@@ -4204,9 +4204,8 @@ impl<'db> LoweringContext<'db> {
     /// method named `method`. Mirrors the TIR-side check; used by
     /// `dispatch_target_for_concrete`.
     fn mir_interface_declares_method(&self, iface_qtn: &DeclName, method: &Name) -> bool {
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, iface_qtn.root());
         let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
-            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+            self.source_definition(iface_qtn)
         else {
             if self.decl_interface_declares(iface_qtn, method) == Some(DeclaredMember::Method) {
                 return true;
@@ -4238,16 +4237,29 @@ impl<'db> LoweringContext<'db> {
     /// implementors: an interface with no implementors in this compilation is still
     /// an interface, and one with implementors elsewhere is not more of one.
     fn is_interface_type_name(&self, tn: &TypeName) -> bool {
-        self.decl(tn).map(|decl| decl.root()).is_some_and(|pkg_id| {
+        self.decl(tn).is_some_and(|decl| {
             matches!(
-                baml_compiler2_hir::package::package_items(self.db, pkg_id)
-                    .lookup_type(tn.namespace(), tn.name()),
+                self.source_definition(&decl),
                 Some(baml_compiler2_hir::contributions::Definition::Interface(_))
             )
         }) || matches!(
             self.mounted_row(tn),
             Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface { .. })
         )
+    }
+
+    /// The source definition a head names — `None` for a root served from
+    /// its interface, whose files are link-only stubs (the rows answer;
+    /// see `hir_ty`'s `definition_of`).
+    fn source_definition(
+        &self,
+        head: &DeclName,
+    ) -> Option<baml_compiler2_hir::contributions::Definition<'db>> {
+        if baml_compiler2_hir::package::is_served_from_interface(self.db, head.root()) {
+            return None;
+        }
+        baml_compiler2_hir::package::package_items(self.db, head.root())
+            .lookup_type(head.namespace(), head.name())
     }
 
     /// What `iface_loc`'s own declaration says `member` is — the leaf every
@@ -4301,9 +4313,8 @@ impl<'db> LoweringContext<'db> {
         iface_decl: &DeclName,
         member: &Name,
     ) -> Option<DeclaredMember> {
-        let pkg_items = baml_compiler2_hir::package::package_items(self.db, iface_decl.root());
         if let Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) =
-            pkg_items.lookup_type(iface_decl.namespace(), iface_decl.name())
+            self.source_definition(iface_decl)
         {
             return self.source_interface_declares(loc, member);
         }

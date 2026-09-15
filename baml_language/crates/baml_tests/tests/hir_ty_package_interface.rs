@@ -649,6 +649,67 @@ function optional() -> int? throws never {
     );
 }
 
+/// A served package answers from its interface alone, and the interface
+/// exports functions and types only: a value path into it that names nothing
+/// exported is reported as exactly that, and a missing member on an
+/// exported type keeps the ordinary first-invalid-segment report.
+#[test]
+fn served_interface_value_path_that_exports_nothing_is_reported_as_such() {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(
+        "/hir-ty-package-interface-served-exports",
+    ));
+    db.mount("app", library_blob());
+    db.file(
+        "main.baml",
+        r#"
+function calls_nothing() -> int throws never {
+    app.not_exported(1)
+}
+
+function reads_nothing() -> int throws never {
+    let value = app.nested.not_exported;
+    0
+}
+
+function missing_member_on_exported_type() -> int throws never {
+    app.Entry.not_a_static()
+}
+"#,
+    );
+    let errors: Vec<String> = collect_diagnostics(&db)
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| format!("[{}] {}", diagnostic.code(), diagnostic.message))
+        .collect();
+    let served = |path: &str| {
+        errors
+            .iter()
+            .filter(|message| {
+                message.starts_with("[E0173]")
+                    && message.contains("package `app` is served from its compiled interface")
+                    && message.contains(&format!("`{path}` is not an exported function"))
+            })
+            .count()
+    };
+    assert_eq!(served("app.not_exported"), 1, "{errors:#?}");
+    assert_eq!(served("app.nested.not_exported"), 1, "{errors:#?}");
+    assert_eq!(
+        errors
+            .iter()
+            .filter(|message| message.starts_with("[E0173]"))
+            .count(),
+        2,
+        "a missing member on an exported type is not an E0173: {errors:#?}"
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|message| !message.starts_with("[E0173]") && message.contains("not_a_static")),
+        "the missing member keeps its ordinary report: {errors:#?}"
+    );
+}
+
 // ── The External lane's substrate: locs minted from rows ─────────────────────
 
 const GENERIC_IMPL_LIBRARY: &str = r#"

@@ -255,16 +255,7 @@ pub fn enum_variant_names(
     db: &dyn baml_compiler2_ppir::Db,
     enum_qtn: &DeclName,
 ) -> Option<Vec<Name>> {
-    let Definition::Enum(enum_loc) = crate::facts::definition_of(db, enum_qtn)? else {
-        return None;
-    };
-    Some(
-        baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
-            .variants
-            .iter()
-            .map(|variant| variant.name.clone())
-            .collect(),
-    )
+    crate::facts::uncached_enum_variants(db, enum_qtn)
 }
 
 /// [`package_resolved_aliases`] with every body folded toward the union
@@ -1219,6 +1210,23 @@ pub fn resolve_ref_to_interface_identity<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
+    let qtn = resolve_ref_to_interface_name(db, store, target, pkg_items, current_ns)?;
+    resolved_interface_from_ty(
+        db,
+        Ty::Interface(qtn, Box::new([]), Box::new([]), TyAttr::default()),
+    )
+}
+
+/// The interface a written reference NAMES, whichever lane declares it —
+/// the head alone, with no source item required. `None` when the reference
+/// does not lower to an interface.
+pub fn resolve_ref_to_interface_name(
+    db: &dyn baml_compiler2_ppir::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    current_ns: &[Name],
+) -> Option<DeclName> {
     let mut diagnostics = Vec::new();
     let ty = lower_ref_in_at(
         &LowerScope {
@@ -1234,7 +1242,10 @@ pub fn resolve_ref_to_interface_identity<'db>(
         crate::lower::TypePosition::ConstraintHead,
         &mut diagnostics,
     );
-    resolved_interface_from_ty(db, ty)
+    match ty {
+        Ty::Interface(qtn, ..) => Some(qtn),
+        _ => None,
+    }
 }
 
 /// Shared tail of the two `resolve_*_to_interface_identity` functions.
@@ -1612,6 +1623,10 @@ fn collect_type_generic_bound_errors<'db>(
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
+            // A served package's class is checked only in source: its row
+            // carries the bounds, but this walk has no diagnostic site for
+            // rows yet (the stub lane never had one either — stubs spell
+            // their generics without bounds).
             if let Some(Definition::Class(class)) = facts.definition_of(qtn) {
                 let params = crate::lower::class_generic_frame(db, class);
                 let declared = crate::lower::class_generic_bounds(db, class);

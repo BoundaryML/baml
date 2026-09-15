@@ -70,10 +70,22 @@ impl<'db> Facts<'db> {
 
 /// The source definition a qualified type name points at, if its package is
 /// served from source and declares the item.
+///
+/// A root served from its interface answers `None` outright: its files are
+/// link-only STUBS the runtime compile generates from the rows (bodies are
+/// `$rust_function`, signatures spell `unknown`, interfaces carry no bounds
+/// or defaults), never declarations. Its declarations are its ROWS, read
+/// through the `extern_loc` row reads — so every consumer sees one lane,
+/// whether or not stubs happen to be present. A stub file lowering its OWN
+/// bare names never comes through here: `lower_ctx_for_file` binds the
+/// file's package items directly (the mount as its own viewer).
 pub(crate) fn definition_of<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     name: &DeclName,
 ) -> Option<Definition<'db>> {
+    if baml_compiler2_hir::package::is_served_from_interface(db, name.root()) {
+        return None;
+    }
     baml_compiler2_ppir::package_items(db, name.root()).lookup_type(name.namespace(), name.name())
 }
 

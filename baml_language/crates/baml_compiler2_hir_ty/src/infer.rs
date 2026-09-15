@@ -49,6 +49,7 @@ use baml_type::{
 };
 use rustc_hash::FxHashMap;
 
+use crate::package_interface::ResolvedValue;
 use crate::{
     callable::{
         callable_display_name, callable_generic_frame, callable_owner_type, callable_signature,
@@ -902,6 +903,11 @@ enum PendingDiag<'db> {
     },
     MountedPackageCallUnsupported {
         expr: ExprId,
+        path: baml_type::Name,
+    },
+    ServedInterfaceExportsFunctionsOnly {
+        expr: ExprId,
+        package: baml_type::Name,
         path: baml_type::Name,
     },
     /// A value typed by a block-scoped `type T = …` binding would be
@@ -5402,8 +5408,9 @@ impl<'db> InferenceContext<'db> {
         };
         let path: Vec<baml_type::Name> =
             function_name.split('.').map(baml_type::Name::new).collect();
-        let Some(baml_compiler2_hir::contributions::Definition::Function(target)) =
-            self.lower.resolve_value(&path)
+        let Some(ResolvedValue::Source(baml_compiler2_hir::contributions::Definition::Function(
+            target,
+        ))) = self.lower.resolve_value(&path)
         else {
             return;
         };
@@ -5873,8 +5880,9 @@ impl<'db> InferenceContext<'db> {
                 .is_some_and(|root| self.template_param_root(root))
         {
             // A path that names a function is a direct call.
-            if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
-                self.lower.resolve_value(segments)
+            if let Some(ResolvedValue::Source(
+                baml_compiler2_hir::contributions::Definition::Function(function),
+            )) = self.lower.resolve_value(segments)
             {
                 let signature = function_signature(self.db, function);
                 let callee_name = baml_compiler2_ppir::item_data::function_data(self.db, function)
@@ -5902,7 +5910,7 @@ impl<'db> InferenceContext<'db> {
                 );
                 return (fn_ty, false);
             }
-            if let Some(function) = self.lower.resolve_exported_value(segments) {
+            if let Some(ResolvedValue::External(function)) = self.lower.resolve_value(segments) {
                 let callable = DeclRef::External(function);
                 let row = extern_function_row(self.db, function);
                 let instantiation = self.instantiation_args_at(
@@ -6459,8 +6467,9 @@ impl<'db> InferenceContext<'db> {
             baml_type::Name::new("json"),
             baml_type::Name::new(name),
         ];
-        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
-            self.lower.resolve_value(&segments)
+        if let Some(ResolvedValue::Source(
+            baml_compiler2_hir::contributions::Definition::Function(function),
+        )) = self.lower.resolve_value(&segments)
         {
             let signature = function_signature(self.db, function);
             // The desugar targets are single-`<T>`-generic by contract;
@@ -6474,7 +6483,9 @@ impl<'db> InferenceContext<'db> {
                 &[target],
             ));
         }
-        let function = self.lower.resolve_exported_value(&segments)?;
+        let Some(ResolvedValue::External(function)) = self.lower.resolve_value(&segments) else {
+            return None;
+        };
         (extern_function_row(self.db, function).generic_params.len() == 1).then(|| {
             instantiate_callable_signature(self.db, DeclRef::External(function), &[target])
         })
@@ -6489,8 +6500,9 @@ impl<'db> InferenceContext<'db> {
             baml_type::Name::new("id"),
             baml_type::Name::new("set"),
         ];
-        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
-            self.lower.resolve_value(&segments)
+        if let Some(ResolvedValue::Source(
+            baml_compiler2_hir::contributions::Definition::Function(function),
+        )) = self.lower.resolve_value(&segments)
         {
             let signature = function_signature(self.db, function);
             let [param] = signature.params.as_slice() else {
@@ -6501,7 +6513,10 @@ impl<'db> InferenceContext<'db> {
                 crate::impls::interned_ty(&signature.throws),
             ));
         }
-        let row = extern_function_row(self.db, self.lower.resolve_exported_value(&segments)?);
+        let Some(ResolvedValue::External(function)) = self.lower.resolve_value(&segments) else {
+            return None;
+        };
+        let row = extern_function_row(self.db, function);
         let [param] = row.params.as_slice() else {
             return None;
         };
@@ -6653,10 +6668,10 @@ impl<'db> InferenceContext<'db> {
             return Ty::error();
         }
         let top_level_let_qualified_item = self.qualified_path_root_is_top_level_let(segments)
-            && (matches!(
+            && matches!(
                 self.lower.resolve_value(segments),
-                Some(Definition::Function(_))
-            ) || self.lower.resolve_exported_value(segments).is_some());
+                Some(ResolvedValue::Source(Definition::Function(_)) | ResolvedValue::External(_))
+            );
         if self.path_resolves_locally(expr) && !top_level_let_qualified_item {
             // The root resolves through the semantic index; the remaining
             // segments are member accesses (the AST cannot split `b.v` into
@@ -6678,8 +6693,9 @@ impl<'db> InferenceContext<'db> {
             self.write_resolved_path(expr, steps);
             return ty;
         }
-        if let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
-            self.lower.resolve_value(segments)
+        if let Some(ResolvedValue::Source(
+            baml_compiler2_hir::contributions::Definition::Function(function),
+        )) = self.lower.resolve_value(segments)
         {
             let had_context =
                 expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
@@ -6774,7 +6790,7 @@ impl<'db> InferenceContext<'db> {
                 &instantiation,
             );
         }
-        if let Some(function) = self.lower.resolve_exported_value(segments) {
+        if let Some(ResolvedValue::External(function)) = self.lower.resolve_value(segments) {
             let had_context =
                 expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
             let callable = DeclRef::External(function);
@@ -6849,7 +6865,7 @@ impl<'db> InferenceContext<'db> {
         // `reflect`, or `type` cannot shadow those package paths. A single
         // segment still reaches this value tier.
         if let Some(root) = segments.first()
-            && let Some(Definition::Let(let_binding)) =
+            && let Some(ResolvedValue::Source(Definition::Let(let_binding))) =
                 self.lower.resolve_value(std::slice::from_ref(root))
         {
             if self.body_owner_id == Some(BodyOwnerId::Let(let_binding))
@@ -6936,9 +6952,7 @@ impl<'db> InferenceContext<'db> {
         // A name that RESOLVES to a definition kind this road doesn't
         // type (clients, top-level lets outside their tier) is not
         // unresolved - it stays the silent sentinel it always was.
-        if self.lower.resolve_value(segments).is_none()
-            && self.lower.resolve_exported_value(segments).is_none()
-        {
+        if self.lower.resolve_value(segments).is_none() {
             // When a proper prefix resolves (`baml.media.Image.missing`
             // has the valid type `baml.media.Image`), the segment AFTER
             // the longest valid prefix is what failed - report it alone,
@@ -6951,10 +6965,36 @@ impl<'db> InferenceContext<'db> {
                         .lower
                         .resolve_exported_type_definition(prefix)
                         .is_some()
-                    || self.lower.resolve_value(prefix).is_some()
-                    || self.lower.resolve_exported_value(prefix).is_some())
+                    || self.lower.resolve_value(prefix).is_some())
                 .then(|| segments[cut].clone())
             });
+            // A package served from its compiled interface exports functions
+            // and types only, and a served dependency answers from that
+            // interface alone (`LowerCtx::resolve_value`). A package-prefixed
+            // path with no valid prefix into such a package is reported as
+            // exactly that — never as an unresolved name a link-only stub
+            // might have shadowed. (A valid prefix — a missing member on an
+            // exported type — keeps the ordinary first-invalid-segment
+            // report below.)
+            if failed.is_none()
+                && segments.len() >= 2
+                && let Some(package) = self.lower.accessible_package(&segments[0])
+                && baml_compiler2_hir::package::is_served_from_interface(self.db, package)
+            {
+                self.pending_diags
+                    .push(PendingDiag::ServedInterfaceExportsFunctionsOnly {
+                        expr,
+                        package: segments[0].clone(),
+                        path: baml_type::Name::new(
+                            segments
+                                .iter()
+                                .map(smol_str::SmolStr::as_str)
+                                .collect::<Vec<_>>()
+                                .join("."),
+                        ),
+                    });
+                return Ty::error();
+            }
             let name = failed.unwrap_or_else(|| {
                 baml_type::Name::new(
                     segments
@@ -9743,7 +9783,7 @@ impl<'db> InferenceContext<'db> {
             && segments.first().is_some_and(|root| {
                 matches!(
                     self.lower.resolve_value(std::slice::from_ref(root)),
-                    Some(Definition::Let(_))
+                    Some(ResolvedValue::Source(Definition::Let(_)))
                 )
             })
     }
@@ -10080,7 +10120,7 @@ impl<'db> InferenceContext<'db> {
                         matches!(
                             self.facts.definition_of(context),
                             Some(baml_compiler2_hir::contributions::Definition::Class(_))
-                        )
+                        ) || mounted_class_loc(self.db, context).is_some()
                     }) {
                     Some(context) => {
                         Ty::intern(InferTy::Class(context, Box::new([]), TyAttr::default()))
@@ -11237,6 +11277,14 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
+                    PendingDiag::ServedInterfaceExportsFunctionsOnly {
+                        expr,
+                        package,
+                        path,
+                    } => (
+                        TirTypeError::ServedInterfaceExportsFunctionsOnly { package, path },
+                        expr,
+                    ),
                     PendingDiag::ScopedTypeEscapesBlock {
                         at,
                         name,

@@ -1896,6 +1896,10 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
+        TirTypeError::ServedInterfaceExportsFunctionsOnly { package, path } => {
+            runtime_type::served_interface_exports_functions_only(package.as_str(), path.as_str())
+                .id
+        }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
             DiagnosticId::CannotConstructBuiltinCompanion

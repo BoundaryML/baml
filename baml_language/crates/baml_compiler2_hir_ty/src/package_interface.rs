@@ -1595,11 +1595,13 @@ impl<'db> PackageResolutionContext<'db> {
         pkg_name: &Name,
     ) -> Option<&'db PackageItems<'db>> {
         let package = accessible_package(db, self.own, pkg_name)?;
-        Some(if package == self.own {
-            &self.own_items
-        } else {
-            baml_compiler2_ppir::package_items(db, package)
-        })
+        if package == self.own {
+            return Some(&self.own_items);
+        }
+        // A served dependency has no semantic items for a consumer: its
+        // files, when present, are link-only stubs; its rows are the answer.
+        (!is_served_from_interface(db, package))
+            .then(|| baml_compiler2_ppir::package_items(db, package))
     }
 
     /// The items of the package `root`, when this package can see it: itself
@@ -1612,10 +1614,9 @@ impl<'db> PackageResolutionContext<'db> {
         if root == self.own {
             return Some(&self.own_items);
         }
-        self.dep_interfaces
-            .iter()
-            .any(|(_, dep, _)| *dep == root)
-            .then(|| baml_compiler2_ppir::package_items(db, root))
+        (self.dep_interfaces.iter().any(|(_, dep, _)| *dep == root)
+            && !is_served_from_interface(db, root))
+        .then(|| baml_compiler2_ppir::package_items(db, root))
     }
 
     /// Resolve a type by path. Own-package via `PackageItems`, then deps.

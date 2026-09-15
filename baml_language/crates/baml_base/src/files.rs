@@ -88,7 +88,10 @@ pub struct SourceRoot {
     /// versioned as a `baml_artifact`), when the package is served from one
     /// instead of from source: a runtime mount, or a precompiled stdlib
     /// package in a runtime compile. When present it is the semantic
-    /// authority for the package; any `files` are link-only stubs.
+    /// authority for the package: consumers resolve the package's items
+    /// from it alone, and any `files` are link-only stubs that only the
+    /// package's own lowering reads (the mount as its own viewer, so a
+    /// stub's bare sibling names resolve while it is emitted).
     #[returns(ref)]
     pub interface: Option<Vec<u8>>,
 

@@ -341,6 +341,12 @@ pub enum DiagnosticId {
     /// package. References type from the mounted interface; callables without
     /// a loc-free bytecode link contract report this diagnostic.
     MountedPackageCallUnsupported,
+    /// A package-prefixed value path into a package served from its compiled
+    /// interface names nothing that interface exports. The interface exports
+    /// functions and types only, and a served package answers from it alone,
+    /// so the path is reported as exactly that — never as an unresolved name
+    /// a link-only stub might have shadowed.
+    ServedInterfaceExportsFunctionsOnly,
 
     // Projection bases (E0156)
     /// The dotted projection shorthand (`Base.Member`) was written with the
@@ -619,6 +625,7 @@ impl DiagnosticId {
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
+            DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0173",
         }
     }
 }
