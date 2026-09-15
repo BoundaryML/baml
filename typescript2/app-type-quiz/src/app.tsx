@@ -42,6 +42,7 @@ import {
   type Save,
   type SavedAnswer,
   type Slot,
+  storageOf,
   VERSION,
   writeSlot,
 } from './saves';
@@ -139,7 +140,7 @@ function failingOne(said: Said): string {
   return said === 'first' ? 'second' : 'first';
 }
 
-const storage = window.localStorage;
+const storage = storageOf();
 
 /**
  * The session a new sitting is drawn from. `?session=N` fixes it, so a

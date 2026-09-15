@@ -44,6 +44,48 @@ function keyOf(slot: number): string {
   return `type-quiz/slot/${slot}`;
 }
 
+/**
+ * Where sittings are kept: this browser's local storage, or memory when
+ * there is none to be had.
+ *
+ * Reading `window.localStorage` THROWS in a browser told to block storage,
+ * and reading it while the module loads took the whole page down with it. A
+ * learner who has turned storage off has said they do not want a sitting kept
+ * between visits, which is a thing to honour rather than a reason to show
+ * them nothing: the quiz runs, and the slots are empty again next time.
+ */
+export function storageOf(): Storage {
+  try {
+    const held = window.localStorage;
+    // Safari in private mode hands back a store that throws only on write.
+    const probe = 'type-quiz/probe';
+    held.setItem(probe, '1');
+    held.removeItem(probe);
+    return held;
+  } catch {
+    return memory();
+  }
+}
+
+/** A store for this visit alone. */
+function memory(): Storage {
+  const held = new Map<string, string>();
+  return {
+    clear: () => held.clear(),
+    getItem: (key) => held.get(key) ?? null,
+    key: (at) => Array.from(held.keys())[at] ?? null,
+    get length() {
+      return held.size;
+    },
+    removeItem: (key) => {
+      held.delete(key);
+    },
+    setItem: (key, value) => {
+      held.set(key, value);
+    },
+  };
+}
+
 export function readSlot(storage: Storage, slot: number): Slot {
   const text = storage.getItem(keyOf(slot));
   if (text === null) {

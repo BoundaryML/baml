@@ -430,6 +430,18 @@ try {
   await page.locator('button:has-text("New sitting")').first().click();
   await page.waitForSelector('button:has-text("Start")', WAIT);
   await page.click('label:has-text("Practice") input[type=radio]');
+  // A number field hands back whatever was typed. What reaches the engine is
+  // a whole number of cases inside the bounds the field advertises.
+  await page.fill('label:has-text("Practice") input.count', '1.5');
+  expect(
+    (await page.inputValue('label:has-text("Practice") input.count')) === '1',
+    'a fraction of a question reaches the engine',
+  );
+  await page.fill('label:has-text("Practice") input.count', '');
+  expect(
+    (await page.inputValue('label:has-text("Practice") input.count')) === '1',
+    'an empty count reaches the engine, which ends the sitting before it starts',
+  );
   await page.fill('label:has-text("Practice") input.count', '2');
   await page.locator('label.check:has-text("Ask why") input').check();
   await page.click('button:has-text("Start")');
@@ -484,8 +496,49 @@ try {
   }
   await page.waitForSelector('.done', WAIT);
 
+  // A browser that cannot start the quiz should say so. Both of these used to
+  // render nothing at all: the page hangs off a WebAssembly module fetched
+  // behind a top-level await, and it read `localStorage` while loading.
+  const blocked = await browser.newPage();
+  await blocked.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new Error('Access is denied for this document.');
+      },
+    });
+  });
+  await blocked.goto(URL, { waitUntil: 'load' });
+  await blocked.waitForSelector('button:has-text("New sitting")', WAIT);
+  // Every slot is empty, though this browser holds three sittings: the page
+  // is running on the in-memory store, not on a localStorage that worked
+  // after all.
+  expect(
+    (await blocked.locator('button:has-text("New sitting")').count()) === 3,
+    'storage was not actually blocked, so this proves nothing',
+  );
+  await blocked.close();
+
+  const starved = await browser.newPage();
+  await starved.route('**/bridge_web_core_bg*.wasm', (route) => route.abort());
+  await starved.goto(URL, { waitUntil: 'load' });
+  await starved.waitForFunction(
+    () =>
+      document
+        .getElementById('booting')
+        ?.textContent?.includes('could not start') === true,
+    undefined,
+    WAIT,
+  );
+  const said = (await starved.textContent('#booting')) ?? '';
+  expect(
+    said.includes('WebAssembly'),
+    `the page does not say why it could not start: ${said}`,
+  );
+  await starved.close();
+
   console.log(
-    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, a mastery sitting shows no total, and a reason is asked only where there is one to give, skipped or marked by the learner when no judge is set`,
+    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, a mastery sitting shows no total, a reason is asked only where there is one to give, skipped or marked by the learner when no judge is set, and a browser that cannot start says why`,
   );
 } catch (error) {
   failure = error;

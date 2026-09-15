@@ -13,6 +13,7 @@
 
 import { engine } from '@quiz/sdk';
 import type { Revealed } from './quiz';
+import { storageOf } from './saves';
 
 export type Grade = engine.Grade;
 
@@ -75,7 +76,7 @@ function fresh(): JudgeSettings {
 
 export function loadJudge(): JudgeSettings {
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = storageOf().getItem(KEY);
     if (raw === null) {
       return fresh();
     }
@@ -112,8 +113,19 @@ export function loadJudge(): JudgeSettings {
   }
 }
 
+/**
+ * Keep the settings for next time, or do not: this runs on every keystroke in
+ * the key field, and a browser with storage blocked or full would otherwise
+ * throw once per character into an event handler that has nowhere to put it.
+ * The settings are already held in the panel's own state, so a visit that
+ * cannot save still judges.
+ */
 export function saveJudge(settings: JudgeSettings): void {
-  window.localStorage.setItem(KEY, JSON.stringify(settings));
+  try {
+    storageOf().setItem(KEY, JSON.stringify(settings));
+  } catch {
+    return;
+  }
 }
 
 /** Whether a judgement can be asked for at all. */

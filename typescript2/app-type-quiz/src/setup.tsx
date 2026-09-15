@@ -53,6 +53,23 @@ export function Setup({
   onBack: () => void;
 }) {
   const [defaults] = useState(() => knobValues(defaultKnobs()));
+  // A number field hands back whatever was typed, including nothing and
+  // fractions of a question. The bounds on the input are a hint to a mouse
+  // and are not enforced against a keyboard, and what gets through is asked
+  // of an engine whose budget is a whole number of cases: a budget of zero
+  // ends the sitting before it starts, and 1.5 reaches the page as
+  // "Case 1 of 1.5" and is saved that way.
+  const whole = (
+    text: string,
+    low: number,
+    high: number,
+    fallback: number,
+  ): number => {
+    const asked = Math.trunc(Number(text));
+    return Number.isFinite(asked)
+      ? Math.min(Math.max(asked, low), high)
+      : fallback;
+  };
   const [practice, setPractice] = useState(false);
   const [count, setCount] = useState(10);
   const [bar, setBar] = useState(defaults.bar);
@@ -109,7 +126,7 @@ export function Setup({
             className="count"
             max={200}
             min={1}
-            onChange={(e) => setCount(Number(e.target.value))}
+            onChange={(e) => setCount(whole(e.target.value, 1, 200, 10))}
             type="number"
             value={count}
           />
@@ -182,7 +199,9 @@ export function Setup({
             <input
               max={400}
               min={1}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              onChange={(e) =>
+                setBudget(whole(e.target.value, 1, 400, defaults.budget))
+              }
               type="number"
               value={budget}
             />

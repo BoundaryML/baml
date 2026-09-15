@@ -14,3 +14,12 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+// The fallback in `index.html` reports anything thrown before this line, and
+// stands down once the app is up and reporting for itself.
+declare global {
+  interface Window {
+    __quizMounted?: boolean;
+  }
+}
+window.__quizMounted = true;
