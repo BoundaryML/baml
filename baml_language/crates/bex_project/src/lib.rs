@@ -32,6 +32,8 @@ pub use bex_external_types::{
     TaggedHeapHandleKind, TyAttr, TypeDefRef, WeakHeapRef, host_release_dispatch,
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
+#[cfg(feature = "allocation_profiling")]
+pub use bex_str::{BexStrAllocationStats, allocation_stats as bex_str_allocation_stats};
 pub use bex_vm_types::{HeapPtr, Program};
 use indexmap::IndexMap;
 pub use sys_ops::SysOps;

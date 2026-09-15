@@ -26,6 +26,7 @@ tokio = { workspace = true, features = [ "rt" ] }
 
 [features]
 default = [  ]
+gc_profiling = [ "bex_engine/gc_profiling", "bex_project/gc_profiling" ]
 native-tls = [ "sys_native/native-tls" ]
 
 [[bin]]

@@ -227,6 +227,55 @@ function collect_garbage() -> null throws never {
     $rust_io_function
 }
 
+/// Allocator counters for the current BAML runtime, not process memory or heap bytes.
+/// Object counts include unused slots reserved by VMs and objects awaiting collection.
+/// They exclude separately allocated payload storage (for example string and array data).
+class HeapStats {
+    /// Compile-time plus runtime object slots.
+    total_objects: int,
+    /// Permanent compile-time object slots.
+    compile_time_objects: int,
+    /// Runtime object slots, including unused allocation reservations.
+    runtime_objects: int,
+    /// Registered heap handles, which act as garbage-collection roots.
+    active_handles: int,
+    /// Current nursery allocation reservations; may decrease after collection.
+    tlab_chunks: int,
+    /// Exact Gen0 reservations, including unused TLAB slots.
+    reserved_slots: int,
+    /// Occupied or reserved slots in each runtime generation.
+    gen0_slots: int,
+    gen1_slots: int,
+    gen2_slots: int,
+    /// Backing capacity retained by each runtime generation and GC scratch space.
+    gen0_capacity_slots: int,
+    gen1_capacity_slots: int,
+    gen2_capacity_slots: int,
+    scratch_capacity_slots: int,
+    /// Actual objects allocated into TLAB reservations since the last collection.
+    allocations_since_gc: int,
+    /// Bytes in one object slot. Separately allocated payloads are excluded.
+    object_slot_bytes: int,
+    /// Bytes reserved for compile-time and runtime object slots. Separately allocated payloads are excluded.
+    tracked_slot_capacity_bytes: int,
+    /// Weak heap-permit registry slots. Zero unless the runtime was built with GC profiling.
+    permit_holder_slots: int,
+    /// Process allocator counters from all malloc zones on macOS; null elsewhere.
+    allocator_blocks_in_use: int?,
+    allocator_bytes_in_use: int?,
+    allocator_bytes_high_water: int?,
+    allocator_bytes_reserved: int?,
+}
+
+/// Samples the calling runtime's heap without forcing garbage collection.
+/// Counters are gauges, not cumulative allocations or a count of live objects.
+/// Concurrent VMs may allocate while sampling, so fields are not an atomic snapshot.
+/// The returned object is allocated after the sample is taken.
+//baml:mut_vm
+function heap_stats() -> HeapStats throws never {
+    $rust_function
+}
+
 /// Panics with `message`.
 ///
 /// # Panics

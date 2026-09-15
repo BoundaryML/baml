@@ -1403,6 +1403,7 @@ dependencies = [
  "bex_engine",
  "bex_external_types",
  "bex_heap",
+ "bex_str",
  "bex_vm_types",
  "borsh",
  "ignore",

@@ -2324,7 +2324,7 @@ impl BexEngine {
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
         let bex_work = bex_work::BexWork::new(&heap);
-        let heap_permit_manager = Arc::new(HeapPermitManager::new());
+        let heap_permit_manager = Arc::new(HeapPermitManager::for_heap(&heap));
         // We just created the permit manager so `new_permit` will not block:
         // the only synchronization inside is the `holders` mutex which is
         // uncontended at this point. `futures::executor::block_on` (rather

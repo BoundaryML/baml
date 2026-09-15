@@ -3,6 +3,8 @@
 //! This crate provides the same Python API as `language_client_python`
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
+#[cfg(feature = "allocation_profiling")]
+mod allocation_stats;
 mod baml_call_context;
 mod errors;
 pub mod host_value;
@@ -59,6 +61,12 @@ fn cancel_function_call(call_id: u64) -> bool {
     bridge_cffi::cancel_function_call_by_id(call_id)
 }
 
+#[cfg(feature = "allocation_profiling")]
+#[pyfunction]
+fn _allocation_stats() -> Vec<(&'static str, u64)> {
+    allocation_stats::snapshot()
+}
+
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
@@ -87,6 +95,8 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     m.add_wrapped(wrap_pyfunction!(new_function_call))?;
     m.add_wrapped(wrap_pyfunction!(cancel_function_call))?;
+    #[cfg(feature = "allocation_profiling")]
+    m.add_wrapped(wrap_pyfunction!(_allocation_stats))?;
     m.add_wrapped(wrap_pyfunction!(
         unhandled_spawn::register_unhandled_spawn_error_callback
     ))?;
