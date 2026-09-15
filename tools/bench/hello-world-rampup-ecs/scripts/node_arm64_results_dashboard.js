@@ -45,4 +45,4 @@ const widgets = [
     customMetric('ForcedStop', 'Forced cycle stop', 'Sum', { period: 5 }),
   ], { period: 5 }),
 ];
-console.log(JSON.stringify({ start: '-PT3H', periodOverride: 'inherit', widgets }, null, 2));
+console.log(JSON.stringify({ start: '2026-09-15T22:20:00Z', end: '2026-09-15T23:10:00Z', periodOverride: 'inherit', widgets }, null, 2));
