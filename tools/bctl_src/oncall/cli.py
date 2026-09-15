@@ -132,7 +132,13 @@ def notify(
         raise typer.Exit(1)
     try:
         now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
-        msgs = compose_handoff(sched, now, wc)
+
+        def _warn_skipped(post_at: datetime.datetime, step: int) -> None:
+            console.print(
+                f"[yellow]skipped[/] reminder for step {step} at {post_at.isoformat()}: already in the past"
+            )
+
+        msgs = compose_handoff(sched, now, wc, on_skip=_warn_skipped)
     except RuntimeError as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)

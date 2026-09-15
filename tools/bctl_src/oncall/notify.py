@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
 
 from oncall.parser import ScheduleFile, ShiftLine
@@ -95,6 +95,7 @@ def compose_handoff(
     sched: ScheduleFile,
     now: datetime.datetime,
     wc,
+    on_skip: Optional[Callable[[datetime.datetime, int], None]] = None,
 ) -> list[HandoffMessage]:
     """Return the handoff announcement plus its scheduled reminders.
 
@@ -102,7 +103,8 @@ def compose_handoff(
     immediately; the rest carry a `post_at` on the shift's first day. Reminder
     times that have already passed as of `now` (e.g. a manual run on Friday
     afternoon) are dropped, and the announcement only lists the reminders that
-    will actually be scheduled.
+    will actually be scheduled. `on_skip(post_at, step)` is called for each
+    dropped reminder so the caller can surface it.
 
     If `wc` is None, no Slack user-id lookup happens and the @-mention is
     rendered as the bare name (dry-run mode).
@@ -177,11 +179,13 @@ def compose_handoff(
         remaining_steps = [step_changelog, step_thanks]
         assert len(remaining_steps) == len(REMINDER_TIMES)
         # (post_at, step number, step text) for reminders still in the future.
-        reminders = [
-            (at, i + 2, step)
-            for i, (t, step) in enumerate(zip(REMINDER_TIMES, remaining_steps))
-            if (at := datetime.datetime.combine(shift.date, t, tzinfo=PACIFIC)) > now
-        ]
+        reminders: list[tuple[datetime.datetime, int, str]] = []
+        for i, (t, step) in enumerate(zip(REMINDER_TIMES, remaining_steps)):
+            at = datetime.datetime.combine(shift.date, t, tzinfo=PACIFIC)
+            if at > now:
+                reminders.append((at, i + 2, step))
+            elif on_skip is not None:
+                on_skip(at, i + 2)
 
         # Posted immediately (Thursday afternoon): who's up, plus step 1 so the
         # release PR is ready before Friday.
