@@ -241,7 +241,7 @@ impl baml_compiler2_mir::Db for ProjectDatabase {}
 
 #[salsa::db]
 impl baml_compiler2_emit::Db for ProjectDatabase {
-    fn parallel_db_handle(&self) -> Option<Box<dyn baml_compiler2_mir::Db + Send>> {
+    fn parallel_db_handle(&self) -> Option<Box<dyn baml_compiler2_emit::Db + Send>> {
         // A shared-storage salsa handle (an `Arc` bump — the same handle
         // cloning the parallel check in `check.rs` relies on): the clone is
         // MOVED into an emit worker thread, and all clones share one memo

@@ -181,7 +181,7 @@ fn render_selected_mir(db: &ProjectDatabase, file: SourceFile, names: &[&str], o
         if names.contains(&name) {
             found.insert(name.to_owned());
             let mir = lower_function(db, func_loc, OptLevel::Two);
-            writeln!(out, "{}", display_function(mir)).unwrap();
+            writeln!(out, "{}", display_function(db, mir)).unwrap();
         }
     }
     for name in names {

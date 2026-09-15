@@ -269,7 +269,7 @@ fn extract_from_class(
     // implementors put their `$rust_function` / `$rust_io_function` methods in
     // an `implements Rng { ... }` block. A method inside `implements I` is an
     // impl-block method like any other and is keyed `{ns}.{I}$for${Class}.{method}`
-    // (matching MIR's `native_key_for` — the KEY partner; `def_to_item_ref`
+    // (matching MIR's `native_key_for` — the KEY partner; `definition_link_name`
     // renders the separate `<(target as iface)>` DISPLAY spelling); a direct
     // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));

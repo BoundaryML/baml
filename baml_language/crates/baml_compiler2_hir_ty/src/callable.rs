@@ -336,6 +336,60 @@ pub fn callable_builtin_kind(
 }
 
 /// The callable's own short name, for diagnostics.
+/// The function a language package declares at `namespace.name`, whichever
+/// lane serves the package: the declaration when the package's source is
+/// present, its exported row when it is served from its interface. `None`
+/// when the package is not installed or declares no such function.
+pub fn lang_function<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    package: baml_base::LangPackage,
+    namespace: &[&str],
+    name: &str,
+) -> Option<FunctionRef<'db>> {
+    let root = baml_compiler2_hir::package::lang_roots(db).get(package)?;
+    let namespace: Vec<Name> = namespace.iter().copied().map(Name::new).collect();
+    let name = Name::new(name);
+    if baml_compiler2_hir::package::is_served_from_interface(db, root) {
+        return crate::extern_loc::extern_function_named(db, root, &namespace, &name)
+            .map(DeclRef::External);
+    }
+    match baml_compiler2_ppir::package_items(db, root).lookup_value(&namespace, &name)? {
+        baml_compiler2_hir::contributions::Definition::Function(function) => {
+            Some(DeclRef::Source(function))
+        }
+        _ => None,
+    }
+}
+
+/// The class-inherent method `class.method` a language package declares at
+/// its root, whichever lane serves the package (see [`lang_function`]).
+pub fn lang_class_method<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    package: baml_base::LangPackage,
+    class: &str,
+    method: &str,
+) -> Option<FunctionRef<'db>> {
+    let root = baml_compiler2_hir::package::lang_roots(db).get(package)?;
+    let method = Name::new(method);
+    if baml_compiler2_hir::package::is_served_from_interface(db, root) {
+        let head = baml_type::DeclName::in_root(root, Vec::new(), Name::new(class));
+        return crate::extern_loc::extern_class_method(db, &head, &method).map(DeclRef::External);
+    }
+    let baml_compiler2_hir::contributions::Definition::Class(class) =
+        baml_compiler2_ppir::package_items(db, root).lookup_type(&[], &Name::new(class))?
+    else {
+        return None;
+    };
+    baml_compiler2_ppir::item_data::class_data(db, class)
+        .methods
+        .iter()
+        .copied()
+        .find(|&candidate| {
+            baml_compiler2_ppir::item_data::function_data(db, candidate).name == method
+        })
+        .map(DeclRef::Source)
+}
+
 pub fn callable_display_name<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     callable: FunctionRef<'db>,

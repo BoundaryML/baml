@@ -770,11 +770,11 @@ fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
     use baml_compiler2_ppir::item_data::{
         file_classes, file_enums, file_functions, file_interfaces, file_lets, file_type_aliases,
     };
-    use baml_db::baml_compiler2_mir::def_to_item_ref;
+    use baml_db::baml_compiler2_mir::definition_link_name;
 
     let mut names: Vec<String> = Vec::new();
     let push = |def, names: &mut Vec<String>| {
-        names.push(last_segment(&def_to_item_ref(db, def).to_string()).to_string());
+        names.push(last_segment(&definition_link_name(db, def)).to_string());
     };
     for &loc in file_functions(db, file) {
         push(Definition::Function(loc), &mut names);
@@ -794,7 +794,7 @@ fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
     // Type aliases are erased into their consumers (a non-recursive alias is
     // expanded inline at every use), so an alias whose RHS changes must reach
     // the change-propagation set by *name*: a consumer that named the alias
-    // would otherwise splice the stale expansion. `def_to_item_ref` handles
+    // would otherwise splice the stale expansion. `definition_link_name` handles
     // `TypeAlias` like any other named item.
     for &loc in file_type_aliases(db, file) {
         push(Definition::TypeAlias(loc), &mut names);

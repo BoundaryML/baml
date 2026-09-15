@@ -9,8 +9,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(debug_assertions)]
-use baml_base::Name;
-
 use crate::{
     BasicBlock, BlockId, CatchRegion, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, Place, Terminator,
@@ -27,7 +25,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
     optimize_body(body, func.arity, opt);
 
     #[cfg(debug_assertions)]
-    verify_mir(body, &func.item_ref);
+    verify_mir(body, &format!("{:?}", func.identity));
 }
 
 /// Run all cleanup phases directly on a `MirFunctionBody`.
@@ -38,14 +36,7 @@ pub(crate) fn optimize_function_body(body: &mut MirFunctionBody, opt: crate::Opt
     optimize_body(body, 0, opt);
 
     #[cfg(debug_assertions)]
-    verify_mir(
-        body,
-        &crate::ItemRef::Free {
-            package: Name::new("$init_let"),
-            namespace: vec![],
-            name: Name::new("_"),
-        },
-    );
+    verify_mir(body, "$init_let._");
 }
 
 fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
@@ -1652,7 +1643,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 /// Debug-only — catches invariant drift between lowering, optimization, and
 /// downstream consumers. Modeled after V1's `verifier.rs`.
 #[cfg(debug_assertions)]
-fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
+fn verify_mir(body: &MirFunctionBody<'_>, name: &str) {
     let num_blocks = body.blocks.len();
     let num_locals = body.locals.len();
 

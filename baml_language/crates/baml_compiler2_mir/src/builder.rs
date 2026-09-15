@@ -30,12 +30,16 @@ use baml_base::{Name, Span};
 use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
+    BasicBlock, BlockId, CatchRegion, Constant, FunctionOwner, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
 };
 
 /// Builder for constructing MIR functions.
 pub(crate) struct MirBuilder<'db> {
+    /// Whose body this builder lowers; the built function's identity.
+    owner: FunctionOwner<'db>,
+    /// The unqualified display spelling nested synthetic functions name this
+    /// body by.
     name: Name,
     arity: usize,
     blocks: Vec<BasicBlock<'db>>,
@@ -52,8 +56,9 @@ pub(crate) struct MirBuilder<'db> {
 #[allow(dead_code)]
 impl<'db> MirBuilder<'db> {
     /// Create a new MIR builder for a function.
-    pub(crate) fn new(name: Name, arity: usize) -> Self {
+    pub(crate) fn new(owner: FunctionOwner<'db>, name: Name, arity: usize) -> Self {
         Self {
+            owner,
             name,
             arity,
             blocks: Vec::new(),
@@ -68,6 +73,10 @@ impl<'db> MirBuilder<'db> {
     /// Return the function name.
     pub(crate) fn name(&self) -> &Name {
         &self.name
+    }
+
+    pub(crate) fn owner(&self) -> &FunctionOwner<'db> {
+        &self.owner
     }
 
     /// Set the source span for the function.
@@ -660,11 +669,7 @@ impl<'db> MirBuilder<'db> {
         MirFunction {
             arity: self.arity,
             span: self.span,
-            item_ref: ItemRef::Free {
-                package: baml_base::Name::new(""),
-                namespace: vec![],
-                name: self.name,
-            },
+            identity: self.owner.into_identity(),
             kind: MirFunctionKind::Bytecode(MirFunctionBody {
                 blocks: self.blocks,
                 entry: BlockId(0),
@@ -701,11 +706,7 @@ impl<'db> MirBuilder<'db> {
         MirFunction {
             arity: self.arity,
             span: self.span,
-            item_ref: ItemRef::Free {
-                package: baml_base::Name::new(""),
-                namespace: vec![],
-                name: self.name,
-            },
+            identity: self.owner.into_identity(),
             kind: MirFunctionKind::Bytecode(MirFunctionBody {
                 blocks: self.blocks,
                 entry: BlockId(0),

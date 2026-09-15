@@ -10,6 +10,8 @@ use std::{
 };
 
 use baml_base::Span;
+use baml_compiler2_hir::loc::DeclRef;
+use baml_compiler2_hir_ty::extern_loc::FunctionRef;
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
@@ -292,6 +294,8 @@ struct StackifyCodegen<'ctx, 'obj> {
     arity: usize,
     /// Line index for the MIR's source file.
     line_starts: &'ctx [u32],
+    /// The database link names are rendered through at this boundary.
+    db: &'ctx dyn baml_compiler2_mir::Db,
 
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
@@ -452,6 +456,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             body,
             arity,
             line_starts,
+            db: ctx.db,
             globals: ctx.globals,
             interface_body_slots: ctx.interface_body_slots,
             classes: ctx.classes,
@@ -1924,16 +1929,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
         }
-        if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
+        if let Rvalue::MakeBoundMethod { func, receiver } = rvalue {
             // Emit the receiver onto the stack first.
             self.emit_operand_pull(receiver);
-            // Resolve the item_ref to a GlobalIndex.
-            let global_idx =
-                self.function_global_index(item_ref, "MakeBoundMethod: global not found");
+            // Resolve the method to its GlobalIndex.
+            let global_idx = self.function_global_index(*func, "MakeBoundMethod: global not found");
             let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
                 global_idx,
             )));
-            self.set_operand(inst, OperandMeta::Global(item_ref.to_string()));
+            self.set_operand(
+                inst,
+                OperandMeta::Global(baml_compiler2_mir::function_link_name(self.db, *func)),
+            );
             return;
         }
         if let Rvalue::MakeVirtualBoundMethod {
@@ -2022,48 +2029,46 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
-    /// Pass-1 global slot for a function item.
+    /// Pass-1 global slot for a callable.
     ///
-    /// An interface-machinery body resolves by its DECLARATION
-    /// ([`baml_compiler2_mir::InterfaceBodyRef::decl`]) through [`Self::interface_body_slots`] —
-    /// its rendered spelling is display-only and keys nothing. Every other
-    /// item resolves by its rendered name through [`Self::globals`]; `None`
-    /// there means the callee is not statically addressable (the caller falls
-    /// back to an indirect call). A body missing its slot is an internal
-    /// error: `ItemRef::InterfaceBody` only exists for declarations this database
-    /// sees, and Pass 1 slots every one of them.
-    fn try_function_global_index(
-        &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
-    ) -> Option<usize> {
-        if let baml_compiler2_mir::ItemRef::InterfaceBody(body) = item {
+    /// A source interface-machinery body resolves by its DECLARATION through
+    /// [`Self::interface_body_slots`] — its rendered spelling is display-only
+    /// and keys nothing. Every other callable resolves by its link name
+    /// through [`Self::globals`]; `None` there means the callee is not
+    /// statically addressable (the caller falls back to an indirect call). A
+    /// body missing its slot is an internal error: a body declaration reaches
+    /// here only from this database, and Pass 1 slots every one of them.
+    fn try_function_global_index(&mut self, func: FunctionRef<'ctx>) -> Option<usize> {
+        let name = baml_compiler2_mir::function_link_name(self.db, func);
+        if let DeclRef::Source(decl) = func
+            && baml_compiler2_mir::function_is_interface_body(self.db, decl)
+        {
             let slot = *self
                 .interface_body_slots
-                .get(&body.decl)
-                .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {item}"));
+                .get(&decl)
+                .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {name}"));
             // The body's rendered spelling is display-only for resolution, but
             // its last segment (the method name) is exactly what the declaring
             // file's `defined_names` produces — the incremental edge grain.
-            self.references.record(&item.to_string());
+            self.references.record(&name);
             return Some(slot);
         }
-        let rendered = item.to_string();
-        let slot = self.globals.get(&rendered).copied();
+        let slot = self.globals.get(&name).copied();
         if slot.is_some() {
-            self.references.record(&rendered);
+            self.references.record(&name);
         }
         slot
     }
 
     /// [`Self::try_function_global_index`], panicking with `what` when the
-    /// item does not resolve.
-    fn function_global_index(
-        &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
-        what: &str,
-    ) -> usize {
-        self.try_function_global_index(item)
-            .unwrap_or_else(|| panic!("{what}: {item}"))
+    /// callable does not resolve.
+    fn function_global_index(&mut self, func: FunctionRef<'ctx>, what: &str) -> usize {
+        self.try_function_global_index(func).unwrap_or_else(|| {
+            panic!(
+                "{what}: {}",
+                baml_compiler2_mir::function_link_name(self.db, func)
+            )
+        })
     }
 
     /// Push a function reference as a value: a pooled, interned
@@ -2080,11 +2085,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// reproducing the exact serial candidate set and pool layout.
     fn emit_pooled_function_value(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
+        func: FunctionRef<'ctx>,
         type_args: &[baml_type::RealizedTy],
     ) {
-        let name_str = item.to_string();
-        let global_idx = self.function_global_index(item, "undefined function");
+        let name_str = baml_compiler2_mir::function_link_name(self.db, func);
+        let global_idx = self.function_global_index(func, "undefined function");
         let gidx = GlobalIndex::from_raw(global_idx);
         // The pooled object carries runtime heads; anchor once and compare in
         // that space so an existing instantiation is actually recognized.
@@ -2164,7 +2169,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const("<omitted>".to_string()));
             }
-            Constant::Function(item_ref) => {
+            Constant::Function(func) => {
                 // A plain function reference as a VALUE. Pooled exactly like
                 // `Constant::GenericFunction`, with EMPTY type args: every
                 // function-pointer value on the heap is a wrapper object
@@ -2173,12 +2178,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // invariant `value_concrete_ty` / `callable_signature` rely
                 // on. Interning keeps `greet === greet` pointer-stable, as a
                 // direct `LoadGlobal` of the function object did before.
-                self.emit_pooled_function_value(item_ref, &[]);
+                self.emit_pooled_function_value(*func, &[]);
             }
-            Constant::GlobalItem(item_ref) => {
+            Constant::GlobalItem(def) => {
                 // A non-function global item (a client, a top-level `let`,
                 // ...): read the value `$init` stored in its slot, unwrapped.
-                let name_str = item_ref.to_string();
+                let name_str = baml_compiler2_mir::definition_link_name(self.db, *def);
                 let global_idx = *self
                     .globals
                     .get(&name_str)
@@ -2187,13 +2192,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
-            Constant::GenericFunction { item, type_args } => {
+            Constant::GenericFunction { func, type_args } => {
                 // `foo<int>` as a value: the same pooled wrapper, carrying its
                 // concrete type arguments so calling it seeds `frame.type_args`.
-                self.emit_pooled_function_value(item, type_args);
+                self.emit_pooled_function_value(*func, type_args);
             }
             Constant::EnumVariant { enum_ref, variant } => {
-                let enum_name_str = enum_ref.to_string();
+                let enum_name_str = baml_compiler2_mir::enum_link_name(self.db, *enum_ref);
                 // Gracefully handle undefined enum references (e.g. cross-package
                 // references that aren't registered in this compilation context).
                 // Emit a Null constant so tests don't panic; runtime will fail
@@ -2410,8 +2415,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     &self.analysis.def_use,
                 );
                 let global_callee = callee_item
-                    .as_ref()
-                    .and_then(|item| self.try_function_global_index(item))
+                    .and_then(|func| self.try_function_global_index(func))
                     .map(GlobalIndex::from_raw);
 
                 if let Some(global_callee) = global_callee {
@@ -2437,8 +2441,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     self.record_call_layout(inst, argument_layout.as_ref());
-                    if let Some(item) = &callee_item {
-                        self.set_operand(inst, OperandMeta::Callable(item.to_string()));
+                    if let Some(func) = callee_item {
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Callable(baml_compiler2_mir::function_link_name(
+                                self.db, func,
+                            )),
+                        );
                     }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
@@ -2531,8 +2540,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     &self.analysis.def_use,
                 );
                 let global_callee = callee_item
-                    .as_ref()
-                    .and_then(|item| self.try_function_global_index(item))
+                    .and_then(|func| self.try_function_global_index(func))
                     .map(GlobalIndex::from_raw)
                     .unwrap_or_else(|| {
                         panic!(
@@ -2549,8 +2557,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 } else {
                     self.emit(Instruction::SysOp(global_callee))
                 };
-                if let Some(item) = &callee_item {
-                    self.set_operand(inst, OperandMeta::Callable(item.to_string()));
+                if let Some(func) = callee_item {
+                    self.set_operand(
+                        inst,
+                        OperandMeta::Callable(baml_compiler2_mir::function_link_name(
+                            self.db, func,
+                        )),
+                    );
                 }
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -3825,11 +3838,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
     fn make_generic_function(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
+        func: FunctionRef<'ctx>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
-        let func_name = item.to_string();
-        let global_idx = self.function_global_index(item, "MakeGenericFunction: global not found");
+        let func_name = baml_compiler2_mir::function_link_name(self.db, func);
+        let global_idx = self.function_global_index(func, "MakeGenericFunction: global not found");
         let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
         let inst = self.emit(Instruction::MakeGenericFunction {
             function: GlobalIndex::from_raw(global_idx),
@@ -4044,12 +4057,14 @@ mod tests {
         let line_starts = [0];
         let mut references = crate::UnitReferences::default();
 
+        let db = crate::tests::TestDb::default();
         let function = compile_mir_function(
             &body,
             1,
             None,
             &line_starts,
             MirCodegenContext {
+                db: &db,
                 globals: &globals,
                 interface_body_slots: &interface_body_slots,
                 classes: &classes,

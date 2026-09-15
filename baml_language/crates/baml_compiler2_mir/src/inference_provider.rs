@@ -18,6 +18,47 @@
 use baml_compiler2_ast::{ExprId as AstExprId, PatId as AstPatId, StmtId as AstStmtId};
 use baml_compiler2_hir::body::BodyOwnerId;
 pub(crate) use baml_compiler2_hir_ty::infer::Receiver;
+
+impl<'db> MemberResolution<'db> {
+    /// The callable a resolution statically names — the mirror of `hir_ty`'s
+    /// accessor: a free function, an inherent or impl-provided method, or, for
+    /// a virtual slot, the interface's own declaration of the method.
+    pub(crate) fn callable(&self, db: &'db dyn crate::Db) -> Option<FunctionRef<'db>> {
+        use baml_compiler2_hir::loc::DeclRef;
+        match self {
+            MemberResolution::Free { func_loc } => Some(*func_loc),
+            MemberResolution::Method { callee, .. } => match callee {
+                MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
+                    Some(*func_loc)
+                }
+                MethodCallee::Virtual { iface_loc, method } => match iface_loc {
+                    DeclRef::Source(interface) => {
+                        baml_compiler2_ppir::item_data::interface_data(db, *interface)
+                            .methods
+                            .iter()
+                            .copied()
+                            .find(|&func| {
+                                baml_compiler2_ppir::item_data::function_data(db, func).name
+                                    == *method
+                            })
+                            .map(DeclRef::Source)
+                    }
+                    DeclRef::External(interface) => {
+                        baml_compiler2_hir_ty::extern_loc::extern_interface_method(
+                            db,
+                            interface.head(db),
+                            method,
+                        )
+                        .map(DeclRef::External)
+                    }
+                },
+            },
+            MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => None,
+        }
+    }
+}
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef},
     infer as hir_infer,

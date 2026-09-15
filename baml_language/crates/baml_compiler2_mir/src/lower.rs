@@ -3,9 +3,13 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Name, TypePath};
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
-    callable::callable_takes_self,
+    callable::{
+        callable_display_name, callable_owner_type, callable_takes_self, lang_class_method,
+        lang_function,
+    },
     extern_loc::{
-        ExternFunctionLoc, FunctionRef, InterfaceRef, extern_function_row, extern_interface_method,
+        EnumRef, ExternFunctionLoc, FunctionRef, InterfaceRef, extern_enum_row,
+        extern_function_row, extern_interface_method, mounted_enum_loc,
     },
     package_interface::ExportedFunction,
 };
@@ -19,9 +23,9 @@ use crate::{
     builder::MirBuilder,
     inference_provider::{MethodCallee, Receiver},
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
-        ItemRef, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
-        Operand, Place, Rvalue, StatementKind, Terminator,
+        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, FunctionOwner, IndexKind,
+        IntrinsicOp, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionId,
+        MirFunctionKind, Operand, Place, Rvalue, StatementKind, SyntheticKind, Terminator,
     },
     optimize,
 };
@@ -1090,11 +1094,21 @@ fn enum_type_name(ty: &RuntimeTy) -> Option<&TypeName> {
     }
 }
 
-// ─── def_to_item_ref helper ──────────────────────────────────────────────────
+// ─── Link names: the one place MIR renders a declaration as a string ────────
 
 use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 
-pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef<'db> {
+/// The name a definition links and displays as: `pkg.ns.name` for a free
+/// item, `pkg.ns.Class.name` for a class-inherent method, and — for an
+/// interface-machinery body — `pkg.ns.<display owner>.name`, where the
+/// display owner is the interface's bare name for a default body and the
+/// synthesized `<(target as iface)>` segment for an impl-provided one.
+///
+/// A NAME, never an identity: MIR carries declarations and refs, and emit
+/// renders this exactly where a name is legitimately a key today — the unit
+/// link symbols, `Function.name`, display metadata, and the incremental
+/// edge grain.
+pub fn definition_link_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
     use baml_compiler2_ppir::item_data::{
         MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
         type_alias_data,
@@ -1110,30 +1124,26 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::Let(loc) => let_data(db, loc).name.clone(),
     };
 
-    // Function definitions: a method needs a Method-shaped ItemRef so it gets a
-    // distinct global slot keyed on its owner's name (instead of colliding with
-    // same-named free functions in the package).
+    // A method's name is qualified by its owner so it gets a distinct global
+    // slot instead of colliding with a same-named free function.
     if let Definition::Function(func_loc) = def {
         match method_owner(db, func_loc) {
             Some(MethodOwner::Class(class_loc)) => {
-                return method_item_ref(db, class_loc, func_loc);
+                return class_method_link_name(db, class_loc, func_loc);
             }
             Some(MethodOwner::Interface(iface_loc)) => {
-                // NOTE: an `ItemRef::InterfaceBody` for a REQUIRED method is
-                // a valid NAME (change-propagation and display renderers
-                // spell every declaration through here) but resolves to no
-                // slot or object — only default-BODIED methods are compiled.
-                // CALLEE positions must therefore gate on
-                // `function_has_body` before minting one (the `default.`
+                // NOTE: a REQUIRED method has a valid NAME (change-propagation
+                // and display renderers spell every declaration through
+                // here) but resolves to no slot or object — only
+                // default-BODIED methods are compiled. Callee positions gate
+                // on `function_has_body` before naming one (the `default.`
                 // bypass and default-adoption do); emit's slot resolution
                 // panics loudly on any that slips through.
-                return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
-                    package: spelling(db).of(pkg_info.root).clone(),
-                    namespace: pkg_info.namespace_path,
-                    display_owner: interface_data(db, iface_loc).name.clone(),
-                    decl: func_loc,
-                    method: name,
-                }));
+                return link_name(
+                    spelling(db).of(pkg_info.root),
+                    &pkg_info.namespace_path,
+                    &[interface_data(db, iface_loc).name.as_str(), name.as_str()],
+                );
             }
             Some(MethodOwner::Impl(impl_loc)) => {
                 // The identity is the DECLARATION (an opaque session id);
@@ -1144,27 +1154,34 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 // arguments appear in the spelling, associated-type pins do
                 // NOT (members of the impl, outputs of the match); the
                 // impl's own type variables render as frame indices (`#0`).
-                return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
-                    package: spelling(db).of(pkg_info.root).clone(),
-                    namespace: pkg_info.namespace_path,
-                    display_owner: Name::new(impl_display_segment(db, impl_loc)),
-                    decl: func_loc,
-                    method: name,
-                }));
+                return link_name(
+                    spelling(db).of(pkg_info.root),
+                    &pkg_info.namespace_path,
+                    &[&impl_display_segment(db, impl_loc), name.as_str()],
+                );
             }
             None => {}
         }
     }
 
-    ItemRef::Free {
-        package: spelling(db).of(pkg_info.root).clone(),
-        namespace: pkg_info.namespace_path,
-        name,
-    }
+    link_name(
+        spelling(db).of(pkg_info.root),
+        &pkg_info.namespace_path,
+        &[name.as_str()],
+    )
+}
+
+/// `package.ns….tail…` — the one dotted spelling every link name uses.
+fn link_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
+    let mut parts: Vec<&str> = Vec::with_capacity(1 + namespace.len() + tail.len());
+    parts.push(package.as_str());
+    parts.extend(namespace.iter().map(Name::as_str));
+    parts.extend(tail.iter().copied());
+    parts.join(".")
 }
 
 /// The synthesized `<(target as iface)>` display segment for an anonymous
-/// impl block — see the `MethodOwner::Impl` arm of [`def_to_item_ref`].
+/// impl block — see the `MethodOwner::Impl` arm of [`definition_link_name`].
 fn impl_display_segment<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
@@ -1281,7 +1298,7 @@ fn render_with_frame_indices(
 /// `baml_builtins2_codegen::extract` produces byte-for-byte for its dispatch
 /// tables and sys-op paths. This is a KEY, not a name — `Function.name`
 /// renders the canonical `<(target as iface)>` display form
-/// ([`def_to_item_ref`]) — so the written-form dependence here is confined
+/// ([`definition_link_name`]) — so the written-form dependence here is confined
 /// to the attach boundary the codegen already owns.
 pub fn native_key_for<'db>(
     db: &'db dyn crate::Db,
@@ -1295,7 +1312,7 @@ pub fn native_key_for<'db>(
     let name = function_data(db, func_loc).name.clone();
     let item = match method_owner(db, func_loc) {
         Some(MethodOwner::Class(class_loc)) => {
-            return method_item_ref(db, class_loc, func_loc).to_string();
+            return class_method_link_name(db, class_loc, func_loc);
         }
         Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
         Some(MethodOwner::Impl(impl_loc)) => {
@@ -1312,21 +1329,18 @@ pub fn native_key_for<'db>(
             ))
         }
         None => {
-            return ItemRef::Free {
-                package: spelling(db).of(pkg_info.root).clone(),
-                namespace: pkg_info.namespace_path,
-                name,
-            }
-            .to_string();
+            return link_name(
+                spelling(db).of(pkg_info.root),
+                &pkg_info.namespace_path,
+                &[name.as_str()],
+            );
         }
     };
-    ItemRef::Method {
-        package: spelling(db).of(pkg_info.root).clone(),
-        namespace: pkg_info.namespace_path,
-        class: item,
-        name,
-    }
-    .to_string()
+    link_name(
+        spelling(db).of(pkg_info.root),
+        &pkg_info.namespace_path,
+        &[item.as_str(), name.as_str()],
+    )
 }
 
 /// True if `func_loc` is an interface-machinery *body*: an impl-block method
@@ -1338,7 +1352,7 @@ pub fn native_key_for<'db>(
 /// relation that selects it — so it gets no runtime name: emit pools and slots
 /// it like any function, but excludes it from every name map
 /// (`Program::function_indices` / `function_global_indices`) and marks its
-/// `Function::is_interface_body`. The [`def_to_item_ref`] spelling for a body
+/// `Function::is_interface_body`. The [`definition_link_name`] spelling for a body
 /// is display-only plus a link-internal unit-export key — the latter makes
 /// it load-bearing as a KEY: it must be unique (coherence + the canonical
 /// rendering guarantee it; decompose enforces it).
@@ -1360,122 +1374,79 @@ pub fn function_is_interface_body<'db>(
     }
 }
 
-fn method_item_ref<'db>(
+/// `pkg.ns.Class.method` for a class-inherent method. Class-inherent only:
+/// an implements-block method is Impl-owned and reaches its
+/// `<(target as iface)>` spelling via [`definition_link_name`].
+fn class_method_link_name<'db>(
     db: &'db dyn crate::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> ItemRef<'db> {
+) -> String {
     use baml_compiler2_ppir::item_data::{class_data, function_data};
     let pkg_info = file_package(db, class_loc.file(db));
-    let class = class_data(db, class_loc).name.clone();
-    // Class-inherent methods only: an implements-block method is Impl-owned
-    // and reaches its `{iface}$for${target}` spelling via `def_to_item_ref`.
-    let method_name = function_data(db, func_loc).name.clone();
-    ItemRef::Method {
-        package: spelling(db).of(pkg_info.root).clone(),
-        namespace: pkg_info.namespace_path,
-        class,
-        name: method_name,
-    }
+    link_name(
+        spelling(db).of(pkg_info.root),
+        &pkg_info.namespace_path,
+        &[
+            class_data(db, class_loc).name.as_str(),
+            function_data(db, func_loc).name.as_str(),
+        ],
+    )
 }
 
-/// The item a member resolution links as, by dispatch mode: a callable's
-/// own item ([`function_item_ref`]), or — for a virtual interface method —
-/// the slot the runtime dispatches through ([`interface_slot_item_ref`]).
-/// Fields, variants, and virtual fields link no item.
-fn resolution_to_item_ref<'db>(
+/// The callable a member resolution links as, wherever it is declared —
+/// [`MemberResolution::callable`]: a free function, an inherent or
+/// impl-provided method, or, for a virtual slot, the interface's own
+/// declaration of the method (whose link name IS the slot's). Fields,
+/// variants, and virtual fields link no callable.
+fn resolution_callee<'db>(
     db: &'db dyn crate::Db,
     res: &crate::inference_provider::MemberResolution<'db>,
-) -> Option<ItemRef<'db>> {
-    use crate::inference_provider::MemberResolution;
-    match res {
-        MemberResolution::Free { func_loc } => Some(function_item_ref(db, *func_loc)),
-        MemberResolution::Method { callee, .. } => Some(match callee {
-            MethodCallee::Inherent(func_loc) | MethodCallee::Concrete { func_loc, .. } => {
-                function_item_ref(db, *func_loc)
-            }
-            MethodCallee::Virtual { iface_loc, method } => {
-                interface_slot_item_ref(db, *iface_loc, method)
-            }
-        }),
-        MemberResolution::Field { .. }
-        | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualField { .. } => None,
-    }
+) -> Option<FunctionRef<'db>> {
+    res.callable(db)
 }
 
-/// The item a callable links as, wherever it is declared.
-///
-/// A source declaration links as its own item: [`def_to_item_ref`] shapes a
-/// free function, a class-inherent method (Method-keyed on the owner
-/// `method_owner` records), and an interface body — an impl's provided
-/// method or an adopted default — alike. A statically-resolved interface
-/// method therefore links to the resolved BODY, never through the
-/// interface's slot: its resolution carries the owner frame that body
-/// expects (`frame_type_args`), which call lowering emits ahead of the
-/// method's own type args per the `[owner ++ own]` invariant.
-///
-/// A served package's row links as its ADDRESS — its dispatch slot — never
-/// the heads the row's own `target` spells: a blob cannot point a
-/// consumer's call at another package's symbol.
-fn function_item_ref<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> ItemRef<'db> {
+/// The name a callable links as, wherever it is declared: a source
+/// declaration by [`definition_link_name`]; a served package's row by its
+/// ADDRESS — its dispatch slot — never the heads the row's own `target`
+/// spells (a blob cannot point a consumer's call at another package's
+/// symbol).
+pub fn function_link_name<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> String {
     use baml_compiler2_hir_ty::callable::ExternalCallTarget;
     match func {
-        DeclRef::Source(func_loc) => def_to_item_ref(db, Definition::Function(func_loc)),
+        DeclRef::Source(func_loc) => definition_link_name(db, Definition::Function(func_loc)),
         DeclRef::External(callee) => match callee.slot(db) {
-            ExternalCallTarget::Free { function } => ItemRef::Free {
-                package: spelling(db).of(function.root()).clone(),
-                namespace: function.namespace().clone(),
-                name: function.name().clone(),
-            },
-            ExternalCallTarget::Method { class, name } => ItemRef::Method {
-                package: spelling(db).of(class.root()).clone(),
-                namespace: class.namespace().clone(),
-                class: class.name().clone(),
-                name,
-            },
-            ExternalCallTarget::Interface { interface, method } => ItemRef::Method {
-                package: spelling(db).of(interface.root()).clone(),
-                namespace: interface.namespace().clone(),
-                class: interface.name().clone(),
-                name: method,
-            },
+            ExternalCallTarget::Free { function } => link_name(
+                spelling(db).of(function.root()),
+                function.namespace(),
+                &[function.name().as_str()],
+            ),
+            ExternalCallTarget::Method { class, name } => link_name(
+                spelling(db).of(class.root()),
+                class.namespace(),
+                &[class.name().as_str(), name.as_str()],
+            ),
+            ExternalCallTarget::Interface { interface, method } => link_name(
+                spelling(db).of(interface.root()),
+                interface.namespace(),
+                &[interface.name().as_str(), method.as_str()],
+            ),
         },
     }
 }
 
-/// The slot a virtual interface-method call dispatches through — the
-/// interface plus the member, wherever the interface is declared; the
-/// runtime resolves it against the receiver's actual impl.
-fn interface_slot_item_ref<'db>(
-    db: &'db dyn crate::Db,
-    interface: InterfaceRef<'db>,
-    method: &Name,
-) -> ItemRef<'db> {
-    let (package, namespace, class) = match interface {
-        DeclRef::Source(iface_loc) => {
-            let pkg_info = file_package(db, iface_loc.file(db));
-            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-            (
-                spelling(db).of(pkg_info.root).clone(),
-                pkg_info.namespace_path,
-                iface_data.name.clone(),
+/// The name an enum links as, wherever it is declared.
+pub fn enum_link_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
+    match enum_ref {
+        DeclRef::Source(enum_loc) => definition_link_name(db, Definition::Enum(enum_loc)),
+        DeclRef::External(enum_loc) => {
+            let head = extern_enum_row(db, enum_loc).head;
+            link_name(
+                spelling(db).of(head.root()),
+                head.namespace(),
+                &[head.name().as_str()],
             )
         }
-        DeclRef::External(interface) => {
-            let head = interface.head(db);
-            (
-                spelling(db).of(head.root()).clone(),
-                head.namespace().clone(),
-                head.name().clone(),
-            )
-        }
-    };
-    ItemRef::Method {
-        package,
-        namespace,
-        class,
-        name: method.clone(),
     }
 }
 
@@ -2154,6 +2125,84 @@ impl<'db> LoweringContext<'db> {
         lang_roots(self.db)
     }
 
+    /// A function the language ships and lowering targets by identity
+    /// (`baml.sys.panic`, the `baml.ops` drivers, ...), whichever lane serves
+    /// the package. Its absence is a compiler/stdlib mismatch.
+    fn lang_function(
+        &self,
+        package: baml_base::LangPackage,
+        namespace: &[&str],
+        name: &str,
+    ) -> FunctionRef<'db> {
+        lang_function(self.db, package, namespace, name).unwrap_or_else(|| {
+            let path = namespace
+                .iter()
+                .copied()
+                .chain(std::iter::once(name))
+                .collect::<Vec<_>>()
+                .join(".");
+            panic!(
+                "internal compiler error: the `{}` package declares no `{path}`",
+                package.manifest_name(),
+            )
+        })
+    }
+
+    /// [`Self::lang_function`] for a class-inherent method of a language
+    /// package's root class (`baml.String.from`, `baml.Array.slice`).
+    fn lang_class_method(
+        &self,
+        package: baml_base::LangPackage,
+        class: &str,
+        method: &str,
+    ) -> FunctionRef<'db> {
+        lang_class_method(self.db, package, class, method).unwrap_or_else(|| {
+            panic!(
+                "internal compiler error: the `{}` package declares no `{class}.{method}`",
+                package.manifest_name(),
+            )
+        })
+    }
+
+    /// Whether `func` is the method `owner.name` of a language package's
+    /// root class or interface — the identity twin of a rendered-name test.
+    fn is_lang_method(
+        &self,
+        func: FunctionRef<'db>,
+        package: baml_base::LangPackage,
+        owner: &str,
+        name: &str,
+    ) -> bool {
+        self.callee_owner_is_lang(func, package, owner)
+            && callable_display_name(self.db, func).as_str() == name
+    }
+
+    /// Whether `func` is owned by `owner`, a language package's root type.
+    fn callee_owner_is_lang(
+        &self,
+        func: FunctionRef<'db>,
+        package: baml_base::LangPackage,
+        owner: &str,
+    ) -> bool {
+        callable_owner_type(self.db, func)
+            .is_some_and(|head| head.is_lang_root_type(self.lang(), package, owner))
+    }
+
+    /// The declaration an enum head names, wherever it lives. TIR admits an
+    /// enum type only by resolving its declaration, so a head that names
+    /// none here is an internal inconsistency, never a state to fall open on.
+    fn enum_ref_of(&self, qtn: &DeclName) -> EnumRef<'db> {
+        match self.source_definition(qtn) {
+            Some(Definition::Enum(enum_loc)) => DeclRef::Source(enum_loc),
+            _ => DeclRef::External(mounted_enum_loc(self.db, qtn).unwrap_or_else(|| {
+                unreachable!(
+                    "TIR admitted the enum `{}`, which no declaration in this compilation names",
+                    qtn.name()
+                )
+            })),
+        }
+    }
+
     /// The viewpoint this function's diagnostics and display strings spell
     /// types from: its own file's package.
     fn viewpoint(&self) -> baml_compiler2_hir_ty::render::Viewpoint<'db> {
@@ -2685,7 +2734,7 @@ impl<'db> LoweringContext<'db> {
 
         LoweringContext {
             db,
-            builder: MirBuilder::new(func_name, arity),
+            builder: MirBuilder::new(FunctionOwner::Function(func_loc), func_name, arity),
             locals: HashMap::new(),
             binding_locals: HashMap::new(),
             loop_context: None,
@@ -2769,7 +2818,7 @@ impl<'db> LoweringContext<'db> {
 
         LoweringContext {
             db,
-            builder: MirBuilder::new(let_name.clone(), 0),
+            builder: MirBuilder::new(FunctionOwner::Let(let_loc), let_name.clone(), 0),
             locals: HashMap::new(),
             binding_locals: HashMap::new(),
             loop_context: None,
@@ -4833,7 +4882,7 @@ impl<'db> LoweringContext<'db> {
         self.mark_captured_locals_in_scope_tree(self.current_scope);
 
         // Take the builder out of self to call `build()` which consumes it
-        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
         optimize::optimize_function(&mut mir, self.opt);
@@ -4950,7 +4999,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.return_();
 
         // Take the builder out and build the MirFunctionBody
-        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut body = builder.build_body();
         optimize::optimize_function_body(&mut body, self.opt);
@@ -4982,6 +5031,11 @@ impl<'db> LoweringContext<'db> {
         let lambda_idx_name = *lambda_count;
         *lambda_count += 1;
         let lambda_name = format!("<lambda({parent_name}, {lambda_idx_name})>");
+        let lambda_identity = MirFunctionId::Synthetic {
+            parent: Box::new(self.builder.owner().clone()),
+            kind: SyntheticKind::Lambda,
+            ordinal: lambda_idx_name,
+        };
 
         // Find the lambda's FileScopeId from the HIR index.
         // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
@@ -5034,7 +5088,11 @@ impl<'db> LoweringContext<'db> {
         // Save parent state.
         let saved_builder = std::mem::replace(
             &mut self.builder,
-            MirBuilder::new(Name::new(&lambda_name), 0),
+            MirBuilder::new(
+                FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
+                Name::new(&lambda_name),
+                0,
+            ),
         );
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
@@ -5072,7 +5130,11 @@ impl<'db> LoweringContext<'db> {
 
         // Set up a fresh builder with the correct arity.
         let arity = func_def.params.len();
-        self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
+        self.builder = MirBuilder::new(
+            FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
+            Name::new(&lambda_name),
+            arity,
+        );
 
         // Keep the checked parameter types for interface dispatch inside the
         // lambda, including inferred parameters and enclosing generic bounds.
@@ -5167,16 +5229,10 @@ impl<'db> LoweringContext<'db> {
         // entering this lambda).
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
 
-        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
         optimize::optimize_function(&mut lambda_mir, self.opt);
-        // Override item_ref with the synthetic name.
-        lambda_mir.item_ref = ItemRef::Free {
-            package: Name::new(""),
-            namespace: vec![],
-            name: Name::new(&lambda_name),
-        };
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
@@ -5361,7 +5417,7 @@ impl<'db> LoweringContext<'db> {
     ) {
         // ── Resolve the tag function. TIR (M4d.3) already validated it is a
         //    //baml:tagged_string fn whose first param is
-        //    `body: (...) -> baml.TaggedString`; resolve again for its ItemRef
+        //    `body: (...) -> baml.TaggedString`; resolve again for its callee
         //    + signature (the body-lambda param names/types). ──
         let tag_span_start = self
             .source_map
@@ -5403,7 +5459,7 @@ impl<'db> LoweringContext<'db> {
             self.emit_panic_call("tagged-template tag did not resolve to a function", expr_id);
             return;
         };
-        let tag_item_ref = def_to_item_ref(self.db, Definition::Function(tag_func_loc));
+        let tag_callee = DeclRef::Source(tag_func_loc);
 
         // ── Body-lambda params + closure type from the tag's `body` param. ──
         let tag_sig = baml_compiler2_ppir::function_signature(self.db, tag_func_loc);
@@ -5460,7 +5516,7 @@ impl<'db> LoweringContext<'db> {
             self.build_tagged_body_closure(expr_id, body, &body_params, closure_ty, static_layout);
 
         // ── Emit `tag(closure)` → dest. The result is the template's value. ──
-        let callee = Operand::Constant(Constant::Function(tag_item_ref));
+        let callee = Operand::Constant(Constant::Function(tag_callee));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         match &dest {
@@ -5533,6 +5589,11 @@ impl<'db> LoweringContext<'db> {
             i
         };
         let lambda_name = format!("<tagged({parent_name}, {idx})>");
+        let lambda_identity = MirFunctionId::Synthetic {
+            parent: Box::new(self.builder.owner().clone()),
+            kind: SyntheticKind::Tagged,
+            ordinal: idx,
+        };
 
         // Find the HIR Lambda scope registered for this tagged template (its
         // span == the tagged-template expr span; see HIR walk_tagged_template_body).
@@ -5578,7 +5639,11 @@ impl<'db> LoweringContext<'db> {
         // — the interpolation exprs live in the current (enclosing) ExprBody.
         let saved_builder = std::mem::replace(
             &mut self.builder,
-            MirBuilder::new(Name::new(&lambda_name), 0),
+            MirBuilder::new(
+                FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
+                Name::new(&lambda_name),
+                0,
+            ),
         );
         let saved_locals = std::mem::take(&mut self.locals);
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
@@ -5607,7 +5672,11 @@ impl<'db> LoweringContext<'db> {
             .collect();
 
         let arity = body_params.len();
-        self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
+        self.builder = MirBuilder::new(
+            FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
+            Name::new(&lambda_name),
+            arity,
+        );
 
         // Return place _0.
         let ret = self.builder.declare_local(
@@ -5734,15 +5803,10 @@ impl<'db> LoweringContext<'db> {
         self.mark_captured_locals_in_scope_tree(lambda_scope_id);
 
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
-        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
         optimize::optimize_function(&mut lambda_mir, self.opt);
-        lambda_mir.item_ref = ItemRef::Free {
-            package: Name::new(""),
-            namespace: vec![],
-            name: Name::new(&lambda_name),
-        };
         lambda_mir.lambdas = nested_lambdas;
 
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
@@ -6544,7 +6608,7 @@ impl<'db> LoweringContext<'db> {
                         let takes_self = callable_takes_self(self.db, *func_loc);
                         // Bound method reference: lower receiver and emit MakeBoundMethod.
                         let resolution = member_resolutions.into_iter().last().unwrap();
-                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        if let Some(item) = resolution_callee(self.db, &resolution) {
                             if !takes_self {
                                 // TIR admitted the reference, so a missing
                                 // prefix type or dispatch view is an internal
@@ -6580,7 +6644,7 @@ impl<'db> LoweringContext<'db> {
                             self.builder.assign(
                                 dest,
                                 Rvalue::MakeBoundMethod {
-                                    item_ref: item,
+                                    func: item,
                                     receiver: receiver_op,
                                 },
                             );
@@ -6635,7 +6699,7 @@ impl<'db> LoweringContext<'db> {
                         // by routing those through `MakeVirtualFunction` with
                         // the resolution's carried frame.
                         let resolution = member_resolutions.into_iter().last().unwrap();
-                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        if let Some(item) = resolution_callee(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -6672,7 +6736,7 @@ impl<'db> LoweringContext<'db> {
                         receiver: Receiver::Bound,
                     } => {
                         // Bound method reference via flat resolutions: emit MakeBoundMethod.
-                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        if let Some(item) = resolution_callee(self.db, &resolution) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
                                 self.path_receiver_root(expr_id, &segments[0]).map_or_else(
@@ -6692,7 +6756,7 @@ impl<'db> LoweringContext<'db> {
                             self.builder.assign(
                                 dest,
                                 Rvalue::MakeBoundMethod {
-                                    item_ref: item,
+                                    func: item,
                                     receiver: receiver_op,
                                 },
                             );
@@ -6758,7 +6822,7 @@ impl<'db> LoweringContext<'db> {
                         // route local- and type-rooted refs to the virtual
                         // roads; what remains is the mounted-UFCS value
                         // shape). See that arm's note for the fix.
-                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        if let Some(item) = resolution_callee(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -6841,11 +6905,7 @@ impl<'db> LoweringContext<'db> {
                 .cloned()
                 .as_ref()
             {
-                let enum_ref = ItemRef::EnumType {
-                    package: self.spelling.of(qtn.root()).clone(),
-                    namespace: qtn.namespace().clone(),
-                    name: qtn.name().clone(),
-                };
+                let enum_ref = self.enum_ref_of(qtn);
                 self.builder.assign(
                     dest,
                     Rvalue::Use(Operand::Constant(Constant::EnumVariant {
@@ -6894,11 +6954,12 @@ impl<'db> LoweringContext<'db> {
                 self.lower_item_ref(expr_id, def, dest);
             }
             ResolvedName::Builtin(def) => {
-                let item = def_to_item_ref(self.db, def);
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                );
+                let constant = match def {
+                    Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
+                    other => Constant::GlobalItem(other),
+                };
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
             ResolvedName::Local { .. } | ResolvedName::Unknown => {
                 if self
@@ -7175,42 +7236,28 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
-        let item = def_to_item_ref(self.db, def);
-        // Check if this expression's type is EnumVariant
-        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) = self
+        // An item TIR typed as an enum variant is that variant's value.
+        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
             .tir_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .as_ref()
         {
-            let variant_name = variant.clone();
-            // Convert the Free item ref to an EnumType variant
-            let enum_ref = match item {
-                ItemRef::Free {
-                    package,
-                    namespace,
-                    name,
-                } => ItemRef::EnumType {
-                    package,
-                    namespace,
-                    name,
-                },
-                other => other,
-            };
+            let enum_ref = self.enum_ref_of(qtn);
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::EnumVariant {
                     enum_ref,
-                    variant: variant_name,
+                    variant: variant.clone(),
                 })),
             );
             return;
         }
         // A function reference becomes a pooled function-value wrapper at
-        // emit; any other item (a client, a top-level `let`, a template
-        // string, ...) is a plain read of the global slot `$init` filled.
+        // emit; any other item (a client, a top-level `let`, ...) is a plain
+        // read of the global slot `$init` filled.
         let constant = match def {
-            Definition::Function(_) => Constant::Function(item),
-            _ => Constant::GlobalItem(item),
+            Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
+            other => Constant::GlobalItem(other),
         };
         self.builder
             .assign(dest, Rvalue::Use(Operand::Constant(constant)));
@@ -7426,11 +7473,11 @@ impl<'db> LoweringContext<'db> {
         result_ty: RuntimeTy,
         dest: Place,
     ) {
-        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("ops")],
-            name: Name::new(driver),
-        }));
+        let callee = Operand::Constant(Constant::Function(self.lang_function(
+            baml_base::LangPackage::Baml,
+            &["ops"],
+            driver,
+        )));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let needs_temp = !matches!(dest, Place::Local(_));
         let call_dest = if needs_temp {
@@ -8332,12 +8379,11 @@ impl<'db> LoweringContext<'db> {
         let mut all_args = type_arg_ops;
         all_args.push(recv_op);
 
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Method {
-            package: Name::new("baml"),
-            namespace: vec![],
-            class: Name::new("String"),
-            name: Name::new("from"),
-        }));
+        let callee_op = Operand::Constant(Constant::Function(self.lang_class_method(
+            baml_base::LangPackage::Baml,
+            "String",
+            "from",
+        )));
         // `string.from` is `throws never`; the unwind target is harmless/unused.
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
@@ -8481,11 +8527,11 @@ impl<'db> LoweringContext<'db> {
         let mut all_args = type_arg_ops;
         all_args.push(recv_op);
 
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("json")],
-            name: Name::new("from"),
-        }));
+        let callee_op = Operand::Constant(Constant::Function(self.lang_function(
+            baml_base::LangPackage::Baml,
+            &["json"],
+            "from",
+        )));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         if let Place::Local(_) = dest {
@@ -8602,11 +8648,11 @@ impl<'db> LoweringContext<'db> {
         let mut all_args = type_arg_ops;
         all_args.push(arg_op);
 
-        let callee_op = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("json")],
-            name: Name::new("to"),
-        }));
+        let callee_op = Operand::Constant(Constant::Function(self.lang_function(
+            baml_base::LangPackage::Baml,
+            &["json"],
+            "to",
+        )));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         if let Place::Local(_) = dest {
@@ -8859,7 +8905,7 @@ impl<'db> LoweringContext<'db> {
                 &current_pkg.namespace_path,
             )
                 // The callee IS the interface's default body: reference it by
-                // its declaration (`ItemRef::InterfaceBody`), the only key a
+                // its declaration, the only key a
                 // body has. Restricted to DEFAULT-BODIED methods, mirroring
                 // TIR's `default_member`: a declared FIELD (possibly
                 // function-typed and called through the view) and a bodyless
@@ -8879,8 +8925,7 @@ impl<'db> LoweringContext<'db> {
                                 && baml_compiler2_ppir::item_data::function_has_body(self.db, loc)
                         })
             {
-                let item_ref = def_to_item_ref(self.db, Definition::Function(default_loc));
-                let callee_op = Operand::Constant(Constant::Function(item_ref));
+                let callee_op = Operand::Constant(Constant::Function(DeclRef::Source(default_loc)));
                 let Some(&self_local) = self.locals.get(&Name::new("self")) else {
                     return;
                 };
@@ -9226,7 +9271,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         match resolution
                             .as_ref()
-                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                            .and_then(|r| resolution_callee(self.db, r))
                         {
                             Some(item) => Operand::Constant(Constant::Function(item)),
                             None => self.lower_normalized_callee_operand(callee, callee_expr),
@@ -9239,7 +9284,7 @@ impl<'db> LoweringContext<'db> {
                     // Non-self method or package function reference:
                     // e.g. Factory<int>.create(42), baml.Array.length(array).
                     // Resolve the callee as a plain function constant using
-                    // resolution_to_item_ref to avoid lower_member_access emitting
+                    // resolution_callee to avoid lower_member_access emitting
                     // MakeBoundMethod (which would try to load the base type as a
                     // runtime value).
                     //
@@ -9267,7 +9312,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         match resolution
                             .as_ref()
-                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                            .and_then(|r| resolution_callee(self.db, r))
                         {
                             Some(item) => Operand::Constant(Constant::Function(item)),
                             None => self.lower_normalized_callee_operand(callee, callee_expr),
@@ -9322,7 +9367,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 let callee_op = match method_resolution
                     .as_ref()
-                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                    .and_then(|r| resolution_callee(self.db, r))
                 {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
@@ -9400,7 +9445,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 let callee_op = match flat_resolution
                     .as_ref()
-                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                    .and_then(|r| resolution_callee(self.db, r))
                 {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
@@ -9446,8 +9491,8 @@ impl<'db> LoweringContext<'db> {
         // reference to the compiler-owned declaration.
         if matches!(
             &callee_operand,
-            Operand::Constant(Constant::Function(item))
-                if item.to_string() == "reflect.Package.current"
+            Operand::Constant(Constant::Function(func))
+                if self.is_lang_method(*func, baml_base::LangPackage::Reflect, "Package", "current")
         ) {
             let package = self
                 .spelling
@@ -9460,13 +9505,14 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Check if callee is `.length()` on a container — emit Rvalue::Len instead of Call.
-        if let Operand::Constant(Constant::Function(ref item)) = callee_operand {
-            let name = item.to_string();
-            if name == "baml.Array.length"
-                || name == "baml.Map.length"
-                || name == "baml.string.length"
-                || name == "baml.Uint8Array.length"
-            {
+        if let Operand::Constant(Constant::Function(func)) = &callee_operand {
+            // `length` of the language's containers lowers to `Len`. (A
+            // `string.length` arm was once spelled here with a lowercase class
+            // name that no declaration renders, so it never fired; it is not
+            // carried over — enabling it would be a lowering change.)
+            if ["Array", "Map", "Uint8Array"].iter().any(|owner| {
+                self.is_lang_method(*func, baml_base::LangPackage::Baml, owner, "length")
+            }) {
                 if let Some(receiver_operand) = arg_operands.first() {
                     let place = match receiver_operand {
                         Operand::Copy(p) | Operand::Move(p) => p.clone(),
@@ -9541,32 +9587,15 @@ impl<'db> LoweringContext<'db> {
         let receiver_class_type_args: Vec<Tir2Ty> =
             match (&callee_operand, receiver_tir_ty.as_ref()) {
                 (_, Some(Tir2Ty::Class(_, class_type_args, _))) => class_type_args.to_vec(),
-                (
-                    Operand::Constant(Constant::Function(ItemRef::Method {
-                        package,
-                        namespace,
-                        class,
-                        ..
-                    })),
-                    Some(Tir2Ty::List(inner, _)),
-                ) if package.as_str() == "baml"
-                    && namespace.is_empty()
-                    && class.as_str() == "Array" =>
+                (Operand::Constant(Constant::Function(func)), Some(Tir2Ty::List(inner, _)))
+                    if self.callee_owner_is_lang(*func, baml_base::LangPackage::Baml, "Array") =>
                 {
                     vec![inner.as_ref().clone()]
                 }
                 (
-                    Operand::Constant(Constant::Function(ItemRef::Method {
-                        package,
-                        namespace,
-                        class,
-                        ..
-                    })),
+                    Operand::Constant(Constant::Function(func)),
                     Some(Tir2Ty::Map { key, value, .. }),
-                ) if package.as_str() == "baml"
-                    && namespace.is_empty()
-                    && class.as_str() == "Map" =>
-                {
+                ) if self.callee_owner_is_lang(*func, baml_base::LangPackage::Baml, "Map") => {
                     vec![key.as_ref().clone(), value.as_ref().clone()]
                 }
                 _ => Vec::new(),
@@ -9997,7 +10026,7 @@ impl<'db> LoweringContext<'db> {
             && let baml_compiler2_hir_ty::callable::ExternalCallTarget::Free { function } =
                 external.slot(self.db)
             && row.builtin_kind == Some(BuiltinKind::Intrinsic)
-            && self.spelling.of(function.root()).as_str() == "log"
+            && self.lang().is(baml_base::LangPackage::Log, function.root())
             && function.namespace().is_empty()
         {
             return match function.name().as_str() {
@@ -10044,12 +10073,20 @@ impl<'db> LoweringContext<'db> {
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Intrinsic) = body.as_ref() {
-                    let item_ref = def_to_item_ref(self.db, Definition::Function(fl));
-                    return match item_ref.to_string().as_str() {
-                        "log.info" => Some(IntrinsicOp::Log(LogLevel::Info)),
-                        "log.debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
-                        "log.warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
-                        "log.error" => Some(IntrinsicOp::Log(LogLevel::Error)),
+                    let pkg = file_package(self.db, fl.file(self.db));
+                    if !self.lang().is(baml_base::LangPackage::Log, pkg.root)
+                        || !pkg.namespace_path.is_empty()
+                    {
+                        return None;
+                    }
+                    return match baml_compiler2_ppir::item_data::function_data(self.db, fl)
+                        .name
+                        .as_str()
+                    {
+                        "info" => Some(IntrinsicOp::Log(LogLevel::Info)),
+                        "debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
+                        "warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
+                        "error" => Some(IntrinsicOp::Log(LogLevel::Error)),
                         _ => None,
                     };
                 }
@@ -10150,11 +10187,12 @@ impl<'db> LoweringContext<'db> {
             ) {
                 return None;
             }
-            let item_ref = def_to_item_ref(
-                self.db,
-                baml_compiler2_hir::contributions::Definition::Function(func_loc),
-            );
-            if item_ref.to_string().as_str() != "reflect.Type.of" {
+            if !self.is_lang_method(
+                DeclRef::Source(func_loc),
+                baml_base::LangPackage::Reflect,
+                "Type",
+                "of",
+            ) {
                 return None;
             }
         }
@@ -10466,7 +10504,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
-    /// function `ItemRef` and all type args are fully concrete, emit a pooled,
+    /// function and all type args are fully concrete, emit a pooled,
     /// interned `Constant::GenericFunction` (pointer-stable; seeds
     /// `frame.type_args` when called). Otherwise fall back to lowering the base
     /// value with type args erased — for exotic bases (bound methods, lambdas)
@@ -10479,7 +10517,7 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
     ) {
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
-            // Non-`ItemRef` base (a local/captured generic function value):
+            // A value base (a local/captured generic function value):
             // there is no function global to pool, so specialize the *runtime
             // value* — evaluate it and wrap it in a closure carrying the
             // (frame-resolved) type args — instead of silently erasing them.
@@ -10510,7 +10548,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::GenericFunction {
-                    item,
+                    func: item,
                     type_args: concrete,
                 })),
             );
@@ -10521,17 +10559,18 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(
                 dest,
                 Rvalue::MakeGenericFunction {
-                    item,
+                    func: item,
                     type_arg_templates: templates,
                 },
             );
         }
     }
 
-    /// Resolve a `GenericApply` base to the underlying function `ItemRef` (free
-    /// function or static/interface method). `None` for bound methods, lambdas,
-    /// or anything that is not a function path.
-    fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef<'db>> {
+    /// Resolve a `GenericApply` base to the underlying function (a free
+    /// function or a static/interface method), wherever it is declared.
+    /// `None` for bound methods, lambdas, or anything that is not a function
+    /// path.
+    fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<FunctionRef<'db>> {
         use crate::inference_provider::MemberResolution;
         let is_fn = |r: &MemberResolution<'_>| {
             matches!(
@@ -10553,7 +10592,7 @@ impl<'db> LoweringContext<'db> {
             .tir_path_member_resolutions(key)
             .and_then(|rs| rs.last())
             .filter(|r| is_fn(r))
-            .and_then(|r| resolution_to_item_ref(self.db, r))
+            .and_then(|r| resolution_callee(self.db, r))
         {
             return Some(item);
         }
@@ -10561,7 +10600,7 @@ impl<'db> LoweringContext<'db> {
         if let Some(item) = self
             .tir_resolution(key)
             .filter(|r| is_fn(r))
-            .and_then(|r| resolution_to_item_ref(self.db, r))
+            .and_then(|r| resolution_callee(self.db, r))
         {
             return Some(item);
         }
@@ -10581,9 +10620,9 @@ impl<'db> LoweringContext<'db> {
                 &segments[0],
                 self.scope_func_name.as_ref(),
             ) {
-                ResolvedName::Item(def @ Definition::Function(_))
-                | ResolvedName::Builtin(def @ Definition::Function(_)) => {
-                    return Some(def_to_item_ref(self.db, def));
+                ResolvedName::Item(Definition::Function(func))
+                | ResolvedName::Builtin(Definition::Function(func)) => {
+                    return Some(DeclRef::Source(func));
                 }
                 _ => {}
             }
@@ -10638,11 +10677,11 @@ impl<'db> LoweringContext<'db> {
 
     fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
         // Emit a call to baml.sys.panic with the error message
-        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("sys")],
-            name: Name::new("panic"),
-        }));
+        let callee = Operand::Constant(Constant::Function(self.lang_function(
+            baml_base::LangPackage::Baml,
+            &["sys"],
+            "panic",
+        )));
         let msg = Operand::Constant(Constant::String(message.to_string()));
         let temp = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
@@ -10663,11 +10702,11 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn lower_current_runtime_id(&mut self, dest: Place) {
-        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("id")],
-            name: Name::new("current"),
-        }));
+        let callee = Operand::Constant(Constant::Function(self.lang_function(
+            baml_base::LangPackage::Baml,
+            &["id"],
+            "current",
+        )));
         let resume = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder.call(callee, Vec::new(), dest, resume, unwind);
@@ -10675,11 +10714,11 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn lower_set_runtime_id(&mut self, value: AstExprId) {
-        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("id")],
-            name: Name::new("set"),
-        }));
+        let callee = Operand::Constant(Constant::Function(self.lang_function(
+            baml_base::LangPackage::Baml,
+            &["id"],
+            "set",
+        )));
         let arg = self.lower_to_operand(value);
         let dest = self.builder.temp(RuntimeTy::String {
             attr: TyAttr::default(),
@@ -11095,13 +11134,13 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                     // Bound method reference: lower receiver and emit MakeBoundMethod.
-                    let item = resolution_to_item_ref(self.db, &resolution);
+                    let item = resolution_callee(self.db, &resolution);
                     if let Some(item) = item {
                         let receiver_op = self.lower_to_operand(base);
                         self.builder.assign(
                             dest,
                             Rvalue::MakeBoundMethod {
-                                item_ref: item,
+                                func: item,
                                 receiver: receiver_op,
                             },
                         );
@@ -11114,7 +11153,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 | MemberResolution::Free { .. } => {
                     // Unbound method or free function reference: emit a plain function constant.
-                    let item = resolution_to_item_ref(self.db, &resolution);
+                    let item = resolution_callee(self.db, &resolution);
                     if let Some(item) = item {
                         self.builder.assign(
                             dest,
@@ -11177,11 +11216,7 @@ impl<'db> LoweringContext<'db> {
             .cloned()
             .as_ref()
         {
-            let enum_ref = ItemRef::EnumType {
-                package: self.spelling.of(qtn.root()).clone(),
-                namespace: qtn.namespace().clone(),
-                name: qtn.name().clone(),
-            };
+            let enum_ref = self.enum_ref_of(qtn);
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::EnumVariant {
@@ -12846,11 +12881,11 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Missing => {
-                let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-                    package: Name::new("baml"),
-                    namespace: vec![Name::new("sys")],
-                    name: Name::new("panic"),
-                }));
+                let callee = Operand::Constant(Constant::Function(self.lang_function(
+                    baml_base::LangPackage::Baml,
+                    &["sys"],
+                    "panic",
+                )));
                 let msg = Operand::Constant(Constant::String("missing statement".to_string()));
                 let temp = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
@@ -14473,12 +14508,11 @@ impl<'db> LoweringContext<'db> {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder.call(
-            Operand::Constant(Constant::Function(ItemRef::Method {
-                package: Name::new("baml"),
-                namespace: Vec::new(),
-                class: Name::new("Array"),
-                name: Name::new("slice"),
-            })),
+            Operand::Constant(Constant::Function(self.lang_class_method(
+                baml_base::LangPackage::Baml,
+                "Array",
+                "slice",
+            ))),
             vec![
                 Operand::Copy(Place::local(scrutinee)),
                 Operand::Copy(Place::local(start)),
@@ -14619,11 +14653,7 @@ impl<'db> LoweringContext<'db> {
                     else {
                         unreachable!("guarded by matches! above");
                     };
-                    let enum_ref = ItemRef::EnumType {
-                        package: self.spelling.of(qtn.root()).clone(),
-                        namespace: qtn.namespace().clone(),
-                        name: qtn.name().clone(),
-                    };
+                    let enum_ref = self.enum_ref_of(qtn);
                     let variant = variant.clone();
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
@@ -15706,19 +15736,13 @@ fn lower_function_impl<'db>(
 ) -> MirFunction<'db> {
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
-    let item_ref = def_to_item_ref(
-        db,
-        baml_compiler2_hir::contributions::Definition::Function(func_loc),
-    );
     let sig = baml_compiler2_ppir::function_signature(db, func_loc);
     let arity = sig.params.len();
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
-            let mut mir = ctx.lower_function_body();
-            mir.item_ref = item_ref;
-            mir
+            ctx.lower_function_body()
         }
         FunctionBody::Builtin(kind) => {
             use baml_compiler2_ast::BuiltinKind;
@@ -15753,7 +15777,7 @@ fn lower_function_impl<'db>(
             MirFunction {
                 arity: arity + extra_arity,
                 span: None,
-                item_ref,
+                identity: MirFunctionId::Declared(func_loc),
                 kind: MirFunctionKind::Builtin(*kind),
                 lambdas: vec![],
                 signature: None,
@@ -15762,7 +15786,7 @@ fn lower_function_impl<'db>(
         FunctionBody::Missing => MirFunction {
             arity,
             span: None,
-            item_ref,
+            identity: MirFunctionId::Declared(func_loc),
             kind: MirFunctionKind::Bytecode(MirFunctionBody {
                 blocks: vec![BasicBlock {
                     id: BlockId(0),

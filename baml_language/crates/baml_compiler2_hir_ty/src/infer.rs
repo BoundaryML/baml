@@ -49,7 +49,6 @@ use baml_type::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::package_interface::ResolvedValue;
 use crate::{
     callable::{
         callable_display_name, callable_generic_frame, callable_owner_type, callable_signature,
@@ -67,6 +66,7 @@ use crate::{
     lower::{
         LowerCtx, function_generic_frame, function_signature, lower_ctx_for_file, substitute_params,
     },
+    package_interface::ResolvedValue,
     render::Spell,
 };
 
