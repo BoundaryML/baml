@@ -120,9 +120,9 @@ rate instead (`aim`): the rate at which people are said to learn best, as
 against what measuring them asks for. `exposure` penalises an item each time
 it has already been served, so a rule may come round as often as the estimate
 wants it while the same template does not. Both are measured in the suite: a
-perfect learner's questions get deeper over a sitting, the same item comes
-round three times at most, and certifying one costs 55 questions where it
-had cost 79 and failed one sitting in two.
+perfect learner's questions get deeper over a sitting, no item comes round
+more than four times in sixty-odd questions, and certifying one costs 38 to
+72 questions where it had cost 79 and failed one sitting in two.
 
 ## Interestingness
 

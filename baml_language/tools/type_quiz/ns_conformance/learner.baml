@@ -185,7 +185,7 @@ function expert_report() -> string throws never {
     let knobs = root.engine.default_knobs();
     // Over twelve sittings, not one. What it costs to certify a perfect
     // learner varies enormously with the draw — the spread below runs from
-    // the high forties to the budget — so a single session measures the luck
+    // the high thirties to the budget — so a single session measures the luck
     // of that session, and the version of this test that asked one certified
     // by chance.
     let steps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((session) -> {
@@ -305,9 +305,10 @@ function escalation_of(learner: Learner) -> string throws never {
 
 /// How often the same item comes round in a perfect learner's sitting: the
 /// five most-served items with their counts, and how many distinct items
-/// the sitting drew on. Three models that sat the quiz each rated it five
-/// of five for repetition and counted the same template six to ten times;
-/// this is that, as a number.
+/// the sitting drew on. Three models that sat the quiz each rated it five of
+/// five for repetition and counted the same template six to ten times; this
+/// is that, as a number, and `exposure` is what brought it down to the
+/// handful the pin below records.
 function repetition_report() -> string throws never {
     let sat = sit(expert, root.engine.default_knobs(), 3);
     let counts: map<string, int> = {};
@@ -328,7 +329,7 @@ function repetition_report() -> string throws never {
 test "learner: the same item comes round again and again" {
     assert.equal(
         repetition_report(),
-        `steps=55 distinct=35 top=["error_covariant=3", "double_contravariance=3", "carried_2=3", "carried_3=3", "map_value_invariant=3"]`,
+        `steps=64 distinct=36 top=["double_contravariance=4", "error_covariant=3", "carried_2=3", "carried_3=3", "map_value_invariant=3"]`,
     )
 }
 
@@ -349,14 +350,14 @@ function mean_of(values: int[]) -> int throws never {
 test "learner: a learner of the axioms is not marched into depth" {
     assert.equal(
         beginner_escalation_report(),
-        `steps=80 depth_first20=120 depth_last20=145 spread=["1:58", "2:17", "3:3", "4:2", "5:0"] chance_last20=5540`,
+        `steps=80 depth_first20=130 depth_last20=145 spread=["1:58", "2:18", "3:2", "4:2", "5:0"] chance_last20=5830`,
     )
 }
 
 test "learner: the questions stop getting harder once the bank runs out of depth" {
     assert.equal(
         escalation_report(),
-        `steps=55 depth_first20=155 depth_last20=180 spread=["1:35", "2:9", "3:6", "4:3", "5:2"] chance_last20=7870`,
+        `steps=64 depth_first20=155 depth_last20=185 spread=["1:40", "2:12", "3:7", "4:3", "5:2"] chance_last20=8195`,
     )
 }
 
@@ -426,7 +427,7 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: certifying a perfect learner costs 49 to 80 questions, and twice in twelve does not finish" {
+test "learner: certifying a perfect learner costs 38 to 72 questions, and twice in twelve does not finish" {
     // The two that do not finish are the measurement, not a fluke to be tuned
     // away: at this budget a learner who answers everything right is left
     // uncertified about one sitting in six, and three models that sat the quiz
@@ -435,7 +436,7 @@ test "learner: certifying a perfect learner costs 49 to 80 questions, and twice 
     // where it would be fixed.
     assert.equal(
         expert_report(),
-        `certified=9 of 12 steps=["Mastered:70", "Budget:80", "Mastered:55", "Mastered:59", "Mastered:74", "Mastered:66", "Mastered:63", "Budget:80", "Mastered:79", "Mastered:65", "Mastered:62", "Budget:80"] withheld=0.0 suspected=none`,
+        `certified=10 of 12 steps=["Mastered:70", "Mastered:70", "Mastered:64", "Mastered:53", "Mastered:38", "Mastered:66", "Mastered:63", "Budget:80", "Mastered:47", "Mastered:65", "Mastered:72", "Budget:80"] withheld=0.0 suspected=none`,
     )
 }
 
@@ -450,7 +451,7 @@ test "learner: a learner who never commits is never certified" {
 test "learner: strict coverage costs more questions than an overall picture" {
     assert.equal(
         coverage_report(),
-        "loose_first=true loose_done=Mastered loose_steps=55 strict_done=Mastered strict_steps=62 uncertified=0 rules=30",
+        "loose_first=true loose_done=Mastered loose_steps=64 strict_done=Mastered strict_steps=64 uncertified=0 rules=30",
     )
 }
 
@@ -468,14 +469,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=95 leading=spelling=16,bounds=5,structural=-1,typescript=-3,covariant=-6",
+        "suspected=none why=Budget commits_unsure=96 leading=spelling=16,structural=2,bounds=1,typescript=-1,covariant=-6",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=84,covariant=60,bounds=50,structural=49,spelling=6 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=61,covariant=17,bounds=6,structural=-7,spelling=-25 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -778,5 +779,5 @@ function leaning_report() -> string throws never {
 }
 
 test "sitting: the answer a question asks about is close to an even split" {
-    assert.equal(leaning_report(), "compiled=61 of=158")
+    assert.equal(leaning_report(), "compiled=65 of=151")
 }

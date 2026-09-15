@@ -654,6 +654,85 @@ function pairing_report() -> string throws never {
     `cases=${found.length()} paired=${paired} items=${pairing.length()} of ${ids.length()} mixed=${mixed} faults=${faults.join(", ")}`
 }
 
+/// Every model a case claims to trap, against what that model would answer.
+///
+/// A trap is a claim about a naive reader: shown this program, its beliefs
+/// lead it to the wrong verdict. The claim is not cosmetic — a trapped model
+/// accrues suspicion from the answer, the case is read as harder for carrying
+/// the trap, and selection prefers it — so a case that names the wrong models
+/// teaches the learner model something false about the learner.
+///
+/// What a model would answer is its belief about the pair, read AT THE CASE'S
+/// SITE. That is the whole of this check, and the whole of the defect it
+/// exists to catch: a flow site accepts what flows into it while the coherence
+/// site rejects exactly the pair that is equivalent, so a trap set worked out
+/// with the flow-site question comes out inverted wherever the site inverts
+/// the verdict.
+///
+/// The sweep mirrors `registry.items()`: every fact, at every site it can be
+/// written at.
+function trap_faults(seeds: int) -> string[] throws never {
+    root.bank.facts().flat_map((fact) -> {
+        baml.iter.Range.new(0, seeds)
+            .flat_map((i) -> {
+                let seed = root.engine.seed_for(`flow/${fact.name}`, i);
+                let none: string[] = [];
+                let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
+                    ?? return none;
+                let one = root.bank.flowed(drawn, drawn.reversed);
+                let traps = root.bank.flow_traps(drawn.d, one);
+                root.bank.models().filter_map((model) -> {
+                    let says = root.bank.predicted(drawn.d, one, model)
+                        ?? return null;
+                    let listed = traps.some((id) -> {
+                        id == model.id
+                    });
+                    if (listed == (says != one.compiles)) {
+                        null
+                    } else if (listed) {
+                        `${fact.name}#${i} ${model.id}: listed, but it answers as the key does`
+                    } else {
+                        `${fact.name}#${i} ${model.id}: answers against the key, but is not listed`
+                    }
+                })
+            })
+            .collect()
+    })
+}
+
+test "traps: a case names exactly the models its own site would fool" {
+    assert.equal(trap_faults(8).join("\n"), "")
+}
+
+/// The coherence site worked by hand, as an anchor the sweep cannot drift
+/// with: two implementations of one interface for one type conflict under
+/// every model's beliefs, so no model is fooled and nothing is trapped.
+function trap_witness() -> string throws never {
+    let found = root.bank.facts().filter_map((fact) -> {
+        if (fact.name != "identity") {
+            return null;
+        }
+        baml.iter.Range.new(0, 16)
+            .filter_map((i) -> {
+                let seed = root.engine.seed_for(`flow/${fact.name}`, i);
+                let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
+                    ?? return null;
+                if (drawn.site != root.algebra.SiteKind.Coherence) {
+                    return null;
+                }
+                let one = root.bank.flowed(drawn, drawn.reversed);
+                `compiles=${one.compiles} traps=${root.bank.flow_traps(drawn.d, one)}`
+            })
+            .collect()
+            .at(0)
+    });
+    found.at(0) ?? "no coherence case drawn"
+}
+
+test "traps: nobody is fooled by a conflict every model predicts" {
+    assert.equal(trap_witness(), "compiles=false traps=[]")
+}
+
 test "pairs: every foil is the same program a step away, answering the other way" {
     assert.equal(pairing_report(), "cases=160 paired=72 items=18 of 40 mixed=[] faults=")
 }

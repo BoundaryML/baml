@@ -167,8 +167,16 @@ function draw_flow(
 
 /// One direction of a fact at a site: the program it renders, what the
 /// compiler must say about it, and why.
+///
+/// The site travels with it. What a site does with a relation is the site's
+/// own question — a flow site accepts what flows into it, and the coherence
+/// site rejects exactly the pair that is equivalent — so anything asking what
+/// a belief about these types would predict has to ask that question, and
+/// cannot ask it without the site. Carrying it here is what stops a reader
+/// of this value reaching for the flow-site answer at a site that inverts it.
 class Flowed {
     flow: Oriented,
+    site: root.algebra.SiteKind,
     case: root.engine.Case,
     compiles: bool,
 }
@@ -204,17 +212,33 @@ function flowed(drawn: Drawn, reversed: bool) -> Flowed throws never {
     let trace = root.algebra.claims(drawn.d).concat([site_claim(drawn.site, flow, compiles)]);
     Flowed {
         flow,
+        site: drawn.site,
         case: root.engine.Case { files: root.engine.one_file(file, probe.source), key, trace },
         compiles,
     }
 }
 
+/// What a model's beliefs predict the compiler will say about `one`.
+///
+/// The model's belief about the pair, read at the site the case stands at.
+/// Null when the model's overrides leave the pair undecided, which is not a
+/// prediction and so cannot be wrong.
+function predicted(
+    d: root.algebra.Derivation,
+    one: Flowed,
+    model: root.algebra.Model,
+) -> bool? throws never {
+    let believed = root.algebra.decided(root.algebra.under(d, model))
+        ?? return null;
+    root.algebra.compiles_when(one.site, in_direction(believed, one.flow))
+}
+
 /// The naive models that read one program's verdict the other way.
 function flow_traps(d: root.algebra.Derivation, one: Flowed) -> string[] throws never {
     models().filter_map((model) -> {
-        let believed = root.algebra.decided(root.algebra.under(d, model))
+        let says = predicted(d, one, model)
             ?? return null;
-        if (root.algebra.flows(in_direction(believed, one.flow)) != one.compiles) {
+        if (says != one.compiles) {
             model.id
         } else {
             null
@@ -243,11 +267,11 @@ function choice_traps(
     other: Flowed,
 ) -> string[] throws never {
     models().filter_map((model) -> {
-        let believed = root.algebra.decided(root.algebra.under(d, model))
+        let says_one = predicted(d, one, model)
             ?? return null;
-        let flows_one = root.algebra.flows(in_direction(believed, one.flow));
-        let flows_other = root.algebra.flows(in_direction(believed, other.flow));
-        if (flows_one == flows_other || flows_one == one.compiles) {
+        let says_other = predicted(d, other, model)
+            ?? return null;
+        if (says_one == says_other || says_one == one.compiles) {
             null
         } else {
             model.id
