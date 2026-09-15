@@ -1,0 +1,10 @@
+{
+  "rate": 2000,
+  "duration_seconds": 60.0,
+  "load_seconds": 60.0,
+  "post_gc_seconds": 1.0,
+  "interval_seconds": 1.0,
+  "target": "baml-only",
+  "workload": "response-allocation",
+  "port": 8505
+}

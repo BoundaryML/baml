@@ -1,0 +1,28 @@
+{
+  "source": "/Users/sam/baml-worktrees/baml/pure-baml-gc-diagnostic/baml_language",
+  "revision": "540971880764f64a21d23c68703902719efe7c7a",
+  "source_dirty": false,
+  "source_status": "",
+  "source_snapshot": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "Python 3.10.0",
+  "node": "v20.14.0",
+  "node_binary": "/Users/sam/.local/share/mise/installs/node/20/bin/node",
+  "vegeta": "12.13.0",
+  "explicit_gc_diagnostic": true,
+  "artifacts": {
+    "toolchain/baml-cli": "e4d897a8b0138f6bae66b456787156cebc07c7793cb541d4804d529617d82541",
+    "toolchain/baml-pack-host": "68077c4ce6378d894d90d7b654d97f31c2404189f686faceaaceb5235be434f3",
+    "wheels/baml_bridge-0.19.0-cp310-abi3-macosx_11_0_arm64.whl": "d1587bb66c475d3894a84dcadac0a51159e2f6c1f9a5b30394bdd411b227e44e",
+    "node-bridge/dist/baml_node.darwin-arm64.node": "0066ef28b8e3f52ce027e0996da781f3fcbdaec68ec66296ff316a7a7a4a7fcc",
+    "apps/baml-only/hello": "b07c9bc1754b85dfb655880bf08f1908b4324b61df99d86ed3011494955e4181",
+    "tools/vegeta": "15d6cd01fc412e70a11243006de4e5fd68d505a13848ae3312d83d49b64fd087",
+    "apps/baml-only-explicit-gc/hello": "d52943dc0e569bf0341fecdb090b0052b5c7673bdc0c7e164389056540a7046a",
+    "apps/baml-only-response-allocation/hello": "daf10a2398b5c03c7e0cb01345e52a3ba4b54d09acccbd0c611b9a88303d0d5b",
+    "apps/python-baml-explicit-gc/server.py": "d9e0186c61eb6eb040a6a98c8c8a363adc1a92a2ac9ff352627ee617adfb0fed",
+    "apps/python-baml-explicit-gc/baml_sdk/_inlinedbaml.py": "24c03f1e69756f10f785798265dbe2a5c6079f34262ee3591b4ff07bd776b209",
+    "apps/python-baml-response-allocation/server.py": "d9e0186c61eb6eb040a6a98c8c8a363adc1a92a2ac9ff352627ee617adfb0fed",
+    "apps/python-baml-response-allocation/baml_sdk/_inlinedbaml.py": "bdb41ad467aa89b37b3a2491ece8f3813295754888f64b8a5803ceb7bdefccac"
+  }
+}

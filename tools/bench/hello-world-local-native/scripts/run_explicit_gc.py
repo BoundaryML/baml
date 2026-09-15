@@ -55,6 +55,7 @@ def report_results(vegeta, files):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=("baml-only", "python-baml"), default="baml-only", help="BAML host to measure")
+    parser.add_argument("--workload", choices=("baseline", "response-allocation"), default="baseline", help="BAML function implementation to exercise")
     parser.add_argument("--rate", type=int, default=100, help="Requests per second during loaded periods")
     parser.add_argument("--duration", type=float, default=300, help="Total experiment duration before the final GC checkpoint")
     parser.add_argument("--load-seconds", type=float, default=30, help="Loaded seconds between explicit GC checkpoints")
@@ -72,7 +73,8 @@ def main():
     if not manifest.get("explicit_gc_diagnostic"):
         parser.error("the build does not include the explicit-GC diagnostic; rerun scripts/build.py with --explicit-gc-diagnostic")
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    result_dir = (args.results_dir or harness.ROOT / "results" / f"{timestamp}-{manifest['revision'][:12]}-{args.target}-explicit-gc-{args.rate}rps").resolve()
+    workload_suffix = "" if args.workload == "baseline" else f"-{args.workload}"
+    result_dir = (args.results_dir or harness.ROOT / "results" / f"{timestamp}-{manifest['revision'][:12]}-{args.target}{workload_suffix}-explicit-gc-{args.rate}rps").resolve()
     result_dir.mkdir(parents=True, exist_ok=False)
     (result_dir / "logs").mkdir()
     (result_dir / "targets").mkdir()
@@ -85,16 +87,18 @@ def main():
         "post_gc_seconds": args.post_gc_seconds,
         "interval_seconds": args.interval,
         "target": args.target,
+        "workload": args.workload,
         "port": harness.PORTS[args.target],
     }
     (result_dir / "config.json").write_text(json.dumps(config, indent=2) + "\n")
 
     apps_root = harness.BUILD / "apps"
+    diagnostic_suffix = "explicit-gc" if args.workload == "baseline" else "response-allocation"
     if args.target == "baml-only":
-        app_root = apps_root / "baml-only-explicit-gc"
+        app_root = apps_root / f"baml-only-{diagnostic_suffix}"
         command = [app_root / "hello"]
     else:
-        app_root = apps_root / "python-baml-explicit-gc"
+        app_root = apps_root / f"python-baml-{diagnostic_suffix}"
         command = [harness.BUILD / "pyvenv/bin/python", "-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", str(harness.PORTS[args.target]), "--no-access-log"]
     if not Path(command[0]).exists():
         parser.error(f"missing explicit-GC application command: {command[0]}")
