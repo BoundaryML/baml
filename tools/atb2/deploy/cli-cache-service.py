@@ -1,4 +1,5 @@
 """Root-owned lazy CLI cache. Builder children never inherit runtime credentials."""
+import http.client
 import importlib.util
 import json
 import os
@@ -35,6 +36,19 @@ def cached(version):
 
 
 def ensure(version):
+    if version == 'nightly':
+        connection = http.client.HTTPSConnection('pkg.boundaryml.com', timeout=30)
+        try:
+            connection.request('GET', '/manifest/v1/nightly.json')
+            response = connection.getresponse()
+            raw = response.read(65537)
+            if response.status != 200 or len(raw) > 65536:
+                raise ValueError('nightly manifest unavailable')
+            version = json.loads(raw).get('version', '')
+            if not isinstance(version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[a-z]', version):
+                raise ValueError('invalid nightly manifest version')
+        finally:
+            connection.close()
     publication_root = ROOT
     if version == 'canary':
         clean = {'PATH':'/usr/bin:/bin','HOME':'/nonexistent','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null'}
@@ -98,7 +112,7 @@ class Handler(socketserver.StreamRequestHandler):
 
 
 def request(version):
-    if version != 'canary' and not VERSION.fullmatch(version):
+    if version not in ('canary', 'nightly') and not VERSION.fullmatch(version):
         raise ValueError('invalid CLI version')
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(2500)
@@ -106,7 +120,7 @@ def request(version):
         connection.sendall((version+'\n').encode())
         response = json.loads(connection.makefile('rb').readline(4096))
         path = response.get('path')
-        if not path or not Path(path).is_relative_to(ROOT if version == 'canary' else ROOT/version):
+        if not path or not Path(path).is_relative_to(ROOT if version in ('canary', 'nightly') else ROOT/version):
             raise ValueError(response.get('error', 'invalid cache response'))
         return path
 

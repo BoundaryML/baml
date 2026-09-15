@@ -51,6 +51,21 @@ class LazyCacheTests(unittest.TestCase):
                 self.assertEqual(service.ensure('canary'),str(binary));build.assert_not_called()
                 self.assertEqual(lookup.call_args.kwargs['env']['HOME'],'/nonexistent')
 
+    def test_nightly_resolves_the_manifest_before_reusing_a_cached_build(self):
+        response = Mock(status=200, read=Mock(return_value=b'{"version":"0.18.1-nightly.20260910.a"}'))
+        connection = Mock(getresponse=Mock(return_value=response))
+        with patch.object(service.http.client, 'HTTPSConnection', return_value=connection), patch.object(service, 'cached', return_value='/verified/cli') as lookup:
+            self.assertEqual(service.ensure('nightly'), '/verified/cli')
+            lookup.assert_called_once_with('0.18.1-nightly.20260910.a')
+        connection.close.assert_called_once()
+
+    def test_invalid_nightly_manifest_never_starts_a_build(self):
+        for raw in [b'{"version":"../../secret"}', b'{"version":null}', b'{"version":"canary"}']:
+            connection = Mock(getresponse=Mock(return_value=Mock(status=200, read=Mock(return_value=raw))))
+            with patch.object(service.http.client, 'HTTPSConnection', return_value=connection), patch.object(service.subprocess, 'Popen') as build:
+                with self.assertRaises(ValueError): service.ensure('nightly')
+                build.assert_not_called()
+
     def test_untrusted_version_is_not_a_command_or_path(self):
         for v in ['../bad','canary;id','0.18.0\ncommand','--help']:
             with self.assertRaises(ValueError):service.cached(v)

@@ -351,3 +351,14 @@ function hello() -> string {
     greeting
 }
 ```
+
+
+## Reporting a BAML problem
+
+When you find a concrete BAML defect, report it with `baml feedback --title
+"Issue (feature): concise symptom" --description "Expected behavior, actual
+behavior, exact toolchain version and minimal repro" --files repro.baml`.
+Keep the report ID and check `baml feedback status`, `baml feedback list` or
+`baml feedback view <id>` before filing the same problem again. Include only
+relevant files; never attach credentials, private configuration or unrelated
+logs. A report being received does not mean it has been reproduced or fixed.

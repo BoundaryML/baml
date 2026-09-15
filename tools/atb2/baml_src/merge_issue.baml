@@ -1,9 +1,9 @@
 // PR -> green -> merged. Give it a PR; it watches the PR until it merges
 // or closes. Each time CI fails or the reviewer (CodeRabbit by default)
-// leaves comments, it gathers them into a brief and hands the PR's branch
-// to handle_issue, which runs the fix pass, the gate and the push exactly
-// as it does for a fresh issue. Stops when the PR merges or closes, when
-// it is green and nothing is new, or after `max_rounds`.
+// leaves comments, it investigates and hands a scoped fix plan to handle_issue
+// for implementation, scanning and a push. It never merges a PR.
+// Stops when the PR merges or closes, when it is green and nothing is new,
+// or after `max_rounds`.
 //
 //   cd tools/atb2 && baml run -e 'merge_issue("https://github.com/BoundaryML/baml/pull/4634")'
 //   ATB2_REVIEWERS=coderabbitai[bot],sxlijin   # whose comments are acted on
@@ -19,7 +19,8 @@
 
 /// How a merge_issue call ended.
 class MergeResult {
-    /// merged: the PR merged. green: checks pass and nothing is new; waiting
+    /// merged: the PR merged. green: checks pass or only confirmed workflow blockers remain
+    /// (workflow_changes_needed explains the exception), and nothing else is new; waiting
     /// on humans. closed: closed without merging. waiting_on_checks: gave
     /// up waiting for checks (ATB2_MAX_WAIT_S). out_of_rounds: `max_rounds`
     /// spent with feedback still pending. dry_run: one round, nothing pushed.
@@ -35,169 +36,15 @@ class MergeResult {
         | "out_of_rounds"
         | "dry_run"
         | "round_failed"
-        | "fork_refused",
+        | "fork_refused"
+        | "awaiting_approval",
     pr: string,
     rounds: int,
+    workflow_changes_needed: string?,
+    workflow_fingerprint: string?,
 }
 
-//#merge_issue(pr: string, mode: HandleMode = HandleMode.Live, max_rounds: int = 3, issue_id: string? = null, thread: SlackRef? = null, mention: string? = null) -> MergeResult
-function merge_issue(
-    pr: string,
-    mode: HandleMode = HandleMode.Live,
-    max_rounds: int = 3,
-    /// The store's issue the PR belongs to, for the merge_rounds rows.
-    issue_id: string? = null,
-    /// A Slack thread that hears the start, every round and the result.
-    thread: SlackRef? = null,
-    /// A Slack user id to @mention on the result line (the requester).
-    mention: string? = null,
-) -> MergeResult {
-    let started = baml.time.Instant.now();
-    //# only this repository's PRs: the sandbox and the push know origin only
-    if (!pr.starts_with("https://github.com/" + repo_slug() + "/pull/")) {
-        log.warn({ "pr": pr, "refused": "not a " + repo_slug() + " pull request" });
-        tell_thread(thread, ":no_entry: " + pr + " is not a " + repo_slug() + " pull request");
-        return MergeResult { kind: "round_failed", pr: pr, rounds: 0 };
-    };
-    let first = match (pr_snapshot(pr)) {
-        null => {
-            tell_thread(thread, ":x: could not read " + pr + " (gh pr view failed)");
-            return MergeResult { kind: "round_failed", pr: pr, rounds: 0 };
-        },
-        let s: PrSnapshot => s,
-    };
-    let state = read_merge_state(first.branch);
-    let done = (
-        kind: "merged"
-            | "green"
-            | "closed"
-            | "waiting_on_checks"
-            | "out_of_rounds"
-            | "dry_run"
-            | "round_failed"
-            | "fork_refused",
-    ) -> MergeResult {
-        log.info({ "pr": pr, "result": kind, "rounds": state.rounds });
-        let r = MergeResult { kind: kind, pr: pr, rounds: state.rounds };
-        //# the thread hears how it ended
-        tell_thread(
-            thread,
-            result_text(r)
-                + (
-                    match (mention) {
-                        null => "",
-                        let m: string => " <@" + m + ">",
-                    }
-                ),
-        );
-        r
-    };
-    tell_thread(
-        thread,
-        ":eyes: watching "
-            + pr
-            + " until it merges: CI failures and review comments go back to the agent, up to "
-            + max_rounds.to_string()
-            + " rounds",
-    );
-    //# refuse: a fork's code would run on this host, and the sandbox and
-    //# the push resolve branches against origin only
-    if (first.cross_repo) {
-        return done("fork_refused");
-    };
-    //# poll the PR until it merges, closes, or something needs fixing
-    while (true) {
-        let snap = match (pr_snapshot(pr)) {
-            null => {
-                return done("round_failed");
-            },
-            let s: PrSnapshot => s,
-        };
-        if (snap.merged) {
-            //## merged: done
-            return done("merged");
-        };
-        if (snap.state != "OPEN") {
-            //## closed without merging: a human decided
-            return done("closed");
-        };
-        //# checks still running: wait before judging anything
-        // one round addresses CI failures and comments together; starting on
-        // comments while CI runs would push over the run and cancel it
-        if (snap.pending_checks > 0) {
-            if (elapsed_s(started) >= max_wait_s()) {
-                //## checks still running past the wait limit
-                return done("waiting_on_checks");
-            };
-            log.info({ "pr": pr, "waiting_on_checks": snap.pending_checks });
-            wait_poll();
-            continue;
-        };
-        //# 1. failing checks, 2. reviewer comments, not yet addressed
-        let fb = pending_feedback(snap, state);
-        if (fb.checks.length() == 0 && fb.comments.length() == 0) {
-            //## green and nothing new: waiting on humans
-            return done("green");
-        };
-        if (state.rounds >= max_rounds) {
-            //## out of rounds: a human takes it from here
-            return done("out_of_rounds");
-        };
-        //# hand the branch and the brief to handle_issue (fix pass, gate, push)
-        let brief = render_feedback(fb, failed_logs(fb));
-        handle_issue(
-            issue_from_pr(snap),
-            mode = mode,
-            review = Review { branch: snap.branch, feedback: brief },
-            thread = thread,
-        );
-        //# how the round ended: handle_issue says so in outcome.json, not in its return
-        let round = state.rounds + 1;
-        let kind = round_outcome(snap.branch, round);
-        state = MergeState { rounds: round, handled_ids: state.handled_ids };
-        //# the thread hears how the round went
-        tell_thread(thread, round_text(round, kind, fb));
-        //# the round goes to the store
-        save_merge_round(
-            issue_id,
-            pr,
-            round,
-            kind,
-            fb.comments.map((c: ReviewComment) -> int {
-                c.id
-            }),
-            brief,
-        );
-        if (kind != "fixed") {
-            //## the round ended without a push: nothing on the PR changed
-            write_merge_state(snap.branch, state);
-            return done("round_failed");
-        };
-        if (mode == HandleMode.DryRun) {
-            //## dry run: one round, nothing pushed
-            write_merge_state(snap.branch, state);
-            return done("dry_run");
-        };
-        //# the fix is on the PR: the comments it answered are handled
-        state
-            = MergeState {
-                rounds: round,
-                handled_ids: state.handled_ids.concat(
-                    fb.comments.map((c: ReviewComment) -> int {
-                        c.id
-                    }),
-                ),
-            };
-        write_merge_state(snap.branch, state);
-        //# wait for the push to land and its checks to register
-        // right after a push GitHub lists no checks on the new head for a
-        // moment; an empty list would read as green
-        wait_for_new_head(pr, snap.head, started);
-    }
-    done("green")
-}
-
-/// One line per review round, for the babysit thread.
+//#merge_issue(pr: string, mode: HandleMode = HandleMode.Live, max_rounds: int = 7, issue_id: string? = null, thread: SlackRef? = null, mention: string? = null) -> MergeResult
 function round_text(round: int, kind: string, fb: PrFeedback) -> string {
     (
         if (kind == "fixed") {
@@ -240,7 +87,7 @@ function round_text(round: int, kind: string, fb: PrFeedback) -> string {
 }
 
 /// The PR as an Issue, so handle_issue can work on it: the PR's title and
-/// body are the ticket; the status carries the PR for the review comment.
+/// body are the ticket; the status carries the PR URL for the outcome.
 function issue_from_pr(snap: PrSnapshot) -> Issue {
     Issue {
         id: "PR-" + snap.number.to_string(),
@@ -256,6 +103,8 @@ function issue_from_pr(snap: PrSnapshot) -> Issue {
         resolution_plan: null,
         difficulty: Difficulty.Medium,
         design_doc: null,
+        slack_ts: null,
+        slack_channel: null,
     }
 }
 
@@ -289,24 +138,6 @@ function wait_poll() -> null {
 
 /// After a push: waits until the PR's head moved off `old_head`, then one
 /// more poll so the new head's check runs are registered.
-function wait_for_new_head(pr: string, old_head: string, started: baml.time.Instant) -> null {
-    while (true) {
-        wait_poll();
-        let head = pr_snapshot(pr)?.head ?? old_head;
-        if (head != old_head) {
-            return wait_poll();
-        };
-        if (elapsed_s(started) >= max_wait_s()) {
-            log.warn({ "pr": pr, "warning": "head did not move after the push" });
-            return null;
-        };
-    }
-    null
-}
-
-// ==================== Config ====================
-
-/// Seconds between polls while checks are running.
 function poll_s() -> int {
     int.parse(baml.env.get("ATB2_POLL_S") ?? "120") catch (_) {
         _ => 120,
@@ -409,34 +240,28 @@ function pr_snapshot(url: string) -> PrSnapshot? {
     };
     let v = baml.json.parse(view.stdout);
     let number = baml.json.path_or<int>(v, ".number", 0);
-    //# checks (gh exits non-zero when any fail; the JSON is still there)
-    let checks = parse_checks(gh(["pr", "checks", url, "--json", "name,bucket,link"]).stdout);
-    //# reviewer comments: inline review comments + reviews that request changes
-    // a review that merely comments (CodeRabbit's walkthrough after every
-    // push) is not feedback; counting it would keep the loop going forever
+    // Failed or malformed API reads are unknown, never evidence of a green PR.
+    let check_result = gh(["pr", "checks", url, "--json", "name,bucket,link"]);
+    let checks = parse_checks(check_result.stdout);
+    if (![0, 1, 8].includes(check_result.exit_code)) {
+        return null;
+    };
     let pulls = "repos/" + repo_slug() + "/pulls/" + number.to_string();
-    let comments = parse_comments(
-        gh(
-            [
-                "api",
-                pulls + "/comments?per_page=100",
-                "--jq",
-                "[.[] | {id, login: .user.login, path, line, body}]",
-            ],
-        ).stdout,
-    )
-        .concat(
-            parse_comments(
-                gh(
-                    [
-                        "api",
-                        pulls + "/reviews?per_page=100",
-                        "--jq",
-                        "[.[] | select(.state == \"CHANGES_REQUESTED\" and .body != \"\") | {id, login: .user.login, path: null, line: null, body}]",
-                    ],
-                ).stdout,
-            ),
-        );
+    let inline = gh(["api", "--paginate", "--slurp", pulls + "/comments?per_page=100"]);
+    let reviews = gh(["api", "--paginate", "--slurp", pulls + "/reviews?per_page=100"]);
+    if (!inline.ok || !reviews.ok) {
+        return null;
+    };
+    let comments = parse_comments(inline.stdout).concat(parse_comments(reviews.stdout, reviews = true));
+    // Checks and comments were fetched separately. Discard a mixed-head view.
+    let after = gh_view(url);
+    if (
+        !after.ok
+            || baml.json.path_or<string>(baml.json.parse(after.stdout), ".headRefOid", "")
+                != baml.json.path_or<string>(v, ".headRefOid", "")
+    ) {
+        return null;
+    };
     PrSnapshot {
         number: number,
         title: baml.json.path_or<string>(v, ".title", ""),
@@ -457,21 +282,60 @@ function pr_snapshot(url: string) -> PrSnapshot? {
 }
 
 function parse_checks(s: string) -> CheckRow[] {
-    if (s.trim().length() == 0) {
-        return [];
-    };
     baml.json.from_string<CheckRow[]>(s) catch (_) {
-        _ => [],
+        _ => {
+            throw StoreError { message: "GitHub check data unavailable" };
+        },
     }
 }
 
-function parse_comments(s: string) -> ReviewComment[] {
-    if (s.trim().length() == 0) {
-        return [];
+class GitHubReviewAuthor {
+    login: string,
+}
+
+class GitHubReviewRow {
+    id: int,
+    user: GitHubReviewAuthor,
+    body: string,
+    path: string?,
+    line: int?,
+    state: string?,
+}
+
+/// gh --paginate --slurp returns an array of pages. Decode every page here;
+/// gh does not support combining --slurp with --jq.
+function parse_comments(s: string, reviews: bool = false) -> ReviewComment[] {
+    let pages = baml.json.from_string<GitHubReviewRow[][]>(s) catch (_) {
+        _ => {
+            throw StoreError { message: "GitHub review data unavailable" };
+        },
     };
-    baml.json.from_string<ReviewComment[]>(s) catch (_) {
-        _ => [],
+    let comments: ReviewComment[] = [];
+    for (let page in pages) {
+        for (let row in page) {
+            if (reviews && (row.state != "CHANGES_REQUESTED" || row.body == "")) {
+                continue;
+            };
+            comments.push(
+                ReviewComment {
+                    id: row.id,
+                    login: row.user.login,
+                    path: if (reviews) {
+                        null
+                    } else {
+                        row.path
+                    },
+                    line: if (reviews) {
+                        null
+                    } else {
+                        row.line
+                    },
+                    body: row.body,
+                },
+            );
+        }
     }
+    comments
 }
 
 /// The GitHub Actions run id in a check's link
@@ -502,12 +366,18 @@ function run_id_of(link: string?) -> string? {
 /// are not lost under a long final step.
 function failed_logs(fb: PrFeedback) -> map<string, string> {
     let logs: map<string, string> = {};
+    let seen_runs: string[] = [];
     for (let c in fb.checks) {
         let id = run_id_of(c.link);
         let log = match (id) {
             null => "(no actions run linked)",
             let i: string => {
-                failed_steps_tail(gh(["run", "view", i, "--repo", repo_slug(), "--log-failed"]).stdout, 80)
+                if (seen_runs.includes(i)) {
+                    "(failure logs included above for workflow run " + i + ")"
+                } else {
+                    seen_runs.push(i);
+                    failed_steps_tail(gh(["run", "view", i, "--repo", repo_slug(), "--log-failed"]).stdout, 80)
+                }
             },
         };
         logs.set(c.name, log);
@@ -590,7 +460,7 @@ class PrFeedback {
 function pending_feedback(snap: PrSnapshot, state: MergeState) -> PrFeedback {
     let who = reviewers();
     //# failing checks, once every check has settled
-    let failing = if (snap.pending_checks > 0) {
+    let failing = if (snap.pending_checks > 0 || snap.checks.length() == 0) {
         []
     } else {
         snap.checks.filter((c: CheckRow) -> bool {
@@ -643,10 +513,9 @@ function render_feedback(fb: PrFeedback, logs: map<string, string>) -> string {
 }
 
 // ==================== The request queue ====================
-// "@bammy babysit <PR>": the Slack ingress (intake.baml, next PR) inserts a babysit_requests row; a
-// runner with the toolchain (`baml run -e 'merge_issue_loop()'`, the Fly
-// app's `requests` process) claims it and runs merge_issue with the Slack
-// thread attached. `request_merge(pr)` queues one by hand.
+// Slack intake inserts a babysit_requests row. The merge loop in the Fly
+// runner process claims it and runs merge_issue with the Slack thread attached.
+// `request_merge(pr)` queues one by hand.
 
 /// One queued request, as the Slack ingress wrote it.
 class MergeRequest {
@@ -671,10 +540,18 @@ function result_text(r: MergeResult) -> string {
     match (r.kind) {
         "merged" => ":white_check_mark: merged after " + rounds + ": " + r.pr,
         "green" => {
-            ":large_green_circle: green after "
-                + rounds
-                + ", nothing left for the agent; waiting on a human to merge "
-                + r.pr
+            if (r.workflow_changes_needed != null) {
+                ":large_green_circle: Green, with workflow changes needed: "
+                    + r.pr
+                    + "\n"
+                    + (r.workflow_changes_needed ?? "")
+                    + "\nGitHub checks may still be red; only workflow blockers remain. No workflow fixes were attempted."
+            } else {
+                ":large_green_circle: green after "
+                    + rounds
+                    + ", no unaddressed configured-reviewer feedback; still watching, waiting on a human to merge "
+                    + r.pr
+            }
         },
         "closed" => ":no_entry_sign: closed without merging: " + r.pr,
         "out_of_rounds" => {
@@ -689,6 +566,7 @@ function result_text(r: MergeResult) -> string {
                 + r.pr
                 + "; see ~/.atb2/merge for the outcome"
         },
+        "awaiting_approval" => "Historical run paused; request a new run for " + r.pr,
         "waiting_on_checks" => ":hourglass: gave up waiting for checks on " + r.pr,
         "dry_run" => ":test_tube: dry run done on " + r.pr + ", nothing pushed",
         "fork_refused" => {
@@ -703,39 +581,12 @@ function result_text(r: MergeResult) -> string {
 
 /// Queues a request by hand, the way the Slack ingress does for a mention.
 /// `thread` is where to narrate; null = no Slack, the result is only stored.
-function request_merge(pr: string, thread: SlackRef? = null) -> int {
-    if (!db_configured()) {
-        baml.sys.panic("request_merge needs the store (FEEDBACK_SUPABASE_URL/KEY)");
-    };
-    let row = insert(
-        "babysit_requests",
-        {
-            "pr": pr,
-            "channel": match (thread) {
-                null => "",
-                let t: SlackRef => t.channel,
-            },
-            "thread_ts": match (thread) {
-                null => "",
-                let t: SlackRef => t.ts,
-            },
-            "requested_by": "baml run",
-            "dataset": dataset(),
-        }
-            .to_json(),
-    );
-    baml.json.path_or<int>(row, ".id", 0)
-}
-
-/// The oldest queued request, claimed for this runner; null when the queue
-/// is empty. The claim is a conditional PATCH (status still queued), so two
-/// runners cannot take the same row.
 function claim_merge_request(runner: string) -> MergeRequest? {
     let rows = select(
         "babysit_requests",
         "select=id,pr,channel,thread_ts,requested_by,status&status=eq.queued&dataset="
             + eq(dataset())
-            + "&order=created_at&limit=1",
+            + "&order=finished_at.asc.nullsfirst,created_at&limit=1",
     );
     let r = match (rows.at(0)) {
         null => {
@@ -837,81 +688,6 @@ function merge_request_thread(r: MergeRequest) -> SlackRef? {
 // ==================== The runner ====================
 
 //#merge_issue_loop(once: bool = false, mode: HandleMode = HandleMode.Live, reclaim_after_s: int = 21600) -> int
-function merge_issue_loop(
-    once: bool = false,
-    mode: HandleMode = HandleMode.Live,
-    reclaim_after_s: int = 21600,
-) -> int {
-    if (!db_configured()) {
-        baml.sys.panic("merge_issue_loop needs the store (FEEDBACK_SUPABASE_URL/KEY)");
-    };
-    let runner = (baml.env.get("HOSTNAME") ?? baml.env.get("USER") ?? "runner") + "/" + baml.id.new().slice(0, 8);
-    let served = 0;
-    log.info({ "merge_request": runner, "polling_s": poll_s(), "once": once });
-    while (true) {
-        //# stale claims back to the queue
-        let back = reclaim_stale_requests(reclaim_after_s);
-        if (back > 0) {
-            log.warn({ "merge_request": runner, "reclaimed": back });
-        };
-        //# claim the oldest queued request; a store failure waits a poll
-        let claimed = claim_merge_request(runner) catch (_) {
-            StoreError => {
-                log.error({ "merge_request": runner, "store": "claim failed; retrying next poll" });
-                null
-            },
-        };
-        match (claimed) {
-            null => {
-                if (once) {
-                    // one-shot: an empty queue is a complete run of zero
-                    return served;
-                };
-                wait_poll();
-            },
-            let r: MergeRequest => {
-                log.info(
-                    { "merge_request": runner, "request": r.id, "pr": r.pr, "by": r.requested_by },
-                );
-                //# run it, narrating in the request's thread; a Slack or store
-                //# failure inside ends this request as round_failed
-                let result = merge_issue(r.pr, mode = mode, thread = merge_request_thread(r), mention = r.requested_by) catch (_) {
-                    StoreError => MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 },
-                    SlackError => MergeResult { kind: "round_failed", pr: r.pr, rounds: 0 },
-                };
-                finish_merge_request(
-                    r.id,
-                    runner,
-                    if (result.kind == "round_failed") {
-                        "failed"
-                    } else {
-                        "done"
-                    },
-                    result.to_json(),
-                ) catch (_) {
-                    StoreError => {
-                        log.error(
-                            {
-                                "merge_request": r.id,
-                                "store": "finish failed; the stale-claim sweep requeues it",
-                            },
-                        )
-                    },
-                };
-                served += 1;
-                if (once) {
-                    return served;
-                };
-            },
-        };
-    }
-    served
-}
-
-// ==================== Unit tests (token-free) ====================
-
-// ==================== Unit tests (token-free) ====================
-
 function snap(checks: CheckRow[], comments: ReviewComment[]) -> PrSnapshot {
     PrSnapshot {
         number: 1,
@@ -936,202 +712,246 @@ function bot(id: int, path: string?, body: string) -> ReviewComment {
     ReviewComment { id: id, login: "coderabbitai[bot]", path: path, line: 12, body: body }
 }
 
-testset "merge_issue" {
-    test "gh check rows parse; a failed gh call yields no rows" {
-        let rows = parse_checks(
-            `[{"name":"clippy","bucket":"fail","link":"https://github.com/BoundaryML/baml/actions/runs/123/job/456"},{"name":"fmt","bucket":"pass","link":null}]`,
-        );
-        assert.equal(rows.length(), 2);
-        assert.equal(rows.at(0)?.bucket ?? "", "fail");
-        assert.equal(parse_checks("").length(), 0);
-        assert.equal(parse_checks("not json").length(), 0);
-    }
+class BabysitProposal {
+    id: string,
+    pr: string,
+    head: string,
+    fingerprint: string,
+    summary: string,
+    plan: string,
+    status: string,
+    requested_by: string?,
+    channel: string?,
+    slack_ts: string?,
+}
 
-    test "the actions run id comes out of the check link" {
-        assert.equal(
-            run_id_of("https://github.com/BoundaryML/baml/actions/runs/123/job/456") ?? "",
-            "123",
-        );
-        assert.equal(run_id_of("https://example.com/status") == null, true);
-        assert.equal(run_id_of(null) == null, true);
-        // a link is whatever the check's author posted: only a numeric id is used
-        assert.equal(run_id_of("https://github.com/x/y/actions/runs/--repo/1") == null, true);
-        assert.equal(run_id_of("https://github.com/x/y/actions/runs/12abc/job/1") == null, true);
-    }
+function proposal_from_row(row: json) -> BabysitProposal {
+    baml.json.from_json<BabysitProposal>(row)
+}
 
-    test "reviewer comments parse with and without a path" {
-        let cs = parse_comments(
-            `[{"id":10,"login":"coderabbitai[bot]","path":"crates/x/src/lib.rs","line":40,"body":"Use \`?\`."},{"id":11,"login":"coderabbitai[bot]","path":null,"line":null,"body":"Summary"}]`,
-        );
-        assert.equal(cs.length(), 2);
-        assert.equal(cs.at(1)?.path == null, true);
-        assert.equal(cs.at(0)?.line ?? 0, 40);
-    }
+function babysit_fingerprint(snap: PrSnapshot, fb: PrFeedback) -> string {
+    let hash = baml.crypto.Sha256.new();
+    hash.update(
+        (
+            "workflow-policy-v1\n"
+                + snap.head
+                + "\n"
+                + baml.json.stringify(fb.to_json())
+                + "\n"
+                + baml.json.stringify(snap.checks.to_json())
+        )
+            .to_utf8(),
+    );
+    hash.finish().to_hex()
+}
 
-    test "pending feedback: failing checks only once checks settle" {
-        let s = snap(
-            [
-                CheckRow { name: "clippy", bucket: "fail", link: null },
-                CheckRow { name: "nextest", bucket: "pending", link: null },
-            ],
-            [],
-        );
-        let fresh = MergeState { rounds: 0, handled_ids: [] };
-        assert.equal(pending_feedback(s, fresh).checks.length(), 0);
-        let settled = snap([CheckRow { name: "clippy", bucket: "fail", link: null }], []);
-        assert.equal(pending_feedback(settled, fresh).checks.length(), 1);
-    }
+class WorkflowOnly {
+    /// Public summary naming every remaining blocker, evidence that it is workflow-only,
+    /// and the workflow changes a human still needs to make. Never include secrets or raw logs.
+    workflow_changes_needed: string,
+}
 
-    test "pending feedback: only reviewers on the list, only once" {
-        let s = snap(
-            [],
-            [
-                bot(1, "a.rs", "x"),
-                bot(2, null, "y"),
-                ReviewComment { id: 3, login: "a-human", path: "a.rs", line: 1, body: "z" },
-            ],
-        );
-        let fresh = MergeState { rounds: 0, handled_ids: [] };
-        assert.equal(
-            pending_feedback(s, fresh).comments.map((c: ReviewComment) -> int {
-                c.id
-            }),
-            [1, 2],
-        );
-        let later = MergeState { rounds: 1, handled_ids: [1] };
-        assert.equal(
-            pending_feedback(s, later).comments.map((c: ReviewComment) -> int {
-                c.id
-            }),
-            [2],
-        );
-    }
+function proposal_current(p: BabysitProposal, head: string, fingerprint: string) -> bool {
+    p.head == head && p.fingerprint == fingerprint
+}
 
-    test "the brief names each check and comment" {
-        let fb = PrFeedback {
-            checks: [CheckRow { name: "clippy", bucket: "fail", link: null }],
-            comments: [bot(7, "crates/x/src/lib.rs", "Use `?` here."), bot(8, null, "LGTM otherwise")],
+/// Plan and claim one automatic round on this exact PR head. Claims are not approvals.
+function automatic_fix_path(id: string) -> string {
+    if (
+        id.length() == 0
+            || id.length() > 100
+            || !id.chars().every((c: string) -> bool {
+                c.is_ascii_alphanumeric() || c == "_" || c == "-"
+            })
+    ) {
+        throw StoreError { message: "invalid automatic fix id" };
+    };
+    atb2_home() + "/automatic-fixes/" + id + ".json"
+}
+
+function finish_automatic_fix(id: string, status: string) -> null {
+    let path = automatic_fix_path(id);
+    let row = baml.json.from_string<map<string, json>>(baml.fs.read(path));
+    let fix = baml.json.from_json<map<string, json>>(row.get("fix") ?? baml.json.parse("{}"));
+    fix.set("status", status.to_json());
+    row.set("fix", fix.to_json());
+    baml.fs.write(path, baml.json.stringify(row.to_json()));
+    null
+}
+
+/// A live request and exact head are required; no approval identity is involved.
+function babysit_push_allowed(id: string, head: string) -> bool {
+    if (id.length() == 0 || head.length() != 40) {
+        return false;
+    };
+    let path = automatic_fix_path(id);
+    if (!baml.fs.exists(path)) {
+        return false;
+    };
+    let row = baml.json.parse(baml.fs.read(path));
+    if (
+        baml.json.path_or<string>(row, ".fix.head", "") != head
+            || baml.json.path_or<string>(row, ".fix.status", "") != "executing"
+    ) {
+        return false;
+    };
+    if (baml.json.path_or<string>(row, ".dataset", "") != dataset()) {
+        return false;
+    };
+    let request = baml.json.path_or<int>(row, ".request_id", 0);
+    select(
+        "babysit_requests",
+        "select=id&id=eq."
+            + request.to_string()
+            + "&status=eq.running&dataset="
+            + eq(dataset())
+            + "&limit=1",
+    )
+        .length()
+        == 1
+}
+
+/// One queue for issue-created PRs and direct babysit requests. Failed/terminal
+/// requests need a new explicit request; pending approvals retain their owner.
+function request_blocks_babysit(row: json, proposals: json[]) -> bool {
+    if (
+        baml.json.path_or<string>(row, ".result.kind", "") != "awaiting_approval"
+            || baml.json.path_or<string>(row, ".status", "") != "done"
+    ) {
+        return true;
+    };
+    let id = baml.json.path_or<int>(row, ".id", 0);
+    proposals
+        .filter((p: json) -> bool {
+            baml.json.path_or<int>(p, ".request_id", -1) == id
+                && ["pending", "approved", "executing"].includes(
+                    baml.json.path_or<string>(p, ".status", ""),
+                )
+        })
+        .length()
+        > 0
+}
+
+function active_babysit_request(pr: string) -> int? {
+    let rows = select(
+        "babysit_requests",
+        "select=id,status,result&pr="
+            + eq(pr)
+            + "&dataset="
+            + eq(dataset())
+            + "&or=(status.in.(queued,running),and(status.eq.done,result->>kind.in.(green,waiting_on_checks,awaiting_approval)))&order=id&limit=101",
+    );
+    if (rows.length() > 100) {
+        throw StoreError { message: "too many active babysit requests; refusing ambiguous ownership" };
+    };
+    let proposals = select(
+        "babysit_proposals",
+        "select=request_id,status&pr="
+            + eq(pr)
+            + "&dataset="
+            + eq(dataset())
+            + "&status=in.(pending,approved,executing)&limit=101",
+    );
+    if (proposals.length() > 100) {
+        throw StoreError { message: "too many active proposals; refusing ambiguous ownership" };
+    };
+    for (let row in rows) {
+        if (request_blocks_babysit(row, proposals)) {
+            return baml.json.path_or<int>(row, ".id", 0);
         };
-        let brief = render_feedback(fb, { "clippy": "error: unused import" });
-        assert.contains(brief, "### Failing check: clippy");
-        assert.contains(brief, "error: unused import");
-        assert.contains(brief, "### Comment 7 (coderabbitai[bot]) at crates/x/src/lib.rs:12");
-        assert.contains(brief, "### Comment 8 (coderabbitai[bot]) at review summary");
     }
+    null
+}
 
-    test "the PR becomes an issue handle_issue can take" {
-        let i = issue_from_pr(snap([], []));
-        assert.equal(i.id, "PR-1");
-        assert.equal(i.title, "fix(compiler): x");
-        assert.equal(i.difficulty ?? Difficulty.Hard, Difficulty.Medium);
-        assert.is_true(pr_url(1).ends_with("/pull/1"));
-        // without a review, handle_issue would refuse it: the PR is not open work
-        assert.equal(handle_ready(i, false) ?? "go", "not open");
-    }
+function resumable_babysit(kind: string) -> bool {
+    kind == "green" || kind == "waiting_on_checks"
+}
 
-    test "the brief reaches the fix prompt as the plan" {
-        let p = implement_fix@render_prompt(issue_from_pr(snap([], [])), "agent/gh-1-x", "a Rust test", "### Failing check: clippy")
-            .text();
-        assert.contains(p, "### Failing check: clippy");
-        assert.contains(p, "fix(compiler): x");
-    }
+function recover_and_claim_babysit(runner: string, reclaim_after_s: int) -> MergeRequest? {
+    reclaim_stale_requests(reclaim_after_s);
+    // Keep observing standalone PRs too. Preserve finished_at for fair rotation.
+    update(
+        "babysit_requests",
+        "status=eq.done&result->>kind=in.(green,waiting_on_checks)&dataset=" + eq(dataset()),
+        { "status": "queued", "claimed_by": null, "claimed_at": null }.to_json(),
+    );
+    let claimed = claim_merge_request(runner);
+    if (claimed != null) {
+        let r = claimed ?? baml.sys.panic("checked request");
+        let canonical = active_babysit_request(r.pr);
+        if (canonical != null && canonical != r.id) {
+            finish_merge_request(r.id, runner, "done", { "kind": "duplicate", "request_id": canonical }.to_json());
+            return null;
+        };
+    };
+    claimed
+}
 
-    test "merge state round-trips outside the run dir" {
-        let branch = "agent/test-merge-state-" + baml.id.new();
-        assert.equal(read_merge_state(branch).rounds, 0);
-        write_merge_state(branch, MergeState { rounds: 2, handled_ids: [5, 6] });
-        let s = read_merge_state(branch);
-        assert.equal(s.rounds, 2);
-        assert.equal(s.handled_ids, [5, 6]);
-        assert.is_true(!merge_state_path(branch).starts_with(run_dir_for(branch)));
-        baml.fs.remove_dir_all(merge_dir(branch));
-    }
-
-    test "a round's outcome is read back and kept per round" {
-        let branch = "agent/test-round-outcome-" + baml.id.new();
-        // no outcome.json: the agent never got as far as writing one
-        assert.equal(round_outcome(branch, 1), "agent_stopped");
-        baml.fs.mkdir(run_dir_for(branch), baml.fs.MkdirOptions { recursive: true });
-        baml.fs.write(run_dir_for(branch) + "/outcome.json", `{"kind":"gate_failed"}`);
-        assert.equal(round_outcome(branch, 2), "gate_failed");
-        assert.is_true(baml.fs.exists(merge_dir(branch) + "/round-2.outcome.json"));
-        baml.fs.remove_dir_all(run_dir_for(branch));
-        baml.fs.remove_dir_all(merge_dir(branch));
-    }
-
-    test "the failed log keeps the tail of every failed step" {
-        let log = "build\tcompile\terror A\nbuild\tcompile\terror B\nbuild\ttest\tFAIL x\nbuild\ttest\tline 2\nbuild\ttest\tline 3";
-        let t = failed_steps_tail(log, 2);
-        assert.contains(t, "error A");
-        assert.contains(t, "error B");
-        assert.contains(t, "line 3");
-        assert.is_true(!t.includes("FAIL x"));
-    }
-
-    test "the review comment says what was addressed and asks CodeRabbit to resolve" {
-        let note = review_comment(sample_report());
-        assert.is_true(note.starts_with("atb2 review round"));
-        assert.contains(note, "Guarded the type-ref lookup.");
-        assert.contains(note, "@coderabbitai resolve");
-    }
-
-    test "config defaults" {
-        assert.equal(reviewers(), ["coderabbitai[bot]"]);
-        assert.is_true(poll_s() > 0 && max_wait_s() > poll_s());
+function issue_id_for_pr(pr: string) -> string? {
+    if (!db_configured()) {
+        return null;
+    };
+    let rows = select("issues", "select=id&status->>pr=" + eq(pr) + "&dataset=" + eq(dataset()) + "&limit=2");
+    if (rows.length() != 1) {
+        null
+    } else {
+        baml.json.path_or<string>(rows.at(0) ?? baml.json.parse("{}"), ".id", "")
     }
 }
 
-testset "merge_requests" {
-    test "the closing line names the outcome" {
-        assert.contains(
-            result_text(MergeResult { kind: "merged", pr: "https://x/pull/1", rounds: 2 }),
-            "merged after 2 rounds",
-        );
-        assert.contains(
-            result_text(MergeResult { kind: "green", pr: "https://x/pull/1", rounds: 1 }),
-            "waiting on a human",
-        );
-        assert.contains(
-            result_text(MergeResult { kind: "out_of_rounds", pr: "https://x/pull/1", rounds: 3 }),
-            "out of rounds",
-        );
-        assert.contains(
-            result_text(MergeResult { kind: "fork_refused", pr: "https://x/pull/1", rounds: 0 }),
-            "fork",
-        );
-    }
+/// Public lifecycle metadata and the explicitly public proposed-fix summary.
+/// Full implementation plans, raw CI diagnostics and transcripts stay private.
+function record_pr_event(pr: string, kind: string, details: json, thread: SlackRef?) -> null {
+    if (!db_configured()) {
+        return null;
+    };
+    let payload = baml.json.from_json<map<string, json>>(details);
+    payload.set("pr", pr.to_json());
+    let previous = select(
+        "events",
+        "select=kind,payload&payload->>pr="
+            + eq(pr)
+            + "&dataset="
+            + eq(dataset())
+            + "&order=created_at.desc,id.desc&limit=1",
+    );
+    let last = previous.at(0) ?? baml.json.parse("{}");
+    if (
+        baml.json.path_or<string>(last, ".kind", "") == kind
+            && baml.json.stringify(baml.json.path_or<json>(last, ".payload", baml.json.parse("{}")))
+                == baml.json.stringify(payload.to_json())
+    ) {
+        return null;
+    };
+    log_event(kind, issue_id_for_pr(pr), null, payload.to_json(), thread?.channel, thread?.ts);
+    null
+}
 
-    test "a round line counts what went to the agent" {
-        let fb = PrFeedback {
-            checks: [CheckRow { name: "clippy", bucket: "fail", link: null }],
-            comments: [],
-        };
-        assert.equal(
-            round_text(1, "fixed", fb),
-            ":arrows_counterclockwise: round 1: 1 failing check, 0 reviewer comments → fixed, pushed",
-        );
-        assert.contains(round_text(2, "gate_failed", fb), "nothing pushed");
-    }
+function pr_activity_link(pr: string) -> string {
+    let base = (baml.env.get("ATB2_UI_URL") ?? "").trim();
+    if (!base.starts_with("https://")) {
+        return pr;
+    };
+    let number = pr.split("/pull/").at(1) ?? "";
+    if (
+        number.length() == 0
+            || !number.chars().every((c: string) -> bool {
+                c >= "0" && c <= "9"
+            })
+    ) {
+        return pr;
+    };
+    "<" + base + "/prs/" + number + "?dataset=" + dataset() + "|View babysitter activity>"
+}
 
-    test "a request row reads back; a queued-by-hand request has no thread" {
-        let r = request_from_row(
-            baml.json.parse(
-                `{"id":7,"pr":"https://github.com/o/r/pull/1","channel":"","thread_ts":"","requested_by":null,"status":"queued"}`,
-            ),
-        );
-        assert.equal(r.id, 7);
-        assert.equal(merge_request_thread(r) == null, true);
-        let s = request_from_row(
-            baml.json.parse(
-                `{"id":8,"pr":"https://github.com/o/r/pull/2","channel":"C1","thread_ts":"1.2","requested_by":"U1","status":"queued"}`,
-            ),
-        );
-        assert.equal(merge_request_thread(s)?.ts ?? "", "1.2");
-    }
-
-    test "the stale cutoff is an instant in the past" {
-        let cutoff = iso_seconds_ago(60);
-        assert.is_true(cutoff.length() > 10);
-        assert.is_true(cutoff < baml.time.Instant.now().to_string());
-    }
+function retire_babysit_proposals(request_id: int) -> null {
+    update(
+        "babysit_proposals",
+        "request_id=eq."
+            + request_id.to_string()
+            + "&status=in.(pending,approved)&dataset="
+            + eq(dataset()),
+        { "status": "stale" }.to_json(),
+    );
+    null
 }
