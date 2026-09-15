@@ -1668,6 +1668,7 @@ dependencies = [
  "baml_version",
  "bex_events",
  "bex_project",
+ "bex_str",
  "bridge_cffi",
  "bridge_ctypes",
  "indexmap",

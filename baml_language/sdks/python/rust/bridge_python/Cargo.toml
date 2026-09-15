@@ -21,12 +21,14 @@ bundle-http = [ "bridge_cffi/bundle-http" ]
 aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
 ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
 gc_profiling = [ "bex_project/gc_profiling" ]
+allocation_profiling = [ "dep:bex_str", "bex_str/allocation_profiling" ]
 # Do not add a Cargo `extension-module` feature here. PyO3 0.28 expects
 # maturin to set PYO3_BUILD_EXTENSION_MODULE only while packaging; making it a
 # normal feature lets `cargo test --all-features` disable libpython linking.
 
 [dependencies]
 baml_version = { workspace = true }
+bex_str = { workspace = true, optional = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
 bridge_cffi = { workspace = true }

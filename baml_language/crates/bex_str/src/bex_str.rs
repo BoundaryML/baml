@@ -9,6 +9,9 @@ use std::{
     },
 };
 
+#[cfg(feature = "allocation_profiling")]
+use crate::allocation_stats;
+
 /// Maximum bytes stored inline without heap allocation.
 /// 56 (target size) - 1 (discriminant) - 1 (len byte) = 54.
 const INLINE_CAPACITY: usize = 54;
@@ -280,7 +283,7 @@ impl BexStr {
             };
         }
 
-        BexStr::Concat(Arc::new(ConcatNode {
+        BexStr::Concat(new_concat_node(ConcatNode {
             total_len: total_len as u64,
             state: Mutex::new(ConcatState::Deferred { left, right }),
         }))
@@ -334,6 +337,8 @@ impl ConcatNode {
     /// Iterative flatten. Materializes bytes into Arc<FlatStr>.
     /// Stores result back so subsequent calls return O(1).
     pub(crate) fn flatten(&self) -> Arc<FlatStr> {
+        #[cfg(feature = "allocation_profiling")]
+        allocation_stats::record_flatten_call();
         let mut guard = self.state.lock().unwrap();
         match &*guard {
             ConcatState::Flattened(f) => return f.clone(),
@@ -343,7 +348,7 @@ impl ConcatNode {
         // Take ownership of the deferred state
         let old = std::mem::replace(
             &mut *guard,
-            ConcatState::Flattened(Arc::new(FlatStr {
+            ConcatState::Flattened(new_flat_str(FlatStr {
                 hash: AtomicU64::new(0),
                 char_count: 0,
                 data: Box::new([]),
@@ -404,7 +409,7 @@ impl ConcatNode {
         }
 
         let char_count = bytecount::num_chars(&buf) as u64;
-        let flat = Arc::new(FlatStr {
+        let flat = new_flat_str(FlatStr {
             hash: AtomicU64::new(0),
             char_count,
             data: buf.into_boxed_slice(),
@@ -417,10 +422,12 @@ impl ConcatNode {
 /// Iterative Drop to avoid stack overflow on deep left-leaning trees.
 impl Drop for ConcatNode {
     fn drop(&mut self) {
+        #[cfg(feature = "allocation_profiling")]
+        allocation_stats::record_concat_dropped();
         let state = match self.state.get_mut() {
             Ok(s) => std::mem::replace(
                 s,
-                ConcatState::Flattened(Arc::new(FlatStr {
+                ConcatState::Flattened(new_flat_str(FlatStr {
                     hash: AtomicU64::new(0),
                     char_count: 0,
                     data: Box::new([]),
@@ -444,7 +451,7 @@ impl Drop for ConcatNode {
                 let inner = match owned.state.get_mut() {
                     Ok(s) => std::mem::replace(
                         s,
-                        ConcatState::Flattened(Arc::new(FlatStr {
+                        ConcatState::Flattened(new_flat_str(FlatStr {
                             hash: AtomicU64::new(0),
                             char_count: 0,
                             data: Box::new([]),
@@ -576,7 +583,7 @@ impl From<String> for BexStr {
             }
         } else {
             let char_count = bytecount::num_chars(s.as_bytes()) as u64;
-            BexStr::Flat(Arc::new(FlatStr {
+            BexStr::Flat(new_flat_str(FlatStr {
                 hash: AtomicU64::new(0),
                 char_count,
                 data: s.into_bytes().into_boxed_slice(),
@@ -596,12 +603,31 @@ impl From<&str> for BexStr {
             }
         } else {
             let char_count = bytecount::num_chars(s.as_bytes()) as u64;
-            BexStr::Flat(Arc::new(FlatStr {
+            BexStr::Flat(new_flat_str(FlatStr {
                 hash: AtomicU64::new(0),
                 char_count,
                 data: s.as_bytes().into(),
             }))
         }
+    }
+}
+
+fn new_flat_str(value: FlatStr) -> Arc<FlatStr> {
+    #[cfg(feature = "allocation_profiling")]
+    allocation_stats::record_flat_created(value.data.len());
+    Arc::new(value)
+}
+
+fn new_concat_node(value: ConcatNode) -> Arc<ConcatNode> {
+    #[cfg(feature = "allocation_profiling")]
+    allocation_stats::record_concat_created();
+    Arc::new(value)
+}
+
+impl Drop for FlatStr {
+    fn drop(&mut self) {
+        #[cfg(feature = "allocation_profiling")]
+        allocation_stats::record_flat_dropped(self.data.len());
     }
 }
 
