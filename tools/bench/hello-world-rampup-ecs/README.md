@@ -76,6 +76,31 @@ The ramp profile schema is:
 
 Ramp rate fields may also be maps keyed by implementation or full cell name. [`profiles/ramp-node-continuation.json`](profiles/ramp-node-continuation.json) is an explicitly labeled continuation profile used after a complete 100-RPS-starting ramp: it resumes plain Node at 4,000 RPS while holding already-bounded implementations at 100 RPS. Continuation evidence must be interpreted together with the initial ramp and must not be presented as a fresh 100-RPS-starting run.
 
+## Binary-search one in-VPC target
+
+After establishing a passing lower bound and failing upper bound, the binary profile tests the upper bound first, verifies the lower bound, and searches to the configured resolution. Every candidate receives `seconds_per_candidate` of 4-on/1-off cycles. Request deadlines must fit within the one-second off-window, and the explicit connection cap prevents the load host's ephemeral ports from defining the result.
+
+```json
+{
+  "name": "binary-node-only-arm64-5000-10000",
+  "mode": "binary",
+  "lower_rate_per_target": 5000,
+  "upper_rate_per_target": 10000,
+  "resolution_rps": 100,
+  "seconds_per_candidate": 30,
+  "connections": 1000,
+  "request_timeout_ms": 800,
+  "on_seconds": 4,
+  "off_seconds": 1
+}
+```
+
+Deploy only the desired application cell and its AWS load task. The generator emits `binary_cycle_finished`, `binary_candidate_finished`, and `binary_search_finished` records to the retained load log group.
+
+```sh
+python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-vpc-node-binary-01 --images artifacts/rampup-001/images.json --profile profiles/binary-node-only-arm64-5000-10000.json --target-cell node-only-arm64
+```
+
 ## Confirm sustained rates
 
 A sustain profile accepts one rate for all cells or overrides keyed by implementation or full `implementation-architecture` cell name. Full-cell keys take precedence over implementation keys. This permits all ten coarse bounds to be tested together without changing workload images or resource allocations.

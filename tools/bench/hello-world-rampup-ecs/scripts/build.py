@@ -28,14 +28,20 @@ def main():
     parser.add_argument('--execute', action='store_true', help='Execute builds; otherwise print commands only')
     parser.add_argument('--push', action='store_true', help='Publish images; without this flag load them locally')
     parser.add_argument('--resume', action='store_true', help='Reuse completed entries from this build manifest; do not edit sources between attempts')
+    parser.add_argument('--base-manifest', type=Path, help='Seed unchanged image entries from an earlier immutable manifest')
+    parser.add_argument('--only', choices=[*[f'{variant}-{arch}' for variant in MATRIX['variants'] for arch in MATRIX['architectures']], 'load'])
     args = parser.parse_args()
     destination = ROOT / 'artifacts' / args.tag
     # Build tags are also directory names; disallow traversal and shell-like input.
     if not args.tag or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-' for c in args.tag) or args.tag in ('.', '..'):
         parser.error('Invalid tag')
     manifest = destination / 'images.json'
-    images = json.loads(manifest.read_text())['images'] if args.resume and manifest.exists() else {}
+    images = json.loads(args.base_manifest.read_text())['images'] if args.base_manifest else {}
+    if args.resume and manifest.exists():
+        images.update(json.loads(manifest.read_text())['images'])
     for name, arch, dockerfile, image in builds(args.repository, args.tag):
+        if args.only and name != args.only:
+            continue
         if name in images and images[name]['tag'] == image and images[name]['pushed'] == args.push:
             print('Reusing completed image ' + image, flush=True)
             continue

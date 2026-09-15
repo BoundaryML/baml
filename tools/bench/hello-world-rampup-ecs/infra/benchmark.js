@@ -23,7 +23,7 @@ function cellValue(configured, cell, label) {
 }
 
 function normalizeProfile(profile, cell) {
-  if (!profile || !['ramp', 'sustain'].includes(profile.mode)) throw new Error('Profile mode must be ramp or sustain');
+  if (!profile || !['ramp', 'sustain', 'binary'].includes(profile.mode)) throw new Error('Profile mode must be ramp, sustain, or binary');
   if (profile.on_seconds !== 4 || profile.off_seconds !== 1) throw new Error('The load duty cycle must be 4 seconds on and 1 second off');
   if (profile.mode === 'ramp') {
     const start = checkedRate(cellValue(profile.start_rate_per_target, cell, 'start_rate_per_target'), `start_rate_per_target for ${cell.name}`);
@@ -33,11 +33,25 @@ function normalizeProfile(profile, cell) {
     const maximum = checkedRate(cellValue(profile.maximum_rate_per_target, cell, 'maximum_rate_per_target'), `maximum_rate_per_target for ${cell.name}`);
     if (!Number.isInteger(every) || every < 5 || every % 5 !== 0) throw new Error('increase_every_seconds must be a positive multiple of the 5-second duty cycle');
     if (maximum < start) throw new Error('maximum_rate_per_target must be at least start_rate_per_target');
-    return { start, increase, every, maximum, on: 4, off: 1 };
+    return { mode: 'ramp', start, increase, every, maximum, on: 4, off: 1 };
+  }
+  if (profile.mode === 'binary') {
+    const lower = checkedRate(cellValue(profile.lower_rate_per_target, cell, 'lower_rate_per_target'), `lower_rate_per_target for ${cell.name}`);
+    const upper = checkedRate(cellValue(profile.upper_rate_per_target, cell, 'upper_rate_per_target'), `upper_rate_per_target for ${cell.name}`);
+    const resolution = profile.resolution_rps;
+    const seconds = profile.seconds_per_candidate;
+    const connections = profile.connections;
+    const timeout = profile.request_timeout_ms;
+    if (upper <= lower) throw new Error('upper_rate_per_target must exceed lower_rate_per_target');
+    if (!Number.isInteger(resolution) || resolution < 1 || resolution > upper - lower) throw new Error('resolution_rps must fit inside the search interval');
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds % 5 !== 0) throw new Error('seconds_per_candidate must be a positive multiple of five');
+    if (!Number.isInteger(connections) || connections < 1 || connections > 10000) throw new Error('connections must be 1..10000');
+    if (!Number.isInteger(timeout) || timeout < 100 || timeout >= 1000) throw new Error('request_timeout_ms must fit inside the one-second off-window');
+    return { mode: 'binary', start: lower, increase: 0, every: seconds, maximum: upper, lower, upper, resolution, seconds, connections, timeout, on: 4, off: 1 };
   }
   const rate = cellValue(profile.rate_per_target, cell, 'rate_per_target');
   checkedRate(rate, `rate_per_target for ${cell.name}`);
-  return { start: rate, increase: 0, every: 30, maximum: rate, on: 4, off: 1 };
+  return { mode: 'sustain', start: rate, increase: 0, every: 30, maximum: rate, on: 4, off: 1 };
 }
 
 function validateRun(name, images, profile) {
@@ -162,7 +176,10 @@ class BenchmarkStack extends cdk.Stack {
         const load = normalizeProfile(profile, { variant, arch, name });
         const env = { RunName: run, Variant: variant, Architecture: arch, START_RATE_PER_TARGET: String(load.start),
           RATE_STEP_PER_TARGET: String(load.increase), RATE_STEP_SECONDS: String(load.every), MAX_RATE_PER_TARGET: String(load.maximum),
-          ON_SECONDS: String(load.on), OFF_SECONDS: String(load.off), TARGET_URL: `http://${name}.${run}.hello.internal:8080/` };
+          ON_SECONDS: String(load.on), OFF_SECONDS: String(load.off), LOAD_MODE: load.mode, TARGET_URL: `http://${name}.${run}.hello.internal:8080/` };
+        if (load.mode === 'binary') Object.assign(env, { SEARCH_LOWER_RPS: String(load.lower), SEARCH_UPPER_RPS: String(load.upper),
+          SEARCH_RESOLUTION_RPS: String(load.resolution), SEARCH_SECONDS_PER_CANDIDATE: String(load.seconds),
+          VEGETA_CONNECTIONS: String(load.connections), REQUEST_TIMEOUT_MS: String(load.timeout) });
         if (variant !== 'baml-only') env.PROCESS_METRICS_URL = `http://${name}.${run}.hello.internal:9091/metrics`;
         const loadTask = new ecs.CfnTaskDefinition(this, `${key}LoadTask`, { family: `${run}-load-${name}`, requiresCompatibilities: ['EC2'], networkMode: 'bridge',
           cpu: String(matrix.load_task_cpu), memory: String(matrix.load_task_memory_mib), executionRoleArn: executionRole.roleArn,

@@ -1,0 +1,12 @@
+{
+  "name": "binary-node-only-arm64-5000-10000",
+  "mode": "binary",
+  "lower_rate_per_target": 5000,
+  "upper_rate_per_target": 10000,
+  "resolution_rps": 100,
+  "seconds_per_candidate": 30,
+  "connections": 1000,
+  "request_timeout_ms": 800,
+  "on_seconds": 4,
+  "off_seconds": 1
+}
