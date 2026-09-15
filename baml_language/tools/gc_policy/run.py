@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--allow-legacy-binaries', action='store_true',
                         help='Explicitly allow binaries without build.py provenance')
     parser.add_argument('--allow-unprofiled', action='store_true', help='Timing-only feature-off comparison')
+    parser.add_argument('--policy', help='Override the harness policy for both binaries')
     parser.add_argument('--timeout', type=float, default=300)
     args = parser.parse_args()
     workspace = Path(__file__).resolve().parents[2]
@@ -58,6 +59,9 @@ def main():
         ('continuous_100k', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=100000, GC_WARMUP=512)),
         ('cache', 'full_live', dict(GC_WORKLOAD='cache', GC_CALLS=1024, GC_N=4096, GC_CACHE_N=262144)),
         ('burst_idle', 'full32', dict(GC_WORKLOAD='burst_idle', GC_CALLS=512, GC_N=2048, GC_IDLE_MS=1000)),
+        ('runtime_concurrent_churn', 'current', dict(GC_WORKLOAD='churn', GC_WORKERS=8, GC_CALLS=128, GC_N=2048)),
+        ('runtime_concurrent_retained', 'current', dict(GC_WORKLOAD='retained', GC_WORKERS=8, GC_CALLS=128, GC_N=2048, GC_RETAIN=32)),
+        ('runtime_concurrent_cache', 'current', dict(GC_WORKLOAD='cache', GC_WORKERS=8, GC_CALLS=128, GC_N=2048, GC_CACHE_N=262144)),
     ]
     if args.extended or args.case:
         cases += extended
@@ -66,6 +70,9 @@ def main():
         if unknown:
             parser.error(f'Unknown cases: {sorted(unknown)}')
         cases = [c for c in cases if c[0] in args.case]
+    if args.policy and args.policy != 'current' and any(
+            case.startswith('runtime_concurrent_') for case, _, _ in cases):
+        parser.error('runtime_concurrent_* cases only support --policy current')
     out.mkdir(parents=True, exist_ok=False)
     for name in provenance:
         shutil.copy2(variants[name].parent / 'build-manifest.json', out / f'{name}-build.json')
@@ -81,6 +88,7 @@ def main():
         seed=4202, repeats=args.repeats, cases=cases, change=args.change,
         build_provenance={name: f'{name}-build.json' if name in provenance else None for name in variants},
         allow_unprofiled=args.allow_unprofiled,
+        policy_override=args.policy,
     )
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Keep baseline/candidate adjacent, randomize their order inside each pair,
@@ -94,11 +102,12 @@ def main():
             rng.shuffle(order)
             for variant in order:
                 name = f'{repeat}-{case}-{variant}'
-                test = 'profile_concurrent_gc' if case == 'concurrent' else 'compare_gc_policy'
+                test = ('compare_concurrent_runtime_policy' if case.startswith('runtime_concurrent_') else
+                        'profile_concurrent_gc' if case == 'concurrent' else 'compare_gc_policy')
                 # Ambient experiment knobs must not silently change a matrix.
                 env = {k: v for k, v in os.environ.items() if not k.startswith('GC_')}
                 env.update({k: str(v) for k, v in settings.items()})
-                env.update(GC_POLICY=policy, GC_TRACE=str(out / f'{name}.cycles.json'))
+                env.update(GC_POLICY=args.policy or policy, GC_TRACE=str(out / f'{name}.cycles.json'))
                 try:
                     run = subprocess.run([str(variants[variant]), '--ignored', '--nocapture', '--exact', test],
                                          cwd=workspace, env=env, text=True, capture_output=True, timeout=args.timeout)

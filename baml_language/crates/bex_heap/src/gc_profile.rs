@@ -173,8 +173,37 @@ mod enabled {
             profile.pause = self.released_at - self.parked_at;
             profile.post_gc = finished_at - self.released_at;
             profile.total = finished_at - self.start;
-            tracing::debug!(target: "bex_gc", reason = reason, level = ?stats.level,
-            budget = ?heap.gc_budget(), profile = ?profile, "GC cycle");
+            tracing::debug!(
+                target: "bex_gc",
+                reason,
+                level = ?stats.level,
+                copied_objects = stats.live_count,
+                reclaimed_slots = stats.collected_count,
+                promoted_gen1 = stats.promoted_to_gen1,
+                promoted_gen2 = stats.promoted_to_gen2,
+                before_gen0 = profile.before.generation_slots[0],
+                before_gen1 = profile.before.generation_slots[1],
+                before_gen2 = profile.before.generation_slots[2],
+                after_gen0 = profile.after.generation_slots[0],
+                after_gen1 = profile.after.generation_slots[1],
+                after_gen2 = profile.after.generation_slots[2],
+                actual_new_objects = profile.before.new_objects,
+                prepare_ms = profile.prepare.as_secs_f64() * 1000.0,
+                trace_ms = profile.trace.as_secs_f64() * 1000.0,
+                keepalive_ms = profile.keepalive.as_secs_f64() * 1000.0,
+                fixup_ms = profile.fixup.as_secs_f64() * 1000.0,
+                reclaim_ms = profile.reclaim.as_secs_f64() * 1000.0,
+                bookkeeping_ms = profile.bookkeeping.as_secs_f64() * 1000.0,
+                park_wait_ms = profile.park_wait.as_secs_f64() * 1000.0,
+                root_scan_ms = profile.root_scan.as_secs_f64() * 1000.0,
+                heap_ms = profile.heap_total.as_secs_f64() * 1000.0,
+                holder_fixup_ms = profile.holder_fixup.as_secs_f64() * 1000.0,
+                pause_ms = profile.pause.as_secs_f64() * 1000.0,
+                post_gc_ms = profile.post_gc.as_secs_f64() * 1000.0,
+                total_ms = profile.total.as_secs_f64() * 1000.0,
+                budget = ?heap.gc_budget(),
+                "GC cycle"
+            );
         }
     }
 

@@ -160,8 +160,12 @@ impl BexWork {
             && s.scheduling.deadline().is_some_and(|d| d <= Instant::now())
             && self.version(&s) != s.collected;
         s.work += 1;
+        let became_concurrent = s.work == 2;
         s.scheduling.disarm();
         drop(s);
+        if became_concurrent && let Some(heap) = self.heap.upgrade() {
+            heap.suppress_minor_collection();
+        }
         self.wake.notify_one();
         BexWorkGuard {
             bex_work: Arc::clone(self),
@@ -171,6 +175,10 @@ impl BexWork {
 
     pub(crate) fn cleanup_version(&self) -> CleanupVersion {
         self.version(&self.lock())
+    }
+
+    pub(crate) fn has_concurrent_work(&self) -> bool {
+        self.lock().work > 1
     }
 
     /// Called for every full GC while it still owns exclusive heap access.
@@ -280,6 +288,16 @@ impl BexWork {
 }
 
 impl BexEngine {
+    pub(crate) fn automatic_collection_level(&self) -> Option<CollectionLevel> {
+        let level = self.heap.should_collect()?;
+        if level == CollectionLevel::Minor && self.bex_work.has_concurrent_work() {
+            self.heap.suppress_minor_collection();
+            None
+        } else {
+            Some(level)
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn ensure_idle_gc_worker(self: &Arc<Self>) {
         let mut s = self.bex_work.lock();
@@ -317,16 +335,18 @@ impl BexEngine {
         }
         let _checking = GcCheckGuard(&self.checking_gc);
         // No active heap permit yet. Incoming external values/handles own roots.
-        if idle_due || self.heap.should_gc() {
-            self.collect_garbage_with_reason(
-                CollectionLevel::Major,
-                if idle_due {
-                    "idle_on_entry"
-                } else {
-                    "allocation_on_entry"
-                },
-            )
-            .await;
+        let requested = if idle_due {
+            Some((CollectionLevel::Major, "idle_on_entry"))
+        } else {
+            self.automatic_collection_level()
+                .map(|level| (level, "allocation_on_entry"))
+        };
+        if let Some((level, reason)) = requested {
+            // Idle cleanup is release-driven, so the allocation-policy recheck
+            // after parking must not cancel it.
+            let _ = self
+                .collect_garbage_with_reason(level, reason, !idle_due)
+                .await;
         }
     }
 
@@ -365,7 +385,8 @@ impl BexEngine {
         if !self.bex_work.due() {
             return;
         }
-        self.collect_garbage_parked(CollectionLevel::Major, "idle", guard, cycle)
+        let _ = self
+            .collect_garbage_parked(CollectionLevel::Major, "idle", false, guard, cycle)
             .await;
     }
 }

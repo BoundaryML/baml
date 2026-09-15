@@ -7,6 +7,22 @@ from pathlib import Path
 import statistics
 
 
+def paired_ratio_summary(pairs, key):
+    values = [(pair['baseline'].get(key), pair['candidate'].get(key)) for pair in pairs]
+    if any(baseline is None or candidate in (None, 0) for baseline, candidate in values):
+        return '-'
+    ratios = [baseline / candidate for baseline, candidate in values]
+    return f'{statistics.median(ratios):.2f}× ({min(ratios):.2f}–{max(ratios):.2f})'
+
+
+def paired_median_summary(pairs, key):
+    values = [(pair['baseline'].get(key), pair['candidate'].get(key)) for pair in pairs]
+    if any(baseline is None or candidate is None for baseline, candidate in values):
+        return '-'
+    return (f'{statistics.median(baseline for baseline, _ in values):.1f} → '
+            f'{statistics.median(candidate for _, candidate in values):.1f}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
@@ -78,22 +94,25 @@ def main():
              'Baseline and candidate are invoked with the same workload, warmup and requested policy settings. '
              + manifest.get('change', 'The candidate optimizes the unhandled-spawn-error scan.') +
              ' Binary hashes and experiment settings are recorded in the manifest.', '',
-             '| Case | Baseline s | Candidate s | Speedup (paired range) | Candidate peak slots MiB | Candidate longest recorded pause ms |',
+             '| Case | Wall speedup | CPU speedup | Peak RSS MiB (base → candidate) | Collections (minor/major, base → candidate) | Longest pause ms (base → candidate) |',
              '|---|---:|---:|---:|---:|---:|']
     for case, pairs in sorted(by_case.items()):
         assert len(pairs) == manifest['repeats']
         med = lambda variant, key: statistics.median(p[variant][key] for p in pairs)
-        ratios = [p['baseline']['elapsed_seconds'] / p['candidate']['elapsed_seconds'] for p in pairs]
-        slots = '-' if case == 'concurrent' else f'{med("candidate", "peak_slot_mib"):.1f}'
-        pauses = [p['candidate']['recorded_max_pause_ms'] for p in pairs]
-        pause = f'{statistics.median(pauses):.1f}' if all(p is not None for p in pauses) else '-'
-        lines.append(f'| {case} | {med("baseline", "elapsed_seconds"):.3f} | '
-                     f'{med("candidate", "elapsed_seconds"):.3f} | {statistics.median(ratios):.2f}× '
-                     f'({min(ratios):.2f}–{max(ratios):.2f}) | {slots} | {pause} |')
+        wall = paired_ratio_summary(pairs, 'elapsed_seconds')
+        cpu = paired_ratio_summary(pairs, 'process_cpu_seconds')
+        rss = paired_median_summary(pairs, 'peak_sampled_rss_mib')
+        collection_counts = (f'{med("baseline", "minor_count"):.0f}/{med("baseline", "major_count"):.0f} → '
+                             f'{med("candidate", "minor_count"):.0f}/{med("candidate", "major_count"):.0f}')
+        pauses = []
+        for variant in ['baseline', 'candidate']:
+            values = [p[variant]['recorded_max_pause_ms'] for p in pairs]
+            pauses.append(f'{statistics.median(values):.1f}' if all(v is not None for v in values) else '-')
+        lines.append(f'| {case} | {wall} | '
+                     f'{cpu} | '
+                     f'{rss} | {collection_counts} | {pauses[0]} → {pauses[1]} |')
     lines += ['', '## Where collection time went', '',
-              'Medians of per-run totals for explicitly requested, measured collections. '
-              'The concurrent case can also trigger automatic collections; these are emitted by '
-              'the engine tracing target but are not included in this harness’s returned-statistics files.', '',
+              'Medians of per-run totals for all engine collections captured on the experiment executor.', '',
               '| Case | Binary | Trace/copy ms | Error/finalizer scans ms | Pointer fixup ms | Reclaim ms | Wait to park ms |',
               '|---|---|---:|---:|---:|---:|---:|']
     for case, pairs in sorted(by_case.items()):
@@ -112,7 +131,8 @@ def main():
               'the original `collected_count` means reclaimed slots and must not be interpreted as dead-object count.',
               '- The `payload` case passes 64 KiB strings and retains 256 results. Payload bytes, compiler memory, '
               'allocator retention and scratch copies are not interchangeable with slot counts. RSS samples are in the raw results; '
-              'they are sampled every 32 calls, include startup/compilation, and can miss brief peaks.',
+              'single-work cases sample every 32 calls and runtime-concurrent cases every 5 ms. Samples include '
+              'startup/compilation and can miss briefer peaks.',
               '- The long-call case allocates roughly 64 MiB of slots within each call. A 32 MiB threshold checked '
               'only between calls cannot constrain that in-call growth. Production scheduling still needs safe allocation checkpoints.',
               '- `park_wait` is time waiting to acquire all permits; different callers may stop at different times. '
