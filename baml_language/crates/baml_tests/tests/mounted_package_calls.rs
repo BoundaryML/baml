@@ -53,6 +53,10 @@ interface Tagged {
     function tag(self) -> string throws never
 }
 
+interface Makeable {
+    function make(x: int) -> Self throws never
+}
+
 class Widget {
     x int
     label string
@@ -64,6 +68,12 @@ class Widget {
     implements Describable {
         function describe(self) -> string throws never {
             self.label
+        }
+    }
+
+    implements Makeable {
+        function make(x: int) -> Widget throws never {
+            Widget { x: x, label: "made" }
         }
     }
 }
@@ -492,6 +502,42 @@ function main() -> string throws never {
     )
     .await;
     assert_ok(result, BexExternalValue::String("l".into()));
+}
+
+/// A mounted impl method referenced as a VALUE through its class
+/// (`let f = app.Widget.describe`) resolves type-keyed, exactly as the
+/// source lane's `Widget.describe` does: a virtual function bound to
+/// `Widget`'s impl, taking the receiver as its first argument.
+#[tokio::test]
+async fn mounted_impl_method_value_reference_runs() {
+    let result = run_consumer(
+        r#"
+function main() -> string throws never {
+    let f = app.Widget.describe;
+    f(app.Widget { x: 1, label: "v" })
+}
+"#,
+        "main",
+    )
+    .await;
+    assert_ok(result, BexExternalValue::String("v".into()));
+}
+
+/// A mounted `self`-less impl method called through its class
+/// (`app.Widget.make(3)`) resolves type-keyed on `Widget` — the same road a
+/// source static takes, never a bare constant naming the interface slot.
+#[tokio::test]
+async fn mounted_impl_static_call_runs() {
+    let result = run_consumer(
+        r#"
+function main() -> int throws never {
+    app.Widget.make(3).x
+}
+"#,
+        "main",
+    )
+    .await;
+    assert_ok(result, BexExternalValue::Int(3));
 }
 
 /// A mounted compiler/VM builtin has no ordinary bytecode-unit symbol. This

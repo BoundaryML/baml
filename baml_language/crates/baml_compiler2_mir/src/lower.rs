@@ -1570,7 +1570,7 @@ enum InterfaceMember {
     Undeclared,
 }
 
-/// How a source interface method's frame divides — see
+/// How an interface method's frame divides — see
 /// [`MirLower::interface_method_shape`].
 struct InterfaceMethodShape {
     /// Whether the method's first parameter is the `self` receiver.
@@ -3634,19 +3634,28 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// A UFCS interface-item call — the `(Base as I).m(..)`, `I.m(..)`, and
-    /// namespaced-path spellings, keyed off the TIR record rather than the
-    /// syntax: any callee that resolves to an UNBOUND virtual slot, and so
-    /// carries its receiver (if any) as the written first argument.
+    /// An interface-item call, keyed off the TIR record rather than the
+    /// spelling: any callee that resolves UNBOUND to an interface slot —
+    /// `(Base as I).m(..)`, `I.m(..)`, `C.m(..)`, or a type-rooted member
+    /// access such as `K.extends` (a contextual-keyword member is not
+    /// accepted as a path segment) — or to a statically matched impl's
+    /// method through a type (`Widget.make(..)`, a served package's
+    /// `app.Widget.describe(w)`), and so carries its receiver (if any) as
+    /// the written first argument. A bound access carries its receiver in
+    /// the base and is routed by the member roads; `default.m(..)` binds
+    /// `default` as its receiver and has its own discipline. Both lanes
+    /// alike: a served interface or impl resolves exactly as a source one.
     ///
     /// Two dispatch forms, split by whether the method takes `self`:
     /// - WITH a receiver, `Self` is DERIVED from it: the same open-world
     ///   `VirtualCall` the member spelling emits, on `args[0]`.
-    /// - WITHOUT one, `Self` is PASSED: the recorded instantiation's slot 0
-    ///   becomes the `Self` type operand of a
-    ///   [`Rvalue::MakeVirtualFunction`], and the call proceeds as an
-    ///   ordinary indirect call of the resolved callable (every frame type
-    ///   arg is curried into the closure, so the call itself carries none).
+    /// - WITHOUT one, `Self` is PASSED: the resolved `Self` type becomes
+    ///   the type operand of a [`Rvalue::MakeVirtualFunction`], and the
+    ///   call proceeds as an ordinary indirect call of the resolved
+    ///   callable (every frame type arg is curried into the closure, so
+    ///   the call itself carries none). A virtual slot's `Self` is the
+    ///   recorded instantiation's slot 0; a matched impl's is its
+    ///   for-target realized at the carried frame.
     fn try_lower_interface_item_call(
         &mut self,
         expr_id: AstExprId,
@@ -3656,88 +3665,154 @@ impl<'db> LoweringContext<'db> {
         dest: &Place,
     ) -> bool {
         use crate::inference_provider::MemberResolution;
-        // The resolution record routes it, never the spelling: an UNBOUND
-        // access to a virtual slot IS the UFCS form, whatever node it parsed
-        // as - `(Base as I).m`, `I.m`, `C.m`, or a type-rooted member access
-        // such as `K.extends` (a contextual-keyword member is not accepted as
-        // a path segment). A bound access carries its receiver in the base and
-        // is routed by the member roads; `default.m(..)` binds `default` as
-        // its receiver and has its own discipline. A served interface's slot
-        // takes the UFCS dispatch road below.
         let Some(MemberResolution::Method {
-            callee:
-                MethodCallee::Virtual {
-                    interface: DeclRef::Source(iface_loc),
-                    method,
-                },
+            callee: item,
             receiver: Receiver::Unbound,
         }) = self.tir_resolution(self.expr_metadata_key(callee)).cloned()
         else {
             return false;
         };
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
-        let pkg_info = file_package(self.db, iface_loc.file(self.db));
-        let iface_tn = TypeName::new(
-            self.spelling.of(pkg_info.root).clone(),
-            pkg_info.namespace_path,
-            iface_data.name.clone(),
-        );
-        let Some(shape) = self.interface_method_shape(&iface_tn, &method) else {
-            return false;
-        };
-
-        if shape.takes_self {
-            // The receiver road derives `Self` from the value, so it needs
-            // only the interface VIEW (the static frame prefix); the method's
-            // own type args — scoped `type T = …` slots included — are
-            // lowered by the virtual-call machinery itself.
-            let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
-                return false;
-            };
-            if plan.type_args.len() != shape.frame_len {
-                return false;
+        match item {
+            MethodCallee::Virtual { interface, method } => {
+                let Some(shape) = self.interface_method_shape(interface, &method) else {
+                    return false;
+                };
+                if shape.takes_self {
+                    // The receiver road derives `Self` from the value, so it
+                    // needs only the interface VIEW (the static frame
+                    // prefix); the method's own type args — scoped `type T =
+                    // …` slots included — are lowered by the virtual-call
+                    // machinery itself.
+                    let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
+                    else {
+                        return false;
+                    };
+                    if plan.type_args.len() != shape.frame_len {
+                        return false;
+                    }
+                    let iface_args: Vec<Tir2Ty> =
+                        plan.type_args[1..=shape.interface_generics].to_vec();
+                    let iface_tn = self.interface_type_name(interface);
+                    return self.emit_item_call_on_receiver(
+                        expr_id,
+                        args,
+                        runtime_id,
+                        dest,
+                        &iface_tn,
+                        &iface_args,
+                        &method,
+                    );
+                }
+                let Some(rvalue) = self.virtual_function_rvalue(expr_id, interface, &method) else {
+                    return false;
+                };
+                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue);
+                true
             }
-            let iface_args: Vec<Tir2Ty> = plan.type_args[1..=shape.interface_generics].to_vec();
-            // Associated types are OUTPUTS of the impl match, never frame
-            // slots (`own_start == 1 + interface_generics`), so the view
-            // carries none — dispatch keys on head + args alone.
-            let iface_assoc: Vec<(Name, Tir2Ty)> = Vec::new();
-            // Lowered as ONE argument list, then split: the call plan covers
-            // every written argument, `self` included, and reads them by
-            // position in the call expression.
-            let mut arg_operands = self.lower_call_arg_operands(expr_id, args);
-            if arg_operands.is_empty() {
-                // Every other bail-out in this function returns before any
-                // lowering; this one cannot. The arguments are already emitted
-                // into the block, so falling through would re-lower them on
-                // the ordinary call road and evaluate a side-effecting
-                // argument twice. A `self`-taking method always carries its
-                // receiver as the first written argument, so an empty list is
-                // an internal inconsistency — fail at the origin.
-                self.emit_panic_call(
-                    "internal compiler error: self-taking interface item call has no receiver \
-                     argument",
-                    expr_id,
-                );
-                return true;
+            MethodCallee::Concrete {
+                impl_block,
+                func,
+                frame_type_args,
+            } => {
+                let (self_ty, view) = self.concrete_item_target(impl_block, func, &frame_type_args);
+                let method = callable_display_name(self.db, func).clone();
+                if callable_takes_self(self.db, func) {
+                    return self.emit_item_call_on_receiver(
+                        expr_id, args, runtime_id, dest, &view.0, &view.1, &method,
+                    );
+                }
+                let rvalue = self.type_keyed_function_rvalue(expr_id, &self_ty, &view, &method);
+                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue);
+                true
             }
-            let receiver = arg_operands.remove(0);
-            return self.emit_virtual_call_with_value_operands(
-                receiver,
-                &iface_tn,
-                &iface_args,
-                &iface_assoc,
-                &method,
-                expr_id,
-                arg_operands,
-                runtime_id,
-                dest,
-            );
+            MethodCallee::Inherent(_) => false,
         }
+    }
 
-        let Some(rvalue) = self.virtual_function_rvalue(expr_id, iface_loc, &method) else {
-            return false;
-        };
+    /// The `(Self, declaring interface view)` a statically matched impl's
+    /// method dispatches on — `hir_ty`'s realization of the carried frame,
+    /// keyed on the interface that DECLARES the method (a `requires`
+    /// ancestor's impl is where it may live). Associated types are outputs
+    /// of the impl match, never dispatch keys, so the view carries none.
+    fn concrete_item_target(
+        &self,
+        impl_block: baml_compiler2_hir_ty::extern_loc::ImplRef<'db>,
+        func: FunctionRef<'db>,
+        frame_type_args: &[Tir2Ty],
+    ) -> (Tir2Ty, InterfaceTypeView) {
+        let (self_ty, interface) = baml_compiler2_hir_ty::impls::concrete_callee_target(
+            self.db,
+            impl_block,
+            func,
+            frame_type_args,
+        );
+        let interface = interface.to_plain();
+        let view = self.interface_view_declaring_method(
+            &(
+                self.wire(&interface.name),
+                interface.generics.iter().cloned().collect(),
+                Box::new([]),
+            ),
+            callable_display_name(self.db, func),
+        );
+        (self_ty.to_plain(), view)
+    }
+
+    /// The receiver form of an interface-item call: `self` is the written
+    /// first argument, from which the VM derives `Self`. The call plan
+    /// covers every written argument, `self` included, so the list is
+    /// lowered ONCE and split.
+    #[expect(clippy::too_many_arguments)]
+    fn emit_item_call_on_receiver(
+        &mut self,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
+        dest: &Place,
+        iface_tn: &TypeName,
+        iface_args: &[Tir2Ty],
+        method: &Name,
+    ) -> bool {
+        let mut arg_operands = self.lower_call_arg_operands(expr_id, args);
+        if arg_operands.is_empty() {
+            // Every other bail-out on this road returns before any lowering;
+            // this one cannot. The arguments are already emitted into the
+            // block, so falling through would re-lower them on the ordinary
+            // call road and evaluate a side-effecting argument twice. A
+            // `self`-taking method always carries its receiver as the first
+            // written argument, so an empty list is an internal
+            // inconsistency — fail at the origin.
+            self.emit_panic_call(
+                "internal compiler error: self-taking interface item call has no receiver \
+                 argument",
+                expr_id,
+            );
+            return true;
+        }
+        let receiver = arg_operands.remove(0);
+        self.emit_virtual_call_with_value_operands(
+            receiver,
+            iface_tn,
+            iface_args,
+            &[],
+            method,
+            expr_id,
+            arg_operands,
+            runtime_id,
+            dest,
+        )
+    }
+
+    /// The type-keyed form of an interface-item call: the resolved callable
+    /// (a [`Rvalue::MakeVirtualFunction`]) called indirectly.
+    fn emit_item_call_type_keyed(
+        &mut self,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
+        dest: &Place,
+        rvalue: Rvalue<'db>,
+    ) {
         let arg_operands = self.lower_call_arg_operands(expr_id, args);
         let callable = self.builder.temp(RuntimeTy::unknown());
         self.builder.assign(Place::local(callable), rvalue);
@@ -3748,37 +3823,118 @@ impl<'db> LoweringContext<'db> {
             runtime_id,
             dest,
         );
-        true
     }
 
-    /// Whether the method a member resolution names takes a `self` receiver.
-    /// `None` for resolutions that are not methods at all.
-    fn resolution_takes_self(
-        &self,
-        resolution: &crate::inference_provider::MemberResolution<'db>,
-    ) -> Option<bool> {
-        use crate::inference_provider::MemberResolution;
-        match resolution {
-            MemberResolution::Method { callee, .. } => match callee {
-                MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => {
-                    Some(callable_takes_self(self.db, *func))
-                }
-                MethodCallee::Virtual { interface, method } => {
-                    self.virtual_slot_takes_self(*interface, method)
-                }
-            },
-            MemberResolution::Free { .. }
-            | MemberResolution::Field { .. }
-            | MemberResolution::Variant { .. }
-            | MemberResolution::InterfaceVirtualField { .. } => None,
+    /// Assign the type-keyed resolution of an UNBOUND interface-item
+    /// reference — a virtual slot's, from its recorded frame; a matched
+    /// impl method's, from its carried frame — to `dest`.
+    fn lower_type_keyed_item_reference(
+        &mut self,
+        expr_id: AstExprId,
+        callee: &MethodCallee<'db>,
+        dest: Place,
+    ) {
+        let rvalue = match callee {
+            MethodCallee::Virtual { interface, method } => {
+                let (interface, method) = (*interface, method.clone());
+                self.virtual_function_rvalue(expr_id, interface, &method)
+            }
+            MethodCallee::Concrete {
+                impl_block,
+                func,
+                frame_type_args,
+            } => {
+                let (self_ty, view) =
+                    self.concrete_item_target(*impl_block, *func, frame_type_args);
+                let method = callable_display_name(self.db, *func).clone();
+                Some(self.type_keyed_function_rvalue(expr_id, &self_ty, &view, &method))
+            }
+            MethodCallee::Inherent(_) => {
+                unreachable!("an inherent method is not an interface item")
+            }
+        };
+        match rvalue {
+            Some(rvalue) => self.builder.assign(dest, rvalue),
+            // TIR admitted it, so an unresolvable frame is an internal
+            // inconsistency — never the generic null placeholder.
+            None => self.emit_panic_call(
+                "internal compiler error: interface method reference has no resolvable frame",
+                expr_id,
+            ),
+        }
+    }
+
+    /// The [`Rvalue::MakeVirtualFunction`] resolving `method` of `view` on
+    /// `self_ty`: the type-keyed callable of a statically matched impl's
+    /// method, the impl re-resolved by the VM from the same `(Self,
+    /// interface)`. The method's own type arguments are the reference's
+    /// written slots or its recorded plan's inferred suffix.
+    fn type_keyed_function_rvalue(
+        &mut self,
+        expr_id: AstExprId,
+        self_ty: &Tir2Ty,
+        view: &InterfaceTypeView,
+        method: &Name,
+    ) -> Rvalue<'db> {
+        let generic_params = self.enclosing_generic_params();
+        let iface =
+            tir2_interface_to_template(&view.0, &view.1, &view.2, &self.runtime(), &generic_params);
+        let type_args = self.lower_call_type_args(expr_id, true, None);
+        Rvalue::MakeVirtualFunction {
+            self_ty: self.ty_to_template(self_ty, &generic_params),
+            iface,
+            method: method.to_string(),
+            type_args,
+        }
+    }
+
+    /// The wire name an interface links as, wherever it is declared.
+    fn interface_type_name(&self, interface: InterfaceRef<'db>) -> TypeName {
+        match interface {
+            DeclRef::Source(iface_loc) => {
+                let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
+                let pkg_info = file_package(self.db, iface_loc.file(self.db));
+                TypeName::new(
+                    self.spelling.of(pkg_info.root).clone(),
+                    pkg_info.namespace_path,
+                    iface_data.name.clone(),
+                )
+            }
+            DeclRef::External(interface) => self.wire(interface.head(self.db)),
+        }
+    }
+
+    /// The interface a wire name denotes, wherever it is declared; `None`
+    /// when the name denotes no interface this program can see.
+    fn interface_ref_of_type_name(&self, name: &TypeName) -> Option<InterfaceRef<'db>> {
+        let head = self.decl(name)?;
+        match self.source_definition(&head) {
+            Some(Definition::Interface(iface_loc)) => Some(DeclRef::Source(iface_loc)),
+            Some(_) => None,
+            None => baml_compiler2_hir_ty::extern_loc::mounted_interface_loc(self.db, &head)
+                .map(DeclRef::External),
+        }
+    }
+
+    /// Whether a method callee takes a `self` receiver, wherever it is
+    /// declared.
+    fn callee_takes_self(&self, callee: &MethodCallee<'db>) -> bool {
+        match callee {
+            MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => {
+                callable_takes_self(self.db, *func)
+            }
+            MethodCallee::Virtual { interface, method } => self
+                .virtual_slot_takes_self(*interface, method)
+                .unwrap_or_else(|| {
+                    unreachable!("a recorded virtual slot names a method its interface declares")
+                }),
         }
     }
 
     /// Whether a resolution names a METHOD for the call roads' receiver
     /// handling. A source method counts by its mode; a served package's
-    /// callee counts only when its row takes `self` — a served static links
-    /// as a plain constant on the residual road (converges at
-    /// link-by-identity).
+    /// callee by whether its row takes `self` (its statics take the
+    /// interface-item road before this predicate is asked).
     fn resolution_is_method_call(
         &self,
         resolution: &crate::inference_provider::MemberResolution<'db>,
@@ -3807,70 +3963,12 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// The served package's interface slot a resolution dispatches through,
-    /// with whether its method takes `self`: a virtual slot on a served
-    /// interface, or a served impl's provided method — which links through
-    /// its interface's slot (the runtime realizes the frame from the rule)
-    /// until link-by-identity. `None` for anything with a body in this
-    /// compilation, or with no slot.
-    fn served_slot_method(
-        &self,
-        resolution: &crate::inference_provider::MemberResolution<'db>,
-    ) -> Option<(Name, bool)> {
-        use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-
-        use crate::inference_provider::MemberResolution;
-        match resolution {
-            MemberResolution::Method {
-                callee:
-                    MethodCallee::Virtual {
-                        interface: DeclRef::External(interface),
-                        method,
-                    },
-                ..
-            } => Some((
-                method.clone(),
-                self.virtual_slot_takes_self(DeclRef::External(*interface), method) == Some(true),
-            )),
-            MemberResolution::Method {
-                callee:
-                    MethodCallee::Concrete {
-                        func: DeclRef::External(function),
-                        ..
-                    },
-                ..
-            } => match function.slot(self.db) {
-                ExternalCallTarget::Interface { method, .. } => Some((
-                    method,
-                    callable_takes_self(self.db, DeclRef::External(*function)),
-                )),
-                ExternalCallTarget::Free { .. } | ExternalCallTarget::Method { .. } => None,
-            },
-            _ => None,
-        }
-    }
-
     /// Whether the method a virtual slot names takes a `self` receiver,
     /// wherever the interface is declared. `None` when the slot cannot be
     /// read at all.
     fn virtual_slot_takes_self(&self, interface: InterfaceRef<'db>, method: &Name) -> Option<bool> {
-        match interface {
-            DeclRef::Source(iface_loc) => {
-                let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
-                let pkg_info = file_package(self.db, iface_loc.file(self.db));
-                let iface_tn = TypeName::new(
-                    self.spelling.of(pkg_info.root).clone(),
-                    pkg_info.namespace_path,
-                    iface_data.name.clone(),
-                );
-                self.interface_method_shape(&iface_tn, method)
-                    .map(|shape| shape.takes_self)
-            }
-            DeclRef::External(interface) => {
-                extern_interface_method(self.db, interface.head(self.db), method)
-                    .map(|method| callable_takes_self(self.db, DeclRef::External(method)))
-            }
-        }
+        self.interface_method_shape(interface, method)
+            .map(|shape| shape.takes_self)
     }
 
     /// The recorded instantiation frame of an interface-item reference,
@@ -3921,17 +4019,11 @@ impl<'db> LoweringContext<'db> {
     fn virtual_function_rvalue(
         &mut self,
         expr_id: AstExprId,
-        iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        interface: InterfaceRef<'db>,
         method: &Name,
     ) -> Option<Rvalue<'db>> {
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
-        let pkg_info = file_package(self.db, iface_loc.file(self.db));
-        let iface_tn = TypeName::new(
-            self.spelling.of(pkg_info.root).clone(),
-            pkg_info.namespace_path,
-            iface_data.name.clone(),
-        );
-        let shape = self.interface_method_shape(&iface_tn, method)?;
+        let shape = self.interface_method_shape(interface, method)?;
+        let iface_tn = self.interface_type_name(interface);
         let (prefix, own_ops) = self.interface_item_slots(expr_id, &shape)?;
         let generic_params = self.enclosing_generic_params();
         let to_template = |this: &Self, ty: &Tir2Ty| this.ty_to_template(ty, &generic_params);
@@ -6223,18 +6315,13 @@ impl<'db> LoweringContext<'db> {
                 // the written qualifier omits). `self`, if the method takes
                 // one, stays an ordinary first parameter.
                 if let Some(MemberResolution::Method {
-                    callee:
-                        MethodCallee::Virtual {
-                            interface: DeclRef::Source(iface_loc),
-                            method,
-                        },
+                    callee: callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
                     ..
                 }) = self
                     .tir_resolution(self.expr_metadata_key(expr_id))
                     .cloned()
-                    && let Some(rvalue) = self.virtual_function_rvalue(expr_id, iface_loc, &method)
                 {
-                    self.builder.assign(dest, rvalue);
+                    self.lower_type_keyed_item_reference(expr_id, &callee, dest);
                 } else {
                     // TIR admitted this reference, so a frame that fails to
                     // resolve here is an internal inconsistency, not a user
@@ -6659,19 +6746,19 @@ impl<'db> LoweringContext<'db> {
                         }
                     }
                     // A *value-rooted* interface-method reference (`let f = x.eq`)
-                    // must capture the receiver and bind its impl at runtime — the
-                    // virtual-bound path below handles it; a bare function constant
-                    // would name an interface-keyed global that (for a required
-                    // method) does not exist. A `self`-LESS member has no receiver
-                    // to bind: it resolves type-keyed on the receiver's static
-                    // type instead.
-                    Some(
-                        resolution @ MemberResolution::Method {
-                            callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
-                            ..
-                        },
-                    ) if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {
-                        if self.resolution_takes_self(resolution) == Some(false) {
+                    // captures the receiver and binds its impl at runtime — the
+                    // virtual-bound path below, keyed on the RECORDED receiver
+                    // (a local, a capture, or a top-level `let` root alike); a
+                    // bare function constant would name an interface-keyed
+                    // global that (for a required method) does not exist. A
+                    // `self`-LESS member has no receiver to bind: it resolves
+                    // type-keyed on the receiver's static type instead.
+                    Some(MemberResolution::Method {
+                        callee:
+                            callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
+                        receiver: Receiver::Bound,
+                    }) => {
+                        if !self.callee_takes_self(callee) {
                             // TIR rejects a `self`-less method reached through a value,
                             // so this is unreachable in a compiling program.
                             self.emit_panic_call(
@@ -6681,30 +6768,30 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
+                    // A TYPE-rooted interface-item reference (`let f = Widget.make`,
+                    // `sort_by(Comparable.compare)`, a served package's
+                    // `app.Widget.describe`): the type-keyed resolution of the
+                    // `(Self, interface, item)` triple as a value — the same road
+                    // the qualified spelling and the call form take. An interface
+                    // item has no global function symbol, so the bare-constant
+                    // road below can never serve it.
+                    Some(MemberResolution::Method {
+                        callee:
+                            callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
+                        receiver: Receiver::Unbound,
+                    }) => {
+                        self.lower_type_keyed_item_reference(expr_id, callee, dest);
+                        return;
+                    }
                     Some(
                         resolution @ (MemberResolution::Method {
                             callee: MethodCallee::Inherent(_),
                             receiver: Receiver::Unbound,
                         }
-                        | MemberResolution::Free { .. }
-                        | MemberResolution::Method {
-                            callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
-                            ..
-                        }),
+                        | MemberResolution::Free { .. }),
                     ) => {
-                        // Unbound method or free function reference — emit a plain function constant.
-                        //
-                        // BUG: for `InterfaceConcreteMethod` (and an External
-                        // interface target) this constant carries NO owner
-                        // frame — calling it seeds `type_args = []`, violating
-                        // the `[owner ++ own]` frame law for any non-frame-free
-                        // impl. Local-rooted refs take the virtual-bound arms
-                        // above and type-rooted refs take the recorded-frame
-                        // road, so the residual reachable shape is a
-                        // non-local, non-type-rooted value reference (e.g.
-                        // mounted UFCS `let f = app.Widget.describe;`). Close
-                        // by routing those through `MakeVirtualFunction` with
-                        // the resolution's carried frame.
+                        // Unbound inherent method or free function reference —
+                        // a plain function constant.
                         if let Some(item) = resolution_callee(self.db, resolution) {
                             self.builder.assign(
                                 dest,
@@ -6768,65 +6855,30 @@ impl<'db> LoweringContext<'db> {
                             return;
                         }
                     }
-                    // Value-rooted interface-method reference: see the
-                    // `member_resolutions` match above — the virtual-bound path
-                    // below captures the receiver and binds its impl at runtime.
+                    // Value-rooted interface-method reference: see the ladder
+                    // match above — the virtual-bound path below captures the
+                    // receiver and binds its impl at runtime.
                     MemberResolution::Method {
                         callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
-                        ..
-                    } if self.binding_id_for_path(expr_id, &segments[0]).is_some() => {}
-                    // TYPE-rooted interface-method VALUE reference
-                    // (`let f = Greeter.greet`, `sort_by(Comparable.compare)`):
-                    // the recorded frame resolves the callable — the same
-                    // type-keyed road the qualified spelling takes. An
-                    // interface method has no global function symbol, so the
-                    // bare-constant road below can never serve it.
+                        receiver: Receiver::Bound,
+                    } => {}
+                    // TYPE-rooted interface-item VALUE reference: see the ladder
+                    // match above.
                     MemberResolution::Method {
                         callee:
-                            MethodCallee::Virtual {
-                                interface: DeclRef::Source(iface_loc),
-                                method,
-                            },
-                        ..
+                            callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
+                        receiver: Receiver::Unbound,
                     } => {
-                        let method = method.clone();
-                        let iface_loc = *iface_loc;
-                        if let Some(rvalue) =
-                            self.virtual_function_rvalue(expr_id, iface_loc, &method)
-                        {
-                            self.builder.assign(dest, rvalue);
-                            return;
-                        }
-                        // As above: TIR admitted it, so an unresolvable frame is
-                        // an internal inconsistency — do not fall through to the
-                        // generic null placeholder below.
-                        self.emit_panic_call(
-                            "internal compiler error: interface method reference has no resolvable frame",
-                            expr_id,
-                        );
+                        self.lower_type_keyed_item_reference(expr_id, callee, dest);
                         return;
                     }
                     MemberResolution::Method {
                         callee: MethodCallee::Inherent(_),
                         receiver: Receiver::Unbound,
                     }
-                    | MemberResolution::Free { .. }
-                    | MemberResolution::Method {
-                        callee:
-                            MethodCallee::Concrete { .. }
-                            | MethodCallee::Virtual {
-                                interface: DeclRef::External(_),
-                                ..
-                            },
-                        ..
-                    } => {
-                        // BUG: same frameless-constant hole as the
-                        // `member_resolutions` arm above — an
-                        // `InterfaceConcreteMethod` reaching this bare
-                        // constant loses its owner frame (the guards above
-                        // route local- and type-rooted refs to the virtual
-                        // roads; what remains is the mounted-UFCS value
-                        // shape). See that arm's note for the fix.
+                    | MemberResolution::Free { .. } => {
+                        // Unbound inherent method or free function reference —
+                        // a plain function constant.
                         if let Some(item) = resolution_callee(self.db, &resolution) {
                             self.builder.assign(
                                 dest,
@@ -8884,24 +8936,6 @@ impl<'db> LoweringContext<'db> {
                 return;
             }
         }
-        // A mounted interface UFCS call names an interface slot but supplies
-        // its receiver as the first explicit argument. Route it through the
-        // same open-world virtual dispatcher as `value.method()`.
-        if let AstExpr::Path(segments) = callee_expr
-            // A value-rooted path such as `a.merge(b)` has `b` as its first
-            // source argument; treating that as UFCS would silently replace
-            // `a` with `b` and drop the real argument.  Only a type-/package-
-            // rooted path spells UFCS, and therefore supplies `self` explicitly.
-            && self.binding_id_for_path(callee, &segments[0]).is_none()
-            && let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)).cloned()
-            && let Some((method, true)) = self.served_slot_method(&resolution)
-            && let Some(&receiver) = args.first()
-            && self.try_lower_interface_ufcs_dispatch(
-                expr_id, receiver, &method, args, runtime_id, &dest,
-            )
-        {
-            return;
-        }
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block emits a static call to `I`'s default function, with the
         // class's `self` forwarded as the receiver. No type-tag switch —
@@ -9112,7 +9146,8 @@ impl<'db> LoweringContext<'db> {
                     // A `self`-less method has no receiver to dispatch on —
                     // fall through to the static roads.
                     && self
-                        .interface_method_shape(&view.0, &method_name)
+                        .interface_ref_of_type_name(&view.0)
+                        .and_then(|interface| self.interface_method_shape(interface, &method_name))
                         .is_none_or(|shape| shape.takes_self)
                     // The interface to key on, or a decline — a declared FIELD
                     // is not dispatchable, and `self.<field>(..)` inside a
@@ -9280,9 +9315,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(MemberResolution::Method {
                             callee:
                                 MethodCallee::Concrete {
-                                    func: DeclRef::Source(_),
-                                    frame_type_args,
-                                    ..
+                                    frame_type_args, ..
                                 },
                             ..
                         }) = resolution.as_ref()
@@ -9321,9 +9354,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(MemberResolution::Method {
                             callee:
                                 MethodCallee::Concrete {
-                                    func: DeclRef::Source(_),
-                                    frame_type_args,
-                                    ..
+                                    frame_type_args, ..
                                 },
                             ..
                         }) = resolution.as_ref()
@@ -9374,9 +9405,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(MemberResolution::Method {
                     callee:
                         MethodCallee::Concrete {
-                            func: DeclRef::Source(_),
-                            frame_type_args,
-                            ..
+                            frame_type_args, ..
                         },
                     ..
                 }) = method_resolution.as_ref()
@@ -9449,9 +9478,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(MemberResolution::Method {
                     callee:
                         MethodCallee::Concrete {
-                            func: DeclRef::Source(_),
-                            frame_type_args,
-                            ..
+                            frame_type_args, ..
                         },
                     ..
                 }) = flat_resolution.as_ref()
@@ -9785,19 +9812,16 @@ impl<'db> LoweringContext<'db> {
     fn callee_uses_method_convention(&self, callee: AstExprId) -> bool {
         use crate::inference_provider::MemberResolution;
         let key = self.expr_metadata_key(callee);
-        // A bound access IS the method convention, whatever it calls. A served
-        // interface's slot additionally counts when its row takes `self`: the
-        // served lane's residual direct road reaches UNBOUND slot spellings
-        // through here (converges at link-by-identity).
-        let uses = |res: Option<&MemberResolution<'db>>| match res {
-            Some(MemberResolution::Method {
-                receiver: Receiver::Bound,
-                ..
-            }) => true,
-            Some(res) => self
-                .served_slot_method(res)
-                .is_some_and(|(_, takes_self)| takes_self),
-            None => false,
+        // A bound access IS the method convention, whatever it calls; an
+        // unbound one passes its receiver, if any, as a written argument.
+        let uses = |res: Option<&MemberResolution<'db>>| {
+            matches!(
+                res,
+                Some(MemberResolution::Method {
+                    receiver: Receiver::Bound,
+                    ..
+                })
+            )
         };
         uses(self.tir_resolution(key)) || uses(self.tir_path_final_resolution(key))
     }
@@ -11123,13 +11147,13 @@ impl<'db> LoweringContext<'db> {
             use crate::inference_provider::MemberResolution;
             match &resolution {
                 MemberResolution::Method {
-                    callee: MethodCallee::Inherent(_),
+                    callee: callee @ MethodCallee::Inherent(_),
                     receiver: Receiver::Bound,
                 } => {
                     // A `self`-less method has no receiver to bind: the base
                     // contributes only its STATIC type, whose class arguments
                     // fill the callee frame.
-                    if self.resolution_takes_self(&resolution) == Some(false) {
+                    if !self.callee_takes_self(callee) {
                         // TIR rejects a `self`-less method reached through a value,
                         // so this is unreachable in a compiling program.
                         self.emit_panic_call(
@@ -11168,7 +11192,7 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
                 MemberResolution::Method {
-                    callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                    callee: callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
                     ..
                 } => {
                     // A member-access base is a *value*: a `self`-taking method
@@ -11176,7 +11200,7 @@ impl<'db> LoweringContext<'db> {
                     // virtual-bound path below); a `self`-LESS one has no
                     // receiver to bind and resolves type-keyed on the base's
                     // static type.
-                    if self.resolution_takes_self(&resolution) == Some(false) {
+                    if !self.callee_takes_self(callee) {
                         // TIR rejects a `self`-less method reached through a value,
                         // so this is unreachable in a compiling program.
                         self.emit_panic_call(
@@ -11514,7 +11538,8 @@ impl<'db> LoweringContext<'db> {
         // of the RECEIVER's interface, before the closure walk below narrows to
         // the declaring one.
         if self
-            .interface_method_shape(&view.0, method)
+            .interface_ref_of_type_name(&view.0)
+            .and_then(|interface| self.interface_method_shape(interface, method))
             .is_some_and(|shape| !shape.takes_self)
         {
             return false;
@@ -11541,46 +11566,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             args,
-            runtime_id,
-            dest,
-        )
-    }
-
-    /// UFCS twin of interface dispatch. Its call plan is self-inclusive, so
-    /// lower the complete source argument list once and peel off the receiver.
-    fn try_lower_interface_ufcs_dispatch(
-        &mut self,
-        expr_id: AstExprId,
-        receiver: AstExprId,
-        method: &Name,
-        args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
-        dest: &Place,
-    ) -> bool {
-        let dispatch_target = self
-            .interface_dispatch_target_for_expr_member(receiver, method)
-            .or_else(|| {
-                self.tir_expr_type(self.expr_metadata_key(receiver))
-                    .and_then(|ty| self.dispatch_target_for_concrete(ty, method))
-            });
-        let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
-            return false;
-        };
-        let mut arg_ops = self.lower_call_arg_operands(expr_id, args);
-        if arg_ops.is_empty() {
-            return false;
-        }
-        let receiver_op = arg_ops.remove(0);
-        let (decl_tn, decl_args, decl_assoc) =
-            self.interface_view_declaring_method(&(iface_tn, iface_type_args, iface_assoc), method);
-        self.emit_virtual_call_with_value_operands(
-            receiver_op,
-            &decl_tn,
-            &decl_args,
-            &decl_assoc,
-            method,
-            expr_id,
-            arg_ops,
             runtime_id,
             dest,
         )
@@ -11883,48 +11868,63 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    /// The frame shape of a SOURCE interface's method: whether it takes a
-    /// `self` receiver, and how its generic frame `[Self] ++ interface
-    /// generics ++ own generics` divides (associated types are not slots). Mounted
-    /// interfaces have no source method item and answer `None` — TIR rejects
-    /// those references upstream.
+    /// The frame shape of an interface's method, wherever the interface is
+    /// declared: whether it takes a `self` receiver, and how its generic
+    /// frame `[Self] ++ interface generics ++ own generics` divides
+    /// (associated types are not slots). `None` when the interface declares
+    /// no such method.
     fn interface_method_shape(
         &self,
-        iface_tn: &TypeName,
+        interface: InterfaceRef<'db>,
         method: &Name,
     ) -> Option<InterfaceMethodShape> {
-        use baml_compiler2_ppir::item_data::{function_data, interface_data};
-        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_tn.package())?;
-        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
-        let Definition::Interface(iface_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
-        else {
-            return None;
-        };
-        let data = interface_data(self.db, iface_loc);
-        let fn_loc = data
-            .methods
-            .iter()
-            .copied()
-            .find(|&fn_loc| function_data(self.db, fn_loc).name == *method)?;
-        let signature = baml_compiler2_ppir::function_signature(self.db, fn_loc);
-        // The frame is `[Self] ++ interface generics ++ own generics`; only
-        // the last group is the function's own declaration, the rest is the
-        // interface's shape. Associated types are not frame slots — body and
-        // signature references to them are `Self.X` projection templates over
-        // slot 0, reduced through the receiver's impl rule at realization.
-        let interface_generics = data.generic_params.len();
-        let own_start = 1 + interface_generics;
-        let frame_len = own_start + function_data(self.db, fn_loc).generic_params.len();
-        Some(InterfaceMethodShape {
-            takes_self: signature
-                .params
-                .first()
-                .is_some_and(|param| param.name.as_str() == "self"),
-            interface_generics,
-            own_start,
-            frame_len,
-        })
+        match interface {
+            DeclRef::Source(iface_loc) => {
+                use baml_compiler2_ppir::item_data::{function_data, interface_data};
+                let data = interface_data(self.db, iface_loc);
+                let fn_loc = data
+                    .methods
+                    .iter()
+                    .copied()
+                    .find(|&fn_loc| function_data(self.db, fn_loc).name == *method)?;
+                let signature = baml_compiler2_ppir::function_signature(self.db, fn_loc);
+                // The frame is `[Self] ++ interface generics ++ own generics`;
+                // only the last group is the function's own declaration, the
+                // rest is the interface's shape. Associated types are not
+                // frame slots — body and signature references to them are
+                // `Self.X` projection templates over slot 0, reduced through
+                // the receiver's impl rule at realization.
+                let interface_generics = data.generic_params.len();
+                let own_start = 1 + interface_generics;
+                let frame_len = own_start + function_data(self.db, fn_loc).generic_params.len();
+                Some(InterfaceMethodShape {
+                    takes_self: signature
+                        .params
+                        .first()
+                        .is_some_and(|param| param.name.as_str() == "self"),
+                    interface_generics,
+                    own_start,
+                    frame_len,
+                })
+            }
+            DeclRef::External(interface) => {
+                let row =
+                    baml_compiler2_hir_ty::extern_loc::extern_interface_row(self.db, interface);
+                let method = extern_interface_method(self.db, row.head, method)?;
+                let interface_generics = row.generic_params.len();
+                let own_start = 1 + interface_generics;
+                let frame_len = own_start
+                    + baml_compiler2_hir_ty::extern_loc::extern_function_row(self.db, method)
+                        .generic_params
+                        .len();
+                Some(InterfaceMethodShape {
+                    takes_self: callable_takes_self(self.db, DeclRef::External(method)),
+                    interface_generics,
+                    own_start,
+                    frame_len,
+                })
+            }
+        }
     }
 
     fn interface_method_generic_count(&self, iface_tn: &TypeName, method: &Name) -> Option<usize> {

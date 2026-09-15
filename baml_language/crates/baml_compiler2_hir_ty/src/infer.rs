@@ -431,13 +431,13 @@ pub enum MethodCallee<'db, T = baml_type::Ty> {
     Concrete {
         impl_block: ImplRef<'db>,
         func: FunctionRef<'db>,
-        /// The callee's OWNER frame, carried from resolution (see
-        /// `MemberDeclarer::ImplMethod::frame_type_args`): impl generic
-        /// bindings for a provided method, `[Self, iface args..]` for a
-        /// default.
+        /// The instantiation of `func`'s OWNER frame, carried from
+        /// resolution (see `MemberDeclarer::ImplMethod::frame_type_args`):
+        /// the impl's generic bindings for a method the impl provides,
+        /// `[Self, interface generics..]` for an adopted default. Which
+        /// shape it is IS `func`'s owner kind (impl-owned or
+        /// interface-owned), never a separate fact.
         frame_type_args: Vec<T>,
-        /// `true` when `func` is the interface's default body.
-        from_interface_default: bool,
     },
 }
 
@@ -9340,13 +9340,11 @@ impl<'db> InferenceContext<'db> {
                 block,
                 func,
                 frame_type_args,
-                from_interface_default,
             } => Some(MemberResolution::Method {
                 callee: MethodCallee::Concrete {
                     impl_block: *block,
                     func: *func,
                     frame_type_args: frame_type_args.clone(),
-                    from_interface_default: *from_interface_default,
                 },
                 receiver,
             }),
@@ -13353,7 +13351,6 @@ impl<'db> InferenceContext<'db> {
                         impl_block,
                         func,
                         frame_type_args,
-                        from_interface_default,
                     } => MethodCallee::Concrete {
                         impl_block,
                         func,
@@ -13361,7 +13358,6 @@ impl<'db> InferenceContext<'db> {
                             .iter()
                             .map(|ty| self.materialize_ty(ty))
                             .collect(),
-                        from_interface_default,
                     },
                 },
                 receiver,

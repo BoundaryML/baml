@@ -20,7 +20,7 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     DeclName, Name, ParamTy, TyAttr,
-    interned::{InferInterface, InferTy, Ty},
+    interned::{InferInterface, InferTy, Ty, TyVocabulary},
     normalize::TypeContext as _,
 };
 
@@ -176,16 +176,13 @@ pub enum MemberDeclarer<'db> {
     ImplMethod {
         block: ImplRef<'db>,
         func: FunctionRef<'db>,
-        /// The callee's OWNER frame, realized by the impl match — the frame
-        /// the resolution CARRIES so the call site never re-derives it: the
-        /// impl's generic bindings (declaration order) for a provided
-        /// method, `[Self = receiver, iface args..]` for an adopted
-        /// default.
+        /// The instantiation of `func`'s OWNER frame, realized by the impl
+        /// match — carried so the call site never re-derives it: the impl's
+        /// generic bindings (declaration order) for a method the impl
+        /// provides (`func` impl-owned), `[Self = receiver, interface
+        /// generics..]` for an adopted default (`func` interface-owned).
+        /// The shape is `func`'s owner kind, never a separate fact.
         frame_type_args: Vec<Ty>,
-        /// `true` when `func` is the interface's default body (which expects
-        /// the `[Self, iface args..]` convention), `false` for a provided
-        /// method (the impl-generics convention).
-        from_interface_default: bool,
     },
     /// A concrete receiver's interface FIELD through a matched impl.
     /// The backing class-field link is not resolved here yet, so
@@ -528,7 +525,6 @@ fn lookup_impl_member<'db>(
                             block: resolved.block(),
                             func: callable,
                             frame_type_args,
-                            from_interface_default: false,
                         };
                     }
                     None => {
@@ -562,7 +558,6 @@ fn lookup_impl_member<'db>(
                                             block: DeclRef::Source(block),
                                             func: method,
                                             frame_type_args,
-                                            from_interface_default: true,
                                         }
                                     }
                                     (_, method) => {
@@ -858,7 +853,7 @@ fn env_discharges_rigid_bounds<'db>(
                 bound
                     .generics
                     .iter()
-                    .map(|arg| crate::impls::substitute_bindings(arg, &resolved.bindings))
+                    .map(|arg| arg.substitute_bindings(&resolved.bindings))
                     .collect(),
                 Box::new([]),
             );
@@ -967,12 +962,10 @@ fn substitute_lookup_class_args<'db>(
                     block,
                     func,
                     frame_type_args,
-                    from_interface_default,
                 } => MemberDeclarer::ImplMethod {
                     block,
                     func,
                     frame_type_args: frame_type_args.iter().map(subst).collect(),
-                    from_interface_default,
                 },
                 other @ (MemberDeclarer::VirtualMethod { .. }
                 | MemberDeclarer::ImplField { .. }) => other,

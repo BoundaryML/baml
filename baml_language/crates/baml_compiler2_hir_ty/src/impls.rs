@@ -35,7 +35,9 @@
 use baml_compiler2_hir::{loc::ImplLoc, package::lang_roots};
 use baml_type::{
     DeclName, Name, ParamTy,
-    interned::{ClosedInterface, ClosedTy, InferInterface, InferTy, Ty},
+    interned::{
+        ClosedInterface, ClosedTy, InferInterface, InferTy, InterfaceVocabulary, Ty, TyVocabulary,
+    },
     normalize::{TypeContext, equivalent_interned},
 };
 use rustc_hash::FxHashMap;
@@ -688,7 +690,10 @@ impl ResolvedImpl<'_> {
     /// per-member (`resolved_pin`); [`Self::implemented_view`] is the
     /// complete spelling.
     pub fn implemented(&self) -> InferInterface {
-        realized(self.facts.interface(), &self.bindings)
+        self.facts
+            .interface()
+            .as_reference()
+            .substitute_bindings(&self.bindings)
     }
 
     /// The COMPLETE realized view of the implemented interface for
@@ -778,7 +783,7 @@ pub(crate) fn resolved_pin(
         .iter()
         .find(|(name, _)| name == member)
     {
-        return Some(substitute_bindings(declared, &resolved.bindings));
+        return Some(declared.as_ty().substitute_bindings(&resolved.bindings));
     }
     realized_assoc_default(db, &resolved.implemented(), self_ty, member)
 }
@@ -1050,23 +1055,9 @@ pub fn impls_for_type<'db>(
     }
     impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
         .iter()
-        .map(|cached| {
-            let facts = match cached.block {
-                baml_compiler2_hir::loc::DeclRef::Source(block) => ResolvedImplFacts::Source {
-                    block,
-                    facts: impl_facts(db, block)
-                        .resolved()
-                        .expect("cached source impl remains well formed"),
-                },
-                baml_compiler2_hir::loc::DeclRef::External(block) => ResolvedImplFacts::External {
-                    block,
-                    facts: extern_impl_facts(db, block),
-                },
-            };
-            ResolvedImpl {
-                facts,
-                bindings: cached.bindings.clone(),
-            }
+        .map(|cached| ResolvedImpl {
+            facts: matched_impl_facts(db, cached.block),
+            bindings: cached.bindings.clone(),
         })
         .filter(|resolved| {
             // `AnyClass` is an explicit narrowing surface, not another
@@ -1537,9 +1528,12 @@ fn match_impl_head(
             .iter()
             .find(|(declared_name, _)| declared_name == name)
         {
-            Some((_, declared)) => Some(substitute_bindings(declared, &bindings)),
+            Some((_, declared)) => Some(declared.as_ty().substitute_bindings(&bindings)),
             None => {
-                let implemented = realized(facts.interface(), &bindings);
+                let implemented = facts
+                    .interface()
+                    .as_reference()
+                    .substitute_bindings(&bindings);
                 realized_assoc_default(db, &implemented, concrete, name)
             }
         };
@@ -1662,7 +1656,7 @@ fn match_pattern(
     // already can be compared semantically (union normalization no
     // structural descent sees).
     if pattern_fully_bound(pattern, params, bindings) {
-        let substituted = substitute_bindings(pattern, bindings);
+        let substituted = pattern.substitute_bindings(bindings);
         if eq_admitted(&substituted, target, eq) {
             return true;
         }
@@ -1817,45 +1811,87 @@ fn pattern_fully_bound(
     all_bound
 }
 
-/// An interface reference REALIZED through impl-param bindings: name
-/// kept, generics and pins substituted - the one spelling of the
-/// five hand-copied blocks this replaces.
-pub(crate) fn realized(
-    reference: &InferInterface,
-    bindings: &FxHashMap<ParamTy, Ty>,
-) -> InferInterface {
-    InferInterface::new(
-        reference.name.clone(),
-        reference
-            .generics
-            .iter()
-            .map(|arg| substitute_bindings(arg, bindings))
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
-        reference
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), substitute_bindings(ty, bindings)))
-            .collect(),
-    )
+/// The facts of a MATCHED block, wherever it is declared — the block a
+/// resolution names. Total: a source block reaches a resolution only
+/// through [`impls_for_type`], which admits headers that resolved; an
+/// exported row's facts re-hydrate through the tracked
+/// [`extern_impl_facts`].
+pub fn matched_impl_facts<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: crate::extern_loc::ImplRef<'db>,
+) -> ResolvedImplFacts<'db> {
+    match block {
+        baml_compiler2_hir::loc::DeclRef::Source(block) => ResolvedImplFacts::Source {
+            block,
+            facts: impl_facts(db, block)
+                .resolved()
+                .unwrap_or_else(|| unreachable!("a matched impl's header resolved")),
+        },
+        baml_compiler2_hir::loc::DeclRef::External(block) => ResolvedImplFacts::External {
+            block,
+            facts: extern_impl_facts(db, block),
+        },
+    }
 }
 
-/// Substitutes impl-param bindings into a type by PARAM IDENTITY (the
-/// registry's frame is not positional at use sites, unlike signature
-/// instantiation).
-pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
-    if !ty.has_typevar() {
-        return ty.clone();
+/// The `(Self, interface)` a statically matched impl's method is reached
+/// through, realized at the frame the resolution carries
+/// (`MemberDeclarer::ImplMethod::frame_type_args`, the instantiation of
+/// `func`'s owner frame). What a type-keyed virtual reference resolves the
+/// same impl from at runtime: a reference reached through a concrete type
+/// keys on the type, never on the body — coherence guarantees the same
+/// impl answers.
+///
+/// Total, in the closed vocabulary: the carried frame is plain (ground
+/// after writeback), so its image is closed by construction and so is
+/// everything realized through it.
+pub fn concrete_callee_target<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: crate::extern_loc::ImplRef<'db>,
+    func: crate::extern_loc::FunctionRef<'db>,
+    frame: &[baml_type::Ty],
+) -> (ClosedTy, ClosedInterface) {
+    use crate::callable::{CallableOwnerKind, callable_owner_kind};
+    let facts = matched_impl_facts(db, block);
+    match callable_owner_kind(db, func) {
+        // An adopted default: the interface's own frame, `[Self,
+        // interface generics..]`, already realized.
+        CallableOwnerKind::Interface => {
+            let Some((self_ty, interface_args)) = frame.split_first() else {
+                unreachable!("an interface method's frame opens with `Self`")
+            };
+            (
+                ClosedTy::from_plain(self_ty),
+                ClosedInterface::new(
+                    facts.interface().name.clone(),
+                    interface_args.iter().map(ClosedTy::from_plain).collect(),
+                    Box::new([]),
+                ),
+            )
+        }
+        // A provided method: the impl's generics, bound in declaration
+        // order; the for-target and interface target realize through them.
+        CallableOwnerKind::Impl => {
+            let params = facts.generic_params();
+            debug_assert_eq!(
+                params.len(),
+                frame.len(),
+                "a matched impl binds every declared generic"
+            );
+            let bindings: FxHashMap<ParamTy, ClosedTy> = params
+                .iter()
+                .zip(frame)
+                .map(|((param, _), ty)| (param.clone(), ClosedTy::from_plain(ty)))
+                .collect();
+            (
+                facts.for_ty_pattern().substitute_bindings(&bindings),
+                facts.interface().substitute_bindings(&bindings),
+            )
+        }
+        CallableOwnerKind::Free | CallableOwnerKind::Class => {
+            unreachable!("a statically matched impl's method is impl- or interface-owned")
+        }
     }
-    if let InferTy::TypeVar(param, _) = ty.kind()
-        && let Some(bound) = bindings.get(param)
-    {
-        return bound.clone();
-    }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| substitute_bindings(child, bindings)),
-    )
 }
 
 /// Verifies a matched impl's declared bounds at the realized bindings.
@@ -1873,7 +1909,7 @@ fn bounds_hold(
             continue;
         };
         for bound in bounds {
-            let bound = realized(bound, bindings);
+            let bound = bound.as_reference().substitute_bindings(bindings);
             if !is_realized(actual) || !bound.generics.iter().all(is_realized) {
                 continue;
             }

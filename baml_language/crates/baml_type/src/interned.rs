@@ -799,6 +799,28 @@ impl ClosedInterface {
         ClosedInterface(InferInterface::from_constraint(interface))
     }
 
+    /// A reference assembled from closed parts, TOTAL into the closed
+    /// world: a reference whose every carried type is closed is closed.
+    pub fn new(
+        name: DeclName,
+        generics: Box<[ClosedTy]>,
+        associated_types: Box<[(Name, ClosedTy)]>,
+    ) -> ClosedInterface {
+        ClosedInterface(InferInterface::new(
+            name,
+            generics
+                .into_vec()
+                .into_iter()
+                .map(ClosedTy::into_ty)
+                .collect(),
+            associated_types
+                .into_vec()
+                .into_iter()
+                .map(|(name, ty)| (name, ty.into_ty()))
+                .collect(),
+        ))
+    }
+
     /// The underlying reference.
     pub fn as_reference(&self) -> &InferInterface {
         &self.0
@@ -886,6 +908,109 @@ impl ClosedTy {
                 f(&ClosedTy::closed_by_construction(child.clone())).into_ty()
             }),
         ))
+    }
+}
+
+// -- Vocabulary-generic rewriting ---------------------------------------------
+
+/// The two interned type vocabularies a structure-preserving rewrite is
+/// generic over: the open inference family ([`Ty`]) and its closed subset
+/// ([`ClosedTy`]). They share one node shape, and a rewrite that only
+/// replaces subtrees with values of its own vocabulary stays in that
+/// vocabulary — so such walkers (substitution, realization) are written
+/// ONCE, and the closed variant comes with its proof for free instead of
+/// as a hand-maintained twin.
+pub trait TyVocabulary: Clone {
+    /// The node as the general vocabulary, for reading its shape.
+    fn as_ty(&self) -> &Ty;
+
+    /// The node rebuilt with each direct child mapped through `f`.
+    fn map_children(&self, f: impl FnMut(&Self) -> Self) -> Self;
+
+    /// The node with every type variable `bindings` binds replaced, by
+    /// PARAM IDENTITY (a frame is not positional at use sites, unlike
+    /// signature instantiation). A closed template under closed bindings
+    /// stays closed, the proof carried by the vocabulary.
+    fn substitute_bindings<S: std::hash::BuildHasher>(
+        &self,
+        bindings: &std::collections::HashMap<crate::ParamTy, Self, S>,
+    ) -> Self {
+        if !self.as_ty().has_typevar() {
+            return self.clone();
+        }
+        if let InferTy::TypeVar(param, _) = self.as_ty().kind()
+            && let Some(bound) = bindings.get(param)
+        {
+            return bound.clone();
+        }
+        self.map_children(|child| child.substitute_bindings(bindings))
+    }
+}
+
+impl TyVocabulary for Ty {
+    fn as_ty(&self) -> &Ty {
+        self
+    }
+
+    fn map_children(&self, mut f: impl FnMut(&Ty) -> Ty) -> Ty {
+        Ty::intern(self.kind().map_children(|child| f(child)))
+    }
+}
+
+impl TyVocabulary for ClosedTy {
+    fn as_ty(&self) -> &Ty {
+        &self.0
+    }
+
+    fn map_children(&self, f: impl FnMut(&ClosedTy) -> ClosedTy) -> ClosedTy {
+        ClosedTy::map_children(self, f)
+    }
+}
+
+/// The interface-reference twin of [`TyVocabulary`]: [`InferInterface`]
+/// and [`ClosedInterface`], each carrying types of its own vocabulary.
+pub trait InterfaceVocabulary: Clone {
+    type Ty: TyVocabulary;
+
+    /// The reference rebuilt with every carried type (generic argument and
+    /// associated-type pin) mapped through `f`; the head is untouched.
+    fn map_types(&self, f: impl FnMut(&Self::Ty) -> Self::Ty) -> Self;
+
+    /// The reference realized at `bindings`: every carried type
+    /// substituted by param identity ([`TyVocabulary::substitute_bindings`]).
+    fn substitute_bindings<S: std::hash::BuildHasher>(
+        &self,
+        bindings: &std::collections::HashMap<crate::ParamTy, Self::Ty, S>,
+    ) -> Self {
+        self.map_types(|ty| ty.substitute_bindings(bindings))
+    }
+}
+
+impl InterfaceVocabulary for InferInterface {
+    type Ty = Ty;
+
+    fn map_types(&self, mut f: impl FnMut(&Ty) -> Ty) -> InferInterface {
+        InferInterface::new(
+            self.name.clone(),
+            self.generics.iter().map(&mut f).collect(),
+            self.associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), f(ty)))
+                .collect(),
+        )
+    }
+}
+
+impl InterfaceVocabulary for ClosedInterface {
+    type Ty = ClosedTy;
+
+    fn map_types(&self, mut f: impl FnMut(&ClosedTy) -> ClosedTy) -> ClosedInterface {
+        // Every carried type of a closed reference is closed, and a closed
+        // image keeps the reference closed.
+        ClosedInterface(
+            self.0
+                .map_types(|ty| f(&ClosedTy::closed_by_construction(ty.clone())).into_ty()),
+        )
     }
 }
 
