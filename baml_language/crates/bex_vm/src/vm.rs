@@ -6288,7 +6288,7 @@ impl BexVm {
 
             // ── Extract locals for the tight inner dispatch loop ──────────
             // SAFETY: code is &'static because Function is &'static.
-            let code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
+            let mut code: &'static [u8] = &function.bytecode.compact.as_ref().unwrap().code;
             let Frame::Bytecode(bf) = &mut self.frames[frame_idx] else {
                 unreachable!(
                     "exec_compact loop frame is always Bytecode after continuation handler"
@@ -6296,15 +6296,22 @@ impl BexVm {
             };
             let mut pc = bf.instruction_ptr;
 
-            // `run_compact` owns the per-instruction loop. Only calls, returns,
-            // unwinds, yields, and errors reach this result handling. Calls or
-            // catches that stay in the same frame resume with the existing PC.
+            // Exact calls and bytecode returns stay in `run_compact`. Other
+            // transitions, unwinds, yields, and errors reach this handler. The
+            // dispatch frame tracks the last instruction's frame, including
+            // direct transitions, so PC writeback remains correct on handoff.
             loop {
-                let orig_frame_idx = frame_idx;
-                let step_result = self.run_compact(&mut pc, &mut frame_idx, &mut function, code);
+                let mut dispatch_frame_idx = frame_idx;
+                let step_result = self.run_compact(
+                    &mut pc,
+                    &mut frame_idx,
+                    &mut function,
+                    &mut code,
+                    &mut dispatch_frame_idx,
+                );
 
                 match step_result {
-                    Ok(None) if frame_idx == orig_frame_idx => {
+                    Ok(None) if frame_idx == dispatch_frame_idx => {
                         // A native call or same-frame catch can finish without
                         // changing frames. Resume the current code at its new PC.
                         continue;
@@ -6316,7 +6323,7 @@ impl BexVm {
                     }
                     Ok(Some(state)) => {
                         // Yielding — save pc to current frame so we can resume.
-                        if frame_idx == orig_frame_idx {
+                        if frame_idx == dispatch_frame_idx {
                             if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(frame_idx) {
                                 bf.instruction_ptr = pc;
                             }
@@ -6338,12 +6345,13 @@ impl BexVm {
         }
     }
 
-    /// Run compact instructions until a call, return, unwind, yield, or error.
+    /// Run compact instructions, switching directly on exact calls and returns
+    /// to bytecode callers. Native continuations and other frame transitions
+    /// return to `exec_compact`, which retains PC writeback and error handling.
     ///
-    /// Ordinary instructions continue here without constructing a step result or
-    /// checking the frame index. Instructions that can change frames return to
-    /// `exec_compact` before fetching again, so `code` always belongs to the
-    /// current frame. The caller retains PC writeback and exception handling.
+    /// `code` and `dispatch_frame_idx` follow direct transitions. Update them
+    /// only after the early-yield check: a handoff must still distinguish the
+    /// instruction's frame from a newly pushed callee or restored caller.
     #[allow(
         clippy::too_many_lines,
         clippy::cast_possible_wrap,
@@ -6359,7 +6367,8 @@ impl BexVm {
         pc: &mut usize,
         frame_idx: &mut usize,
         function: &mut &'static Function,
-        code: &'static [u8],
+        code: &mut &'static [u8],
+        dispatch_frame_idx: &mut usize,
     ) -> Result<Option<VmExecState>, VmError> {
         use bex_vm_types::bytecode::OpCode;
 
@@ -7024,14 +7033,23 @@ impl BexVm {
                                         faulting_pc: 0,
                                     })
                                 }));
-                                let new_len = self.stack.len() + callee.real_local_count;
-                                self.stack.resize(new_len, Value::NULL);
+                                if callee.real_local_count != 0 {
+                                    let new_len = self.stack.len() + callee.real_local_count;
+                                    self.stack.resize(new_len, Value::NULL);
+                                }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
                                 if self.early_yield.should_early_yield() {
                                     return Ok(Some(VmExecState::EarlyYield));
                                 }
-                                return Ok(None);
+                                // No engine handoff: enter the known bytecode
+                                // callee directly. Update the dispatch origin so
+                                // later fallback calls/yields write back the PC
+                                // of the instruction that actually produced them.
+                                *pc = 0;
+                                *code = &callee.bytecode.compact.as_ref().unwrap().code;
+                                *dispatch_frame_idx = *frame_idx;
+                                continue;
                             }
                         }
 
@@ -7437,8 +7455,8 @@ impl BexVm {
                         // SAFETY: this instruction is executing the bytecode frame
                         // accessed above; stack operations cannot remove that frame.
                         unsafe { self.frames.no_return_pop() };
-                        // Update frame_idx so the outer loop detects the frame change
-                        // and re-extracts code/pc/function for the parent frame.
+                        // Select the restored caller. Native continuations and
+                        // early yields still hand this frame back to the outer loop.
                         if !self.frames.is_empty() {
                             *frame_idx = self.frames.len() - 1;
                         }
@@ -7449,7 +7467,14 @@ impl BexVm {
                         if self.early_yield.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
-                        // Return before fetching from potentially changed frame code.
+                        if let Frame::Bytecode(caller) = &self.frames[*frame_idx] {
+                            *pc = caller.instruction_ptr;
+                            *function = self.load_function(*frame_idx)?;
+                            *code = &function.bytecode.compact.as_ref().unwrap().code;
+                            *dispatch_frame_idx = *frame_idx;
+                            continue;
+                        }
+                        // Native continuations still need the outer loop.
                         return Ok(None);
                     }
 

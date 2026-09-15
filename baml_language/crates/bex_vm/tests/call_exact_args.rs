@@ -180,3 +180,48 @@ fn exact_calls_poll_and_resume_inside_the_callee() {
         other => panic!("expected completion after resuming, got {other:?}"),
     }
 }
+
+#[test]
+fn exact_transitions_preserve_resume_pc_across_callbacks_and_reused_depths() {
+    let source = r#"
+        function leaf(n: int) -> int { n }
+        function inner(n: int) -> int { leaf(n) + leaf(1) }
+        function outer(n: int) -> int { inner(n) + leaf(1) }
+        function invoke(f: (int) -> int, n: int) -> int { f(n) }
+        function main() -> int {
+            let first = outer(3);
+            let values = [1, 2].map((n: int) -> int { outer(n) });
+            let second = invoke(outer, 5);
+            first + values[0] + values[1] + second + leaf(23)
+        }
+    "#;
+    // Vary the boundary so some transitions stay in compact dispatch while
+    // others yield before entering a callee or after restoring its caller.
+    // Native callbacks and indirect calls also reuse earlier frame depths.
+    for interval in [1, 2, 3, 5, 11] {
+        let program = compile_source(source);
+        let entry = program.function_index("user.main").unwrap();
+        let flag = Arc::new(AtomicBool::new(true));
+        let mut vm = BexVm::from_program(program, Arc::clone(&flag)).unwrap();
+        vm.early_yield = bex_vm_types::EarlyYieldCheck::with_interval(flag, interval);
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        let mut completed = false;
+        let mut yields = 0;
+        for _ in 0..200 {
+            match vm.exec().unwrap() {
+                VmExecState::EarlyYield => yields += 1,
+                VmExecState::Complete(value) => {
+                    assert_eq!(value.as_int(), Some(42), "interval {interval}");
+                    completed = true;
+                    break;
+                }
+                other => panic!("unexpected state at interval {interval}: {other:?}"),
+            }
+        }
+        assert!(
+            completed,
+            "resumption stopped progressing at interval {interval}"
+        );
+        assert!(yields > 0, "interval {interval} did not exercise a handoff");
+    }
+}
