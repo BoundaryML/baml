@@ -167,14 +167,16 @@ def render(identity, runs, root):
     fig.text(
         0.07,
         0.934,
-        "Full = feeder + clock + encoding + rings + discard drainer. Baseline = feeder with compiler barriers.",
+        f"Full = feeder + clock + encoding + rings + {identity.get('stage_description', 'discard drainer')}. Baseline = feeder with compiler barriers.",
         color="#475569",
         fontsize=10.5,
     )
     fig.text(
         0.07,
         0.101,
-        "1 synthetic call = enter + exit. Baseline emits no bytes and has no drainer; full replay has one round-robin drainer.",
+        "1 synthetic call = enter + exit. Baseline emits no bytes and has no drainer; full replay has one round-robin drainer."
+        if identity.get("consumer_stage") != "copy-handoff"
+        else "1 synthetic call = enter + exit. Full replay has a drainer plus a buffer-return worker; baseline has neither.",
         color="#475569",
         fontsize=10,
     )

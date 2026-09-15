@@ -14,13 +14,10 @@ use std::{
     time::Duration,
 };
 
-use btel_core::{
-    marker::Marker,
-    stage::{Aggregator, EventBuilder, MarkerRange, Publisher},
-};
+use btel_core::{marker::Marker, stage::MarkerRange};
 
 use crate::{
-    Pipeline, RangeHandler,
+    DrainTarget,
     memory::ProfilerMemoryGovernor,
     registry::{Cursor, Registry},
     ring::{OSThreadMarkerRingHandle, RingCtx},
@@ -234,17 +231,7 @@ impl Drainer {
     }
 
     /// A bounded round-robin service step shared by all drainer presets.
-    pub fn drain<H, B, A, P>(
-        &mut self,
-        pipeline: &mut Pipeline<H, B, A, P>,
-        source_budget: usize,
-    ) -> bool
-    where
-        H: RangeHandler,
-        B: EventBuilder,
-        A: Aggregator<B::Event>,
-        P: Publisher<B::Event, A::Aggregate>,
-    {
+    pub fn drain<T: DrainTarget>(&mut self, pipeline: &mut T, source_budget: usize) -> bool {
         let mut progress = false;
         for _ in 0..source_budget.max(1) {
             // SAFETY: this endpoint is the instance's sole drainer. Every
@@ -253,7 +240,7 @@ impl Drainer {
                 self.inner
                     .registry
                     .visit_next(&mut self.cursor, &mut |ring, bytes| {
-                        pipeline.consume(MarkerRange {
+                        pipeline.accept(MarkerRange {
                             source_id: ring.engine_id(),
                             bytes,
                         });
@@ -265,20 +252,16 @@ impl Drainer {
                 break;
             }
         }
+        pipeline.end_step();
         progress
     }
 
-    pub fn idle<H, B, A, P>(
+    pub fn idle<T: DrainTarget>(
         &mut self,
-        pipeline: &mut Pipeline<H, B, A, P>,
+        pipeline: &mut T,
         source_budget: usize,
         timeout: Duration,
-    ) where
-        H: RangeHandler,
-        B: EventBuilder,
-        A: Aggregator<B::Event>,
-        P: Publisher<B::Event, A::Aggregate>,
-    {
+    ) {
         self.inner.ctx.wake().pre_park();
         if !self.drain(pipeline, source_budget) {
             self.inner.ctx.wake().park(timeout);
@@ -288,13 +271,7 @@ impl Drainer {
 
     /// Seal admission and finish only after producer ownership has ended.
     /// No decoder/root-completion state participates in this boundary.
-    pub fn finish<H, B, A, P>(self, mut pipeline: Pipeline<H, B, A, P>) -> Result<P, TransportError>
-    where
-        H: RangeHandler,
-        B: EventBuilder,
-        A: Aggregator<B::Event>,
-        P: Publisher<B::Event, A::Aggregate>,
-    {
+    pub fn finish<T: DrainTarget>(self, mut pipeline: T) -> Result<T::Output, TransportError> {
         self.inner
             .admission
             .lock()
@@ -307,14 +284,16 @@ impl Drainer {
         // commits. Repeat complete sweeps until every source is drained.
         while !unsafe {
             self.inner.registry.sweep_outcome(&mut |ring, bytes| {
-                pipeline.consume(MarkerRange {
+                pipeline.accept(MarkerRange {
                     source_id: ring.engine_id(),
                     bytes,
                 });
             })
         }
         .caught_up
-        {}
+        {
+            pipeline.end_step();
+        }
         Ok(pipeline.finish())
     }
 }
