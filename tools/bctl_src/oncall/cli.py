@@ -112,7 +112,7 @@ def notify(
 
     Posts the handoff for the next shift immediately and schedules follow-up
     reminders on the shift's first day. Reminders whose delivery time has
-    already passed (e.g. a manual run on Friday afternoon) are skipped.
+    already passed (e.g. a manual run on Friday afternoon) are not scheduled.
     """
     path = _schedule_path()
 
@@ -131,13 +131,12 @@ def notify(
             console.print(f"[red]error[/] {loc}{e.message}")
         raise typer.Exit(1)
     try:
-        today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date()
-        msgs = compose_handoff(sched, today, wc)
+        now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
+        msgs = compose_handoff(sched, now, wc)
     except RuntimeError as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
 
-    now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
     if post_to_slack:
         from oncall.slack import post as slack_post
         from oncall.slack import schedule as slack_schedule
@@ -147,10 +146,6 @@ def notify(
             if message.post_at is None:
                 slack_post(wc, message.channel, message.text, blocks=message.blocks)
                 posted += 1
-            elif message.post_at <= now:
-                console.print(
-                    f"[yellow]skipped[/] reminder scheduled for {message.post_at.isoformat()}: already in the past"
-                )
             else:
                 slack_schedule(
                     wc, message.channel, message.text, message.post_at, blocks=message.blocks
@@ -162,9 +157,8 @@ def notify(
             if message.post_at is None:
                 console.print(f"[bold]→ {message.channel}[/] (now)")
             else:
-                stale = " [yellow](in the past; would be skipped)[/]" if message.post_at <= now else ""
                 console.print(
-                    f"[bold]→ {message.channel}[/] (scheduled for {message.post_at.isoformat()}){stale}"
+                    f"[bold]→ {message.channel}[/] (scheduled for {message.post_at.isoformat()})"
                 )
             console.print(message.text)
             console.print()

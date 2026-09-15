@@ -93,17 +93,23 @@ def _message(
 
 def compose_handoff(
     sched: ScheduleFile,
-    today: datetime.date,
+    now: datetime.datetime,
     wc,
 ) -> list[HandoffMessage]:
     """Return the handoff announcement plus its scheduled reminders.
 
     The first message per rotation has `post_at=None` and is meant to go out
-    immediately; the rest carry a `post_at` on the shift's first day.
+    immediately; the rest carry a `post_at` on the shift's first day. Reminder
+    times that have already passed as of `now` (e.g. a manual run on Friday
+    afternoon) are dropped, and the announcement only lists the reminders that
+    will actually be scheduled.
 
     If `wc` is None, no Slack user-id lookup happens and the @-mention is
     rendered as the bare name (dry-run mode).
     """
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    today = now.astimezone(PACIFIC).date()
     shift = _handoff_shift(sched, today)
     if shift is None:
         raise RuntimeError("no schedule line starts on or after today")
@@ -168,31 +174,37 @@ def compose_handoff(
             "and follow its instructions to thank all external contributors."
         )
 
-        reminder_at = [
-            datetime.datetime.combine(shift.date, t, tzinfo=PACIFIC) for t in REMINDER_TIMES
+        remaining_steps = [step_changelog, step_thanks]
+        assert len(remaining_steps) == len(REMINDER_TIMES)
+        # (post_at, step number, step text) for reminders still in the future.
+        reminders = [
+            (at, i + 2, step)
+            for i, (t, step) in enumerate(zip(REMINDER_TIMES, remaining_steps))
+            if (at := datetime.datetime.combine(shift.date, t, tzinfo=PACIFIC)) > now
         ]
-        reminder_schedule = "\n".join(
-            f"- {_fmt_when(at)}: reminder for step {i + 2}"
-            for i, at in enumerate(reminder_at)
-        )
 
         # Posted immediately (Thursday afternoon): who's up, plus step 1 so the
         # release PR is ready before Friday.
+        sections = [
+            f"*{rot}* - {mention} is oncall starting {_fmt_date(shift.date)}{prev_clause}",
+            step_release,
+        ]
+        if reminders:
+            reminder_schedule = "\n".join(
+                f"- {_fmt_when(at)}: reminder for step {n}" for at, n, _ in reminders
+            )
+            sections.append(
+                f"Reminders for the remaining steps are scheduled for:\n{reminder_schedule}"
+            )
         msgs.append(
             _message(
                 channel,
-                [
-                    f"*{rot}* - {mention} is oncall starting {_fmt_date(shift.date)}{prev_clause}",
-                    step_release,
-                    f"Reminders for the remaining steps are scheduled for:\n{reminder_schedule}",
-                ],
+                sections,
                 ([upcoming_text] if upcoming_text else []) + [footer],
             )
         )
         # Scheduled reminders on the shift's first day.
-        remaining_steps = [step_changelog, step_thanks]
-        assert len(remaining_steps) == len(reminder_at)
-        for at, step in zip(reminder_at, remaining_steps):
+        for at, _, step in reminders:
             msgs.append(
                 _message(
                     channel,
