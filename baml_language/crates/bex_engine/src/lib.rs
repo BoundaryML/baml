@@ -1696,6 +1696,7 @@ impl BexEngine {
                 loop {
                     match vm.exec() {
                         Ok(VmExecState::Complete(_)) => {
+                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
                             // Extract the (potentially mutated) global pool back
                             // so StoreGlobal writes are visible to subsequent calls.
                             globals_pool = match vm.globals {
@@ -1714,11 +1715,13 @@ impl BexEngine {
                             continue;
                         }
                         Ok(other) => {
+                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' yielded unexpectedly: {other:?}"
                             )));
                         }
                         Err(e) => {
+                            vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' failed: {e}"
                             )));
@@ -4310,6 +4313,9 @@ impl BexEngine {
         thread: &mut ActiveHeapPermit<BexThread>,
         future_id: FutureId,
     ) -> Result<(), EngineError> {
+        thread
+            .vm
+            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
         let child_cancel = thread.vm_thread_cancel().clone();
         let mut guard = self.futures.acquire(thread.proof()).await;
         guard.cancel_future(future_id)?;
@@ -4328,6 +4334,9 @@ impl BexEngine {
         value: Value,
         trace: Vec<bex_vm::StackFrame>,
     ) -> Result<(), EngineError> {
+        thread
+            .vm
+            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
         let child_cancel = thread.vm_thread_cancel().clone();
         let mut guard = self.futures.acquire(thread.proof()).await;
         guard.err_future(future_id, value, trace)?;
@@ -4482,8 +4491,18 @@ impl BexEngine {
         // termination path — surface as Exit so the host maps it to a
         // process exit code.
         if let Some(code) = extract_exit_code(&external) {
+            thread
+                .vm
+                .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Exited);
             return Err(EngineError::Exit { code });
         }
+        let outcome = if thread.vm_thread_cancel().is_cancelled() && self.is_cancelled_panic(value)
+        {
+            bex_vm::telemetry::InvocationOutcome::Cancelled
+        } else {
+            bex_vm::telemetry::InvocationOutcome::Errored
+        };
+        thread.vm.finish_telemetry(outcome);
         Err(EngineError::UnhandledThrow {
             value: Box::new(external),
             trace,
@@ -4692,6 +4711,7 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
+        telemetry: bex_vm::telemetry::ThreadSpawnContext,
 
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
@@ -4706,6 +4726,7 @@ impl BexEngine {
             call_id,
             future_id,
             thread_id,
+            telemetry,
             log_capture,
         ))
     }
@@ -4730,6 +4751,7 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
+        telemetry: bex_vm::telemetry::ThreadSpawnContext,
 
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
@@ -4779,6 +4801,7 @@ impl BexEngine {
             Arc::clone(&self.panic_class_ptrs),
         );
         child_vm.thread_id = thread_id;
+        child_vm.configure_spawn_telemetry(telemetry);
 
         child_vm.set_entry_point(closure, &[]);
 
@@ -4905,6 +4928,20 @@ impl BexEngine {
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
+        macro_rules! try_or_finish_telemetry {
+            ($expression:expr) => {
+                match $expression {
+                    Ok(value) => value,
+                    Err(error) => {
+                        thread
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
+                        return Err(error.into());
+                    }
+                }
+            };
+        }
+
         loop {
             let vm_exec_result = thread.vm.exec();
 
@@ -4933,6 +4970,9 @@ impl BexEngine {
                         .await;
                 }
                 Err(bex_vm::errors::VmError::InternalError(err)) => {
+                    thread
+                        .vm
+                        .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard
@@ -4944,6 +4984,9 @@ impl BexEngine {
                     return Err(EngineError::VmInternalError(err));
                 }
                 Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
+                    thread
+                        .vm
+                        .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                     if let Some(future_id) = thread.vm_thread_settles_future() {
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard.internal_error_future(
@@ -4963,6 +5006,9 @@ impl BexEngine {
                     // registry and return SettledChild. The awaiter's
                     // next `Await` instruction picks up `FutureRead::Ready`.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
+                        thread
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard.fulfill_future(future_id, value)?;
                         return Ok(ThreadOutcome::SettledChild);
@@ -4973,6 +5019,9 @@ impl BexEngine {
                     let cancelled = cancel.is_cancelled();
 
                     if cancelled {
+                        thread
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
                         return Err(cancelled_unhandled_throw());
                     }
 
@@ -4990,38 +5039,51 @@ impl BexEngine {
                             // (e.g. Union wrapping) is preserved; the bare
                             // unboxing fast-path stripped that.
                             if matches!(unsafe { ptr.get() }, Object::Float(_)) {
-                                self.convert_vm_value_to_external_with_type(
-                                    value,
-                                    &return_type,
-                                    &thread.vm,
-                                    thread.proof(),
-                                )?
+                                try_or_finish_telemetry!(
+                                    self.convert_vm_value_to_external_with_type(
+                                        value,
+                                        &return_type,
+                                        &thread.vm,
+                                        thread.proof(),
+                                    )
+                                )
                             } else {
                                 let handle = self.heap.create_handle(ptr);
                                 BexExternalValue::Handle(handle)
                             }
                         } else {
-                            let external = self.convert_vm_value_to_external_with_type(
+                            let external = try_or_finish_telemetry!(
+                                self.convert_vm_value_to_external_with_type(
+                                    value,
+                                    &return_type,
+                                    &thread.vm,
+                                    thread.proof(),
+                                )
+                            );
+                            try_or_finish_telemetry!(
+                                crate::conversion::coerce_return_to_declared_type(
+                                    external,
+                                    &return_type,
+                                )
+                            )
+                        }
+                    } else {
+                        let external =
+                            try_or_finish_telemetry!(self.convert_vm_value_to_external_with_type(
                                 value,
                                 &return_type,
                                 &thread.vm,
                                 thread.proof(),
-                            )?;
-                            crate::conversion::coerce_return_to_declared_type(
-                                external,
-                                &return_type,
-                            )?
-                        }
-                    } else {
-                        let external = self.convert_vm_value_to_external_with_type(
-                            value,
+                            ));
+                        try_or_finish_telemetry!(crate::conversion::coerce_return_to_declared_type(
+                            external,
                             &return_type,
-                            &thread.vm,
-                            thread.proof(),
-                        )?;
-                        crate::conversion::coerce_return_to_declared_type(external, &return_type)?
+                        ))
                     };
 
+                    thread
+                        .vm
+                        .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
                     return Ok(ThreadOutcome::RootValue(return_value));
                 }
 
@@ -5053,15 +5115,18 @@ impl BexEngine {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
+                        thread
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
                         return Err(cancelled_unhandled_throw());
                     }
 
                     let runtime_type_overlay =
                         self.runtime_type_overlay(&thread.vm, &args, thread.proof());
                     let runtime_compile_request = match operation {
-                        SysOp::ReflectPackageCompile => {
-                            Some(Ok(Self::runtime_compile_request(&thread.vm, &args)?))
-                        }
+                        SysOp::ReflectPackageCompile => Some(Ok(try_or_finish_telemetry!(
+                            Self::runtime_compile_request(&thread.vm, &args)
+                        ))),
                         SysOp::ReflectSessionCompile => {
                             Some(Self::runtime_session_compile_request(&mut thread.vm, &args))
                         }
@@ -5072,16 +5137,23 @@ impl BexEngine {
                         && let Some(future_id) = thread.vm_thread_settles_future()
                     {
                         let mut guard = self.futures.acquire(thread.proof()).await;
-                        guard.register_session_lease(future_id, &session.lease)?;
+                        let registered = guard.register_session_lease(future_id, &session.lease);
+                        drop(guard);
+                        try_or_finish_telemetry!(registered);
                     }
                     let runtime_schema_overlay =
                         self.runtime_schema_overlay(&thread.vm, &args, thread.proof());
 
                     let bex_args: Vec<BexExternalValue> =
                         if operation == SysOp::BamlHostCallHostValue {
-                            let params = host_call_params(args.first().copied())
-                                .map_err(EngineError::VmInternalError)?;
+                            let params = try_or_finish_telemetry!(
+                                host_call_params(args.first().copied())
+                                    .map_err(EngineError::VmInternalError)
+                            );
                             if args.len() != 4 {
+                                thread.vm.finish_telemetry(
+                                    bex_vm::telemetry::InvocationOutcome::Errored,
+                                );
                                 return Err(EngineError::VmInternalError(
                                     bex_vm::errors::VmInternalError::BridgeFailure {
                                         message: format!(
@@ -5093,12 +5165,12 @@ impl BexEngine {
                             }
                             vec![
                                 self.vm_arg_to_bex_value(args[0]),
-                                self.convert_host_call_args_pack(
+                                try_or_finish_telemetry!(self.convert_host_call_args_pack(
                                     args[1],
                                     &params,
                                     &thread.vm,
                                     thread.proof(),
-                                )?,
+                                )),
                                 self.vm_arg_to_bex_value(args[2]),
                                 self.vm_arg_to_bex_value(args[3]),
                             ]
@@ -5129,8 +5201,10 @@ impl BexEngine {
                     let host_ret_ty: Option<baml_type::RuntimeTy> =
                         if operation == SysOp::BamlHostCallHostValue {
                             Some(crate::conversion::overlay_wire_ty_under_permit(
-                                &host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
-                                    .map_err(EngineError::VmInternalError)?,
+                                &try_or_finish_telemetry!(
+                                    host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
+                                        .map_err(EngineError::VmInternalError)
+                                ),
                                 thread.proof(),
                             ))
                         } else {
@@ -5139,8 +5213,10 @@ impl BexEngine {
                     let host_throws_ty: Option<baml_type::RuntimeTy> =
                         if operation == SysOp::BamlHostCallHostValue {
                             Some(crate::conversion::overlay_wire_ty_under_permit(
-                                &host_call_type_arg(args.get(3).copied(), 3, "throws_ty")
-                                    .map_err(EngineError::VmInternalError)?,
+                                &try_or_finish_telemetry!(
+                                    host_call_type_arg(args.get(3).copied(), 3, "throws_ty")
+                                        .map_err(EngineError::VmInternalError)
+                                ),
                                 thread.proof(),
                             ))
                         } else {
@@ -5186,6 +5262,9 @@ impl BexEngine {
                                         self.settle_child_cancelled(&mut thread, future_id).await?;
                                         return Ok(ThreadOutcome::SettledChild);
                                     }
+                                    thread.vm.finish_telemetry(
+                                        bex_vm::telemetry::InvocationOutcome::Cancelled,
+                                    );
                                     return Err(cancelled_unhandled_throw());
                                 }
                                 SysOpOutcome::Result(r) => r,
@@ -5226,16 +5305,16 @@ impl BexEngine {
                                         language: None,
                                     },
                                 );
-                                if let Some(outcome) = self
-                                    .inject_sysop_throw(
+                                if let Some(outcome) = try_or_finish_telemetry!(
+                                    self.inject_sysop_throw(
                                         &mut thread,
                                         call_id,
                                         op_err,
                                         throws_type.as_ref(),
                                         host_throws_ty.as_ref(),
                                     )
-                                    .await?
-                                {
+                                    .await
+                                ) {
                                     return Ok(outcome);
                                 }
                                 // VM caught the throw; the unwinder truncated
@@ -5253,27 +5332,33 @@ impl BexEngine {
                                 // / projection / whatever the surrounding
                                 // expression expected — no implicit await.
                                 let value = if operation == SysOp::BamlHostCallHostValue {
-                                    self.convert_external_to_vm_value_with_ty(
-                                        &mut thread,
-                                        external,
-                                        host_ret_ty.as_ref(),
-                                    )?
+                                    try_or_finish_telemetry!(
+                                        self.convert_external_to_vm_value_with_ty(
+                                            &mut thread,
+                                            external,
+                                            host_ret_ty.as_ref(),
+                                        )
+                                    )
                                 } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
-                                    self.convert_external_to_vm_value_with_runtime_schema(
-                                        &mut thread,
-                                        external,
-                                        overlay,
-                                        &runtime_type_overlay.class_handles_by_name(),
-                                        &runtime_type_overlay.enum_handles_by_name(),
-                                    )?
+                                    try_or_finish_telemetry!(
+                                        self.convert_external_to_vm_value_with_runtime_schema(
+                                            &mut thread,
+                                            external,
+                                            overlay,
+                                            &runtime_type_overlay.class_handles_by_name(),
+                                            &runtime_type_overlay.enum_handles_by_name(),
+                                        )
+                                    )
                                 } else {
-                                    self.convert_external_to_vm_value_with_dynamic_types(
-                                        &mut thread,
-                                        external,
-                                        None,
-                                        &runtime_type_overlay.class_handles_by_name(),
-                                        &runtime_type_overlay.enum_handles_by_name(),
-                                    )?
+                                    try_or_finish_telemetry!(
+                                        self.convert_external_to_vm_value_with_dynamic_types(
+                                            &mut thread,
+                                            external,
+                                            None,
+                                            &runtime_type_overlay.class_handles_by_name(),
+                                            &runtime_type_overlay.enum_handles_by_name(),
+                                        )
+                                    )
                                 };
 
                                 thread.vm.stack.push(value);
@@ -5290,16 +5375,16 @@ impl BexEngine {
                             // VM-internal `ThrownUnhandled` — settling a
                             // spawned child errored or surfacing as
                             // `EngineError::UnhandledThrow` at the root.
-                            if let Some(outcome) = self
-                                .inject_sysop_throw(
+                            if let Some(outcome) = try_or_finish_telemetry!(
+                                self.inject_sysop_throw(
                                     &mut thread,
                                     call_id,
                                     op_err,
                                     throws_type.as_ref(),
                                     host_throws_ty.as_ref(),
                                 )
-                                .await?
-                            {
+                                .await
+                            ) {
                                 return Ok(outcome);
                             }
                             // VM caught the throw; fall through to the top of
@@ -5310,15 +5395,18 @@ impl BexEngine {
 
                 VmExecState::Spawn {
                     future: unscheduled,
+                    telemetry,
                 } => {
                     // BEP-034: pull the closure + name off the
                     // `UnscheduledFuture` heap object and hand them to
                     // `spawn_thread`, which allocates the future and
                     // dispatches the body on a fresh `BexThread`.
-                    let unscheduled = thread
-                        .vm
-                        .unscheduled_future(unscheduled)
-                        .map_err(EngineError::VmInternalError)?;
+                    let unscheduled = try_or_finish_telemetry!(
+                        thread
+                            .vm
+                            .unscheduled_future(unscheduled)
+                            .map_err(EngineError::VmInternalError)
+                    );
                     let UnscheduledFuture {
                         closure,
                         name: name_ptr,
@@ -5372,19 +5460,22 @@ impl BexEngine {
                         let (future_id, future_ptr) =
                             guard.new_future(returns, throws, child_cancel.clone(), spawn_origin);
                         drop(guard);
-                        Arc::clone(self)
-                            .spawn_thread(
-                                child_cancel,
-                                closure,
-                                spawn_name,
-                                user_cancel,
-                                group,
-                                call_id,
-                                future_id,
-                                child_thread_id,
-                                log_capture.clone(),
-                            )
-                            .await?;
+                        try_or_finish_telemetry!(
+                            Arc::clone(self)
+                                .spawn_thread(
+                                    child_cancel,
+                                    closure,
+                                    spawn_name,
+                                    user_cancel,
+                                    group,
+                                    call_id,
+                                    future_id,
+                                    child_thread_id,
+                                    telemetry,
+                                    log_capture.clone(),
+                                )
+                                .await
+                        );
                         future_ptr
                     };
                     thread.vm.stack.push(Value::object(future_ptr));
@@ -5420,6 +5511,9 @@ impl BexEngine {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
+                        thread
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
                         return Err(cancelled_unhandled_throw());
                     }
                     #[allow(clippy::items_after_statements)]
@@ -5435,7 +5529,9 @@ impl BexEngine {
                     // ends before we release the VM permit below.
                     let future = {
                         let mut g = self.futures.acquire(thread.proof()).await;
-                        g.future_ready(future_id)?
+                        let future = g.future_ready(future_id);
+                        drop(g);
+                        try_or_finish_telemetry!(future)
                     };
                     // Release the VM permit before the SetOnce wait — the
                     // wait is the safepoint. Holding a permit through the
@@ -5465,9 +5561,12 @@ impl BexEngine {
                                 self.settle_child_cancelled(&mut thread, future_id).await?;
                                 return Ok(ThreadOutcome::SettledChild);
                             }
+                            thread
+                                .vm
+                                .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
                             return Err(cancelled_unhandled_throw());
                         }
-                        AwaitOutcome::Done(r) => r?,
+                        AwaitOutcome::Done(r) => try_or_finish_telemetry!(r),
                     }
                 }
 
@@ -5488,6 +5587,9 @@ impl BexEngine {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild);
                         }
+                        thread
+                            .vm
+                            .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
                         return Err(cancelled_unhandled_throw());
                     }
                     #[allow(clippy::items_after_statements)]
@@ -5503,9 +5605,10 @@ impl BexEngine {
                         let mut g = self.futures.acquire(thread.proof()).await;
                         let mut ws = Vec::with_capacity(future_ids.len());
                         for future_id in &future_ids {
-                            ws.push(g.future_ready(*future_id)?);
+                            ws.push(g.future_ready(*future_id));
                         }
-                        ws
+                        drop(g);
+                        try_or_finish_telemetry!(ws.into_iter().collect::<Result<Vec<_>, _>>())
                     };
 
                     let inactive = thread.release();
@@ -5538,13 +5641,16 @@ impl BexEngine {
                                 self.settle_child_cancelled(&mut thread, future_id).await?;
                                 return Ok(ThreadOutcome::SettledChild);
                             }
+                            thread
+                                .vm
+                                .finish_telemetry(bex_vm::telemetry::InvocationOutcome::Cancelled);
                             return Err(cancelled_unhandled_throw());
                         }
                         // Only an internal-error future surfaces here; normal
                         // BAML success/throw/cancel settles resolve the SetOnce
                         // with `Ok(())` and are observed when the VM re-reads
                         // the future (and the stdlib `await futures[i]` it).
-                        AwaitAnyOutcome::Done(r) => r?,
+                        AwaitAnyOutcome::Done(r) => try_or_finish_telemetry!(r),
                     }
                 }
 

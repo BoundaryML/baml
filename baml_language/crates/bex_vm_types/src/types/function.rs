@@ -162,6 +162,12 @@ pub struct Function {
     /// Type of function.
     pub kind: FunctionKind,
 
+    /// Current immutable/resolved telemetry policy. This runtime-only atomic
+    /// is not serialized; loaded programs begin at policy zero and the engine
+    /// may publish a newer policy while calls are in flight.
+    #[borsh(skip)]
+    pub telemetry_policy_id: btel_types::TelemetryPolicyId,
+
     /// Local variable names indexed by slot number.
     ///
     /// Debug info: maps eval-stack slot indices to variable names.
