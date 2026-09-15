@@ -1078,6 +1078,7 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_project",
+ "libc",
  "libsui",
  "sys_native",
  "tokio",
