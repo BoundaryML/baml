@@ -18,6 +18,7 @@ RUN_FIELDS = "headSha,databaseId,conclusion,createdAt,event,headBranch,workflowN
 
 
 def timestamp(value: str) -> dt.datetime:
+    """Parse an ISO 8601 timestamp and require an explicit timezone."""
     parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         raise ValueError(f"timestamp must include a timezone: {value}")
@@ -25,15 +26,18 @@ def timestamp(value: str) -> dt.datetime:
 
 
 def command_json(command: list[str]) -> object:
+    """Run a command and parse its stdout as JSON."""
     result = subprocess.run(command, check=True, text=True, capture_output=True)
     return json.loads(result.stdout)
 
 
 def write_json(path: Path, value: object) -> None:
+    """Write a stable, human-readable JSON snapshot."""
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
 def fetch_recent_runs(repo: str) -> list[dict]:
+    """Fetch the repository's 100 newest runs without selection filters."""
     value = command_json(
         [
             "gh",
@@ -53,6 +57,7 @@ def fetch_recent_runs(repo: str) -> list[dict]:
 
 
 def canary_commits(checkout: Path) -> list[dict]:
+    """Read the 10 newest commits from the checked-out canary git log."""
     result = subprocess.run(
         [
             "git",
@@ -77,6 +82,7 @@ def canary_commits(checkout: Path) -> list[dict]:
 
 
 def normalize_api_run(run: dict) -> dict:
+    """Convert a REST workflow run to the gh run list field names."""
     return {
         "headSha": run["head_sha"],
         "databaseId": run["id"],
@@ -89,6 +95,7 @@ def normalize_api_run(run: dict) -> dict:
 
 
 def fetch_runs_for_commit(repo: str, sha: str) -> list[dict]:
+    """Fetch CI workflow runs for one exact commit SHA."""
     value = command_json(
         [
             "gh",
@@ -108,6 +115,7 @@ def fetch_runs_for_commit(repo: str, sha: str) -> list[dict]:
 
 
 def fetch_commit_runs(repo: str, checkout: Path) -> dict:
+    """Fetch CI runs for the newest canary commits concurrently."""
     commits = canary_commits(checkout)
     runs = []
     errors = []
@@ -131,6 +139,7 @@ def fetch_commit_runs(repo: str, checkout: Path) -> dict:
 
 
 def eligible_ci_runs(runs: list[dict]) -> list[dict]:
+    """Filter a run snapshot locally to canary push runs of BAML CI."""
     return [
         run
         for run in runs
@@ -143,6 +152,7 @@ def eligible_ci_runs(runs: list[dict]) -> list[dict]:
 def select_candidate(
     commits: list[dict], runs: list[dict], observed_at: dt.datetime, source: str
 ) -> tuple[str, int]:
+    """Select the newest green commit without stepping past an old run gap."""
     if not commits:
         raise ValueError("canary git log returned no commits")
 
@@ -174,6 +184,7 @@ def select_candidate(
 
 
 def read_optional_json(path: Path) -> Optional[object]:
+    """Read a JSON snapshot, returning None with a warning when unavailable."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError) as exc:
@@ -184,6 +195,7 @@ def read_optional_json(path: Path) -> Optional[object]:
 def select_with_fallback(
     recent_path: Path, commits_path: Path, observed_at: dt.datetime
 ) -> tuple[str, int, str]:
+    """Prefer the recent-run snapshot, then try the per-commit snapshot."""
     commit_snapshot = read_optional_json(commits_path)
     if not isinstance(commit_snapshot, dict) or not isinstance(
         commit_snapshot.get("commits"), list
@@ -225,6 +237,7 @@ def select_with_fallback(
 
 
 def main() -> None:
+    """Run one collection or selection phase for the nightly workflow."""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
