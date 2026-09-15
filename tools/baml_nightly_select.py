@@ -222,7 +222,12 @@ def select_with_fallback(
         )
 
     fallback_runs = commit_snapshot.get("runs")
-    if isinstance(fallback_runs, list):
+    fallback_errors = commit_snapshot.get("errors")
+    if isinstance(fallback_errors, list) and fallback_errors:
+        failures.append(
+            f"per-commit fallback has {len(fallback_errors)} failed run query or queries"
+        )
+    elif isinstance(fallback_runs, list):
         try:
             sha, run_id = select_candidate(
                 commits, fallback_runs, observed_at, "per-commit fallback"

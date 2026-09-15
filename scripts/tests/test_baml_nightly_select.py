@@ -140,6 +140,27 @@ class NightlySelectorTests(unittest.TestCase):
                 ("candidate", 10, "100 most recent workflow runs"),
             )
 
+    def test_rejects_partial_per_commit_fallback(self) -> None:
+        commits = [commit("candidate", "2026-09-15T06:00:00Z")]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recent_path = root / "recent.json"
+            commits_path = root / "commits.json"
+            SELECTOR.write_json(recent_path, [])
+            SELECTOR.write_json(
+                commits_path,
+                {
+                    "commits": commits,
+                    "runs": [run("candidate", 20, "success")],
+                    "errors": [{"sha": "another", "error": "request failed"}],
+                },
+            )
+
+            with self.assertRaisesRegex(
+                ValueError, "per-commit fallback has 1 failed run query"
+            ):
+                SELECTOR.select_with_fallback(recent_path, commits_path, OBSERVED_AT)
+
     def test_filters_unrelated_recent_runs_locally(self) -> None:
         matching = run("candidate", 10, "success")
         wrong_workflow = {**matching, "workflowName": "Another workflow"}
