@@ -103,7 +103,7 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: Query the 100 most recent workflow runs
+      - name: Query the 100 most recent CI workflow runs
         id: recent-runs
         if: ${{ steps.clock.outputs.proceed == 'true' }}
         continue-on-error: true

@@ -37,7 +37,7 @@ def write_json(path: Path, value: object) -> None:
 
 
 def fetch_recent_runs(repo: str) -> list[dict]:
-    """Fetch the repository's 100 newest runs without selection filters."""
+    """Fetch the CI workflow's 100 newest runs without branch or event filters."""
     value = command_json(
         [
             "gh",
@@ -45,6 +45,8 @@ def fetch_recent_runs(repo: str) -> list[dict]:
             "list",
             "--repo",
             repo,
+            "--workflow",
+            "ci.yaml",
             "--limit",
             "100",
             "--json",
@@ -266,7 +268,7 @@ def main() -> None:
         if args.command == "fetch-recent":
             runs = fetch_recent_runs(args.repo)
             write_json(args.output, runs)
-            print(f"Fetched {len(runs)} unfiltered recent workflow runs.")
+            print(f"Fetched {len(runs)} recent CI workflow runs.")
         elif args.command == "fetch-commits":
             snapshot = fetch_commit_runs(args.repo, args.checkout)
             write_json(args.output, snapshot)

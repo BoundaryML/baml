@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +46,28 @@ def run(sha: str, run_id: int, conclusion: str) -> dict:
 
 
 class NightlySelectorTests(unittest.TestCase):
+    @mock.patch.object(SELECTOR, "command_json")
+    def test_recent_query_filters_only_by_workflow(self, command_json) -> None:
+        """The primary query scopes CI but leaves branch and event filtering local."""
+        command_json.return_value = []
+
+        self.assertEqual(SELECTOR.fetch_recent_runs("BoundaryML/baml"), [])
+        command_json.assert_called_once_with(
+            [
+                "gh",
+                "run",
+                "list",
+                "--repo",
+                "BoundaryML/baml",
+                "--workflow",
+                "ci.yaml",
+                "--limit",
+                "100",
+                "--json",
+                SELECTOR.RUN_FIELDS,
+            ]
+        )
+
     def test_selects_newest_successful_commit_in_ancestry_order(self) -> None:
         """Git ancestry wins even when API results arrive out of order."""
         commits = [
