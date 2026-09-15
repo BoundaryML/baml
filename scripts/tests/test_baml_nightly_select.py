@@ -13,6 +13,7 @@ SELECTOR_PATH = ROOT / "tools" / "baml_nightly_select.py"
 
 
 def selector_module():
+    """Load the standalone selector tool as an importable test module."""
     spec = importlib.util.spec_from_file_location("baml_nightly_select", SELECTOR_PATH)
     assert spec is not None
     assert spec.loader is not None
@@ -27,10 +28,12 @@ OBSERVED_AT = dt.datetime(2026, 9, 15, 7, 25, tzinfo=dt.timezone.utc)
 
 
 def commit(sha: str, committed_at: str) -> dict:
+    """Build a git-log commit fixture."""
     return {"sha": sha, "committedAt": committed_at}
 
 
 def run(sha: str, run_id: int, conclusion: str) -> dict:
+    """Build an eligible canary CI run fixture."""
     return {
         "headSha": sha,
         "databaseId": run_id,
@@ -43,6 +46,7 @@ def run(sha: str, run_id: int, conclusion: str) -> dict:
 
 class NightlySelectorTests(unittest.TestCase):
     def test_selects_newest_successful_commit_in_ancestry_order(self) -> None:
+        """Git ancestry wins even when API results arrive out of order."""
         commits = [
             commit("newest", "2026-09-15T07:00:00Z"),
             commit("older", "2026-09-15T06:00:00Z"),
@@ -55,6 +59,7 @@ class NightlySelectorTests(unittest.TestCase):
         )
 
     def test_uses_latest_successful_rerun_id(self) -> None:
+        """The newest successful attempt attests a multiply-run commit."""
         commits = [commit("candidate", "2026-09-15T06:00:00Z")]
         runs = [
             run("candidate", 10, "failure"),
@@ -68,6 +73,7 @@ class NightlySelectorTests(unittest.TestCase):
         )
 
     def test_rejects_stale_run_snapshot_before_selecting_older_green(self) -> None:
+        """An old gap prevents silently releasing a stale green commit."""
         commits = [
             commit("missing", "2026-09-15T06:00:00Z"),
             commit("older", "2026-09-15T05:00:00Z"),
@@ -83,6 +89,7 @@ class NightlySelectorTests(unittest.TestCase):
         self.assertIn("age 1:25:00", str(raised.exception))
 
     def test_allows_actions_visibility_grace_period(self) -> None:
+        """A newly pushed run may remain invisible for a short grace period."""
         commits = [
             commit("pending", "2026-09-15T07:20:00Z"),
             commit("older", "2026-09-15T06:00:00Z"),
@@ -96,6 +103,7 @@ class NightlySelectorTests(unittest.TestCase):
         )
 
     def test_falls_back_when_recent_runs_have_a_canary_ci_hole(self) -> None:
+        """A primary snapshot hole switches selection to per-commit data."""
         commits = [
             commit("newest", "2026-09-15T06:00:00Z"),
             commit("older", "2026-09-15T05:00:00Z"),
@@ -120,6 +128,7 @@ class NightlySelectorTests(unittest.TestCase):
             )
 
     def test_prefers_recent_runs_when_both_sources_have_a_candidate(self) -> None:
+        """A valid broad snapshot remains the preferred source."""
         commits = [commit("candidate", "2026-09-15T06:00:00Z")]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -141,6 +150,7 @@ class NightlySelectorTests(unittest.TestCase):
             )
 
     def test_rejects_partial_per_commit_fallback(self) -> None:
+        """Any failed exact-SHA query invalidates the fallback batch."""
         commits = [commit("candidate", "2026-09-15T06:00:00Z")]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -162,6 +172,7 @@ class NightlySelectorTests(unittest.TestCase):
                 SELECTOR.select_with_fallback(recent_path, commits_path, OBSERVED_AT)
 
     def test_filters_unrelated_recent_runs_locally(self) -> None:
+        """Workflow, branch, and event filters are applied only in process."""
         matching = run("candidate", 10, "success")
         wrong_workflow = {**matching, "workflowName": "Another workflow"}
         wrong_branch = {**matching, "headBranch": "main"}
