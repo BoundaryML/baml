@@ -83,6 +83,17 @@ manifest and its verified runtime artifact. A missing, corrupt,
 ABI-incompatible, or version-incompatible runtime fails before any BAML program
 is initialized.
 
+## BAML logs
+
+`log.info`, `log.debug`, `log.warn`, and `log.error` events from BAML code are
+dropped by default. Set the `BAML_LOG` environment variable to `error`, `warn`,
+`info`, or `debug` to write events at or above that level to the process's
+stderr as `[LEVEL] body` lines, matching `baml-cli test --logs`. The variable
+is read at the start of each BAML function call, and logs stream while a call
+is still running. `off` and an empty value disable delivery. This behavior is
+implemented in the shared native runtime, so it works identically in every SDK
+that loads `bridge_cffi`.
+
 ## Current scope
 
 The manually loaded runtime is implemented for macOS, Linux, and Windows with
