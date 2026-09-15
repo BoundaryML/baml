@@ -24,6 +24,9 @@ sys_native = { workspace = true, default-features = false, features = [ "bundle-
 libsui = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = { workspace = true }
+
 [features]
 default = [  ]
 gc_profiling = [ "bex_engine/gc_profiling", "bex_project/gc_profiling" ]

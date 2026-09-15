@@ -31,6 +31,9 @@ use baml_exec::{
 use bex_engine::{BexEngine, UserFunctionInfo};
 use sys_native::SysOpsExt;
 
+#[cfg(all(feature = "gc_profiling", target_os = "macos"))]
+mod malloc_pressure_relief;
+
 fn extract_envelope() -> Result<PackEnvelope, String> {
     let section = libsui::find_section(PACK_SECTION_NAME)
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
@@ -65,6 +68,9 @@ fn target_is_typed(info: &UserFunctionInfo) -> bool {
 }
 
 fn main() -> ExitCode {
+    #[cfg(all(feature = "gc_profiling", target_os = "macos"))]
+    malloc_pressure_relief::install_from_env();
+
     let envelope = match extract_envelope() {
         Ok(e) => e,
         Err(e) => {
