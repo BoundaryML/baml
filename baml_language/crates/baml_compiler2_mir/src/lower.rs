@@ -6959,12 +6959,7 @@ impl<'db> LoweringContext<'db> {
                 self.lower_item_ref(expr_id, def, dest);
             }
             ResolvedName::Builtin(def) => {
-                let constant = match def {
-                    Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
-                    other => Constant::GlobalItem(other),
-                };
-                self.builder
-                    .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+                self.lower_item_ref(expr_id, def, dest);
             }
             ResolvedName::Local { .. } | ResolvedName::Unknown => {
                 if self
@@ -7258,11 +7253,23 @@ impl<'db> LoweringContext<'db> {
             return;
         }
         // A function reference becomes a pooled function-value wrapper at
-        // emit; any other item (a client, a top-level `let`, ...) is a plain
-        // read of the global slot `$init` filled.
+        // emit; a top-level `let` (a client, ...) is a plain read of the
+        // global slot `$init` filled.
         let constant = match def {
             Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
-            other => Constant::GlobalItem(other),
+            Definition::Let(binding) => Constant::GlobalItem(binding),
+            Definition::Class(_)
+            | Definition::Enum(_)
+            | Definition::Interface(_)
+            | Definition::TypeAlias(_) => {
+                // A type declaration is not a value; the checker rejects the
+                // reference, so a compiling program never reaches here.
+                self.emit_panic_call(
+                    "internal compiler error: a type declaration referenced as a value",
+                    expr_id,
+                );
+                return;
+            }
         };
         self.builder
             .assign(dest, Rvalue::Use(Operand::Constant(constant)));

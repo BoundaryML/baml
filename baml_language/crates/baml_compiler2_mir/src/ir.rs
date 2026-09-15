@@ -1157,15 +1157,16 @@ pub enum Constant<'db> {
     /// Carried from TIR resolution through lowering. Converted to a
     /// runtime string only in the emit phase, where it becomes a pooled
     /// function-value wrapper (see `emit_pooled_function_value`). Only for
-    /// items that ARE functions; a non-function global item read (a client,
-    /// a top-level `let`, ...) is [`Constant::GlobalItem`].
+    /// items that ARE functions; a top-level `let` read is
+    /// [`Constant::GlobalItem`].
     Function(baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>),
-    /// A non-function global item read (a `client<llm>` declaration, a
-    /// top-level `let`, a template string, ...): the value the program's
-    /// `$init` stored in the item's global slot. Emitted as a plain
-    /// `LoadGlobal`, never wrapped — the slot holds an ordinary value
-    /// (an instance, a closure, ...), not a `Function` object.
-    GlobalItem(baml_compiler2_hir::contributions::Definition<'db>),
+    /// A top-level `let` read (a `client` declaration is one): the value
+    /// the program's `$init` stored in the binding's global slot. Emitted as
+    /// a plain `LoadGlobal`, never wrapped — the slot holds an ordinary value
+    /// (an instance, a closure, ...), not a `Function` object. The only
+    /// non-function item that is a value; a type declaration in value
+    /// position is a checker error and never reaches here.
+    GlobalItem(baml_compiler2_hir::loc::LetLoc<'db>),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object

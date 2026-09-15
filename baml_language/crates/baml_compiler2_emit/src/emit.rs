@@ -297,12 +297,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// The database link names are rendered through at this boundary.
     db: &'ctx dyn baml_compiler2_mir::Db,
 
-    /// Resolved global names to indices.
-    globals: &'ctx HashMap<String, usize>,
-    /// Pass-1 global slot per interface-machinery body, keyed by declaration.
-    /// An interface body has no runtime name; this map is its only
-    /// resolution channel.
-    interface_body_slots: &'ctx HashMap<baml_compiler2_hir::loc::FunctionLoc<'ctx>, usize>,
+    /// The Pass-1 slot registry every direct callee and top-level `let` read
+    /// resolves through, by declaration identity.
+    slots: &'ctx crate::GlobalSlots<'ctx>,
     /// Resolved class field indices.
     #[allow(dead_code)]
     classes: &'ctx HashMap<String, HashMap<String, usize>>,
@@ -457,8 +454,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             arity,
             line_starts,
             db: ctx.db,
-            globals: ctx.globals,
-            interface_body_slots: ctx.interface_body_slots,
+            slots: ctx.slots,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
@@ -2029,33 +2025,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
-    /// Pass-1 global slot for a callable.
-    ///
-    /// A source interface-machinery body resolves by its DECLARATION through
-    /// [`Self::interface_body_slots`] — its rendered spelling is display-only
-    /// and keys nothing. Every other callable resolves by its link name
-    /// through [`Self::globals`]; `None` there means the callee is not
-    /// statically addressable (the caller falls back to an indirect call). A
-    /// body missing its slot is an internal error: a body declaration reaches
-    /// here only from this database, and Pass 1 slots every one of them.
+    /// The global slot `func` links as, or `None` when this program slots
+    /// nothing for it — [`Self::slots`] is the one registry, keyed by
+    /// declaration identity on both lanes. A `None` is a callee the program
+    /// cannot direct-call: a required interface method (no body), an
+    /// intrinsic (never a `Call`), or a served row the linked prefix does not
+    /// slot; callers fall back or panic per their own law. An interface body
+    /// reaching codegen unslotted is a loud panic, never a fallback.
     fn try_function_global_index(&mut self, func: FunctionRef<'ctx>) -> Option<usize> {
-        let name = baml_compiler2_mir::function_link_name(self.db, func);
-        if let DeclRef::Source(decl) = func
+        let slot = self.slots.functions.get(&func).copied();
+        if slot.is_none()
+            && let DeclRef::Source(decl) = func
             && baml_compiler2_mir::function_is_interface_body(self.db, decl)
         {
-            let slot = *self
-                .interface_body_slots
-                .get(&decl)
-                .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {name}"));
-            // The body's rendered spelling is display-only for resolution, but
-            // its last segment (the method name) is exactly what the declaring
-            // file's `defined_names` produces — the incremental edge grain.
-            self.references.record(&name);
-            return Some(slot);
+            panic!(
+                "interface body has no Pass-1 slot: {}",
+                baml_compiler2_mir::function_link_name(self.db, func)
+            );
         }
-        let slot = self.globals.get(&name).copied();
         if slot.is_some() {
-            self.references.record(&name);
+            // The incremental edge grain is the item's last-segment name —
+            // rendered here only for the record.
+            self.references
+                .record(&baml_compiler2_mir::function_link_name(self.db, func));
         }
         slot
     }
@@ -2180,13 +2172,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // direct `LoadGlobal` of the function object did before.
                 self.emit_pooled_function_value(*func, &[]);
             }
-            Constant::GlobalItem(def) => {
-                // A non-function global item (a client, a top-level `let`,
-                // ...): read the value `$init` stored in its slot, unwrapped.
-                let name_str = baml_compiler2_mir::definition_link_name(self.db, *def);
+            Constant::GlobalItem(binding) => {
+                // A top-level `let` (a client, ...): read the value `$init`
+                // stored in its slot, unwrapped.
+                let name_str = baml_compiler2_mir::definition_link_name(
+                    self.db,
+                    baml_compiler2_hir::contributions::Definition::Let(*binding),
+                );
                 let global_idx = *self
-                    .globals
-                    .get(&name_str)
+                    .slots
+                    .lets
+                    .get(binding)
                     .unwrap_or_else(|| panic!("undefined global item: {name_str}"));
                 self.references.record(&name_str);
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
@@ -3495,16 +3491,24 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
         let inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(inst, OperandMeta::Const(display));
-        let deep_copy_idx = self
-            .globals
-            .get("baml.deep_copy")
-            .copied()
-            .unwrap_or_else(|| panic!("undefined function: baml.deep_copy"));
+        let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
+            self.db,
+            baml_base::LangPackage::Baml,
+            &[],
+            "deep_copy",
+        )
+        .unwrap_or_else(|| {
+            panic!("internal compiler error: the stdlib exports no `baml.deep_copy`")
+        });
+        let deep_copy_idx = self.function_global_index(deep_copy, "undefined function");
         let inst = self.emit(Instruction::Call {
             callee: GlobalIndex::from_raw(deep_copy_idx),
             ntypeargs: 0,
         });
-        self.set_operand(inst, OperandMeta::Callable("baml.deep_copy".to_string()));
+        self.set_operand(
+            inst,
+            OperandMeta::Callable(baml_compiler2_mir::function_link_name(self.db, deep_copy)),
+        );
         Ok(())
     }
 
@@ -4042,8 +4046,7 @@ mod tests {
             catch_regions: Vec::new(),
         };
 
-        let globals = HashMap::new();
-        let interface_body_slots = HashMap::new();
+        let slots = crate::GlobalSlots::default();
         let classes = HashMap::new();
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
@@ -4065,8 +4068,7 @@ mod tests {
             &line_starts,
             MirCodegenContext {
                 db: &db,
-                globals: &globals,
-                interface_body_slots: &interface_body_slots,
+                slots: &slots,
                 classes: &classes,
                 class_object_indices: &class_object_indices,
                 enum_object_indices: &enum_object_indices,
