@@ -1,0 +1,215 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Directly SSH-accessible x64 and Graviton hosts for BAML micro-GC benchmarks
+
+Parameters:
+  Prefix:
+    Type: String
+    Default: sam-microgc-test
+    AllowedPattern: '^[a-z0-9][a-z0-9-]{1,40}$'
+  PublicKeyMaterial:
+    Type: String
+    NoEcho: true
+  SSHCidr:
+    Type: String
+    AllowedPattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$'
+  X64InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+  GravitonInstanceType:
+    Type: String
+    Default: t4g.micro
+    AllowedValues:
+      - t4g.micro
+  X64ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  GravitonImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.77.0.0/24
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-igw'
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.77.0.0/27
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-public'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-public'
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Direct SSH access for ${Prefix}'
+      SecurityGroupIngress:
+        - CidrIp: !Ref SSHCidr
+          Description: Operator public IPv4
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-ssh'
+      VpcId: !Ref VPC
+
+  SSHKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${Prefix}-ssh'
+      KeyType: ed25519
+      PublicKeyMaterial: !Ref PublicKeyMaterial
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-ssh'
+
+  X64Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 8
+            VolumeType: gp3
+      CreditSpecification:
+        CPUCredits: standard
+      ImageId: !Ref X64ImageId
+      InstanceType: !Ref X64InstanceType
+      KeyName: !Ref SSHKeyPair
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+      SecurityGroupIds:
+        - !Ref SSHSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-x64'
+        - Key: Architecture
+          Value: x86_64
+        - Key: Purpose
+          Value: microgc-benchmark
+
+  GravitonInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 8
+            VolumeType: gp3
+      CreditSpecification:
+        CPUCredits: standard
+      ImageId: !Ref GravitonImageId
+      InstanceType: !Ref GravitonInstanceType
+      KeyName: !Ref SSHKeyPair
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+      SecurityGroupIds:
+        - !Ref SSHSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-graviton'
+        - Key: Architecture
+          Value: arm64
+        - Key: Purpose
+          Value: microgc-benchmark
+
+  X64EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-x64'
+
+  GravitonEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Prefix}-graviton'
+
+  X64EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt X64EIP.AllocationId
+      InstanceId: !Ref X64Instance
+
+  GravitonEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt GravitonEIP.AllocationId
+      InstanceId: !Ref GravitonInstance
+
+Outputs:
+  GravitonInstanceId:
+    Value: !Ref GravitonInstance
+  GravitonPublicIp:
+    Value: !Ref GravitonEIP
+  GravitonSSH:
+    Value: !Sub 'ssh ec2-user@${GravitonEIP}'
+  SSHCidr:
+    Value: !Ref SSHCidr
+  X64InstanceId:
+    Value: !Ref X64Instance
+  X64PublicIp:
+    Value: !Ref X64EIP
+  X64SSH:
+    Value: !Sub 'ssh ec2-user@${X64EIP}'
