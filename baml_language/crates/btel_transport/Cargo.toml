@@ -1,0 +1,19 @@
+[package]
+name = "btel_transport"
+description = "Experimental Btel rings and telemetry pipeline transport"
+version.workspace = true
+publish = false
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+btel_core.workspace = true
+crossbeam-utils.workspace = true
+
+[target.'cfg(baml_loom)'.dependencies]
+loom.workspace = true

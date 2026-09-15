@@ -1,0 +1,25 @@
+[package]
+name = "btel_bench"
+description = "Standalone Btel marker replay and no-op pipeline benchmarks"
+version.workspace = true
+publish = false
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+btel_core.workspace = true
+btel_transport.workspace = true
+clap = { workspace = true, features = [ "derive" ] }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[package.metadata.ci]
+wasm_support = false
