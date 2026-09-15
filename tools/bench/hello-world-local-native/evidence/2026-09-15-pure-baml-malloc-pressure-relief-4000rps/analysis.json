@@ -1,0 +1,67 @@
+{
+  "classification": "allocator high-water retention of virtual address space and clean/reusable pages, not a live-object memory leak",
+  "requests": 1200000,
+  "status_counts": {
+    "200": 1200000
+  },
+  "delivered_rps": 4000.0,
+  "load_seconds": 300,
+  "load": {
+    "rss_initial_mib": 37.171875,
+    "rss_peak_mib": 160.3125,
+    "rss_final_mib": 160.3125,
+    "rss_last_90_seconds_min_mib": 159.9375,
+    "rss_last_90_seconds_max_mib": 160.3125,
+    "rss_last_60_seconds_min_mib": 160.3125,
+    "rss_last_60_seconds_max_mib": 160.3125,
+    "malloc_live_min_mib": 18.914505004882812,
+    "malloc_live_max_mib": 100.361083984375,
+    "malloc_reserved_initial_mib": 48.0,
+    "malloc_reserved_peak_mib": 160.0,
+    "malloc_reserved_final_mib": 160.0,
+    "late_reservation_step_elapsed_seconds": 202.0,
+    "late_reservation_step_before_mib": 156.0,
+    "late_reservation_step_after_mib": 160.0
+  },
+  "explicit_gc": {
+    "runtime_objects_before": 204133,
+    "runtime_objects_after": 15,
+    "malloc_blocks_before": 276274,
+    "malloc_blocks_after": 129476,
+    "malloc_live_before_mib": 50.3587646484375,
+    "malloc_live_after_mib": 19.1712646484375,
+    "malloc_reserved_before_mib": 160.0,
+    "malloc_reserved_after_mib": 160.0,
+    "rss_before_mib": 160.3125,
+    "rss_one_second_after_mib": 160.3125
+  },
+  "vmmap_after_gc": {
+    "physical_footprint_mib": 27.8,
+    "malloc_zone_virtual_mib": 161.3,
+    "malloc_zone_resident_mib": 144.9,
+    "malloc_zone_dirty_mib": 24.9,
+    "malloc_zone_allocated_mib": 19.4,
+    "malloc_zone_fragmentation_mib": 5.474609375,
+    "malloc_zone_fragmentation_percent_of_dirty": 22,
+    "malloc_small_empty_virtual_mib": 76.0,
+    "malloc_small_empty_resident_mib": 72.2,
+    "malloc_small_empty_dirty_mib": 0.25
+  },
+  "pressure_relief": {
+    "reported_bytes_relieved": 0,
+    "rss_before_mib": 160.3125,
+    "rss_immediate_delta_mib": 0.015625,
+    "rss_30_seconds_delta_mib": 0.015625,
+    "http_or_heap_samples_during_window": 0,
+    "process_alive_after": true,
+    "exact_response_after": true
+  },
+  "interpretation": [
+    "The BAML collector reclaimed the request graph: runtime objects fell to 15 and malloc live bytes fell by about 31.2 MiB.",
+    "The unchanged 160 MiB malloc reservation is allocator-owned virtual address space retained at its high-water mark.",
+    "After GC, vmmap attributed only 24.9 MiB of the malloc zone to dirty pages even though ps-style RSS counted 144.9 MiB resident. The 76 MiB of completely empty MALLOC_SMALL regions was almost entirely clean, so it does not represent 76 MiB of live or dirty process memory.",
+    "The remaining dirty allocator fragmentation was about 5.5 MiB, or 22% of dirty malloc-zone bytes; it was bounded and far smaller than the apparent RSS gap.",
+    "Maximal malloc_zone_pressure_relief reported zero bytes released and RSS did not fall. This establishes that the call caused no additional unmapping; it does not prove that every clean page was immediately kernel-reclaimable or rule out future address-space growth. The separate vmmap measurements show that clean pages, rather than live allocations or dirty fragmentation, dominate the apparent RSS gap.",
+    "This run reproduced a late allocator expansion from 156 MiB to 160 MiB at 202 seconds while the live-byte sawtooth continued to reclaim. RSS was exactly flat for the final 60 loaded seconds. A longer run is still needed to prove a permanent plateau, but the retained floor observed here is allocator high-water behavior rather than unreachable live allocations."
+  ]
+}
