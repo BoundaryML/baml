@@ -221,6 +221,36 @@ function silent_report() -> string throws never {
     `why=${sat.standing.why} mastered=${sat.standing.mastered.length()} committed=${sat.profile.committed} commits_unsure=${hundredths(commits)}`
 }
 
+/// What a case is worth to selection: a rule met once, the same rule met
+/// twice, and two different rules met once each.
+///
+/// The update moves one offset per rule, with the whole of that rule's
+/// gradient, so a rule a case reaches twice moves its offset twice as far and
+/// the answer says FOUR times as much about it, not twice. That makes such a
+/// case worth strictly more than two different rules met once, which move two
+/// offsets one step each. Reading the information per occurrence instead
+/// makes the two identical, and undervalues exactly the deep cases the ladder
+/// exists to reach.
+///
+/// A fresh profile holds every rule at the same strength, so the comparison
+/// turns on the arithmetic and not on which rules were drawn.
+function information_report() -> string throws never {
+    let profile = root.fresh_profile();
+    let knobs = root.engine.default_knobs();
+    let a = profile.skills.at(0)?.rule
+        ?? return "no skills";
+    let b = profile.skills.at(1)?.rule
+        ?? return "one skill";
+    let once = root.engine.information(profile, knobs, [a], 0);
+    let twice = root.engine.information(profile, knobs, [a, a], 0);
+    let apart = root.engine.information(profile, knobs, [a, b], 0);
+    `once=${hundredths(once)} twice=${hundredths(twice)} apart=${hundredths(apart)} deeper=${twice > apart}`
+}
+
+test "information: a rule met twice is worth more than two rules met once" {
+    assert.equal(information_report(), "once=34 twice=37 apart=28 deeper=true")
+}
+
 /// `x` as hundredths. Through a function: the arithmetic reads a local bound
 /// from an earlier closure call (README, compiler issue 9).
 function hundredths(x: float) -> int throws never {

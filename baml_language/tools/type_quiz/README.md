@@ -469,3 +469,24 @@ minimal single-file packages; none is fixed at the time of writing.
    the declared parameter type, which the wire already carries, to lower a
    string against an enum position.
 
+15. **An interface method called from inside a nested closure panics the
+   emitter.** `crates/baml_compiler2_emit/src/emit.rs:2025`, `undefined
+   function: user.engine.Item.id`. It type-checks and dies at emit, as a
+   panic rather than a diagnostic, so there is no span and nothing to act on.
+   The same call one level out is fine:
+
+   ```
+   items().flat_map((item) -> {                 // panics
+       range.filter_map((i) -> { item.id() })
+   })
+   items().flat_map((item) -> {                 // compiles
+       let id = item.id();
+       range.filter_map((i) -> { id })
+   })
+   ```
+
+   It is why `pairings` in `ns_conformance/bank.baml` binds `let id =
+   item.id()` before its inner closure. A free function taking the same
+   interface value closes over fine, so it is the method dispatch that is
+   lost.
+

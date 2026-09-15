@@ -422,9 +422,15 @@ function information(
         0.0,
     );
     let by_ability = q * total_doubt * q * total_doubt;
-    let by_rules = doubts.reduce(
-        (acc, doubt) -> {
-            acc + q * doubt * q * doubt
+    // Per rule rather than per occurrence, over the same skills the update
+    // walks. A rule the case reaches twice moves its one offset with twice
+    // the gradient, so it carries four times the information and not twice:
+    // summing the occurrences instead understates exactly the deep cases,
+    // which are the ones worth reaching for.
+    let by_rules = profile.skills.reduce(
+        (acc, skill) -> {
+            let gradient = q * times_in(rules, skill.rule) * (1.0 - logistic(strength(profile, skill.rule)));
+            acc + gradient * gradient
         },
         0.0,
     );
