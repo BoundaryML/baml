@@ -25,6 +25,7 @@
 //   14a  `default.<field>()` field call   value road (view read) + indirect
 //   14b  `self.<field>()` in a default    value road (view read) + indirect
 //   14c  `<expr>.<field>()` member access  value road (view read) + indirect
+//   15   generics bound by iface args      virtual; rule frame from the request
 //
 // Rows 1-5 all dispatch open-world (every interface-mediated call is a
 // virtual call): a concrete receiver's TIR resolution still CARRIES the
@@ -279,6 +280,31 @@ function row14c_member_access_field_call() -> string throws never {
     make_formatting().formatter(9)
 }
 
+// Row 15: an impl whose generics come only from the INTERFACE arguments —
+// `implements<T, E> Sized<T, E> for Plain` binds nothing from the receiver.
+// The rule's frame is realized from the request's interface args at
+// dispatch, and an existential with pins carries exactly that request.
+// Reflection observes the bindings.
+interface Sized<T, E> {
+    type Output = T
+    type Error = E
+    function sizes(self) -> string throws never
+}
+
+class Bare {}
+
+implements<T, E> Sized<T, E> for Bare {
+    function sizes(self) -> string throws never {
+        reflect.Type.of<T>().to_string() + "/" + reflect.Type.of<E>().to_string()
+    }
+}
+
+function row15_generics_from_interface_args(
+    s: Sized<int, string, Output = int, Error = string>,
+) -> string throws never {
+    s.sizes()
+}
+
 test "row1 static call reaches a provided method" {
     assert.equal(row1_static_provided(), "loud")
 }
@@ -347,4 +373,8 @@ test "row14b an adopted default body calls self.<field> through the view" {
 
 test "row14c a member-access field call reads through the view too" {
     assert.equal(row14c_member_access_field_call(), "made 9")
+}
+
+test "row15 impl generics are bound from the interface args" {
+    assert.equal(row15_generics_from_interface_args(Bare {}), "int/string")
 }
