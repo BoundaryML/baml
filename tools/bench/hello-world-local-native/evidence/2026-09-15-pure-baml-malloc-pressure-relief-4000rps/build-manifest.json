@@ -1,0 +1,14 @@
+{
+  "source": "/Users/sam/baml-worktrees/baml/malloc-pressure-relief-source/baml_language",
+  "revision": "640c4ff55f003e9cedc99b664a8fc38be173de31",
+  "source_dirty": false,
+  "source_status": "",
+  "source_snapshot": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "base_build_revision": "687d7b3470d3a00d556ff537841a334f43064577",
+  "embedded_toolchain_revision": "687d7b3470d3a00d556ff537841a334f43064577",
+  "base_build_manifest_sha256": "80bb10818303d19fec61018bf387d5f7c4175e572e8beaa07d4ab2f92298a153",
+  "artifacts": {
+    "toolchain/baml-pack-host": "e1e54a45bc49bcb64b9eefc0eec03200967c4109a8f5f150c4872fdadfd1db3f",
+    "apps/baml-only-explicit-gc/hello": "bfa0c2e81e9c9e9c6a2ffb3d30d36c7519253fa631264c05459d2470261d832b"
+  }
+}

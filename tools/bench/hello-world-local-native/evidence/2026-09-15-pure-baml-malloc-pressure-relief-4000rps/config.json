@@ -1,0 +1,12 @@
+{
+  "rate": 4000,
+  "duration_seconds": 300.0,
+  "interval_seconds": 1.0,
+  "final_delay_seconds": 30.0,
+  "target": "baml-only-explicit-gc",
+  "port": 8505,
+  "continuous_load": true,
+  "explicit_gc_after_load": true,
+  "malloc_pressure_relief_after_gc": true,
+  "relief_signal": "SIGUSR2"
+}

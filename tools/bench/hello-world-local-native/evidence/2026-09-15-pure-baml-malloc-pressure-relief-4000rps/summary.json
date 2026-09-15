@@ -1,0 +1,474 @@
+{
+  "source_revision": "640c4ff55f003e9cedc99b664a8fc38be173de31",
+  "source_dirty": false,
+  "elapsed_seconds": 333.50952925,
+  "requests": 1200000,
+  "status_counts": {
+    "200": 1200000
+  },
+  "delivered_rps": 4000.0,
+  "binary": {
+    "executable_sha256": "bfa0c2e81e9c9e9c6a2ffb3d30d36c7519253fa631264c05459d2470261d832b"
+  },
+  "captures": [
+    {
+      "command": [
+        "vmmap",
+        "-summary",
+        "99264"
+      ],
+      "output": "vmmap-before-gc.txt",
+      "returncode": 0,
+      "elapsed_seconds": 0.9270402920000151,
+      "label": "before-gc"
+    },
+    {
+      "command": [
+        "vmmap",
+        "-summary",
+        "99264"
+      ],
+      "output": "vmmap-after-gc.txt",
+      "returncode": 0,
+      "elapsed_seconds": 0.5880057500000362,
+      "label": "after-gc"
+    },
+    {
+      "command": [
+        "vmmap",
+        "-summary",
+        "99264"
+      ],
+      "output": "vmmap-after-relief.txt",
+      "returncode": 0,
+      "elapsed_seconds": 0.8809742500000084,
+      "label": "after-relief"
+    }
+  ],
+  "checkpoint": {
+    "before_gc": {
+      "timestamp": "2026-09-15T17:43:40.194392+00:00",
+      "elapsed_seconds": 300.046772625,
+      "phase": "before_gc",
+      "process": {
+        "alive": true,
+        "rss_bytes": 166789120,
+        "cpu_percent": 14.0,
+        "elapsed": "05:01"
+      },
+      "heap": {
+        "total_objects": 208791,
+        "compile_time_objects": 4914,
+        "runtime_objects": 203877,
+        "active_handles": 4,
+        "tlab_chunks": 6371,
+        "reserved_slots": 203872,
+        "gen0_slots": 203872,
+        "gen1_slots": 0,
+        "gen2_slots": 5,
+        "gen0_capacity_slots": 204800,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 121033,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 13893632,
+        "permit_holder_slots": 6368,
+        "allocator_blocks_in_use": 276062,
+        "allocator_bytes_in_use": 52786288,
+        "allocator_bytes_high_water": 0,
+        "allocator_bytes_reserved": 171966464
+      }
+    },
+    "gc": {
+      "elapsed_seconds": 0.003960416999973404,
+      "heap": {
+        "before": {
+          "total_objects": 209047,
+          "compile_time_objects": 4914,
+          "runtime_objects": 204133,
+          "active_handles": 4,
+          "tlab_chunks": 6379,
+          "reserved_slots": 204128,
+          "gen0_slots": 204128,
+          "gen1_slots": 0,
+          "gen2_slots": 5,
+          "gen0_capacity_slots": 204800,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 121179,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 13893632,
+          "permit_holder_slots": 6369,
+          "allocator_blocks_in_use": 276274,
+          "allocator_bytes_in_use": 52811680,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 171966464
+        },
+        "after": {
+          "total_objects": 4929,
+          "compile_time_objects": 4914,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 129476,
+          "allocator_bytes_in_use": 20109216,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 171966464
+        }
+      }
+    },
+    "after_gc_immediate": {
+      "timestamp": "2026-09-15T17:43:41.129584+00:00",
+      "elapsed_seconds": 300.98196591699997,
+      "phase": "after_gc_immediate",
+      "process": {
+        "alive": true,
+        "rss_bytes": 166789120,
+        "cpu_percent": 0.6,
+        "elapsed": "05:02"
+      },
+      "heap": {
+        "total_objects": 5441,
+        "compile_time_objects": 4914,
+        "runtime_objects": 527,
+        "active_handles": 4,
+        "tlab_chunks": 16,
+        "reserved_slots": 512,
+        "gen0_slots": 512,
+        "gen1_slots": 0,
+        "gen2_slots": 15,
+        "gen0_capacity_slots": 4096,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 272,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 1048576,
+        "permit_holder_slots": 6,
+        "allocator_blocks_in_use": 129871,
+        "allocator_bytes_in_use": 20417776,
+        "allocator_bytes_high_water": 0,
+        "allocator_bytes_reserved": 171966464
+      }
+    },
+    "after_gc_1s": {
+      "timestamp": "2026-09-15T17:43:42.147635+00:00",
+      "elapsed_seconds": 302.000019584,
+      "phase": "after_gc_1s",
+      "process": {
+        "alive": true,
+        "rss_bytes": 166805504,
+        "cpu_percent": 0.1,
+        "elapsed": "05:03"
+      },
+      "heap": {
+        "total_objects": 5697,
+        "compile_time_objects": 4914,
+        "runtime_objects": 783,
+        "active_handles": 4,
+        "tlab_chunks": 24,
+        "reserved_slots": 768,
+        "gen0_slots": 768,
+        "gen1_slots": 0,
+        "gen2_slots": 15,
+        "gen0_capacity_slots": 4096,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 418,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 1048576,
+        "permit_holder_slots": 7,
+        "allocator_blocks_in_use": 130081,
+        "allocator_bytes_in_use": 20442560,
+        "allocator_bytes_high_water": 0,
+        "allocator_bytes_reserved": 171966464
+      }
+    },
+    "before_relief": {
+      "timestamp": "2026-09-15T17:43:42.740063+00:00",
+      "elapsed_seconds": 302.592433375,
+      "phase": "before_relief",
+      "process": {
+        "alive": true,
+        "rss_bytes": 166805504,
+        "cpu_percent": 0.0,
+        "elapsed": "05:03"
+      },
+      "heap": {
+        "total_objects": 5953,
+        "compile_time_objects": 4914,
+        "runtime_objects": 1039,
+        "active_handles": 4,
+        "tlab_chunks": 32,
+        "reserved_slots": 1024,
+        "gen0_slots": 1024,
+        "gen1_slots": 0,
+        "gen2_slots": 15,
+        "gen0_capacity_slots": 4096,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 564,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 1048576,
+        "permit_holder_slots": 8,
+        "allocator_blocks_in_use": 130291,
+        "allocator_bytes_in_use": 20467344,
+        "allocator_bytes_high_water": 0,
+        "allocator_bytes_reserved": 171966464
+      }
+    },
+    "pressure_relief": {
+      "signal": "SIGUSR2",
+      "reported_bytes_relieved": 0,
+      "elapsed_seconds": 0.010672666000004938
+    },
+    "after_relief_immediate": {
+      "timestamp": "2026-09-15T17:43:42.754642+00:00",
+      "elapsed_seconds": 302.607011375,
+      "phase": "after_relief_immediate",
+      "process": {
+        "alive": true,
+        "rss_bytes": 166821888,
+        "cpu_percent": 0.0,
+        "elapsed": "05:03"
+      },
+      "heap": {
+        "total_objects": 6209,
+        "compile_time_objects": 4914,
+        "runtime_objects": 1295,
+        "active_handles": 4,
+        "tlab_chunks": 40,
+        "reserved_slots": 1280,
+        "gen0_slots": 1280,
+        "gen1_slots": 0,
+        "gen2_slots": 15,
+        "gen0_capacity_slots": 4096,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 710,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 1048576,
+        "permit_holder_slots": 9,
+        "allocator_blocks_in_use": 130501,
+        "allocator_bytes_in_use": 20492128,
+        "allocator_bytes_high_water": 0,
+        "allocator_bytes_reserved": 171966464
+      }
+    },
+    "after_relief_delayed": [
+      {
+        "delay_seconds": 0.1,
+        "sample": {
+          "timestamp": "2026-09-15T17:43:42.849799+00:00",
+          "elapsed_seconds": 302.702169334,
+          "phase": "after_relief_0.1s",
+          "process": {
+            "alive": true,
+            "rss_bytes": 166838272,
+            "cpu_percent": 0.1,
+            "elapsed": "05:03"
+          },
+          "heap": {
+            "total_objects": 6465,
+            "compile_time_objects": 4914,
+            "runtime_objects": 1551,
+            "active_handles": 4,
+            "tlab_chunks": 48,
+            "reserved_slots": 1536,
+            "gen0_slots": 1536,
+            "gen1_slots": 0,
+            "gen2_slots": 15,
+            "gen0_capacity_slots": 4096,
+            "gen1_capacity_slots": 0,
+            "gen2_capacity_slots": 4096,
+            "scratch_capacity_slots": 0,
+            "allocations_since_gc": 856,
+            "object_slot_bytes": 64,
+            "tracked_slot_capacity_bytes": 1048576,
+            "permit_holder_slots": 10,
+            "allocator_blocks_in_use": 130711,
+            "allocator_bytes_in_use": 20516912,
+            "allocator_bytes_high_water": 0,
+            "allocator_bytes_reserved": 171966464
+          }
+        }
+      },
+      {
+        "delay_seconds": 0.5,
+        "sample": {
+          "timestamp": "2026-09-15T17:43:43.258148+00:00",
+          "elapsed_seconds": 303.110526584,
+          "phase": "after_relief_0.5s",
+          "process": {
+            "alive": true,
+            "rss_bytes": 166854656,
+            "cpu_percent": 0.0,
+            "elapsed": "05:04"
+          },
+          "heap": {
+            "total_objects": 6721,
+            "compile_time_objects": 4914,
+            "runtime_objects": 1807,
+            "active_handles": 4,
+            "tlab_chunks": 56,
+            "reserved_slots": 1792,
+            "gen0_slots": 1792,
+            "gen1_slots": 0,
+            "gen2_slots": 15,
+            "gen0_capacity_slots": 4096,
+            "gen1_capacity_slots": 0,
+            "gen2_capacity_slots": 4096,
+            "scratch_capacity_slots": 0,
+            "allocations_since_gc": 1002,
+            "object_slot_bytes": 64,
+            "tracked_slot_capacity_bytes": 1048576,
+            "permit_holder_slots": 11,
+            "allocator_blocks_in_use": 130921,
+            "allocator_bytes_in_use": 20541696,
+            "allocator_bytes_high_water": 0,
+            "allocator_bytes_reserved": 171966464
+          }
+        }
+      },
+      {
+        "delay_seconds": 1.0,
+        "sample": {
+          "timestamp": "2026-09-15T17:43:43.760544+00:00",
+          "elapsed_seconds": 303.61292249999997,
+          "phase": "after_relief_1s",
+          "process": {
+            "alive": true,
+            "rss_bytes": 166854656,
+            "cpu_percent": 0.1,
+            "elapsed": "05:04"
+          },
+          "heap": {
+            "total_objects": 6977,
+            "compile_time_objects": 4914,
+            "runtime_objects": 2063,
+            "active_handles": 4,
+            "tlab_chunks": 64,
+            "reserved_slots": 2048,
+            "gen0_slots": 2048,
+            "gen1_slots": 0,
+            "gen2_slots": 15,
+            "gen0_capacity_slots": 4096,
+            "gen1_capacity_slots": 0,
+            "gen2_capacity_slots": 4096,
+            "scratch_capacity_slots": 0,
+            "allocations_since_gc": 1148,
+            "object_slot_bytes": 64,
+            "tracked_slot_capacity_bytes": 1048576,
+            "permit_holder_slots": 12,
+            "allocator_blocks_in_use": 131131,
+            "allocator_bytes_in_use": 20566480,
+            "allocator_bytes_high_water": 0,
+            "allocator_bytes_reserved": 171966464
+          }
+        }
+      },
+      {
+        "delay_seconds": 5.0,
+        "sample": {
+          "timestamp": "2026-09-15T17:43:47.753712+00:00",
+          "elapsed_seconds": 307.606079334,
+          "phase": "after_relief_5s",
+          "process": {
+            "alive": true,
+            "rss_bytes": 166871040,
+            "cpu_percent": 0.1,
+            "elapsed": "05:08"
+          },
+          "heap": {
+            "total_objects": 7233,
+            "compile_time_objects": 4914,
+            "runtime_objects": 2319,
+            "active_handles": 4,
+            "tlab_chunks": 72,
+            "reserved_slots": 2304,
+            "gen0_slots": 2304,
+            "gen1_slots": 0,
+            "gen2_slots": 15,
+            "gen0_capacity_slots": 4096,
+            "gen1_capacity_slots": 0,
+            "gen2_capacity_slots": 4096,
+            "scratch_capacity_slots": 0,
+            "allocations_since_gc": 1294,
+            "object_slot_bytes": 64,
+            "tracked_slot_capacity_bytes": 1048576,
+            "permit_holder_slots": 13,
+            "allocator_blocks_in_use": 131341,
+            "allocator_bytes_in_use": 20591264,
+            "allocator_bytes_high_water": 0,
+            "allocator_bytes_reserved": 171966464
+          }
+        }
+      },
+      {
+        "delay_seconds": 30.0,
+        "sample": {
+          "timestamp": "2026-09-15T17:44:12.774693+00:00",
+          "elapsed_seconds": 332.626969209,
+          "phase": "after_relief_30s",
+          "process": {
+            "alive": true,
+            "rss_bytes": 166887424,
+            "cpu_percent": 0.2,
+            "elapsed": "05:33"
+          },
+          "heap": {
+            "total_objects": 7489,
+            "compile_time_objects": 4914,
+            "runtime_objects": 2575,
+            "active_handles": 4,
+            "tlab_chunks": 80,
+            "reserved_slots": 2560,
+            "gen0_slots": 2560,
+            "gen1_slots": 0,
+            "gen2_slots": 15,
+            "gen0_capacity_slots": 4096,
+            "gen1_capacity_slots": 0,
+            "gen2_capacity_slots": 4096,
+            "scratch_capacity_slots": 0,
+            "allocations_since_gc": 1440,
+            "object_slot_bytes": 64,
+            "tracked_slot_capacity_bytes": 1048576,
+            "permit_holder_slots": 14,
+            "allocator_blocks_in_use": 131551,
+            "allocator_bytes_in_use": 20616048,
+            "allocator_bytes_high_water": 0,
+            "allocator_bytes_reserved": 171966464
+          }
+        }
+      }
+    ],
+    "exact_response_after_relief": {
+      "ok": true,
+      "status": 200,
+      "body": "hello world",
+      "content_type": "text/plain; charset=utf-8",
+      "cache_control": "no-store"
+    }
+  },
+  "rss_immediate_relief_delta_mib": 0.015625,
+  "rss_final_relief_delta_mib": 0.078125,
+  "alive_after_relief": true,
+  "exact_response_after_relief": true
+}
