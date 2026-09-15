@@ -11,13 +11,46 @@ Run a BAML function from the terminal. This first example needs no model provide
 
 ## Install the toolchain
 
-On macOS or Linux with Homebrew:
+Choose one installation method.
+
+### macOS or Linux
+
+If you already use Homebrew:
 
 ```sh
 brew install baml
 ```
 
-For other installation methods, see the [BAML installer](https://boundaryml.com/quickstart).
+Without Homebrew, run the installer in Bash or Zsh:
+
+```sh
+curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s -- --yes
+. "$HOME/.baml/env"
+```
+
+The installer adds BAML to your Bash or Zsh startup file. The second command makes `baml` available in the current terminal.
+
+### Windows
+
+Run these commands in PowerShell:
+
+```powershell
+$bamlInstaller = Invoke-RestMethod https://pkg.boundaryml.com/install.ps1
+& ([scriptblock]::Create($bamlInstaller)) -Yes
+$env:Path = "$env:USERPROFILE\.baml\bin;$env:Path"
+```
+
+The installer adds BAML to your user `PATH`. The last command makes it available in the current PowerShell session.
+
+### Arch Linux
+
+If you use `yay`, install the AUR package:
+
+```sh
+yay -S baml-bin
+```
+
+## Select Canary
 
 These guides use **Canary**. Select it and download the latest toolchain:
 
@@ -49,13 +82,45 @@ The function returns `42`. Put function arguments after `--`; use `baml run retu
 
 ## Add editor support
 
-For VS Code:
+Editor support is optional. With VS Code installed, run:
 
 ```sh
 baml ide install --code
 ```
 
-If you use a coding agent, run `baml agent install` in the project to install the toolchain’s BAML skill.
+For Cursor:
+
+```sh
+baml ide install --cursor
+```
+
+For another VS Code-compatible editor, save the extension locally:
+
+```sh
+baml ide install --output-dir .
+```
+
+In your editor's Extensions view, choose **Install from VSIX** and select the downloaded `.vsix` file.
+
+## Set up a coding agent
+
+If you use a coding agent, run this from the project root:
+
+```sh
+baml agent install
+```
+
+This installs the active toolchain's BAML skill for supported agents. Use `baml describe` to inspect available functions and types while you work.
+
+## Update BAML
+
+To get the latest Canary toolchain:
+
+```sh
+baml toolchain update
+```
+
+To update the `baml` launcher itself, use `brew upgrade baml` for a Homebrew installation, `yay -S baml-bin` for an AUR installation, or `baml self-update` for a script installation.
 
 ## Next steps
 

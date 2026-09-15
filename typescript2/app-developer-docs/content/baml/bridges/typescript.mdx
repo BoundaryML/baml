@@ -35,6 +35,21 @@ Match the runtime package version to the toolchain version printed by `baml --ve
 With `return_number` from [Get started](/baml/get-started), create `app.ts` beside `baml.toml`:
 
 ```typescript
+import { return_number } from "./baml_sdk/index.js"
+
+const value = return_number(42)
+console.log(value)
+```
+
+Run it with `npx tsx app.ts`. It prints `42`.
+
+`return_number` runs synchronously and returns the value directly. Import from `baml_sdk/index.js` so the SDK initializes its runtime and type mappings.
+
+## Call asynchronously
+
+The Node.js generator also exports an `_async` variant of each function. It returns a promise:
+
+```typescript
 import { return_number_async } from "./baml_sdk/index.js"
 
 async function main() {
@@ -45,9 +60,9 @@ async function main() {
 main().catch(console.error)
 ```
 
-Run it with `npx tsx app.ts`. It prints `42`.
+Replace `app.ts` with this version and run `npx tsx app.ts` again. It also prints `42`.
 
-The Node.js generator exports both `return_number`, which returns synchronously, and `return_number_async`, which returns a promise. Use the async form in a server so a BAML call does not block its JavaScript thread. Import from `baml_sdk/index.js` so the SDK initializes its runtime and type mappings.
+Use the async variant when other JavaScript work needs to continue during the call, such as when a Node.js server waits for a model response. The synchronous variant blocks the JavaScript thread until the call finishes.
 
 ## Compatibility
 
