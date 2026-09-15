@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 
 from oncall.current import current_oncall
-from oncall.notify import compose_handoff
+from oncall.notify import compose_handoff, compose_reminders
 from oncall.parser import ScheduleFile, emit, parse
 from oncall.schedule import canonicalize, fill_horizon, validate
 
@@ -110,9 +110,8 @@ def notify(
 ) -> None:
     """Compose and (optionally) post the weekly on-call handoff.
 
-    Posts the handoff for the next shift immediately and schedules follow-up
-    reminders on the shift's first day. Reminders whose delivery time has
-    already passed (e.g. a manual run on Friday afternoon) are not scheduled.
+    Also schedules release reminders (via Slack chat.scheduleMessage) for the
+    shift's first day. Reminders whose time has already passed are skipped.
     """
     path = _schedule_path()
 
@@ -132,13 +131,8 @@ def notify(
         raise typer.Exit(1)
     try:
         now = datetime.datetime.now(ZoneInfo("America/Los_Angeles"))
-
-        def _warn_skipped(post_at: datetime.datetime, step: int) -> None:
-            console.print(
-                f"[yellow]skipped[/] reminder for step {step} at {post_at.isoformat()}: already in the past"
-            )
-
-        msgs = compose_handoff(sched, now, wc, on_skip=_warn_skipped)
+        msgs = compose_handoff(sched, now.date(), wc)
+        reminders = [(at, m) for at, m in compose_reminders(sched, now.date(), wc) if at > now]
     except RuntimeError as e:
         console.print(f"[red]error[/]: {e}")
         raise typer.Exit(1)
@@ -147,25 +141,20 @@ def notify(
         from oncall.slack import post as slack_post
         from oncall.slack import schedule as slack_schedule
 
-        posted = scheduled = 0
         for message in msgs:
-            if message.post_at is None:
-                slack_post(wc, message.channel, message.text, blocks=message.blocks)
-                posted += 1
-            else:
-                slack_schedule(
-                    wc, message.channel, message.text, message.post_at, blocks=message.blocks
-                )
-                scheduled += 1
-        console.print(f"[green]posted {posted} message(s), scheduled {scheduled} reminder(s)[/]")
+            slack_post(wc, message.channel, message.text, blocks=message.blocks)
+        for post_at, message in reminders:
+            slack_schedule(wc, message.channel, message.text, post_at, blocks=message.blocks)
+        console.print(
+            f"[green]posted {len(msgs)} message(s), scheduled {len(reminders)} reminder(s)[/]"
+        )
     else:
         for message in msgs:
-            if message.post_at is None:
-                console.print(f"[bold]→ {message.channel}[/] (now)")
-            else:
-                console.print(
-                    f"[bold]→ {message.channel}[/] (scheduled for {message.post_at.isoformat()})"
-                )
+            console.print(f"[bold]→ {message.channel}[/]")
+            console.print(message.text)
+            console.print()
+        for post_at, message in reminders:
+            console.print(f"[bold]→ {message.channel}[/] (scheduled for {post_at.isoformat()})")
             console.print(message.text)
             console.print()
 
