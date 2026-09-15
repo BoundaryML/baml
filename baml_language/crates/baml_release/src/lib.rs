@@ -4,6 +4,7 @@ pub mod manifest;
 pub mod platforms;
 
 use std::{
+    ffi::OsString,
     fs::{self, OpenOptions},
     io::{Cursor, Read},
     path::{Path, PathBuf},
@@ -19,22 +20,55 @@ use sha2::{Digest, Sha256};
 /// toolchain stores installed releases, config, and other per-user state.
 ///
 /// Resolution order:
-///   1. `$BAML_HOME`, if set.
+///   1. `$BAML_HOME`, if set to a non-blank value.
 ///   2. `$HOME` (or `$USERPROFILE` on Windows) joined with `.baml`.
 ///   3. A relative `.baml` as a last resort when no home directory is known.
+///
+/// A variable that is present but empty or whitespace-only is treated as
+/// unset, so a blank `$HOME` does not block `$USERPROFILE` and a blank
+/// `$BAML_HOME` does not skip the home-directory fallback.
 ///
 /// This is the single source of truth shared by the `baml` wrapper and the
 /// `baml-cli` toolchain binary; don't reimplement it.
 pub fn baml_home() -> PathBuf {
-    std::env::var_os("BAML_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
-                .map(|home| home.join(".baml"))
-        })
+    baml_home_from_env(
+        std::env::var_os("BAML_HOME"),
+        std::env::var_os("HOME"),
+        std::env::var_os("USERPROFILE"),
+    )
+}
+
+/// The user's home directory, skipping blank `$HOME` so Windows can fall
+/// through to `$USERPROFILE`.
+pub fn user_home() -> Option<PathBuf> {
+    user_home_from_env(std::env::var_os("HOME"), std::env::var_os("USERPROFILE"))
+}
+
+fn baml_home_from_env(
+    baml_home: Option<OsString>,
+    home: Option<OsString>,
+    userprofile: Option<OsString>,
+) -> PathBuf {
+    configured_os_path(baml_home)
+        .or_else(|| user_home_from_env(home, userprofile).map(|home| home.join(".baml")))
         .unwrap_or_else(|| PathBuf::from(".baml"))
+}
+
+fn user_home_from_env(home: Option<OsString>, userprofile: Option<OsString>) -> Option<PathBuf> {
+    configured_os_path(home).or_else(|| configured_os_path(userprofile))
+}
+
+/// Treat a missing or blank environment value as unconfigured.
+///
+/// Windows and some CI setups export `HOME=` (or `BAML_HOME=`). `var_os`
+/// still returns `Some("")`, which would otherwise block the `USERPROFILE`
+/// fallback and resolve `~/.baml` against the current working directory.
+fn configured_os_path(value: Option<OsString>) -> Option<PathBuf> {
+    let value = value?;
+    if value.to_string_lossy().trim().is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(value))
 }
 
 pub const MANIFEST_SCHEMA: u32 = 1;
@@ -722,6 +756,56 @@ fn extract_zip_to_dir(archive_bytes: &[u8], dest: &Path) -> Result<(), FetchErro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blank_home_falls_through_to_userprofile() {
+        assert_eq!(
+            baml_home_from_env(
+                None,
+                Some(OsString::from("")),
+                Some(OsString::from(r"C:\Users\tester")),
+            ),
+            PathBuf::from(r"C:\Users\tester").join(".baml")
+        );
+    }
+
+    #[test]
+    fn whitespace_baml_home_falls_through_to_home() {
+        assert_eq!(
+            baml_home_from_env(
+                Some(OsString::from("   ")),
+                Some(OsString::from("/home/tester")),
+                None,
+            ),
+            PathBuf::from("/home/tester").join(".baml")
+        );
+    }
+
+    #[test]
+    fn explicit_baml_home_wins() {
+        assert_eq!(
+            baml_home_from_env(
+                Some(OsString::from("/custom")),
+                Some(OsString::from("/home/tester")),
+                None,
+            ),
+            PathBuf::from("/custom")
+        );
+    }
+
+    #[test]
+    fn missing_homes_use_relative_dot_baml() {
+        assert_eq!(baml_home_from_env(None, None, None), PathBuf::from(".baml"));
+    }
+
+    #[test]
+    fn blank_home_does_not_count_as_user_home() {
+        assert_eq!(
+            user_home_from_env(Some(OsString::from("")), Some(OsString::from("/win/user"))),
+            Some(PathBuf::from("/win/user"))
+        );
+        assert_eq!(user_home_from_env(Some(OsString::from("")), None), None);
+    }
 
     #[test]
     fn test_release_archive_filename_uses_platform_extension() {
