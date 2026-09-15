@@ -12,7 +12,8 @@ PIN = "a" * 40
 
 
 class EntrypointTests(unittest.TestCase):
-    def boot(self, *, pin=PIN, cached=PIN, executable=True, fetch_ok=False, cargo_ok=True):
+    def boot(self, *, pin=PIN, cached=PIN, executable=True, fetch_ok=False, cargo_ok=True,
+             toolchain="canary", nightly=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             commands = root / "bin"
@@ -36,6 +37,10 @@ class EntrypointTests(unittest.TestCase):
                     "esac\n"
                 ),
                 "cargo": f'echo cargo >> "{log}"\nexit {0 if cargo_ok else 43}\n',
+                "curl": (
+                    f'echo "curl" >> "{log}"\n'
+                    + (f"echo '{{\"version\": \"{nightly}\"}}'\n" if nightly else "exit 22\n")
+                ),
             }
             for name, script in scripts.items():
                 path = commands / name
@@ -49,11 +54,15 @@ class EntrypointTests(unittest.TestCase):
             }
             if pin:
                 env["ATB2_CANARY_REV"] = pin
+            if toolchain:
+                env["ATB2_TOOLCHAIN"] = toolchain
             result = subprocess.run(
                 ["bash", str(ENTRYPOINT)], env=env, capture_output=True, text=True
             )
             calls = log.read_text() if log.exists() else ""
             marker = target / ".baml-cli-rev"
+            version = target / ".baml-cli-version"
+            self.version = version.read_text().strip() if version.exists() else ""
             return result, calls, marker.read_text().strip() if marker.exists() else ""
 
     def test_matching_pin_boots_without_network(self):
@@ -89,6 +98,37 @@ class EntrypointTests(unittest.TestCase):
         self.assertEqual(result.returncode, 43)
         self.assertIn("cargo\n", calls)
         self.assertEqual(revision, "")
+
+    def test_latest_nightly_is_built_from_its_tag(self):
+        result, calls, revision = self.boot(
+            pin=None, cached="b" * 40, fetch_ok=True, toolchain=None,
+            nightly="0.18.1-nightly.20260908.a",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("curl\n", calls)
+        self.assertIn(
+            "git fetch -q --no-tags origin refs/tags/baml-language-0.18.1-nightly.20260908.a\n", calls
+        )
+        self.assertNotIn("origin canary", calls)
+        self.assertEqual(revision, PIN)
+        self.assertEqual(self.version, "0.18.1-nightly.20260908.a")
+
+    def test_nightly_manifest_failure_builds_nothing(self):
+        result, calls, revision = self.boot(pin=None, cached="b" * 40, fetch_ok=True, toolchain=None)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("cargo\n", calls)
+        self.assertEqual(revision, "b" * 40)
+
+    def test_manifest_without_a_nightly_version_is_refused(self):
+        result, calls, _ = self.boot(pin=None, cached="b" * 40, fetch_ok=True, toolchain=None, nightly="0.18.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("cargo\n", calls)
+
+    def test_explicit_pin_still_wins_over_the_nightly(self):
+        result, calls, revision = self.boot(cached="b" * 40, fetch_ok=True, toolchain=None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("curl\n", calls)
+        self.assertEqual(revision, PIN)
 
 
 if __name__ == "__main__":
