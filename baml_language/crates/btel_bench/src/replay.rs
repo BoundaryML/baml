@@ -29,6 +29,7 @@ pub enum ConsumerMode {
     Discard,
     CopyLocal,
     CopyHandoff,
+    BuildSpans,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -52,6 +53,7 @@ pub struct ReplayConfig {
 
 #[derive(Serialize)]
 pub struct ReplayResult {
+    pub builder: Option<crate::builder::BuilderReport>,
     pub consumer_mode: ConsumerMode,
     pub downstream_threads: usize,
     pub batch_payload_bytes: usize,
@@ -136,7 +138,7 @@ pub fn run(
             CopyLocal::new(config.batch, noop::ReturnBatches)?,
             None,
         ),
-        ConsumerMode::CopyHandoff => {
+        ConsumerMode::CopyHandoff | ConsumerMode::BuildSpans => {
             let (target, receiver) = CopyHandoff::new(config.batch)?;
             run_target(config, fixtures, target, Some(receiver))
         }
@@ -220,11 +222,19 @@ fn run_with<
         let gate = gate.clone();
         let ready = ready_tx.clone();
         thread::spawn(move || {
+            let builder = crate::builder::BuildSpans::default();
             ready.send(Ok::<_, String>(())).unwrap();
-            if gate.wait().is_some() {
-                receiver.run(noop::ReturnBatches);
-            }
-            Instant::now()
+            let result = if gate.wait().is_some() {
+                if matches!(config.consumer_mode, ConsumerMode::BuildSpans) {
+                    receiver.run(builder).map(Some)
+                } else {
+                    receiver.run(noop::ReturnBatches);
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            };
+            (Instant::now(), result)
         })
     });
     // A feeder baseline has the same producer setup, but no drainer competing
@@ -323,13 +333,25 @@ fn run_with<
         Some(receiver) => receiver.join().map_err(|_| "drainer panicked")??,
         None => producers_done,
     };
-    let finish = match downstream {
-        Some(worker) => finish.max(worker.join().map_err(|_| "batch worker panicked")?),
-        None => finish,
+    let (finish, builder) = match downstream {
+        Some(worker) => {
+            let (at, report) = worker.join().map_err(|_| "batch worker panicked")?;
+            (finish.max(at), report?)
+        }
+        None => (finish, None),
     };
     let usage_end = usage();
     if let Some(error) = error {
         return Err(error);
+    }
+    if let Some(report) = &builder {
+        let expected_calls: u64 = sources.iter().map(|source| source.calls).sum();
+        if report.closed_spans != expected_calls
+            || report.standalone_events != sources.len() as u64 * 2
+            || report.unmatched_halves != 0
+        {
+            return Err(format!("builder output mismatch: {report:?}"));
+        }
     }
     let elapsed = finish.duration_since(start).as_secs_f64();
     #[expect(
@@ -338,9 +360,14 @@ fn run_with<
     )]
     let bytes_per_second = (!FEEDER_ONLY).then_some(input_bytes as f64 / elapsed);
     Ok(ReplayResult {
+        builder,
         consumer_mode: config.consumer_mode,
         downstream_threads: usize::from(
-            !FEEDER_ONLY && matches!(config.consumer_mode, ConsumerMode::CopyHandoff),
+            !FEEDER_ONLY
+                && matches!(
+                    config.consumer_mode,
+                    ConsumerMode::CopyHandoff | ConsumerMode::BuildSpans
+                ),
         ),
         batch_payload_bytes: config.batch.payload_bytes,
         batch_source_ranges: config.batch.source_ranges,
@@ -356,6 +383,7 @@ fn run_with<
                 ConsumerMode::Discard => "drain-only",
                 ConsumerMode::CopyLocal => "copy-local",
                 ConsumerMode::CopyHandoff => "copy-handoff",
+                ConsumerMode::BuildSpans => "build-spans",
             }
         },
         full_ring_policy: if FEEDER_ONLY {
@@ -458,6 +486,7 @@ mod tests {
             ConsumerMode::Discard,
             ConsumerMode::CopyLocal,
             ConsumerMode::CopyHandoff,
+            ConsumerMode::BuildSpans,
         ] {
             let baseline = run_mode(ProducerMode::FeederOnly, consumer_mode);
             let full = run_mode(ProducerMode::EncodeClock, consumer_mode);
@@ -484,7 +513,10 @@ mod tests {
             assert_eq!(baseline.downstream_threads, 0);
             assert_eq!(
                 full.downstream_threads,
-                usize::from(matches!(consumer_mode, ConsumerMode::CopyHandoff))
+                usize::from(matches!(
+                    consumer_mode,
+                    ConsumerMode::CopyHandoff | ConsumerMode::BuildSpans
+                ))
             );
         }
     }

@@ -46,7 +46,7 @@ def main():
     parser.add_argument(
         "--stages",
         nargs="+",
-        choices=["discard", "copy-local", "copy-handoff"],
+        choices=["discard", "copy-local", "copy-handoff", "build-spans"],
         default=["discard", "copy-local", "copy-handoff"],
     )
     args = parser.parse_args()
@@ -120,10 +120,23 @@ def main():
             "clock_reads": 0 if baseline else args.calls * 2 + threads * 2,
             "ring_bytes": 0 if baseline else args.calls * 80 + threads * 54,
             "consumer_threads": 0 if baseline else 1,
-            "downstream_threads": int(not baseline and stage == "copy-handoff"),
+            "downstream_threads": int(
+                not baseline and stage in ("copy-handoff", "build-spans")
+            ),
         }
         if any(result.get(key) != value for key, value in expected.items()):
             raise ValueError(f"Benchmark workload validation failed: {expected}")
+        if (
+            not baseline
+            and stage == "build-spans"
+            and result.get("builder")
+            != {
+                "closed_spans": args.calls,
+                "standalone_events": threads * 2,
+                "unmatched_halves": 0,
+            }
+        ):
+            raise ValueError("Builder output validation failed")
         if sum(source["calls"] for source in result["sources"]) != args.calls:
             raise ValueError("Mismatched source call counts")
         return {
