@@ -16,6 +16,7 @@ from matplotlib.ticker import FuncFormatter
 
 BENCHMARK_COLORS = {
     'baml-only': ('#6F4EAD', '#A896CF'),
+    'baml-only-gc': ('#8A6D00', '#D8C36A'),
     'python-baml': ('#0072B2', '#70AED2'),
     'python-only': ('#CC79A7', '#E2AFCA'),
     'node-baml': ('#D55E00', '#EBA06B'),
@@ -26,6 +27,7 @@ ON_SECONDS = 4
 OFF_SECONDS = 1
 BENCHMARKS = [
     {'name': 'baml-only', 'label': 'BAML only', 'run': 'hello-ramp-20260915-01', 'event': 'load_cycle_finished', 'pre': 300, 'post': 400},
+    {'name': 'baml-only-gc', 'variant': 'baml-only', 'label': 'BAML only + explicit GC', 'run': 'hello-baml-gc-01', 'event': 'binary_cycle_finished', 'pre': 3800, 'post': 3900, 'start_ms': 1789521951000, 'minimum_cycles': 1, 'post_metric_midpoint_ms': 1789521858000},
     {'name': 'python-baml', 'label': 'Python + BAML', 'run': 'hello-ramp-20260915-01', 'event': 'load_cycle_finished', 'pre': 1000, 'post': 1100},
     {'name': 'python-only', 'label': 'Python only', 'run': 'hello-ramp-20260915-01', 'event': 'load_cycle_finished', 'pre': 1600, 'post': 1700},
     {'name': 'node-baml', 'label': 'Node + BAML', 'run': 'hello-ramp-20260915-01', 'event': 'load_cycle_finished', 'pre': 2600, 'post': 2700},
@@ -47,15 +49,16 @@ def aws_json(profile, region, *args):
 
 def load_events(profile, region, benchmark):
     group = f"/baml/hello-world-rampup/{benchmark['run']}/load"
+    start_ms = benchmark.get('start_ms', 1789500000 * 1000)
     response = aws_json(profile, region, 'logs', 'filter-log-events', '--log-group-name', group,
-                        '--start-time', str(1789500000 * 1000))
+                        '--start-time', str(start_ms))
     events = []
     for item in response.get('events', []):
         try:
             message = json.loads(item['message'])
         except json.JSONDecodeError:
             continue
-        if (message.get('event') == benchmark['event'] and message.get('Variant') == benchmark['name'] and
+        if (message.get('event') == benchmark['event'] and message.get('Variant') == benchmark.get('variant', benchmark['name']) and
                 message.get('Architecture') == ARCHITECTURE and message.get('rate') in (benchmark['pre'], benchmark['post'])):
             events.append({'cloudwatch_log_timestamp_ms': item['timestamp'], **message})
     events.sort(key=lambda item: item['cloudwatch_log_timestamp_ms'])
@@ -82,28 +85,30 @@ def selected_point(metric, midpoint_ms):
     return point
 
 
-def summarize_phase(rate, events, cpu_metric, memory_metric):
+def summarize_phase(rate, events, cpu_metric, memory_metric, minimum_cycles=5, metric_midpoint_ms=None):
     phase = [event for event in events if event['rate'] == rate]
-    if len(phase) < 5:
-        raise RuntimeError(f'Expected at least five cycles at {rate}, found {len(phase)}')
+    if len(phase) < minimum_cycles:
+        raise RuntimeError(f'Expected at least {minimum_cycles} cycles at {rate}, found {len(phase)}')
     start_ms = phase[0]['cloudwatch_log_timestamp_ms'] - (ON_SECONDS + OFF_SECONDS) * 1000
     end_ms = phase[-1]['cloudwatch_log_timestamp_ms']
     midpoint_ms = (start_ms + end_ms) // 2
+    metric_midpoint_ms = midpoint_ms if metric_midpoint_ms is None else metric_midpoint_ms
     http200 = sum(int(event.get('Http200', event.get('http200', 0))) for event in phase)
     scheduled = sum(int(event['scheduled']) for event in phase)
     requests = sum(int(event.get('Requests', event.get('requests', 0))) for event in phase)
     return {
         'configured_active_rps': rate,
         'cycle_count': len(phase),
-        'window': {'start': iso(start_ms), 'end': iso(end_ms), 'midpoint': iso(midpoint_ms)},
+        'window': {'start': iso(start_ms), 'end': iso(end_ms), 'midpoint': iso(midpoint_ms),
+                   'metric_sample_target': iso(metric_midpoint_ms)},
         'scheduled_requests': scheduled,
         'recorded_requests': requests,
         'http200': http200,
         'completion_ratio': http200 / scheduled,
         'successful_active_rps': http200 / (len(phase) * ON_SECONDS),
         'successful_wall_rps': http200 / (len(phase) * (ON_SECONDS + OFF_SECONDS)),
-        'cpu_utilization_percent': selected_point(cpu_metric, midpoint_ms),
-        'memory_utilization_percent': selected_point(memory_metric, midpoint_ms),
+        'cpu_utilization_percent': selected_point(cpu_metric, metric_midpoint_ms),
+        'memory_utilization_percent': selected_point(memory_metric, metric_midpoint_ms),
         'cycles': phase,
     }
 
@@ -115,7 +120,7 @@ def collect(profile, region):
         'task_memory_gib': 1, 'on_seconds': ON_SECONDS, 'off_seconds': OFF_SECONDS,
         'benchmark_colors': {name: {'passing_target': colors[0], 'failing_target': colors[1]}
                              for name, colors in BENCHMARK_COLORS.items()},
-        'metric_granularity_note': 'AWS/ECS CPU and memory points have 60-second granularity; each 30-second threshold phase uses the nearest point to its midpoint and can blend an adjacent phase.',
+        'metric_granularity_note': 'AWS/ECS CPU and memory points have 60-second granularity; each phase uses the nearest point to its midpoint and can blend adjacent activity. The explicit-GC 3,900-RPS confirmation died before publishing a resource point, so its CPU and memory bars use the captured minute from the immediately preceding identical 3,900-RPS OOM probe in the same run.',
     }, 'benchmarks': {}}
     for benchmark in BENCHMARKS:
         evidence = load_events(profile, region, benchmark)
@@ -123,14 +128,15 @@ def collect(profile, region):
         all_times = [event['cloudwatch_log_timestamp_ms'] for event in events]
         if not all_times:
             raise RuntimeError(f"No threshold events for {benchmark['name']}")
-        service = f"{benchmark['run']}-{benchmark['name']}-{ARCHITECTURE}"
+        variant = benchmark.get('variant', benchmark['name'])
+        service = f"{benchmark['run']}-{variant}-{ARCHITECTURE}"
         cpu = metric_points(profile, region, benchmark['run'], service, 'CPUUtilization', min(all_times), max(all_times))
         memory = metric_points(profile, region, benchmark['run'], service, 'MemoryUtilization', min(all_times), max(all_times))
         output['benchmarks'][benchmark['name']] = {
-            'label': benchmark['label'], 'run': benchmark['run'], 'service': service,
+            'label': benchmark['label'], 'variant': variant, 'run': benchmark['run'], 'service': service,
             'cloudwatch_logs': evidence, 'cloudwatch_metrics': {'cpu': cpu, 'memory': memory},
-            'pre': summarize_phase(benchmark['pre'], events, cpu, memory),
-            'post': summarize_phase(benchmark['post'], events, cpu, memory),
+            'pre': summarize_phase(benchmark['pre'], events, cpu, memory, benchmark.get('minimum_cycles', 5), benchmark.get('pre_metric_midpoint_ms')),
+            'post': summarize_phase(benchmark['post'], events, cpu, memory, benchmark.get('minimum_cycles', 5), benchmark.get('post_metric_midpoint_ms')),
         }
     return output
 
@@ -208,17 +214,20 @@ def render_individual(data, values, limits, output_dir):
         rps_path = output_dir / f'{name}-rps.png'
         two_bar_chart(rps_path, f"{benchmark['label']} — successful RPS", 'HTTP 200 / active second',
                       [values[name]['pre']['rps'], values[name]['post']['rps']], phase_labels, BENCHMARK_COLORS[name],
-                      f"Aggregate across six 4-second active cycles · completion: {pre['configured_active_rps']:,} RPS {pre['completion_ratio']:.2%}, {post['configured_active_rps']:,} RPS {post['completion_ratio']:.2%}", 'RPS', limits['rps'])
+                      f"Passing: {pre['cycle_count']} × 4s · failing: {post['cycle_count']} × 4s · completion: {pre['completion_ratio']:.2%} / {post['completion_ratio']:.2%}", 'RPS', limits['rps'])
         paths.append(rps_path)
+        resource_sample_note = 'Maximum of nearest 60-second AWS/ECS sample'
+        if name == 'baml-only-gc':
+            resource_sample_note += '; 3,900 uses preceding identical OOM probe'
         cpu_path = output_dir / f'{name}-cpu.png'
         two_bar_chart(cpu_path, f"{benchmark['label']} — CPU at threshold", 'CPU',
                       [values[name]['pre']['cpu'], values[name]['post']['cpu']], phase_labels, BENCHMARK_COLORS[name],
-                      'Maximum of nearest 60-second AWS/ECS sample; 1.0 is the full task allocation', 'CPU', limits['cpu'])
+                      resource_sample_note + '; 1.0 is the full task allocation', 'CPU', limits['cpu'])
         paths.append(cpu_path)
         memory_path = output_dir / f'{name}-memory.png'
         two_bar_chart(memory_path, f"{benchmark['label']} — memory at threshold", 'Memory (GiB)',
                       [values[name]['pre']['memory'], values[name]['post']['memory']], phase_labels, BENCHMARK_COLORS[name],
-                      'Maximum of nearest 60-second AWS/ECS sample; 1-GiB container limit', 'GiB', limits['memory'])
+                      resource_sample_note + '; 1-GiB container limit', 'GiB', limits['memory'])
         paths.append(memory_path)
     return paths
 
@@ -232,7 +241,7 @@ def render_overview(data, limits, output_dir):
     ax.set_ylabel('Max sustained active-window RPS')
     fig.text(0.08, 0.965, 'Max sustained RPS — ARM64, 1-vCPU / 1-GiB ECS task',
              ha='left', va='top', fontsize=18, fontweight='bold')
-    fig.text(0.08, 0.915, 'c7g.medium host · six 4s-on/1s-off cycles per threshold candidate',
+    fig.text(0.08, 0.915, 'c7g.medium host · 4s active windows; explicit-GC row collects before its 1s idle window',
              ha='left', va='top', fontsize=10, color='#555555')
     ax.spines[['top', 'right']].set_visible(False)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, unused: f'{value:,.0f}'))
@@ -252,8 +261,9 @@ def render_contact_sheet(overview, chart_paths, output_dir):
     path = output_dir / 'all-threshold-charts.png'
     if len(chart_paths) != len(BENCHMARKS) * 3:
         raise ValueError(f'Expected three charts for each of {len(BENCHMARKS)} benchmarks')
-    fig = plt.figure(figsize=(20, 27), facecolor='white')
-    grid = fig.add_gridspec(6, 3, height_ratios=[1.05, 1, 1, 1, 1, 1])
+    rows = len(BENCHMARKS) + 1
+    fig = plt.figure(figsize=(20, 4.5 * rows), facecolor='white')
+    grid = fig.add_gridspec(rows, 3, height_ratios=[1.05] + [1] * len(BENCHMARKS))
     overview_axis = fig.add_subplot(grid[0, :])
     overview_axis.imshow(mpimg.imread(overview))
     overview_axis.axis('off')
@@ -269,19 +279,19 @@ def render_contact_sheet(overview, chart_paths, output_dir):
 
 
 def write_index(data, values, chart_paths, overview, contact_sheet, output_dir):
-    lines = ['# Hello-world ARM64 threshold charts', '', 'Source: retained passing/failing threshold events from CloudWatch Logs and AWS/ECS metrics from the 2026-09-15 ramp and in-VPC binary-search runs.', '', 'The source hosts were c7g.medium, while each measured ECS task had a hard 1-vCPU and 1-GiB allocation. These are not t4g.micro measurements.', '', 'Color identifies the implementation across every chart. The darker shade is the passing target and the lighter shade is the first failing target.', '', f'![Overview]({overview.name})', '', f'![All threshold charts]({contact_sheet.name})', '']
+    lines = ['# Hello-world ARM64 threshold charts', '', 'Source: retained passing/failing threshold events from CloudWatch Logs and AWS/ECS metrics from the 2026-09-15 ramp, in-VPC binary-search, and BAML explicit-GC runs.', '', 'The source hosts were c7g.medium, while each measured ECS task had a hard 1-vCPU and 1-GiB allocation. These are not t4g.micro measurements.', '', 'Color identifies the implementation across every chart. The darker shade is the passing target and the lighter shade is the first failing target.', '', f'![Overview]({overview.name})', '', f'![All threshold charts]({contact_sheet.name})', '']
     lines += ['## Selected CloudWatch values', '', '| Benchmark | Passing target RPS | Failing target RPS | Passing successful RPS | Failing successful RPS | Passing CPU max (vCPU) | Failing CPU max (vCPU) | Passing memory max (GiB) | Failing memory max (GiB) |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     for benchmark in BENCHMARKS:
         name = benchmark['name']
         value = data['benchmarks'][name]
         pre, post = value['pre'], value['post']
         lines.append(f"| {value['label']} | {pre['configured_active_rps']:,} | {post['configured_active_rps']:,} | {pre['successful_active_rps']:,.1f} | {post['successful_active_rps']:,.1f} | {values[name]['pre']['cpu']:.2f} | {values[name]['post']['cpu']:.2f} | {values[name]['pre']['memory']:.2f} | {values[name]['post']['memory']:.2f} |")
-    lines += ['', 'The failing-target memory drops for BAML-only and Node+BAML reflect OOM task replacement near the selected 60-second sample; they do not indicate successful memory recovery within one uninterrupted task.', '']
+    lines += ['', 'The failing-target memory drops for BAML-only and Node+BAML reflect OOM task replacement near the selected 60-second sample; they do not indicate successful memory recovery within one uninterrupted task. The explicit-GC row uses its 60-cycle sustained pass and its one-cycle OOM failure at 3,900 RPS. That confirmation died before publishing a resource point, so its CPU and memory bars use the captured minute from the immediately preceding identical 3,900-RPS OOM probe in the same run.', '']
     for benchmark in BENCHMARKS:
         name = benchmark['name']
         label = data['benchmarks'][name]['label']
         lines += [f'## {label}', '', f'![{label} RPS]({name}-rps.png)', '', f'![{label} CPU]({name}-cpu.png)', '', f'![{label} memory]({name}-memory.png)', '']
-    lines += ['## Method note', '', 'AWS/ECS CPU and memory points have 60-second granularity; each 30-second threshold phase uses the nearest point to its midpoint and can blend an adjacent phase. RPS is aggregated from the six four-second active cycles in each phase.', '']
+    lines += ['## Method note', '', 'AWS/ECS CPU and memory points have 60-second granularity; each phase uses the point nearest its midpoint and can blend adjacent activity. RPS is aggregated over each phase’s four-second active windows. The explicit-GC passing phase contains 60 cycles, while its failing phase ends after the first OOM cycle.', '']
     (output_dir / 'README.md').write_text('\n'.join(lines))
 
 
