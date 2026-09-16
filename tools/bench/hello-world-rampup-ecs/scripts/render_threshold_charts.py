@@ -14,9 +14,13 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
-PRE_COLOR = '#2A9D8F'
-POST_COLOR = '#E76F51'
-OVERVIEW_COLOR = PRE_COLOR
+BENCHMARK_COLORS = {
+    'baml-only': ('#6F4EAD', '#A896CF'),
+    'python-baml': ('#0072B2', '#70AED2'),
+    'python-only': ('#CC79A7', '#E2AFCA'),
+    'node-baml': ('#D55E00', '#EBA06B'),
+    'node-only': ('#009E73', '#6DC4AA'),
+}
 ARCHITECTURE = 'arm64'
 ON_SECONDS = 4
 OFF_SECONDS = 1
@@ -109,7 +113,8 @@ def collect(profile, region):
         'generated_at': dt.datetime.now(dt.timezone.utc).isoformat(), 'aws_profile': profile, 'region': region,
         'architecture': ARCHITECTURE, 'host_instance_type': 'c7g.medium', 'task_cpu_vcpu': 1,
         'task_memory_gib': 1, 'on_seconds': ON_SECONDS, 'off_seconds': OFF_SECONDS,
-        'pre_color': PRE_COLOR, 'post_color': POST_COLOR,
+        'benchmark_colors': {name: {'passing_target': colors[0], 'failing_target': colors[1]}
+                             for name, colors in BENCHMARK_COLORS.items()},
         'metric_granularity_note': 'AWS/ECS CPU and memory points have 60-second granularity; each 30-second threshold phase uses the nearest point to its midpoint and can blend an adjacent phase.',
     }, 'benchmarks': {}}
     for benchmark in BENCHMARKS:
@@ -171,9 +176,9 @@ def shared_axis_limits(values):
     }
 
 
-def two_bar_chart(path, title, ylabel, values, labels, note, unit, ylim):
+def two_bar_chart(path, title, ylabel, values, labels, colors, note, unit, ylim):
     fig, ax = plt.subplots(figsize=(6.4, 4.5))
-    bars = ax.bar(labels, values, color=[PRE_COLOR, POST_COLOR], width=0.58)
+    bars = ax.bar(labels, values, color=colors, width=0.58)
     ax.set_ylim(0, ylim)
     ax.set_ylabel(ylabel)
     ax.set_title(title, loc='left', fontweight='bold')
@@ -182,9 +187,11 @@ def two_bar_chart(path, title, ylabel, values, labels, note, unit, ylim):
     for bar, value in zip(bars, values):
         near_ceiling = value > ylim * 0.88
         label_y = value - ylim * 0.025 if near_ceiling else value + ylim * 0.018
+        red, green, blue, unused = bar.get_facecolor()
+        luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
         ax.text(bar.get_x() + bar.get_width() / 2, label_y, value_label(value, unit),
                 ha='center', va='top' if near_ceiling else 'bottom',
-                color='white' if near_ceiling else '#111111', fontweight='bold')
+                color='white' if near_ceiling and luminance < 0.55 else '#111111', fontweight='bold')
     fig.text(0.5, 0.015, note, ha='center', va='bottom', fontsize=8.5, color='#555555')
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(path, dpi=200, bbox_inches='tight')
@@ -200,30 +207,30 @@ def render_individual(data, values, limits, output_dir):
         phase_labels = [f"{pre['configured_active_rps']:,} RPS\ntarget", f"{post['configured_active_rps']:,} RPS\ntarget"]
         rps_path = output_dir / f'{name}-rps.png'
         two_bar_chart(rps_path, f"{benchmark['label']} — successful RPS", 'HTTP 200 / active second',
-                      [values[name]['pre']['rps'], values[name]['post']['rps']], phase_labels,
+                      [values[name]['pre']['rps'], values[name]['post']['rps']], phase_labels, BENCHMARK_COLORS[name],
                       f"Aggregate across six 4-second active cycles · completion: {pre['configured_active_rps']:,} RPS {pre['completion_ratio']:.2%}, {post['configured_active_rps']:,} RPS {post['completion_ratio']:.2%}", 'RPS', limits['rps'])
         paths.append(rps_path)
         cpu_path = output_dir / f'{name}-cpu.png'
         two_bar_chart(cpu_path, f"{benchmark['label']} — CPU at threshold", 'CPU',
-                      [values[name]['pre']['cpu'], values[name]['post']['cpu']], phase_labels,
+                      [values[name]['pre']['cpu'], values[name]['post']['cpu']], phase_labels, BENCHMARK_COLORS[name],
                       'Maximum of nearest 60-second AWS/ECS sample; 1.0 is the full task allocation', 'CPU', limits['cpu'])
         paths.append(cpu_path)
         memory_path = output_dir / f'{name}-memory.png'
         two_bar_chart(memory_path, f"{benchmark['label']} — memory at threshold", 'Memory (GiB)',
-                      [values[name]['pre']['memory'], values[name]['post']['memory']], phase_labels,
+                      [values[name]['pre']['memory'], values[name]['post']['memory']], phase_labels, BENCHMARK_COLORS[name],
                       'Maximum of nearest 60-second AWS/ECS sample; 1-GiB container limit', 'GiB', limits['memory'])
         paths.append(memory_path)
     return paths
 
 
 def render_overview(data, limits, output_dir):
-    path = output_dir / 'highest-rps-overview.png'
+    path = output_dir / 'max-sustained-rps.png'
     names = [data['benchmarks'][item['name']]['label'] for item in BENCHMARKS]
     values = [data['benchmarks'][item['name']]['pre']['configured_active_rps'] for item in BENCHMARKS]
     fig, ax = plt.subplots(figsize=(12, 5.3))
-    bars = ax.bar(names, values, color=OVERVIEW_COLOR, width=0.62)
-    ax.set_ylabel('Highest passing active-window RPS')
-    fig.text(0.08, 0.965, 'Highest passing RPS — ARM64, 1-vCPU / 1-GiB ECS task',
+    bars = ax.bar(names, values, color=[BENCHMARK_COLORS[item['name']][0] for item in BENCHMARKS], width=0.62)
+    ax.set_ylabel('Max sustained active-window RPS')
+    fig.text(0.08, 0.965, 'Max sustained RPS — ARM64, 1-vCPU / 1-GiB ECS task',
              ha='left', va='top', fontsize=18, fontweight='bold')
     fig.text(0.08, 0.915, 'c7g.medium host · six 4s-on/1s-off cycles per threshold candidate',
              ha='left', va='top', fontsize=10, color='#555555')
@@ -262,14 +269,14 @@ def render_contact_sheet(overview, chart_paths, output_dir):
 
 
 def write_index(data, values, chart_paths, overview, contact_sheet, output_dir):
-    lines = ['# Hello-world ARM64 threshold charts', '', 'Source: retained passing/failing threshold events from CloudWatch Logs and AWS/ECS metrics from the 2026-09-15 ramp and in-VPC binary-search runs.', '', 'The source hosts were c7g.medium, while each measured ECS task had a hard 1-vCPU and 1-GiB allocation. These are not t4g.micro measurements.', '', f'![Overview]({overview.name})', '', f'![All threshold charts]({contact_sheet.name})', '']
+    lines = ['# Hello-world ARM64 threshold charts', '', 'Source: retained passing/failing threshold events from CloudWatch Logs and AWS/ECS metrics from the 2026-09-15 ramp and in-VPC binary-search runs.', '', 'The source hosts were c7g.medium, while each measured ECS task had a hard 1-vCPU and 1-GiB allocation. These are not t4g.micro measurements.', '', 'Color identifies the implementation across every chart. The darker shade is the passing target and the lighter shade is the first failing target.', '', f'![Overview]({overview.name})', '', f'![All threshold charts]({contact_sheet.name})', '']
     lines += ['## Selected CloudWatch values', '', '| Benchmark | Passing target RPS | Failing target RPS | Passing successful RPS | Failing successful RPS | Passing CPU max (vCPU) | Failing CPU max (vCPU) | Passing memory max (GiB) | Failing memory max (GiB) |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     for benchmark in BENCHMARKS:
         name = benchmark['name']
         value = data['benchmarks'][name]
         pre, post = value['pre'], value['post']
         lines.append(f"| {value['label']} | {pre['configured_active_rps']:,} | {post['configured_active_rps']:,} | {pre['successful_active_rps']:,.1f} | {post['successful_active_rps']:,.1f} | {values[name]['pre']['cpu']:.2f} | {values[name]['post']['cpu']:.2f} | {values[name]['pre']['memory']:.2f} | {values[name]['post']['memory']:.2f} |")
-    lines += ['', 'The post-threshold memory drops for BAML-only and Node+BAML reflect OOM task replacement near the selected 60-second sample; they do not indicate successful memory recovery within one uninterrupted task.', '']
+    lines += ['', 'The failing-target memory drops for BAML-only and Node+BAML reflect OOM task replacement near the selected 60-second sample; they do not indicate successful memory recovery within one uninterrupted task.', '']
     for benchmark in BENCHMARKS:
         name = benchmark['name']
         label = data['benchmarks'][name]['label']
