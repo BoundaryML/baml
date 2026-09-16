@@ -26,6 +26,15 @@ python3 scripts/run.py --rate 300 --duration 0  # continue until Ctrl-C
 python3 scripts/run_cycled.py --rate 100 --duration 300 --on-seconds 30 --off-seconds 1
 ```
 
+The diverse-workload runner compares fresh-process pure-BAML and Python-BAML targets for an exact `Hello World` response, exact 64 KiB and 1 MiB nested JSON responses, and base64 encoding of the same local image. It samples CPU plus the macOS kernel's `ri_phys_footprint` and `ri_resident_size` fields using `proc_pid_rusage`.
+
+```sh
+python3 scripts/build.py --baml-source ../../../baml_language --diverse-image /path/to/image.png
+python3 scripts/run_diverse.py --rate 1000 --duration 60 --interval 1
+```
+
+Each workload uses a fresh server process and runs sequentially. Use `--targets` or `--workloads` to select a subset. The runner stops a case when sampled `ri_phys_footprint` reaches `--max-phys-footprint-mib` (4096 by default); because sampling is periodic, the observed value can exceed that threshold before shutdown.
+
 The runners own every child process, verify each exact response before load, probe each target during sampling, capture Vegeta HTTP status counters, sample native RSS and CPU with `ps`, and shut down only the processes they started. `run_cycled.py` keeps the applications alive while repeatedly starting load for the requested on period and leaving them idle for the requested off period. Results go to `results/<timestamp>-<revision>-<rate>rps/`, including the build manifest, configuration, process logs, samples, and a machine-readable summary with delivered RPS and an RSS slope fitted after the first minute.
 
 | Variant | URL | Load metrics |

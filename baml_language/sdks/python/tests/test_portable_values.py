@@ -40,6 +40,18 @@ def test_media_decodes_and_reencodes_as_portable_payload():
     assert inbound.media_value.base64 == "aW1hZ2U="
 
 
+def test_file_media_reencodes_with_its_file_source():
+    media = BamlImage.from_file("/tmp/image.png", mime_type="image/png")
+
+    inbound = baml_inbound_pb2.InboundValue()
+    _set_inbound_value(inbound, media, kwarg_name="media")
+
+    assert inbound.WhichOneof("value") == "media_value"
+    assert inbound.media_value.WhichOneof("value") == "file"
+    assert inbound.media_value.file == "/tmp/image.png"
+    assert inbound.media_value.mime_type == "image/png"
+
+
 def test_prompt_wrapper_reencodes_repeatedly_without_a_handle():
     outbound = baml_outbound_pb2.BamlOutboundValue()
     message = outbound.prompt_ast_value.message

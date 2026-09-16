@@ -6,12 +6,11 @@ import hashlib
 import json
 import os
 import platform
-from pathlib import Path
 import shutil
 import subprocess
 import tarfile
 import urllib.request
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / ".build"
@@ -51,10 +50,10 @@ def copy_tree(source, destination):
 
 
 def source_identity(source):
-    jj = subprocess.run(["jj", "--ignore-working-copy", "log", "-r", "@", "--no-graph", "-T", "commit_id"], cwd=source, text=True, capture_output=True)
+    jj = subprocess.run(["jj", "--ignore-working-copy", "log", "-r", "@", "--no-graph", "-T", "commit_id"], cwd=source, text=True, capture_output=True, check=False)
     if jj.returncode == 0:
         revision = jj.stdout.strip()
-        status = subprocess.run(["jj", "status", "--no-pager"], cwd=source, text=True, capture_output=True).stdout
+        status = subprocess.run(["jj", "status", "--no-pager"], cwd=source, text=True, capture_output=True, check=False).stdout
         dirty = "The working copy has no changes." not in status
         snapshot = hashlib.sha256(output_bytes("jj", "diff", "--git", cwd=source)).hexdigest()
         return revision, dirty, status, snapshot
@@ -75,12 +74,16 @@ def main():
     parser.add_argument("--baml-source", type=Path, default=ROOT.parents[2] / "baml_language", help="Path to a baml_language workspace")
     parser.add_argument("--skip-rust", action="store_true", help="Reuse the CLI, pack host, Python bridge, and Node addon for the same source revision")
     parser.add_argument("--explicit-gc-diagnostic", action="store_true", help="Build the pure-BAML explicit-GC diagnostic, which requires baml.sys.heap_stats()")
+    parser.add_argument("--diverse-image", type=Path, help="Also build the diverse-workload targets using this local image")
     args = parser.parse_args()
     source = args.baml_source.expanduser().resolve()
+    diverse_image = args.diverse_image.expanduser().resolve() if args.diverse_image else None
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         parser.error("this harness currently builds and measures native macOS arm64 binaries")
     if not (source / "Cargo.toml").is_file() or not (source / "sdks/python/pyproject.toml").is_file():
         parser.error(f"not a baml_language workspace: {source}")
+    if diverse_image is not None and not diverse_image.is_file():
+        parser.error(f"not an image file: {diverse_image}")
 
     revision, dirty, source_status, source_snapshot = source_identity(source)
     BUILD.mkdir(parents=True, exist_ok=True)
@@ -90,7 +93,9 @@ def main():
         parser.error("--skip-rust requires a completed build from the same source path and exact source snapshot")
 
     rust_toolchain = output("rustup", "show", "active-toolchain", cwd=source).split()[0]
-    common_env = dict(os.environ, BAML_GIT_SHA=revision, BAML_PROFILE="0", BAML_TELEMETRY_DISABLED="1", BAML_LOG="off", CARGO_TARGET_DIR=str(BUILD / "cargo-target"), RUSTUP_TOOLCHAIN=rust_toolchain)
+    target_flavor = "gc" if args.explicit_gc_diagnostic else "standard"
+    cargo_target = BUILD / "cargo-targets" / f"{source_snapshot[:16]}-{target_flavor}"
+    common_env = dict(os.environ, BAML_GIT_SHA=revision, BAML_PROFILE="0", BAML_TELEMETRY_DISABLED="1", BAML_LOG="off", CARGO_TARGET_DIR=str(cargo_target), RUSTUP_TOOLCHAIN=rust_toolchain)
     toolchain = BUILD / "toolchain"
     toolchain.mkdir(exist_ok=True)
     cli = toolchain / "baml-cli"
@@ -105,8 +110,8 @@ def main():
         if args.explicit_gc_diagnostic:
             cargo_build.extend(["--features", "baml_pack_host/gc_profiling"])
         run(*cargo_build, cwd=source, env=common_env)
-        shutil.copy2(BUILD / "cargo-target/release/baml-cli", cli)
-        shutil.copy2(BUILD / "cargo-target/release/baml-pack-host", pack_host)
+        shutil.copy2(cargo_target / "release/baml-cli", cli)
+        shutil.copy2(cargo_target / "release/baml-pack-host", pack_host)
         wheels = BUILD / "wheels"
         if wheels.exists():
             shutil.rmtree(wheels)
@@ -121,10 +126,25 @@ def main():
     apps = BUILD / "apps"
     for name in ("node-baseline", "node-baml", "python-baseline", "python-baml", "baml-only"):
         copy_tree(ROOT / "apps" / name, apps / name)
+    diverse_artifacts = []
+    if diverse_image is not None:
+        for name in ("diverse-baml-only", "diverse-python-baml"):
+            copy_tree(ROOT / "apps" / name, apps / name)
+            shutil.copy2(diverse_image, apps / name / "benchmark-image.png")
 
     for name in ("node-baml", "python-baml"):
         run(cli, "generate", "--agent-skill-check", "off", cwd=apps / name, env=common_env)
     run(cli, "pack", "main", "--target", TARGET, "--output", apps / "baml-only/hello", "--no-progress", "--agent-skill-check", "off", cwd=apps / "baml-only", env=common_env)
+    if diverse_image is not None:
+        run(cli, "generate", "--agent-skill-check", "off", cwd=apps / "diverse-python-baml", env=common_env)
+        run(cli, "pack", "main", "--target", TARGET, "--output", apps / "diverse-baml-only/server", "--no-progress", "--agent-skill-check", "off", cwd=apps / "diverse-baml-only", env=common_env)
+        diverse_artifacts.extend([
+            apps / "diverse-baml-only/server",
+            apps / "diverse-baml-only/benchmark-image.png",
+            apps / "diverse-python-baml/server.py",
+            apps / "diverse-python-baml/baml_sdk/_inlinedbaml.py",
+            apps / "diverse-python-baml/benchmark-image.png",
+        ])
     diagnostics = []
     if args.explicit_gc_diagnostic:
         for name in ("baml-only-explicit-gc", "baml-only-response-allocation"):
@@ -177,6 +197,7 @@ def main():
 
     artifacts = [cli, pack_host, next((BUILD / "wheels").glob("baml_bridge-*.whl")), bridge / "dist/baml_node.darwin-arm64.node", apps / "baml-only/hello", vegeta]
     artifacts.extend(diagnostics)
+    artifacts.extend(diverse_artifacts)
     manifest = {
         "source": str(source),
         "revision": revision,
@@ -191,6 +212,8 @@ def main():
         "vegeta": VEGETA_VERSION,
         "explicit_gc_diagnostic": args.explicit_gc_diagnostic,
         "allocation_profiling": args.explicit_gc_diagnostic,
+        "diverse_workloads": diverse_image is not None,
+        "diverse_image": None if diverse_image is None else {"source": str(diverse_image), "bytes": diverse_image.stat().st_size, "sha256": digest(diverse_image)},
         "artifacts": {str(path.relative_to(BUILD)): digest(path) for path in artifacts},
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

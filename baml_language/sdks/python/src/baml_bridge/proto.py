@@ -440,10 +440,10 @@ def _set_inbound_value(
             media.mime_type = mime_type
         if (url := value.url()) is not None:
             media.url = url
-        elif (base64 := value.base64()) is not None:
-            media.base64 = base64
         elif (file := value.file()) is not None:
             media.file = file
+        elif (base64 := value.base64()) is not None:
+            media.base64 = base64
         else:
             raise TypeError(f"Cannot encode empty media argument {kwarg_name!r}")
         return
