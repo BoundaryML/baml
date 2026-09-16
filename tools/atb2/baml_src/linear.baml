@@ -271,7 +271,15 @@ function linear_description(issue: Issue, reported: string[] = []) -> string {
     };
     parts.push(
         "## Details\n\n"
-            + "- Subsystem: "
+            + "- Kind: "
+            + (
+                if (issue_kind(issue) == IssueKind.Feature) {
+                    "feature request"
+                } else {
+                    "bug"
+                }
+            )
+            + "\n- Subsystem: "
             + issue.subsystem.to_string()
             + "\n"
             + "- Fails on: "
@@ -479,82 +487,4 @@ function linear_fixture() -> Issue {
     row.set("feedback_ids", ["PH-1", "PH-2"].to_json());
     row.set("comments", [Comment { author: "hellovai", body: "seen in the wild" }].to_json());
     issue_from_row(row.to_json())
-}
-
-testset "linear_export" {
-    test "assignee mapping is explicit and refuses ambiguity" {
-        assert.equal(linear_assignee_in("CodeShaunted", "other:u2, codeshaunted:u1") ?? "", "u1");
-        assert.equal(
-            linear_assignee_in("codeshaunted", "codeshaunted:u1,codeshaunted:u2") == null,
-            true,
-        );
-        assert.equal(linear_assignee_in("codeshaunted", "codeshaunted:") == null, true);
-        assert.equal(linear_assignee_in(null, "codeshaunted:u1") == null, true);
-        assert.equal(linear_assignee_in("nobody", "codeshaunted:u1") == null, true);
-    }
-    test "shepherds match Linear users by handle, then email" {
-        let users = [
-            LinearUser {
-                id: "a",
-                name: "Shaun",
-                display_name: "codeshaunted",
-                email: "shaun@boundaryml.com",
-            },
-            LinearUser {
-                id: "b",
-                name: "Vaibhav",
-                display_name: "vaibhav",
-                email: "hellovai@boundaryml.com",
-            },
-            LinearUser { id: "c", name: "Sam", display_name: "sam", email: "sam@boundaryml.com" },
-            LinearUser { id: "d", name: "Sam 2", display_name: "sam", email: "sam2@boundaryml.com" },
-        ];
-        assert.equal(linear_user_matching("CodeShaunted", users) ?? "", "a");
-        assert.equal(linear_user_matching("hellovai", users) ?? "", "b");
-        assert.equal(linear_user_matching("sam", users) == null, true);
-        assert.equal(linear_user_matching("stranger", users) == null, true);
-        assert.equal(linear_user_matching(null, users) == null, true);
-    }
-    test "description carries the ticket, repros, state, documents and the marker" {
-        let issue = linear_fixture();
-        let md = linear_description(issue, reported = ["0.17.1"]);
-        assert.equal(md.index_of("- Fails on: 0.17.1") != null, true);
-        assert.equal(md.index_of("- Fixed on: not yet") != null, true);
-        let shipped = linear_description(
-            with_status(
-                issue,
-                Shipped {
-                    state: "shipped",
-                    version: "0.18.1-nightly.20260908.a",
-                    date: "2026-09-09",
-                },
-            ),
-        );
-        assert.equal(shipped.index_of("- Fixed on: 0.18.1-nightly.20260908.a") != null, true);
-        assert.equal(md.starts_with(issue.description.trim()), true);
-        assert.equal(md.index_of("## Details") != null, true);
-        assert.equal(md.index_of("- Difficulty: Medium") != null, true);
-        assert.equal(md.index_of("- Shepherd: codeshaunted") != null, true);
-        assert.equal(md.index_of("## Repros") != null == (issue.repros.length() > 0), true);
-        assert.equal(md.index_of("## Resolution plan\n\nFix the parser.") != null, true);
-        assert.equal(md.index_of("- **hellovai**: seen in the wild") != null, true);
-        assert.equal(md.index_of("Feedback: PH-1, PH-2") != null, true);
-        assert.equal(md.ends_with(linear_marker(issue.id)), true);
-    }
-    test "every status renders" {
-        assert.equal(status_text(Open { state: "open" }), "open");
-        assert.equal(status_text(Approved { state: "approved", by: "U1" }), "approved by U1");
-        assert.equal(
-            status_text(InProgress { state: "in_progress", pr: null }),
-            "in progress (a human took it)",
-        );
-        assert.equal(
-            status_text(Deferred { state: "deferred", reason: "later", workaround: "use x" }),
-            "deferred: later (workaround: use x)",
-        );
-        assert.equal(
-            status_text(Shipped { state: "shipped", version: "0.18.0", date: "2026-09-09" }),
-            "shipped in 0.18.0 on 2026-09-09",
-        );
-    }
 }

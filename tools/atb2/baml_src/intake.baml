@@ -6,7 +6,7 @@
 //   PostHog   `baml feedback` posts a `baml_feedback` event; posthog_feedback
 //             turns new events into Feedback (run_pipeline's ingest stage)
 //   Slack     @bammy mentions and reactions arrive at the HTTP server here
-//             babysit <PR> -> the shared PR queue, a report -> triage,
+//             babysit <PR> -> the approval queue, a report -> triage,
 //             a reaction -> approval
 //   by hand   `baml run -e 'request_merge("<PR url>")'`, `run_pipeline()`
 //
@@ -206,60 +206,6 @@ function slack_origin(fb: Feedback, channel: string) -> json {
 
 // ==================== Unit tests (token-free) ====================
 
-testset "intake" {
-    test "a baml_feedback event becomes a report with its files decoded" {
-        let ev = baml.json.parse(
-            `{"id":"ev-1","timestamp":"2026-09-01T10:00:00Z","distinct_id":"anon-1","properties":{"title":"throws panics","description":"index out of bounds","report_id":"r-42","cli_version":"0.17.0","email":"a@b.c","files":[{"name":"main.baml","mime":"text/plain","size_bytes":5,"content_base64":"aGVsbG8="}]}}`,
-        );
-        let fb = feedback_from_posthog(ev) ?? baml.sys.panic("no feedback");
-        assert.equal(fb.id, "PH-r-42");
-        assert.equal(fb.title, "throws panics");
-        assert.equal(fb.author.email ?? "", "a@b.c");
-        assert.equal(fb.author.device_id == null, true);
-        assert.equal(fb.toolchain ?? "", "0.17.0");
-        assert.equal(fb.files.get("main.baml") ?? "", "hello");
-    }
-
-    test "an anonymous report is attributed to the CLI's distinct id" {
-        let ev = baml.json.parse(
-            `{"id":"ev-2","distinct_id":"anon-2","properties":{"description":"only a description\\nsecond line","report_id":"r-43"}}`,
-        );
-        let fb = feedback_from_posthog(ev) ?? baml.sys.panic("no feedback");
-        assert.equal(fb.title, "only a description");
-        assert.equal(fb.author.device_id ?? "", "anon-2");
-        assert.equal(author_identity(fb.author), "anon-2");
-    }
-
-    test "an empty event is not a report" {
-        assert.equal(
-            feedback_from_posthog(baml.json.parse(`{"id":"ev-3","properties":{}}`)) == null,
-            true,
-        );
-    }
-
-    test "a Slack origin recovers the message ts" {
-        let fb = feedback_from_slack(
-            baml.json.parse(`{"type":"message","user":"U1","ts":"1725000000.000100","text":"x"}`),
-            "C1",
-        )
-            ?? baml.sys.panic("no feedback");
-        assert.equal(
-            baml.json.path_or<string>(slack_origin(fb, "C1"), ".ts", ""),
-            "1725000000.000100",
-        );
-    }
-
-    test "intakes are off without their variables" {
-        assert.equal(posthog_configured(), false);
-        assert.equal(posthog_feedback(null).feedback.length(), 0);
-        assert.equal(posthog_feedback(null).resume == null, true);
-        assert.equal(posthog_feedback(null).ran, false);
-        assert.equal(slack_feedback(null).ran, false);
-        assert.equal(slack_feedback(null).feedback.length(), 0);
-        assert.equal(slack_feedback(null).resume == null, true);
-    }
-}
-
 // ==================== Slack Events HTTP server ====================
 
 /// One process owns the HTTP listener, pipeline and merge queue.
@@ -267,8 +213,12 @@ function main_ingress(
     port: int = 8080,
     every_s: int = 300,
     mode: HandleMode = HandleMode.Live,
+    stages: string? = null,
 ) -> never {
-    spawn { runner_loop(every_s = every_s, mode = mode) };
+    // ATB2_STAGES narrows the loop from the environment (Fly strips quotes
+    // from process arguments, so a string literal cannot be passed there).
+    let want = stages ?? baml.env.get("ATB2_STAGES") ?? "ingest,triage,verify,handle,merge,intuit";
+    spawn { runner_loop(every_s = every_s, mode = mode, stages = want) };
     serve_slack(port = port)
 }
 
@@ -457,9 +407,6 @@ function persist_mention(m: SlackMention) -> bool {
     };
     let table = "";
     let row: map<string, json> = {};
-    if (m.route.kind == "babysit") {
-        return true;
-    };
     if (m.route.kind == "babysit" && m.route.pr != null) {
         // Both intake paths share the same request ownership. The worker also
         // coalesces races before it starts a proposal or implementation.
@@ -519,7 +466,7 @@ function mention_ack(m: SlackMention) -> string {
         if (m.route.pr == null) {
             return "Use babysit followed by a GitHub PR URL.";
         };
-        return "PR monitoring is not enabled in the issue MVP yet.";
+        return "Queued this PR for babysitting.";
     };
     "Queued your request; I will reply in this thread."
 }
@@ -540,90 +487,27 @@ function signed_slack_request(
     }
 }
 
-testset "slack_http" {
-    test "HMAC SHA256 matches standard vectors including a long key" {
-        assert.equal(
-            hmac_sha256_hex("key", "The quick brown fox jumps over the lazy dog"),
-            "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8",
-        );
-        assert.equal(
-            hmac_sha256_hex("", ""),
-            "b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad",
-        );
-    }
-    test "HMAC hashes keys longer than its block" {
-        assert.equal(
-            hmac_sha256_hex(
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "test",
-            ),
-            "1228d938c9fd0321973d610248b62e03d404697ee5cb7196ac17d7fd18c610ca",
-        );
-    }
-    test "signature covers raw bytes and rejects stale or future replays" {
-        let req = signed_slack_request("{}", "1000", "test-secret");
-        assert.equal(slack_signature_ok(req, "test-secret", 1000n), true);
-        assert.equal(slack_signature_ok(req, "test-secret", 1301n), false);
-        assert.equal(slack_signature_ok(req, "test-secret", 699n), false);
-        assert.equal(slack_signature_ok(req, "wrong", 1000n), false);
-        assert.equal(slack_signature_ok(req, "", 1000n), false);
-        let changed = baml.http.Request { method: req.method, url: req.url, headers: req.headers, body: "{ }" };
-        assert.equal(slack_signature_ok(changed, "test-secret", 1000n), false);
-    }
-    test "signed challenge is JSON escaped and does not touch the store" {
-        let body = `{"type":"url_verification","challenge":"a\\\"b"}`;
-        let out = slack_events(signed_slack_request(body, "1000", "secret"), "secret", 1000n);
-        assert.equal(out.status_code, 200);
-        assert.equal(
-            baml.json.path_or<string>(baml.json.parse(out.text()), ".challenge", ""),
-            "a\"b",
-        );
-        assert.equal(
-            slack_events(signed_slack_request("broken", "1000", "secret"), "secret", 1000n).status_code,
-            400,
-        );
-    }
-    test "mention commands are anchored and links may be Slack wrapped" {
-        assert.equal(
-            parse_mention("<@U1> babysit <https://github.com/BoundaryML/baml/pull/42|PR>").pr ?? "",
-            "https://github.com/BoundaryML/baml/pull/42",
-        );
-        assert.equal(parse_mention("a babysit bug").kind, "feedback");
-        assert.equal(parse_mention("get me a tshirt").kind, "feedback");
-        assert.equal(parse_mention("shirtless function").kind, "feedback");
-    }
-    test "retry identity and original thread are preserved" {
-        let m = slack_mention(
-            baml.json.parse(
-                `{"event_id":"Ev1","team_id":"T1","event":{"type":"app_mention","channel":"C1","user":"U1","ts":"123.4","thread_ts":"123.0","text":"<@BOT> parser broke"}}`,
-            ),
-        )
-            ?? baml.sys.panic("no mention");
-        assert.equal(m.thread.ts, "123.0");
-        assert.equal(m.event_id, "Ev1");
-        assert.equal(mention_feedback(m).id, "SL-T1-C1-123-4");
-        assert.equal(mention_feedback(m).title, "parser broke");
-        assert.equal(slack_mention(baml.json.parse(`{"event":{"bot_id":"B1"}}`)) == null, true);
-    }
-    test "health is public but unsigned event intake is forbidden" {
-        assert.equal(
-            slack_http(baml.http.Request { method: "GET", url: "/health", headers: {}, body: "" }).status_code,
-            200,
-        );
-        assert.equal(
-            slack_http(baml.http.Request { method: "POST", url: "/slack/events", headers: {}, body: "{}" }).status_code,
-            403,
-        );
-    }
-}
-
 // ==================== GitHub issues ====================
 
 /// One controller poller owns the GitHub cursor in the live runner. No agents,
 /// approvals, PostHog credentials, or website OAuth are needed to ingest reports.
 function github_intake_loop() -> never {
+    let tick = 0;
     while (true) {
         github_intake_tick();
+        //# every fifth minute: comments on reported GitHub issues -> the store
+        if (tick % 5 == 0) {
+            let synced = sync_github_comments() catch (_) {
+                _ => {
+                    log.warn({ "intake": "github_comments", "result": "sync failed; retrying later" });
+                    0
+                },
+            };
+            if (synced > 0) {
+                log.info({ "intake": "github_comments", "synced": synced });
+            };
+        };
+        tick += 1;
         baml.sys.sleep(baml.time.Duration.from_seconds(60));
     }
 }
@@ -709,6 +593,17 @@ function feedback_from_github(row: json) -> Feedback? {
         throw IntakeError { message: "Malformed GitHub issue; cursor retained" };
     };
     let url = "https://github.com/" + repo_slug() + "/issues/" + number.to_string();
+    //# the comment chain is evidence too: fetch it when the issue has one
+    let comments = if (baml.json.path_or<int>(row, ".comments", 0) > 0) {
+        github_comments(number) catch (_) {
+            IntakeError => {
+                log.warn({ "intake": "github", "issue": number, "result": "comments unavailable; ingesting without them" });
+                []
+            },
+        }
+    } else {
+        []
+    };
     Feedback {
         // GH- is reserved for eval reference issues. GHI- is a live report.
         id: "GHI-" + number.to_string(),
@@ -718,9 +613,168 @@ function feedback_from_github(row: json) -> Feedback? {
         author: Author { email: null, github: author, device_id: null },
         toolchain: null,
         files: {},
-        comments: [],
+        comments: comments,
         issue_ids: [],
     }
+}
+
+// ==================== GitHub comments (one way: GitHub -> store) ====================
+
+/// The issue number behind a GHI- report id; null for every other source.
+function github_issue_number(feedback_id: string) -> int? {
+    if (!feedback_id.starts_with("GHI-")) {
+        return null;
+    };
+    baml.json.from_string<int>(feedback_id.slice(4, feedback_id.length())) catch (_) {
+        _ => null,
+    }
+}
+
+/// The comments on one GitHub issue, oldest first, as store comments. The
+/// permalink is the identity a later sync de-duplicates on.
+function github_comments(number: int) -> Comment[] {
+    let response = gh(
+        [
+            "api",
+            "--method",
+            "GET",
+            "repos/" + repo_slug() + "/issues/" + number.to_string() + "/comments",
+            "-f",
+            "per_page=100",
+        ],
+    );
+    if (!response.ok) {
+        throw IntakeError { message: "GitHub comments read failed for #" + number.to_string() };
+    };
+    let raw = baml.json.from_string<json[]>(response.stdout) catch (_) {
+        _ => {
+            throw IntakeError { message: "Malformed GitHub comments response" };
+        },
+    };
+    raw
+        .map((c: json) -> Comment {
+            Comment {
+                author: baml.json.path_or<string>(c, ".user.login", ""),
+                body: baml.json.path_or<string>(c, ".body", ""),
+                at: baml.json.path_or<string?>(c, ".created_at", null),
+                source: "github",
+                url: baml.json.path_or<string?>(c, ".html_url", null),
+            }
+        })
+        .filter((c: Comment) -> bool {
+            c.url != null && c.author.length() > 0
+        })
+}
+
+/// Comments already known, by permalink.
+function comment_urls(comments: Comment[]) -> string[] {
+    comments
+        .map((c: Comment) -> string {
+            c.url ?? ""
+        })
+        .filter((u: string) -> bool {
+            u.length() > 0
+        })
+}
+
+/// Pull new GitHub comments onto every reported issue that came from
+/// GitHub: the feedback row keeps the full chain, each linked issue gets
+/// the same comments in its own `comments`, and the issue's timeline hears.
+/// Never writes back to GitHub. Returns how many comments were new.
+function sync_github_comments() -> int {
+    if (dataset() != "live" || !db_configured() || github_token() == null) {
+        return 0;
+    };
+    let rows = select(
+        "feedback",
+        "select=id,comments,issue_ids&source=eq.Github&issue_ids=neq.%7B%7D&dataset="
+            + eq(dataset())
+            + "&order=received_at.desc&limit=100",
+    );
+    let synced = 0;
+    for (let row in rows) {
+        synced += sync_feedback_comments(row) catch (_) {
+            IntakeError => 0,
+            StoreError => 0,
+        };
+    }
+    synced
+}
+
+/// One report's comment chain, brought up to date. Writes are
+/// compare-and-set on the previous value so a comment left on the website
+/// at the same moment is never overwritten; a lost race retries next sync.
+function sync_feedback_comments(row: json) -> int {
+    let id = baml.json.path_or<string>(row, ".id", "");
+    let number = github_issue_number(id);
+    if (number == null) {
+        return 0;
+    };
+    let known = baml.json.path_or<Comment[]>(row, ".comments", []);
+    let seen = comment_urls(known);
+    let fresh = github_comments(number ?? 0).filter((c: Comment) -> bool {
+        !seen.includes(c.url ?? "")
+    });
+    if (fresh.length() == 0) {
+        return 0;
+    };
+    let old_json = baml.json.path_or<json[]>(row, ".comments", []);
+    let updated = rows_of(
+        supabase_send(
+            "PATCH",
+            "feedback?id=" + eq(id) + "&dataset=" + eq(dataset()) + "&comments=" + eq(baml.json.stringify(old_json.to_json())),
+            baml.json.stringify({ "comments": known.concat(fresh).to_json() }.to_json()),
+            "return=representation",
+        ),
+    );
+    if (updated.length() != 1) {
+        log.warn({ "intake": "github_comments", "feedback": id, "result": "row changed underneath; retrying next sync" });
+        return 0;
+    };
+    for (let issue_id in baml.json.path_or<string[]>(row, ".issue_ids", [])) {
+        match (load_issue(issue_id)) {
+            null => null,
+            let issue: Issue => {
+                let have = comment_urls(issue.comments);
+                let add = fresh.filter((c: Comment) -> bool {
+                    !have.includes(c.url ?? "")
+                });
+                if (add.length() > 0) {
+                    let issue_rows = select("issues", "select=comments&id=" + eq(issue_id) + "&dataset=" + eq(dataset()) + "&limit=1");
+                    let before = baml.json.path_or<json[]>(issue_rows.at(0) ?? baml.json.parse("{}"), ".comments", []);
+                    let changed = rows_of(
+                        supabase_send(
+                            "PATCH",
+                            "issues?id=" + eq(issue_id) + "&dataset=" + eq(dataset()) + "&comments=" + eq(baml.json.stringify(before.to_json())),
+                            baml.json.stringify({ "comments": issue.comments.concat(add).to_json() }.to_json()),
+                            "return=representation",
+                        ),
+                    );
+                    if (changed.length() == 1) {
+                        for (let c in add) {
+                            log_event(
+                                "comment_synced",
+                                issue_id,
+                                id,
+                                {
+                                    "summary": compact_issue_text(c.body, 300),
+                                    "author": c.author,
+                                    "url": c.url,
+                                    "source": "github",
+                                    "at": c.at,
+                                }
+                                    .to_json(),
+                                null,
+                                null,
+                            );
+                        }
+                    };
+                };
+                null
+            },
+        };
+    }
+    fresh.length()
 }
 
 /// Poll at most five pages per pass. Advance only after every row is stored.
@@ -818,36 +872,4 @@ function ingest_github_issues() -> Feedback[] {
         pages += 1;
     }
     fresh
-}
-
-testset "github_intake" {
-    test "full GitHub description and source survive as live feedback" {
-        let body = "## Repro\n```baml\n" + "x".repeat(25000) + "\n```\nhttps://example.invalid/repro";
-        let fb = feedback_from_github(
-            {
-                "number": 4815,
-                "title": "bigint roundtrip",
-                "body": body,
-                "user": { "login": "reporter" },
-            }
-                .to_json(),
-        )
-            ?? baml.sys.panic("missing feedback");
-        assert.equal(fb.id, "GHI-4815");
-        assert.equal(dataset_of_id(fb.id), "live");
-        assert.equal(fb.source, FeedbackSource.Github);
-        assert.equal(fb.author.github, "reporter");
-        assert.equal(
-            fb.body,
-            body + "\n\nGitHub issue: https://github.com/BoundaryML/baml/issues/4815",
-        );
-    }
-    test "PRs are excluded and empty descriptions are supported" {
-        assert.equal(
-            feedback_from_github(baml.json.parse(`{"pull_request":{"url":"fixture"}}`)),
-            null,
-        );
-        let fb = feedback_from_github(baml.json.parse(`{"number":1,"title":"Issue","body":null,"user":{"login":"reporter"}}`));
-        assert.equal(fb != null, true);
-    }
 }

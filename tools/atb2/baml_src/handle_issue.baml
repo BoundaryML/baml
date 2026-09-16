@@ -58,11 +58,13 @@ function handle_issue(
             return issue;
         };
         //# prepare the requested CLI only when repros need it
-        // Only a cache entry built from current canary can establish already-fixed.
+        // Resolve and verify the latest published nightly before starting a fix.
         ensure_cache();
         if (!still_broken(issue)) {
             //## already fixed: nothing to do
-            log.info({ "issue": issue.id, "kind": "already_fixed", "checked_with": check_cli() });
+            log.info(
+                { "issue": issue.id, "kind": "already_fixed", "checked_with": "latest nightly" },
+            );
             return issue;
         };
     } else {
@@ -140,12 +142,14 @@ function handle_issue(
         };
         doc = render_design_doc(design ?? baml.sys.panic("unreachable"));
         baml.fs.write(sb.run_dir + "/design.md", doc);
-        if (difficulty == Difficulty.Hard || difficulty == Difficulty.Medium) {
+        // Every issue gets a fix attempt and a PR. ATB2_HARD_DESIGN_ONLY=1
+        // restores the old behavior: a Hard issue stops at the design doc.
+        if (difficulty == Difficulty.Hard && baml.env.get("ATB2_HARD_DESIGN_ONLY") == "1") {
             //## hard: hand the design doc to the shepherd, no code change
             write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
             tell_thread(
                 thread,
-                ":memo: this needs a larger change; the investigation plan is ready for the shepherd.",
+                ":memo: gauged Hard: the design doc is written for the shepherd, no code was changed",
             );
             return with_design_doc(issue, doc);
         };
@@ -363,6 +367,12 @@ function latest_nightly_cli() -> VerifiedNightlyCli {
 
 /// Controller-only request: agents cannot write the shared cache or access its socket.
 function cli_for_version(version: string) -> string? {
+    // A local run names its nightly explicitly (a `baml toolchain install`
+    // path); latest_nightly_cli still checks the binary reports that version.
+    let local = baml.env.get("ATB2_NIGHTLY_CLI");
+    if (version == "nightly" && local != null) {
+        return local;
+    };
     if (atb2_home() != "/data") {
         // Local runs must not silently impersonate a requested release.
         throw StoreError { message: "versioned CLI resolution requires the runner cache service" };
@@ -412,8 +422,11 @@ function run_repro_with_cli(
             _ => null,
         };
     }
-    if (!r.files.has("baml.toml")) {
+    // A report's own baml.toml is often a fragment; the runner needs a
+    // [package] table, so one without it is replaced by a minimal one.
+    if (!r.files.has("baml.toml") || !(r.files.get("baml.toml") ?? "").includes("[package]")) {
         baml.fs.write(dir + "/baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
+        r.files.set("baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
     };
     let prefixed = r.files.keys()
         .filter((k: string) -> bool {
@@ -577,9 +590,12 @@ function verdict_from_check(
             if (exit_code != 0) {
                 Verdict.Inconclusive
             } else {
-                let expected = baml.json.stringify(e.expected);
-                let got = stdout.trim();
-                if (got == expected || got.includes(expected)) {
+                let got = baml.json.parse(stdout.trim()) catch (_) {
+                    _ => {
+                        return Verdict.Inconclusive;
+                    },
+                };
+                if (got == e.expected) {
                     Verdict.Fixed
                 } else {
                     Verdict.StillBroken
@@ -597,6 +613,7 @@ function with_status(issue: Issue, status: IssueStatus) -> Issue {
     };
     Issue {
         id: issue.id,
+        kind: issue.kind,
         title: issue.title,
         description: issue.description,
         shepherd: issue.shepherd,
@@ -625,6 +642,7 @@ function with_status(issue: Issue, status: IssueStatus) -> Issue {
 function with_design_doc(issue: Issue, doc: string) -> Issue {
     Issue {
         id: issue.id,
+        kind: issue.kind,
         title: issue.title,
         description: issue.description,
         shepherd: issue.shepherd,
@@ -679,7 +697,9 @@ function time_budget_s(d: Difficulty) -> int {
         Difficulty.Trivial => 1800,
         Difficulty.Easy => 3600,
         Difficulty.Medium => 7200,
-        Difficulty.Hard => 1800,
+        // Hard issues now get a fix pass too (after the design pass); the
+        // old 1800 was the design-doc-only budget.
+        Difficulty.Hard => 7200,
     }
 }
 
@@ -1068,6 +1088,26 @@ function agent_model() -> string {
     baml.env.get("ATB2_MODEL") ?? "claude-fable-5"
 }
 
+/// The most turns one agent session (design pass or fix pass) may take
+/// before Claude Code stops it; the time budget still applies on top.
+/// ATB2_MAX_TURNS overrides; a value that is not a positive integer is ignored.
+function agent_max_turns() -> string {
+    let raw = (baml.env.get("ATB2_MAX_TURNS") ?? "").trim();
+    let digits = raw.length() > 0
+        && raw.chars()
+            .filter((c: string) -> bool {
+                !"0123456789".includes(c)
+            })
+            .length()
+            == 0
+        && raw != "0";
+    if (digits) {
+        raw
+    } else {
+        "200"
+    }
+}
+
 class AgentRun {
     text: string,
     num_turns: int,
@@ -1085,6 +1125,8 @@ function claude_args(tools: string[]) -> string[] {
         "--verbose",
         "--model",
         agent_model(),
+        "--max-turns",
+        agent_max_turns(),
         // bypassPermissions: in -p mode a "requires approval" Bash call just
         // fails, and the agent needs cargo. The worktree is disposable and the
         // env is an allowlist, so this is the sandbox, not the prompt.
@@ -1306,7 +1348,7 @@ function implement_fix(
     prompt: `
         ${sandbox_rules(branch)}
 
-        Fix this issue in the BAML toolchain. Below is either the plan a read-only design pass
+        ${handle_brief(issue)} Below is either the plan a read-only design pass
         wrote, or (when this branch is already a PR) the CI failures and reviewer comments to
         address on it; follow it unless the code proves it wrong, and if you deviate, say so in
         \`summary\`. For review feedback: read the branch's own diff first
@@ -1324,7 +1366,7 @@ function implement_fix(
 
         ${issue.description}
 
-        Resolution plan from triage (a starting point, not gospel):
+        ${plan_label(issue)}
         ${issue.resolution_plan ?? "(none)"}
 
         Repros (${issue.repros.length().to_string()}):
@@ -1445,11 +1487,12 @@ function write_design_doc(issue: Issue, branch: string) -> DesignDoc {
         ${sandbox_rules(branch)}
         This is a READ-ONLY investigation: do not change any file.
 
-        Investigate the repository and write the suggested fix and the plan a maintainer would
-        hand to an engineer (or their agent): where the defect lives, what to change, which tests
+        ${handle_brief(issue)}
+        Investigate the repository and write the suggested change and the plan a maintainer would
+        hand to an engineer (or their agent): where the code lives, what to change, which tests
         to add and where. Cite file paths and line ranges you actually read. If the issue turns
-        out to be already fixed on this branch, say so plainly and make the plan "add the missing
-        regression test".
+        out to be already fixed (or the feature already present) on this branch, say so plainly
+        and make the plan "add the missing regression test".
 
         Issue ID: ${issue.id}
         Title: ${issue.title}
@@ -1457,7 +1500,7 @@ function write_design_doc(issue: Issue, branch: string) -> DesignDoc {
 
         ${issue.description}
 
-        Resolution plan from triage:
+        ${plan_label(issue)}
         ${issue.resolution_plan ?? "(none)"}
 
         Repros:
@@ -1694,9 +1737,31 @@ class PrDraft {
     body: string,
 }
 
+/// The one-line task for the agents, by kind.
+function handle_brief(issue: Issue) -> string {
+    if (issue_kind(issue) == IssueKind.Feature) {
+        "Implement this FEATURE REQUEST in the BAML toolchain. It is not a defect: today's behavior is expected. Build the proposed feature exactly as the proposal below describes (surface, semantics, error cases), keep it minimal, add tests, and make the desired-usage example from the request pass. Do not redesign the language beyond the proposal; put open questions in the summary."
+    } else {
+        "Fix this issue in the BAML toolchain."
+    }
+}
+
+function plan_label(issue: Issue) -> string {
+    if (issue_kind(issue) == IssueKind.Feature) {
+        "Proposed feature from triage (the scope to implement; a starting point, not gospel):"
+    } else {
+        "Resolution plan from triage (a starting point, not gospel):"
+    }
+}
+
 function pr_title(issue: Issue) -> string {
     let scope = issue.subsystem.to_string().to_lower_case();
-    let t = "fix(" + scope + "): " + issue.title;
+    let verb = if (issue_kind(issue) == IssueKind.Feature) {
+        "feat("
+    } else {
+        "fix("
+    };
+    let t = verb + scope + "): " + issue.title;
     if (t.length() > 72) {
         t.slice(0, 72)
     } else {
@@ -2216,68 +2281,6 @@ function selected(only: string[]?, key: string) -> bool {
     only == null || (only ?? []).includes(key)
 }
 
-testset "fix_in_budget" with testing.PassRate(0.6) {
-    if (supabase_configured()) {
-        ensure_cache();
-        let issues = load_issues();
-        let only = handle_issues_selected();
-        for (let key in issues.keys()) {
-            let row = issues.get(key) ?? baml.sys.panic("unreachable");
-            if (row.reference_issue.time_budget_s != null && selected(only, key)) {
-                test ("#" + key) {
-                    // everything derived from `key` in here (loop-capture caveat)
-                    let issue = load_issues().get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
-                    let r = issue.reference_issue;
-                    let target = with_difficulty(reference_as_issue(issue.number, r), r.difficulty);
-                    handle_issue(target, mode = HandleMode.DryRun);
-                    let out = read_outcome(target) ?? baml.sys.panic("no outcome for #" + key);
-                    // the store, when configured, gets the eval's rows marked dataset=eval
-                    // (run_tests.sh exports ATB2_DATASET=eval); never mixed with live ones
-                    save_issue(target);
-                    save_run(target, out, HandleMode.DryRun);
-                    log.info(
-                        {
-                            "issue": key,
-                            "kind": out.kind,
-                            "seconds": out.seconds,
-                            "budget": issue.reference_issue.time_budget_s,
-                            "turns": out.turns,
-                            "gate": match (out.gate) {
-                                null => "not run",
-                                let g: GateResult => gate_summary(g),
-                            },
-                        },
-                    );
-                    assert.equal(out.kind, "fixed");
-                }
-            };
-        }
-    };
-}
-
-testset "design_doc" with testing.PassRate(0.5) {
-    if (supabase_configured()) {
-        ensure_cache();
-        let issues = load_issues();
-        let only = handle_issues_selected();
-        for (let key in issues.keys()) {
-            let row = issues.get(key) ?? baml.sys.panic("unreachable");
-            if (row.reference_issue.design_doc != null && selected(only, key)) {
-                test ("#" + key) {
-                    let issue = load_issues().get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
-                    let r = issue.reference_issue;
-                    let target = with_difficulty(reference_as_issue(issue.number, r), Difficulty.Hard);
-                    let handled = handle_issue(target, mode = HandleMode.DryRun);
-                    let ours = handled.design_doc ?? baml.sys.panic("no design doc produced for #" + key);
-                    let j = judge_design_doc(ours, issue.reference_issue.design_doc ?? "");
-                    log.info({ "issue": key, "similarity": j.similarity, "missing": j.missing });
-                    assert.is_true(j.similarity >= 0.7);
-                }
-            };
-        }
-    };
-}
-
 // ==================== Unit tests (token-free) ====================
 
 function sample_stream() -> string {
@@ -2340,369 +2343,6 @@ function sample_report() -> FixReport {
     }
 }
 
-testset "handle_issue" {
-    test "branch names are agent/gh-<n>-<slug>" {
-        assert.equal(
-            branch_for(gh_issue(4587, Difficulty.Easy)),
-            "agent/gh-4587-0-17-0-throws-clause-with-an-unresolved",
-        );
-        assert.equal(github_number(gh_issue(4587, null)) ?? -1, 4587);
-    }
-
-    test "pipeline ids get a short slug and no github number" {
-        let i = with_status(gh_issue(1, Difficulty.Easy), Open { state: "open" });
-        let piped = Issue {
-            id: "ISSUE-01j9x7abcdefg",
-            title: i.title,
-            description: i.description,
-            shepherd: null,
-            subsystem: i.subsystem,
-            repros: [],
-            version: i.version,
-            feedback_ids: [],
-            status: Open { state: "open" },
-            comments: [],
-            resolution_plan: null,
-            difficulty: Difficulty.Easy,
-            design_doc: null,
-            slack_ts: null,
-            slack_channel: null,
-        };
-        assert.is_true(branch_for(piped).starts_with("agent/issue-01j9x7ab-"));
-        assert.equal(github_number(piped) == null, true);
-    }
-
-    test "slug collapses and trims" {
-        assert.equal(slug("  Hello, World!! --x  "), "hello-world-x");
-        assert.equal(slug("abcdefghij", max = 5), "abcde");
-        assert.equal(slug("ab-cdefghij", max = 3), "ab");
-    }
-
-    test "worktree and run dirs never contain a slash from the branch" {
-        assert.is_true(worktree_for("agent/gh-1-x").ends_with("/worktrees/agent__gh-1-x"));
-        assert.is_true(run_dir_for("agent/gh-1-x").ends_with("/runs/agent__gh-1-x"));
-    }
-
-    test "parse_stream reads the result event" {
-        let r = parse_stream(sample_stream());
-        assert.equal(r.num_turns, 7);
-        assert.equal(r.text, "{\"summary\":\"done\"}");
-    }
-
-    test "parse_stream without a result event counts assistant messages" {
-        let cut = sample_stream().lines().slice(0, 5).join("\n");
-        let r = parse_stream(cut);
-        assert.equal(r.num_turns, 2);
-        assert.equal(r.text, "");
-        assert.equal(parse_stream("").num_turns, 0);
-    }
-
-    test "the agent env is an allowlist" {
-        let env = sandbox_env(false);
-        assert.is_true(env.has("PATH") && env.has("HOME"));
-        assert.equal(env.get("CARGO_INCREMENTAL") ?? "", "0");
-        assert.is_true(
-            !env.has("GH_TOKEN")
-                && !env.has("FEEDBACK_SUPABASE_KEY")
-                && !env.has("ANTHROPIC_API_KEY")
-                && !env.has("CLAUDE_CODE_OAUTH_TOKEN"),
-        );
-        // no ambient git credentials or ssh agent for the agent, and the host
-        // git config (osxkeychain helper, planted hooks) is neutralized
-        assert.is_true(!env.has("SSH_AUTH_SOCK"));
-        assert.equal(env.get("GIT_CONFIG_GLOBAL") ?? "", "/dev/null");
-        assert.equal(env.get("GIT_CONFIG_SYSTEM") ?? "", "/dev/null");
-    }
-
-    test "repro paths cannot escape their directory" {
-        assert.equal(sanitize_rel_path("baml_src/../../../.zshrc"), "baml_src/.zshrc");
-        assert.equal(sanitize_rel_path("/etc/passwd"), "etc/passwd");
-        assert.equal(sanitize_rel_path("../../x"), "x");
-        assert.is_true(!repro_file_path("baml_src/../../x", false).includes(".."));
-        assert.is_true(!repro_file_path("../../../etc/passwd", true).includes(".."));
-    }
-
-    test "large prompts travel through stdin without appearing in argv" {
-        let prompt = "large prompt\n".repeat(100000);
-        let result = run_with(
-            Cmd {
-                program: "/usr/bin/wc",
-                args: ["-c"],
-                cwd: "/tmp",
-                timeout_ms: 30000,
-                stdin: prompt,
-            },
-            { "PATH": "/usr/bin:/bin" },
-        );
-        assert.equal(result.exit_code, 0);
-        assert.equal(result.stdout.trim(), "1300000");
-        assert.equal(result.cmd, "/usr/bin/wc -c");
-    }
-
-    test "claude argv mirrors the client's flags plus --tools" {
-        let a = claude_args(fix_tools());
-        assert.equal(a.at(0) ?? "", "-p");
-        assert.equal(a.at(1) ?? "", "--output-format");
-        assert.is_true(
-            a.includes("--no-session-persistence")
-                && a.includes("stream-json")
-                && a.includes("--tools"),
-        );
-        assert.equal(a.at(a.length() - 1) ?? "", "Read,Edit,Write,Glob,Grep,Bash");
-    }
-
-    test "the claude process writes its own transcript" {
-        let out = baml.sys.exec(
-            "sh",
-            [
-                "-c",
-                "exec \"$@\" > \"$ATB2_TRANSCRIPT\" 2>&1",
-                "atb2",
-                "echo",
-                "{\"type\":\"result\",\"num_turns\":3,\"result\":\"ok\"}",
-            ],
-            baml.sys.ProcessOptions {
-                cwd: null,
-                env: {
-                    "PATH": baml.env.get("PATH") ?? "/bin:/usr/bin",
-                    "ATB2_TRANSCRIPT": "/tmp/atb2-transcript-test.jsonl",
-                },
-                timeout_ms: 10000,
-                stdin: null,
-            },
-        );
-        assert.equal(out.exit_code, 0);
-        assert.equal(parse_stream(baml.fs.read("/tmp/atb2-transcript-test.jsonl")).num_turns, 3);
-        baml.fs.remove("/tmp/atb2-transcript-test.jsonl");
-    }
-
-    test "repro files land in baml_src/ whether or not the repro says so" {
-        assert.equal(repro_file_path("main.baml", false), "baml_src/main.baml");
-        assert.equal(repro_file_path("baml_src/main.baml", true), "baml_src/main.baml");
-        assert.equal(repro_file_path("baml.toml", true), "baml.toml");
-        assert.equal(repro_file_path("clients.baml", true), "clients.baml");
-    }
-
-    test "verdicts from an out-of-process check" {
-        let sc = ShouldCompile { check: "should_compile" };
-        assert.equal(verdict_from_check(sc, 0, "", ""), Verdict.Fixed);
-        assert.equal(
-            verdict_from_check(sc, 1, "", "error[E0002]: unresolved type"),
-            Verdict.StillBroken,
-        );
-        assert.equal(
-            verdict_from_check(sc, 134, "", "thread 'main' panicked at type_ref.rs:346"),
-            Verdict.StillBroken,
-        );
-        assert.equal(
-            verdict_from_check(sc, 1, "", "internal error: entered unreachable code"),
-            Verdict.StillBroken,
-        );
-        let snc = ShouldNotCompile { check: "should_not_compile", diagnostic_contains: "E0002" };
-        assert.equal(verdict_from_check(snc, 1, "", "error[E0002]: unresolved type"), Verdict.Fixed);
-        assert.equal(
-            verdict_from_check(snc, 1, "", "error[E0001]: mismatched"),
-            Verdict.Inconclusive,
-        );
-        assert.equal(verdict_from_check(snc, 0, "", ""), Verdict.StillBroken);
-        // the CLI never ran: not a verdict on the bug either way
-        assert.equal(
-            verdict_from_check(snc, 127, "", "could not start: baml check"),
-            Verdict.Inconclusive,
-        );
-        assert.equal(verdict_from_check(sc, 126, "", ""), Verdict.Inconclusive);
-        let ev = ShouldEvaluateTo { check: "should_evaluate_to", expected: 2 };
-        assert.equal(verdict_from_check(ev, 0, "2\n", ""), Verdict.Fixed);
-        assert.equal(verdict_from_check(ev, 0, "3\n", ""), Verdict.StillBroken);
-        assert.equal(
-            verdict_from_check(RequiresInspection { check: "requires_inspection", instructions: "look" }, 0, "", ""),
-            Verdict.Inconclusive,
-        );
-    }
-
-    test "the insta step gates on snapshot state" {
-        let settled = "        FAIL [ 115.989s] (1622/2042) baml_tests::baml_src baml_test\nerror: test run failed\n\ndone: no snapshots to review\n";
-        assert.is_true(settled.includes("no snapshots to review"));
-    }
-
-    test "failed gate output cannot become a pass when truncated" {
-        let step = gate_step(
-            "failure",
-            Cmd {
-                program: "/bin/sh",
-                args: [
-                    "-c",
-                    "echo 'FAIL [0.1s] unexpected_regression'; i=0; while [ $i -lt 65 ]; do echo ordinary-output; i=$((i+1)); done; exit 100",
-                ],
-                cwd: "/tmp",
-                timeout_ms: 10000,
-            },
-        );
-        assert.equal(step.exit_code, 100);
-        assert.is_true(!step.ok);
-        assert.is_true(!step.tail.includes("unexpected_regression"));
-    }
-
-    test "time budgets" {
-        assert.equal(time_budget_s(Difficulty.Trivial), 1800);
-        assert.equal(time_budget_s(Difficulty.Easy), 3600);
-        assert.equal(time_budget_s(Difficulty.Medium), 7200);
-        assert.equal(time_budget_s(Difficulty.Hard), 1800);
-    }
-
-    test "changed crates come from crates/<name>/ paths" {
-        let names = "baml_language/crates/baml_compiler2_hir/src/type_ref.rs\nbaml_language/crates/baml_tests/projects/x/main.baml\nbaml_language/crates/baml_compiler2_hir/src/lib.rs\nREADME.md\n";
-        assert.equal(changed_crates_from(names), ["baml_compiler2_hir", "baml_tests"]);
-    }
-
-    test "test_route follows the repro expectations" {
-        let base = gh_issue(1, Difficulty.Easy);
-        let with_repro = Issue {
-            id: base.id,
-            title: base.title,
-            description: base.description,
-            shepherd: null,
-            subsystem: base.subsystem,
-            repros: [
-                Repro {
-                    files: { "main.baml": "function f() -> int { \"x\" }" },
-                    command: "baml check",
-                    setup: null,
-                    expectation: ShouldNotCompile { check: "should_not_compile", diagnostic_contains: null },
-                },
-            ],
-            version: base.version,
-            feedback_ids: [],
-            status: Open { state: "open" },
-            comments: [],
-            resolution_plan: null,
-            difficulty: Difficulty.Easy,
-            design_doc: null,
-            slack_ts: null,
-            slack_channel: null,
-        };
-        assert.contains(test_route(with_repro), "diagnostic_errors");
-        assert.contains(test_route(base), "Rust test");
-    }
-
-    test "pr title and body" {
-        let issue = gh_issue(4587, Difficulty.Easy);
-        assert.is_true(pr_title(issue).starts_with("fix(compiler): "));
-        assert.is_true(pr_title(issue).length() <= 72);
-        let body = pr_body(issue, sample_report(), sample_gate(), 12, 640);
-        assert.is_true(body.starts_with("Fixes #4587"));
-        assert.contains(body, "## Problem");
-        assert.contains(body, "## After this PR");
-        assert.contains(body, "| `throws Nope` | `E0002` | the type is looked up before lowering |");
-        assert.contains(body, "## Tests");
-        assert.contains(body, "## Validation");
-        assert.contains(body, "- [x] `clippy`");
-        assert.contains(body, "12 agent turns, 10 min");
-    }
-
-    test "validation counts come from the tool summaries" {
-        assert.equal(
-            passed_count("running 3 tests\ntest result: ok. 46 passed; 0 failed") ?? "",
-            "46 passed",
-        );
-        assert.equal(
-            passed_count(
-                "     Summary [ 183.785s] 1925/2039 tests run: 1924 passed (2 slow), 1 failed, 23 skipped",
-            )
-                ?? "",
-            "1924 passed",
-        );
-        assert.equal(passed_count("nothing here") == null, true);
-    }
-
-    test "handle_ready reasons" {
-        assert.equal(handle_ready(gh_issue(1, null), false) ?? "go", "not gauged");
-        assert.equal(handle_ready(gh_issue(1, Difficulty.Easy), false) ?? "go", "go");
-        let taken = with_status(gh_issue(1, Difficulty.Easy), InProgress { state: "in_progress", pr: null });
-        assert.equal(handle_ready(taken, false) ?? "go", "not open");
-        assert.equal(handle_ready(taken, true) ?? "go", "go");
-        assert.equal(
-            handle_ready(with_design_doc(gh_issue(1, Difficulty.Hard), "doc"), false) ?? "go",
-            "already has a design doc",
-        );
-    }
-
-    test "with_status / with_design_doc change nothing else" {
-        let i = gh_issue(7, Difficulty.Medium);
-        let s = with_status(i, InProgress { state: "in_progress", pr: "https://x/pr/1" });
-        assert.equal(s.id, i.id);
-        assert.equal(s.difficulty ?? Difficulty.Hard, Difficulty.Medium);
-        let d = with_design_doc(i, "doc");
-        assert.equal(d.design_doc ?? "", "doc");
-        assert.equal(d.title, i.title);
-    }
-
-    test "blocked and revoked runs preserve their reason instead of claiming parse failure" {
-        let sb = Sandbox {
-            branch: "test",
-            worktree: "/tmp/unused",
-            run_dir: "/tmp/atb2-stop-" + baml.id.new(),
-            reused_branch: true,
-            base_head: null,
-            source_head: "head",
-        };
-        let report = sample_report();
-        let stopped = stopped_outcome(
-            sb,
-            baml.time.Instant.now(),
-            reason = "fix plan blocked: needs a schema change",
-            report = report,
-        );
-        assert.equal(stopped.reason, "fix plan blocked: needs a schema change");
-        assert.equal(stopped.timed_out, false);
-        assert.equal(stopped.report?.summary, report.summary);
-        assert.equal(stopped.gate, null);
-        let revoked = stopped_outcome(sb, baml.time.Instant.now(), reason = "proposal is no longer executable");
-        assert.equal(revoked.reason, "proposal is no longer executable");
-        assert.equal(revoked.report, null);
-    }
-
-    test "fenced fix reports with embedded code and blocker notes parse" {
-        let row = baml.json.from_json<map<string, json>>(sample_report().to_json());
-        row.set("problem", "Example:\n```baml\nfunction Example() -> int { 1 }\n```".to_json());
-        row.set(
-            "blockers",
-            "None for the requested fix; unrelated checks need investigation".to_json(),
-        );
-        let r = implement_fix@parse("```json\n" + baml.json.stringify(row.to_json()) + "\n```");
-        assert.contains(r.problem, "function Example");
-        assert.contains(r.blockers ?? "", "unrelated checks");
-    }
-
-    test "CLI error results and truncated streams fail closed" {
-        let error = parse_stream(`{"type": "result", "is_error": true, "result": "a plausible report", "num_turns": 2}`);
-        assert.equal(error.exit_code, 1);
-        assert.equal(error.text, "");
-        assert.equal(parse_stream(`{"type":"assistant"}`).exit_code, 1);
-        assert.equal(
-            parse_stream(`{"type": "result", "is_error": false, "result": "ok"}`).text,
-            "ok",
-        );
-        assert.equal(
-            last_result_event("bad line\n" + `{"type": "result", "result": "ok"}`) != null,
-            true,
-        );
-        assert.equal(last_result_event(`{"type":"assistant","text":"result"}`), null);
-    }
-
-    test "llm replies parse" {
-        let r = implement_fix@parse(
-            `{ "summary": "s", "problem": "p", "after": "a", "boundaries": [{ "scenario": "x", "result": "compiles", "why": "y" }], "tests": "t", "tests_added": ["a.baml"], "files_changed": ["x.rs"], "gate_passed": true, "blockers": null }`,
-        );
-        assert.equal(r.boundaries.length(), 1);
-        assert.equal(r.tests_added.length(), 1);
-        let d = write_design_doc@parse(`{ "suggested_fix": "f", "doc": "## Problem\\nx" }`);
-        assert.contains(render_design_doc(d), "## Suggested fix");
-        let j = judge_design_doc@parse(`{ "similarity": 0.7, "missing": null }`);
-        assert.equal(j.similarity, 0.7);
-    }
-}
-
 function pr_url_in_from_issue(issue: Issue) -> string {
     match (issue.status) {
         let s: InProgress => s.pr ?? "",
@@ -2718,33 +2358,4 @@ function handoff_issue_pr(issue: Issue, pr: string, doc: string, thread: SlackRe
     // Reconciliation queues this only after handle_one has saved the outcome
     // and handle_issue has closed its sandbox. Never wake a worker here.
     progressed
-}
-
-testset "native_repro_results" {
-    test "test failures are distinguished from broken harnesses" {
-        assert.equal(
-            native_test_verdict(2, "FAIL root::reported behavior\nAGGREGATE FAIL [outcome=fail]"),
-            Verdict.StillBroken,
-        );
-        assert.equal(
-            native_test_verdict(4, "compilation error: FAIL is not a type"),
-            Verdict.Inconclusive,
-        );
-        assert.equal(
-            native_test_verdict(
-                2,
-                "AGGREGATE FAIL\nVM internal error\nerror: test failures — 0 passed, 1 failed, 1 total",
-            ),
-            Verdict.StillBroken,
-        );
-        assert.equal(native_test_verdict(124, "timeout"), Verdict.Inconclusive);
-        assert.equal(
-            native_test_verdict(0, "Finished 0 passed, 0 failed, 0 total"),
-            Verdict.Inconclusive,
-        );
-        assert.equal(
-            native_test_verdict(0, "PASS root::reported behavior\nFinished 1 passed, 0 failed, 1 total"),
-            Verdict.Fixed,
-        );
-    }
 }

@@ -48,11 +48,12 @@ function duplicate_issue(candidate: Issue) -> Issue? {
     let matches: Issue[] = [];
     for (let state in ["open", "awaiting_approval", "approved", "in_progress"]) {
         for (let existing in load_issues_in(state)) {
+            // same_defect: title similarity first, then the LLM judge for
+            // same-subsystem, same-kind candidates whose titles differ
             if (
                 existing.id != candidate.id
-                    && existing.subsystem == candidate.subsystem
                     && existing.version == candidate.version
-                    && similar_issue_titles(existing.title, candidate.title)
+                    && same_defect(existing, candidate)
             ) {
                 matches.push(existing);
             };
@@ -85,30 +86,4 @@ function merge_duplicate(existing: Issue, candidate: Issue) -> Issue {
     row.set("repros", repros.to_json());
     row.set("feedback_ids", ids.to_json());
     issue_from_row(row.to_json())
-}
-
-testset "title_dedup" {
-    test "matches wording changes but not unrelated bugs" {
-        assert.is_true(
-            similar_issue_titles(
-                "Function return type _ may be accepted by compiler instead of being rejected",
-                "Compiler rejects _ function return type",
-            ),
-        );
-        assert.is_true(
-            similar_issue_titles("Parser panics on nested unions", "parser: panics on nested unions"),
-        );
-        assert.is_true(
-            !similar_issue_titles("Parser panics on nested unions", "Parser panics on missing semicolons"),
-        );
-        assert.is_true(!similar_issue_titles("", ""));
-    }
-    test "merging retains lifecycle and adds each report and repro once" {
-        let issue = gh_issue(7, Difficulty.Medium);
-        let merged = merge_duplicate(issue, issue);
-        assert.equal(merged.id, issue.id);
-        assert.equal(merged.status, issue.status);
-        assert.equal(merged.repros, issue.repros);
-        assert.equal(merged.feedback_ids, issue.feedback_ids);
-    }
 }

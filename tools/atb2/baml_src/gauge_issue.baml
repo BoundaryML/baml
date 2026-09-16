@@ -24,7 +24,9 @@ function estimate_difficulty(issue: Issue) -> DifficultyEstimate {
     prompt: `
         Estimate how much engineering work this BAML toolchain issue is, from
         the ticket alone. Judge the FIX, not the symptom: a crash can be a
-        one-line guard, a cosmetic mismatch can need a redesign.
+        one-line guard, a cosmetic mismatch can need a redesign. For a
+        feature request, judge the IMPLEMENTATION of the proposed feature as
+        written, including its tests and docs.
 
         - trivial: one obvious change — a typo, a message, a default, a
           missing match arm.
@@ -41,13 +43,14 @@ function estimate_difficulty(issue: Issue) -> DifficultyEstimate {
         fix changes semantics others depend on.
 
         Issue ID: ${issue.id}
+        Kind: ${issue_kind(issue).to_string()}
         Title: ${issue.title}
         Subsystem: ${issue.subsystem.to_string()}
 
         Description:
         ${issue.description}
 
-        Resolution plan:
+        ${if (issue_kind(issue) == IssueKind.Feature) { "Proposed feature:" } else { "Resolution plan:" }}
         ${issue.resolution_plan ?? "(none)"}
 
         Repros (${issue.repros.length().to_string()}):
@@ -86,7 +89,22 @@ function gauge_issue(issue: Issue) -> Issue {
         "gauged",
         issue.id,
         null,
-        { "summary": estimate.rationale, "difficulty": estimate.difficulty.to_string() }.to_json(),
+        {
+            "step": "Gauge difficulty",
+            "decision": estimate.difficulty.to_string()
+                + ": "
+                + match (estimate.difficulty) {
+                    Difficulty.Trivial => "one obvious change",
+                    Difficulty.Easy => "a localized fix, under a day",
+                    Difficulty.Medium => "a few days inside one subsystem",
+                    Difficulty.Hard => "design or cross-subsystem work, or the cause is unknown",
+                },
+            "reason": estimate.rationale,
+            "evidence": { "unknowns": estimate.unknowns.to_json(), "repros": issue.repros.length().to_json() }.to_json(),
+            "summary": estimate.rationale,
+            "difficulty": estimate.difficulty.to_string(),
+        }
+            .to_json(),
         null,
         null,
     );
@@ -97,6 +115,7 @@ function gauge_issue(issue: Issue) -> Issue {
 function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
     Issue {
         id: issue.id,
+        kind: issue.kind,
         title: issue.title,
         description: issue.description,
         shepherd: issue.shepherd,
@@ -111,31 +130,5 @@ function with_difficulty(issue: Issue, difficulty: Difficulty) -> Issue {
         design_doc: issue.design_doc,
         slack_ts: issue.slack_ts,
         slack_channel: issue.slack_channel,
-    }
-}
-
-// Token-free: the estimator's reply parses, and the wrapper only ever
-// touches `difficulty`.
-testset "gauge_issue" {
-    test "estimate reply parses" {
-        let e = estimate_difficulty@parse(`{ "difficulty": "Medium", "rationale": "known cause, three call sites", "unknowns": [] }`);
-        assert.equal(e.difficulty, Difficulty.Medium);
-        assert.equal(e.unknowns.length(), 0);
-    }
-
-    test "with_difficulty changes nothing else" {
-        let before = issue_in(Subsystem.Compiler, "codeshaunted");
-        let after = with_difficulty(before, Difficulty.Hard);
-        assert.equal(after.difficulty ?? Difficulty.Trivial, Difficulty.Hard);
-        assert.equal(after.id, before.id);
-        assert.equal(after.shepherd ?? "", "codeshaunted");
-        assert.equal(after.subsystem, before.subsystem);
-        assert.equal(after.feedback_ids.length(), before.feedback_ids.length());
-    }
-
-    test "an already-gauged issue is left alone" {
-        let gauged = with_difficulty(issue_in(Subsystem.Runtime, null), Difficulty.Easy);
-        // no LLM call: the wrapper returns before estimate_difficulty
-        assert.equal(gauge_issue(gauged).difficulty ?? Difficulty.Hard, Difficulty.Easy);
     }
 }

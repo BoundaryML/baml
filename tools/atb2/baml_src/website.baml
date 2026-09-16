@@ -156,6 +156,58 @@ function website_http(req: baml.http.Request) -> baml.http.Response {
         };
         return intake_response(200, enriched.to_json());
     };
+    if (operation == "runs") {
+        return intake_response(
+            200,
+            select(
+                "runs",
+                "select=id,prompt,play_status,report,canary_sha,created_at,feedback_ids&kind=eq.play&dataset="
+                    + eq(dataset())
+                    + "&order=created_at.desc&limit=100",
+            )
+                .to_json(),
+        );
+    };
+    if (operation == "run") {
+        if (id.length() == 0 || id.length() > 19 || !id.is_ascii_numeric()) {
+            return intake_response(400, baml.json.parse("{}"));
+        };
+        let rows = select(
+            "runs",
+            "select=id,session_id,prompt,play_status,report,transcript,canary_sha,created_at,feedback_ids,reason&kind=eq.play&id="
+                + eq(id)
+                + "&dataset="
+                + eq(dataset())
+                + "&limit=1",
+        );
+        let enriched: json[] = [];
+        for (let row in rows) {
+            let ids = baml.json.path_or<string[]>(row, ".feedback_ids", []);
+            let reports: json[] = if (ids.length() > 0) {
+                select(
+                    "feedback",
+                    "select=id,title,body,files,issue_ids&dataset="
+                        + eq(dataset())
+                        + "&id=in."
+                        + url_encode(
+                            "("
+                                + ids
+                                    .map((id: string) -> string {
+                                        baml.json.stringify(id.to_json())
+                                    })
+                                    .join(",")
+                                + ")",
+                        ),
+                )
+            } else {
+                []
+            };
+            let item = baml.json.from_json<map<string, json>>(row);
+            item.set("feedback", reports.to_json());
+            enriched.push(item.to_json());
+        }
+        return intake_response(200, enriched.to_json());
+    };
     if (
         !id.starts_with("ISSUE-")
             || id.length() > 126

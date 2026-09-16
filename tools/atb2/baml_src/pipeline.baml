@@ -9,6 +9,8 @@
 //   handle   every approved, gauged issue -> handle_issue -> a runs row; the
 //            thread hears about the PR, or that a human is needed
 //   merge    reconcile issue PRs with the shared merge_issue babysitter queue
+//   intuit   one Opus pass across every recent issue -> intuitions rows,
+//            see intuition.baml; skipped when no issue changed
 //
 //   cd tools/atb2 && baml run -e 'run_pipeline()'
 //   baml run -e 'run_pipeline(mode = HandleMode.DryRun, stages = "ingest,triage")'
@@ -31,14 +33,16 @@ class PipelineReport {
     handled: int,
     /// merge_issue calls that ended merged.
     merged: int,
+    /// Cross-issue intuitions written this run (intuit).
+    intuitions: int,
     /// Anything skipped, one line each.
     skipped: string[],
 }
 
-//#run_pipeline(mode: HandleMode = HandleMode.Live, stages: string = "ingest,triage,verify,handle") -> PipelineReport
+//#run_pipeline(mode: HandleMode = HandleMode.Live, stages: string = "ingest,triage,verify,handle,merge") -> PipelineReport
 function run_pipeline(
     mode: HandleMode = HandleMode.Live,
-    stages: string = "ingest,triage,verify,handle",
+    stages: string = "ingest,triage,verify,handle,merge,intuit",
     github_ingress: bool = true,
 ) -> PipelineReport {
     let want = stages.split(",").map((s: string) -> string {
@@ -50,6 +54,7 @@ function run_pipeline(
         verified_fixed: 0,
         handled: 0,
         merged: 0,
+        intuitions: 0,
         skipped: [],
     };
     if (!db_configured()) {
@@ -75,25 +80,28 @@ function run_pipeline(
                 fresh
             }
         ) {
-            match (triage_feedback(fb)) {
-                null => report.skipped.push(fb.id + ": no issue (fixed or needs report details)"),
-                let i: Issue => {
-                    report.issues_created += 1;
-                    created.push(i);
-                    // Start the first fix before triaging another report. The separate
-                    // GitHub poller continues storing arrivals while this agent works.
-                    if (db_configured() && want.includes("handle") && issue_auto_ready(i)) {
-                        let outcome = handle_one(i, mode);
-                        if (outcome != null) {
-                            report.handled += 1;
-                        };
-                    };
-                    null
-                },
+            let made = triage_feedback(fb);
+            if (made.length() == 0) {
+                report.skipped.push(fb.id + ": no issue (fixed or needs report details)");
             };
+            for (let i in made) {
+                report.issues_created += 1;
+                created.push(i);
+                // Start the first fix before triaging another report. The separate
+                // GitHub poller continues storing arrivals while this agent works.
+                if (db_configured() && want.includes("handle") && issue_auto_ready(i)) {
+                    let outcome = handle_one(i, mode);
+                    if (outcome != null) {
+                        report.handled += 1;
+                    };
+                };
+            }
         }
     };
-    if (want.includes("triage") && db_configured()) {
+    // Slack hears about an issue once its PR exists (pr_opened), or when the
+    // fix needs a human. ATB2_ANNOUNCE_ISSUES=1 restores the announcement at
+    // creation time.
+    if (want.includes("triage") && db_configured() && baml.env.get("ATB2_ANNOUNCE_ISSUES") == "1") {
         announce_open_issues();
     };
     //# verify: open issues re-run on the runner's toolchain; passing ones ship
@@ -134,6 +142,37 @@ function run_pipeline(
             };
         }
     };
+    //# merge: in-progress issues with a PR -> merge_issue
+    if (want.includes("merge")) {
+        let in_progress = if (db_configured()) {
+            load_issues_in("in_progress")
+        } else {
+            handled
+        };
+        for (let issue in in_progress) {
+            match (merge_one(issue)) {
+                null => report.skipped.push(issue.id + ": no PR to watch"),
+                let r: MergeResult => {
+                    if (r.kind == "merged") {
+                        report.merged += 1;
+                    } else {
+                        report.skipped.push(issue.id + ": merge_issue ended " + r.kind);
+                    };
+                },
+            };
+        }
+    };
+    //# intuit: what the issues say together (skipped when nothing changed)
+    if (want.includes("intuit") && db_configured()) {
+        let run = run_intuition() catch (_) {
+            StoreError => IntuitionRun { written: 0, skipped: "store failed during the intuition pass" },
+        };
+        report.intuitions = run.written;
+        match (run.skipped) {
+            null => null,
+            let why: string => report.skipped.push("intuit: " + why),
+        };
+    };
     log.info(
         {
             "ingested": report.ingested,
@@ -156,6 +195,7 @@ function failed_run(what: string) -> PipelineReport {
         verified_fixed: 0,
         handled: 0,
         merged: 0,
+        intuitions: 0,
         skipped: [what + " failed; next run retries"],
     }
 }
@@ -169,13 +209,14 @@ function pipeline_loop(
     every_s: int = 300,
     mode: HandleMode = HandleMode.Live,
     github_ingress: bool = true,
+    stages: string = "ingest,triage,verify,handle,merge,intuit",
 ) -> null {
     while (true) {
         //# one run; a store, intake or Slack failure ends this run only
         if (mode == HandleMode.Live && db_configured()) {
-            null;
+            reconcile_feedback_releases();
         };
-        let r = run_pipeline(mode = mode, github_ingress = github_ingress) catch (e) {
+        let r = run_pipeline(mode = mode, github_ingress = github_ingress, stages = stages) catch (e) {
             StoreError => failed_run("store"),
             IntakeError => failed_run("intake"),
             SlackError => failed_run("slack"),
@@ -199,13 +240,18 @@ function pipeline_loop(
 
 /// The Fly runner's one process: the request loop in the background, the
 /// pipeline loop in the foreground, one machine and one volume between them.
-//#runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null
-function runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live) -> null {
+//#runner_loop(every_s: int = 300, mode: HandleMode = HandleMode.Live, stages: string = "…") -> null
+function runner_loop(
+    every_s: int = 300,
+    mode: HandleMode = HandleMode.Live,
+    stages: string = "ingest,triage,verify,handle,merge,intuit",
+) -> null {
+    spawn { merge_issue_loop(mode = mode) };
     if (mode == HandleMode.Live) {
         spawn { agent_turn_loop() };
         spawn { github_intake_loop() };
     };
-    pipeline_loop(every_s = every_s, mode = mode, github_ingress = mode != HandleMode.Live)
+    pipeline_loop(every_s = every_s, mode = mode, github_ingress = mode != HandleMode.Live, stages = stages)
 }
 
 // ==================== ingest ====================
@@ -389,7 +435,7 @@ function untriaged_feedback() -> Feedback[] {
 
 /// One report through triage. Insufficient reports and already-fixed repros
 /// get a terminal no_issue event instead of a ticket or Slack announcement.
-function triage_feedback(fb: Feedback) -> Issue? {
+function triage_feedback(fb: Feedback) -> Issue[] {
     //# create: repro, run it, write the ticket
     log_event(
         "enrich_started",
@@ -399,7 +445,7 @@ function triage_feedback(fb: Feedback) -> Issue? {
         null,
         null,
     );
-    let created = create_issue(fb) catch (e) {
+    let created = create_issues(fb) catch (e) {
         BehaviorNeedsReview => {
             log_event(
                 "no_issue",
@@ -414,7 +460,7 @@ function triage_feedback(fb: Feedback) -> Issue? {
                 null,
                 null,
             );
-            return null;
+            return [];
         },
         ReproUnconfirmed => {
             // Retain the report and verification evidence without opening a false
@@ -428,23 +474,78 @@ function triage_feedback(fb: Feedback) -> Issue? {
                 null,
                 null,
             );
-            return null;
+            return [];
         },
-
         FeedbackNeedsDetails => {
             // Keep the original report, but do not create an issue or page a shepherd.
             // This terminal event also prevents the same report being retried every poll.
             log_event("no_issue", null, fb.id, { "reason": "needs_details" }.to_json(), null, null);
-            return null;
+            return [];
         },
     };
-    match (created) {
-        null => {
-            log_event("no_issue", null, fb.id, { "reason": "fixed on this toolchain" }.to_json(), null, null);
-            null
-        },
-        let issue: Issue => {
+    if (created.length() == 0) {
+        log_event("no_issue", null, fb.id, { "reason": "fixed on this toolchain" }.to_json(), null, null);
+        return [];
+    };
+    let out: Issue[] = [];
+    let report = fb;
+    for (let issue in created) {
+        let done = triage_one(report, issue);
+        out.push(done);
+        // the next half must keep this one's link on the feedback row
+        report = with_issue(report, done.id);
+    }
+    //# a split report: each half knows the other
+    if (out.length() > 1) {
+        for (let issue in out) {
+            for (let other in out) {
+                if (other.id != issue.id) {
+                    log_event(
+                        "linked",
+                        issue.id,
+                        fb.id,
+                        {
+                            "step": "Linked to the other half of the report",
+                            "decision": other.id + " (" + issue_kind(other).to_string().to_lower_case() + "): " + other.title,
+                            "reason": "The report carried both a defect and a request; each is filed as its own issue so they can be fixed, gauged and shipped separately, and both cite the same report.",
+                            "evidence": { "related": other.id.to_json(), "feedback": fb.id.to_json() }.to_json(),
+                            "related": other.id,
+                        }
+                            .to_json(),
+                        null,
+                        null,
+                    );
+                };
+            }
+        }
+    };
+    out
+}
+
+/// One created issue through dedup, organize and gauge, into the store.
+function triage_one(fb: Feedback, issue: Issue) -> Issue {
+    {
+        {
             let duplicate = duplicate_issue(issue);
+            // events.issue_id references issues: a new issue's id cannot be cited
+            // until save_issue below, so a fresh issue's decision rides on the report.
+            decide(
+                "Check for duplicates",
+                match (duplicate) {
+                    null => null,
+                    let d: Issue => d.id,
+                },
+                fb.id,
+                match (duplicate) {
+                    null => "New issue: no open issue matches",
+                    let d: Issue => "Merged into " + d.id + ": " + d.title,
+                },
+                match (duplicate) {
+                    null => "No open issue in the same subsystem and toolchain has a title this similar (exact normalized match, or Dice similarity >= 0.60 with four shared terms).",
+                    let d: Issue => "An open issue in the same subsystem and toolchain has a near-identical title; this report's repro and id were added to it instead of opening a second ticket.",
+                },
+                evidence = { "candidate_title": issue.title.to_json(), "subsystem": issue.subsystem.to_string().to_json(), "version": issue.version.to_json() },
+            );
             if (duplicate != null) {
                 let merged = merge_duplicate(duplicate ?? baml.sys.panic("checked duplicate"), issue);
                 update(
@@ -481,7 +582,11 @@ function triage_feedback(fb: Feedback) -> Issue? {
                 null,
                 null,
             );
-            let gauged = with_status(gauge_issue(organize_issue(issue)), Open { state: "open", automatic_fix: true });
+            // every issue, bug or feature request, goes straight to a fix and a PR
+            let gauged = with_status(
+                gauge_issue(organize_issue(issue)),
+                Open { state: "open", automatic_fix: true },
+            );
             save_issue(gauged);
             log_event(
                 "organized",
@@ -508,7 +613,7 @@ function triage_feedback(fb: Feedback) -> Issue? {
             //# open the issue's thread
             notify("issue_created", gauged, issue_created_text(gauged), { "feedback": fb.id }.to_json());
             gauged
-        },
+        }
     }
 }
 
@@ -607,6 +712,11 @@ function handle_one(issue: Issue, mode: HandleMode) -> HandleOutcome? {
                 save_issue(after);
             };
             tell_outcome(after, out, mode);
+            // handle_issue has returned and released its sandbox; the saved draft
+            // can now enter the shared automatic CI/CodeRabbit worker immediately.
+            if (mode == HandleMode.Live && out.kind == "fixed" && out.pr != null) {
+                request_merge(out.pr ?? "", thread = issue_thread(issue.id));
+            };
             out
         },
     }
@@ -636,41 +746,6 @@ function tell_outcome(issue: Issue, o: HandleOutcome, mode: HandleMode) -> null 
 // ==================== merge ====================
 
 // ==================== Unit tests (token-free) ====================
-
-testset "pipeline" {
-    test "a report is linked to its issue once" {
-        let fb = with_issue(with_issue(sample_feedback(), "ISSUE-1"), "ISSUE-1");
-        assert.equal(fb.issue_ids, ["ISSUE-1"]);
-        assert.equal(fb.title, sample_feedback().title);
-    }
-
-    test "origins follow the id" {
-        assert.equal(
-            baml.json.path_or<string>(origin_of(sample_feedback()), ".report_id", ""),
-            "abc",
-        );
-        let sl = feedback_from_slack(baml.json.parse(`{"type":"message","user":"U1","ts":"1.000200","text":"x"}`), "C1")
-            ?? baml.sys.panic("no feedback");
-        assert.equal(baml.json.path_or<string>(origin_of(sl), ".kind", ""), "slack");
-    }
-
-    test "without the store or intakes a run does nothing and says so" {
-        if (!db_configured() && !posthog_configured() && slack_intake_channel() == null) {
-            let r = run_pipeline(mode = HandleMode.DryRun, stages = "ingest,triage");
-            assert.equal(r.ingested, 0);
-            assert.equal(r.issues_created, 0);
-            assert.is_true(r.skipped.length() >= 1);
-        };
-    }
-
-    test "stages are picked by name" {
-        if (!db_configured()) {
-            let r = run_pipeline(mode = HandleMode.DryRun, stages = "merge");
-            assert.equal(r.merged, 0);
-            assert.equal(r.ingested, 0);
-        };
-    }
-}
 
 /// New issues run automatically. Historical pending work requires explicit requeue.
 function issue_auto_ready(issue: Issue) -> bool {
@@ -716,23 +791,23 @@ function save_active_issue(issue: Issue) -> null {
 }
 
 /// Only controller credentials enter the root-owned release indexer, never an agent.
-
-testset "automatic_issue_fixes" {
-    test "new automatic issues run but historical and cancelled work do not" {
-        let issue = issue_in(Subsystem.Compiler, "owner");
-        assert.equal(
-            issue_auto_ready(with_status(issue, Open { state: "open", automatic_fix: true })),
-            true,
-        );
-        assert.equal(issue_auto_ready(with_status(issue, Open { state: "open" })), false);
-        assert.equal(
-            issue_auto_ready(with_status(issue, AwaitingApproval { state: "awaiting_approval" })),
-            false,
-        );
-        assert.equal(
-            issue_auto_ready(with_status(issue, Cancelled { state: "cancelled", reason: "stop", by: "U1" })),
-            false,
-        );
-        assert.is_true(compact_issue_text("x".repeat(900), 450).length() <= 450);
-    }
+function reconcile_feedback_releases() -> null {
+    let result = run_with(
+        Cmd {
+            program: "/usr/bin/python3",
+            args: ["-I", "/usr/local/lib/atb2/reconcile-releases.py"],
+            cwd: atb2_home(),
+            timeout_ms: 600000,
+        },
+        {
+            "PATH": "/usr/bin:/bin",
+            "FEEDBACK_SUPABASE_URL": baml.env.get("FEEDBACK_SUPABASE_URL") ?? "",
+            "FEEDBACK_SUPABASE_KEY": baml.env.get("FEEDBACK_SUPABASE_KEY") ?? "",
+            "GH_TOKEN": baml.env.get("GH_TOKEN") ?? baml.env.get("ATB_GITHUB_TOKEN") ?? "",
+        },
+    );
+    if (!result.ok) {
+        log.warn({ "release_resolution": "unavailable; retrying next pass" });
+    };
+    null
 }

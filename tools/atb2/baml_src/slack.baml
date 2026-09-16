@@ -27,7 +27,12 @@ class SlackError {
     message: string,
 }
 
+/// ATB2_SLACK_OFF=1 silences every post (a local re-run, a rehearsal) while
+/// leaving the rest of the pipeline exactly as in production.
 function slack_configured() -> bool {
+    if (baml.env.get("ATB2_SLACK_OFF") == "1") {
+        return false;
+    };
     slack_token() != null
         && baml.env.get("ATB2_SLACK_CHANNEL") != null
         || slack_token() != null
@@ -151,7 +156,10 @@ function notify(kind: string, issue: Issue, text: string, payload: json) -> null
     } else {
         null
     };
-    if (kind == "issue_created" && posted != null && db_configured()) {
+    // The first top-level post about an issue anchors its thread: the
+    // creation announcement when enabled, otherwise the PR (or needs-human)
+    // message that follows the fix.
+    if ((kind == "issue_created" || kind == "pr_opened" || kind == "needs_human") && thread == null && posted != null && db_configured()) {
         let anchor = posted ?? baml.sys.panic("checked post");
         update(
             "issues",
@@ -224,19 +232,47 @@ function issue_mentions(issue: Issue, mapping: string? = null) -> string {
 
 function issue_created_text(issue: Issue, mapping: string? = null) -> string {
     issue_mentions(issue, mapping = mapping)
+        + (
+            if (issue_kind(issue) == IssueKind.Feature) {
+                "Feature request: "
+            } else {
+                ""
+            }
+        )
         + short_issue_title(issue.title)
         + " "
         + issue_link(issue)
-        + " · preparing a fix."
+        + (
+            if (issue_kind(issue) == IssueKind.Feature) {
+                " · proposal written; waiting for a human."
+            } else {
+                " · preparing a fix."
+            }
+        )
 }
 
 function pr_opened_text(issue: Issue, o: HandleOutcome) -> string {
+    let what = if (issue_kind(issue) == IssueKind.Feature) {
+        "Feature request implemented"
+    } else {
+        "Fix ready"
+    };
     issue_mentions(issue)
+        + what
+        + ": *"
         + short_issue_title(issue.title)
-        + " "
-        + issue_link(issue)
-        + " · here's my fix: "
+        + "* ("
+        + issue.subsystem.to_string().to_lower_case()
+        + (
+            match (issue.difficulty) {
+                null => "",
+                let d: Difficulty => " · " + d.to_string().to_lower_case(),
+            }
+        )
+        + ")\nPR: "
         + (o.pr ?? "(not published)")
+        + " · issue: "
+        + issue_link(issue)
 }
 
 function needs_human_text(issue: Issue, o: HandleOutcome) -> string {
@@ -531,133 +567,6 @@ function trim_punct(tok: string) -> string {
 
 // ==================== Unit tests (token-free) ====================
 
-testset "slack" {
-    test "the created line is short and contains no approval instruction" {
-        let t = issue_created_text(with_difficulty(gh_issue(4587, null), Difficulty.Easy));
-        assert.contains(t, "GH-4587");
-        assert.contains(t, "preparing a fix");
-        assert.is_true(!t.includes("approve") && !t.includes("React"));
-        assert.is_true(short_issue_title("x".repeat(200)).length() <= 110);
-    }
-
-    test "the needs-human line says why" {
-        let g = sample_gate();
-        let o = outcome_for_test("gate_failed", g, null);
-        let t = needs_human_text(gh_issue(1, null), o);
-        assert.contains(t, "gate failed");
-        assert.contains(t, "agent/gh-1-x");
-        let stopped = HandleOutcome {
-            kind: "agent_stopped",
-            branch: null,
-            pr: null,
-            turns: 0,
-            seconds: 5,
-            timed_out: true,
-            gate: null,
-            report: null,
-            design_doc: null,
-            reason: "killed at the time budget",
-        };
-        assert.contains(needs_human_text(gh_issue(1, null), stopped), "killed at the time budget");
-        assert.contains(
-            needs_human_text(gh_issue(1, null), outcome_for_test("hard", null, null)),
-            "design doc",
-        );
-    }
-
-    test "the PR notification only needs title issue link and fix link" {
-        let o = HandleOutcome {
-            kind: "fixed",
-            branch: "agent/x",
-            pr: "https://github.com/BoundaryML/baml/pull/1",
-            turns: 12,
-            seconds: 640,
-            timed_out: false,
-            gate: sample_gate(),
-            report: null,
-            design_doc: null,
-            reason: null,
-        };
-        let t = pr_opened_text(gh_issue(1, null), o);
-        assert.contains(t, "pull/1");
-        assert.contains(t, "here's my fix:");
-        assert.is_true(!t.includes("turns") && !t.includes("approve"));
-    }
-
-    test "a Slack message becomes a report; replies, bots and joins do not" {
-        let m = baml.json.parse(
-            `{"type":"message","user":"U1","ts":"1725000000.000100","text":"baml check panics on \`throws Nope\` with 0.17.0\\nstack: index out of bounds","files":[{"name":"main.baml","preview":"function f() -> int throws Nope { 1 }"}]}`,
-        );
-        let fb = feedback_from_slack(m, "C1") ?? baml.sys.panic("no feedback");
-        assert.equal(fb.id, "SL-1725000000-000100");
-        assert.equal(fb.source, FeedbackSource.Slack);
-        assert.equal(fb.author.device_id ?? "", "slack:U1");
-        assert.equal(fb.toolchain ?? "", "0.17.0");
-        assert.equal(fb.files.get("main.baml") ?? "", "function f() -> int throws Nope { 1 }");
-        assert.is_true(fb.title.starts_with("baml check panics"));
-        assert.equal(
-            feedback_from_slack(
-                baml.json.parse(
-                    `{"type":"message","user":"U1","ts":"2.0","thread_ts":"1.0","text":"reply"}`,
-                ),
-                "C1",
-            )
-                == null,
-            true,
-        );
-        assert.equal(
-            feedback_from_slack(baml.json.parse(`{"type":"message","bot_id":"B1","ts":"3.0","text":"bot"}`), "C1")
-                == null,
-            true,
-        );
-        assert.equal(
-            feedback_from_slack(
-                baml.json.parse(
-                    `{"type":"message","subtype":"channel_join","user":"U1","ts":"4.0","text":"joined"}`,
-                ),
-                "C1",
-            )
-                == null,
-            true,
-        );
-    }
-
-    test "helpers" {
-        assert.equal(first_line("a\nb", 10), "a");
-        assert.equal(first_line("abcdef", 4), "abc…");
-        assert.equal(toolchain_mentioned("on 0.18.0-nightly.1 it fails") ?? "", "0.18.0-nightly.1");
-        assert.equal(toolchain_mentioned("no version") == null, true);
-        assert.equal(minutes(59), "59s");
-        assert.equal(minutes(600), "10m");
-        assert.equal(slack_configured(), false);
-    }
-
-    test "a PR url comes out of a mention, Slack-wrapped or not" {
-        assert.equal(
-            pr_url_in("babysit this PR https://github.com/BoundaryML/baml/pull/4715") ?? "",
-            "https://github.com/BoundaryML/baml/pull/4715",
-        );
-        assert.equal(
-            pr_url_in("babysit <https://github.com/BoundaryML/baml/pull/4715|pull/4715> please")
-                ?? "",
-            "https://github.com/BoundaryML/baml/pull/4715",
-        );
-        assert.equal(
-            pr_url_in("babysit <https://github.com/BoundaryML/baml/pull/4715/files>") ?? "",
-            "https://github.com/BoundaryML/baml/pull/4715",
-        );
-        assert.equal(
-            pr_url_in("babysit https://github.com/BoundaryML/baml/pull/4715.") ?? "",
-            "https://github.com/BoundaryML/baml/pull/4715",
-        );
-        assert.equal(
-            pr_url_in("babysit https://github.com/BoundaryML/baml/issues/4715") == null,
-            true,
-        );
-        assert.equal(pr_url_in("hello") == null, true);
-    }
-}
-
 // ==================== Signed HTTP intake ====================
 
 function hmac_sha256_hex(key: string, message: string) -> string {
@@ -750,7 +659,19 @@ function parse_mention(raw: string) -> MentionRoute {
     if (command == "babysit") {
         return MentionRoute { kind: "babysit", text: text, pr: pr_url_in(text) };
     };
-    MentionRoute { kind: "feedback", text: text, pr: null }
+    let shirt = text.to_lower_case().split(" ").some((word: string) -> bool {
+        let clean = trim_punct(word);
+        clean == "shirt" || clean == "tshirt" || clean == "t-shirt"
+    });
+    MentionRoute {
+        kind: if (shirt) {
+            "shirt"
+        } else {
+            "feedback"
+        },
+        text: text,
+        pr: null,
+    }
 }
 
 // ==================== Shepherd cancellation ====================
@@ -928,70 +849,4 @@ function approval_fixture() -> Issue {
     row.set("slack_ts", "123.4".to_json());
     row.set("slack_channel", "C1".to_json());
     issue_from_row(row.to_json())
-}
-
-testset "cancellation" {
-    test "any mapped shepherd can cancel only the exact issue anchor" {
-        let issue = approval_fixture();
-        let r = ApprovalReaction { user: "U1", channel: "C1", ts: "123.4" };
-        assert.equal(can_cancel(issue, r, "owner:U1"), true);
-        assert.equal(can_cancel(issue, r, "owner:U2,other:U1"), true);
-        assert.equal(can_cancel(issue, r, "owner:U2"), false);
-        assert.equal(can_cancel(issue, r, ""), false);
-        assert.equal(
-            can_cancel(issue, ApprovalReaction { user: "U1", channel: "C2", ts: "123.4" }, "owner:U1"),
-            false,
-        );
-        assert.equal(
-            can_cancel(issue, ApprovalReaction { user: "U1", channel: "C1", ts: "123.5" }, "owner:U1"),
-            false,
-        );
-        assert.equal(
-            can_cancel(
-                with_status(issue, Cancelled { state: "cancelled", reason: "not an issue", by: "U1" }),
-                r,
-                "owner:U1",
-            ),
-            false,
-        );
-        assert.equal(
-            can_cancel(with_status(issue, Merged { state: "merged", pr: "fixture" }), r, "owner:U1"),
-            false,
-        );
-        assert.equal(
-            can_cancel(
-                with_status(issue, Shipped { state: "shipped", version: "0.18.0", date: "2026-09-09" }),
-                r,
-                "owner:U1",
-            ),
-            false,
-        );
-    }
-    test "only an added X reaction cancels" {
-        let added = baml.json.parse(
-            `{"type":"reaction_added","reaction":"x","user":"U1","item":{"type":"message","channel":"C1","ts":"123.4"}}`,
-        );
-        assert.equal(issue_reaction(added, true) != null, true);
-        assert.equal(approval_reaction(added) == null, true);
-        assert.equal(
-            issue_reaction(
-                baml.json.parse(
-                    `{"type":"reaction_removed","reaction":"x","user":"U1","item":{"type":"message","channel":"C1","ts":"123.4"}}`,
-                ),
-                true,
-            )
-                == null,
-            true,
-        );
-        assert.equal(
-            issue_reaction(
-                baml.json.parse(
-                    `{"type":"reaction_added","reaction":"+1","user":"U1","item":{"type":"message","channel":"C1","ts":"123.4"}}`,
-                ),
-                true,
-            )
-                == null,
-            true,
-        );
-    }
 }

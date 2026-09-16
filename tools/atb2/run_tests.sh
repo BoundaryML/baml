@@ -49,7 +49,7 @@ die() { echo "run_tests: $*" >&2; exit 1; }
 command -v infisical >/dev/null || die "infisical CLI not found — brew install infisical"
 env="${FEEDBACK_INFISICAL_ENV:-dev}"
 # boundary-tools: where FEEDBACK_SUPABASE_*, ATB_SLACK_* and (prod) ATB_POSTHOG_* live.
-# This matches the repo's .infisical.json workspace.
+# The repo's own .infisical.json points at another workspace.
 project_id="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
 project="$project_id"
 # (no arrays: macOS ships bash 3.2, where an empty array trips `set -u`)
@@ -110,10 +110,14 @@ run_stage() {
             # budgets, feedback parsing; a regression there should not cost an
             # agent session
             exec "$BAML" test -i "root::handle_issue::*" -i "root::merge_issue::*" -i "root::fix_in_budget::*" -i "root::design_doc::*" ;;
+        metrics|5)
+            echo "run_tests: testing METRICS (dedup_catch, dedup_false_positive, already_fixed, kind_split, difficulty_estimate, repro_match)"
+            echo "run_tests: dedup_catch/kind_split call Sonnet per case; already_fixed needs a compiler host (Linux runner or ATB2_NIGHTLY_CLI)"
+            exec "$BAML" test -i "root::dedup_catch::*" -i "root::dedup_false_positive::*" -i "root::already_fixed::*" -i "root::kind_split::*" -i "root::difficulty_estimate::*" -i "root::repro_match::*" ;;
         wire|4|"wiring")
             echo "run_tests: testing WIRING (store, slack, intake, pipeline; token-free)"
             exec "$BAML" test -i "root::store::*" -i "root::slack::*" -i "root::intake::*" -i "root::pipeline::*" -i "root::merge_requests::*" ;;
-        *)  die "unknown stage: $1 (use create | organize | pr | wire)" ;;
+        *)  die "unknown stage: $1 (use create | organize | pr | wire | metrics)" ;;
     esac
 }
 
@@ -130,7 +134,8 @@ echo "  1) issue creation      — repro_match, issue_enrichment"
 echo "  2) issue organization  — organize_issue, gauge_issue, difficulty_estimate"
 echo "  3) PR creation         — fix_in_budget, design_doc (real agent runs, slow)"
 echo "  4) wiring              — store, slack, intake, pipeline (token-free)"
+echo "  5) metrics             — dedup, already-fixed, bug-vs-feature, difficulty, repro (eval/cases.json or triage_cases)"
 echo
-printf "Enter 1, 2, 3 or 4 (or create/organize/pr/wire): "
+printf "Enter 1-5 (or create/organize/pr/wire/metrics): "
 read -r choice
 run_stage "$choice"

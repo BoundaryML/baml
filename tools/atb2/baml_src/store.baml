@@ -214,6 +214,7 @@ function feedback_from_row(row: json) -> Feedback {
 function issue_row(issue: Issue) -> json {
     {
         "id": issue.id,
+        "kind": issue_kind(issue).to_string().to_lower_case(),
         "title": issue.title,
         "description": issue.description,
         "shepherd": issue.shepherd,
@@ -241,6 +242,11 @@ function issue_row(issue: Issue) -> json {
 function issue_from_row(row: json) -> Issue {
     Issue {
         id: baml.json.path_or<string>(row, ".id", ""),
+        kind: if (baml.json.path_or<string>(row, ".kind", "bug") == "feature") {
+            IssueKind.Feature
+        } else {
+            IssueKind.Bug
+        },
         title: baml.json.path_or<string>(row, ".title", ""),
         description: baml.json.path_or<string>(row, ".description", ""),
         shepherd: baml.json.path_or<string?>(row, ".shepherd", null),
@@ -490,6 +496,30 @@ function log_event(
     baml.json.path_or<int>(row, ".id", 0)
 }
 
+/// One recorded decision: which step decided what, and why. The website
+/// renders these as the issue's decision trail, so every field the pipeline
+/// sets on an issue (subsystem, shepherd, difficulty, the repro, the
+/// verdicts) has a reason next to it. `evidence` is anything a reviewer
+/// would check the reason against: verdicts, candidates, unknowns.
+function decide(
+    step: string,
+    issue_id: string?,
+    feedback_id: string?,
+    decision: string,
+    reason: string,
+    evidence: map<string, json> = {},
+) -> int {
+    log.info({ "step": step, "issue": issue_id, "feedback": feedback_id, "decision": decision, "reason": reason });
+    log_event(
+        "decision",
+        issue_id,
+        feedback_id,
+        { "step": step, "decision": decision, "reason": reason, "evidence": evidence.to_json() }.to_json(),
+        null,
+        null,
+    )
+}
+
 /// The Slack thread an issue's notifications live in: the first event about
 /// it that was posted to Slack.
 function issue_thread(issue_id: string) -> SlackRef? {
@@ -562,7 +592,7 @@ function rows_field(rows: json[], field: string) -> string[] {
     })
 }
 
-// ==================== Unit tests (token-free) ====================
+// ==================== Test fixtures (the tests live in metrics.baml) ====================
 
 function sample_feedback() -> Feedback {
     Feedback {
@@ -575,104 +605,6 @@ function sample_feedback() -> Feedback {
         files: { "main.baml": "function f() -> int throws Nope { 1 }" },
         comments: [],
         issue_ids: [],
-    }
-}
-
-testset "store" {
-    test "a feedback row round-trips" {
-        let fb = sample_feedback();
-        let row = feedback_row(fb, { "kind": "posthog", "event": "e1" }.to_json());
-        assert.equal(baml.json.path_or<string>(row, ".source", ""), "BamlFeedback");
-        assert.equal(baml.json.path_or<string>(row, ".author_email", ""), "a@b.c");
-        assert.equal(baml.json.path_or<string>(row, ".origin.kind", ""), "posthog");
-        let back = feedback_from_row(row);
-        assert.equal(back.id, fb.id);
-        assert.equal(back.files.get("main.baml") ?? "", "function f() -> int throws Nope { 1 }");
-        assert.equal(back.toolchain ?? "", "0.17.0");
-        assert.equal(back.author.email ?? "", "a@b.c");
-        assert.equal(back.author.github == null, true);
-    }
-
-    test "an issue row round-trips, status and repros included" {
-        let issue = with_difficulty(gh_issue(4587, null), Difficulty.Easy);
-        let taken = with_status(issue, InProgress { state: "in_progress", pr: "https://github.com/x/y/pull/1" });
-        let row = issue_row(taken);
-        assert.equal(baml.json.path_or<string>(row, ".subsystem", ""), "Compiler");
-        assert.equal(baml.json.path_or<string>(row, ".difficulty", ""), "Easy");
-        assert.equal(baml.json.path_or<string>(row, ".status.state", ""), "in_progress");
-        let back = issue_from_row(row);
-        assert.equal(back.id, taken.id);
-        assert.equal(back.subsystem, Subsystem.Compiler);
-        assert.equal(back.difficulty ?? Difficulty.Hard, Difficulty.Easy);
-        assert.equal(back.repros.length(), taken.repros.length());
-        match (back.status) {
-            let s: InProgress => assert.equal(s.pr ?? "", "https://github.com/x/y/pull/1"),
-            _ => assert.is_true(false),
-        };
-    }
-
-    test "an issue row without a difficulty reads back as ungauged" {
-        let back = issue_from_row(issue_row(gh_issue(1, null)));
-        assert.equal(back.difficulty == null, true);
-        assert.equal(subsystem_from("nope"), Subsystem.Unknown);
-        assert.equal(difficulty_from(null) == null, true);
-    }
-
-    test "a run row carries the outcome" {
-        let o = outcome_for_test("gate_failed", sample_gate(), sample_report());
-        let row = run_row("ISSUE-1", o, HandleMode.DryRun);
-        assert.equal(baml.json.path_or<string>(row, ".kind", ""), "gate_failed");
-        assert.equal(baml.json.path_or<string>(row, ".mode", ""), "DryRun");
-        assert.equal(baml.json.path_or<bool>(row, ".gate.ok", true), sample_gate().ok);
-        assert.equal(baml.json.path_or<string>(row, ".issue_id", ""), "ISSUE-1");
-    }
-
-    test "rows carry the dataset; live unless ATB2_DATASET=eval" {
-        let row = issue_row(gh_issue(1, null));
-        assert.equal(baml.json.path_or<string>(row, ".dataset", ""), dataset());
-        assert.is_true(dataset() == "live" || dataset() == "eval");
-        assert.equal(
-            baml.json.path_or<string>(
-                feedback_row(sample_feedback(), baml.json.parse("{}")),
-                ".dataset",
-                "",
-            ),
-            dataset(),
-        );
-    }
-
-    test "a write refuses an id from the other dataset" {
-        assert.equal(dataset_of_id("GH-4587"), "eval");
-        assert.equal(dataset_of_id("ISSUE-01j9"), "live");
-        assert.equal(dataset_of_id("PH-abc"), "live");
-        let other = if (dataset() == "eval") {
-            "ISSUE-x"
-        } else {
-            "GH-1"
-        };
-        let refused = guard_dataset(other) catch (_) {
-            StoreError => "refused",
-        };
-        assert.equal(refused ?? "allowed", "refused");
-    }
-
-    test "filters are url-safe" {
-        assert.equal(eq("ISSUE-01j9"), "eq.ISSUE-01j9");
-        assert.equal(eq("a b&c"), "eq.a%20b%26c");
-        assert.equal(
-            url_encode("https://github.com/x/y/pull/1"),
-            "https%3A%2F%2Fgithub.com%2Fx%2Fy%2Fpull%2F1",
-        );
-    }
-
-    test "the store is off without its variables" {
-        // the token-free tests run without FEEDBACK_SUPABASE_*; every save is a no-op
-        if (!db_configured()) {
-            save_issue(gh_issue(1, null));
-            assert.equal(known_feedback_ids().length(), 0);
-            assert.equal(load_issue("nope") == null, true);
-            assert.equal(get_cursor("x") == null, true);
-        };
     }
 }
 

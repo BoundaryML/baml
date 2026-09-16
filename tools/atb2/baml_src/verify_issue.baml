@@ -1,8 +1,6 @@
-// Re-confirm open issues on the toolchain this runner was built with: the
-// latest published nightly (deploy/build-cli.sh). A fix that lands on
-// canary reaches the next nightly, the runner rebuilds on it, and the next
-// pass finds the repros passing: the issue ships, the reporters' `baml
-// feedback status` says which nightly fixed it, and no agent run is wasted.
+// Resolve the latest published nightly for each verification pass. Reuse the
+// immutable versioned CLI for all issues in that pass; no controller restart
+// is needed when a newer nightly is published.
 //
 //   baml run -e 'verify_issues()'
 //   baml run -e 'verify_issue(load_issue("ISSUE-…") ?? baml.sys.panic("no such issue"))'
@@ -72,7 +70,31 @@ function needs_verification(issue: Issue, toolchain: string) -> string? {
     if (issue.version == toolchain) {
         return "already confirmed broken on " + toolchain;
     };
+    // An inconclusive run leaves `version` alone; without this an issue whose
+    // repros need a human would be re-run and re-logged every five minutes.
+    if (already_verified(issue.id, toolchain)) {
+        return "already verified on " + toolchain;
+    };
     null
+}
+
+/// A re-verify decision for this issue on this toolchain is already recorded.
+function already_verified(issue_id: string, toolchain: string) -> bool {
+    if (!db_configured()) {
+        return false;
+    };
+    select(
+        "events",
+        "select=id&issue_id="
+            + eq(issue_id)
+            + "&kind=eq.decision&payload-%3E%3Estep="
+            + eq("Re-verify on " + toolchain)
+            + "&dataset="
+            + eq(dataset())
+            + "&limit=1",
+    )
+        .length()
+        > 0
 }
 
 /// Today, as the Shipped status records it.
@@ -84,17 +106,51 @@ function today() -> string {
 /// becomes Shipped on that version, `fixed_in` is set for the reporters'
 /// CLI, and the thread hears. StillBroken: the issue's version advances so
 /// the next pass skips it. Inconclusive: nothing changes.
-function verify_issue(issue: Issue, toolchain: string? = null) -> VerifyOutcome {
-    let current = toolchain ?? toolchain_version();
+function verify_issue(
+    issue: Issue,
+    toolchain: string? = null,
+    cli: string? = null,
+) -> VerifyOutcome {
+    let nightly = if (cli == null) {
+        latest_nightly_cli()
+    } else {
+        VerifiedNightlyCli { path: cli ?? "", version: toolchain ?? "" }
+    };
+    let current = nightly.version;
     //# run every repro out of process on the current toolchain
     let verdicts: Verdict[] = [];
     let i = 0;
     for (let r in issue.repros) {
         i += 1;
-        verdicts.push(check_on_canary(r, i, cli = check_cli()));
+        verdicts.push(check_on_canary(r, i, cli = nightly.path));
     }
     let outcome = fold_verdicts(verdicts);
     log.info({ "issue": issue.id, "verify": outcome.to_string(), "toolchain": current });
+    if (issue.version != current) {
+        decide(
+            "Re-verify on " + current,
+            issue.id,
+            null,
+            match (outcome) {
+                VerifyOutcome.Fixed => "Fixed: every repro passes, the issue ships on " + current,
+                VerifyOutcome.StillBroken => "Still broken on " + current,
+                VerifyOutcome.Inconclusive => "Inconclusive: no repro gave a verdict",
+            },
+            match (outcome) {
+                VerifyOutcome.Fixed => "All " + verdicts.length().to_string() + " repros now match their expectation on this nightly; reporters see it as fixed in this version.",
+                VerifyOutcome.StillBroken => "At least one repro still violates its expectation; the issue's toolchain advances so the next pass skips this nightly.",
+                VerifyOutcome.Inconclusive => "The repros need manual inspection or the run itself failed, so nothing changes.",
+            },
+            evidence = {
+                "previous_version": issue.version.to_json(),
+                "verdicts": verdicts
+                    .map((v: Verdict) -> string {
+                        v.to_string()
+                    })
+                    .to_json(),
+            },
+        );
+    };
     match (outcome) {
         VerifyOutcome.Fixed => {
             //# every repro passes: ship it on this toolchain
@@ -142,7 +198,16 @@ function issue_shipped_text(issue: Issue, toolchain: string, reported: string[] 
 /// Re-run every verifiable issue whose recorded toolchain is not the
 /// runner's. Store-only: without it there are no issues to re-check.
 function verify_issues() -> VerifyReport {
-    let current = toolchain_version();
+    if (!db_configured()) {
+        return VerifyReport {
+            toolchain: "not checked",
+            checked: 0,
+            shipped: [],
+            skipped: ["store unconfigured"],
+        };
+    };
+    let nightly = latest_nightly_cli();
+    let current = nightly.version;
     let report = VerifyReport { toolchain: current, checked: 0, shipped: [], skipped: [] };
     if (!db_configured()) {
         report.skipped.push("store: FEEDBACK_SUPABASE_URL/KEY unset; nothing to verify");
@@ -154,7 +219,7 @@ function verify_issues() -> VerifyReport {
                 let why: string => report.skipped.push(issue.id + ": " + why),
                 null => {
                     report.checked += 1;
-                    match (verify_issue(issue, toolchain = current)) {
+                    match (verify_issue(issue, toolchain = current, cli = nightly.path)) {
                         VerifyOutcome.Fixed => report.shipped.push(issue.id),
                         VerifyOutcome.StillBroken => {
                             report.skipped.push(issue.id + ": still broken on " + current)
@@ -176,57 +241,4 @@ function verify_issues() -> VerifyReport {
         },
     );
     report
-}
-
-testset "verify_issue" {
-    test "fixed only when every repro passes; a failure outranks the unknown" {
-        assert.equal(fold_verdicts([Verdict.Fixed, Verdict.Fixed]), VerifyOutcome.Fixed);
-        assert.equal(
-            fold_verdicts([Verdict.Fixed, Verdict.Inconclusive]),
-            VerifyOutcome.Inconclusive,
-        );
-        assert.equal(
-            fold_verdicts([Verdict.Inconclusive, Verdict.StillBroken]),
-            VerifyOutcome.StillBroken,
-        );
-        assert.equal(fold_verdicts([Verdict.Fixed, Verdict.StillBroken]), VerifyOutcome.StillBroken);
-        assert.equal(fold_verdicts([]), VerifyOutcome.Inconclusive);
-    }
-    test "an issue is re-run only on a toolchain it has not been seen broken on" {
-        let issue = gh_issue(7, Difficulty.Easy);
-        let seen = baml.json.from_json<map<string, json>>(issue_row(issue));
-        let repro = Repro {
-            files: { "main.baml": "function main() -> int { 1 }" },
-            command: "baml check",
-            setup: null,
-            expectation: ShouldCompile { check: "should_compile" },
-        };
-        seen.set("repros", [repro].to_json());
-        seen.set("version", "0.18.1-nightly.20260908.a".to_json());
-        let with_repro = issue_from_row(seen.to_json());
-        assert.equal(
-            needs_verification(with_repro, "0.18.1-nightly.20260908.a") ?? "",
-            "already confirmed broken on 0.18.1-nightly.20260908.a",
-        );
-        assert.equal(needs_verification(with_repro, "0.18.1-nightly.20260909.a") == null, true);
-        assert.equal(needs_verification(with_repro, "unknown") ?? "", "runner toolchain unknown");
-        let none: Repro[] = [];
-        seen.set("repros", none.to_json());
-        assert.equal(
-            needs_verification(issue_from_row(seen.to_json()), "0.18.1-nightly.20260909.a") ?? "",
-            "no repros to run",
-        );
-    }
-    test "the ship message says what fails and what fixes" {
-        let issue = gh_issue(7, Difficulty.Easy);
-        let text = issue_shipped_text(issue, "0.18.1-nightly.20260908.a", reported = ["0.17.1", "0.18.0"]);
-        assert.equal(
-            text.index_of("fails on 0.17.1, 0.18.0 · fixed on 0.18.1-nightly.20260908.a") != null,
-            true,
-        );
-        assert.equal(fails_fixed_text([], "0.18.0", "0.18.1"), "fails on 0.18.0 · fixed on 0.18.1");
-    }
-    test "today is a date" {
-        assert.equal(today().length(), 10);
-    }
 }

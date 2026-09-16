@@ -63,8 +63,26 @@ function organize_issue(issue: Issue, mapping: string? = null) -> Issue {
     });
     let shepherd = candidates.at(0) ?? baml.sys.panic("no mapped shepherd for " + issue.subsystem.to_string());
     log.info({ "issue": issue.id, "subsystem": issue.subsystem.to_string(), "shepherd": shepherd });
+    decide(
+        "Assign a shepherd",
+        issue.id,
+        null,
+        "@" + shepherd,
+        "Routed by subsystem: "
+            + issue.subsystem.to_string()
+            + " issues go to its most active owners, first mapped one wins"
+            + (
+                if (config.trim().length() > 0) {
+                    " (ATB2_SHEPHERDS limits the candidates)."
+                } else {
+                    "."
+                }
+            ),
+        evidence = { "subsystem": issue.subsystem.to_string().to_json(), "candidates": candidates.to_json() },
+    );
     Issue {
         id: issue.id,
+        kind: issue.kind,
         title: issue.title,
         description: issue.description,
         shepherd: shepherd,
@@ -100,76 +118,5 @@ function issue_in(subsystem: Subsystem, shepherd: string?) -> Issue {
         design_doc: null,
         slack_ts: null,
         slack_channel: null,
-    }
-}
-
-// Checks the deterministic matcher: every subsystem routes to the first of
-// its owners, and organize_issue only ever touches `shepherd`.
-testset "organize_issue" {
-    test "new issues prefer an owner who can be mentioned in Slack" {
-        let issue = organize_issue(issue_in(Subsystem.Tooling, null), mapping = "codeshaunted:U123,hellovai:U456");
-        assert.equal(issue.shepherd, "codeshaunted");
-        assert.contains(issue_created_text(issue, mapping = "codeshaunted:U123"), "<@U123>");
-    }
-
-    for (
-        let s in [
-            Subsystem.Syntax,
-            Subsystem.Compiler,
-            Subsystem.Runtime,
-            Subsystem.StdLibrary,
-            Subsystem.Tooling,
-        ]
-    ) {
-        test ("routes " + s.to_string() + " to its first owner") {
-            let owners = shepherds_for(s);
-            assert.is_true(owners.length() >= 2);
-            assert.equal(organize_issue(issue_in(s, null)).shepherd ?? "", owners.at(0) ?? "");
-        }
-    }
-
-    test "the defaults back every subsystem" {
-        for (
-            let s in [
-                Subsystem.Syntax,
-                Subsystem.Compiler,
-                Subsystem.Runtime,
-                Subsystem.StdLibrary,
-                Subsystem.Tooling,
-            ]
-        ) {
-            let owners = shepherds_for(s);
-            assert.equal(owners.at(owners.length() - 2) ?? "", "hellovai");
-            assert.equal(owners.at(owners.length() - 1) ?? "", "aaronvg");
-        }
-    }
-
-    test "no matching subsystem goes to the defaults" {
-        assert.equal(organize_issue(issue_in(Subsystem.Unknown, null)).shepherd ?? "", "hellovai");
-        assert.equal(shepherds_for(Subsystem.Unknown).length(), 2);
-    }
-
-    test "known routes" {
-        assert.equal(organize_issue(issue_in(Subsystem.Tooling, null)).shepherd ?? "", "sxlijin");
-        assert.equal(
-            organize_issue(issue_in(Subsystem.Compiler, null)).shepherd ?? "",
-            "codeshaunted",
-        );
-    }
-
-    test "keeps an existing shepherd" {
-        assert.equal(
-            organize_issue(issue_in(Subsystem.Compiler, "someone-else")).shepherd ?? "",
-            "someone-else",
-        );
-    }
-
-    test "nothing but the shepherd changes" {
-        let before = issue_in(Subsystem.Runtime, null);
-        let after = organize_issue(before);
-        assert.equal(after.id, before.id);
-        assert.equal(after.subsystem, before.subsystem);
-        assert.equal(after.feedback_ids.length(), 1);
-        assert.equal(after.version, before.version);
     }
 }

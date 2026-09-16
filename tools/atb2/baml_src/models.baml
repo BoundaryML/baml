@@ -20,6 +20,13 @@ class Author {
 class Comment {
     author: string,
     body: string,
+    /// When it was written (RFC 3339); null on the oldest rows.
+    at: string?,
+    /// Where it came from: "github", "website", "slack"; null on the oldest rows.
+    source: string?,
+    /// Permalink to the original (a GitHub comment url); doubles as the
+    /// de-duplication key for synced comments.
+    url: string?,
 }
 
 class Feedback {
@@ -142,8 +149,23 @@ type IssueStatus = AwaitingApproval
     | Merged
     | Shipped;
 
+/// What a report became. A feature request goes through the same pipeline
+/// as a bug: its repro is the desired usage, verified to NOT work yet, and
+/// `resolution_plan` holds the proposed feature instead of a fix plan.
+enum IssueKind {
+    Bug,
+    Feature,
+}
+
+/// Null on rows written before feature requests existed: a bug.
+function issue_kind(issue: Issue) -> IssueKind {
+    issue.kind ?? IssueKind.Bug
+}
+
 class Issue {
     id: string,
+    /// Bug or feature request; null means bug (see issue_kind).
+    kind: IssueKind?,
     title: string,
     description: string,
     shepherd: string?,
