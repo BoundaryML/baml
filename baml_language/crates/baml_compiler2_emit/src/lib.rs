@@ -4666,7 +4666,7 @@ fn emit_file_group<'db>(
                 real_local_count: 1, // the registry param
                 bytecode,
                 kind: FunctionKind::Bytecode,
-                telemetry_policy_id: bex_vm_types::TelemetryPolicyId::default(),
+                telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
                 // local_names is indexed by slot number:
                 //   slot 0 = fn ref (reserved, empty string placeholder)
                 //   slot 1 = first param "registry"
@@ -6288,7 +6288,7 @@ fn builtin_emit_function(
         real_local_count: 0,
         bytecode: Bytecode::default(),
         kind,
-        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
@@ -6621,7 +6621,7 @@ fn compile_init_function<'db>(
                     real_local_count: 0,
                     bytecode,
                     kind: FunctionKind::Bytecode,
-                    telemetry_policy_id: bex_vm_types::TelemetryPolicyId::default(),
+                    telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
@@ -6702,7 +6702,7 @@ fn compile_init_function<'db>(
         real_local_count: 0,
         bytecode,
         kind: FunctionKind::Bytecode,
-        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),

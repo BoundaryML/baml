@@ -1329,7 +1329,7 @@ mod tests {
             real_local_count: 0,
             bytecode,
             kind: FunctionKind::Bytecode,
-            telemetry_policy_id: crate::TelemetryPolicyId::default(),
+            telemetry_policy_id: crate::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
@@ -1353,6 +1353,31 @@ mod tests {
 
             runtime_package: HeapPtr::null(),
         }))
+    }
+
+    #[test]
+    fn function_artifacts_exclude_runtime_policy_and_load_with_none() {
+        let object = func("policy_round_trip", vec![Instruction::Return]);
+        let original_bytes = borsh::to_vec(&object).unwrap();
+        let Object::Function(function) = &object else {
+            unreachable!()
+        };
+        function.telemetry_policy_id.store(17);
+        let bytes = borsh::to_vec(&object).unwrap();
+        assert_eq!(bytes, original_bytes);
+
+        let Object::Function(loaded) = borsh::from_slice::<Object>(&bytes).unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(
+            loaded.telemetry_policy_id.load(),
+            crate::TelemetryPolicyId::NONE
+        );
+        assert_eq!(loaded.name, "policy_round_trip");
+        assert_eq!(
+            borsh::to_vec(&Object::Function(loaded)).unwrap(),
+            original_bytes
+        );
     }
 
     fn class(name: &str, type_tag: i64) -> Object {

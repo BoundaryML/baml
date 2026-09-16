@@ -72,12 +72,6 @@ impl TelemetryPolicyId {
     }
 }
 
-impl Default for TelemetryPolicyId {
-    fn default() -> Self {
-        Self::none()
-    }
-}
-
 impl Clone for TelemetryPolicyId {
     fn clone(&self) -> Self {
         Self(AtomicU16::new(self.load()))

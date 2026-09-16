@@ -165,7 +165,10 @@ pub struct Function {
     /// Current immutable/resolved telemetry policy. This runtime-only atomic
     /// is not serialized; loaded programs begin at policy zero and the engine
     /// may publish a newer policy while calls are in flight.
-    #[borsh(skip)]
+    #[borsh(
+        serialize_with = "serialize_runtime_policy",
+        deserialize_with = "initialize_runtime_policy"
+    )]
     pub telemetry_policy_id: btel_types::TelemetryPolicyId,
 
     /// Local variable names indexed by slot number.
@@ -266,6 +269,23 @@ pub struct Function {
     /// functions use null and address operands through the engine image.
     #[borsh(skip)]
     pub runtime_package: HeapPtr,
+}
+
+// Runtime policy contributes no artifact bytes. Explicit field codecs avoid
+// Borsh's skipped-field requirement for a blanket `Default` implementation.
+#[allow(clippy::unnecessary_wraps, reason = "Borsh field codec signature")]
+fn serialize_runtime_policy<W: borsh::io::Write>(
+    _policy: &btel_types::TelemetryPolicyId,
+    _writer: &mut W,
+) -> borsh::io::Result<()> {
+    Ok(())
+}
+
+#[allow(clippy::unnecessary_wraps, reason = "Borsh field codec signature")]
+fn initialize_runtime_policy<R: borsh::io::Read>(
+    _reader: &mut R,
+) -> borsh::io::Result<btel_types::TelemetryPolicyId> {
+    Ok(btel_types::TelemetryPolicyId::none())
 }
 
 impl std::fmt::Display for Function {
