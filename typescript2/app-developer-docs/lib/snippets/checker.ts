@@ -276,6 +276,7 @@ async function validateProject(
 export async function validateSnippetCatalog(
   binary: string,
   appRoot: string,
+  onProgress?: (message: string) => void,
 ): Promise<{ results: SnippetValidationResult[]; toolchainVersion: string }> {
   const versionResult = await runBamlProcess(binary, ['--version']);
   if (versionResult.exitCode !== 0) {
@@ -288,12 +289,14 @@ export async function validateSnippetCatalog(
   const projects = await discoverProjectSnippets();
   const standaloneResults: SnippetValidationResult[] = [];
   for (const snippet of standaloneSnippets) {
+    onProgress?.(`Checking snippet ${snippet.id}`);
     standaloneResults.push(
       await validateStandalone(binary, toolchainVersion, appRoot, snippet),
     );
   }
   const projectResults: SnippetValidationResult[] = [];
   for (const project of projects) {
+    onProgress?.(`Checking project ${project.id}`);
     projectResults.push(
       await validateProject(binary, toolchainVersion, appRoot, project),
     );

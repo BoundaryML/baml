@@ -2573,7 +2573,19 @@ mod tests {
         let root = bc_root();
         let _ = compile_and_store_v1(&root, initial);
 
-        let r2 = resolved(&root, edited);
+        let result = plan_diags_and_relink_from_stored(&root, edited);
+        let _ = std::fs::remove_dir_all(&root);
+        Some(result)
+    }
+
+    /// Compare one edit against an already-stored baseline. Keeping this
+    /// separate lets matrix tests reuse the expensive v1 compile while each
+    /// edited case still gets independent served and honest databases.
+    fn plan_diags_and_relink_from_stored(
+        root: &Path,
+        edited: &[(&str, &str)],
+    ) -> (PlanSummary, bool, Option<bool>) {
+        let r2 = resolved(root, edited);
         let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = CacheContext::open(&r2).expect("cache reopens");
         let pending_plan = ctx2.plan_reuse(&db2, pkg2);
@@ -2617,101 +2629,96 @@ mod tests {
             clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
             seeded,
         };
-        let _ = std::fs::remove_dir_all(&root);
-        Some((summary, diags_match, byte_identical))
+        (summary, diags_match, byte_identical)
+    }
+
+    fn assert_mixed_file_edit(
+        root: &Path,
+        label: &str,
+        mixed_v2: &str,
+        baker: &str,
+        unrelated: &str,
+        expect_baker_dirty: bool,
+    ) {
+        let edited = [
+            ("mixed.baml", mixed_v2),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let (plan, diagnostics_match, byte_identical) =
+            plan_diags_and_relink_from_stored(root, &edited);
+
+        assert!(
+            plan.dirty.contains("mixed.baml"),
+            "{label}: the edited file must be dirty; {plan:?}"
+        );
+        assert_eq!(
+            plan.dirty.contains("baker.baml"),
+            expect_baker_dirty,
+            "{label}: layout-sentinel decision was wrong; {plan:?}"
+        );
+        assert!(
+            plan.clean.contains("z.baml"),
+            "{label}: the unrelated file must remain clean; {plan:?}"
+        );
+        assert!(
+            diagnostics_match,
+            "{label}: served diagnostics must match an independent fresh database"
+        );
+        assert_eq!(
+            byte_identical,
+            Some(true),
+            "{label}: relink must be byte-identical to a full compile"
+        );
     }
 
     // ── Layout-scoped sentinel (mixed class+function files) ──────────────────
 
-    /// A function-signature edit in a file that ALSO defines a class must leave
-    /// the layout sentinel unraised: only the edited file is dirty, an unrelated
-    /// layout-baking file stays clean (the whole win), and the relink is
-    /// byte-identical to a full compile.
+    /// Exercise both sides of the mixed-file layout sentinel in one labeled
+    /// oracle. In each case diagnostics and bytecode are compared with a
+    /// distinct, unseeded database; only the served side receives the reuse
+    /// plan.
     #[test]
-    fn plan_reuse_mixed_file_function_sig_edit_stays_minimal() {
+    fn mixed_file_edits_preserve_minimal_reuse_and_honest_outputs() {
+        if cache_disabled() {
+            return;
+        }
         let mixed_v1 = "class Widget {\n  w int\n  h int\n}\n\
                         function helper(a: int) -> int {\n  a\n}\n";
-        // Only `helper`'s signature changes; `Widget`'s layout is untouched.
-        let mixed_v2 = "class Widget {\n  w int\n  h int\n}\n\
+        let function_edit = "class Widget {\n  w int\n  h int\n}\n\
                         function helper(a: int, b: int) -> int {\n  a + b\n}\n";
-        // A layout-baker naming nothing `mixed.baml` defines: `o.a` bakes
-        // `Other`'s field offset, so it carries LAYOUT_SENTINEL — the file the
-        // old "any sig change in a type-defining file" rule wrongly dirtied.
+        let field_reorder = "class Widget {\n  h int\n  w int\n}\n\
+                            function helper(a: int) -> int {\n  a\n}\n";
         let baker = "class Other {\n  a int\n  b int\n}\n\
                      function reado(o: Other) -> int {\n  o.a\n}\n";
         let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let root = bc_root();
         let initial = [
             ("mixed.baml", mixed_v1),
             ("baker.baml", baker),
             ("z.baml", unrelated),
         ];
-        let edited = [
-            ("mixed.baml", mixed_v2),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let Some((p, byte_identical)) = plan_and_relink_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("mixed.baml"),
-            "the edited file must be dirty; {p:?}"
-        );
-        assert!(
-            !p.dirty.contains("baker.baml"),
-            "a layout-baking file must stay clean on a function-only sig edit — \
-             the layout sentinel must NOT fire; dirty = {:?}",
-            p.dirty
-        );
-        assert!(
-            p.clean.contains("baker.baml") && p.clean.contains("z.baml"),
-            "both non-edited files stay clean; {p:?}"
-        );
-        assert!(
-            byte_identical,
-            "relink must be byte-identical to a full compile"
-        );
-    }
+        let _ = compile_and_store_v1(&root, &initial);
 
-    /// A field reorder in that same mixed file MUST fire the sentinel: the
-    /// layout-baking `baker.baml` is dragged into the dirty set, and the relink
-    /// stays byte-identical.
-    #[test]
-    fn plan_reuse_mixed_file_field_reorder_fires_sentinel() {
-        let mixed_v1 = "class Widget {\n  w int\n  h int\n}\n\
-                        function helper(a: int) -> int {\n  a\n}\n";
-        let mixed_v2 = "class Widget {\n  h int\n  w int\n}\n\
-                        function helper(a: int) -> int {\n  a\n}\n";
-        let baker = "class Other {\n  a int\n  b int\n}\n\
-                     function reado(o: Other) -> int {\n  o.a\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("mixed.baml", mixed_v1),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("mixed.baml", mixed_v2),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let Some((p, byte_identical)) = plan_and_relink_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("mixed.baml"),
-            "the reordered file must be dirty; {p:?}"
+        // A function-only signature edit leaves the sentinel unraised; a field
+        // reorder fires it and dirties the layout-baking file.
+        assert_mixed_file_edit(
+            &root,
+            "function signature edit",
+            function_edit,
+            baker,
+            unrelated,
+            false,
         );
-        assert!(
-            p.dirty.contains("baker.baml"),
-            "a field reorder must fire the layout sentinel and dirty every \
-             layout-baking file; dirty = {:?}",
-            p.dirty
+        assert_mixed_file_edit(
+            &root,
+            "field reorder",
+            field_reorder,
+            baker,
+            unrelated,
+            true,
         );
-        assert!(
-            byte_identical,
-            "relink must be byte-identical to a full compile"
-        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Editing a class's generic-parameter list is a layout change — it must
@@ -4141,9 +4148,9 @@ mod tests {
         // A whole-image cache hit passes `plan = None`: nothing is served
         // artifact-by-artifact, so the honest DB must never be built (sampling a
         // hit would need a full honest compile — the design forbids it).
-        let Some((root, ctx, _plan, _honest, _honest_pkg)) =
-            sampled_setup(&[("a.baml", "function a() -> int {\n  1\n}\n")])
-        else {
+        let root = bc_root();
+        let project = resolved(&root, &[("a.baml", "function a() -> int {\n  1\n}\n")]);
+        let Some(ctx) = CacheContext::open(&project) else {
             return;
         };
         ctx.maybe_sampled_verify(None, || panic!("hit path must not build an honest DB"))

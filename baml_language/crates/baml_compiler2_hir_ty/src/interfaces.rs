@@ -1623,14 +1623,16 @@ fn collect_type_generic_bound_errors<'db>(
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
-            // A served package's class is checked only in source: its row
-            // carries the bounds, but this walk has no diagnostic site for
-            // rows yet (the stub lane never had one either — stubs spell
-            // their generics without bounds).
+            // The head's declared bounds: its source declaration's, or its
+            // served package's row's, which carries them the same way.
             if let Some(Definition::Class(class)) = facts.definition_of(qtn) {
                 let params = crate::lower::class_generic_frame(db, class);
                 let declared = crate::lower::class_generic_bounds(db, class);
                 check_head_args(facts, &params, &declared, args, errors);
+            } else if let Some(class) = crate::extern_loc::mounted_class_loc(db, qtn) {
+                let row = crate::extern_loc::extern_class_row(db, class);
+                let declared = row_param_bounds(row.generic_params, row.generic_param_bounds);
+                check_head_args(facts, row.generic_params, &declared, args, errors);
             }
         }
         baml_type::LoweringTy::Interface(qtn, args, pins, _) => {
@@ -1644,6 +1646,10 @@ fn collect_type_generic_bound_errors<'db>(
                 let params = crate::lower::interface_declared_params(db, iface);
                 let declared = interface_declared_param_bounds(db, iface);
                 check_head_args(facts, &params, &declared, args, errors);
+            } else if let Some(iface) = crate::extern_loc::mounted_interface_loc(db, qtn) {
+                let row = crate::extern_loc::extern_interface_row(db, iface);
+                let declared = row_param_bounds(row.generic_params, row.param_bounds);
+                check_head_args(facts, row.generic_params, &declared, args, errors);
             }
         }
         baml_type::LoweringTy::List(inner, _) => {
@@ -1693,6 +1699,16 @@ fn collect_type_generic_bound_errors<'db>(
         }
         _ => {}
     }
+}
+
+/// A served row's per-parameter bounds in the walk's keyed form. The row
+/// carries one bound list per parameter, in parameter order; import refuses
+/// a row whose lists do not pair (`validate_row_identities`).
+fn row_param_bounds(
+    params: &[ParamTy],
+    bounds: &[Vec<baml_type::Interface>],
+) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>> {
+    params.iter().cloned().zip(bounds.iter().cloned()).collect()
 }
 
 /// One head's arguments against its declared bounds: each conjunct is a
@@ -2135,6 +2151,40 @@ fn realize_qualifier_through_roots<'db>(
     fill_defaults: bool,
 ) -> Option<baml_type::Interface> {
     for root in roots {
+        // A mounted interface has no `InterfaceLoc`, but its exported row is
+        // still a complete root for qualifier proof. In particular, associated
+        // binding lowering gives symbolic `Self` a progressively pinned mounted
+        // bound; proving `(Self as dep.I).Item` from that bound must stay on the
+        // loc-free requires surface rather than fall through to concrete impl
+        // selection (which would re-enter the impl currently being built).
+        if matches!(
+            crate::package_interface::mounted_type_row(db, &root.name),
+            Some(crate::package_interface::ExportedType::Interface { .. })
+        ) {
+            let subject = root.to_ty();
+            for candidate in
+                std::iter::once(root.clone()).chain(crate::impls::direct_requires_closure_plain(
+                    db,
+                    root,
+                    &subject,
+                    crate::impls::REQUIRES_CLOSURE_FUEL,
+                ))
+            {
+                if candidate.name != qualifier.name {
+                    continue;
+                }
+                let candidate =
+                    complete_qualifier_candidate_associated_bindings(db, &candidate, fill_defaults);
+                if written_qualifier_proven_by(facts, qualifier, &candidate) {
+                    return Some(baml_type::Interface {
+                        name: candidate.name,
+                        generics: qualifier.generics.clone(),
+                        associated_types: candidate.associated_types,
+                    });
+                }
+            }
+            continue;
+        }
         let Some(root_loc) = projection_interface_loc(db, &root.name) else {
             continue;
         };
@@ -2164,6 +2214,94 @@ fn realize_qualifier_through_roots<'db>(
         }
     }
     None
+}
+
+/// Fill an existential qualifier candidate's omitted associated defaults in
+/// declaration order. Source-backed candidates use the ordinary declaration
+/// helper; mounted candidates perform its loc-free twin from the exported row.
+/// A later default may project through an earlier pin on symbolic `Self`, so
+/// each completed member must be visible while the next one is realized.
+///
+/// Rigid roots deliberately pass `fill_defaults = false`; their eventual
+/// implementor may override a declared default, so those candidates retain
+/// only the pins written by the bound.
+fn complete_qualifier_candidate_associated_bindings(
+    db: &dyn baml_compiler2_ppir::Db,
+    candidate: &baml_type::Interface,
+    fill_defaults: bool,
+) -> baml_type::Interface {
+    if !fill_defaults {
+        return candidate.clone();
+    }
+    let Some(crate::package_interface::ExportedType::Interface {
+        self_param,
+        generic_params,
+        associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &candidate.name)
+    else {
+        let Some(loc) = projection_interface_loc(db, &candidate.name) else {
+            return candidate.clone();
+        };
+        let data = baml_compiler2_ppir::item_data::interface_data(db, loc);
+        return baml_type::Interface {
+            name: candidate.name.clone(),
+            generics: candidate.generics.clone(),
+            associated_types: complete_interface_associated_bindings_from_tys(
+                db,
+                loc,
+                data,
+                &candidate.generics,
+                &candidate.associated_types,
+                true,
+            )
+            .into(),
+        };
+    };
+
+    let generic_bindings = baml_type::unify::bind_type_vars(generic_params, &candidate.generics);
+    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
+
+    for associated_type in associated_types {
+        let self_ty = Ty::Interface(
+            candidate.name.clone(),
+            candidate.generics.clone(),
+            resolved_pins.clone().into(),
+            TyAttr::default(),
+        );
+        let ty = if let Some((_, written)) = candidate
+            .associated_types
+            .iter()
+            .find(|(name, _)| name == &associated_type.name)
+        {
+            baml_type::unify::substitute_ty(written, &generic_bindings)
+        } else if let Some(default) = &associated_type.default {
+            realize_associated_default(
+                default,
+                generic_params,
+                &candidate.generics,
+                self_param,
+                &self_ty,
+            )
+        } else {
+            continue;
+        };
+        let ty = collapse_self_assoc_projections(
+            &ty,
+            &[&self_var, &self_ty],
+            Some(&candidate.name),
+            &candidate.generics,
+            &resolved_pins,
+        );
+        resolved_pins.push((associated_type.name.clone(), ty));
+    }
+
+    baml_type::Interface {
+        name: candidate.name.clone(),
+        generics: candidate.generics.clone(),
+        associated_types: resolved_pins.into(),
+    }
 }
 
 /// Every written qualifier constraint must be consistent with the

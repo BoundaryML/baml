@@ -954,11 +954,6 @@ enum PendingDiag<'db> {
         expr: ExprId,
         path: baml_type::Name,
     },
-    ServedInterfaceExportsFunctionsOnly {
-        expr: ExprId,
-        package: baml_type::Name,
-        path: baml_type::Name,
-    },
     /// A value typed by a block-scoped `type T = …` binding would be
     /// observable outside its block: the block's value (anchored at the
     /// tail), or a thrown type an inferred clause would publish (anchored
@@ -7046,33 +7041,13 @@ impl<'db> InferenceContext<'db> {
                     || self.lower.resolve_value(prefix).is_some())
                 .then(|| segments[cut].clone())
             });
-            // A package served from its compiled interface exports functions
-            // and types only, and a served dependency answers from that
-            // interface alone (`LowerCtx::resolve_value`). A package-prefixed
-            // path with no valid prefix into such a package is reported as
-            // exactly that — never as an unresolved name a link-only stub
-            // might have shadowed. (A valid prefix — a missing member on an
-            // exported type — keeps the ordinary first-invalid-segment
-            // report below.)
-            if failed.is_none()
-                && segments.len() >= 2
-                && let Some(package) = self.lower.accessible_package(&segments[0])
-                && baml_compiler2_hir::package::is_served_from_interface(self.db, package)
-            {
-                self.pending_diags
-                    .push(PendingDiag::ServedInterfaceExportsFunctionsOnly {
-                        expr,
-                        package: segments[0].clone(),
-                        path: baml_type::Name::new(
-                            segments
-                                .iter()
-                                .map(smol_str::SmolStr::as_str)
-                                .collect::<Vec<_>>()
-                                .join("."),
-                        ),
-                    });
-                return Ty::error();
-            }
+            // A served dependency answers from its interface alone
+            // (`LowerCtx::resolve_value`), and that interface cannot tell a
+            // declaration it does not carry from a misspelling — so a path
+            // into a served package that names nothing reports exactly as
+            // the source lane reports it, never under a lane-dependent code.
+            // (A dedicated "declared but not exported" report needs the
+            // interface to carry those names.)
             let name = failed.unwrap_or_else(|| {
                 baml_type::Name::new(
                     segments
@@ -11488,14 +11463,6 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
-                    PendingDiag::ServedInterfaceExportsFunctionsOnly {
-                        expr,
-                        package,
-                        path,
-                    } => (
-                        TirTypeError::ServedInterfaceExportsFunctionsOnly { package, path },
-                        expr,
-                    ),
                     PendingDiag::ScopedTypeEscapesBlock {
                         at,
                         name,

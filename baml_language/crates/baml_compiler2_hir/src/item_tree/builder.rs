@@ -65,6 +65,7 @@ impl ItemTreeBuilder {
                 type_expr: p.type_expr.clone(),
                 default: p.default.map(|expr| DefaultExprRef { function: id, expr }),
                 span: p.span,
+                name_span: p.name_span,
             })
             .collect();
         self.tree.functions.insert(
@@ -256,6 +257,7 @@ impl ItemTreeBuilder {
                 type_expr: p.type_expr.clone(),
                 default: None,
                 span: p.span,
+                name_span: p.name_span,
             })
             .collect();
         self.tree.functions.insert(

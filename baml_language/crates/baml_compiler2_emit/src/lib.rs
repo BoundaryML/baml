@@ -24,9 +24,10 @@ use baml_compiler2_hir::{
     },
 };
 use baml_compiler2_mir::{
-    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases,
-    RuntimeLowering, Rvalue, StatementKind, Terminator, definition_link_name, lower_function,
-    lower_let_body, native_key_for,
+    BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases,
+    RuntimeLowering, Rvalue, StatementKind, definition_link_name, lower_function, lower_let_body,
+    memory::{self, CellId},
+    native_key_for,
 };
 // PPIR item-data firewall (canonical / post-expansion view, including synthetic
 // `*$stream` items) — enumeration + lookup queries in place of the raw item tree.
@@ -971,23 +972,48 @@ fn build_packages<'db>(
         };
         // Associated-type bindings written in an `implements` block body
         // (`type Item = int`) live beside the target, not in it (`split_interface`
-        // only sees the target), so lower them here to fold into the implemented
-        // interface's bindings.
-        let lower_assoc = |store: &TypeRefStore,
+        // only sees the target), so fold them into the implemented interface's
+        // bindings here. Prefer `impl_data`'s canonical checked value: it lowers
+        // bindings in declaration order with `Self` carrying the pins resolved so
+        // far, so `type Item = int; type Items = Self.Item[]` becomes `int[]`.
+        // Mounted interfaces have no source `InterfaceLoc`; their equivalent
+        // canonical values live in the loc-free `impl_facts` surface. Re-lowering
+        // a raw binding in the plain impl scope loses the earlier witness and
+        // leaves an error-recovery projection that RuntimeTy cannot represent.
+        let lower_assoc = |impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+                           store: &TypeRefStore,
                            bindings: &[AssociatedTypeBindingData],
                            generics: &[ParamTy],
                            bounds: &BoundsMap|
          -> Vec<(Name, bex_vm_types::TyTemplate)> {
+            let canonical = baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc)
+                .as_ref()
+                .ok();
+            let loc_free = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).for_display();
             bindings
                 .iter()
                 .filter_map(|b| {
-                    let id = b.type_ref?;
+                    let ty = canonical
+                        .and_then(|data| {
+                            data.associated_types
+                                .iter()
+                                .find(|(name, _)| *name == b.name)
+                                .map(|(_, ty)| ty.clone())
+                        })
+                        .or_else(|| {
+                            loc_free.and_then(|facts| {
+                                facts
+                                    .associated_types
+                                    .iter()
+                                    .find(|(name, _)| *name == b.name)
+                                    .map(|(_, ty)| ty.to_plain())
+                            })
+                        })
+                        .or_else(|| b.type_ref.map(|id| lower(store, id, generics, bounds)))?;
                     Some((
                         b.name.clone(),
                         bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                            &lower(store, id, generics, bounds),
-                            resolved,
-                            generics,
+                            &ty, resolved, generics,
                         )),
                     ))
                 })
@@ -1022,6 +1048,7 @@ fn build_packages<'db>(
                 continue;
             };
             interface_assoc.extend(lower_assoc(
+                impl_loc,
                 store,
                 &block.associated_type_bindings,
                 &impl_params,
@@ -5554,22 +5581,6 @@ fn unknown_capture_ty() -> RuntimeTy {
     }
 }
 
-fn local_def_rvalue<'a, 'db>(
-    body: &'a MirFunctionBody<'db>,
-    local: Local,
-) -> Option<&'a Rvalue<'db>> {
-    body.blocks
-        .iter()
-        .flat_map(|block| &block.statements)
-        .find_map(|statement| match &statement.kind {
-            StatementKind::Assign {
-                destination: Place::Local(dest),
-                value,
-            } if *dest == local => Some(value),
-            _ => None,
-        })
-}
-
 fn resolve_capture_operand_type<'db>(
     body: &MirFunctionBody<'db>,
     parent_capture_types: &[RuntimeTy],
@@ -5599,104 +5610,9 @@ fn resolve_capture_place_type(
     match place {
         Place::Local(local) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
         Place::Capture(idx) => parent_capture_types.get(*idx).cloned(),
+        Place::Deref(CellId::Local(local)) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
+        Place::Deref(CellId::Capture(idx)) => parent_capture_types.get(*idx).cloned(),
         Place::Field { .. } | Place::Index { .. } => None,
-    }
-}
-
-fn operand_reads_spawn_capture<'db>(
-    body: &MirFunctionBody<'db>,
-    parent_spawn_capture_indices: &HashSet<usize>,
-    operand: &Operand<'db>,
-    seen: &mut HashSet<Local>,
-) -> bool {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => {
-            place_reads_spawn_capture(body, parent_spawn_capture_indices, place, seen)
-        }
-        Operand::Constant(_) => false,
-    }
-}
-
-fn place_reads_spawn_capture(
-    body: &MirFunctionBody<'_>,
-    parent_spawn_capture_indices: &HashSet<usize>,
-    place: &Place,
-    seen: &mut HashSet<Local>,
-) -> bool {
-    match place {
-        Place::Local(local) => {
-            if !seen.insert(*local) {
-                return false;
-            }
-            match local_def_rvalue(body, *local) {
-                Some(Rvalue::Use(operand)) => {
-                    operand_reads_spawn_capture(body, parent_spawn_capture_indices, operand, seen)
-                }
-                _ => false,
-            }
-        }
-        Place::Capture(idx) => parent_spawn_capture_indices.contains(idx),
-        Place::Field { base, .. } => {
-            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
-        }
-        Place::Index { base, index, .. } => {
-            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
-                || place_reads_spawn_capture(
-                    body,
-                    parent_spawn_capture_indices,
-                    &Place::Local(*index),
-                    seen,
-                )
-        }
-    }
-}
-
-fn make_closure_for_operand<'a, 'db>(
-    body: &'a MirFunctionBody<'db>,
-    operand: &'a Operand<'db>,
-    seen: &mut HashSet<Local>,
-) -> Option<(usize, &'a [Operand<'db>])> {
-    match operand {
-        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-            if !seen.insert(*local) {
-                return None;
-            }
-            match local_def_rvalue(body, *local)? {
-                Rvalue::MakeClosure {
-                    lambda_idx,
-                    captures,
-                    ..
-                } => Some((*lambda_idx, captures)),
-                Rvalue::Use(operand) => make_closure_for_operand(body, operand, seen),
-                _ => None,
-            }
-        }
-        _ => None,
-    }
-}
-
-fn mark_spawned_closure_operand<'db>(
-    body: &MirFunctionBody<'db>,
-    infos: &mut [LambdaCaptureInfo],
-    operand: &Operand<'db>,
-    seen_locals: &mut HashSet<Local>,
-    seen_lambdas: &mut HashSet<usize>,
-) {
-    let Some((lambda_idx, captures)) = make_closure_for_operand(body, operand, seen_locals) else {
-        return;
-    };
-    let Some(info) = infos.get_mut(lambda_idx) else {
-        return;
-    };
-
-    if !seen_lambdas.insert(lambda_idx) {
-        return;
-    }
-
-    info.spawn_capture_indices.extend(0..captures.len());
-
-    for capture in captures {
-        mark_spawned_closure_operand(body, infos, capture, seen_locals, seen_lambdas);
     }
 }
 
@@ -5707,6 +5623,7 @@ fn collect_lambda_capture_infos(
     parent_spawn_capture_indices: &HashSet<usize>,
 ) -> Vec<LambdaCaptureInfo> {
     let mut infos = vec![LambdaCaptureInfo::default(); lambda_count];
+    let shared_cells = memory::spawn_shared_cells(body);
 
     for block in &body.blocks {
         for statement in &block.statements {
@@ -5733,30 +5650,22 @@ fn collect_lambda_capture_infos(
                 })
                 .collect();
 
+            // A capture is shared with a task when this body spawns something
+            // reaching its cell, or when it forwards one of this body's own
+            // captures that an enclosing body already shares.
             for (capture_idx, capture) in captures.iter().enumerate() {
-                if operand_reads_spawn_capture(
-                    body,
-                    parent_spawn_capture_indices,
-                    capture,
-                    &mut HashSet::new(),
-                ) {
+                let (Operand::Copy(place) | Operand::Move(place)) = capture else {
+                    continue;
+                };
+                let cell = CellId::try_from(place.clone())
+                    .unwrap_or_else(|_| unreachable!("a capture operand is a cell pointer"));
+                let shared = shared_cells.contains(&cell)
+                    || matches!(cell, CellId::Capture(idx) if parent_spawn_capture_indices.contains(&idx));
+                if shared {
                     info.spawn_capture_indices.insert(capture_idx);
                 }
             }
         }
-    }
-
-    for block in &body.blocks {
-        let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
-            continue;
-        };
-        mark_spawned_closure_operand(
-            body,
-            &mut infos,
-            closure,
-            &mut HashSet::new(),
-            &mut HashSet::new(),
-        );
     }
 
     infos

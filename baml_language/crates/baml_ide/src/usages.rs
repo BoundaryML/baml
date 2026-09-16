@@ -11,8 +11,11 @@
 //! - **Members** (fields, variants, methods, interface slots): walk every
 //!   workspace file's function scopes and match the *inference* member
 //!   resolutions against the target — spans come from the source maps
-//!   (`member_access_member_span`, `path_segment_span`,
-//!   `object_field_name_span`), never from re-scanning source text.
+//!   (`member_name_span`, `path_segment_span`, `object_field_name_span`),
+//!   never from re-scanning source text. Which spellings are covered is
+//!   decided by whether lowering RECORDED a member-name span, not by an
+//!   `Expr` variant list, so `p.name`, `p?.name` and `(B as I).name` are
+//!   all one case and a new spelling joins them for free.
 //!
 //! The search scope is the workspace (every `Workspace`-kind source root):
 //! stdlib and dependency roots are read-only context — their internal
@@ -66,9 +69,22 @@ pub fn usages_at(
     let Some(target) = symbol_at(db, file, offset) else {
         return Vec::new();
     };
+    usages_of(db, file, target)
+}
 
+/// Every reference to `target`, searched from `anchor`'s workspace.
+///
+/// [`usages_at`] is this after resolving the cursor. A caller that already
+/// holds a target uses this directly — a rename spans several declarations
+/// (an interface method and every `implements` block's override), and only
+/// one of them is under the cursor.
+pub(crate) fn usages_of<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    anchor: SourceFile,
+    target: SymbolTarget<'db>,
+) -> Vec<Location> {
     match target {
-        SymbolTarget::Item(def) => find_item_usages(db, file, def),
+        SymbolTarget::Item(def) => find_item_usages(db, anchor, def),
         SymbolTarget::Local {
             func,
             func_scope,
@@ -77,9 +93,8 @@ pub fn usages_at(
         SymbolTarget::Field { .. }
         | SymbolTarget::Variant { .. }
         | SymbolTarget::Method { .. }
-        | SymbolTarget::InterfaceRequiredMethod { .. }
         | SymbolTarget::InterfaceField { .. }
-        | SymbolTarget::AssociatedType { .. } => find_member_usages(db, file, target),
+        | SymbolTarget::AssociatedType { .. } => find_member_usages(db, anchor, target),
     }
 }
 
@@ -396,20 +411,26 @@ fn find_member_usages(
                 if member_resolution_target(db, resolution) != Some(target) {
                     continue;
                 }
-                let range = match &expr_body.exprs[*expr_id] {
-                    Expr::MemberAccess { .. } => source_map.member_access_member_span(*expr_id),
-                    Expr::Path(segments) => {
-                        let ladder_resolved =
-                            inference.path_resolutions.get(expr_id).is_some_and(|path| {
-                                path.segments.iter().any(|step| step.resolution.is_some())
-                            });
-                        if ladder_resolved {
-                            continue;
-                        }
-                        source_map.path_segment_span(*expr_id, segments.len() - 1)
+                let range = if let Expr::Path(segments) = &expr_body.exprs[*expr_id] {
+                    let ladder_resolved =
+                        inference.path_resolutions.get(expr_id).is_some_and(|path| {
+                            path.segments.iter().any(|step| step.resolution.is_some())
+                        });
+                    if ladder_resolved {
+                        continue;
                     }
-                    // Member resolutions only attach to accesses and paths.
-                    _ => continue,
+                    source_map.path_segment_span(*expr_id, segments.len() - 1)
+                } else {
+                    // Every other spelling that reads a member — `p.name`,
+                    // `p?.name`, `(B as I).name` — records a member-NAME
+                    // span, so asking the source map is what keeps this
+                    // total: a new spelling is covered the moment it records
+                    // one, and a site that records none yields nothing
+                    // rather than a span that is not a name.
+                    let Some(range) = source_map.member_name_span(*expr_id) else {
+                        continue;
+                    };
+                    range
                 };
                 if !range.is_empty() {
                     results.push(Location { file: sf, range });
@@ -489,19 +510,6 @@ fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>
             DeclRef::Source(func) => item_data::function_data(db, func).name.clone(),
             DeclRef::External(func) => extern_function_row(db, func).name.clone(),
         }),
-        SymbolTarget::InterfaceRequiredMethod {
-            iface,
-            method_index,
-        } => match iface {
-            DeclRef::Source(iface) => item_data::interface_data(db, iface)
-                .required_methods
-                .get(method_index)
-                .map(|m| m.name.clone()),
-            DeclRef::External(iface) => extern_interface_row(db, iface)
-                .required_methods
-                .get(method_index)
-                .map(|m| m.name.clone()),
-        },
         SymbolTarget::InterfaceField { iface, field_index } => match iface {
             DeclRef::Source(iface) => item_data::interface_data(db, iface)
                 .fields
@@ -763,6 +771,104 @@ implements Animal for Dog {
                 .any(|usage| usage.ends_with("-> Animal") && usage.contains("test.baml:")),
             "Should find the interface reference in the out-of-body implements target, found: {formatted:?}"
         );
+    }
+
+    /// An interface method has ONE identity — the function item the
+    /// interface declares — whether the cursor is on that declaration or on
+    /// a call that dispatches through the slot. Before both spellings
+    /// collapsed onto `SymbolTarget::Method`, a virtual call resolved to a
+    /// positional index into the TIR-era `required_methods` view, which no
+    /// declaration ever produced, so the declaration found zero references.
+    #[test]
+    fn an_interface_method_declaration_finds_its_virtual_call_sites() {
+        const SRC: &str = r#"interface Shows {
+    function show(self) -> string throws never
+    function twice(self) -> string throws never { self.show() }
+}
+
+class Box { item: int }
+
+implement Shows for Box {
+    function show(self) -> string throws never { "b" }
+}
+
+function generic<T extends Shows>(t: T) -> string throws never { t.show() }
+
+function existential(s: Shows) -> string throws never { s.show() }
+
+function ufcs(b: Box) -> string throws never { Shows.show(b) }
+"#;
+        // The declaration in the interface body...
+        let at_decl =
+            CursorTest::new(&SRC.replacen("    function show", "    function <[CURSOR]show", 1));
+        let from_decl: Vec<String> = at_decl
+            .find_all_usages()
+            .iter()
+            .map(|l| at_decl.format_location_with_name(l))
+            .collect();
+        assert_eq!(
+            from_decl.len(),
+            4,
+            "the default body, the generic call, the existential call, and the \
+             UFCS call all dispatch through this slot: {from_decl:?}"
+        );
+
+        // ...and a call through the slot agree on the reference set.
+        let at_call = CursorTest::new(&SRC.replace("s.show()", "s.<[CURSOR]show()"));
+        let from_call: Vec<String> = at_call
+            .find_all_usages()
+            .iter()
+            .map(|l| at_call.format_location_with_name(l))
+            .collect();
+        // The SETS, not their sizes: equal counts over different spans
+        // would be exactly the split identity this unification removed.
+        assert_eq!(
+            from_decl, from_call,
+            "declaration and call are the same symbol"
+        );
+    }
+
+    /// Three spellings read one member of one receiver, and all three are
+    /// references the search must return. The interface projection
+    /// (`(B as Shows).show`) and the null-short-circuiting access
+    /// (`b?.show()`) were both invisible before their member-name spans were
+    /// recorded and asked for — a rename that missed them would have left
+    /// the call naming a method that no longer exists.
+    #[test]
+    fn every_spelling_of_a_member_read_is_a_reference() {
+        let test = CursorTest::new(
+            r#"interface Shows {
+    function <[CURSOR]show(self) -> string throws never
+}
+
+class Box { item: int }
+
+implement Shows for Box {
+    function show(self) -> string throws never { "b" }
+}
+
+function projection(b: Box) -> string throws never { (Box as Shows).show(b) }
+
+function shorthand(b: Box) -> string throws never { Shows.show(b) }
+
+function existential(s: Shows) -> string throws never { s.show() }
+
+function optional(s: Shows?) -> string? throws never { s?.show() }
+"#,
+        );
+        let mut found: Vec<String> = test
+            .find_all_usages()
+            .iter()
+            .map(|l| test.format_location_with_name(l))
+            .collect();
+        found.sort();
+        assert_eq!(found.len(), 4, "one per call spelling: {found:?}");
+        for usage in &found {
+            assert!(
+                usage.ends_with("-> show"),
+                "a reference is the NAME: {usage:?}"
+            );
+        }
     }
 
     #[test]

@@ -57,7 +57,7 @@ const IMPL_BODY: &[(&str, &str)] = &[
     ("type", "type ${1:Name} = $0"),
 ];
 
-pub(crate) fn complete_items(container: ItemContainer, out: &mut Completions) {
+pub(crate) fn complete_items(container: ItemContainer, out: &mut Completions<'_>) {
     let declarations = match container {
         ItemContainer::TopLevel => TOP_LEVEL,
         ItemContainer::Class => CLASS_BODY,
@@ -69,7 +69,7 @@ pub(crate) fn complete_items(container: ItemContainer, out: &mut Completions) {
     }
 }
 
-pub(crate) fn complete_attributes(out: &mut Completions) {
+pub(crate) fn complete_attributes(out: &mut Completions<'_>) {
     // Unknown `@` names on FIELDS are legal user schema annotations (hoisted
     // for reflection read-back), so this list is a menu of the names the
     // compiler gives meaning to, not a closed set.

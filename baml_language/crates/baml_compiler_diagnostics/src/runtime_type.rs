@@ -210,17 +210,6 @@ pub fn mounted_package_call_unsupported(path: &str) -> Diagnostic {
     )
 }
 
-/// E0173 — a value path into a package served from its compiled interface
-/// names nothing the interface exports.
-pub fn served_interface_exports_functions_only(package: &str, path: &str) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ServedInterfaceExportsFunctionsOnly,
-        format!(
-            "package `{package}` is served from its compiled interface, which exports functions and types only; `{path}` is not an exported function"
-        ),
-    )
-}
-
 /// E0012 — a runtime type contains the same member more than once.
 pub fn duplicate_member(kind: DuplicateMemberKind, container: &str, member: &str) -> Diagnostic {
     Diagnostic::error(
@@ -330,11 +319,6 @@ mod tests {
                 mounted_package_call_unsupported("dep.tool"),
                 "E0158",
                 "cannot call mounted callable `dep.tool`: this callable kind has no loc-free bytecode link contract",
-            ),
-            (
-                served_interface_exports_functions_only("dep", "dep.tool"),
-                "E0173",
-                "package `dep` is served from its compiled interface, which exports functions and types only; `dep.tool` is not an exported function",
             ),
             (
                 duplicate_serialized_key("wire", SerializedKeyContainer::Class),

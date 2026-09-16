@@ -285,6 +285,7 @@ jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
+subenum = { version = "1.2.0" }
 pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"

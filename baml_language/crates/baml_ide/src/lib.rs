@@ -36,6 +36,7 @@ pub mod listing;
 mod mounted_package_tests;
 pub mod outline;
 pub mod param_schema;
+pub mod rename;
 pub mod render;
 pub mod resolve;
 pub mod search;
@@ -72,6 +73,7 @@ pub use listing::{
 };
 pub use outline::{OutlineItem, file_outline};
 pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
+pub use rename::{RenameError, prepare_rename, rename};
 pub use resolve::{Location, SymbolTarget, symbol_at, target_definition};
 pub use search::{SearchHit, SymbolInfo, search_ranked, search_symbols};
 pub use symbol_pool::build_symbol_pool;
@@ -79,7 +81,7 @@ pub use symbol_pool::build_symbol_pool;
 // the unqualified name belongs to `describe::SymbolKind`, the payload-carrying
 // kind of a symbol description.
 pub use symbols::{
-    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Symbol,
+    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Internals, Symbol,
     list_functions_with_metadata,
 };
 // Editor primitive: cursor-position token lookup. First-class API — callers

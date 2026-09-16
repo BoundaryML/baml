@@ -17,15 +17,15 @@ pub(crate) fn complete(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
     offset: TextSize,
-    out: &mut Completions,
+    out: &mut Completions<'_>,
 ) {
     for entry in type_names_in_scope_at(db, file, offset) {
         if let baml_compiler2_ppir::resolve::TypeScopeNameKind::Item(def) = &entry.kind
-            && symbols::is_synthesized(db, &entry.name, *def)
+            && !symbols::offered_in_completion(db, &entry.name, *def)
         {
             continue;
         }
-        out.add_type_scope_name(db, file, &entry);
+        out.add_type_scope_name(&entry);
     }
 
     for builtin in baml_type::BuiltinTypeName::all() {

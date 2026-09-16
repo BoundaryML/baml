@@ -9,6 +9,8 @@ RELEASING.md
 
 # Test documentation
 crates/baml_tests/BENCHMARKS.md
+crates/baml_tests/NATIVE_BAML_TEST_MIGRATION_SURVEY.md
+crates/baml_tests/NATIVE_BAML_TEST_RUST_SURVIVORS.md
 crates/baml_tests/benches/incremental/*/description.md
 
 # LSP documentation

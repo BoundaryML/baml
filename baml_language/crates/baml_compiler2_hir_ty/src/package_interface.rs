@@ -557,6 +557,13 @@ pub enum ImportError {
     },
     /// Two rows of one family share a key, so the key names no single row.
     DuplicateRow { kind: &'static str, key: String },
+    /// A row's per-parameter bound lists do not pair with its parameters.
+    UnpairedBounds {
+        kind: &'static str,
+        key: String,
+        params: usize,
+        bound_lists: usize,
+    },
     /// An impl claims to be declared in the body of a class this package
     /// does not export.
     DanglingImplOrigin { interface: String, class: String },
@@ -578,6 +585,15 @@ impl std::fmt::Display for ImportError {
             Self::DuplicateRow { kind, key } => {
                 write!(f, "the interface exports two {kind} rows as `{key}`")
             }
+            Self::UnpairedBounds {
+                kind,
+                key,
+                params,
+                bound_lists,
+            } => write!(
+                f,
+                "the {kind} row `{key}` declares {params} generic parameter(s) but {bound_lists} bound list(s)"
+            ),
             Self::DanglingImplOrigin { interface, class } => write!(
                 f,
                 "an impl of `{interface}` claims the body of `{class}`, which this package does not export as a class"
@@ -635,6 +651,14 @@ fn validate_row_identities(
         let mut seen = FxHashSet::default();
         for row in rows {
             let expected = expected(&row.name);
+            if row.generic_params.len() != row.generic_param_bounds.len() {
+                return Err(ImportError::UnpairedBounds {
+                    kind,
+                    key: spell_target(&expected),
+                    params: row.generic_params.len(),
+                    bound_lists: row.generic_param_bounds.len(),
+                });
+            }
             if row.target != expected {
                 return Err(ImportError::RowIdentity {
                     kind,
@@ -665,6 +689,27 @@ fn validate_row_identities(
                     kind,
                     key: spell(&key),
                     claimed: spell(claimed),
+                });
+            }
+            let (params, bound_lists) = match row {
+                ExportedType::Class {
+                    generic_params,
+                    generic_param_bounds,
+                    ..
+                } => (generic_params.len(), generic_param_bounds.len()),
+                ExportedType::Interface {
+                    generic_params,
+                    param_bounds,
+                    ..
+                } => (generic_params.len(), param_bounds.len()),
+                ExportedType::Enum { .. } | ExportedType::TypeAlias { .. } => (0, 0),
+            };
+            if params != bound_lists {
+                return Err(ImportError::UnpairedBounds {
+                    kind,
+                    key: spell(&key),
+                    params,
+                    bound_lists,
                 });
             }
             match row {
@@ -720,6 +765,14 @@ fn validate_row_identities(
     }
     for exported in &interface.impls {
         let slot_owner = &exported.interface.name;
+        if exported.generic_params.len() != exported.param_bounds.len() {
+            return Err(ImportError::UnpairedBounds {
+                kind: "impl",
+                key: spell(slot_owner),
+                params: exported.generic_params.len(),
+                bound_lists: exported.param_bounds.len(),
+            });
+        }
         check_callables("impl method", &mut exported.methods.iter(), &|name| {
             ExternalCallTarget::Interface {
                 interface: slot_owner.clone(),

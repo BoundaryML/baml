@@ -21,7 +21,7 @@
 //! # Invariants enforced here (plan §6)
 //!
 //! - The producer never blocks: no mutex, no condvar, no park, no unbounded
-//!   spin anywhere reachable from [`Ring::push`]. It runs holding an
+//!   spin anywhere reachable from [`OSThreadMarkerRing::push`]. It runs holding an
 //!   `ActiveHeapPermit`; a blocked producer is an engine-wide GC stall.
 //! - The consumer never touches the GC heap or permits.
 //! - Hitting the live-memory cap rejects the concrete record without blocking
@@ -44,7 +44,7 @@ use crate::prof::{
     wake::Wake,
 };
 
-/// Ring lifecycle states (design D5b).
+/// `OSThreadMarkerRing` lifecycle states (design D5b).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum RingState {
@@ -67,7 +67,7 @@ impl RingState {
     }
 }
 
-/// What one bounded [`Ring::drain`] call accomplished.
+/// What one bounded [`OSThreadMarkerRing::drain`] call accomplished.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct DrainOutcome {
     /// Whether any bytes were consumed.
@@ -240,10 +240,10 @@ struct SegSync {
     /// the segment sits in the free list — the next free-list node. A
     /// segment is never in both places, and in-list nodes are immutable
     /// until popped, so the dual use cannot be observed concurrently.
-    next: AtomicPtr<Segment>,
+    next: AtomicPtr<OSThreadMarkerRingSegment>,
 }
 
-struct Segment {
+struct OSThreadMarkerRingSegment {
     /// D3: `{commit_len, next}` get their own cache line so producer commits
     /// and consumer polls don't false-share with the buffer pointer reads.
     sync: CachePadded<SegSync>,
@@ -252,12 +252,15 @@ struct Segment {
 }
 
 pub(crate) fn segment_footprint(seg_bytes: usize) -> usize {
-    seg_bytes + size_of::<Segment>()
+    seg_bytes + size_of::<OSThreadMarkerRingSegment>()
 }
 
-fn alloc_segment(seg_bytes: usize, ctx: &'static RingCtx) -> Option<*mut Segment> {
+fn alloc_segment(
+    seg_bytes: usize,
+    ctx: &'static RingCtx,
+) -> Option<*mut OSThreadMarkerRingSegment> {
     let charge = ctx.try_charge(segment_footprint(seg_bytes))?;
-    Some(Box::into_raw(Box::new(Segment {
+    Some(Box::into_raw(Box::new(OSThreadMarkerRingSegment {
         sync: CachePadded::new(SegSync {
             commit_len: AtomicU32::new(0),
             next: AtomicPtr::new(null_mut()),
@@ -270,19 +273,19 @@ fn alloc_segment(seg_bytes: usize, ctx: &'static RingCtx) -> Option<*mut Segment
 /// # Safety
 /// `seg` came from [`alloc_segment`], is reachable from neither the live
 /// chain nor the free list, and no thread will touch it again.
-unsafe fn free_segment(seg: *mut Segment) {
+unsafe fn free_segment(seg: *mut OSThreadMarkerRingSegment) {
     drop(unsafe { Box::from_raw(seg) });
 }
 
 /// Producer-only position fields (D3 group 1).
 struct RingProducer {
-    head: *mut Segment,
+    head: *mut OSThreadMarkerRingSegment,
     head_pos: usize,
 }
 
 /// Consumer-only position fields (D3 group 2).
 struct RingConsumer {
-    tail: *mut Segment,
+    tail: *mut OSThreadMarkerRingSegment,
     tail_pos: usize,
 }
 
@@ -291,8 +294,8 @@ struct RingShared {
     state: AtomicU8,
     /// Treiber free list of recycled segments. Single pusher (the consumer)
     /// and single popper (the producer) — see the no-ABA argument on
-    /// [`Ring::free_pop`].
-    free_head: AtomicPtr<Segment>,
+    /// [`OSThreadMarkerRing::free_pop`].
+    free_head: AtomicPtr<OSThreadMarkerRingSegment>,
     /// Approximate free-list length (Relaxed; D7). Transient off-by-one —
     /// including the brief wrap-below-zero when a pop's decrement lands
     /// between a push's CAS and its increment — only skews the recycle/free
@@ -305,7 +308,7 @@ struct RingShared {
 }
 
 /// The segmented SPSC ring. See the module docs.
-pub struct Ring {
+pub struct OSThreadMarkerRing {
     p: CachePadded<UnsafeCell<RingProducer>>,
     c: CachePadded<UnsafeCell<RingConsumer>>,
     s: CachePadded<RingShared>,
@@ -321,10 +324,10 @@ pub struct Ring {
 // publish-by-first-commit rule — with the Release/Acquire edges in the
 // module-docs table providing the happens-before. The loom suite
 // model-checks exactly these claims.
-unsafe impl Send for Ring {}
-unsafe impl Sync for Ring {}
+unsafe impl Send for OSThreadMarkerRing {}
+unsafe impl Sync for OSThreadMarkerRing {}
 
-impl Ring {
+impl OSThreadMarkerRing {
     /// Allocates a ring with one open segment, `Active` and owned by the
     /// calling thread (the creator is the claimant). The returned pointer is
     /// conceptually `&'static`: production code never frees rings
@@ -334,9 +337,9 @@ impl Ring {
         seg_bytes: usize,
         freelist_cap: usize,
         engine_id: u64,
-    ) -> Option<*mut Ring> {
+    ) -> Option<*mut OSThreadMarkerRing> {
         let seg = alloc_segment(seg_bytes, ctx)?;
-        Some(Box::into_raw(Box::new(Ring {
+        Some(Box::into_raw(Box::new(OSThreadMarkerRing {
             p: CachePadded::new(UnsafeCell::new(RingProducer {
                 head: seg,
                 head_pos: 0,
@@ -508,7 +511,7 @@ impl Ring {
     ///
     /// # Safety
     /// Caller is the ring's unique producer thread.
-    unsafe fn free_pop(&self) -> Option<*mut Segment> {
+    unsafe fn free_pop(&self) -> Option<*mut OSThreadMarkerRingSegment> {
         let mut head = self.s.free_head.load(Ordering::Acquire);
         loop {
             if head.is_null() {
@@ -542,7 +545,7 @@ impl Ring {
     /// Caller is the consumer thread, has fully drained `seg`, and has
     /// already advanced `tail` past it (the producer linked past it, so
     /// neither side can reach it again).
-    unsafe fn retire(&self, seg: *mut Segment) {
+    unsafe fn retire(&self, seg: *mut OSThreadMarkerRingSegment) {
         if self.s.free_len.load(Ordering::Relaxed) >= self.freelist_cap {
             unsafe { free_segment(seg) };
             return;
@@ -603,7 +606,7 @@ impl Ring {
     /// New-producer claim: CAS `Pooled → Active`. On success the caller is
     /// the unique producer and may push from the calling thread only.
     ///
-    /// Acquire on success: pairs with [`Ring::mark_pooled`]'s Release, so the
+    /// Acquire on success: pairs with [`OSThreadMarkerRing::mark_pooled`]'s Release, so the
     /// consumer's final drain — and, through the orphan edge before it, the
     /// dead producer's last `head`/`head_pos` writes — happen-before the new
     /// producer touches them.
@@ -632,7 +635,7 @@ impl Ring {
     /// Which engine the bytes most recently drained from this ring belong to.
     ///
     /// # Safety
-    /// Consumer thread only, and only after a [`Ring::drain`] on this ring
+    /// Consumer thread only, and only after a [`OSThreadMarkerRing::drain`] on this ring
     /// reported progress in the current sweep (that drain's Acquire is what
     /// publishes a new claimant's write).
     pub(crate) unsafe fn engine_id(&self) -> u64 {
@@ -645,7 +648,7 @@ impl Ring {
     }
 }
 
-impl Drop for Ring {
+impl Drop for OSThreadMarkerRing {
     /// Production rings are never dropped (invariant 7: `&'static`, reuse
     /// don't reclaim). This exists for tests, which reclaim rings after all
     /// producer/consumer activity has quiesced; then the live chain
@@ -672,18 +675,18 @@ impl Drop for Ring {
 /// The producer-side write handle: living proof that the holding thread
 /// claimed the ring. Created only by the claim/acquire paths on the claiming
 /// thread, and `!Send + !Sync` so it cannot leave it — which is what makes
-/// [`RingHandle::push`] safe to expose.
+/// [`OSThreadMarkerRingHandle::push`] safe to expose.
 #[derive(Clone, Copy)]
-pub struct RingHandle {
-    ring: &'static Ring,
+pub struct OSThreadMarkerRingHandle {
+    ring: &'static OSThreadMarkerRing,
     _not_send_sync: PhantomData<*mut ()>,
 }
 
-impl RingHandle {
+impl OSThreadMarkerRingHandle {
     /// # Safety
     /// `ring` is `Active` and was claimed by (or created on) the calling
     /// thread, which makes that thread the unique producer.
-    pub(crate) unsafe fn new(ring: &'static Ring) -> Self {
+    pub(crate) unsafe fn new(ring: &'static OSThreadMarkerRing) -> Self {
         Self {
             ring,
             _not_send_sync: PhantomData,
@@ -711,9 +714,9 @@ impl RingHandle {
     }
 
     /// The underlying ring, for D5a snapshots: the engine stores this
-    /// `&'static Ring` in the VM and refreshes it once per exec resume.
+    /// `&'static OSThreadMarkerRing` in the VM and refreshes it once per exec resume.
     #[must_use]
-    pub fn ring(self) -> &'static Ring {
+    pub fn ring(self) -> &'static OSThreadMarkerRing {
         self.ring
     }
 }
@@ -722,7 +725,7 @@ impl RingHandle {
 /// committed)` and advances `tail_pos`. Bytes below `committed` were
 /// published by the Acquire that read it and are immutable until recycle.
 unsafe fn consume_range(
-    seg: &Segment,
+    seg: &OSThreadMarkerRingSegment,
     tail_pos: &mut usize,
     committed: usize,
     sink: &mut impl FnMut(&[u8]),

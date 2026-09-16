@@ -1,12 +1,8 @@
 //! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
 //!
-//! Each VM gets its own TLAB, which is a reserved chunk of the heap.
-//! Allocation within a TLAB is a simple bump-pointer increment - no
-//! locks, no atomics, no contention.
-//!
-//! When a TLAB is exhausted, the VM requests a new chunk from the heap.
-//! This is the only point where synchronization is needed (an atomic
-//! fetch_add on the heap's next_chunk counter).
+//! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
+//! to 1024 as the VM allocates. Only reserved object slots spend the GC budget;
+//! backing storage is excluded. Ordinary yields preserve unused capacity.
 
 use std::sync::Arc;
 
@@ -54,10 +50,9 @@ impl TlabChunk {
 ///
 /// # Performance
 ///
-/// - **Fast path**: `alloc()` is a single pointer increment + write
-/// - **No atomics**: Each VM owns its TLAB exclusively
-/// - **No locks**: Direct memory access via `UnsafeCell`
-/// - **Refill cost**: One `AtomicUsize::fetch_add` per ~1024 allocations
+/// Object placement uses an exclusive bump pointer. Reservations update the shared
+/// allocation budget; no collection runs here.
+/// Refill reserves another region from the heap.
 ///
 /// # Example
 ///
@@ -83,6 +78,8 @@ pub struct Tlab {
 
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
+
+    next_chunk_size: usize,
 }
 
 impl Tlab {
@@ -102,12 +99,9 @@ impl Tlab {
     /// TLAB mechanics without the permit infrastructure (those tests
     /// guarantee single-threaded access).
     pub fn new(heap: Arc<BexHeap>) -> Self {
-        let chunk = heap.alloc_tlab_chunk();
-        Self {
-            alloc_ptr: chunk.start,
-            alloc_limit: chunk.end,
-            heap,
-        }
+        let mut tlab = Self::new_empty(heap);
+        tlab.refill();
+        tlab
     }
 
     /// Create a TLAB without allocating an initial chunk.
@@ -121,6 +115,11 @@ impl Tlab {
         Self {
             alloc_ptr: 0,
             alloc_limit: 0,
+
+            // Zero marks the first reservation, so the first size is repeated:
+            // 32, 32, 64, ... gives aligned cumulative reservations of
+            // 32, 64, 128, ... rather than 32, 96, 224, ... .
+            next_chunk_size: 0,
             heap,
         }
     }
@@ -260,7 +259,17 @@ impl Tlab {
     /// Get a new chunk from the heap (cold path).
     #[cold]
     fn refill(&mut self) {
-        let chunk = self.heap.alloc_tlab_chunk();
+        let size = if self.next_chunk_size == 0 {
+            self.heap.tlab_size()
+        } else {
+            self.next_chunk_size
+        };
+        let chunk = self.heap.alloc_tlab_chunk_sized(size);
+        self.next_chunk_size = if self.next_chunk_size == 0 {
+            size
+        } else {
+            size.saturating_mul(2).min(self.heap.max_tlab_size)
+        };
         self.alloc_ptr = chunk.start;
         self.alloc_limit = chunk.end;
     }

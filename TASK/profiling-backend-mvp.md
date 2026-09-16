@@ -300,7 +300,7 @@ function. The selected row is the outer, user-visible LLM function. Internal
 client/sysop helpers remain CCT-only unless they independently satisfy root or
 manual policy, and their time remains inside the outer call's inclusive time.
 
-The current reserved `CallFunction.flags: u8` is sufficient for the MVP:
+The current reserved `FunctionEnter.flags: u8` is sufficient for the MVP:
 
 | Bit | Meaning |
 |---:|---|
@@ -346,7 +346,7 @@ selected the call, the profiler retains the resulting runtime-ID annotation
 on that span. If the call is CCT-only, no exact span is created solely because
 its runtime identity changed.
 
-The implementation may replace the raw `SetFunctionId` record with an
+The implementation may replace the raw `SetBoundaryLocalId` record with an
 equivalent runtime-ID annotation record only after both the call-site
 `LocalId` path and mid-call `baml.id.set` retain their existing language
 behavior and selected-span attribution.
@@ -428,7 +428,7 @@ and its protected control memory starts with profiling off.
 guard. It does not allocate
 another task, map entry, or `Arc` per call, and it is deliberately not owned by
 `BexThread`: canary consumes/drops `BexThread` before its outer event-loop
-wrapper emits the final `EndThread`.
+wrapper emits the final `BexThreadEnd`.
 
 The registry is a fixed-capacity slot array allocated when the profiler starts.
 Execution admission/release may use its bounded free list; the spawn and
@@ -487,7 +487,7 @@ the shorter engine-local pair is never used as a durable key.
 Admission attaches the host runtime token and nonoptional program ID to the
 root logical thread via the registry slot and the `RootStarted` meta record;
 there is no `StartBoundary` fact (superseded by
-TASK/profiling-backend-streams.md §5.5). `StartThread` keeps its parent
+TASK/profiling-backend-streams.md §5.5). `BexThreadStart` keeps its parent
 thread/call reference and gains an optional spawn source span. The consumer
 propagates execution ownership and the parent context through that edge. A
 child-start that drains before its parent remains in the bounded unresolved
@@ -496,7 +496,7 @@ table.
 The host runtime token is also the root span's initial runtime ID. Once
 this admission fact exists, the profiler does not need a duplicate
 host-installed root
-`SetFunctionId` record. `SetFunctionId`/its replacement is reserved for actual
+`SetBoundaryLocalId` record. `SetBoundaryLocalId`/its replacement is reserved for actual
 language runtime-ID overrides and carries the per-call annotation ordinal.
 
 The first call on a spawned thread uses:
@@ -508,20 +508,20 @@ edge kind      = Spawn
 ~~~
 
 Two spawn expressions in the same parent therefore remain distinct. This
-requires plumbing the source span into `StartThread` (or an equivalent
+requires plumbing the source span into `BexThreadStart` (or an equivalent
 self-contained spawn fact); canary does not carry it today.
 
 The acknowledged root registration creates the first lease and initializes
 `active_threads = 1`. Every spawn, including a grandchild spawn, acquires a
 child lease by checked atomic increment **before** the child becomes runnable
-or its `StartThread` is attempted. The parent owns the new lease until the
+or its `BexThreadStart` is attempted. The parent owns the new lease until the
 spawn task accepts it; a scheduling/setup failure releases it immediately.
 Inside the task, canary's existing `SpawnProfCloser` owns the lease while the
 child is queued or before its event loop starts. On an abnormal drop it emits
-the synthetic `EndFunction`/`EndThread` first and releases the lease last. On
+the synthetic `FunctionExit`/`BexThreadEnd` first and releases the lease last. On
 normal loop entry it transfers the lease into a separate outer
 `ThreadProfileCompletionGuard`; that guard is held outside the consumed
-`BexThread`, records/attempts all final value, `EndFunction`, and `EndThread`
+`BexThread`, records/attempts all final value, `FunctionExit`, and `BexThreadEnd`
 work, completes any post-loop future settlement/unhandled bookkeeping that can
 wake another VM, and then releases the lease at the end of the spawned task.
 If the task future itself is dropped mid-loop, its execution future is
@@ -539,10 +539,10 @@ task.
 Child lease acquisition is a producer-local atomic operation. It is not an
 acknowledged consumer control message and it does not create another
 admission fact, runtime token, stream, or capture-policy root. The
-existing `StartThread` parent-thread/parent-call fact carries causal ownership
+existing `BexThreadStart` parent-thread/parent-call fact carries causal ownership
 to the consumer. If that structural record is lost, the lease still prevents
 early sealing while population health reports the missing thread attribution.
-When the producer itself knows the `StartThread` push was rejected, it stops
+When the producer itself knows the `BexThreadStart` push was rejected, it stops
 further profiler emission for that child subtree but retains the lease until
 the child completes. A record accepted and later found corrupt is reconciled
 by the consumer's bounded unresolved/loss path.
@@ -712,13 +712,13 @@ The producer adds one end-record variant:
 
 ~~~rust
 enum RawCallEnd {
-    EndFunction {
+    FunctionExit {
         status: FunctionEndStatus,
         thread_id: BexThreadId,
         call_id: BexCallId,
         end_ticks: u64,
     },
-    EndFunctionAwaited {
+    FunctionExitAwaited {
         status: FunctionEndStatus,
         thread_id: BexThreadId,
         call_id: BexCallId,
@@ -729,10 +729,10 @@ enum RawCallEnd {
 }
 ~~~
 
-`EndFunctionAwaited` is an alternative encoding of the same one call-end fact,
+`FunctionExitAwaited` is an alternative encoding of the same one call-end fact,
 not a second record. Its payload is the compact end plus twelve timing bytes
 before codec framing. Calls whose total and count are both zero use the
-existing `EndFunction` byte shape. The codec is versioned and golden-tested;
+existing `FunctionExit` byte shape. The codec is versioned and golden-tested;
 Phase 0 records the measured encoded sizes rather than copying stale sizes
 from the reference proposal.
 
@@ -1226,7 +1226,7 @@ The fixed dimensions are:
 - the closed loss-reason enums in Section 8.
 
 The structural push API returns success/failure. Before attempting a selected
-`CallFunction` push, the producer increments `spans_selected` in the execution
+`FunctionEnter` push, the producer increments `spans_selected` in the execution
 health block. If the push fails, it increments
 `StructuralStartTransportExceeded` and suppresses value copying for that call.
 If the start arrives but cannot resolve a context, the consumer records
@@ -2364,7 +2364,7 @@ not restate or weaken them.
 ### Phase 0: freeze contracts and measurements
 
 - Inventory all canary call/thread producers, suspension and unwind entries,
-  `EndFunction` emitters, internal-root suppressions, host value/logging
+  `FunctionExit` emitters, internal-root suppressions, host value/logging
   injection, and `$id` call-kind support.
 - Freeze durable `CallRef`/`ThreadRef` scope, nonoptional `ProgramId`,
   `ContextKey`, `ValueCid`, awaited-end, and error-record codecs with
@@ -2380,7 +2380,7 @@ not restate or weaken them.
 - Implement the Section 11 process/store `ProfilerSession::Off | On` and sole
   per-root `begin_root(UserBoundary|SuppressInternal)` interface.
 - Put the Section 4 resolver inside active roots and encode its result in the
-  reserved `CallFunction.flags` byte.
+  reserved `FunctionEnter.flags` byte.
 - Remove the independent `FunctionCallContext` value-capture path and move
   CLI/exec/LSP/WASM logging to its own optional logger interface.
 - Preserve all language IDs, `LocalId` mutation/consumption, and logging in
@@ -2397,7 +2397,7 @@ not restate or weaken them.
 - Add governor-charged active-thread/call/unresolved state and the O(1)
   publisher handles; replace fatal ring overflow with explicit nonfatal loss.
 - Implement Section 5.4's sparse await accumulator and single
-  `EndFunctionAwaited` variant across every declared suspension seam.
+  `FunctionExitAwaited` variant across every declared suspension seam.
 - Keep old output only as an oracle; transcode the awaited variant as an
   ordinary legacy end until Phase 7.
 
@@ -2489,9 +2489,9 @@ gates remain in force verbatim.
   each submit exactly one barrier through the same last-owner path.
 - **Child completion:** queue rejection, cancellation before first poll, task
   drop, engine error, and scheduling failure release one acquired lease.
-  Barriers placed (a) after inner-loop return but before final `EndThread` and
+  Barriers placed (a) after inner-loop return but before final `BexThreadEnd` and
   (b) during post-loop future settlement prove that neither consumed
-  `BexThread` nor early `EndThread` can release ownership before all final
+  `BexThread` nor early `BexThreadEnd` can release ownership before all final
   producer work stops.
 - **Root completion:** host drop/abort after acknowledged start yields
   `Abandoned` plus `RootAbandoned`; panic yields `Panicked`; setup/engine error
@@ -2506,7 +2506,7 @@ gates remain in force verbatim.
   immutable root result. A forever-running child honestly keeps the run open;
   profiling never cancels or joins it. Orderly engine shutdown preserves
   canary's existing wait-only behavior; this MVP adds no cancellation sweep.
-- **Loss and races:** losing child `StartThread` reports attribution loss while
+- **Loss and races:** losing child `BexThreadStart` reports attribution loss while
   its lease still prevents early seal. Counter saturation or stale generation
   makes that subtree profiler-off with
   `ProfilerThreadLeaseUnavailable` and preserves execution/identity.
@@ -2518,8 +2518,8 @@ gates remain in force verbatim.
 
 ### Timing
 
-- **Encoding:** a never-suspended call uses compact `EndFunction` with zero
-  await; one or ten waits use one `EndFunctionAwaited` carrying the summed
+- **Encoding:** a never-suspended call uses compact `FunctionExit` with zero
+  await; one or ten waits use one `FunctionExitAwaited` carrying the summed
   duration and count. Ready-inline sysops/futures allocate no sparse entry.
 - **Attribution:** async sysop, Await, AwaitAny, task-group/entry permit,
   EarlyYield, normal resume, cancellation wake-up, and OS-thread migration

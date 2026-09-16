@@ -12,8 +12,10 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
-// Re-enabled in Slice 3 after the enriched PackageInterface schema is native
-// to hir_ty. The test source remains the contract for that slice.
+// Archived tests for the superseded TIR PackageInterface API. Re-enabling
+// requires porting the fixtures and assertions to hir_ty; keeping the module
+// disconnected makes that separate repair explicit instead of compiling a
+// misleading stale contract.
 #[cfg(any())]
 mod package_interface;
 #[cfg(test)]

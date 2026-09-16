@@ -163,9 +163,6 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
-    /// A package-prefixed value path into a package served from its compiled
-    /// interface names nothing that interface exports.
-    ServedInterfaceExportsFunctionsOnly { package: Name, path: Name },
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
@@ -1124,13 +1121,6 @@ impl TirTypeError {
                         baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(
                             path.as_str(),
                         );
-                    f.write_str(diagnostic.message.as_str())
-                }
-                TirTypeError::ServedInterfaceExportsFunctionsOnly { package, path } => {
-                    let diagnostic = baml_compiler_diagnostics::runtime_type::served_interface_exports_functions_only(
-                        package.as_str(),
-                        path.as_str(),
-                    );
                     f.write_str(diagnostic.message.as_str())
                 }
                 TirTypeError::DeadCode {

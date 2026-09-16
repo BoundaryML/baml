@@ -202,6 +202,44 @@ export const annotationSpecs = {
       text: '} catch (error: unknown) {\n    if (error instanceof BadToolInput) {\n      return error.message\n    }\n    throw error\n  }',
     },
   ],
+  'vision-ask': [
+    {
+      kind: 'recovery',
+      label: 'System: everything until the next role',
+      mark: 'left-bar',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${role("system")}\n        Answer the user\'s question about the image.',
+    },
+    {
+      kind: 'success',
+      label: 'User: text and image until the prompt ends',
+      mark: 'left-bar',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${role("user")}\n        ${question}\n        ${photo}',
+    },
+    {
+      kind: 'syntax',
+      label: 'BAML inserts the image here',
+      mark: 'underbrace',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${photo}',
+    },
+  ],
+  'vision-extract': [
+    {
+      kind: 'recovery',
+      label: 'Defines the output schema',
+      mark: 'underbrace',
+      text: 'Receipt',
+    },
+    {
+      kind: 'recovery',
+      label: 'Inserts that schema into the system message',
+      mark: 'underbrace',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${ctx.output_format()}',
+    },
+  ],
 } satisfies Record<string, CodeAnnotation[]>;
 
 export type CodeAnnotationId = keyof typeof annotationSpecs;

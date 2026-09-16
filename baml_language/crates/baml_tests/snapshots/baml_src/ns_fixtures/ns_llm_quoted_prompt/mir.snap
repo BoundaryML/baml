@@ -556,7 +556,7 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.Func
     let _10: reflect.Type
 
     bb0: {
-        _3 = copy _1;
+        _3 = copy *_1;
         _2 = { const "topic": copy _3 }: map<string, unknown>;
         _4 = make_closure lambda[0](copy _1);
         _6 = []: ai.tools.Tool[];
@@ -636,7 +636,7 @@ fn .<lambda(BacktickPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> 
 
     bb1: {
         _14 = copy _6;
-        _15 = copy capture[0];
+        _15 = copy *capture[0];
         _16 = load_type(unknown);
         _13 = call const fn baml.Array.push<copy _16>(copy _14, copy _15) -> [bb2, unwind: bb8];
     }

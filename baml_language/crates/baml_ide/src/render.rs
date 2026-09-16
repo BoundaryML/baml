@@ -25,9 +25,7 @@ use baml_compiler2_hir::{
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_compiler2_ppir::item_data::{
-    FunctionData, GenericParamData, InterfaceData, InterfaceMethodSigData,
-};
+use baml_compiler2_ppir::item_data::{FunctionData, GenericParamData};
 use baml_type::{DeclName, Ty, TyRenderStrategy, user_facing::humanize_type_string};
 
 // ── Resolved-type rendering ───────────────────────────────────────────────────
@@ -610,39 +608,6 @@ impl<'db> FnSigParts<'db> {
                 .collect(),
             ret: SigSlot::Resolved(&exported.return_type),
             throws: SigSlot::Resolved(&exported.callable_throws),
-        }
-    }
-
-    /// Signature parts for an interface method signature. Interface method
-    /// declarations must declare BOTH the return type and the `throws`
-    /// clause, so an absent slot here is a malformed declaration
-    /// ([`SigSlot::Missing`]).
-    pub fn of_interface_method(
-        iface: &'db InterfaceData<'db>,
-        method: &'db InterfaceMethodSigData,
-    ) -> FnSigParts<'db> {
-        FnSigParts {
-            name: method.name.as_str().to_string(),
-            generics: render_generic_params(&method.generic_params, &iface.type_refs),
-            params: method
-                .params
-                .iter()
-                .map(|param| SigParam {
-                    name: param.name.as_str().to_string(),
-                    optional: param.has_default,
-                    ty: param
-                        .type_ref
-                        .map(|id| SigSlot::Syntax(&iface.type_refs, id)),
-                })
-                .collect(),
-            ret: method
-                .return_type
-                .map(|id| SigSlot::Syntax(&iface.type_refs, id))
-                .unwrap_or(SigSlot::Missing),
-            throws: method
-                .throws
-                .map(|id| SigSlot::Syntax(&iface.type_refs, id))
-                .unwrap_or(SigSlot::Missing),
         }
     }
 

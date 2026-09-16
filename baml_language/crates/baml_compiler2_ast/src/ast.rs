@@ -621,10 +621,22 @@ pub struct AstSourceMap {
     pub expr_spans: Arena<TextRange>,
     pub stmt_spans: Arena<TextRange>,
     pub pattern_spans: Arena<TextRange>,
+    /// The NAME token of each `Pattern::Bind`, as distinct from
+    /// [`Self::pattern_spans`], which covers the whole pattern (`x: T`, and
+    /// for a `let` the keyword too). A rename replaces an identifier and
+    /// nothing else, and go-to-definition should land on the name rather
+    /// than highlight the binding, so the two spans cannot be the same
+    /// entry. Absent for binds the compiler synthesizes, which have no name
+    /// token to point at.
+    pub bind_name_spans: HashMap<PatId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
-    /// For `MemberAccess` expressions, the span of just the member name (after the dot).
+    /// For `MemberAccess` and `QualifiedPath` expressions, the span of just
+    /// the member name (after the dot). Both name one member of one
+    /// receiver, differing only in how the receiver is written, so both
+    /// record it here — an editor asking "what name is at this offset"
+    /// must not have to know which spelling produced it.
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
@@ -657,6 +669,7 @@ impl AstSourceMap {
             expr_spans: Arena::new(),
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
+            bind_name_spans: HashMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
@@ -712,12 +725,22 @@ impl AstSourceMap {
         Self::span_at(&self.expr_spans, id)
     }
 
-    /// Look up the member-name span for a `MemberAccess` expression.
+    /// The member-name span recorded for `id`, or `None` when this
+    /// expression names no member.
+    ///
+    /// Prefer this over [`Self::member_access_member_span`] wherever the
+    /// answer must be a NAME — a rename or a reference highlight. The
+    /// fallback that accessor applies is the whole expression, which is
+    /// never a name.
+    pub fn member_name_span(&self, id: ExprId) -> Option<TextRange> {
+        self.member_access_member_spans.get(&id).copied()
+    }
+
+    /// Look up the member-name span for a `MemberAccess` or `QualifiedPath`
+    /// expression.
     /// Returns the full expression span as fallback if no member span was recorded.
     pub fn member_access_member_span(&self, id: ExprId) -> TextRange {
-        self.member_access_member_spans
-            .get(&id)
-            .copied()
+        self.member_name_span(id)
             .unwrap_or_else(|| self.expr_span(id))
     }
 
@@ -750,6 +773,11 @@ impl AstSourceMap {
     }
 
     /// Look up the source span of a pattern by its `PatId`.
+    /// The name token of a `Pattern::Bind`, when it was written in source.
+    pub fn bind_name_span(&self, id: PatId) -> Option<TextRange> {
+        self.bind_name_spans.get(&id).copied()
+    }
+
     pub fn pattern_span(&self, id: PatId) -> TextRange {
         Self::span_at(&self.pattern_spans, id)
     }
@@ -1486,10 +1514,17 @@ impl FunctionMetadata {
     }
 }
 
+/// The source form a [`Stmt::While`] was written in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopOrigin {
     While,
-    For,
+    /// A C-style `for (init; cond; step)`. `init` is the `let` statement the
+    /// desugaring placed before the loop; its bindings are per-iteration
+    /// (each iteration's closures see their own copy, as in JS and Go), which
+    /// MIR lowering implements by re-celling them at the top of the step.
+    For {
+        init: StmtId,
+    },
 }
 
 /// Binary operators — matches those supported in `body.rs`.

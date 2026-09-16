@@ -90,34 +90,7 @@ fn write_bytecode_function(
         write!(f, " -> {}", ret.ty)?;
     }
     writeln!(f, " {{")?;
-
-    // Local declarations
-    writeln!(f, "    // Locals:")?;
-    for (i, local) in body.locals.iter().enumerate() {
-        write!(f, "    let _{i}: {}", local.ty)?;
-        if let Some(name) = &local.name {
-            write!(f, " // {name}")?;
-        }
-        if i == 0 {
-            write!(f, " // return")?;
-        } else if i <= func.arity {
-            write!(f, " // param")?;
-        }
-        if local.is_captured {
-            write!(f, " [captured]")?;
-        }
-        writeln!(f)?;
-    }
-    writeln!(f)?;
-
-    // Basic blocks
-    for (i, block) in body.blocks.iter().enumerate() {
-        write_block(f, db, block)?;
-        if i + 1 < body.blocks.len() {
-            writeln!(f)?;
-        }
-    }
-
+    write_body(f, db, body, func.arity)?;
     writeln!(f, "}}")?;
 
     // Recursively display child lambda functions, labeled by index.
@@ -127,6 +100,48 @@ fn write_bytecode_function(
         write_function(f, db, lambda)?;
     }
 
+    Ok(())
+}
+
+/// Pretty print a function body on its own: its locals and blocks, without
+/// the signature header.
+pub fn display_body(db: &dyn crate::Db, body: &MirFunctionBody<'_>, arity: usize) -> String {
+    let mut output = String::new();
+    let _ = write_body(&mut output, db, body, arity);
+    output
+}
+
+/// Write a body's locals and blocks.
+fn write_body(
+    f: &mut impl Write,
+    db: &dyn crate::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+) -> fmt::Result {
+    writeln!(f, "    // Locals:")?;
+    for (i, local) in body.locals.iter().enumerate() {
+        write!(f, "    let _{i}: {}", local.ty)?;
+        if let Some(name) = &local.name {
+            write!(f, " // {name}")?;
+        }
+        if i == 0 {
+            write!(f, " // return")?;
+        } else if i <= arity {
+            write!(f, " // param")?;
+        }
+        if local.is_captured {
+            write!(f, " [captured]")?;
+        }
+        writeln!(f)?;
+    }
+    writeln!(f)?;
+
+    for (i, block) in body.blocks.iter().enumerate() {
+        write_block(f, db, block)?;
+        if i + 1 < body.blocks.len() {
+            writeln!(f)?;
+        }
+    }
     Ok(())
 }
 
@@ -181,8 +196,17 @@ fn write_statement(f: &mut impl Write, db: &dyn crate::Db, stmt: &Statement<'_>)
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
-        StatementKind::FreshCell(local) => {
+        StatementKind::FreshCell {
+            local,
+            carry_value: false,
+        } => {
             write!(f, "fresh_cell({local});")
+        }
+        StatementKind::FreshCell {
+            local,
+            carry_value: true,
+        } => {
+            write!(f, "fresh_cell({local}, carry);")
         }
         StatementKind::Intrinsic { op, args } => {
             let op_str = match op {

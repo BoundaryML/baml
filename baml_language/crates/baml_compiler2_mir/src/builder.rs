@@ -111,6 +111,40 @@ impl<'db> MirBuilder<'db> {
         id
     }
 
+    /// Declare a local a closure captures, and give it its cell.
+    ///
+    /// A non-parameter local is celled right here, in the current block: a
+    /// cell is created where its binding is created, so a declaration that
+    /// runs once per loop iteration hands each iteration's closures their own
+    /// cell. Emit the initializing store after this, never before. A
+    /// parameter (`_1..=_n`) is celled by the frame preamble instead, since the
+    /// caller has already written its value into the slot.
+    pub(crate) fn declare_captured_local(
+        &mut self,
+        name: Option<Name>,
+        ty: RuntimeTy,
+        span: Option<Span>,
+    ) -> Local {
+        let local = Local(self.locals.len());
+        self.locals.push(LocalDecl {
+            name,
+            ty,
+            span,
+            scope_span: None,
+            is_captured: true,
+        });
+        if local.0 > self.arity {
+            self.push_statement(
+                StatementKind::FreshCell {
+                    local,
+                    carry_value: false,
+                },
+                None,
+            );
+        }
+        local
+    }
+
     /// Allocate a temporary (unnamed local).
     pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
         self.declare_local(None, ty, None)
@@ -129,12 +163,14 @@ impl<'db> MirBuilder<'db> {
         self.locals[local.0].ty.clone()
     }
 
-    /// Get a mutable reference to a local declaration.
-    ///
-    /// Used by Phase 4 to set `is_captured = true` after lowering the function body
-    /// but before calling `build()`.
-    pub(crate) fn local_decl_mut(&mut self, local: Local) -> &mut LocalDecl {
-        &mut self.locals[local.0]
+    /// The declaration of a local.
+    pub(crate) fn local_decl(&self, local: Local) -> &LocalDecl {
+        &self.locals[local.0]
+    }
+
+    /// Refine a local's declared type once TIR has a more specific one.
+    pub(crate) fn set_local_ty(&mut self, local: Local, ty: RuntimeTy) {
+        self.locals[local.0].ty = ty;
     }
 
     // ========================================================================
@@ -238,9 +274,20 @@ impl<'db> MirBuilder<'db> {
         self.push_statement(StatementKind::Drop(place), None);
     }
 
-    /// Emit a fresh-cell statement for a loop variable.
-    pub(crate) fn fresh_cell(&mut self, local: Local) {
-        self.push_statement(StatementKind::FreshCell(local), None);
+    /// Give a captured local a new cell holding its current value, so the
+    /// closures that captured the old cell stop sharing it with what follows.
+    pub(crate) fn recell_with_current_value(&mut self, local: Local) {
+        debug_assert!(
+            self.locals[local.0].is_captured,
+            "recell of {local}, which no closure captures"
+        );
+        self.push_statement(
+            StatementKind::FreshCell {
+                local,
+                carry_value: true,
+            },
+            None,
+        );
     }
 
     /// Emit a nop statement.

@@ -1,0 +1,42 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase7.rs
+expression: "render_labeled_cases(&[(\"assign_wrong_type_in_null_branch_is_error\",\nr#\"function f(x: int?) -> int {\n  if (x == null) {\n    x = \"string\";\n    return 0;\n  } else {\n    return x;\n  }\n}\"#,),\n(\"assign_method_result_in_null_branch_works\",\nr#\"function f(x: int?) -> int {\n  if (x == null) {\n    x = \"string\".length();\n    return 0;\n  } else {\n    return x;\n  }\n}\"#,),])"
+---
+=== assign_wrong_type_in_null_branch_is_error ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x == null : bool) : never
+      { : never
+        x = "string" : "string"
+        return 0 : 0
+      }
+    else
+      { : never
+        return x : int
+      }
+  }
+  !! 56..64: type mismatch: expected int | null, got "string"
+}
+block user.f {
+}
+block user.f {
+}
+
+=== assign_method_result_in_null_branch_works ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x == null : bool) : never
+      { : never
+        x = "string".length() : int
+        return 0 : 0
+      }
+    else
+      { : never
+        return x : int
+      }
+  }
+}
+block user.f {
+}
+block user.f {
+}

@@ -636,6 +636,45 @@ pub(crate) mod tests {
         (vm, native_ptr)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gc_polling_progress_survives_engine_handoffs() {
+        use bex_vm_types::{ConstValue, bytecode::Instruction};
+
+        let Object::Function(mut function) = native_function_object() else {
+            unreachable!()
+        };
+        function.kind = FunctionKind::Bytecode;
+        // Every iteration hands control to the engine before the backedge.
+        // No single exec call reaches the polling interval on its own.
+        function.bytecode = Bytecode {
+            instructions: vec![
+                Instruction::LoadConst(0),
+                Instruction::LoadConst(1),
+                Instruction::SendEvent,
+                Instruction::Jump(-3),
+            ],
+            constants: vec![
+                ConstValue::Object(ObjectIndex::from_raw(1)),
+                ConstValue::Int(42),
+            ],
+            ..Bytecode::default()
+        };
+        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        let mut vm = test_vm(vec![
+            Object::Function(function),
+            Object::String("tick".into()),
+        ]);
+        let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        vm.set_entry_point(entry, &[]);
+        vm.early_yield = EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(true)), 3);
+
+        for _ in 0..3 {
+            assert!(matches!(vm.exec().unwrap(), VmExecState::Event { .. }));
+        }
+        assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
+    }
+
     #[test]
     fn runtime_cache_identity_unwraps_callable_allocations() {
         let (mut vm, function) = vm_with_native_entry();
@@ -1270,7 +1309,7 @@ pub struct BexVm {
     /// OS thread, refreshed by the engine at the top of every exec resume
     /// (`run_thread_event_loop`) and **never valid across an `.await`**.
     /// `None` = profiling off. Pushes go through `prof_push_record`.
-    pub prof_ring: Option<&'static bex_events::prof::Ring>,
+    pub prof_ring: Option<&'static bex_events::prof::OSThreadMarkerRing>,
 
     /// Per-root execution suppression for project/catalog work that must not
     /// become visible run/profile state. `$id` call ids are still minted.
@@ -1904,6 +1943,9 @@ impl BexVm {
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
         );
+
+        let early_yield =
+            early_yield.with_gc_pressure(heap.gc_pressure(), bex_heap::gc_policy::POLL_INTERVAL);
 
         Self {
             frames: Vec::new(),
@@ -5946,14 +5988,14 @@ impl BexVm {
 
     /// Encodes one profiling record directly into a reserved slot of the
     /// supplied per-resume ring snapshot. Callers do the profiling-off gate
-    /// (they pass the already-unwrapped `&Ring`); the slot is sized from
-    /// [`bex_events::prof::record::RawRecord::encoded_len`] and initialized in
+    /// (they pass the already-unwrapped `&OSThreadMarkerRing`); the slot is sized from
+    /// [`bex_events::prof::record::Marker::encoded_len`] and initialized in
     /// place by `encode_to` — no intermediate stack buffer, no zeroing.
     #[inline]
     fn prof_push_record(
         &self,
-        ring: &bex_events::prof::Ring,
-        rec: &bex_events::prof::record::RawRecord<'_>,
+        ring: &bex_events::prof::OSThreadMarkerRing,
+        rec: &bex_events::prof::record::Marker<'_>,
     ) -> bool {
         // Encode straight into the ring slot: no intermediate stack buffer,
         // no 41-byte zeroing, and one copy instead of two (encode→buf→ring).
@@ -5993,7 +6035,7 @@ impl BexVm {
     /// latter owns a boundary handle, and every record it would have pushed is
     /// one `StructuralTransportExceeded` loss (§8.4), not one per exec resume.
     #[inline]
-    fn prof_ring_for_push(&self) -> Option<&'static bex_events::prof::Ring> {
+    fn prof_ring_for_push(&self) -> Option<&'static bex_events::prof::OSThreadMarkerRing> {
         if self.prof_ring.is_none() {
             self.prof_note_transport_loss();
         }
@@ -6055,7 +6097,7 @@ impl BexVm {
         let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
                 ring,
-                &bex_events::prof::record::RawRecord::CallFunction {
+                &bex_events::prof::record::Marker::FunctionEnter {
                     flags: capture_plan.to_call_flags(),
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
@@ -6095,7 +6137,7 @@ impl BexVm {
             let ts_ticks = bex_events::prof::clock::now_ticks();
             let record = match awaited {
                 Some((await_ns, await_count)) => {
-                    bex_events::prof::record::RawRecord::EndFunctionAwaited {
+                    bex_events::prof::record::Marker::FunctionExitAwaited {
                         status,
                         thread_id: BexThreadId(self.prof_thread_id),
                         call_id: BexCallId(call_id),
@@ -6104,7 +6146,7 @@ impl BexVm {
                         await_count,
                     }
                 }
-                None => bex_events::prof::record::RawRecord::EndFunction {
+                None => bex_events::prof::record::Marker::FunctionExit {
                     status,
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
@@ -6299,7 +6341,7 @@ impl BexVm {
         let start_accepted = self.prof_ring_for_push().is_some_and(|ring| {
             self.prof_push_record(
                 ring,
-                &bex_events::prof::record::RawRecord::CallFunction {
+                &bex_events::prof::record::Marker::FunctionEnter {
                     flags: capture_plan.to_call_flags(),
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
@@ -6326,7 +6368,7 @@ impl BexVm {
         if let Some(ring) = self.prof_ring_for_push() {
             self.prof_push_record(
                 ring,
-                &bex_events::prof::record::RawRecord::SetFunctionId {
+                &bex_events::prof::record::Marker::SetBoundaryLocalId {
                     thread_id: BexThreadId(self.prof_thread_id),
                     call_id: BexCallId(call_id),
                     id,
@@ -6361,9 +6403,9 @@ impl BexVm {
         };
         // Both records in one push: one bounds check + one Release store
         // for the pair (the ring moves whole records; two at once is fine).
-        let mut buf = [0u8; bex_events::prof::record::CALL_FUNCTION_LEN
-            + bex_events::prof::record::END_FUNCTION_LEN];
-        let call_len = bex_events::prof::record::RawRecord::CallFunction {
+        let mut buf = [0u8; bex_events::prof::record::FUNCTION_ENTER_LEN
+            + bex_events::prof::record::FUNCTION_EXIT_LEN];
+        let call_len = bex_events::prof::record::Marker::FunctionEnter {
             flags: 0,
             thread_id: BexThreadId(self.prof_thread_id),
             call_id: BexCallId(call_id),
@@ -6373,7 +6415,7 @@ impl BexVm {
             ts_ticks: start_ticks,
         }
         .encode_to(&mut buf);
-        let end_len = bex_events::prof::record::RawRecord::EndFunction {
+        let end_len = bex_events::prof::record::Marker::FunctionExit {
             status,
             thread_id: BexThreadId(self.prof_thread_id),
             call_id: BexCallId(call_id),
@@ -7311,12 +7353,9 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
-        // Re-arm the long-running-loop detector at every yield boundary so
-        // each `exec()` call starts with a fresh budget; a single `exec()`
-        // call yields back to the embedder eventually (e.g. via `Await`,
-        // `EarlyYield`, etc.), which is the right granularity for the
-        // counter to reset at.
-        self.early_yield.reset();
+        // Keep GC polling progress across engine handoffs. Returning from
+        // exec (for example, to spawn a child) does not necessarily release
+        // the heap permit. The checker resets its own counter when it polls.
 
         // BAML_KPERF: read PMCs around this exec() on the current worker thread.
         let kp = crate::kperf::enabled();

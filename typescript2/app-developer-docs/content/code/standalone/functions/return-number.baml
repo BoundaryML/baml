@@ -1,5 +1,5 @@
 // docs:start example
-function ReturnNumber(value: int) -> int {
+function return_number(value: int) -> int {
   value
 }
 // docs:end example

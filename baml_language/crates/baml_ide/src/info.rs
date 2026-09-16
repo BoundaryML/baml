@@ -547,27 +547,6 @@ fn target_type_info(
             owner: method_owner_path(db, func),
             docstring: item_data::function_data(db, func).docstring.clone(),
         }),
-        SymbolTarget::InterfaceRequiredMethod {
-            iface: DeclRef::Source(iface),
-            method_index,
-        } => {
-            let iface_data = item_data::interface_data(db, iface);
-            let method = iface_data.required_methods.get(method_index)?;
-            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
-                db,
-                Definition::Interface(iface),
-                &iface_data.name,
-            );
-            Some(TypeInfo::Symbol {
-                declaration: FnSigParts::of_interface_method(iface_data, method).render(
-                    db,
-                    iface.file(db),
-                    hover_sig_style(),
-                ),
-                owner: Some(render::canonical_path(db, &qtn)),
-                docstring: method.docstring.clone(),
-            })
-        }
         SymbolTarget::AssociatedType { iface, assoc_index } => {
             let iface_data = item_data::interface_data(db, iface);
             let assoc = iface_data.associated_types.get(assoc_index)?;
@@ -644,18 +623,6 @@ fn target_type_info(
             .map(|head| render::canonical_path(db, &head)),
             docstring: None,
         }),
-        SymbolTarget::InterfaceRequiredMethod {
-            iface: DeclRef::External(iface),
-            method_index,
-        } => {
-            let row = extern_interface_row(db, iface);
-            let method = row.required_methods.get(method_index)?;
-            Some(TypeInfo::Symbol {
-                declaration: FnSigParts::of_exported(method).render(db, reader, hover_sig_style()),
-                owner: Some(render::canonical_path(db, iface.head(db))),
-                docstring: None,
-            })
-        }
         SymbolTarget::InterfaceField {
             iface: DeclRef::External(iface),
             field_index,

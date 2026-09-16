@@ -445,62 +445,6 @@ implements SfxConv for int {
 }
 
 #[test]
-fn literal_return() {
-    let mut db = make_db();
-    let file = db.file("test.baml", "function f() -> int { return 42; }");
-    mir_snapshot!("literal_return", render_mir(&db, file));
-}
-
-#[test]
-fn binary_add() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(x: int, y: int) -> int { return x + y; }",
-    );
-    mir_snapshot!("binary_add", render_mir(&db, file));
-}
-
-#[test]
-fn if_else() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(x: int) -> string {
-            if x > 0 {
-                return "positive";
-            } else {
-                return "non-positive";
-            }
-        }"#,
-    );
-    mir_snapshot!("if_else", render_mir(&db, file));
-}
-
-#[test]
-fn let_binding() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(x: int) -> int { let y = x + 1; return y; }",
-    );
-    mir_snapshot!("let_binding", render_mir(&db, file));
-}
-
-#[test]
-fn function_call() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        function add(a: int, b: int) -> int { return a + b; }
-        function f(x: int) -> int { return add(x, 1); }
-        "#,
-    );
-    mir_snapshot!("function_call", render_mir(&db, file));
-}
-
-#[test]
 fn optional_default_prologue_and_source_omission() {
     let mut db = make_db();
     let file = db.file(
@@ -603,53 +547,6 @@ fn optional_dropping_function_value() {
 }
 
 #[test]
-fn while_loop() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(n: int) -> int {
-            let sum = 0;
-            let i = 0;
-            while i < n {
-                sum += i;
-                i += 1;
-            }
-            return sum;
-        }"#,
-    );
-    mir_snapshot!("while_loop", render_mir(&db, file));
-}
-
-#[test]
-fn match_expr() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(x: int) -> string {
-            return match (x) {
-                1 => "one",
-                2 => "two",
-                _ => "other",
-            };
-        }"#,
-    );
-    mir_snapshot!("match_expr", render_mir(&db, file));
-}
-
-#[test]
-fn object_construction() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        class Point { x int  y int }
-        function f() -> Point { return Point { x: 1, y: 2 }; }
-        "#,
-    );
-    mir_snapshot!("object_construction", render_mir(&db, file));
-}
-
-#[test]
 fn generic_class_destructure_field_projection_uses_instantiated_type() {
     let mut db = make_db();
     let file = db.file(
@@ -742,22 +639,6 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
 
 // ─── Phase 4: reflect.Type.of concrete types ─────────────────────────────────
 
-/// `reflect.Type.of<User>()` should lower to `_N = load_type(Concrete(User))`.
-#[test]
-fn reflect_type_of_class() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        class User { name string }
-        function f() -> reflect.Type {
-            reflect.Type.of<User>()
-        }
-        "#,
-    );
-    mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
-}
-
 /// `reflect.Type.of<int[]>()` — concrete array type.
 #[test]
 fn reflect_type_of_array() {
@@ -774,22 +655,6 @@ fn reflect_type_of_array() {
 }
 
 // ─── Phase 5: reflect.Type.of with generic type params ───────────────────────
-
-/// `reflect.Type.of<T>()` inside a generic function should lower to
-/// `_N = load_type(TypeArgRef(0))`.
-#[test]
-fn reflect_type_of_bare_typevar() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        function f<T>() -> reflect.Type {
-            reflect.Type.of<T>()
-        }
-        "#,
-    );
-    mir_snapshot!("reflect_type_of_bare_typevar", render_mir(&db, file));
-}
 
 /// `reflect.Type.of<T[]>()` — composite array wrapping a type-var.
 /// Should lower to `_N = load_type(Array(TypeArgRef(0)))`.

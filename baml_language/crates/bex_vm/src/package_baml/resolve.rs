@@ -67,6 +67,13 @@ pub(crate) struct RuleMethodImpl<'r> {
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
     root_package: Option<bex_vm_types::HeapPtr>,
+    /// A value-owned dynamic world is not always the whole lexical world: a
+    /// runtime package may legally declare a local interface impl for a class
+    /// imported from one of its dependencies. Dispatch on that foreign class
+    /// must therefore search both the receiver owner's graph and the calling
+    /// package's graph. Explicit `for_package` reflection keeps this empty so
+    /// inspecting one package cannot accidentally see the caller's impls.
+    additional_package: Option<bex_vm_types::HeapPtr>,
     /// Rules a registration proposes but has not published. They take part
     /// in every lookup this resolver makes and are visible nowhere else.
     staged_rules: &'vm [RuntimeImplRule],
@@ -77,6 +84,7 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: None,
+            additional_package: None,
             staged_rules: &[],
         }
     }
@@ -129,18 +137,27 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: Some(package),
+            additional_package: None,
             staged_rules: &[],
         }
     }
 
-    /// Resolve in the dynamic world that owns `value`, falling back to the
-    /// lexical frame's world for static values and primitives.
+    /// Resolve in every dynamic world relevant to a call on `value`: its
+    /// owning package (where runtime-created witnesses live) plus the lexical
+    /// frame's package (which may own an orphan-legal impl for an imported
+    /// receiver). Static values and primitives need only the lexical world.
     pub(crate) fn for_value(vm: &'vm BexVm, value: bex_vm_types::Value) -> Self {
         let package = vm.value_runtime_package(value);
         if package.is_null() {
             Self::new(vm)
         } else {
-            Self::for_package(vm, package)
+            let lexical = vm.current_runtime_package();
+            Self {
+                vm,
+                root_package: Some(package),
+                additional_package: (!lexical.is_null() && lexical != package).then_some(lexical),
+                staged_rules: &[],
+            }
         }
     }
 
@@ -168,6 +185,7 @@ impl<'vm> ImplResolver<'vm> {
             self.root_package
                 .unwrap_or_else(|| self.vm.current_runtime_package()),
         ];
+        packages.extend(self.additional_package);
         let mut seen = std::collections::HashSet::new();
         while let Some(package_ptr) = packages.pop() {
             if package_ptr.is_null() || !seen.insert(package_ptr) {
@@ -317,7 +335,7 @@ impl<'vm> ImplResolver<'vm> {
         concrete_ty: &RealizedTy,
         iface_args: &[RealizedTy],
     ) -> Option<Vec<RealizedTy>> {
-        let type_args = self.rule_applies(rule, concrete_ty, &mut Vec::new())?;
+        let type_args = self.rule_applies(rule, concrete_ty, iface_args, &mut Vec::new())?;
         // Select on the interface's input args only (associated types are outputs).
         let rule_args: Vec<RealizedTy> = rule
             .interface_args
@@ -503,7 +521,7 @@ impl<'vm> ImplResolver<'vm> {
         // mutably inside the predicate, so the candidates are collected first.
         let candidates = self.rules_for(iface);
         let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(&rule, concrete_ty, stack)
+            self.rule_applies(&rule, concrete_ty, requested_args, stack)
                 .is_some_and(|bindings| {
                     self.interface_request_matches(
                         &rule,
@@ -517,12 +535,15 @@ impl<'vm> ImplResolver<'vm> {
         proven
     }
 
-    /// Match a rule's `for_ty_pattern` against `concrete_ty`, then discharge its
-    /// bounds. On success returns the bound generic args in de Bruijn order.
+    /// Match a rule's `for_ty_pattern` against `concrete_ty`, bind whatever
+    /// generics that leaves open from the request's interface args, then
+    /// discharge the rule's bounds. On success returns the bound generic args
+    /// in de Bruijn order.
     fn rule_applies(
         self,
         rule: &RuntimeImplRule,
         concrete_ty: &RealizedTy,
+        requested_args: &[RealizedTy],
         stack: &mut Vec<Obligation>,
     ) -> Option<Vec<RealizedTy>> {
         let base = concrete_base(concrete_ty);
@@ -531,8 +552,20 @@ impl<'vm> ImplResolver<'vm> {
         if !self.match_template(&rule.for_ty_pattern, concrete_ty, &mut bindings) {
             return None;
         }
-        // The for-type pattern must constrain every generic param — a param the
-        // pattern never mentions could not be inferred from the receiver.
+        // A generic the for-type pattern never mentions is bound from the
+        // interface arguments instead (`implements<T, E> Modifier<T, E> for
+        // Limit`): unify the rule's interface args with the requested ones,
+        // into the same bindings. A slot that stays open cannot be inferred
+        // from this request, so the rule does not apply. A fully constrained
+        // rule takes the identical path it always has: this unification only
+        // runs when the pattern left something open, and an empty request (a
+        // non-generic interface) has nothing to bind.
+        if bindings.iter().any(Option::is_none)
+            && !requested_args.is_empty()
+            && !self.all_match(&rule.interface_args, requested_args, &mut bindings)
+        {
+            return None;
+        }
         let type_args: Vec<RealizedTy> = bindings.into_iter().collect::<Option<_>>()?;
 
         // Bounds as nested obligations (rustc winnowing): every interface in a param's

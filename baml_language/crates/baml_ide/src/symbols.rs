@@ -13,32 +13,217 @@ use crate::{
     param_schema::{ParamSchema, TypeSchema},
 };
 
-/// Whether an enumeration of the language surface should skip this
-/// definition as synthesized.
+/// What a declaration is, as far as any enumeration of the language surface
+/// is concerned.
 ///
-/// Companions and auto-derives carry the
-/// docstring of the declaration they shadow, so listing them makes every
-/// original into several near-duplicate rows. Search and completion both
-/// enumerate what a reader can write, so both ask here.
-pub(crate) fn is_synthesized(
+/// TOTAL: every declaration is exactly one of these, so a view states its
+/// policy as an exhaustive `match` rather than a stack of predicates. That
+/// is the point. Four views enumerate this surface — describe's listings,
+/// describe's search, completion's qualifier arm, completion's bare-name
+/// arms — and they disagreed about three of these categories with nothing
+/// in the code saying so. A new category now breaks all four until each one
+/// decides what to do with it.
+///
+/// Variants are ordered by how far off-surface they are, strongest claim
+/// first, because a declaration can satisfy several and the strongest wins:
+/// `$init_test` is language-internal *and* synthetic, and calling it
+/// language-internal is the more useful answer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Surface {
+    /// Outside the language entirely (`$init_test`, the shim test lowering
+    /// mints). No source position can name one, and `is_language_internal`
+    /// documents that no language-surface view lists them.
+    LanguageInternal,
+    /// Spelled with `$`. The lexer takes `$` both leading (the form
+    /// `$rust_function` uses) and infix, so these are ordinary identifiers:
+    /// `testing.$invoke_collector` compiles, and `Doc$stream` is a real type
+    /// (`expected int, found Doc$stream`).
+    ///
+    /// A NAME heuristic, not a provenance fact — and a weak one. Corpus-wide
+    /// it has exactly one inhabitant, `testing.$invoke_collector`, which is
+    /// hand-written stdlib with `UserDefined` origin: the compiler's own
+    /// provenance says it is ordinary, and only its spelling says otherwise.
+    /// `$`-named TYPES never arrive here at all; PPIR synthesizes them
+    /// instead of lowering them as items.
+    Synthetic,
+    /// Genuinely compiler-generated: the `@` companions (`summarize@spec`),
+    /// which carry `FunctionOrigin::Companion`, so this one IS provenance.
+    /// Real source references them — the test corpus writes `OaiEcho@spec`
+    /// and friends by the dozen.
+    Companion,
+    /// A companion carrier an ALIAS already reaches: `baml.Int` is written
+    /// `int`, so its own path teaches a spelling nobody uses. Carriers with
+    /// no alias (`baml.Array`, `baml.Map`, `reflect.Type`) are
+    /// [`Surface::Public`] — they are the only handle on their own members.
+    AliasedCarrier,
+    /// Marked internal by the stdlib's `_` convention. Whether a view shows
+    /// one is [`Internals`]' business, not this classification's.
+    StdlibInternal,
+    /// An ordinary declaration: every view offers it.
+    Public,
+}
+
+/// Classify `def` for every surface at once.
+///
+/// The checks run in [`Surface`]'s own order, so a declaration that is
+/// several things is reported as the strongest.
+pub(crate) fn surface_of(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &Name,
+    def: Definition<'_>,
+) -> Surface {
+    // Read function metadata from the CANONICAL item layer, never through
+    // `Definition::is_language_internal`: that indexes HIR's PRE-expansion
+    // item tree, which holds no expansion-minted companion, and completion
+    // enumerates exactly those — indexing it with one panics rather than
+    // answering.
+    let metadata = match def {
+        Definition::Function(func) => Some(function_data(db, func).metadata),
+        Definition::Class(_)
+        | Definition::Enum(_)
+        | Definition::Interface(_)
+        | Definition::TypeAlias(_)
+        | Definition::Let(_) => None,
+    };
+    if metadata.is_some_and(|metadata| metadata.is_language_internal) {
+        return Surface::LanguageInternal;
+    }
+    if name.as_str().contains('$') {
+        return Surface::Synthetic;
+    }
+    if let Some(metadata) = metadata {
+        use baml_compiler2_ast::ast::FunctionOrigin;
+        match metadata.origin {
+            FunctionOrigin::UserDefined => {}
+            // Companions and auto-derives carry the docstring of the
+            // declaration they shadow, so listing them turns every original
+            // into several near-duplicate rows.
+            FunctionOrigin::Companion | FunctionOrigin::Internal | FunctionOrigin::AutoDerive => {
+                return Surface::Companion;
+            }
+        }
+    }
+    if let Definition::Class(class) = def
+        && is_aliased_carrier(db, class)
+    {
+        return Surface::AliasedCarrier;
+    }
+    if is_stdlib_internal(db, name.as_str(), def.file(db)) {
+        return Surface::StdlibInternal;
+    }
+    Surface::Public
+}
+
+/// Whether `class` is a builtin's companion carrier that an alias already
+/// reaches, so its own path is a spelling nobody writes.
+fn is_aliased_carrier(
+    db: &dyn baml_compiler2_ppir::Db,
+    class: baml_compiler2_hir::loc::ClassLoc<'_>,
+) -> bool {
+    let data = baml_compiler2_ppir::item_data::class_data(db, class);
+    let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
+    let decl = baml_type::DeclName::in_root(pkg.root, pkg.namespace_path, data.name.clone());
+    baml_type::type_kind::builtin_companion_of_decl(
+        baml_compiler2_hir::package::lang_roots(db),
+        &decl,
+    )
+    .is_some_and(|companion| companion.members_reachable_without_carrier)
+}
+
+/// What completion offers, stated once for all three of its arms.
+///
+/// A completion list is a MENU of what to write, so it drops everything a
+/// reader cannot write — and, unlike describe, everything a better spelling
+/// already reaches: `baml.Int` is real documentation but `int` is how one
+/// writes it, so the menu offers the alias and the reference lists the
+/// carrier.
+///
+/// [`Surface::StdlibInternal`] is deliberately NOT decided here. Completion
+/// also offers dot members, which have no [`Definition`] to classify, so its
+/// accumulator applies [`Internals`] to declarations and members alike in
+/// one place.
+pub(crate) fn offered_in_completion(
     db: &dyn baml_compiler2_ppir::Db,
     name: &Name,
     def: Definition<'_>,
 ) -> bool {
-    if name.as_str().contains('$') {
-        return true;
+    match surface_of(db, name, def) {
+        Surface::LanguageInternal
+        | Surface::Synthetic
+        | Surface::Companion
+        | Surface::AliasedCarrier => false,
+        Surface::StdlibInternal | Surface::Public => true,
     }
-    if let Definition::Function(func) = def {
-        use baml_compiler2_ast::ast::FunctionOrigin;
-        match function_data(db, func).metadata.origin {
-            FunctionOrigin::UserDefined => false,
-            FunctionOrigin::Companion | FunctionOrigin::Internal | FunctionOrigin::AutoDerive => {
-                true
-            }
+}
+
+/// The mark the stdlib uses for a helper that is its own business: until
+/// BAML has `public`/`private`, a leading `_` is the whole convention.
+const INTERNAL_PREFIX: &str = "_";
+
+/// Whether an enumeration of the language surface includes the stdlib's
+/// `_`-marked internal helpers.
+///
+/// The stdlib prefixes hundreds of helpers with `_`, and every surface that
+/// SUGGESTS what to reach for — completion, `baml describe`'s search, its
+/// listings, its did-you-mean — would otherwise bury the answer in them. So
+/// the policy is a parameter those enumerations take rather than a rule each
+/// caller remembers to apply: a new consumer has to say which it wants.
+///
+/// Narrow by design. It is the STDLIB's convention, so [`Internals::hides`]
+/// reads stdlib roots and nothing else; a name in the reader's own source is
+/// theirs, however it is spelled. And it only ever hides a SUGGESTION —
+/// never a resolution, and never an answer to a question that named the
+/// symbol, which is what [`Internals::for_query`] is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Internals {
+    Hide,
+    Show,
+}
+
+impl Internals {
+    /// What the reader wrote decides: a leading `_` on any word of it asks
+    /// for the internals.
+    ///
+    /// Words split on whitespace and `.`, because a dotted path is how BAML
+    /// addresses a symbol — `baml.time._tz_offset_at` names one as plainly
+    /// as `_tz_offset_at` does.
+    pub fn for_query(query: &str) -> Self {
+        if query
+            .split(|c: char| c.is_whitespace() || c == '.')
+            .any(|word| word.starts_with(INTERNAL_PREFIX))
+        {
+            Self::Show
+        } else {
+            Self::Hide
         }
-    } else {
-        false
     }
+
+    /// Whether this policy keeps `name`, declared in `declared_in`, out.
+    ///
+    /// For a declaration prefer `surface_of`, which answers this as
+    /// `Surface::StdlibInternal` along with everything else; this is for
+    /// the member path, where there is no [`Definition`] to classify.
+    /// (Both are crate-private, so they are named rather than linked.)
+    pub fn hides(
+        self,
+        db: &dyn baml_compiler2_ppir::Db,
+        name: &str,
+        declared_in: baml_base::SourceFile,
+    ) -> bool {
+        self == Self::Hide && is_stdlib_internal(db, name, declared_in)
+    }
+}
+
+/// The stdlib's `_` convention, in one place: both [`surface_of`] and
+/// [`Internals::hides`] read it, so a declaration and a member can never
+/// disagree about what the mark means.
+fn is_stdlib_internal(
+    db: &dyn baml_compiler2_ppir::Db,
+    name: &str,
+    declared_in: baml_base::SourceFile,
+) -> bool {
+    name.starts_with(INTERNAL_PREFIX)
+        && declared_in.source_root(db).kind(db) == baml_base::SourceRootKind::Stdlib
 }
 
 /// Symbol kind — locally defined since v1 HIR is removed.

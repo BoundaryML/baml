@@ -341,11 +341,12 @@ pub enum DiagnosticId {
     /// package. References type from the mounted interface; callables without
     /// a loc-free bytecode link contract report this diagnostic.
     MountedPackageCallUnsupported,
-    /// A package-prefixed value path into a package served from its compiled
-    /// interface names nothing that interface exports. The interface exports
-    /// functions and types only, and a served package answers from it alone,
-    /// so the path is reported as exactly that — never as an unresolved name
-    /// a link-only stub might have shadowed.
+    /// Reserved (E0173): a value path into a package served from its
+    /// compiled interface that names a declaration the interface does not
+    /// carry. Not produced today — the interface cannot yet tell such a
+    /// declaration from a misspelling, so the path reports as an unresolved
+    /// name, as in source. Returns once the interface carries the names of
+    /// its unexported declarations.
     ServedInterfaceExportsFunctionsOnly,
 
     // Projection bases (E0156)

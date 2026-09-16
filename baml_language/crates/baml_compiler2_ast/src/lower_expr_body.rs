@@ -2845,6 +2845,7 @@ impl LoweringContext {
                 });
         }
 
+        let name_span = name_token.as_ref().map(rowan::SyntaxToken::text_range);
         let name = name_token.map(|t| Name::new(t.text()));
 
         // The parser folds `: <pattern>` into BINDING_PATTERN as a
@@ -2858,7 +2859,11 @@ impl LoweringContext {
             Some(name) => Pattern::Bind { name, subpat },
             None => Pattern::Wildcard,
         };
-        self.alloc_pattern(pat, node.span_range())
+        let id = self.alloc_pattern(pat, node.span_range());
+        if let Some(span) = name_span {
+            self.source_map.bind_name_spans.insert(id, span);
+        }
+        id
     }
 
     /// Walk a pattern and emit `VoidInNonReturnPosition` for any `Pattern::Type`
@@ -3837,27 +3842,35 @@ impl LoweringContext {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| !token.kind().is_trivia())
             .collect();
-        let member = tokens
+        let member_token = tokens
             .iter()
             .rposition(|token| token.kind() == SyntaxKind::DOT)
             .and_then(|dot| tokens.get(dot + 1))
             // The full member-name set, not just `WORD`: an interface method
             // may be named with a contextual keyword (`implements`, `extends`),
             // and the parser accepts those here.
-            .filter(|token| is_ident_token(token.kind()))
-            .map(|token| Name::new(token.text()));
-        let Some(member) = member else {
+            .filter(|token| is_ident_token(token.kind()));
+        let Some(member_token) = member_token else {
             return self.alloc_expr(Expr::Missing, span);
         };
+        let member = Name::new(member_token.text());
+        let member_range = member_token.text_range();
 
-        self.alloc_expr(
+        let id = self.alloc_expr(
             Expr::QualifiedPath {
                 qself,
                 interface,
                 member,
             },
             span,
-        )
+        );
+        // The member name is a reference to the interface's declaration, so
+        // it needs a span of its own: without one, a reader asking about
+        // `show` in `(B as Shows).show` gets back the whole projection.
+        self.source_map
+            .member_access_member_spans
+            .insert(id, member_range);
+        id
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -4467,7 +4480,7 @@ impl LoweringContext {
                 condition: cond,
                 body: loop_body,
                 after: step,
-                origin: LoopOrigin::For,
+                origin: LoopOrigin::For { init },
             },
             after_span,
         );
@@ -4743,7 +4756,7 @@ impl LoweringContext {
                             condition: *cond,
                             body: loop_body,
                             after: *step,
-                            origin: LoopOrigin::For,
+                            origin: LoopOrigin::For { init: *init },
                         },
                         span,
                     );
@@ -5834,7 +5847,7 @@ impl LoweringContext {
         //
         // C-style is desugared to:
         //   Stmt::Let { ... }   // init
-        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For }
+        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For { init } }
         // These two statements are wrapped in Expr::Block → Stmt::Expr so the
         // function can return a single StmtId.
         let range = node.span_range();
@@ -5993,7 +6006,7 @@ impl LoweringContext {
                 condition,
                 body,
                 after: after_stmt,
-                origin: LoopOrigin::For,
+                origin: LoopOrigin::For { init: init_stmt },
             },
             range,
         );

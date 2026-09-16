@@ -1026,3 +1026,70 @@ body:has([data-slot="docs"]) footer {
   line-height: 1.65;
   color: var(--foreground);
 }
+
+/* Image-input examples keep the source image readable beside its result. */
+.vision-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.25rem;
+  margin-block: 1.75rem 2.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.vision-result figure,
+.vision-image-pair figure {
+  min-width: 0;
+  margin: 0;
+}
+
+.vision-result img,
+.vision-image-pair img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+}
+
+.vision-result figcaption,
+.vision-image-pair figcaption,
+.vision-result .vision-caption {
+  margin-top: 0.65rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.vision-result .vision-label {
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.vision-result .vision-label + p {
+  margin-top: 0;
+}
+
+.vision-image-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  max-width: 36rem;
+  margin: 1.5rem auto;
+}
+
+@media (width < 540px) {
+  .vision-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vision-result figure {
+    max-width: 18rem;
+    margin-inline: auto;
+  }
+}

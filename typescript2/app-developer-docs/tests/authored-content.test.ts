@@ -4,7 +4,10 @@ import { relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { z } from 'zod';
 import { bridgeDataSchema, loadBridgeData } from '../lib/content/bridges.ts';
-import { loadProjectSnippet } from '../lib/snippets/discovery';
+import {
+  loadProjectSnippet,
+  loadStandaloneSnippet,
+} from '../lib/snippets/discovery';
 import { selectProjectFiles } from '../lib/snippets/selection';
 
 const expectedAuthoredRoutes = [
@@ -22,6 +25,7 @@ const expectedAuthoredRoutes = [
   '/cli',
   '/examples',
   '/examples/classify-support-tickets',
+  '/examples/vision',
   '/tutorials',
   '/tutorials/structured-extraction',
 ];
@@ -76,14 +80,24 @@ test('authored MDX never embeds a second BAML source block', async () => {
   }
 });
 
-test('book excerpts resolve to canonical project regions and internal links resolve', async () => {
-  const files = (
-    await collectFiles(resolve(process.cwd(), 'content/baml/book'))
-  ).filter((path) => path.endsWith('.mdx'));
+test('authored excerpts resolve to canonical project regions and internal links resolve', async () => {
+  const files = (await collectFiles(resolve(process.cwd(), 'content'))).filter(
+    (path) => path.endsWith('.mdx'),
+  );
   for (const path of files) {
     const source = await readFile(path, 'utf8');
     for (const match of source.matchAll(
-      /<BamlProject id="([^"]+)"(?: file="([^"]+)" regions=\{(\[[^\]]+\])\})?\s*\/>/g,
+      /<BamlSnippet id="([^"]+)"(?: region="([^"]+)")?\s*\/>/g,
+    )) {
+      const snippet = await loadStandaloneSnippet(match[1]);
+      if (match[2])
+        assert.ok(
+          snippet.parsed.regions.has(match[2]),
+          `${path}: missing region ${match[2]}`,
+        );
+    }
+    for (const match of source.matchAll(
+      /<BamlProject id="([^"]+)"(?: file="([^"]+)" regions=\{(\[[^\]]+\])\})?(?: annotation="[^"]+")?\s*\/>/g,
     )) {
       const project = await loadProjectSnippet(match[1]);
       const regions = match[3]
@@ -104,8 +118,16 @@ test('book excerpts resolve to canonical project regions and internal links reso
       /\]\((\/[^)#]+)(?:#[^)]*)?\)|href="(\/[^"#]+)"/g,
     )) {
       const href = match[1] ?? match[2];
+      if (href.startsWith('/examples/vision/')) {
+        const target =
+          href === '/examples/vision/source'
+            ? resolve(process.cwd(), 'app/examples/vision/source/route.ts')
+            : resolve(process.cwd(), `public${href}`);
+        await readFile(target);
+        continue;
+      }
       assert.ok(
-        expectedAuthoredRoutes.includes(href),
+        ['/', '/baml/packages', ...expectedAuthoredRoutes].includes(href),
         `${path}: broken authored link ${href}`,
       );
     }

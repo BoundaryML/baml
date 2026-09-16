@@ -5,7 +5,10 @@ import type {
   ExportedParameter,
   ExportedSignature,
 } from '@/lib/generated-content/package-export';
-import type { CrossReference } from '@/lib/generated-content/schemas';
+import type {
+  CrossReference,
+  ReferencePageData,
+} from '@/lib/generated-content/schemas';
 
 export type ReferenceTypeLink = CrossReference;
 
@@ -52,10 +55,7 @@ export function signatureText(
 ): string {
   const generics = genericParametersText(signature.generics);
   const parameters = signature.params.map(parameterText).join(', ');
-  const throws =
-    signature.throws && signature.throws.display !== 'never'
-      ? ` throws ${signature.throws.display}`
-      : '';
+  const throws = signature.throws ? ` throws ${signature.throws.display}` : '';
   return `${name}${generics}(${parameters}) -> ${signature.returns.display}${throws}`;
 }
 
@@ -211,4 +211,20 @@ export function referenceHref(
 ): string {
   const anchor = reference.anchor ? `#${reference.anchor}` : '';
   return `/baml/packages/${routeVersion}/${reference.route_path}${anchor}`;
+}
+
+// Preserve published member links when a field is named "signature", "fields",
+// or another section label. Only the presentation section gets a new anchor.
+export function referenceSectionId(
+  page: ReferencePageData,
+  section: string,
+): string {
+  const members = new Set(
+    'member_anchors' in page
+      ? page.member_anchors.map((member) => member.anchor)
+      : [],
+  );
+  let id = section;
+  while (members.has(id)) id = `section-${id}`;
+  return id;
 }
