@@ -73,6 +73,32 @@ concurrency:
 permissions:
   contents: read
 
+# Compiling is nearly all of what these jobs do, and sccache is what the rest
+# of the repo compiles against: a content-addressed store in R2, keyed by what
+# a rustc invocation would produce. It is the cache that works: on the morning
+# the daily refresh purged every Actions cache, the canary wasm job answered
+# 468 compiles from it with no misses and finished in 58 seconds.
+#
+# There is deliberately no Actions cache here. Swatinem/rust-cache folds the
+# runner's toolchain list and the set of CARGO_*/RUST* variables into its key,
+# so only a job set up exactly like the one that writes the key can read it —
+# a condition this workflow does not meet on ubuntu-latest, and one that is
+# silently broken elsewhere too (`wasm-pack test`, on the writer's own runner
+# and the same lockfile, logs "No cache found"). A step that cannot hit is
+# worse than no step: it reads as caching. sccache asks nothing of the runner.
+env:
+  # .envrc is the single source of truth for the rest; it maps these two to
+  # the AWS_* names sccache wants. Absent on a fork, where sccache falls back
+  # to a runner-local cache and the build is simply cold.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  # sccache cannot cache an incremental compile and declines every one of
+  # them, so leaving this on would cost the whole cache.
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
 jobs:
   quiz:
     name: "Build the quiz"
@@ -83,10 +109,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Node.js, pnpm, and wasm-pack
+      - name: Setup Node.js, pnpm, wasm-pack, sccache, and direnv
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "node npm:pnpm github:rustwasm/wasm-pack"
+          install_args: "node npm:pnpm github:rustwasm/wasm-pack sccache direnv"
 
       - name: Setup Rust WASM target
         working-directory: baml_language
@@ -95,11 +121,15 @@ jobs:
           rustup show
           rustup target add wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-wasm"
-          save-if: false
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
 
       # The release bridge: 15 MB of WebAssembly, against 100 for the debug
       # build the local `pnpm prepare:deps` makes.
@@ -154,6 +184,13 @@ jobs:
           pnpm exec playwright install --with-deps chromium
           pnpm test:smoke
 
+      # What the cache did, in the job that used it: a hit rate that falls
+      # says the compile is being paid for again, which is the whole cost of
+      # this job.
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
       - name: "Upload the quiz site"
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
@@ -183,23 +220,38 @@ jobs:
         with:
           persist-credentials: false
 
-      # No mise: nothing here comes from it. Rust arrives through rustup and
-      # baml_language/rust-toolchain.toml, node and pnpm through the setup-node
-      # actions below, and jq is on the image. Installing it with no
-      # `install_args` pulls every tool in mise.toml — including `cargo:bacon`,
-      # whose binstall failed and took the job with it.
+      # Rust arrives through rustup and baml_language/rust-toolchain.toml, node
+      # and pnpm through the setup-node actions below, and jq is on the image.
+      # mise is asked for sccache and direnv BY NAME: with no `install_args` it
+      # pulls every tool in mise.toml — including `cargo:bacon`, whose binstall
+      # failed and took the job with it.
       - name: "Install Rust toolchain"
         working-directory: baml_language
         run: rustup show
 
-      - uses: Swatinem/rust-cache@v2
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
         with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "stdlib-matrix-baml-cli"
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      # This job compiles the same CLI the quiz job does, from the same
+      # commit, so what one of them compiles the other reads back.
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
 
       - name: "Build the BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
 
       # Two workspaces, deliberately. The extractor reads the repo-pinned
       # `typescript` and `@types/node` resolved against the ROOT package.json,
