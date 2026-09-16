@@ -130,7 +130,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         let pkg: Name = spelling.of(pkg_info.root).clone();
         let ns_path: Vec<Name> = pkg_info.namespace_path.clone();
 
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
 
         let (alias_map, recursive_aliases) = alias_caches.entry(pkg.clone()).or_insert_with(|| {
             let mut aliases = HashMap::new();
@@ -159,30 +159,30 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         // generated SDKs.
         let mut non_free_function_locs: std::collections::HashSet<FunctionLoc> =
             std::collections::HashSet::new();
-        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
-            for &m in &baml_compiler2_ppir::item_data::class_data(db, class_loc).methods {
+        for &class_loc in baml_compiler2_hir::item_data::file_classes(db, source_file) {
+            for &m in &baml_compiler2_hir::item_data::class_data(db, class_loc).methods {
                 non_free_function_locs.insert(m);
             }
         }
-        for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, source_file) {
+        for &iface_loc in baml_compiler2_hir::item_data::file_interfaces(db, source_file) {
             // ALL interface methods: default (with a body) and required
             // (bodyless items under the unified method model) alike - a
             // required signature is an interface slot, not a callable.
-            for &m in &baml_compiler2_ppir::item_data::interface_data(db, iface_loc).methods {
+            for &m in &baml_compiler2_hir::item_data::interface_data(db, iface_loc).methods {
                 non_free_function_locs.insert(m);
             }
         }
         // ALL implements blocks, in-class and out-of-body alike: their
         // methods are Impl-owned (never in `class_data.methods`).
-        for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, source_file) {
-            for &m in &baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc).methods {
+        for &impl_loc in baml_compiler2_hir::item_data::file_impls(db, source_file) {
+            for &m in &baml_compiler2_hir::item_data::impl_block_data(db, impl_loc).methods {
                 non_free_function_locs.insert(m);
             }
         }
 
         // Classes
-        for &class_loc in baml_compiler2_ppir::item_data::file_classes(db, source_file) {
-            let class = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        for &class_loc in baml_compiler2_hir::item_data::file_classes(db, source_file) {
+            let class = baml_compiler2_hir::item_data::class_data(db, class_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
             let class_generic_params =
                 baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
@@ -214,7 +214,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // sit alongside their parent method in the same vec; their
             // shared span keeps them adjacent after sorting.
             for &method_loc in &class.methods {
-                let method = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+                let method = baml_compiler2_hir::item_data::function_data(db, method_loc);
 
                 // Auto-derived methods (`to_json` / `from_json` synthesized
                 // by `auto_derive_json`) are language-level plumbing, not
@@ -238,14 +238,14 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // method (in-body or out-of-body) is Impl-owned and never lands
                 // here.
                 debug_assert!(
-                    baml_compiler2_ppir::item_data::method_interface_target(db, method_loc)
+                    baml_compiler2_hir::item_data::method_interface_target(db, method_loc)
                         .is_none(),
                     "interface targets are recorded on impl-block methods, which never appear \
                      in `class.methods`",
                 );
 
                 if matches!(
-                    baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
+                    baml_compiler2_hir::body::function_body(db, method_loc).as_ref(),
                     baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
                 ) {
                     continue;
@@ -265,7 +265,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // path). The method's own `generic_params` are its user +
                 // synthetic effect params; the enclosing class's params join
                 // only the lowering scope, not the method's declared generics.
-                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, method_loc);
+                let sig = baml_compiler2_hir::item_data::elaborated_function_data(db, method_loc);
                 // Emitted generics are the method's *user* params only; effect
                 // params (see the free-function path) join only the lowering
                 // scope.
@@ -289,7 +289,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases)
                 };
                 let method_defaults =
-                    baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
+                    baml_compiler2_hir::signature::function_parameter_defaults(db, method_loc);
 
                 // The compiler injects a `client` override on LLM methods and
                 // on the `@build_request`/`@stream` companions. It is an
@@ -299,7 +299,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 // longer the last param); `on_event` stays — its function type
                 // is representable and part of the SDK surface.
                 let strips_injected_client =
-                    baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc).is_some()
+                    baml_compiler2_hir::item_data::function_llm_meta(db, method_loc).is_some()
                         || method.name.as_str().ends_with("@stream")
                         || method.name.as_str().ends_with("@build_request");
 
@@ -346,7 +346,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
                         span_start: u32::from(
-                            baml_compiler2_ppir::item_data::function_source_map(db, method_loc)
+                            baml_compiler2_hir::item_data::function_source_map(db, method_loc)
                                 .span
                                 .start(),
                         ),
@@ -376,7 +376,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
                         span_start: u32::from(
-                            baml_compiler2_ppir::item_data::class_source_map(db, class_loc)
+                            baml_compiler2_hir::item_data::class_source_map(db, class_loc)
                                 .span
                                 .start(),
                         ),
@@ -386,8 +386,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
 
         // Enums
-        for &enum_loc in baml_compiler2_ppir::item_data::file_enums(db, source_file) {
-            let enum_def = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
+        for &enum_loc in baml_compiler2_hir::item_data::file_enums(db, source_file) {
+            let enum_def = baml_compiler2_hir::item_data::enum_data(db, enum_loc);
             let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), enum_def.name.clone());
             let variants = enum_def
                 .variants
@@ -407,7 +407,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     origin: Origin {
                         source_file_path: source_file_path.clone(),
                         span_start: u32::from(
-                            baml_compiler2_ppir::item_data::enum_source_map(db, enum_loc)
+                            baml_compiler2_hir::item_data::enum_source_map(db, enum_loc)
                                 .span
                                 .start(),
                         ),
@@ -417,8 +417,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         }
 
         // Type aliases
-        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, source_file) {
-            let alias = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+        for &alias_loc in baml_compiler2_hir::item_data::file_type_aliases(db, source_file) {
+            let alias = baml_compiler2_hir::item_data::type_alias_data(db, alias_loc);
             if let Some(resolved) = resolve_type_ref(
                 db,
                 &alias.type_refs,
@@ -446,11 +446,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         origin: Origin {
                             source_file_path: source_file_path.clone(),
                             span_start: u32::from(
-                                baml_compiler2_ppir::item_data::type_alias_source_map(
-                                    db, alias_loc,
-                                )
-                                .span
-                                .start(),
+                                baml_compiler2_hir::item_data::type_alias_source_map(db, alias_loc)
+                                    .span
+                                    .start(),
                             ),
                         },
                     }),
@@ -462,11 +460,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         // so they don't double-emit. Companion functions (names containing `$`)
         // flow through as their own pool entries; parent and companion alike are
         // inserted directly, keyed on the suffixed name.
-        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, source_file) {
             if non_free_function_locs.contains(&func_loc) {
                 continue;
             }
-            let func = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+            let func = baml_compiler2_hir::item_data::function_data(db, func_loc);
 
             // Internal-origin functions (e.g. `<Client>$new` synthesized for
             // primitive clients) are runtime plumbing, not user-callable —
@@ -482,7 +480,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             }
 
             if matches!(
-                baml_compiler2_ppir::function_body(db, func_loc).as_ref(),
+                baml_compiler2_hir::body::function_body(db, func_loc).as_ref(),
                 baml_compiler2_hir::body::FunctionBody::Builtin(ast::BuiltinKind::Intrinsic)
             ) {
                 continue;
@@ -504,7 +502,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // references the effect param, so a raw lowering would leave it a
             // dangling, undeclared typevar and collapse the callback's own
             // `throws` to `Never`.
-            let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+            let sig = baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc);
             // Effect params (minted for a callback whose `throws` is inferred)
             // join only the lowering *scope*, so the callback and the inferred
             // outer `throws` resolve to real typevars instead of dangling /
@@ -527,7 +525,8 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(type_refs, id));
                 convert_tir_to_codegen_ty(spelling, &tir_ty, alias_map, recursive_aliases)
             };
-            let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+            let func_defaults =
+                baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
             // The compiler injects a `client: ai.Client? = null` override onto
             // every LLM function (and its `@stream`/`@build_request`
             // companions, where it is retyped `ai.stream.StreamingClient?`).
@@ -541,7 +540,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
             // function type is representable and it is part of the SDK
             // surface.
             let strips_injected_client =
-                baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
+                baml_compiler2_hir::item_data::function_llm_meta(db, func_loc).is_some()
                     || func.name.as_str().ends_with("@stream")
                     || func.name.as_str().ends_with("@build_request");
             let arguments: Vec<cg::FunctionArgument> = sig
@@ -584,7 +583,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 origin: Origin {
                     source_file_path: source_file_path.clone(),
                     span_start: u32::from(
-                        baml_compiler2_ppir::item_data::function_source_map(db, func_loc)
+                        baml_compiler2_hir::item_data::function_source_map(db, func_loc)
                             .span
                             .start(),
                     ),

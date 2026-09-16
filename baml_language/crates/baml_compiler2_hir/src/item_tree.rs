@@ -98,7 +98,7 @@ impl ItemTree {
     ///
     /// The single successor of the `classes.values().find(|c|
     /// c.methods.contains(…))` scans that used to be copied (divergently)
-    /// across HIR, PPIR and TIR.
+    /// across HIR and TIR.
     pub fn enclosing_type_generic_params(
         &self,
         method: LocalItemId<FunctionMarker>,

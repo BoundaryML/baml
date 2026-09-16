@@ -109,15 +109,15 @@ pub struct InlineAnnotation {
 /// with this module.
 #[salsa::tracked(returns(ref))]
 pub fn file_annotations(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
 ) -> Vec<InlineAnnotation> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
-    for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
-        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+    for &func_loc in baml_compiler2_hir::item_data::file_functions(db, file) {
+        let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
 
         // Process user-written functions and methods, plus the compiler's own
         // test-registration functions: `Internal` is the origin the lowering
@@ -132,23 +132,24 @@ pub fn file_annotations(
             FunctionOrigin::UserDefined | FunctionOrigin::Internal => {}
             FunctionOrigin::Companion | FunctionOrigin::AutoDerive => continue,
         }
-        if baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some() {
+        if baml_compiler2_hir::item_data::function_llm_meta(db, func_loc).is_some() {
             continue;
         }
 
-        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        let body = baml_compiler2_hir::body::function_body(db, func_loc);
         let FunctionBody::Expr(expr_body) = body.as_ref() else {
             continue;
         };
-        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+        let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+        else {
             continue;
         };
 
-        let owner_scope = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+        let owner_scope = baml_compiler2_hir::item_data::function_scope(db, func_loc)
             .map(|scope| scope.file_scope_id(db))
             .unwrap_or_else(|| {
                 let func_span =
-                    baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+                    baml_compiler2_hir::item_data::function_source_map(db, func_loc).span;
                 index.scope_at_offset(func_span.start(), Some(&func_data.name))
             });
         process_body(
@@ -172,7 +173,7 @@ pub fn file_annotations(
 /// (each lambda has its own `ExprBody` arena and source map, e.g. the body of a
 /// `test` block lowered to a lambda passed to `register_test`).
 fn process_body(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     index: &SemanticIndex<'_>,
     owner_scope: FileScopeId,

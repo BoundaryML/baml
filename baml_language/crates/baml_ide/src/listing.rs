@@ -77,7 +77,7 @@ impl std::fmt::Debug for ResolvedTarget<'_> {
 /// For empty input (`n == 0`), returns `None` — the dispatcher handles the
 /// project-level case.
 pub fn resolve_target<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
@@ -149,7 +149,7 @@ pub fn resolve_target<'db>(
 /// because they have language-reference topics rather than addressable stdlib
 /// definitions.
 pub fn resolve_builtin_type_target<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
     let (alias, member_path) = name.split_once('.').unwrap_or((name, ""));
@@ -231,7 +231,7 @@ impl ListingEntry {
 /// `types` and `values` from each `NamespaceItems`. The FQN is constructed
 /// as `ns_path.join(".") + "." + item_name` (or bare `item_name` for root namespace).
 pub fn list_package_items(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package_id: baml_base::SourceRoot,
     internals: Internals,
 ) -> Vec<ListingEntry> {
@@ -242,7 +242,7 @@ pub fn list_package_items(
 
 /// Collect listing entries from a `PackageItems`, including all namespaces.
 fn collect_entries_from_package(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: &PackageItems<'_>,
     package_name: &Name,
     internals: Internals,
@@ -288,7 +288,7 @@ fn collect_entries_from_package(
 /// includes items from child namespaces (e.g., `baml describe baml`
 /// includes `baml.env.GetEnv`).
 pub fn list_namespace_items(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package_id: baml_base::SourceRoot,
     namespace_path: &[Name],
     internals: Internals,
@@ -355,7 +355,7 @@ fn is_local_package_name(package_name: &Name) -> bool {
 /// cannot be named at all. That is why it is the one view that shows
 /// carriers and `@` companions.
 fn is_listed(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     item_name: &Name,
     def: Definition<'_>,
     internals: Internals,
@@ -381,7 +381,7 @@ fn is_listed(
 
 /// Build a single `ListingEntry` from a definition.
 fn make_entry<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     line_indexes: &mut HashMap<SourceFile, LineIndex<'db>>,
     package_name: Name,
     ns_path: Vec<Name>,
@@ -412,7 +412,7 @@ fn make_entry<'db>(
 /// Line indexes are built once per file in `line_indexes` and shared across
 /// entries, so a listing never rescans a file's text per entry.
 fn entry_line<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     line_indexes: &mut HashMap<SourceFile, LineIndex<'db>>,
     file: SourceFile,
     offset: TextSize,

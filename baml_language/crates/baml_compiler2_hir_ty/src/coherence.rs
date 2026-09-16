@@ -327,7 +327,7 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
 /// the fold, `Bar<TF>` vs `Bar<bool>` (with `type TF = true | false`) is
 /// wrongly judged disjoint - a fails-open coherence hole.
 fn normalized_alias_map(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> FxHashMap<DeclName, Ty> {
     let mut aliases = FxHashMap::default();
@@ -344,11 +344,11 @@ fn normalized_alias_map(
 }
 
 fn collect_package_aliases(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
     out: &mut FxHashMap<DeclName, Ty>,
 ) {
-    let items = baml_compiler2_ppir::package_items(db, pkg);
+    let items = baml_compiler2_hir::package::package_items(db, pkg);
     for (ns_path, ns_items) in &items.namespaces {
         for (name, def) in &ns_items.types {
             if let Definition::TypeAlias(loc) = def {
@@ -1033,7 +1033,7 @@ unsafe impl salsa::Update for CoherenceReport<'_> {
 /// dependency when ITS coherence is checked.
 #[salsa::tracked(returns(ref))]
 pub fn package_coherence_violations<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> CoherenceReport<'db> {
     let mut own = package_impls(db, pkg);
@@ -1092,7 +1092,7 @@ fn overlap_violation(overlap: Overlap) -> Option<bool> {
 }
 
 fn package_impls(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> Vec<(ImplLoc<'_>, &'_ ImplFacts<'_>)> {
     package_impl_locs(db, pkg)
@@ -1101,8 +1101,8 @@ fn package_impls(
         .collect()
 }
 
-fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String, u32) {
-    let span = baml_compiler2_ppir::item_data::impl_block_source_map(db, loc).span;
+fn impl_sort_key(db: &dyn baml_compiler2_hir::Db, loc: ImplLoc<'_>) -> (String, u32) {
+    let span = baml_compiler2_hir::item_data::impl_block_source_map(db, loc).span;
     (
         loc.file(db).path(db).display().to_string(),
         u32::from(span.start()),
@@ -1122,7 +1122,7 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 /// judged the normalized one, so a `true | false` subject was invalid here
 /// and valid there, and the pair escaped both.
 pub fn impls_conflict(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     a: &ImplFacts<'_>,
     b: &ImplFacts<'_>,
     aliases: &AliasEquivCtx<'_>,
@@ -1138,7 +1138,7 @@ pub fn impls_conflict(
 /// overlap engine receives the same normalized facts, but the caller keeps the
 /// mounted side structural because there is no legitimate `ImplLoc` to mint.
 pub fn source_mounted_impl_conflict(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_package: baml_base::SourceRoot,
     source: &ImplFacts<'_>,
     mounted: &crate::package_interface::ExportedImpl,
@@ -1190,7 +1190,7 @@ pub fn source_mounted_impl_conflict(
 /// against the registry; provable violation makes the pair disjoint
 /// (overriding even `Unknown`).
 fn impls_overlap(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     a: &ImplFacts<'_>,
     b: &ImplFacts<'_>,
     aliases: &AliasEquivCtx<'_>,
@@ -1238,7 +1238,7 @@ fn impls_overlap(
 /// stays conservatively satisfiable (a wrong negative would admit an
 /// overlapping pair).
 fn bounds_hold_at_common_instance(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     rule: &ImplFacts<'_>,
     prefix: char,
     vars: &[ParamTy],
@@ -1375,7 +1375,7 @@ unsafe impl salsa::Update for OrphanReport<'_> {
 /// any generic param BEFORE it uncovered and rejected).
 #[salsa::tracked(returns(ref))]
 pub fn package_orphan_violations(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> OrphanReport<'_> {
     let mut violations = Vec::new();

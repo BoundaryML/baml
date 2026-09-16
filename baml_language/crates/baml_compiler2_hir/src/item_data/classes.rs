@@ -1,14 +1,14 @@
 use baml_base::Name;
-use baml_compiler2_hir::{
+use text_size::TextRange;
+
+use crate::{
+    item_data::common::{
+        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData, GenericParamData,
+        InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
+    },
     item_tree::Attribute,
     loc::{ClassLoc, FunctionLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
-};
-use text_size::TextRange;
-
-use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData, GenericParamData,
-    InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
 };
 
 /// Span-free semantic data for a `class` declaration.

@@ -763,7 +763,6 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
- "baml_compiler2_ppir",
  "baml_type",
  "baml_type_runtime",
  "bex_vm_types",
@@ -801,7 +800,6 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
- "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
  "baml_type",
  "baml_type_runtime",
@@ -824,7 +822,6 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler2_ppir",
  "baml_type",
  "baml_type_runtime",
  "indexmap",
@@ -832,18 +829,6 @@ dependencies = [
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str",
-]
-
-[[package]]
-name = "baml_compiler2_ppir"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_compiler2_ast",
- "baml_compiler2_hir",
- "indexmap",
- "salsa",
- "text-size",
 ]
 
 [[package]]
@@ -912,7 +897,6 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
- "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",
@@ -972,7 +956,6 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler2_ppir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
@@ -1148,7 +1131,6 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
- "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_fmt",
@@ -1384,7 +1366,6 @@ dependencies = [
  "baml_compiler2_emit",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler2_ppir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",

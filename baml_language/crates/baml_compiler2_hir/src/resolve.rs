@@ -10,11 +10,12 @@
 //! lives with the scopes it walks, rust-analyzer's `Resolver` discipline.
 
 use baml_base::{Name, SourceFile, SourceRoot};
-use baml_compiler2_hir::{
+use text_size::TextSize;
+
+use crate::{
     contributions::Definition, package::PackageItems, scope::ScopeKind,
     semantic_index::DefinitionSite,
 };
-use text_size::TextSize;
 
 /// What a name resolves to - produced on demand, NOT stored in a map.
 ///
@@ -109,8 +110,8 @@ pub fn resolve_name_at_in_scope<'db>(
         // through into a dependency; `resolve_path_at` is where a qualified
         // name is resolved.
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let own_items: &PackageItems<'db> = crate::package_items(db, pkg_info.root);
+            let pkg_info = crate::file_package::file_package(db, file);
+            let own_items: &PackageItems<'db> = crate::package::package_items(db, pkg_info.root);
 
             if let Some(def) = own_items.lookup_value(&pkg_info.namespace_path, name) {
                 return ResolvedName::Item(def);
@@ -197,8 +198,8 @@ pub fn names_in_scope_at<'db>(
         }
 
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let own_items: &PackageItems<'db> = crate::package_items(db, pkg_info.root);
+            let pkg_info = crate::file_package::file_package(db, file);
+            let own_items: &PackageItems<'db> = crate::package::package_items(db, pkg_info.root);
             if let Some(namespace) = own_items.namespaces.get(&pkg_info.namespace_path) {
                 for (name, def) in &namespace.values {
                     push(name.clone(), ScopeNameKind::Item(*def), &mut out);
@@ -288,8 +289,8 @@ pub fn type_names_in_scope_at<'db>(
             }
         }
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let own_items: &PackageItems<'db> = crate::package_items(db, pkg_info.root);
+            let pkg_info = crate::file_package::file_package(db, file);
+            let own_items: &PackageItems<'db> = crate::package::package_items(db, pkg_info.root);
             if let Some(namespace) = own_items.namespaces.get(&pkg_info.namespace_path) {
                 for (name, def) in &namespace.types {
                     push(name.clone(), TypeScopeNameKind::Item(*def), &mut out);
@@ -308,7 +309,7 @@ pub fn type_names_in_scope_at<'db>(
 }
 
 /// The package `file`'s package spells as `name`, with its items
-/// ([`accessible_package`](baml_compiler2_hir::package::accessible_package):
+/// ([`accessible_package`](crate::package::accessible_package):
 /// itself by its own name, else the dependency reached by the edge named
 /// `name`). Anything else is invisible (`None`) — the same access rule the
 /// type resolver applies.
@@ -317,9 +318,9 @@ fn accessible_package<'db>(
     file: SourceFile,
     name: &Name,
 ) -> Option<(SourceRoot, &'db PackageItems<'db>)> {
-    let own = baml_compiler2_hir::file_package::file_package(db, file).root;
-    let package = baml_compiler2_hir::package::accessible_package(db, own, name)?;
-    Some((package, crate::package_items(db, package)))
+    let own = crate::file_package::file_package(db, file).root;
+    let package = crate::package::accessible_package(db, own, name)?;
+    Some((package, crate::package::package_items(db, package)))
 }
 
 /// Resolve the package and namespace split for a qualified path.
@@ -335,8 +336,8 @@ fn accessible_path_package<'db>(
 ) -> Option<(SourceRoot, &'db PackageItems<'db>, usize)> {
     let first = segments.first()?;
     if first.as_str() == "root" {
-        let own = baml_compiler2_hir::file_package::file_package(db, file).root;
-        return Some((own, crate::package_items(db, own), 1));
+        let own = crate::file_package::file_package(db, file).root;
+        return Some((own, crate::package::package_items(db, own), 1));
     }
     if let Some((package, items)) = accessible_package(db, file, first) {
         return Some((package, items, 1));
@@ -395,7 +396,7 @@ pub fn resolve_namespace_prefix(
     file: SourceFile,
     segments: &[Name],
 ) -> Option<bool> {
-    let own = baml_compiler2_hir::file_package::file_package(db, file).root;
+    let own = crate::file_package::file_package(db, file).root;
     let (package, pkg_items, namespace_start) = accessible_path_package(db, file, segments)?;
     let ns_prefix = &segments[namespace_start..];
     let is_namespace = ns_prefix.is_empty()
@@ -423,8 +424,9 @@ pub fn qualified_type_at<'db>(
     if prefix.is_empty() {
         // A bare name: the file's own namespace, the same rule
         // `resolve_name_at` applies.
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        return crate::package_items(db, pkg_info.root).lookup_type(&pkg_info.namespace_path, item);
+        let pkg_info = crate::file_package::file_package(db, file);
+        return crate::package::package_items(db, pkg_info.root)
+            .lookup_type(&pkg_info.namespace_path, item);
     }
     let (_, pkg_items, namespace_start) = accessible_path_package(db, file, segments)?;
     let namespace = &prefix[namespace_start.min(prefix.len())..];

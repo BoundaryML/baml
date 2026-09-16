@@ -20,10 +20,12 @@ pub mod diagnostic;
 pub mod file_package;
 pub mod ids;
 pub mod inputs;
+pub mod item_data;
 pub mod item_tree;
 pub mod loc;
 pub mod namespace;
 pub mod package;
+pub mod resolve;
 pub mod scope;
 pub mod semantic_index;
 pub mod signature;
@@ -250,12 +252,24 @@ pub fn file_symbol_contributions(
 /// Not tracked — the item tree is cached via `file_semantic_index`.
 ///
 /// `pub(crate)`: the raw `ItemTree` is an implementation detail behind the
-/// PPIR item-data firewall (`baml_compiler2_ppir::item_data`). Consumers use
-/// the enumeration (`file_classes`/`file_functions`/…) and lookup
-/// (`class_data`/`function_data`/…) queries there, never the tree itself.
+/// [`item_data`] firewall. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries there, never the tree itself.
 pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Returns the item-tree source map for a file.
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` queries in
+/// [`item_data`].
+pub(crate) fn file_item_tree_source_map(
+    db: &dyn Db,
+    file: SourceFile,
+) -> Arc<crate::item_tree::ItemTreeSourceMap> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Returns the `ScopeBindings` for a given scope.

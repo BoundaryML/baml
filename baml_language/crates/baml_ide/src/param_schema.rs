@@ -164,7 +164,8 @@ pub(crate) fn function_param_schemas(
         user_iface: iface,
         table,
     };
-    let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+    let parameter_defaults =
+        baml_compiler2_hir::signature::function_parameter_defaults(db, function);
     let source = function.file(db).text(db);
     let params = params
         .iter()

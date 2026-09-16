@@ -17,7 +17,7 @@ use baml_type::{
 };
 
 pub struct Facts<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     /// The current scope's param env (I2): each rigid variable's declared
     /// bound conjunction, as plain constraints (the trait's vocabulary).
     bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
@@ -29,7 +29,7 @@ pub struct Facts<'db> {
 }
 
 impl<'db> Facts<'db> {
-    pub fn new(db: &'db dyn baml_compiler2_ppir::Db) -> Facts<'db> {
+    pub fn new(db: &'db dyn baml_compiler2_hir::Db) -> Facts<'db> {
         Facts {
             db,
             bounds: rustc_hash::FxHashMap::default(),
@@ -39,7 +39,7 @@ impl<'db> Facts<'db> {
     }
 
     pub fn with_bounds(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
     ) -> Facts<'db> {
         Facts {
@@ -71,15 +71,16 @@ impl<'db> Facts<'db> {
 /// The source definition a qualified type name points at, if its package is
 /// served from source and declares the item.
 pub(crate) fn definition_of<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     name: &DeclName,
 ) -> Option<Definition<'db>> {
-    baml_compiler2_ppir::package_items(db, name.root()).lookup_type(name.namespace(), name.name())
+    baml_compiler2_hir::package::package_items(db, name.root())
+        .lookup_type(name.namespace(), name.name())
 }
 
 /// Resolves an alias without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
-pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_ppir::Db, name: &DeclName) -> Option<Ty> {
+pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_hir::Db, name: &DeclName) -> Option<Ty> {
     if let Some(Definition::TypeAlias(alias)) = definition_of(db, name) {
         return Some(crate::lower::type_alias_value(db, alias));
     }
@@ -94,12 +95,12 @@ pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_ppir::Db, name: &DeclNa
 /// Resolves enum variants without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
 pub(crate) fn uncached_enum_variants(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     name: &DeclName,
 ) -> Option<Vec<Name>> {
     if let Some(Definition::Enum(enum_loc)) = definition_of(db, name) {
         return Some(
-            baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
+            baml_compiler2_hir::item_data::enum_data(db, enum_loc)
                 .variants
                 .iter()
                 .map(|variant| variant.name.clone())

@@ -17,26 +17,66 @@ use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
 /// Compiler2 function signature — param names + unresolved `ast::TypeExpr`.
 ///
 /// The `SignatureSourceMap` twin holds the item-level spans. This struct is NOT
-/// fully span-free, though: `ast::TypeExpr` carries its own `span` inline (its
-/// `PartialEq` ignores that span but transitively compares `RawAttribute` spans),
-/// so a whitespace edit near an attribute can still bust this query's cutoff. The
-/// span-free successor is `ppir::function_data` over the `TypeRef` arena; this
-/// struct is retained until its consumers migrate.
+/// span-free successor is [`crate::item_data::function_data`] over the
+/// `TypeRef` arena; this struct is retained until its consumers migrate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     pub name: baml_base::Name,
     /// Parameter names paired with their unresolved type expressions.
     pub params: Vec<SignatureParam>,
     /// Return type (None if omitted).
-    pub return_type: Option<TypeExpr>,
+    pub return_type: Option<SignatureTypeExpr>,
     /// Declared throws contract type (None if omitted).
-    pub throws: Option<TypeExpr>,
+    pub throws: Option<SignatureTypeExpr>,
+}
+
+/// A signature's written type, compared **including its spans**.
+///
+/// The signature queries are memoized, and consumers lower these types with a
+/// diagnostic sink that anchors on the spans inside them — including nested
+/// ones ([`SignatureSourceMap`] holds only the top-level spans, not the span of
+/// `Box` within `Box<int>`). [`TypeExpr`]'s own `PartialEq` ignores spans, so
+/// without this wrapper a signature whose types had merely *moved* would
+/// compare equal, Salsa would keep the older value, and every diagnostic
+/// anchored through it would point at a stale range.
+///
+/// Comparing spans costs this query its early cutoff across a whitespace edit,
+/// which is the honest price: a consumer that reads spans has to re-run when
+/// they move. Type-only consumers should move to the span-free
+/// [`crate::item_data::function_data`] instead.
+#[derive(Debug, Clone, Eq)]
+pub struct SignatureTypeExpr(TypeExpr);
+
+impl SignatureTypeExpr {
+    #[must_use]
+    pub fn new(ty: TypeExpr) -> Self {
+        Self(ty)
+    }
+
+    #[must_use]
+    pub fn into_type_expr(self) -> TypeExpr {
+        self.0
+    }
+}
+
+impl PartialEq for SignatureTypeExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.0.spans() == other.0.spans()
+    }
+}
+
+impl std::ops::Deref for SignatureTypeExpr {
+    type Target = TypeExpr;
+
+    fn deref(&self) -> &TypeExpr {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureParam {
     pub name: Name,
-    pub ty: TypeExpr,
+    pub ty: SignatureTypeExpr,
     pub has_default: bool,
 }
 
@@ -71,8 +111,8 @@ pub struct ElaboratedFunctionSignature {
     pub user_generic_params: Vec<Name>,
     pub synthetic_effect_params: Vec<Name>,
     pub params: Vec<SignatureParam>,
-    pub return_type: Option<TypeExpr>,
-    pub throws: Option<TypeExpr>,
+    pub return_type: Option<SignatureTypeExpr>,
+    pub throws: Option<SignatureTypeExpr>,
 }
 
 /// Parallel span storage for a signature.
@@ -99,8 +139,21 @@ pub struct SignatureSourceMap {
     pub throws_type_span: Option<TextRange>,
 }
 
+/// One signature parameter, with its type stripped of spans.
+fn signature_param(p: &crate::item_tree::FunctionParam) -> SignatureParam {
+    let type_expr = p
+        .type_expr
+        .clone()
+        .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
+    SignatureParam {
+        name: p.name.clone(),
+        ty: SignatureTypeExpr::new(type_expr),
+        has_default: p.default.is_some(),
+    }
+}
+
 /// Shared implementation — reads from the `ItemTree` (full AST data),
-/// splits into semantic (`TypeExpr`, no spans) + source map (spans only).
+/// splits into the semantic signature (no spans) + source map (spans only).
 fn function_signature_with_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -109,29 +162,13 @@ fn function_signature_with_source_map<'db>(
     let item_tree = crate::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    // Build semantic signature — strip spans, keep TypeExpr
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default())
-            });
-            SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
-
-    let return_type = func_data.return_type.clone();
+    let params: Vec<_> = func_data.params.iter().map(signature_param).collect();
 
     let sig = Arc::new(FunctionSignature {
         name: func_data.name.clone(),
         params,
-        return_type,
-        throws: func_data.throws.clone(),
+        return_type: func_data.return_type.clone().map(SignatureTypeExpr::new),
+        throws: func_data.throws.clone().map(SignatureTypeExpr::new),
     });
 
     // Build source map — spans only (separate for early-cutoff)
@@ -255,8 +292,8 @@ pub fn elaborate_function_signature_parts(
     user_generic_params: Vec<Name>,
     reserved_effect_param_names: &[Name],
     params: Vec<SignatureParam>,
-    return_type: Option<TypeExpr>,
-    throws: Option<TypeExpr>,
+    return_type: Option<SignatureTypeExpr>,
+    throws: Option<SignatureTypeExpr>,
 ) -> ElaboratedFunctionSignature {
     let mut used_names: FxHashSet<Name> = user_generic_params.iter().cloned().collect();
     used_names.extend(reserved_effect_param_names.iter().cloned());
@@ -266,13 +303,13 @@ pub fn elaborate_function_signature_parts(
         .into_iter()
         .map(|param| {
             let elaborated = elaborate_callback_param_root(
-                param.ty,
+                param.ty.into_type_expr(),
                 &mut used_names,
                 &mut synthetic_effect_params,
             );
             SignatureParam {
                 name: param.name,
-                ty: elaborated,
+                ty: SignatureTypeExpr::new(elaborated),
                 has_default: param.has_default,
             }
         })
@@ -296,23 +333,10 @@ fn elaborated_function_signature_with_source_map<'db>(
     let item_tree = crate::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default())
-            });
-            SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
+    let params: Vec<_> = func_data.params.iter().map(signature_param).collect();
 
-    let return_type = func_data.return_type.clone();
-    let throws = func_data.throws.clone();
+    let return_type = func_data.return_type.clone().map(SignatureTypeExpr::new);
+    let throws = func_data.throws.clone().map(SignatureTypeExpr::new);
     let reserved_effect_param_names: Vec<Name> = item_tree
         .enclosing_type_generic_params(function.id(db))
         .iter()

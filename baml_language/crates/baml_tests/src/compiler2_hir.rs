@@ -36,10 +36,10 @@ mod tests {
         file: baml_base::SourceFile,
         name: &str,
     ) -> FunctionLoc<'db> {
-        *baml_compiler2_ppir::item_data::file_functions(db, file)
+        *baml_compiler2_hir::item_data::file_functions(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .name
                     .as_str()
                     == name
@@ -53,20 +53,20 @@ mod tests {
         class_name: &str,
         method_name: &str,
     ) -> FunctionLoc<'db> {
-        let class_loc = *baml_compiler2_ppir::item_data::file_classes(db, file)
+        let class_loc = *baml_compiler2_hir::item_data::file_classes(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::class_data(db, loc)
+                baml_compiler2_hir::item_data::class_data(db, loc)
                     .name
                     .as_str()
                     == class_name
             })
             .unwrap_or_else(|| panic!("missing class {class_name}"));
-        *baml_compiler2_ppir::item_data::class_data(db, class_loc)
+        *baml_compiler2_hir::item_data::class_data(db, class_loc)
             .methods
             .iter()
             .find(|&&method_loc| {
-                baml_compiler2_ppir::item_data::function_data(db, method_loc)
+                baml_compiler2_hir::item_data::function_data(db, method_loc)
                     .name
                     .as_str()
                     == method_name
@@ -243,13 +243,13 @@ mod tests {
         );
 
         // Find the function via the firewall.
-        let greet = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+        let greet = *baml_compiler2_hir::item_data::file_functions(&db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(&db, loc).name == Name::new("greet")
+                baml_compiler2_hir::item_data::function_data(&db, loc).name == Name::new("greet")
             })
             .expect("function 'greet' should be in item tree");
-        let func = baml_compiler2_ppir::item_data::function_data(&db, greet);
+        let func = baml_compiler2_hir::item_data::function_data(&db, greet);
 
         assert_eq!(
             func.params.len(),
@@ -311,7 +311,7 @@ mod tests {
             "#,
         );
 
-        use baml_compiler2_ppir::item_data::{
+        use baml_compiler2_hir::item_data::{
             ImplSubjectData, class_data, class_impls, file_classes, file_free_impls, file_impls,
             impl_block_data,
         };
@@ -395,23 +395,23 @@ mod tests {
         let aliases = std::collections::HashMap::new();
 
         let class_ty = |class_name: &str| {
-            let loc = *baml_compiler2_ppir::item_data::file_classes(&db, file)
+            let loc = *baml_compiler2_hir::item_data::file_classes(&db, file)
                 .iter()
                 .find(|&&loc| {
-                    baml_compiler2_ppir::item_data::class_data(&db, loc).name
+                    baml_compiler2_hir::item_data::class_data(&db, loc).name
                         == Name::new(class_name)
                 })
                 .expect("class in item tree");
-            let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
+            let data = baml_compiler2_hir::item_data::class_data(&db, loc);
             let qtn =
                 baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
             Ty::Class(qtn, Box::new([]), TyAttr::default())
         };
         let iface = |iface_name: &str| {
-            let loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+            let loc = *baml_compiler2_hir::item_data::file_interfaces(&db, file)
                 .iter()
                 .find(|&&loc| {
-                    baml_compiler2_ppir::item_data::interface_data(&db, loc).name
+                    baml_compiler2_hir::item_data::interface_data(&db, loc).name
                         == Name::new(iface_name)
                 })
                 .expect("interface in item tree");
@@ -2162,7 +2162,7 @@ function foo(user: User) -> string {
     /// survive lowering. Locks the item-tree source-map plumbing end to end.
     #[test]
     fn item_source_maps_carry_name_spans_and_docstrings() {
-        use baml_compiler2_ppir::item_data;
+        use baml_compiler2_hir::item_data;
 
         let mut db = make_db();
         let src = r##"/// Alias docs.

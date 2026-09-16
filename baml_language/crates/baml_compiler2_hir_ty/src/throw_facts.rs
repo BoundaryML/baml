@@ -64,7 +64,7 @@ unsafe impl salsa::Update for FileThrowFacts {
 /// dependencies didn't change signature.
 #[salsa::tracked(returns(ref))]
 pub fn file_throw_facts(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: baml_base::SourceFile,
 ) -> FileThrowFacts {
     // `seeds.by_path(db)` is a *tracked* read of the `SeededThrowFacts` input:
@@ -83,42 +83,42 @@ pub fn file_throw_facts(
         return FileThrowFacts(facts);
     }
 
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
     let func_ns = pkg_info.namespace_path;
 
     // Class methods, interface default methods, and `implements`-block
     // methods are not top-level solver entries under their own names.
     let mut member_ids = std::collections::HashSet::new();
-    for class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+    for class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
+        let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
         member_ids.extend(class_data.methods.iter().copied());
     }
-    for iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, file) {
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
+    for iface_loc in baml_compiler2_hir::item_data::file_interfaces(db, file) {
+        let iface_data = baml_compiler2_hir::item_data::interface_data(db, *iface_loc);
         member_ids.extend(iface_data.default_methods.iter().copied());
     }
     // ALL `implements` blocks, in-body and out-of-body alike: their methods
     // are Impl-owned (never in `class_data.methods`) and dispatch through the
     // interface registry, so none is a solver node under its bare name.
-    for impl_loc in baml_compiler2_ppir::item_data::file_impls(db, file) {
-        let block = baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc);
+    for impl_loc in baml_compiler2_hir::item_data::file_impls(db, file) {
+        let block = baml_compiler2_hir::item_data::impl_block_data(db, *impl_loc);
         member_ids.extend(block.methods.iter().copied());
     }
 
     let mut out = Vec::new();
 
-    for func_loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
+    for func_loc in baml_compiler2_hir::item_data::file_functions(db, file) {
         // Required interface methods are signature-only items; the throw
         // fixpoint saw no such functions before they were items, and their
         // conformance-checked implementors carry the real bodies.
-        if baml_compiler2_ppir::item_data::is_required_interface_method(db, *func_loc) {
+        if baml_compiler2_hir::item_data::is_required_interface_method(db, *func_loc) {
             continue;
         }
         if member_ids.contains(func_loc) {
             continue;
         }
         let func_loc = *func_loc;
-        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
         let short_name = &func_data.name;
         let key = function_key(db, func_loc, short_name);
 
@@ -131,7 +131,7 @@ pub fn file_throw_facts(
             &func_data.params,
         );
 
-        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        let body = baml_compiler2_hir::body::function_body(db, func_loc);
         let call_edges =
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                 collect_call_targets(expr_body)
@@ -147,11 +147,11 @@ pub fn file_throw_facts(
         });
     }
 
-    for class_loc in baml_compiler2_ppir::item_data::file_classes(db, file) {
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+    for class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
+        let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
         let class_name = &class_data.name;
         for &func_loc in &class_data.methods {
-            let method_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+            let method_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
             let method_name = &method_data.name;
             // Key as "ClassName.method_name" (with namespace prefix if any).
             let method_short = Name::new(format!("{class_name}.{method_name}"));
@@ -166,7 +166,7 @@ pub fn file_throw_facts(
                 &method_data.params,
             );
 
-            let body = baml_compiler2_ppir::function_body(db, func_loc);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let call_edges =
                 if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                     // Rewrite "self.X" call targets to "ClassName.X" so edges
@@ -198,15 +198,15 @@ pub fn file_throw_facts(
 /// from the body. Shared by the top-level-function and class-method passes,
 /// which differ only in which item supplies `params`.
 fn extract_direct_and_declared<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
-    params: &[baml_compiler2_ppir::item_data::FunctionParamData],
+    params: &[baml_compiler2_hir::item_data::FunctionParamData],
 ) -> (BTreeSet<ThrowFact>, bool) {
-    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
     let file = func_loc.file(db);
 
     // The method's full frame and bounds (its own params plus the enclosing
@@ -240,7 +240,7 @@ fn extract_direct_and_declared<'db>(
 }
 
 fn function_key<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     func: baml_compiler2_hir::loc::FunctionLoc<'db>,
     short_name: &Name,
 ) -> Name {
@@ -250,7 +250,7 @@ fn function_key<'db>(
 }
 
 pub fn collect_direct_throws<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -264,7 +264,7 @@ pub fn collect_direct_throws<'db>(
     // source map — but only when the body actually has a `catch`. A `catch`-free
     // body needs no spans and stays insensitive to whitespace-only edits.
     let source_map = (!catch_arm_bodies.is_empty())
-        .then(|| baml_compiler2_ppir::function_body_source_map(db, func_loc))
+        .then(|| baml_compiler2_hir::body::function_body_source_map(db, func_loc))
         .flatten();
 
     // Walk the body structurally rather than scanning the arena: a `throw`
@@ -304,7 +304,7 @@ pub fn collect_direct_throws<'db>(
 fn lower_param_types(
     ctx: &crate::lower::LowerCtx<'_>,
     type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
-    params: &[baml_compiler2_ppir::item_data::FunctionParamData],
+    params: &[baml_compiler2_hir::item_data::FunctionParamData],
 ) -> Vec<(Name, Ty)> {
     params
         .iter()
@@ -367,7 +367,7 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
 /// Convert a thrown expression to a `Ty` directly, using `pkg_items` to resolve
 /// paths to their actual types (enum variants, classes, etc).
 fn throw_fact_from_expr<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     param_types: &[(Name, Ty)],
@@ -435,7 +435,7 @@ fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
 /// or `["Status"]` to a `Ty`, or `None` when the path names nothing this pass
 /// can see (or names a non-type definition).
 fn resolve_path_to_ty<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     segments: &[Name],
@@ -492,7 +492,7 @@ fn resolve_path_to_ty<'db>(
 ///   prefix stripped (own-package alias);
 /// - any other leading segment is treated as a sibling package name.
 fn lookup_type_in_scope<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     ns: &[Name],
@@ -511,7 +511,7 @@ fn lookup_type_in_scope<'db>(
             pkg_items.lookup_type(rest, type_name)
         } else {
             let package = accessible_package(db, pkg_items.root, first)?;
-            baml_compiler2_ppir::package_items(db, package).lookup_type(rest, type_name)
+            baml_compiler2_hir::package::package_items(db, package).lookup_type(rest, type_name)
         }
     })
 }
@@ -601,7 +601,7 @@ fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
 /// Seeded facts re-spelled into `root`'s compile-time heads; `None` when a
 /// head names a package `root` cannot reach.
 fn respell_seeded_facts(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
     facts: &[baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>],
 ) -> Option<Vec<baml_type::throw_facts::FunctionThrowFacts>> {
@@ -617,7 +617,7 @@ fn respell_seeded_facts(
 /// spelling in this database. The dual of the seed re-spelling above, and
 /// what the incremental cache persists and compares.
 pub fn export_file_throw_facts(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: baml_base::SourceFile,
 ) -> Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>> {
     let spelling = baml_compiler2_hir::package::spelling(db);

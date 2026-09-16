@@ -47,7 +47,7 @@ type InterfaceClosureQueueEntry<'db> = (
 // vocabulary.
 
 pub(crate) struct LowerScope<'a, 'db> {
-    pub db: &'db dyn baml_compiler2_ppir::Db,
+    pub db: &'db dyn baml_compiler2_hir::Db,
     pub package_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     pub ns_context: &'a [Name],
     pub generic_params: &'a [ParamTy],
@@ -115,7 +115,7 @@ pub(crate) fn lower_expr_in_at(
 
 /// `Self` — the interface frame's universal slot 0.
 pub(crate) fn interface_self_param(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
 ) -> ParamTy {
     crate::lower::interface_frame(db, iface_loc)
@@ -191,10 +191,10 @@ pub(crate) fn append_params(parent: &[ParamTy], names: &[Name]) -> Vec<ParamTy> 
 /// Only interface-shaped bounds contribute; lowering errors are the
 /// declaration's own diagnostics, dropped here.
 pub fn interface_declared_param_bounds(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
 ) -> TypeVarBoundsMap {
-    let data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
     let frame = crate::lower::interface_frame(db, iface_loc);
     let declared = crate::lower::interface_declared_params(db, iface_loc);
     let ctx = crate::lower::lower_ctx_for_file(db, iface_loc.file(db)).with_frame(frame);
@@ -226,7 +226,7 @@ pub fn interface_declared_param_bounds(
 /// closure's), resolved to its one-level value through the `hir_ty` road.
 #[salsa::tracked(returns(ref))]
 pub fn package_resolved_aliases(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> std::collections::HashMap<DeclName, Ty> {
     let mut aliases = std::collections::HashMap::new();
@@ -235,7 +235,7 @@ pub fn package_resolved_aliases(
         db, pkg_id,
     ));
     for pkg in packages {
-        let items = baml_compiler2_ppir::package_items(db, pkg);
+        let items = baml_compiler2_hir::package::package_items(db, pkg);
         for ns in items.namespaces.values() {
             for (name, def) in &ns.types {
                 if let Definition::TypeAlias(loc) = def {
@@ -252,14 +252,14 @@ pub fn package_resolved_aliases(
 /// Resolve an enum's full variant-name set (for `nf`'s complete-variant
 /// folding), or `None` if `qtn` is not an enum.
 pub fn enum_variant_names(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     enum_qtn: &DeclName,
 ) -> Option<Vec<Name>> {
     let Definition::Enum(enum_loc) = crate::facts::definition_of(db, enum_qtn)? else {
         return None;
     };
     Some(
-        baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
+        baml_compiler2_hir::item_data::enum_data(db, enum_loc)
             .variants
             .iter()
             .map(|variant| variant.name.clone())
@@ -271,7 +271,7 @@ pub fn enum_variant_names(
 /// canonical form the overlap machinery assumes (see `baml_type::unify`).
 #[salsa::tracked(returns(ref))]
 pub fn normalized_alias_map(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> std::collections::HashMap<DeclName, Ty> {
     let mut aliases = package_resolved_aliases(db, pkg_id).clone();
@@ -285,9 +285,9 @@ pub fn normalized_alias_map(
 // ── Relocated module body ──────────────────────────────────────────────────
 
 struct InterfaceTypeAssocLowering<'a, 'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: &'a baml_compiler2_ppir::item_data::InterfaceData<'db>,
+    iface: &'a baml_compiler2_hir::item_data::InterfaceData<'db>,
     interface_args: &'a [Ty],
     explicit_associated_bindings: &'a [baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
     /// The arena the explicit bindings' `ty` ids index — the *requiring* item's
@@ -374,15 +374,15 @@ pub(crate) fn carried_bound_satisfies(
 
 #[allow(clippy::too_many_arguments)]
 fn lower_interface_associated_bindings<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: &baml_compiler2_ppir::item_data::InterfaceData<'db>,
+    iface: &baml_compiler2_hir::item_data::InterfaceData<'db>,
     interface_args: &[Ty],
     self_ty: &Ty,
     // The arena the block bindings' `type_ref` ids index — the impl block's own
     // `type_refs` (the bindings are written in the block's source).
     binding_type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
-    block_associated_bindings: &[baml_compiler2_ppir::item_data::AssociatedTypeBindingData],
+    block_associated_bindings: &[baml_compiler2_hir::item_data::AssociatedTypeBindingData],
     binding_pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     binding_namespace_path: &[Name],
     generic_params: &[ParamTy],
@@ -478,9 +478,9 @@ fn lower_interface_associated_bindings<'db>(
 }
 
 pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface: &baml_compiler2_ppir::item_data::InterfaceData<'db>,
+    iface: &baml_compiler2_hir::item_data::InterfaceData<'db>,
     interface_args: &[Ty],
     associated_bindings: &[(Name, Ty)],
     // When false, an unbound associated type is left absent rather than filled
@@ -566,7 +566,7 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
 /// The one scope recipe behind [`interface_associated_type_default`],
 /// [`resolve_interface_fields`], and [`resolve_interface_required_methods`].
 struct InterfaceDeclScope<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     ns: Vec<Name>,
     /// `Self` followed by the interface's declared generic parameters.
@@ -578,12 +578,12 @@ struct InterfaceDeclScope<'db> {
 
 impl<'db> InterfaceDeclScope<'db> {
     fn new(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     ) -> Self {
-        let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        let iface = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
 
         // `Self` plus the declared params: the frame's universal prefix,
         // without the associated-type slots that follow it.
@@ -655,11 +655,11 @@ impl<'db> InterfaceDeclScope<'db> {
 #[allow(clippy::needless_pass_by_value)]
 #[salsa::tracked]
 pub fn interface_associated_type_default<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     name: Name,
 ) -> Option<(Ty, Vec<TirTypeError>)> {
-    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let iface = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
     let assoc = iface.associated_types.iter().find(|a| a.name == name)?;
     let default = assoc.default?;
 
@@ -703,11 +703,11 @@ unsafe impl salsa::Update for ResolvedInterfaceFields {
 /// Resolve an interface's declared field types in its own scope.
 #[salsa::tracked(returns(ref))]
 pub fn resolve_interface_fields<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> ResolvedInterfaceFields {
-    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
-    let iface_spans = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
+    let iface = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
+    let iface_spans = baml_compiler2_hir::item_data::interface_source_map(db, iface_loc);
     let scope = InterfaceDeclScope::new(db, iface_loc);
 
     let mut fields = Vec::new();
@@ -783,10 +783,10 @@ unsafe impl salsa::Update for ResolvedInterfaceMethod {
 /// come from [`crate::lower::function_signature`] instead.
 #[salsa::tracked(returns(ref))]
 pub fn resolve_interface_required_methods<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Vec<ResolvedInterfaceMethod> {
-    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let iface = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
     let scope = InterfaceDeclScope::new(db, iface_loc);
 
     iface
@@ -850,7 +850,7 @@ pub fn realize_associated_default(
 /// type of that interface. A *bound* never fills a default this way — its implementor may
 /// override it — which is why this is keyed on the interface-existential base.
 pub fn existential_associated_default(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     res_ctx: &crate::package_interface::PackageResolutionContext<'_>,
     qtn: &DeclName,
     args: &[Ty],
@@ -1188,7 +1188,7 @@ fn bind_type_var(
 /// interface. The paths resolved here are `requires` / `implements` targets —
 /// constraint heads — and only the identity is consumed.
 pub fn resolve_path_to_interface_identity<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     target: &baml_compiler2_ast::TypeExpr,
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     current_ns: &[Name],
@@ -1213,7 +1213,7 @@ pub fn resolve_path_to_interface_identity<'db>(
 /// The `TypeRef`-arena twin of [`resolve_path_to_interface_identity`], for
 /// callers holding firewall data rather than an AST node.
 pub fn resolve_ref_to_interface_identity<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     target: baml_compiler2_hir::type_ref::TypeRefId,
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
@@ -1239,14 +1239,14 @@ pub fn resolve_ref_to_interface_identity<'db>(
 
 /// Shared tail of the two `resolve_*_to_interface_identity` functions.
 fn resolved_interface_from_ty(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     ty: Ty,
 ) -> Option<ResolvedInterface<'_>> {
     let Ty::Interface(qtn, _, _, _) = ty else {
         return None;
     };
     let pkg_id = qtn.root();
-    let resolved_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let resolved_pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     let Definition::Interface(loc) = resolved_pkg_items.lookup_type(qtn.namespace(), qtn.name())?
     else {
         return None;
@@ -1256,7 +1256,7 @@ fn resolved_interface_from_ty(
 
 /// Resolve a `TypeRef`-arena entry to an interface declaration.
 pub fn resolve_ref_to_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     store: &baml_compiler2_hir::type_ref::TypeRefStore,
     target: baml_compiler2_hir::type_ref::TypeRefId,
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
@@ -1270,19 +1270,19 @@ pub fn resolve_ref_to_interface<'db>(
 /// `[root, …, root]` witnessing it; else `None`. The user-facing detector (E0118) for the
 /// cycle that [`interface_closure_locs`] skips silently.
 pub fn interface_requires_cycle<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     root: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Option<Vec<Name>> {
     let iface_name = |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Name {
-        baml_compiler2_ppir::item_data::interface_data(db, loc)
+        baml_compiler2_hir::item_data::interface_data(db, loc)
             .name
             .clone()
     };
     let required_locs =
         |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
-            let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
+            let iface = baml_compiler2_hir::item_data::interface_data(db, loc);
             let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-            let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
+            let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
             iface
                 .requires
                 .iter()
@@ -1319,7 +1319,7 @@ pub fn interface_requires_cycle<'db>(
 /// interface in it (including `root_iface` itself), in BFS order. Cycles are
 /// skipped silently — they are reported elsewhere (E0118).
 pub fn interface_closure_locs<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     let mut out: Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> = Vec::new();
@@ -1332,9 +1332,9 @@ pub fn interface_closure_locs<'db>(
             continue;
         }
         out.push(loc);
-        let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
+        let iface = baml_compiler2_hir::item_data::interface_data(db, loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let parent_pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
         for &parent in &iface.requires {
             if let Some(parent_loc) = resolve_ref_to_interface(
                 db,
@@ -1362,7 +1362,7 @@ pub fn interface_closure_locs<'db>(
 /// Order is stable — roots in the order given, each root's closure in BFS order
 /// — so a caller rendering these into a diagnostic gets a deterministic list.
 pub fn interfaces_declaring_associated_type<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     roots: impl IntoIterator<Item = baml_compiler2_hir::loc::InterfaceLoc<'db>>,
     member: &Name,
 ) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
@@ -1373,7 +1373,7 @@ pub fn interfaces_declaring_associated_type<'db>(
             if !seen.insert(loc) {
                 continue;
             }
-            if baml_compiler2_ppir::item_data::interface_data(db, loc)
+            if baml_compiler2_hir::item_data::interface_data(db, loc)
                 .associated_types
                 .iter()
                 .any(|assoc| assoc.name == *member)
@@ -1388,7 +1388,7 @@ pub fn interfaces_declaring_associated_type<'db>(
 /// Walk the transitive `requires` closure of `root_iface`, carrying generic
 /// arguments and associated type bindings for each interface in the closure.
 pub fn interface_closure_locs_with_args_and_assoc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_args: &[Ty],
     root_associated_bindings: &[(Name, Ty)],
@@ -1412,9 +1412,9 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         if ancestors.contains(&loc) {
             continue;
         }
-        let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
+        let iface = baml_compiler2_hir::item_data::interface_data(db, loc);
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-        let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let parent_pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
         let mut diags = Vec::new();
         let associated_bindings = complete_interface_associated_bindings_from_tys(
             db,
@@ -1485,7 +1485,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                 }
                 _ => Vec::new(),
             };
-            let parent_iface = baml_compiler2_ppir::item_data::interface_data(db, parent_loc);
+            let parent_iface = baml_compiler2_hir::item_data::interface_data(db, parent_loc);
             let (parent_explicit_assoc, parent_binding_ns): (
                 &[baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
                 &[Name],
@@ -1529,7 +1529,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
 /// associated-type pins, and looks for an entry matching `sup` by qualified name,
 /// argument list, and every associated-type pin `sup` specifies.
 pub fn interface_requires<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
     sub: &baml_type::Interface,
     sup: &baml_type::Interface,
@@ -1553,7 +1553,7 @@ pub fn interface_requires<'db>(
         &sub.associated_types,
         true,
     ) {
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
         let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
         if iface_qtn == sup.name
             && iface_args.len() == sup.generics.len()
@@ -1588,7 +1588,7 @@ pub fn interface_requires<'db>(
 /// that is itself a bounded var judges through it). Aliases expand
 /// cycle-guarded; a cyclic alias is its own diagnostic elsewhere.
 pub fn type_generic_bound_errors(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     ty: &baml_type::LoweringTy,
 ) -> Vec<TirTypeError> {
@@ -1600,7 +1600,7 @@ pub fn type_generic_bound_errors(
 }
 
 fn collect_type_generic_bound_errors<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &crate::facts::Facts<'db>,
     ty: &baml_type::LoweringTy,
     seen_aliases: &mut FxHashSet<DeclName>,
@@ -1830,7 +1830,7 @@ fn projection_poisoned(ty: &Ty) -> bool {
 /// [`Determination::Poisoned`] carries the diagnostic (or none, when the
 /// qualifier was already an error type and must not double-report).
 pub fn determine_member_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     base: &Ty,
@@ -1847,7 +1847,7 @@ pub fn determine_member_interface(
 /// the param env per projection. `viewer` is the asking package: the impls
 /// that can declare the member are the ones it can see.
 pub fn determine_member_interface_with_facts(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &crate::facts::Facts<'_>,
     base: &Ty,
@@ -1888,7 +1888,7 @@ pub fn determine_member_interface_with_facts(
 /// determination is shared, and only the product - a canonical projection
 /// triple, or the interface's own pin for `member` - is namespace-specific.
 pub fn lower_projection(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     scope_bounds: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     base: Ty,
@@ -1953,7 +1953,7 @@ pub fn lower_projection(
 }
 
 fn determine_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &crate::facts::Facts<'db>,
     base: &Ty,
@@ -2084,7 +2084,7 @@ fn determine_interface<'db>(
 
 #[allow(clippy::too_many_arguments)]
 fn resolve_via_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &crate::facts::Facts<'db>,
     roots: Vec<baml_type::Interface>,
     explicit: Option<baml_type::Interface>,
@@ -2113,7 +2113,7 @@ fn resolve_via_roots<'db>(
 }
 
 fn realize_qualifier_through_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &crate::facts::Facts<'db>,
     roots: &[baml_type::Interface],
     qualifier: &baml_type::Interface,
@@ -2195,7 +2195,7 @@ fn realize_qualifier_through_roots<'db>(
 /// implementor may override a declared default, so those candidates retain
 /// only the pins written by the bound.
 fn complete_qualifier_candidate_associated_bindings(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     candidate: &baml_type::Interface,
     fill_defaults: bool,
 ) -> baml_type::Interface {
@@ -2212,7 +2212,7 @@ fn complete_qualifier_candidate_associated_bindings(
         let Some(loc) = projection_interface_loc(db, &candidate.name) else {
             return candidate.clone();
         };
-        let data = baml_compiler2_ppir::item_data::interface_data(db, loc);
+        let data = baml_compiler2_hir::item_data::interface_data(db, loc);
         return baml_type::Interface {
             name: candidate.name.clone(),
             generics: candidate.generics.clone(),
@@ -2310,7 +2310,7 @@ fn written_qualifier_proven_by(
 /// Iterable<Item = Self.Item>` pinning idiom depends on it); declarers
 /// dedupe by realized identity across the pool.
 fn resolve_through_roots(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     roots: Vec<baml_type::Interface>,
     member: &Name,
     undeclared: crate::diagnostics::AssocContainer,
@@ -2377,7 +2377,7 @@ fn resolve_through_roots(
 /// root-wins across declarers (the most-derived interface shadows one it
 /// transitively requires, mirroring the symbolic road).
 fn determine_concrete<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &crate::facts::Facts<'db>,
     base: &Ty,
@@ -2456,7 +2456,7 @@ fn determine_concrete<'db>(
 /// does — plus the impl's realization of the associated types the qualifier
 /// left unwritten.
 fn concrete_realized_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     base: &Ty,
     qualifier: &baml_type::Interface,
 ) -> Option<baml_type::Interface> {
@@ -2491,7 +2491,7 @@ fn projection_expand_aliases(facts: &crate::facts::Facts<'_>, mut ty: Ty) -> Ty 
 /// Whether `qtn` declares `member` in `ns` — [`interface_declared_kind`]
 /// collapsed to a `bool`, for callers that only need existence.
 pub fn interface_declares_member(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     qtn: &DeclName,
     member: &Name,
     ns: MemberNamespace,
@@ -2506,12 +2506,12 @@ pub fn interface_declares_member(
 }
 
 fn interface_declares_member_at(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
     member: &Name,
     ns: MemberNamespace,
 ) -> bool {
-    let data = baml_compiler2_ppir::item_data::interface_data(db, loc);
+    let data = baml_compiler2_hir::item_data::interface_data(db, loc);
     match ns {
         MemberNamespace::Type => data
             .associated_types
@@ -2526,8 +2526,8 @@ fn interface_declares_member_at(
 /// a method cannot share a name (the HIR rejects that at declaration), so the
 /// order is a formality that keeps the scan single-pass.
 fn source_declared_value_kind(
-    db: &dyn baml_compiler2_ppir::Db,
-    data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
+    db: &dyn baml_compiler2_hir::Db,
+    data: &baml_compiler2_hir::item_data::InterfaceData<'_>,
     name: &Name,
 ) -> Option<ValueMemberKind> {
     if data.fields.iter().any(|field| field.name == *name) {
@@ -2535,7 +2535,7 @@ fn source_declared_value_kind(
     }
     data.methods
         .iter()
-        .any(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
+        .any(|&method| baml_compiler2_hir::item_data::function_data(db, method).name == *name)
         .then_some(ValueMemberKind::Method)
 }
 
@@ -2591,7 +2591,7 @@ fn mounted_declared_kind(
 /// (a virtual field read dispatches differently from a call, and the ambiguity
 /// diagnostics word themselves differently) ask here instead.
 pub fn interface_declared_kind(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     qtn: &DeclName,
     name: &Name,
     ns: MemberNamespace,
@@ -2602,7 +2602,7 @@ pub fn interface_declared_kind(
         return mounted_declared_kind(row, name, ns);
     }
     let loc = projection_interface_loc(db, qtn)?;
-    let data = baml_compiler2_ppir::item_data::interface_data(db, loc);
+    let data = baml_compiler2_hir::item_data::interface_data(db, loc);
     match ns {
         MemberNamespace::Type => data
             .associated_types
@@ -2616,7 +2616,7 @@ pub fn interface_declared_kind(
 }
 
 fn projection_interface_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     qtn: &DeclName,
 ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     match crate::facts::definition_of(db, qtn)? {
@@ -2630,7 +2630,7 @@ fn projection_interface_loc<'db>(
 /// one interface-headed base that CAN resolve is an alias of a fully-pinned
 /// existential whose spelling pins `member`; that shape passes (`None`).
 pub fn interface_base_without_member_pin(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     base_ty: &Ty,
     member: &Name,
 ) -> Option<DeclName> {

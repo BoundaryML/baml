@@ -584,7 +584,7 @@ impl WitnessPat {
 /// cascade so nested classes keep labels, everything else takes the
 /// standard `Display`.
 pub fn render_witness_pat(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     vp: &Viewpoint<'_>,
     w: &WitnessPat,
 ) -> String {
@@ -594,7 +594,7 @@ pub fn render_witness_pat(
             let names: Vec<baml_type::Name> = {
                 match crate::facts::definition_of(db, qtn) {
                     Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
-                        baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                        baml_compiler2_hir::item_data::class_data(db, class_loc)
                             .fields
                             .iter()
                             .map(|f| f.name.clone())

@@ -605,7 +605,7 @@ impl std::fmt::Display for UnresolvedHead {
 /// A wire interface as seen from `root`: the artifact's own declarations
 /// are `root`'s, its dependencies resolve through `root`'s edges.
 pub fn import_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
     wire: &PackageInterface<TypeName>,
 ) -> Result<PackageInterface, UnresolvedHead> {
@@ -620,7 +620,7 @@ pub fn import_interface(
 /// `root`'s interface spelled for the wire: every head by its root's
 /// spelling in this database.
 pub fn export_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
 ) -> PackageInterface<TypeName> {
     let spelling = baml_compiler2_hir::package::spelling(db);
@@ -632,7 +632,7 @@ pub fn export_interface(
 /// A file's callable-throws fragment spelled for the wire, as the
 /// incremental cache persists it (see [`export_interface`]).
 pub fn export_callable_throws_fragment(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
 ) -> CallableThrowsFragment<TypeName> {
     let spelling = baml_compiler2_hir::package::spelling(db);
@@ -641,7 +641,7 @@ pub fn export_callable_throws_fragment(
 
 /// The serialized compiler interface of a mounted (source-less) package.
 pub fn mounted_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
 ) -> Option<&'_ PackageInterface> {
     is_served_from_interface(db, package).then(|| package_interface(db, package))
@@ -649,7 +649,7 @@ pub fn mounted_interface(
 
 /// A mounted package's structural type row, addressed without source locs.
 pub fn mounted_type_row<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     qtn: &DeclName,
 ) -> Option<&'db ExportedType> {
     mounted_interface(db, qtn.root())?.lookup_type(qtn.namespace(), qtn.name())
@@ -693,20 +693,20 @@ fn plain_bounds(
 }
 
 fn external_target<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
     frame: &[ParamTy],
 ) -> ExternalCallTarget {
-    use baml_compiler2_ppir::item_data::MethodOwner;
+    use baml_compiler2_hir::item_data::MethodOwner;
 
     let package = file_package::file_package(db, function.file(db));
-    let name = baml_compiler2_ppir::item_data::function_data(db, function)
+    let name = baml_compiler2_hir::item_data::function_data(db, function)
         .name
         .clone();
     let free = || ExternalCallTarget::Free {
         function: DeclName::in_root(package.root, package.namespace_path.clone(), name.clone()),
     };
-    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+    match baml_compiler2_hir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => {
             if let Some(target) = crate::lower::owner_impl_target(db, function, frame) {
                 ExternalCallTarget::Interface {
@@ -718,7 +718,7 @@ fn external_target<'db>(
                     class: DeclName::in_root(
                         package.root,
                         package.namespace_path.clone(),
-                        baml_compiler2_ppir::item_data::class_data(db, class)
+                        baml_compiler2_hir::item_data::class_data(db, class)
                             .name
                             .clone(),
                     ),
@@ -766,7 +766,7 @@ fn exported_field_attrs(
 /// `(IntDecoder as Decoder<..>).Output` IS `int` once the impl is known,
 /// and the export (describe, codegen schemas) should say so. Symbolic
 /// bases (rigid vars) stay - a signature over `T` keeps `T.Item`.
-pub fn reduce_ground_projections(db: &dyn baml_compiler2_ppir::Db, ty: &Ty, fuel: u32) -> Ty {
+pub fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel: u32) -> Ty {
     use baml_type::normalize::{ProjectionStep, TypeContext as _};
     let recurse = |t: &Ty| reduce_ground_projections(db, t, fuel);
     match ty {
@@ -858,13 +858,13 @@ fn exported_function_param(name: Name, ty: Ty, has_default: bool) -> FunctionPar
 /// generics are the function's OWN params: the frame minus the enclosing
 /// type's prefix (`enclosing_param_count`, 0 for a free function).
 fn exported_function<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     name: &Name,
     enclosing_param_count: usize,
 ) -> ExportedFunction {
     let sig = crate::lower::function_signature(db, func_loc);
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
     let params = sig
         .params
         .iter()
@@ -877,7 +877,7 @@ fn exported_function<'db>(
         })
         .collect();
     let callable_throws =
-        if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+        if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
             // Total: an interface contract is written or REJECTED to the
             // error sentinel (already diagnosed as E0170) - never inferred,
             // so no body run and no Unknown stand-in.
@@ -915,12 +915,12 @@ fn exported_function<'db>(
 
 /// Lower a class definition into its `ExportedType::Class`.
 fn lower_class_export<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     _pkg_items: &PackageItems<'db>,
     class_loc: ClassLoc<'db>,
     name: &Name,
 ) -> ExportedType {
-    let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(db, class_loc);
     let class_frame = crate::lower::class_generic_frame(db, class_loc);
 
     // Lower fields under the class frame and bounds so an associated-type
@@ -944,7 +944,7 @@ fn lower_class_export<'db>(
     // Lower methods
     let mut methods = Vec::new();
     for &method_loc in &class_data.methods {
-        let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+        let method_data = baml_compiler2_hir::item_data::function_data(db, method_loc);
         methods.push(exported_function(
             db,
             method_loc,
@@ -968,11 +968,11 @@ fn lower_class_export<'db>(
 
 /// Lower an enum definition into its `ExportedType::Enum`.
 fn lower_enum_export<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     enum_loc: EnumLoc<'db>,
     name: &Name,
 ) -> ExportedType {
-    let enum_data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
+    let enum_data = baml_compiler2_hir::item_data::enum_data(db, enum_loc);
     let qtn = qualify_def(db, Definition::Enum(enum_loc), name);
     ExportedType::Enum {
         qtn,
@@ -982,7 +982,7 @@ fn lower_enum_export<'db>(
 
 /// Lower a type-alias definition into its `ExportedType::TypeAlias`.
 fn lower_alias_export<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ta_loc: TypeAliasLoc<'db>,
     name: &Name,
@@ -996,11 +996,11 @@ fn lower_alias_export<'db>(
 /// Lower an interface at its declaration scope. Every row is span-free and
 /// remains symbolic over `Self` and the interface's declared parameters.
 fn lower_interface_export<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     interface_loc: InterfaceLoc<'db>,
     name: &Name,
 ) -> ExportedType {
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
+    let data = baml_compiler2_hir::item_data::interface_data(db, interface_loc);
     let qtn = qualify_def(db, Definition::Interface(interface_loc), name);
     let frame = crate::lower::interface_frame(db, interface_loc);
     let self_param = frame
@@ -1077,9 +1077,9 @@ fn lower_interface_export<'db>(
     let mut required_methods = Vec::new();
     let mut default_methods = Vec::new();
     for &method in &data.methods {
-        let method_data = baml_compiler2_ppir::item_data::function_data(db, method);
+        let method_data = baml_compiler2_hir::item_data::function_data(db, method);
         let exported = exported_function(db, method, &method_data.name, frame.len());
-        if baml_compiler2_ppir::item_data::is_required_interface_method(db, method) {
+        if baml_compiler2_hir::item_data::is_required_interface_method(db, method) {
             required_methods.push(exported);
         } else {
             default_methods.push(exported);
@@ -1105,7 +1105,7 @@ fn lower_interface_export<'db>(
 /// Lower a free-function definition into its `ExportedFunction`, read off
 /// `function_signature` (the one signature road).
 fn lower_function_export<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     func_loc: FunctionLoc<'db>,
     name: &Name,
 ) -> ExportedFunction {
@@ -1116,16 +1116,16 @@ fn lower_function_export<'db>(
 
 #[salsa::tracked(returns(ref))]
 pub fn file_callable_throws_fragment(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
 ) -> CallableThrowsFragment {
-    let by_id = baml_compiler2_ppir::item_data::file_functions(db, file)
+    let by_id = baml_compiler2_hir::item_data::file_functions(db, file)
         .iter()
         // Required interface methods are signature-only items: their
         // throws is the declared clause read at the DECLARATION scope
         // (the interface driver), never a callable fixpoint entry.
         .filter(|&&func_loc| {
-            !baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc)
+            !baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc)
         })
         .map(|&func_loc| {
             (
@@ -1139,7 +1139,7 @@ pub fn file_callable_throws_fragment(
 
 #[salsa::tracked(returns(ref))]
 pub fn file_interface_fragment(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
 ) -> FileInterfaceFragment {
     let pkg_info = file_package::file_package(db, file);
@@ -1147,8 +1147,8 @@ pub fn file_interface_fragment(
     let pkg_id = pkg_info.root;
     // Lower against the package's resolved items so a per-file fragment matches
     // the whole-package fold.
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-    let contributions = baml_compiler2_ppir::file_symbol_contributions(db, file);
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    let contributions = baml_compiler2_hir::file_symbol_contributions(db, file);
 
     // Structural exports, keyed by `Name` with keep-first semantics. A file's
     // *first* contribution of a name is the one `namespace_items` would elect as
@@ -1194,7 +1194,7 @@ pub fn file_interface_fragment(
 
 #[salsa::tracked(returns(ref))]
 pub fn package_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> PackageInterface {
     let is_stdlib = pkg_id.kind(db) == baml_base::SourceRootKind::Stdlib;
@@ -1313,17 +1313,17 @@ fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
 /// export. Malformed headers have no `ImplFacts` row and are skipped; their
 /// source diagnostics remain owned by the declaration checker.
 fn exported_impls(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> Vec<ExportedImpl> {
-    use baml_compiler2_ppir::item_data::ImplSubjectData;
+    use baml_compiler2_hir::item_data::ImplSubjectData;
 
     let mut rows = Vec::new();
     for &block in crate::impls::package_impl_locs(db, pkg_id) {
         let Some(facts) = crate::impls::impl_facts(db, block).resolved() else {
             continue;
         };
-        let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+        let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
         let generic_params: Vec<ParamTy> = facts
             .generic_params
             .iter()
@@ -1343,7 +1343,7 @@ fn exported_impls(
             .methods
             .iter()
             .map(|&method| {
-                let name = baml_compiler2_ppir::item_data::function_data(db, method)
+                let name = baml_compiler2_hir::item_data::function_data(db, method)
                     .name
                     .clone();
                 exported_function(db, method, &name, generic_params.len())
@@ -1398,10 +1398,10 @@ fn exported_impls(
 /// deterministic `contribs[0]` pick); per-item *lowering* lives in
 /// `file_interface_fragment`.
 fn fold_package_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> PackageInterface {
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
     let mut types: IndexMap<Vec<Name>, IndexMap<Name, ExportedType>> = IndexMap::new();
     let mut functions: IndexMap<Vec<Name>, IndexMap<Name, ExportedFunction>> = IndexMap::new();
@@ -1561,20 +1561,20 @@ fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
 /// fixpoint crosses call and package boundaries).
 #[salsa::tracked(returns(ref))]
 pub fn function_throw_sets(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package_id: baml_base::SourceRoot,
 ) -> FunctionThrowSets {
-    let pkg_items = baml_compiler2_ppir::package_items(db, package_id);
+    let pkg_items = baml_compiler2_hir::package::package_items(db, package_id);
     let mut sets = FunctionThrowSets::default();
     for (ns_path, ns_items) in &pkg_items.namespaces {
         for def in ns_items.values.values() {
             let Definition::Function(func_loc) = def else {
                 continue;
             };
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, *func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, *func_loc) {
                 continue;
             }
-            let data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
+            let data = baml_compiler2_hir::item_data::function_data(db, *func_loc);
             let key = throw_set_key(ns_path, &data.name);
             // The runtime boundary's shape: literals widen to their
             // primitives, `void` drops, and error-recovery sentinels
@@ -1614,10 +1614,10 @@ pub fn function_throw_sets(
 
 #[salsa::tracked(returns(ref))]
 pub fn package_resolution_context(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> PackageResolutionContext<'_> {
-    let own_items = baml_compiler2_ppir::package_items(db, pkg_id).clone();
+    let own_items = baml_compiler2_hir::package::package_items(db, pkg_id).clone();
     let dep_interfaces: Vec<(Name, baml_base::SourceRoot, PackageInterface)> = pkg_id
         .dependencies(db)
         .iter()
@@ -1642,14 +1642,14 @@ impl<'db> PackageResolutionContext<'db> {
     /// `None` for undeclared packages.
     pub fn items_for_package(
         &'db self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         pkg_name: &Name,
     ) -> Option<&'db PackageItems<'db>> {
         let package = accessible_package(db, self.own, pkg_name)?;
         Some(if package == self.own {
             &self.own_items
         } else {
-            baml_compiler2_ppir::package_items(db, package)
+            baml_compiler2_hir::package::package_items(db, package)
         })
     }
 
@@ -1657,7 +1657,7 @@ impl<'db> PackageResolutionContext<'db> {
     /// or a declared dependency.
     pub fn items_for_root(
         &'db self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         root: baml_base::SourceRoot,
     ) -> Option<&'db PackageItems<'db>> {
         if root == self.own {
@@ -1666,13 +1666,13 @@ impl<'db> PackageResolutionContext<'db> {
         self.dep_interfaces
             .iter()
             .any(|(_, dep, _)| *dep == root)
-            .then(|| baml_compiler2_ppir::package_items(db, root))
+            .then(|| baml_compiler2_hir::package::package_items(db, root))
     }
 
     /// Resolve a type by path. Own-package via `PackageItems`, then deps.
     pub fn resolve_type(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Ty)> {
@@ -1721,7 +1721,7 @@ impl<'db> PackageResolutionContext<'db> {
 
     fn resolve_type_in_own_then_deps(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         namespace: &[Name],
         item: &Name,
     ) -> Option<(ResolvedSource, Ty)> {
@@ -1740,7 +1740,7 @@ impl<'db> PackageResolutionContext<'db> {
     /// ownership in the result.
     pub fn resolve_value(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<ResolvedValue<'db>> {
@@ -1777,7 +1777,7 @@ impl<'db> PackageResolutionContext<'db> {
                             resolved_exported_function(function, Vec::new(), Vec::new()),
                         )));
                     }
-                    let dep_items = baml_compiler2_ppir::package_items(db, *dep_root);
+                    let dep_items = baml_compiler2_hir::package::package_items(db, *dep_root);
                     if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
                         return Some(ResolvedValue::Source(def));
                     }
@@ -1790,7 +1790,7 @@ impl<'db> PackageResolutionContext<'db> {
     /// Look up a class method. Dual dispatch.
     pub fn lookup_class_method(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         class_name: &DeclName,
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
@@ -1827,7 +1827,7 @@ impl<'db> PackageResolutionContext<'db> {
 
     fn lookup_own_class_method(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         class_name: &DeclName,
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
@@ -1837,10 +1837,10 @@ impl<'db> PackageResolutionContext<'db> {
         let Definition::Class(class_loc) = def else {
             return None;
         };
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        let class_data = baml_compiler2_hir::item_data::class_data(db, class_loc);
 
         for &method_loc in &class_data.methods {
-            let method_data = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+            let method_data = baml_compiler2_hir::item_data::function_data(db, method_loc);
             if &method_data.name != method_name {
                 continue;
             }
@@ -1874,18 +1874,18 @@ impl<'db> PackageResolutionContext<'db> {
 /// a type definition — `lookup_type` searches the type namespace, so the
 /// non-type arms are unreachable for its results, but a caller that resolved
 /// `def` some other way gets a resolution failure rather than a stand-in type.
-fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) -> Option<Ty> {
+fn def_to_ty<'db>(db: &'db dyn baml_compiler2_hir::Db, def: Definition<'db>) -> Option<Ty> {
     let name = match def {
-        Definition::Class(loc) => baml_compiler2_ppir::item_data::class_data(db, loc)
+        Definition::Class(loc) => baml_compiler2_hir::item_data::class_data(db, loc)
             .name
             .clone(),
-        Definition::Enum(loc) => baml_compiler2_ppir::item_data::enum_data(db, loc)
+        Definition::Enum(loc) => baml_compiler2_hir::item_data::enum_data(db, loc)
             .name
             .clone(),
-        Definition::Interface(loc) => baml_compiler2_ppir::item_data::interface_data(db, loc)
+        Definition::Interface(loc) => baml_compiler2_hir::item_data::interface_data(db, loc)
             .name
             .clone(),
-        Definition::TypeAlias(loc) => baml_compiler2_ppir::item_data::type_alias_data(db, loc)
+        Definition::TypeAlias(loc) => baml_compiler2_hir::item_data::type_alias_data(db, loc)
             .name
             .clone(),
         Definition::Function(_)

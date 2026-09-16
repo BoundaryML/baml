@@ -9,8 +9,8 @@ use crate::engine::TestDbExt;
 
 #[test]
 fn explicit_local_id_is_structural_call_metadata() {
+    use baml_compiler2_hir::item_data::{file_functions, function_data};
     use baml_compiler2_hir_ty::infer::ParamBinding;
-    use baml_compiler2_ppir::item_data::{file_functions, function_data};
 
     let mut db = make_db();
     let file = db.file(

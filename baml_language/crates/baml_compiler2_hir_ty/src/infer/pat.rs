@@ -316,7 +316,7 @@ impl<'db> InferenceContext<'db> {
                 };
                 let short = segments.last()?;
                 let qtn = self.lower.qualify_definition(def, short);
-                let generic_count = baml_compiler2_ppir::item_data::class_data(self.db, class_loc)
+                let generic_count = baml_compiler2_hir::item_data::class_data(self.db, class_loc)
                     .generic_params
                     .len();
                 let written = self.type_refs.pattern_class_args.get(&pat).cloned();
@@ -590,7 +590,7 @@ impl<'db> InferenceContext<'db> {
         scrut: &Ty,
     ) -> PatternOutcome {
         let attr = TyAttr::default;
-        let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let data = baml_compiler2_hir::item_data::interface_data(self.db, interface);
         let short = path.last().expect("type paths are never empty");
         let qtn = self.lower.qualify_definition(
             baml_compiler2_hir::contributions::Definition::Interface(interface),
@@ -1599,9 +1599,9 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let Some(Definition::Interface(iface_loc)) = facts.definition_of(iface_qtn) else {
             return None;
         };
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
+        let class_data = baml_compiler2_hir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
         // The class's implements block for THIS interface supplies the
         // `field as class_field` links (default: the same name).
         let block = class_data.implements.iter().find(|block| {
@@ -1613,7 +1613,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 &pkg.namespace_path,
             ) == Some(iface_loc)
         })?;
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
         iface_data
             .fields
             .iter()
@@ -1696,7 +1696,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                 .collect(),
         );
-        baml_compiler2_ppir::item_data::interface_data(self.infer.db, interface)
+        baml_compiler2_hir::item_data::interface_data(self.infer.db, interface)
             .fields
             .iter()
             .map(|field| {

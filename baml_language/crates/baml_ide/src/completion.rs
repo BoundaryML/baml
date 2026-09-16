@@ -45,7 +45,7 @@ use self::{
 /// index, inference, member enumeration) are Salsa-cached underneath, and the
 /// speculative parse is one lex+parse of one file.
 pub fn completions(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Vec<Completion> {

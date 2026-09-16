@@ -20,7 +20,7 @@ mod tests {
             );
         }
 
-        let package = baml_compiler2_ppir::package_items(&db, db.workspace_root().unwrap());
+        let package = baml_compiler2_hir::package::package_items(&db, db.workspace_root().unwrap());
         package
             .namespaces
             .keys()
@@ -125,16 +125,16 @@ mod tests {
             "function f() -> int { 1 }\n\nfunction g() -> int { f() }\n",
         );
 
-        let owners = baml_compiler2_ppir::file_body_owners(&db, file);
-        let functions = baml_compiler2_ppir::item_data::file_functions(&db, file);
+        let owners = baml_compiler2_hir::body::file_body_owners(&db, file);
+        let functions = baml_compiler2_hir::item_data::file_functions(&db, file);
         assert_eq!(owners.len(), functions.len());
 
         for (&func_loc, &owner) in functions.iter().zip(owners.iter()) {
             assert_eq!(owner, BodyOwnerId::Function(func_loc));
             assert!(owner.file(&db) == file);
 
-            let unified = baml_compiler2_ppir::body(&db, owner);
-            let direct = baml_compiler2_ppir::function_body(&db, func_loc);
+            let unified = baml_compiler2_hir::body::body(&db, owner);
+            let direct = baml_compiler2_hir::body::function_body(&db, func_loc);
             assert!(matches!(direct.as_ref(), FunctionBody::Expr(_)));
             let OwnerBody::Function(unified_body) = &unified else {
                 panic!("function owner must dispatch to the function body query");
@@ -149,12 +149,12 @@ mod tests {
             );
 
             assert_eq!(
-                baml_compiler2_ppir::body_source_map(&db, owner),
-                baml_compiler2_ppir::function_body_source_map(&db, func_loc)
+                baml_compiler2_hir::body::body_source_map(&db, owner),
+                baml_compiler2_hir::body::function_body_source_map(&db, func_loc)
             );
             assert!(
-                baml_compiler2_ppir::body_scope(&db, owner)
-                    == baml_compiler2_ppir::item_data::function_scope(&db, func_loc)
+                baml_compiler2_hir::body::body_scope(&db, owner)
+                    == baml_compiler2_hir::item_data::function_scope(&db, func_loc)
             );
         }
     }

@@ -1,5 +1,6 @@
 use baml_base::Name;
-use baml_compiler2_hir::{item_tree::ItemSpans, loc::ClientLoc};
+
+use crate::{item_tree::ItemSpans, loc::ClientLoc};
 
 /// Semantic data for a `client` declaration.
 ///

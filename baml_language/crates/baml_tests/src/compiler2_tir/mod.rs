@@ -984,12 +984,12 @@ pub(crate) mod support {
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
         let mut output = String::new();
-        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
 
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = pkg_info.root;
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
@@ -1183,11 +1183,11 @@ pub(crate) mod support {
             if matches!(scope.kind, ScopeKind::Function) {
                 // The authoritative scope→item link (replaces the fragile
                 // `func.span == scope.range` join, which collided on companion spans).
-                if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
-                    baml_compiler2_ppir::item_data::scope_owner(db, scope_id)
+                if let Some(baml_compiler2_hir::item_data::ScopeOwner::Function(func_loc)) =
+                    baml_compiler2_hir::item_data::scope_owner(db, scope_id)
                 {
-                    let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
-                    func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
+                    let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
+                    func_body_opt = Some(baml_compiler2_hir::body::function_body(db, func_loc));
                     let sig = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
 
                     let gp = &func_data.generic_params;
@@ -1200,7 +1200,7 @@ pub(crate) mod support {
                     };
 
                     let parameter_defaults =
-                        baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                        baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
                     let params: Vec<String> = sig
                         .params
                         .iter()
@@ -1235,7 +1235,7 @@ pub(crate) mod support {
                     // display reads the syntax side; the signature itself
                     // carries only the effective type.
                     let clause_written =
-                        baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc)
+                        baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc)
                             .throws
                             .is_some();
                     let throws = match (clause_written, &inferred_throws) {
@@ -1279,8 +1279,9 @@ pub(crate) mod support {
             if matches!(scope.kind, ScopeKind::Function)
                 && let Some(owner) = baml_compiler2_hir_ty::ide::owner_for_scope(db, scope_id)
             {
-                let source_map = baml_compiler2_ppir::body_source_map(db, owner);
-                let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
+                let source_map = baml_compiler2_hir::body::body_source_map(db, owner);
+                let type_ref_spans =
+                    baml_compiler2_hir::body_type_refs::body_type_ref_spans(db, owner);
                 let mut rendered = Vec::new();
                 for diagnostic in &inference.diagnostics {
                     rendered.push(diagnostic.render_with_body_type_refs(
@@ -1294,9 +1295,10 @@ pub(crate) mod support {
                     let defaults_owner =
                         baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(func_loc);
                     let defaults = baml_compiler2_hir_ty::infer::infer_body(db, defaults_owner);
-                    let defaults_map = baml_compiler2_ppir::body_source_map(db, defaults_owner);
+                    let defaults_map =
+                        baml_compiler2_hir::body::body_source_map(db, defaults_owner);
                     let defaults_spans =
-                        baml_compiler2_ppir::body_type_ref_spans(db, defaults_owner);
+                        baml_compiler2_hir::body_type_refs::body_type_ref_spans(db, defaults_owner);
                     for diagnostic in &defaults.diagnostics {
                         rendered.push(diagnostic.render_with_body_type_refs(
                             db,
@@ -2185,7 +2187,7 @@ pub(crate) mod support {
             )
         };
 
-        use baml_compiler2_ppir::item_data::{
+        use baml_compiler2_hir::item_data::{
             class_data, enum_data, file_classes, file_enums, file_functions, file_type_aliases,
             function_data, function_llm_meta, type_alias_data,
         };
@@ -2247,7 +2249,7 @@ pub(crate) mod support {
         functions.sort_by_key(|&loc| function_data(db, loc).name.as_str().to_string());
         for loc in functions {
             let func = function_data(db, loc);
-            let defaults = baml_compiler2_ppir::function_parameter_defaults(db, loc);
+            let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, loc);
             let params: Vec<String> = func
                 .params
                 .iter()
@@ -2268,7 +2270,7 @@ pub(crate) mod support {
                 .return_type
                 .map(|id| type_ref_to_string(&func.type_refs, id, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
-            let func_body = baml_compiler2_ppir::function_body(db, loc);
+            let func_body = baml_compiler2_hir::body::function_body(db, loc);
             let body_kind = if function_llm_meta(db, loc).is_some() {
                 "llm"
             } else {
@@ -2351,16 +2353,16 @@ pub(crate) mod support {
         expr_text: &str,
     ) -> String {
         let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
-        let func_loc = *baml_compiler2_ppir::item_data::file_functions(db, file)
+        let func_loc = *baml_compiler2_hir::item_data::file_functions(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .name
                     .as_str()
                     == function_name
             })
             .unwrap_or_else(|| panic!("function `{function_name}` not found"));
-        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
+        let func_body = baml_compiler2_hir::body::function_body(db, func_loc);
         let body = match func_body.as_ref() {
             FunctionBody::Expr(body) => body,
             _ => panic!("function `{function_name}` has no expression body"),

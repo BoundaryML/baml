@@ -1,5 +1,6 @@
 use baml_base::Name;
-use baml_compiler2_hir::{item_tree::ItemSpans, loc::RetryPolicyLoc};
+
+use crate::{item_tree::ItemSpans, loc::RetryPolicyLoc};
 
 /// Semantic data for a `retry_policy` declaration.
 ///

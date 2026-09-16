@@ -346,7 +346,7 @@ class ConcreteBatch {
         ["E0139"],
         "the bare foreign blanket is deliberately rejected by the orphan rule"
     );
-    let impl_locs = baml_compiler2_ppir::item_data::file_impls(&db, file);
+    let impl_locs = baml_compiler2_hir::item_data::file_impls(&db, file);
     let blanket =
         baml_compiler2_hir_ty::impls::impl_facts(&db, *impl_locs.first().expect("blanket impl"))
             .resolved()
@@ -437,14 +437,14 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         "type AllowedReflect = reflect.Signature\n",
     );
 
-    let assert_alias = *baml_compiler2_ppir::item_data::file_type_aliases(&db, assert_file)
+    let assert_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, assert_file)
         .first()
         .expect("assert alias");
     let assert_errors =
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, assert_alias);
     assert!(assert_errors.is_empty(), "{assert_errors:?}");
 
-    let boundary_alias = *baml_compiler2_ppir::item_data::file_type_aliases(&db, boundary_file)
+    let boundary_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, boundary_file)
         .first()
         .expect("boundary alias");
     let boundary_errors =
@@ -456,7 +456,7 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         "an undeclared package must not resolve: {boundary_errors:?}"
     );
 
-    let user_alias = *baml_compiler2_ppir::item_data::file_type_aliases(&db, user_file)
+    let user_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, user_file)
         .first()
         .expect("user alias");
     let user_errors =
@@ -497,7 +497,7 @@ function raw_only_value_is_available() -> string throws never {
 
     let user_pkg = db.workspace_root().unwrap();
     let context = package_resolution_context(&db, user_pkg);
-    let reflect_items = baml_compiler2_ppir::package_items(
+    let reflect_items = baml_compiler2_hir::package::package_items(
         &db,
         baml_compiler2_hir::package::spelling(&db)
             .root(&Name::new("reflect"))
@@ -562,7 +562,7 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
     assert_no_diagnostic_errors(&local);
 
     let inspect = |db: &ProjectDatabase| {
-        let items = baml_compiler2_ppir::package_items(db, (db).workspace_root().unwrap());
+        let items = baml_compiler2_hir::package::package_items(db, (db).workspace_root().unwrap());
         let Some(baml_compiler2_hir::contributions::Definition::Function(function)) =
             items.lookup_value(&[], &Name::new("inspect"))
         else {
@@ -572,7 +572,7 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
             db,
             baml_compiler2_hir::body::BodyOwnerId::Function(function),
         );
-        let body = baml_compiler2_ppir::function_body(db, function);
+        let body = baml_compiler2_hir::body::function_body(db, function);
         let baml_compiler2_hir::body::FunctionBody::Expr(body) = body.as_ref() else {
             panic!("inspect has an expression body")
         };

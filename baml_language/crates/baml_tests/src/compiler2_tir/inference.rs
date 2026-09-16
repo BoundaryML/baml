@@ -1,12 +1,14 @@
 //! Core type inference snapshot tests.
 
 use baml_base::Name;
-use baml_compiler2_hir::scope::ScopeKind;
+use baml_compiler2_hir::{
+    resolve::{ResolvedName, resolve_name_at_in_scope},
+    scope::ScopeKind,
+};
 use baml_compiler2_hir_ty::{
     package_interface::{ExportedType, package_interface, package_resolution_context},
     render::Viewpoint,
 };
-use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
 use baml_type::{FunctionParamMode, Ty, TyAttr};
 use text_size::TextSize;
 
@@ -18,7 +20,7 @@ fn find_function_scope_id<'db>(
     file: baml_base::SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::scope::ScopeId<'db> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     index
         .scope_ids
         .iter()
@@ -69,7 +71,7 @@ fn resolver_initializer_shadowing_uses_previous_binding() {
         "function f() -> int { let x = 1; let x = x + 1; x }",
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let index = baml_compiler2_hir::file_semantic_index(&db, file);
     let function_scope = index
         .scopes
         .iter()
@@ -534,7 +536,7 @@ implements ToJson for Dog {
     );
 
     assert_eq!(
-        baml_compiler2_ppir::item_data::file_free_impls(&db, impl_file).len(),
+        baml_compiler2_hir::item_data::file_free_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );
@@ -684,7 +686,7 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
         "function main(x: int) -> int { let f = () -> int { x }; return f(); }",
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let index = baml_compiler2_hir::file_semantic_index(&db, file);
     let lambda_scope_id = index
         .scope_ids
         .iter()
@@ -697,16 +699,16 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
     let lambda_inference = baml_compiler2_hir_ty::ide::infer_for_scope(&db, lambda_scope_id)
         .expect("lambda scope has an owner");
 
-    let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+    let main_loc = *baml_compiler2_hir::item_data::file_functions(&db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::function_data(&db, loc)
+            baml_compiler2_hir::item_data::function_data(&db, loc)
                 .name
                 .as_str()
                 == "main"
         })
         .expect("main function");
-    let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
+    let main_body = baml_compiler2_hir::body::function_body(&db, main_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");
     };
@@ -1058,10 +1060,10 @@ interface Encoder {
 "#,
     );
 
-    let iface_loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+    let iface_loc = *baml_compiler2_hir::item_data::file_interfaces(&db, file)
         .iter()
         .find(|&&i| {
-            baml_compiler2_ppir::item_data::interface_data(&db, i)
+            baml_compiler2_hir::item_data::interface_data(&db, i)
                 .name
                 .as_str()
                 == "Encoder"

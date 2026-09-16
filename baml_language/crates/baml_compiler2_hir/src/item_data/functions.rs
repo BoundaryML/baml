@@ -1,14 +1,14 @@
 use baml_base::Name;
 use baml_compiler2_ast as ast;
-use baml_compiler2_hir::{
-    loc::FunctionLoc,
-    type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
-};
 use text_size::TextRange;
 
-use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData, GenericParamData,
-    lower_generic_params,
+use crate::{
+    item_data::common::{
+        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData,
+        GenericParamData, lower_generic_params,
+    },
+    loc::FunctionLoc,
+    type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
 
 /// Span-free semantic data for a function's *signature*.
@@ -142,8 +142,9 @@ pub fn llm_prompt_spans<'db>(
 ///   any immediate callback parameters they expose
 /// - every other omitted nested function-type throws becomes `never`
 ///
-/// This is the **tracked** successor of `ppir::elaborated_function_signature`
-/// (an untracked fn returning spanned `TypeExpr`s — zero memoization, and
+/// This is the **tracked** successor of
+/// [`crate::signature::elaborated_function_signature`] (which returns spanned
+/// `TypeExpr`s — and
 /// unsafe to memoize as-is because Salsa would retain its stale spans).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElaboratedFunctionData {
@@ -207,7 +208,7 @@ fn lower_elaborated<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> (ElaboratedFunctionData, ElaboratedFunctionSourceMap) {
-    let sig = crate::elaborated_function_signature(db, function);
+    let sig = crate::signature::elaborated_function_signature(db, function);
 
     let mut type_refs = TypeRefBuilder::new();
     let params = sig
@@ -244,10 +245,10 @@ fn lower_elaborated<'db>(
 /// block, not its class — the in-class spelling is pure syntax).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
 pub enum MethodOwner<'db> {
-    Class(baml_compiler2_hir::loc::ClassLoc<'db>),
-    Interface(baml_compiler2_hir::loc::InterfaceLoc<'db>),
+    Class(crate::loc::ClassLoc<'db>),
+    Interface(crate::loc::InterfaceLoc<'db>),
     /// A method of an `implements` block — in-class and out-of-body alike.
-    Impl(baml_compiler2_hir::loc::ImplLoc<'db>),
+    Impl(crate::loc::ImplLoc<'db>),
 }
 
 /// The item `method` belongs to, or `None` for a top-level function.
@@ -260,7 +261,7 @@ pub fn method_owner<'db>(
     db: &'db dyn crate::Db,
     method: FunctionLoc<'db>,
 ) -> Option<MethodOwner<'db>> {
-    use baml_compiler2_hir::item_tree;
+    use crate::item_tree;
 
     let file = method.file(db);
     let owner = *crate::file_item_tree(db, file)
@@ -269,13 +270,13 @@ pub fn method_owner<'db>(
 
     Some(match owner {
         item_tree::MethodOwner::Class(id) => {
-            MethodOwner::Class(baml_compiler2_hir::loc::ClassLoc::new(db, file, id))
+            MethodOwner::Class(crate::loc::ClassLoc::new(db, file, id))
         }
         item_tree::MethodOwner::Interface(id) => {
-            MethodOwner::Interface(baml_compiler2_hir::loc::InterfaceLoc::new(db, file, id))
+            MethodOwner::Interface(crate::loc::InterfaceLoc::new(db, file, id))
         }
         item_tree::MethodOwner::Impl(id) => {
-            MethodOwner::Impl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
+            MethodOwner::Impl(crate::loc::ImplLoc::new(db, file, id))
         }
     })
 }

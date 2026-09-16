@@ -53,11 +53,11 @@ use std::fmt::{self, Write as _};
 use baml_base::{MediaKind, Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::Definition,
+    item_data,
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
     namespace::NamespaceId,
     package::{Spelling, spelling},
 };
-use baml_compiler2_ppir::item_data;
 use baml_type::{
     DeclName, Interface as InterfaceBound, ParamTy, PrimitiveType, QualifiedTypeName, RuntimeTy, Ty,
 };
@@ -68,7 +68,7 @@ use text_size::TextRange;
 /// before reading anything else.
 pub const FORMAT_VERSION: u32 = 1;
 
-type Db = dyn baml_compiler2_ppir::Db;
+type Db = dyn baml_compiler2_hir::Db;
 
 // ── Type heads (rustdoc-style lossy impl attachment) ─────────────────────────
 //
@@ -884,14 +884,14 @@ pub fn export_package<'db>(db: &'db Db, package: baml_base::SourceRoot) -> Packa
     // Namespaces root-first sorted by path; items types-then-values sorted
     // by name within each namespace. (The final id sort makes the walk order
     // invisible in the artifact; it is kept for deterministic tie behavior.)
-    let items_index = baml_compiler2_ppir::package_items(db, package);
+    let items_index = baml_compiler2_hir::package::package_items(db, package);
     let mut ns_paths: Vec<&Vec<Name>> = items_index.namespaces.keys().collect();
     ns_paths.sort();
 
     let mut items = Vec::new();
     for path in ns_paths {
         let ns = NamespaceId::new(db, package, path.clone());
-        let ns_items = baml_compiler2_ppir::namespace_items(db, ns);
+        let ns_items = baml_compiler2_hir::namespace::namespace_items(db, ns);
         let mut named: Vec<(&Name, Definition<'db>)> = ns_items
             .types
             .iter()

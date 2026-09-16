@@ -15,4 +15,4 @@ pub use lower::{
 
 /// Database trait for compiler2 MIR queries.
 #[salsa::db]
-pub trait Db: baml_compiler2_ppir::Db {}
+pub trait Db: baml_compiler2_hir::Db {}

@@ -211,6 +211,97 @@ impl TypeExpr {
         self.span = span;
         self
     }
+
+    /// Every span in this type, in source order: its own, its children's, and
+    /// its attributes'.
+    ///
+    /// [`TypeExpr`]'s `PartialEq` deliberately ignores spans, so two types that
+    /// differ only in position compare equal. A memoized value that carries
+    /// spans needs them compared too, or Salsa keeps the older value and every
+    /// span read out of it is stale — see `signature::SignatureTypeExpr`.
+    #[must_use]
+    pub fn spans(&self) -> Vec<TextRange> {
+        let mut out = Vec::new();
+        self.collect_spans(&mut out);
+        out
+    }
+
+    fn collect_spans(&self, out: &mut Vec<TextRange>) {
+        fn attr_spans(attrs: &[RawAttribute], out: &mut Vec<TextRange>) {
+            for attr in attrs {
+                out.push(attr.span);
+                out.extend(attr.args.iter().map(|arg| arg.span));
+            }
+        }
+
+        out.push(self.span);
+        attr_spans(self.kind.attrs(), out);
+        match &self.kind {
+            TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    arg.collect_spans(out);
+                }
+                for binding in associated_type_bindings {
+                    binding.ty.collect_spans(out);
+                }
+            }
+            TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                base.collect_spans(out);
+                if let Some(interface) = interface {
+                    interface.collect_spans(out);
+                }
+            }
+            TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
+                inner.collect_spans(out);
+            }
+            TypeExprKind::Map { key, value, .. } => {
+                key.collect_spans(out);
+                value.collect_spans(out);
+            }
+            TypeExprKind::Union { variants, .. } => {
+                for variant in variants {
+                    variant.collect_spans(out);
+                }
+            }
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for param in params {
+                    param.ty.collect_spans(out);
+                }
+                ret.collect_spans(out);
+                if let Some(throws) = throws {
+                    throws.collect_spans(out);
+                }
+            }
+            TypeExprKind::Int { .. }
+            | TypeExprKind::Bigint { .. }
+            | TypeExprKind::Float { .. }
+            | TypeExprKind::String { .. }
+            | TypeExprKind::Bool { .. }
+            | TypeExprKind::Null { .. }
+            | TypeExprKind::Uint8Array { .. }
+            | TypeExprKind::Never { .. }
+            | TypeExprKind::Void { .. }
+            | TypeExprKind::Rust { .. }
+            | TypeExprKind::Literal { .. }
+            | TypeExprKind::Media { .. }
+            | TypeExprKind::Unknown { .. }
+            | TypeExprKind::Type { .. }
+            | TypeExprKind::Error { .. }
+            | TypeExprKind::Missing { .. }
+            | TypeExprKind::Infer { .. } => {}
+        }
+    }
 }
 
 impl TypeExprKind {

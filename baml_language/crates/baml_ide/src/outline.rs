@@ -27,12 +27,12 @@ use baml_compiler2_ast::LetOrigin;
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     file_symbol_contributions,
+    item_data::{
+        class_data, class_impls, class_source_map, client_source_map, enum_data, enum_source_map,
+        function_data, function_source_map, impl_block_data, interface_source_map, let_data,
+        let_source_map, retry_policy_source_map, template_string_source_map, type_alias_source_map,
+    },
     loc::{ClassLoc, EnumLoc},
-};
-use baml_compiler2_ppir::item_data::{
-    class_data, class_impls, class_source_map, client_source_map, enum_data, enum_source_map,
-    function_data, function_source_map, impl_block_data, interface_source_map, let_data,
-    let_source_map, retry_policy_source_map, template_string_source_map, type_alias_source_map,
 };
 use text_size::TextRange;
 
@@ -67,7 +67,7 @@ pub struct OutlineItem {
 /// Returns `Vec<OutlineItem>` in the order contributions appear (types first,
 /// then values, preserving declaration order within each group).
 #[salsa::tracked(returns(ref))]
-pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<OutlineItem> {
+pub fn file_outline(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<OutlineItem> {
     let contribs = file_symbol_contributions(db, file);
 
     let mut items: Vec<OutlineItem> = Vec::new();
@@ -159,7 +159,7 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
 /// returns the *name* span): every item kind's `*_source_map` firewall query
 /// records the whole declaration's extent.
 fn definition_full_span<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     def: Definition<'db>,
 ) -> TextRange {
     match def {
@@ -177,7 +177,7 @@ fn definition_full_span<'db>(
 
 /// Children of a class outline item: fields first, then methods.
 fn class_children<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class_loc: ClassLoc<'db>,
 ) -> Vec<OutlineItem> {
     let class = class_data(db, class_loc);
@@ -231,7 +231,7 @@ fn class_children<'db>(
 
 /// Children of an enum outline item: its variants.
 fn enum_children<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     enum_loc: EnumLoc<'db>,
 ) -> Vec<OutlineItem> {
     let enum_def = enum_data(db, enum_loc);

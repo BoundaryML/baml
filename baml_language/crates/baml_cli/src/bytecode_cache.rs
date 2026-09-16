@@ -46,7 +46,7 @@ use baml_db::{
         generate_project_bytecode_with_stdlib_artifacts, generate_stdlib_program,
         reuse_throws_mismatches,
     },
-    baml_compiler2_hir, baml_compiler2_ppir,
+    baml_compiler2_hir,
 };
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
@@ -766,9 +766,11 @@ fn last_segment(name: &str) -> &str {
 
 /// Last-segment names of every item `file` defines, from the HIR item tree.
 fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
-    use baml_compiler2_hir::contributions::Definition;
-    use baml_compiler2_ppir::item_data::{
-        file_classes, file_enums, file_functions, file_interfaces, file_lets, file_type_aliases,
+    use baml_compiler2_hir::{
+        contributions::Definition,
+        item_data::{
+            file_classes, file_enums, file_functions, file_interfaces, file_lets, file_type_aliases,
+        },
     };
     use baml_db::baml_compiler2_mir::def_to_item_ref;
 
@@ -885,7 +887,7 @@ fn add_type_ref_display(
 }
 
 fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<String> {
-    use baml_compiler2_ppir::item_data::{
+    use baml_compiler2_hir::item_data::{
         ImplSubjectData, class_data, file_classes, file_functions, file_impls, file_interfaces,
         file_template_strings, file_type_aliases, function_data, impl_block_data, interface_data,
         template_string_data, type_alias_data,
@@ -986,7 +988,7 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
 /// against; a *modified* file instead compares its [`file_layout_hash`] so a
 /// function-only edit in a type-defining file no longer trips the sentinel.
 fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
-    use baml_compiler2_ppir::item_data::{
+    use baml_compiler2_hir::item_data::{
         file_classes, file_enums, file_interfaces, file_type_aliases,
     };
     !file_classes(db, file).is_empty()
@@ -1000,7 +1002,7 @@ fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// `IMPL_SENTINEL`: only a change to such a file can move the package's impl set
 /// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
 fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
-    use baml_compiler2_ppir::item_data::{class_data, file_classes, file_impls};
+    use baml_compiler2_hir::item_data::{class_data, file_classes, file_impls};
     // `file_impls` holds both in-class and out-of-body impl blocks; a class
     // `implements` block is a distinct construct, so it needs its own check.
     !file_impls(db, file).is_empty()
@@ -3402,7 +3404,7 @@ mod tests {
         )]);
         let file = file_named(&db, "a.baml");
         let (f_id, g_id) = {
-            use baml_compiler2_ppir::item_data::{file_functions, function_data};
+            use baml_compiler2_hir::item_data::{file_functions, function_data};
             let mut f_id = None;
             let mut g_id = None;
             for &loc in file_functions(&db, file) {

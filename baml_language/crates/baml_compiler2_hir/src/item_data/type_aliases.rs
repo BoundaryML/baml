@@ -1,9 +1,10 @@
 use baml_base::Name;
-use baml_compiler2_hir::{
+use text_size::TextRange;
+
+use crate::{
     loc::TypeAliasLoc,
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
-use text_size::TextRange;
 
 /// Span-free semantic data for a `type X = ...` declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,6 +1,6 @@
 //! Per-body type references: every type expression written inside a body,
 //! lowered once into a span-free [`TypeRefStore`] - the body-side analog of
-//! the per-item stores in ppir's item data, and the rust-analyzer shape
+//! the per-item stores in [`crate::item_data`], and the rust-analyzer shape
 //! (bodies own their type refs; consumers see ids, never syntax).
 //!
 //! The collection walks the body's arenas in allocation order, so ids are a
@@ -15,6 +15,8 @@
 //! right-hand side of a `type T = …` binding (a runtime `unreflect(expr)`
 //! right-hand side is an ordinary body expression, not a type reference).
 //! Class-destructure generic args join when pattern inference needs them.
+
+use std::sync::Arc;
 
 use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TypeBindingValue};
@@ -107,8 +109,8 @@ impl BodyTypeRefs {
     }
 }
 
-/// Lowers every type expression in `body` into one store. Pure; ppir wraps
-/// this in salsa queries over its canonical bodies.
+/// Lowers every type expression in `body` into one store. Pure; the queries
+/// below wrap it per body owner.
 pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSourceMap) {
     let mut builder = TypeRefBuilder::new();
     let mut refs = BodyTypeRefs::default();
@@ -317,4 +319,88 @@ mod tests {
         ));
         assert_eq!(source_map.span(type_ref), static_span);
     }
+}
+
+/// Per-body type references for a function (rust-analyzer's
+/// bodies-own-their-type-refs shape): every type expression written inside
+/// the body, lowered once into a span-free store. Salsa-tracked, so
+/// downstream type queries depend on structure only.
+#[salsa::tracked]
+pub fn function_body_type_refs<'db>(
+    db: &'db dyn crate::Db,
+    function: crate::loc::FunctionLoc<'db>,
+) -> Arc<BodyTypeRefs> {
+    let body = crate::body::function_body(db, function);
+    let refs = match body.as_ref() {
+        crate::body::FunctionBody::Expr(expr_body) => collect_body_type_refs(expr_body).0,
+        _ => BodyTypeRefs::default(),
+    };
+    Arc::new(refs)
+}
+
+/// The span map for a body's collected type references (the `.1` the
+/// tracked ref query drops; recomputed on demand - the check layer's
+/// annotation-diagnostic anchors resolve through it).
+pub fn body_type_ref_spans(
+    db: &dyn crate::Db,
+    owner: crate::body::BodyOwnerId<'_>,
+) -> Option<BodyTypeRefSourceMap> {
+    use crate::body::{BodyOwnerId, FunctionBody, LetBody};
+    match owner {
+        BodyOwnerId::Function(function) => {
+            match crate::body::function_body(db, function).as_ref() {
+                FunctionBody::Expr(expr_body) => Some(collect_body_type_refs(expr_body).1),
+                _ => None,
+            }
+        }
+        BodyOwnerId::Let(let_binding) => match crate::body::let_body(db, let_binding).as_ref() {
+            LetBody::Expr(expr_body) => Some(collect_body_type_refs(expr_body).1),
+            LetBody::Missing => None,
+        },
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            collect_body_type_refs(
+                &crate::signature::function_parameter_defaults(db, function)
+                    .defaults
+                    .exprs,
+            )
+            .1,
+        ),
+    }
+}
+
+/// Per-body type references for a top-level let's initializer.
+#[salsa::tracked]
+pub fn let_body_type_refs<'db>(
+    db: &'db dyn crate::Db,
+    let_binding: crate::loc::LetLoc<'db>,
+) -> Arc<BodyTypeRefs> {
+    let body = crate::body::let_body(db, let_binding);
+    let refs = match body.as_ref() {
+        crate::body::LetBody::Expr(expr_body) => collect_body_type_refs(expr_body).0,
+        crate::body::LetBody::Missing => BodyTypeRefs::default(),
+    };
+    Arc::new(refs)
+}
+
+/// Per-body type references for any body owner.
+pub fn body_type_refs<'db>(
+    db: &'db dyn crate::Db,
+    owner: crate::body::BodyOwnerId<'db>,
+) -> Arc<BodyTypeRefs> {
+    use crate::body::BodyOwnerId;
+    match owner {
+        BodyOwnerId::Function(function) => function_body_type_refs(db, function),
+        BodyOwnerId::Let(let_binding) => let_body_type_refs(db, let_binding),
+        BodyOwnerId::ParameterDefaults(function) => parameter_defaults_type_refs(db, function),
+    }
+}
+
+/// Per-body type references for a function's parameter-default arena.
+#[salsa::tracked]
+pub fn parameter_defaults_type_refs<'db>(
+    db: &'db dyn crate::Db,
+    function: crate::loc::FunctionLoc<'db>,
+) -> Arc<BodyTypeRefs> {
+    let defaults = crate::signature::function_parameter_defaults(db, function);
+    Arc::new(collect_body_type_refs(&defaults.defaults.exprs).0)
 }

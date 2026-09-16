@@ -21,8 +21,11 @@
 
 use baml_base::SourceFile;
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
-use baml_compiler2_hir::{body::BodyOwnerId, contributions::Definition};
-use baml_compiler2_ppir::resolve::{NamespaceMember, namespace_members_at};
+use baml_compiler2_hir::{
+    body::BodyOwnerId,
+    contributions::Definition,
+    resolve::{NamespaceMember, namespace_members_at},
+};
 use text_size::{TextRange, TextSize};
 
 use crate::{resolve, syntax};
@@ -125,7 +128,7 @@ pub(crate) enum DotTarget<'db> {
 
 impl<'db> CompletionContext<'db> {
     pub(crate) fn new(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         file: SourceFile,
         offset: TextSize,
     ) -> Option<Self> {
@@ -202,7 +205,7 @@ impl<'db> CompletionContext<'db> {
 /// The file's text with [`MARKER`] spliced in at `offset`, parsed. Returns the
 /// tree and the marker's range within it.
 fn speculative_parse(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     text: &str,
     offset: TextSize,
@@ -363,7 +366,7 @@ fn classify(token: &SyntaxToken) -> Position {
 
 /// The three readings of the `.` at `dot`, tried in resolution's own order.
 fn dot_target(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     dot: TextSize,
 ) -> Option<DotTarget<'_>> {
@@ -381,7 +384,7 @@ fn dot_target(
 /// from the REAL file (the chain ends before the cursor), never from the
 /// fragment being typed.
 fn qualifier_chain(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     dot: TextSize,
 ) -> Option<Vec<baml_base::Name>> {

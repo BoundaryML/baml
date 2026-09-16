@@ -274,9 +274,9 @@ fn interface_requires_closure_locs<'db>(
             continue;
         }
         out.push(loc);
-        let iface = baml_compiler2_ppir::item_data::interface_data(db, loc);
+        let iface = baml_compiler2_hir::item_data::interface_data(db, loc);
         let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
         for &parent in &iface.requires {
             if let Some(parent_loc) = resolve_ref_to_interface_loc(
                 db,
@@ -1069,7 +1069,7 @@ fn enum_type_name(ty: &RuntimeTy) -> Option<&TypeName> {
 use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 
 pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef<'db> {
-    use baml_compiler2_ppir::item_data::{
+    use baml_compiler2_hir::item_data::{
         MethodOwner, class_data, client_data, enum_data, function_data, interface_data, let_data,
         method_owner, retry_policy_data, template_string_data, type_alias_data,
     };
@@ -1146,7 +1146,7 @@ fn impl_display_segment<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> String {
-    use baml_compiler2_ppir::item_data::impl_block_data;
+    use baml_compiler2_hir::item_data::impl_block_data;
     let block = impl_block_data(db, impl_loc);
     let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
     let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
@@ -1198,7 +1198,7 @@ pub fn interface_body_link_bounds_suffix<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> Option<String> {
-    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
+    use baml_compiler2_hir::item_data::{MethodOwner, method_owner};
     let Some(MethodOwner::Impl(impl_loc)) = method_owner(db, func_loc) else {
         return None;
     };
@@ -1264,7 +1264,7 @@ pub fn native_key_for<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> String {
-    use baml_compiler2_ppir::item_data::{
+    use baml_compiler2_hir::item_data::{
         ImplSubjectData, MethodOwner, class_data, function_data, impl_block_data, interface_data,
         method_owner,
     };
@@ -1327,7 +1327,7 @@ pub fn function_is_interface_body<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> bool {
-    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
+    use baml_compiler2_hir::item_data::{MethodOwner, method_owner};
     match method_owner(db, func_loc) {
         // Impl blocks own their methods regardless of spelling (in-class
         // blocks are pure syntax), so class-owned methods are always real
@@ -1342,7 +1342,7 @@ fn method_item_ref<'db>(
     class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> ItemRef<'db> {
-    use baml_compiler2_ppir::item_data::{class_data, function_data};
+    use baml_compiler2_hir::item_data::{class_data, function_data};
     let pkg_info = file_package(db, class_loc.file(db));
     let class = class_data(db, class_loc).name.clone();
     // Class-inherent methods only: an implements-block method is Impl-owned
@@ -1368,7 +1368,7 @@ fn resolution_to_item_ref<'db>(
     match res {
         MemberResolution::Free { func_loc } => {
             let pkg_info = file_package(db, func_loc.file(db));
-            let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
+            let func_data = baml_compiler2_hir::item_data::function_data(db, *func_loc);
             Some(ItemRef::Free {
                 package: spelling(db).of(pkg_info.root).clone(),
                 namespace: pkg_info.namespace_path,
@@ -1387,7 +1387,7 @@ fn resolution_to_item_ref<'db>(
             // A virtual interface-method call: the ItemRef names the interface + method, and
             // the runtime dispatches on the receiver's actual impl.
             let pkg_info = file_package(db, iface_loc.file(db));
-            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
+            let iface_data = baml_compiler2_hir::item_data::interface_data(db, *iface_loc);
             Some(ItemRef::Method {
                 package: spelling(db).of(pkg_info.root).clone(),
                 namespace: pkg_info.namespace_path,
@@ -1479,17 +1479,15 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
+    file_semantic_index,
     loc::{FunctionLoc, LetLoc},
     package::{Spelling, is_precompiled_stdlib, lang_roots, package_items, spelling},
+    resolve::{ResolvedName, resolve_name_at_in_scope},
     scope::FileScopeId,
     semantic_index::{
         BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope as MetadataScope,
         PathResolution,
     },
-};
-use baml_compiler2_ppir::{
-    file_semantic_index,
-    resolve::{ResolvedName, resolve_name_at_in_scope},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -1712,7 +1710,7 @@ unsafe impl salsa::Update for ProjectClassTypeTags {
 /// 2026 audit, item #4).
 #[salsa::tracked(returns(ref))]
 fn class_type_tags_within(db: &dyn crate::Db, root: baml_base::SourceRoot) -> ProjectClassTypeTags {
-    use baml_compiler2_ppir::item_data::{class_data, file_classes};
+    use baml_compiler2_hir::item_data::{class_data, file_classes};
     let all_files = baml_compiler2_hir::package::world_files(db, root);
     let mut tags: IndexMap<TypeName, i64> = IndexMap::new();
     let spelling = spelling(db);
@@ -1762,8 +1760,7 @@ fn class_type_tags_within(db: &dyn crate::Db, root: baml_base::SourceRoot) -> Pr
 /// memoized by Salsa and shared across every function's `LoweringContext`.
 #[salsa::tracked(returns(ref))]
 fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> PackageLoweringData {
-    use baml_compiler2_hir::package::package_dependency_closure;
-    use baml_compiler2_ppir::package_items;
+    use baml_compiler2_hir::package::{package_dependency_closure, package_items};
 
     let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
     let runtime = RuntimeLowering {
@@ -1854,13 +1851,13 @@ fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> P
                 else {
                     continue;
                 };
-                let iface_data = baml_compiler2_ppir::item_data::interface_data(db, *iface_loc);
+                let iface_data = baml_compiler2_hir::item_data::interface_data(db, *iface_loc);
                 for sig in &iface_data.required_methods {
                     interface_method_names.insert(sig.name.clone());
                 }
                 for &fn_loc in &iface_data.default_methods {
                     interface_method_names.insert(
-                        baml_compiler2_ppir::item_data::function_data(db, fn_loc)
+                        baml_compiler2_hir::item_data::function_data(db, fn_loc)
                             .name
                             .clone(),
                     );
@@ -2170,7 +2167,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<InterfaceTypeView> {
         let class_tn = self.wire(class_qtn);
         let class_loc = self.resolve_class_loc_by_type_name(&class_tn)?;
-        let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
+        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
         let class_params = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
 
         for impl_block in &class_data.implements {
@@ -2410,7 +2407,7 @@ impl<'db> LoweringContext<'db> {
                 match def {
                     Definition::Class(class_loc) => {
                         let cfile = class_loc.file(db);
-                        let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+                        let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
 
                         let tn = resolved.wire(&DeclName::in_root(
                             pkg_items.root,
@@ -2470,7 +2467,7 @@ impl<'db> LoweringContext<'db> {
                         out.class_field_types.insert(tn.clone(), field_types);
                     }
                     Definition::Enum(enum_loc) => {
-                        let enum_data = baml_compiler2_ppir::item_data::enum_data(db, *enum_loc);
+                        let enum_data = baml_compiler2_hir::item_data::enum_data(db, *enum_loc);
                         let enum_qtn = resolved.wire(&DeclName::in_root(
                             pkg_items.root,
                             ns_names.clone(),
@@ -2534,12 +2531,12 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = func_loc.file(db);
 
-        let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
         let index = file_semantic_index(db, file);
         // The scope this function opened, from the recorded item↔scope index.
         // Exact — no span match, so companion functions and synthesized `0..0`
         // functions (which the old scan special-cased) resolve correctly.
-        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+        let func_scope_id = baml_compiler2_hir::item_data::function_scope(db, func_loc)
             .expect("every item-tree function has a recorded scope")
             .file_scope_id(db);
 
@@ -2584,7 +2581,7 @@ impl<'db> LoweringContext<'db> {
         let class_type_tags = &class_type_tags_within(db, pkg_id).tags;
 
         // --- Determine arity from function signature ---
-        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+        let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
         let arity = sig.params.len();
 
         // Detect if this function is a class method by checking the parent scope.
@@ -2666,10 +2663,10 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = let_loc.file(db);
 
-        let let_name = baml_compiler2_ppir::item_data::let_data(db, let_loc)
+        let let_name = baml_compiler2_hir::item_data::let_data(db, let_loc)
             .name
             .clone();
-        let let_scope_id = baml_compiler2_ppir::item_data::let_scope(db, let_loc)
+        let let_scope_id = baml_compiler2_hir::item_data::let_scope(db, let_loc)
             .expect("every item-tree let has a recorded scope")
             .file_scope_id(db);
 
@@ -3450,7 +3447,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Option<Tir2Ty> {
         let func_loc = self.func_loc?;
         let param_scope = self.source_param_scope?;
-        let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
+        let sig = baml_compiler2_hir::signature::function_signature(self.db, func_loc);
         let (param_idx, param) = sig
             .params
             .iter()
@@ -3557,7 +3554,7 @@ impl<'db> LoweringContext<'db> {
         else {
             return false;
         };
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
+        let iface_data = baml_compiler2_hir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
             self.spelling.of(pkg_info.root).clone(),
@@ -3644,14 +3641,13 @@ impl<'db> LoweringContext<'db> {
             MemberResolution::BoundMethod { func_loc, .. }
             | MemberResolution::UnboundMethod { func_loc, .. }
             | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => Some(
-                baml_compiler2_ppir::function_signature(self.db, *func_loc)
+                baml_compiler2_hir::signature::function_signature(self.db, *func_loc)
                     .params
                     .first()
                     .is_some_and(|param| param.name.as_str() == "self"),
             ),
             MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
-                let iface_data =
-                    baml_compiler2_ppir::item_data::interface_data(self.db, *iface_loc);
+                let iface_data = baml_compiler2_hir::item_data::interface_data(self.db, *iface_loc);
                 let pkg_info = file_package(self.db, iface_loc.file(self.db));
                 let iface_tn = TypeName::new(
                     self.spelling.of(pkg_info.root).clone(),
@@ -3717,7 +3713,7 @@ impl<'db> LoweringContext<'db> {
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         method: &Name,
     ) -> Option<Rvalue<'db>> {
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
+        let iface_data = baml_compiler2_hir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
             self.spelling.of(pkg_info.root).clone(),
@@ -4121,7 +4117,7 @@ impl<'db> LoweringContext<'db> {
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         member: &Name,
     ) -> Option<DeclaredMember> {
-        use baml_compiler2_ppir::item_data::{function_data, interface_data};
+        use baml_compiler2_hir::item_data::{function_data, interface_data};
         let data = interface_data(self.db, iface_loc);
         let declares_method = data.required_methods.iter().any(|s| s.name == *member)
             || data
@@ -4529,7 +4525,7 @@ impl<'db> LoweringContext<'db> {
         let func_loc = self
             .func_loc
             .expect("lower_function_body called on non-function LoweringContext");
-        let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
+        let sig = baml_compiler2_hir::signature::function_signature(self.db, func_loc);
 
         // Return place _0
         let pkg_info = file_package(self.db, self.file);
@@ -4549,24 +4545,24 @@ impl<'db> LoweringContext<'db> {
 
         // Detect enclosing class for `self` parameter resolution
         let index = file_semantic_index(self.db, self.file);
-        let func_data = baml_compiler2_ppir::item_data::function_data(self.db, func_loc);
-        let func_span = baml_compiler2_ppir::item_data::function_source_map(self.db, func_loc).span;
+        let func_data = baml_compiler2_hir::item_data::function_data(self.db, func_loc);
+        let func_span = baml_compiler2_hir::item_data::function_source_map(self.db, func_loc).span;
         // Set the function-level span on the builder so MirFunction::span is populated.
         self.builder
             .set_span(baml_base::Span::new(self.file.file_id(self.db), func_span));
-        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(self.db, func_loc)
+        let func_scope_id = baml_compiler2_hir::item_data::function_scope(self.db, func_loc)
             .expect("every item-tree function has a recorded scope")
             .file_scope_id(self.db);
         let func_scope = &index.scopes[func_scope_id.index() as usize];
-        let method_owner = baml_compiler2_ppir::item_data::method_owner(self.db, func_loc);
+        let method_owner = baml_compiler2_hir::item_data::method_owner(self.db, func_loc);
         let enclosing_class_name: Option<Name> = match method_owner {
             // Methods declared inside an `implements` block are owned by the
             // class, but their lexical scope is the block rather than the
             // class scope. Use the item-tree owner so an unannotated `self`
             // parameter gets the concrete class type (and virtual calls keep
             // their receiver type) instead of falling back to `Any`.
-            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => Some(
-                baml_compiler2_ppir::item_data::class_data(self.db, class_loc)
+            Some(baml_compiler2_hir::item_data::MethodOwner::Class(class_loc)) => Some(
+                baml_compiler2_hir::item_data::class_data(self.db, class_loc)
                     .name
                     .clone(),
             ),
@@ -4580,8 +4576,8 @@ impl<'db> LoweringContext<'db> {
             }),
         };
         let enclosing_impl = match method_owner {
-            Some(baml_compiler2_ppir::item_data::MethodOwner::Impl(impl_loc)) => Some(
-                baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc),
+            Some(baml_compiler2_hir::item_data::MethodOwner::Impl(impl_loc)) => Some(
+                baml_compiler2_hir::item_data::impl_block_data(self.db, impl_loc),
             ),
             _ => None,
         };
@@ -4596,7 +4592,7 @@ impl<'db> LoweringContext<'db> {
                     baml_compiler2_ast::TypeExprKind::Missing { .. }
                 ) {
                 if let Some(imp) = enclosing_impl
-                    && let baml_compiler2_ppir::item_data::ImplSubjectData::Free {
+                    && let baml_compiler2_hir::item_data::ImplSubjectData::Free {
                         for_target, ..
                     } = &imp.subject
                 {
@@ -4650,7 +4646,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(entry);
 
         let parameter_defaults =
-            baml_compiler2_ppir::function_parameter_defaults(self.db, func_loc);
+            baml_compiler2_hir::signature::function_parameter_defaults(self.db, func_loc);
         self.lower_default_parameter_prologue(func_data, &parameter_defaults);
 
         // Lower root expression into return place
@@ -4691,7 +4687,7 @@ impl<'db> LoweringContext<'db> {
 
     fn lower_default_parameter_prologue(
         &mut self,
-        func_data: &baml_compiler2_ppir::item_data::FunctionData,
+        func_data: &baml_compiler2_hir::item_data::FunctionData,
         parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     ) {
         for (index, param) in func_data.params.iter().enumerate() {
@@ -5236,11 +5232,11 @@ impl<'db> LoweringContext<'db> {
         let tag_item_ref = def_to_item_ref(self.db, Definition::Function(tag_func_loc));
 
         // ── Body-lambda params + closure type from the tag's `body` param. ──
-        let tag_sig = baml_compiler2_ppir::function_signature(self.db, tag_func_loc);
+        let tag_sig = baml_compiler2_hir::signature::function_signature(self.db, tag_func_loc);
         let tag_pkg_info = file_package(self.db, tag_func_loc.file(self.db));
         let tag_pkg_items = package_items(self.db, tag_pkg_info.root);
         let mut body_params: Vec<(Name, RuntimeTy)> = Vec::new();
-        let closure_ty = match tag_sig.params.first().map(|p| &p.ty) {
+        let closure_ty = match tag_sig.params.first().map(|p| &*p.ty) {
             Some(
                 body_te @ baml_compiler2_ast::TypeExpr {
                     kind: baml_compiler2_ast::TypeExprKind::Function { params, .. },
@@ -6362,7 +6358,7 @@ impl<'db> LoweringContext<'db> {
                         // (a bare constant runs a generic class's method with
                         // an empty frame).
                         let takes_self =
-                            baml_compiler2_ppir::function_signature(self.db, *func_loc)
+                            baml_compiler2_hir::signature::function_signature(self.db, *func_loc)
                                 .params
                                 .first()
                                 .is_some_and(|param| param.name.as_str() == "self");
@@ -7028,7 +7024,7 @@ impl<'db> LoweringContext<'db> {
             };
         };
 
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class_loc);
+        let class_data = baml_compiler2_hir::item_data::class_data(db, class_loc);
         let class_generic_params = baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
 
         let field = class_data.fields.iter().find(|f| &f.name == field_name);
@@ -8077,7 +8073,8 @@ impl<'db> LoweringContext<'db> {
         callee_loc: FunctionLoc<'db>,
         param_index: usize,
     ) -> Operand<'db> {
-        let defaults = baml_compiler2_ppir::function_parameter_defaults(self.db, callee_loc);
+        let defaults =
+            baml_compiler2_hir::signature::function_parameter_defaults(self.db, callee_loc);
         let constant = defaults
             .param_default(param_index)
             .map(|d| d.expr.expr())
@@ -8757,14 +8754,14 @@ impl<'db> LoweringContext<'db> {
                 // interface — instead of silently dropping the call with its
                 // destination unassigned.
                 && let Some(default_loc) =
-                    baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc)
+                    baml_compiler2_hir::item_data::interface_data(self.db, iface_loc)
                         .methods
                         .iter()
                         .copied()
                         .find(|&loc| {
-                            baml_compiler2_ppir::item_data::function_data(self.db, loc).name
+                            baml_compiler2_hir::item_data::function_data(self.db, loc).name
                                 == segments[1]
-                                && baml_compiler2_ppir::item_data::function_has_body(self.db, loc)
+                                && baml_compiler2_hir::item_data::function_has_body(self.db, loc)
                         })
             {
                 let item_ref = def_to_item_ref(self.db, Definition::Function(default_loc));
@@ -9072,8 +9069,9 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::UnboundMethod { func_loc, .. }
                             | MemberResolution::Free { func_loc }
                             | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                                let sig =
-                                    baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                                let sig = baml_compiler2_hir::signature::function_signature(
+                                    self.db, *func_loc,
+                                );
                                 sig.params
                                     .first()
                                     .is_some_and(|param| param.name.as_str() == "self")
@@ -9213,7 +9211,8 @@ impl<'db> LoweringContext<'db> {
                     MemberResolution::BoundMethod { func_loc, .. }
                     | MemberResolution::UnboundMethod { func_loc, .. }
                     | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
-                        let sig = baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                        let sig =
+                            baml_compiler2_hir::signature::function_signature(self.db, *func_loc);
                         sig.params
                             .first()
                             .is_some_and(|param| param.name.as_str() == "self")
@@ -9663,7 +9662,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                let body = baml_compiler2_hir::body::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                     return Some(fl);
                 }
@@ -9682,7 +9681,7 @@ impl<'db> LoweringContext<'db> {
             if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = resolution_func_loc(resolution);
                 if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
+                    let body = baml_compiler2_hir::body::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                         return Some(fl);
                     }
@@ -9754,7 +9753,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                let body = baml_compiler2_hir::body::function_body(self.db, fl);
                 if let FunctionBody::Builtin(kind) = body.as_ref() {
                     return Some(*kind);
                 }
@@ -9766,7 +9765,7 @@ impl<'db> LoweringContext<'db> {
             if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = resolution_func_loc(resolution);
                 if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
+                    let body = baml_compiler2_hir::body::function_body(self.db, fl);
                     if let FunctionBody::Builtin(kind) = body.as_ref() {
                         return Some(*kind);
                     }
@@ -9816,7 +9815,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                let body = baml_compiler2_hir::body::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                     return Some(self.synthetic_type_arg_count_for_sys_op(fl));
                 }
@@ -9832,7 +9831,7 @@ impl<'db> LoweringContext<'db> {
             if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = resolution_func_loc(resolution);
                 if let Some(fl) = func_loc {
-                    let body = baml_compiler2_ppir::function_body(self.db, fl);
+                    let body = baml_compiler2_hir::body::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
                         return Some(self.synthetic_type_arg_count_for_sys_op(fl));
                     }
@@ -9847,7 +9846,7 @@ impl<'db> LoweringContext<'db> {
         &self,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
     ) -> usize {
-        let func = baml_compiler2_ppir::item_data::function_data(self.db, func_loc);
+        let func = baml_compiler2_hir::item_data::function_data(self.db, func_loc);
         let declared_type_value_params = func
             .params
             .iter()
@@ -9919,7 +9918,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             if let Some(fl) = func_loc {
-                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                let body = baml_compiler2_hir::body::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Intrinsic) = body.as_ref() {
                     let item_ref = def_to_item_ref(self.db, Definition::Function(fl));
                     return match item_ref.to_string().as_str() {
@@ -10018,7 +10017,7 @@ impl<'db> LoweringContext<'db> {
 
         if !external_type_of {
             let func_loc = func_loc?;
-            let body = baml_compiler2_ppir::function_body(self.db, func_loc);
+            let body = baml_compiler2_hir::body::function_body(self.db, func_loc);
             if !matches!(
                 body.as_ref(),
                 baml_compiler2_hir::body::FunctionBody::Builtin(BuiltinKind::Intrinsic)
@@ -10078,7 +10077,7 @@ impl<'db> LoweringContext<'db> {
     fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = pkg_info.root;
-        let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
         lower_expr_in_scope(
             self.db,
             type_arg,
@@ -11739,7 +11738,7 @@ impl<'db> LoweringContext<'db> {
         iface_tn: &TypeName,
         method: &Name,
     ) -> Option<InterfaceMethodShape> {
-        use baml_compiler2_ppir::item_data::{function_data, interface_data};
+        use baml_compiler2_hir::item_data::{function_data, interface_data};
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_tn.package())?;
         let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
@@ -11753,7 +11752,7 @@ impl<'db> LoweringContext<'db> {
             .iter()
             .copied()
             .find(|&fn_loc| function_data(self.db, fn_loc).name == *method)?;
-        let signature = baml_compiler2_ppir::function_signature(self.db, fn_loc);
+        let signature = baml_compiler2_hir::signature::function_signature(self.db, fn_loc);
         // The frame is `[Self] ++ interface generics ++ own generics`; only
         // the last group is the function's own declaration, the rest is the
         // interface's shape. Associated types are not frame slots — body and
@@ -11774,7 +11773,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn interface_method_generic_count(&self, iface_tn: &TypeName, method: &Name) -> Option<usize> {
-        use baml_compiler2_ppir::item_data::{function_data, interface_data};
+        use baml_compiler2_hir::item_data::{function_data, interface_data};
         if let Some(baml_compiler2_hir_ty::package_interface::ExportedType::Interface {
             required_methods,
             default_methods,
@@ -12133,13 +12132,13 @@ impl<'db> LoweringContext<'db> {
     fn resolve_implements_target_view(
         &self,
         target: baml_compiler2_hir::type_ref::TypeRefId,
-        associated_type_bindings: &[baml_compiler2_ppir::item_data::AssociatedTypeBindingData],
+        associated_type_bindings: &[baml_compiler2_hir::item_data::AssociatedTypeBindingData],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
     ) -> Option<InterfaceTypeView> {
         let class_file = class_loc.file(self.db);
         let class_pkg = baml_compiler2_hir::file_package::file_package(self.db, class_file);
         let class_pkg_items = package_items(self.db, class_pkg.root);
-        let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
+        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
         // `target` and the class-side `associated_type_bindings` index the class's
         // own arena; the interface's associated-type defaults index the interface's.
         let target_store = &class_data.type_refs;
@@ -12150,7 +12149,7 @@ impl<'db> LoweringContext<'db> {
             class_pkg_items,
             &class_pkg.namespace_path,
         )?;
-        let target_data = baml_compiler2_ppir::item_data::interface_data(self.db, target_loc);
+        let target_data = baml_compiler2_hir::item_data::interface_data(self.db, target_loc);
         let class_generic_params =
             baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
         let target_generic_params =
@@ -12224,9 +12223,9 @@ impl<'db> LoweringContext<'db> {
     /// and interface default-method bodies.
     fn implements_block_iface_target(
         &self,
-    ) -> Option<&'db baml_compiler2_ppir::item_data::MethodInterfaceTarget> {
+    ) -> Option<&'db baml_compiler2_hir::item_data::MethodInterfaceTarget> {
         let func_loc = self.func_loc?;
-        baml_compiler2_ppir::item_data::method_interface_target(self.db, func_loc).as_ref()
+        baml_compiler2_hir::item_data::method_interface_target(self.db, func_loc).as_ref()
     }
 
     /// The enclosing implements-block's subject type — what `Self` denotes in
@@ -12235,7 +12234,7 @@ impl<'db> LoweringContext<'db> {
     /// (the in-body-vs-free distinction is HIR's business, not MIR's).
     /// `None` when the enclosing function is not an impl method.
     fn implements_subject_tir_ty(&self) -> Option<Tir2Ty> {
-        use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
+        use baml_compiler2_hir::item_data::{MethodOwner, method_owner};
         let fl = self.func_loc?;
         match method_owner(self.db, fl)? {
             MethodOwner::Impl(impl_loc) => Some(baml_compiler2_hir_ty::lower::impl_self_ty(
@@ -12258,7 +12257,7 @@ impl<'db> LoweringContext<'db> {
     /// `None` for plain class methods and free functions, where a body
     /// `Self` is an unresolved name TIR already diagnosed.
     fn body_self_tir_ty(&self) -> Option<Tir2Ty> {
-        use baml_compiler2_ppir::item_data::{MethodOwner, method_interface_target, method_owner};
+        use baml_compiler2_hir::item_data::{MethodOwner, method_interface_target, method_owner};
         let fl = self.func_loc?;
         match method_owner(self.db, fl)? {
             MethodOwner::Interface(iface_loc) => {
@@ -14050,7 +14049,7 @@ impl<'db> LoweringContext<'db> {
 
         let file = class_loc.file(self.db);
         let ns_context = file_package(self.db, file).namespace_path;
-        let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class_loc);
+        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
         let class_generic_params =
             baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
         let bindings = baml_type_runtime::bind_type_vars(&class_generic_params, class_type_args);
@@ -15590,13 +15589,13 @@ fn lower_function_impl<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction<'db> {
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
-    let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
+    let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
         db,
         baml_compiler2_hir::contributions::Definition::Function(func_loc),
     );
-    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
     let arity = sig.params.len();
 
     match body.as_ref() {
@@ -15627,10 +15626,10 @@ fn lower_function_impl<'db>(
                 // Must stay in lockstep with `baml_builtins2_codegen`'s
                 // `fn_only_generic_count`, which decides how many type-arg
                 // slots the generated glue reads back.
-                baml_compiler2_ppir::item_data::function_data(db, func_loc)
+                baml_compiler2_hir::item_data::function_data(db, func_loc)
                     .generic_params
                     .len()
-                    + baml_compiler2_ppir::item_data::enclosing_type_generic_param_count(
+                    + baml_compiler2_hir::item_data::enclosing_type_generic_param_count(
                         db, func_loc,
                     )
             } else {

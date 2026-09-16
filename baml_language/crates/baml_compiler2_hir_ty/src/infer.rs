@@ -1225,7 +1225,7 @@ unsafe impl salsa::Update for InferenceResult<'_> {
 }
 
 fn infer_function_body_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    _db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
     _function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
@@ -1244,14 +1244,14 @@ thread_local! {
 }
 
 fn let_owner_key(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     let_binding: baml_compiler2_hir::loc::LetLoc<'_>,
 ) -> LetOwnerKey {
     (let_binding.file(db).path(db), let_binding.id(db).as_u32())
 }
 
 fn let_owner_is_in_flight(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     let_binding: baml_compiler2_hir::loc::LetLoc<'_>,
 ) -> bool {
     let key = let_owner_key(db, let_binding);
@@ -1265,7 +1265,7 @@ struct InFlightLetOwner {
 
 impl InFlightLetOwner {
     fn enter(
-        db: &dyn baml_compiler2_ppir::Db,
+        db: &dyn baml_compiler2_hir::Db,
         let_binding: baml_compiler2_hir::loc::LetLoc<'_>,
     ) -> Self {
         let key = let_owner_key(db, let_binding);
@@ -1285,7 +1285,7 @@ impl Drop for InFlightLetOwner {
 }
 
 fn infer_let_body_cycle_initial<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
     let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
 ) -> InferenceResult<'db> {
@@ -1315,7 +1315,7 @@ fn infer_let_body_cycle_initial<'db>(
 /// unchanged results.
 #[salsa::tracked(returns(ref), cycle_initial = infer_function_body_cycle_initial)]
 fn infer_function_body<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
     infer_body_impl(db, BodyOwnerId::Function(function))
@@ -1326,7 +1326,7 @@ fn infer_function_body<'db>(
 /// the explicit in-flight set normally diagnoses before Salsa must recover.
 #[salsa::tracked(returns(ref), cycle_initial = infer_let_body_cycle_initial)]
 fn infer_let_body<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     let_binding: baml_compiler2_hir::loc::LetLoc<'db>,
 ) -> InferenceResult<'db> {
     let _in_flight = InFlightLetOwner::enter(db, let_binding);
@@ -1339,7 +1339,7 @@ fn infer_let_body<'db>(
 /// signature road consults default inference.
 #[salsa::tracked(returns(ref))]
 fn infer_parameter_defaults<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
     infer_body_impl(db, BodyOwnerId::ParameterDefaults(function))
@@ -1350,7 +1350,7 @@ fn infer_parameter_defaults<'db>(
 /// declaration side's own plain vocabulary (the lowering ctx and the fact
 /// oracle take it directly).
 pub(crate) fn owner_declared_bounds<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     owner: BodyOwnerId<'db>,
 ) -> FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>> {
     match owner {
@@ -1368,7 +1368,7 @@ pub(crate) fn owner_declared_bounds<'db>(
 /// queries (ppir's `body`/`body_scope` shape - `BodyOwnerId` is an
 /// ordinary enum, not a salsa struct).
 pub fn infer_body<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     owner: BodyOwnerId<'db>,
 ) -> &'db InferenceResult<'db> {
     match owner {
@@ -1390,20 +1390,20 @@ pub fn body_inferences() -> usize {
 }
 
 fn infer_body_impl<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     owner: BodyOwnerId<'db>,
 ) -> InferenceResult<'db> {
     BODY_INFERENCES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let body = baml_compiler2_ppir::body(db, owner);
-    let index = baml_compiler2_ppir::file_semantic_index(db, owner.file(db));
-    let owner_scope = baml_compiler2_ppir::body_scope(db, owner).map(|s| s.file_scope_id(db));
+    let body = baml_compiler2_hir::body::body(db, owner);
+    let index = baml_compiler2_hir::file_semantic_index(db, owner.file(db));
+    let owner_scope = baml_compiler2_hir::body::body_scope(db, owner).map(|s| s.file_scope_id(db));
     // The owner's generic frame makes `T` in body annotations resolve; the
     // signature gives parameter references their types and the body its
     // return expectation.
     let (frame, param_tys, return_ty, declared_throws_ref) = match owner {
         BodyOwnerId::Function(function) => {
             let signature = function_signature(db, function);
-            let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+            let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
             (
                 function_generic_frame(db, function),
                 signature
@@ -1445,10 +1445,10 @@ fn infer_body_impl<'db>(
             // implements-block bodies (`Self` substitutes to the subject,
             // and they are Impl-owned — in-class and out-of-body alike)
             // and interface default bodies (frame slot 0) keep theirs.
-            match baml_compiler2_ppir::item_data::method_owner(db, function) {
-                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(_)) => {
+            match baml_compiler2_hir::item_data::method_owner(db, function) {
+                Some(baml_compiler2_hir::item_data::MethodOwner::Class(_)) => {
                     debug_assert!(
-                        baml_compiler2_ppir::item_data::method_interface_target(db, function)
+                        baml_compiler2_hir::item_data::method_interface_target(db, function)
                             .is_none(),
                         "interface targets are recorded on impl-block methods, which are \
                          Impl-owned",
@@ -1471,7 +1471,7 @@ fn infer_body_impl<'db>(
         .with_bounds(owner_declared_bounds(db, owner))
         .with_self_ty(concrete_self)
         .with_impl_target(impl_target);
-    let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
+    let type_refs = baml_compiler2_hir::body_type_refs::body_type_refs(db, owner);
     let plain_bounds = owner_declared_bounds(db, owner);
     // Split the declared clause into its named part and openness (spec
     // rule 3: `throws T | _` names T and opens the remainder to
@@ -1514,7 +1514,7 @@ fn infer_body_impl<'db>(
         // checks against that parameter's declared type (its expectation
         // at the call boundary, the rule MIR's callee-entry prologue
         // relies on).
-        let defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+        let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, function);
         if let Some(arena) = body.expr_body() {
             ctx.register_property_shorthands(arena);
             for (index, default) in defaults.params.iter().enumerate() {
@@ -1638,7 +1638,7 @@ impl Expectation {
 /// One inference run over one body owner: the table, the accumulating
 /// result, and the bidirectional expression walk.
 struct InferenceContext<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: Facts<'db>,
     index: &'db FileSemanticIndex<'db>,
     /// The owner body's scope: the key half mapping this body's `ExprId`s
@@ -1831,7 +1831,7 @@ struct InferenceContext<'db> {
 impl<'db> InferenceContext<'db> {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         index: &'db FileSemanticIndex<'db>,
         owner_file: baml_base::SourceFile,
         owner_scope: Option<FileScopeId>,
@@ -2469,7 +2469,7 @@ impl<'db> InferenceContext<'db> {
                                 _ => None,
                             };
                             let is_tagged = func.is_some_and(|func| {
-                                baml_compiler2_ppir::item_data::function_data(self.db, func)
+                                baml_compiler2_hir::item_data::function_data(self.db, func)
                                     .is_tagged_template_tag
                             });
                             let body_param_ok = params.first().is_some_and(|param| {
@@ -5308,7 +5308,7 @@ impl<'db> InferenceContext<'db> {
             return;
         };
         let package = baml_compiler2_hir::file_package::file_package(self.db, func.file(self.db));
-        let data = baml_compiler2_ppir::item_data::function_data(self.db, func);
+        let data = baml_compiler2_hir::item_data::function_data(self.db, func);
         if !self.lang().is(baml_base::LangPackage::Baml, package.root)
             || !package
                 .namespace_path
@@ -5353,8 +5353,8 @@ impl<'db> InferenceContext<'db> {
         else {
             return;
         };
-        if baml_compiler2_ppir::item_data::function_llm_meta(self.db, target).is_none()
-            || !baml_compiler2_ppir::item_data::function_data(self.db, target)
+        if baml_compiler2_hir::item_data::function_llm_meta(self.db, target).is_none()
+            || !baml_compiler2_hir::item_data::function_data(self.db, target)
                 .generic_params
                 .is_empty()
         {
@@ -5403,7 +5403,7 @@ impl<'db> InferenceContext<'db> {
         if !self.lang().is(baml_base::LangPackage::Reflect, qtn.root())
             || !qtn.namespace().is_empty()
             || qtn.name().as_str() != "Session"
-            || baml_compiler2_ppir::item_data::function_data(self.db, func)
+            || baml_compiler2_hir::item_data::function_data(self.db, func)
                 .name
                 .as_str()
                 != "eval"
@@ -5819,7 +5819,7 @@ impl<'db> InferenceContext<'db> {
                 self.lower.resolve_value(segments)
             {
                 let signature = function_signature(self.db, function);
-                let callee_name = baml_compiler2_ppir::item_data::function_data(self.db, function)
+                let callee_name = baml_compiler2_hir::item_data::function_data(self.db, function)
                     .name
                     .clone();
                 let instantiation = self.instantiation_args_at(
@@ -6229,7 +6229,7 @@ impl<'db> InferenceContext<'db> {
                 let signature = function_signature(self.db, method);
                 let class_count = candidate.class_args.len();
                 let own_params = signature.generic_params[class_count..].to_vec();
-                let method_name = baml_compiler2_ppir::item_data::function_data(self.db, method)
+                let method_name = baml_compiler2_hir::item_data::function_data(self.db, method)
                     .name
                     .clone();
                 let mut instantiation = candidate.class_args;
@@ -6306,7 +6306,7 @@ impl<'db> InferenceContext<'db> {
     fn default_receiver_target(&mut self) -> Option<(InferInterface, Ty)> {
         let function = self.body_owner?;
         let target =
-            baml_compiler2_ppir::item_data::method_interface_target(self.db, function).as_ref()?;
+            baml_compiler2_hir::item_data::method_interface_target(self.db, function).as_ref()?;
         let target_ty = self.lower.lower_type_ref_at(
             &target.type_refs,
             target.target,
@@ -6316,8 +6316,8 @@ impl<'db> InferenceContext<'db> {
         let InferTy::Interface(name, args, pins, _) = target_interned.kind() else {
             return None;
         };
-        let self_ty = match baml_compiler2_ppir::item_data::method_owner(self.db, function) {
-            Some(baml_compiler2_ppir::item_data::MethodOwner::Impl(impl_loc)) => {
+        let self_ty = match baml_compiler2_hir::item_data::method_owner(self.db, function) {
+            Some(baml_compiler2_hir::item_data::MethodOwner::Impl(impl_loc)) => {
                 crate::impls::interned_ty(&crate::lower::impl_self_ty(self.db, impl_loc))
             }
             // A recorded interface target pairs with an Impl owner —
@@ -6350,12 +6350,11 @@ impl<'db> InferenceContext<'db> {
         // field (contract state, read through the interface view) or a
         // default-bodied method (delegation). Bodyless required methods
         // have nothing to delegate to.
-        let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let data = baml_compiler2_hir::item_data::interface_data(self.db, interface);
         let provided = data.fields.iter().any(|field| field.name == *member)
             || data.methods.iter().any(|&method| {
-                baml_compiler2_ppir::item_data::function_has_body(self.db, method)
-                    && baml_compiler2_ppir::item_data::function_data(self.db, method).name
-                        == *member
+                baml_compiler2_hir::item_data::function_has_body(self.db, method)
+                    && baml_compiler2_hir::item_data::function_data(self.db, method).name == *member
             });
         if !provided {
             return None;
@@ -6392,10 +6391,9 @@ impl<'db> InferenceContext<'db> {
                     let signature = function_signature(self.db, method);
                     let own_offset = prefix.len();
                     let own_params = signature.generic_params[own_offset..].to_vec();
-                    let method_name =
-                        baml_compiler2_ppir::item_data::function_data(self.db, method)
-                            .name
-                            .clone();
+                    let method_name = baml_compiler2_hir::item_data::function_data(self.db, method)
+                        .name
+                        .clone();
                     let mut instantiation = prefix;
                     instantiation.extend(self.instantiation_args_at(
                         call,
@@ -6510,12 +6508,12 @@ impl<'db> InferenceContext<'db> {
         if let Some((class, _)) =
             self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))
         {
-            let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+            let method = baml_compiler2_hir::item_data::class_data(self.db, class)
                 .methods
                 .iter()
                 .copied()
                 .find(|&method| {
-                    baml_compiler2_ppir::item_data::function_data(self.db, method)
+                    baml_compiler2_hir::item_data::function_data(self.db, method)
                         .name
                         .as_str()
                         == "from"
@@ -6566,12 +6564,12 @@ impl<'db> InferenceContext<'db> {
             | MemberResolution::InterfaceConcreteMethod { func, .. } => Some((func, true)),
             MemberResolution::UnboundMethod { func, .. } => Some((func, false)),
             MemberResolution::InterfaceVirtualMethod { interface, method } => {
-                baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+                baml_compiler2_hir::item_data::interface_data(self.db, interface)
                     .methods
                     .iter()
                     .copied()
                     .find(|func| {
-                        baml_compiler2_ppir::item_data::function_data(self.db, *func).name == method
+                        baml_compiler2_hir::item_data::function_data(self.db, *func).name == method
                     })
                     .map(|func| (func, true))
             }
@@ -6614,7 +6612,7 @@ impl<'db> InferenceContext<'db> {
         let Some((method, receiver_is_bound)) = source_method else {
             return;
         };
-        let data = baml_compiler2_ppir::item_data::function_data(self.db, method);
+        let data = baml_compiler2_hir::item_data::function_data(self.db, method);
         if data.generic_params.is_empty() {
             return;
         }
@@ -6725,7 +6723,7 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
-            let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
+            let data = baml_compiler2_hir::item_data::function_data(self.db, function);
             if data.generic_params.is_empty() {
                 // Synthetic callback-effect parameters are inference-only;
                 // they do not make an otherwise non-generic function value
@@ -7077,7 +7075,7 @@ impl<'db> InferenceContext<'db> {
         // body unify against the same hole. Associated types are not slots -
         // signature references to them are projections over `Self`, reduced
         // once `Self` is known.
-        let interface_data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let interface_data = baml_compiler2_hir::item_data::interface_data(self.db, interface);
         let pinned = interface_data.generic_params.len();
         // `lower::function_generic_frame` builds an interface method's frame
         // from this same `interface_data`, appending the method's own generics
@@ -7394,12 +7392,12 @@ impl<'db> InferenceContext<'db> {
         interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         member: &baml_type::Name,
     ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
-        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+        baml_compiler2_hir::item_data::interface_data(self.db, interface)
             .methods
             .iter()
             .copied()
             .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+                baml_compiler2_hir::item_data::function_data(self.db, method).name == *member
             })
     }
 
@@ -7726,12 +7724,12 @@ impl<'db> InferenceContext<'db> {
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
         let (class, pinned) = self.static_class_for(prefix)?;
-        let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
+        let method = baml_compiler2_hir::item_data::class_data(self.db, class)
             .methods
             .iter()
             .copied()
             .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+                baml_compiler2_hir::item_data::function_data(self.db, method).name == *member
             })?;
         let signature = function_signature(self.db, method);
         let frame = crate::lower::class_generic_frame(self.db, class);
@@ -7999,12 +7997,12 @@ impl<'db> InferenceContext<'db> {
         else {
             return None;
         };
-        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+        baml_compiler2_hir::item_data::interface_data(self.db, interface)
             .methods
             .iter()
             .copied()
             .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
+                baml_compiler2_hir::item_data::function_data(self.db, method).name == *member
             })
             .map(|method| (interface, method))
     }
@@ -8303,7 +8301,7 @@ impl<'db> InferenceContext<'db> {
         // judged at the receiver's own annotation.
         let own_start = {
             let frame = crate::lower::function_generic_frame(self.db, function);
-            let own = baml_compiler2_ppir::item_data::function_data(self.db, function)
+            let own = baml_compiler2_hir::item_data::function_data(self.db, function)
                 .generic_params
                 .len();
             frame.len().saturating_sub(own)
@@ -8498,7 +8496,7 @@ impl<'db> InferenceContext<'db> {
         self.lang().is(baml_base::LangPackage::Reflect, qtn.root())
             && qtn.namespace().is_empty()
             && qtn.name().as_str() == "Package"
-            && baml_compiler2_ppir::item_data::function_data(self.db, function)
+            && baml_compiler2_hir::item_data::function_data(self.db, function)
                 .name
                 .as_str()
                 == "get_function"
@@ -8732,7 +8730,7 @@ impl<'db> InferenceContext<'db> {
                 });
             return Ty::error();
         }
-        let generic_count = baml_compiler2_ppir::item_data::class_data(db, class)
+        let generic_count = baml_compiler2_hir::item_data::class_data(db, class)
             .generic_params
             .len();
         let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
@@ -8805,7 +8803,7 @@ impl<'db> InferenceContext<'db> {
                     let class_name = crate::lower::qualify_def(
                         db,
                         baml_compiler2_hir::contributions::Definition::Class(class),
-                        &baml_compiler2_ppir::item_data::class_data(db, class).name,
+                        &baml_compiler2_hir::item_data::class_data(db, class).name,
                     );
                     self.pending_diags.push(PendingDiag::UnknownObjectField {
                         object,
@@ -9006,8 +9004,8 @@ impl<'db> InferenceContext<'db> {
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
         function: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) {
-        let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class);
-        let function_data = baml_compiler2_ppir::item_data::function_data(self.db, function);
+        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class);
+        let function_data = baml_compiler2_hir::item_data::function_data(self.db, function);
         let package = baml_compiler2_hir::file_package::file_package(self.db, class.file(self.db));
         let is_output_format = function_data.name.as_str() == "output_format"
             && self.lang().is(baml_base::LangPackage::Ai, package.root)
@@ -9376,9 +9374,9 @@ impl<'db> InferenceContext<'db> {
         name: &baml_type::Name,
     ) -> Option<baml_type::Name> {
         let db = self.db;
-        let data = baml_compiler2_ppir::item_data::class_data(db, class);
+        let data = baml_compiler2_hir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
         for block in &data.implements {
             let Some(interface) = crate::interfaces::resolve_ref_to_interface(
                 db,
@@ -9389,7 +9387,7 @@ impl<'db> InferenceContext<'db> {
             ) else {
                 continue;
             };
-            let declares = baml_compiler2_ppir::item_data::interface_data(db, interface)
+            let declares = baml_compiler2_hir::item_data::interface_data(db, interface)
                 .fields
                 .iter()
                 .any(|field| field.name == *name);
@@ -9613,7 +9611,7 @@ impl<'db> InferenceContext<'db> {
         &self,
         interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     ) -> baml_type::Name {
-        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+        baml_compiler2_hir::item_data::interface_data(self.db, interface)
             .name
             .clone()
     }
@@ -9631,13 +9629,13 @@ impl<'db> InferenceContext<'db> {
         &self,
         func: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Option<baml_type::Name> {
-        if let Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(interface)) =
-            baml_compiler2_ppir::item_data::method_owner(self.db, func)
+        if let Some(baml_compiler2_hir::item_data::MethodOwner::Interface(interface)) =
+            baml_compiler2_hir::item_data::method_owner(self.db, func)
         {
             return Some(self.interface_short_name(interface));
         }
         let target =
-            baml_compiler2_ppir::item_data::method_interface_target(self.db, func).as_ref()?;
+            baml_compiler2_hir::item_data::method_interface_target(self.db, func).as_ref()?;
         let target_ty = self.lower.lower_type_ref_at(
             &target.type_refs,
             target.target,
@@ -12657,7 +12655,7 @@ impl<'db> InferenceContext<'db> {
         effect: &baml_type::ParamTy,
     ) -> Option<baml_type::Name> {
         let function = self.body_owner?;
-        let data = baml_compiler2_ppir::item_data::function_data(self.db, function);
+        let data = baml_compiler2_hir::item_data::function_data(self.db, function);
         let param_tys = self.param_tys.clone();
         for (index, param_ty) in param_tys.iter().enumerate() {
             let resolved = self.table.resolve_completely(param_ty);
@@ -12767,7 +12765,7 @@ impl<'db> InferenceContext<'db> {
                 self.db, pkg,
             ));
             for pkg_id in packages {
-                let items = baml_compiler2_ppir::package_items(self.db, pkg_id);
+                let items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
                 for ns in items.namespaces.values() {
                     for (name, def) in &ns.types {
                         let Definition::TypeAlias(loc) = def else {
@@ -12971,11 +12969,11 @@ pub(crate) fn ty_mentions_param(ty: &Ty, param: &baml_type::ParamTy) -> bool {
 /// follow it, so neither group should make a function value require explicit
 /// specialization.
 fn function_user_generic_params<'a, 'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,
     signature: &'a crate::lower::FunctionSignature,
 ) -> &'a [baml_type::ParamTy] {
-    let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+    let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
     let end = signature
         .generic_params
         .len()

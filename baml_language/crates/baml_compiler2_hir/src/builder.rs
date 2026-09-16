@@ -1992,7 +1992,8 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         for attr in attributes {
             let Some(spec) = baml_base::schema_attribute_spec(attr.name.as_str()) else {
-                // Unknown attributes pass through (e.g. `@stream.*`).
+                // Unknown attributes pass through (e.g. user schema annotations read
+                // back through reflection).
                 continue;
             };
             match spec.arguments {

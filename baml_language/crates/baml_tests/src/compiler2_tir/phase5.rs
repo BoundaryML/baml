@@ -56,7 +56,7 @@ fn make_db() -> ProjectDatabase {
 
 /// Declared generic parameter names, for assertions that care about the names
 /// rather than the bounds.
-fn generic_param_names(params: &[baml_compiler2_ppir::item_data::GenericParamData]) -> Vec<Name> {
+fn generic_param_names(params: &[baml_compiler2_hir::item_data::GenericParamData]) -> Vec<Name> {
     params.iter().map(|param| param.name.clone()).collect()
 }
 
@@ -98,7 +98,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.types[name];
             match def {
                 Definition::Class(class_loc) => {
-                    let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+                    let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
                     let gp_str = if class_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -116,7 +116,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                         .methods
                         .iter()
                         .map(|mid| {
-                            baml_compiler2_ppir::item_data::function_data(db, *mid)
+                            baml_compiler2_hir::item_data::function_data(db, *mid)
                                 .name
                                 .to_string()
                         })
@@ -144,7 +144,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.values[name];
             match def {
                 Definition::Function(func_loc) => {
-                    let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
+                    let func_data = baml_compiler2_hir::item_data::function_data(db, *func_loc);
                     let gp_str = if func_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -311,7 +311,7 @@ fn array_has_generic_param_t() {
         panic!("Array should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
         generic_param_names(&class_data.generic_params),
@@ -334,7 +334,7 @@ fn map_has_generic_params_k_v() {
         panic!("Map should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
         generic_param_names(&class_data.generic_params),
@@ -357,7 +357,7 @@ fn string_class_has_no_generic_params() {
         panic!("String should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     assert!(
         class_data.generic_params.is_empty(),
@@ -381,13 +381,13 @@ fn array_has_expected_methods() {
         panic!("Array should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
         .map(|mid| {
-            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+            baml_compiler2_hir::item_data::function_data(&db, *mid)
                 .name
                 .to_string()
         })
@@ -418,13 +418,13 @@ fn map_has_expected_methods() {
         panic!("Map should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
         .map(|mid| {
-            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+            baml_compiler2_hir::item_data::function_data(&db, *mid)
                 .name
                 .to_string()
         })

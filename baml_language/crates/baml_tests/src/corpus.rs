@@ -36,8 +36,8 @@ use std::{
 };
 
 use baml_base::SourceFile;
+use baml_compiler2_hir::item_data::{file_functions, function_source_map};
 use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
-use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 use baml_db::ProjectDatabase;
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::Function;

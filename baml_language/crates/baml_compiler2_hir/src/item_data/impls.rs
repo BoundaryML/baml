@@ -1,12 +1,12 @@
-use baml_compiler2_hir::{
-    loc::{ClassLoc, FunctionLoc, ImplLoc},
-    type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
-};
 use text_size::TextRange;
 
-use crate::item_data::common::{
-    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, GenericParamData,
-    InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
+use crate::{
+    item_data::common::{
+        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, GenericParamData,
+        InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
+    },
+    loc::{ClassLoc, FunctionLoc, ImplLoc},
+    type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
 
 /// What an `implements` block applies to.
@@ -74,7 +74,7 @@ pub fn impl_block_data<'db>(db: &'db dyn crate::Db, block: ImplLoc<'db>) -> Impl
 pub fn impl_enclosing_class<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
-) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
+) -> Option<crate::loc::ClassLoc<'db>> {
     match impl_block_data(db, block).subject {
         ImplSubjectData::InClass { class, .. } => Some(class),
         ImplSubjectData::Free { .. } => None,
@@ -89,10 +89,7 @@ pub fn impl_enclosing_class<'db>(
 pub fn impl_declared_generics<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
-) -> (
-    &'db [GenericParamData],
-    &'db baml_compiler2_hir::type_ref::TypeRefStore,
-) {
+) -> (&'db [GenericParamData], &'db crate::type_ref::TypeRefStore) {
     let data = impl_block_data(db, block);
     match &data.subject {
         ImplSubjectData::InClass { class, .. } => {
@@ -120,7 +117,7 @@ fn lower<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
 ) -> (ImplBlockData<'db>, ImplBlockSourceMap) {
-    use baml_compiler2_hir::item_tree::ImplSubject;
+    use crate::item_tree::ImplSubject;
 
     let file = block.file(db);
     let item_tree = crate::file_item_tree(db, file);

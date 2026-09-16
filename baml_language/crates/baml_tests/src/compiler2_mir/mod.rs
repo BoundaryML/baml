@@ -6,11 +6,11 @@
 use std::fmt::Write;
 
 use baml_base::Name;
+use baml_compiler2_hir::item_data::{file_functions, function_data, function_source_map};
 use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
-use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
 use crate::engine::TestDbExt;
@@ -416,7 +416,7 @@ implements SfxConv for int {
         .iter()
         .filter(|&&loc| {
             baml_compiler2_mir::function_is_interface_body(&db, loc)
-                && !baml_compiler2_ppir::item_data::is_required_interface_method(&db, loc)
+                && !baml_compiler2_hir::item_data::is_required_interface_method(&db, loc)
         })
         .map(|&loc| {
             (

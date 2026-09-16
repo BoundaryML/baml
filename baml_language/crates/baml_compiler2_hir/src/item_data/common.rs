@@ -5,16 +5,17 @@
 //! here rather than in `classes`/`functions`.
 
 use baml_base::Name;
-use baml_compiler2_hir::{
+use text_size::TextRange;
+
+use crate::{
     item_tree::{Attribute, GenericParam},
     type_ref::{TypeRefBuilder, TypeRefId},
 };
-use text_size::TextRange;
 
 /// A generic parameter on a function, class, interface, interface method
 /// signature, or out-of-body `implements` block, paired with its set of
 /// `&`-separated bounds. Mirrors
-/// [`item_tree::GenericParam`](baml_compiler2_hir::item_tree::GenericParam)
+/// [`item_tree::GenericParam`](crate::item_tree::GenericParam)
 /// with the bounds lowered into the owning item's type-ref arena.
 ///
 /// The bound set is a **conjunction**: an argument for this parameter must
@@ -59,7 +60,7 @@ pub struct FunctionParamData {
 pub struct FieldData {
     pub name: Name,
     /// Always present. A field written without a type is reported by the parser and
-    /// recovers as [`TypeRefKind::Error`](baml_compiler2_hir::type_ref::TypeRefKind::Error),
+    /// recovers as [`TypeRefKind::Error`](crate::type_ref::TypeRefKind::Error),
     /// which suppresses follow-on diagnostics while the rest of the declaration still
     /// type-checks. "No type" is not a kind of type, so it is not representable here —
     /// otherwise every consumer has to invent its own stand-in, and they disagree.
