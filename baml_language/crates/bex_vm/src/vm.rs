@@ -402,7 +402,10 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
-            telemetry: TelemetryState::new_root(Arc::new(TelemetryPolicies::new())),
+            telemetry: TelemetryState::new_root(
+                Arc::new(TelemetryPolicies::new()),
+                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            ),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
@@ -1894,6 +1897,7 @@ impl BexVm {
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
         telemetry_policies: Arc<TelemetryPolicies>,
+        telemetry_clock: Arc<btel_clock::ClockEpoch>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1937,7 +1941,7 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
-            telemetry: TelemetryState::new_root(telemetry_policies),
+            telemetry: TelemetryState::new_root(telemetry_policies, telemetry_clock),
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
@@ -3564,6 +3568,7 @@ impl BexVm {
             error_class_ptrs,
             panic_class_ptrs,
             Arc::new(TelemetryPolicies::new()),
+            btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
         ))
     }
 
@@ -6269,7 +6274,7 @@ impl BexVm {
         let frame_idx = self.bytecode_caller_index(frame_idx);
         if matches!(&self.frames[frame_idx], Frame::Bytecode(frame) if frame.telemetry.is_some()) {
             debug_assert!(self.pending_telemetry_wait.is_none());
-            self.pending_telemetry_wait = Some((frame_idx, ClockInstant::now()));
+            self.pending_telemetry_wait = Some((frame_idx, self.telemetry.clock().read()));
         }
     }
 
@@ -6281,7 +6286,7 @@ impl BexVm {
 
     fn finish_pending_telemetry_wait(&mut self) {
         if let Some((frame_idx, start)) = self.take_telemetry_wait() {
-            let elapsed = start.elapsed_until(ClockInstant::now());
+            let elapsed = start.elapsed_until(self.telemetry.clock().read());
             self.record_telemetry_wait(Some(frame_idx), elapsed);
         }
     }
@@ -6308,7 +6313,14 @@ impl BexVm {
         self.telemetry.complete_thread(outcome);
     }
 
-    pub fn configure_spawn_telemetry(&mut self, context: crate::telemetry::ThreadSpawnContext) {
+    pub fn telemetry_clock(&self) -> &Arc<btel_clock::ClockEpoch> {
+        self.telemetry.clock()
+    }
+    pub fn is_telemetry_root(&self) -> bool {
+        self.telemetry.is_root_thread()
+    }
+
+    pub fn configure_spawn_telemetry(&mut self, context: &crate::telemetry::ThreadSpawnContext) {
         self.telemetry.configure_spawn(context);
     }
 

@@ -427,3 +427,46 @@ async fn child_internal_error_settles_and_finishes_both_threads() {
         ],
     );
 }
+
+#[tokio::test]
+async fn clock_restore_invalidates_inflight_timing_without_changing_execution() {
+    use btel_clock::{ClockMode, TimingStatus};
+
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_clock(
+            baml_db::testing::compile_source("function Main() -> int { 7 }"),
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            None,
+            ClockMode::Monotonic,
+        )
+        .unwrap(),
+    );
+    let cancel = CancellationToken::new();
+    let thread = entry(&engine, &cancel, &[]).await;
+    let old = Arc::clone(thread.vm.telemetry_clock());
+    let id = thread.vm.thread_id;
+    let replacement = engine.reset_telemetry_clock_after_restore();
+    assert_eq!(old.status(), TimingStatus::Restored);
+    assert_ne!(replacement.metadata().epoch, old.metadata().epoch);
+    let result = engine
+        .run_thread_event_loop(
+            RuntimeTy::int(),
+            None,
+            thread,
+            CallId::next(),
+            None,
+            &cancel,
+            true,
+        )
+        .await;
+    assert!(matches!(
+        result,
+        Ok(ThreadOutcome::RootValue(BexExternalValue::Int(7)))
+    ));
+    assert_completed(&engine, &[(id, InvocationOutcome::Ok)]);
+    let mut next = entry(&engine, &cancel, &[]).await;
+    assert_eq!(next.vm.telemetry_clock().status(), TimingStatus::Valid);
+    assert_ne!(next.vm.telemetry_clock().domain(), old.domain());
+    engine.finish_thread_telemetry(&mut next, InvocationOutcome::Cancelled);
+}

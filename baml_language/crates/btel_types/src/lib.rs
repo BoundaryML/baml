@@ -190,8 +190,8 @@ const _: () = assert!(size_of::<AwaitDuration>() == 8);
 
 impl ClockInstant {
     #[inline(always)]
-    pub fn now() -> Self {
-        Self(clock::now_ticks())
+    pub const fn from_ticks(ticks: u64) -> Self {
+        Self(ticks)
     }
 
     #[inline(always)]
@@ -252,44 +252,6 @@ pub enum InvocationOutcome {
 pub enum CallPathEdge {
     Synchronous,
     Spawn,
-}
-
-/// Ancestry captured by a parent VM when it commits a logical-thread spawn.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ThreadSpawnContext {
-    pub parent_id: TelemetryId,
-    pub spawn_call_path: CallPathId,
-}
-
-mod clock {
-    #[cfg(all(target_arch = "aarch64", not(miri)))]
-    #[inline(always)]
-    pub(crate) fn now_ticks() -> u64 {
-        let value: u64;
-        unsafe {
-            core::arch::asm!(
-                "mrs {value}, cntvct_el0",
-                value = out(reg) value,
-                options(nomem, nostack, preserves_flags)
-            );
-        }
-        value
-    }
-
-    #[cfg(all(target_arch = "x86_64", not(miri)))]
-    #[inline(always)]
-    pub(crate) fn now_ticks() -> u64 {
-        unsafe { core::arch::x86_64::_rdtsc() }
-    }
-
-    #[cfg(any(miri, not(any(target_arch = "aarch64", target_arch = "x86_64"))))]
-    #[inline]
-    pub(crate) fn now_ticks() -> u64 {
-        use std::{sync::OnceLock, time::Instant};
-        static ZERO: OnceLock<Instant> = OnceLock::new();
-        let nanos = ZERO.get_or_init(Instant::now).elapsed().as_nanos();
-        u64::try_from(nanos).unwrap_or(u64::MAX)
-    }
 }
 
 #[cfg(test)]

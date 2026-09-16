@@ -16,6 +16,7 @@ bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+btel_clock = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }

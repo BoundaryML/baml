@@ -39,6 +39,7 @@ members = [
   "tools_sccache",
 ]
 exclude = [
+  "vendor/quanta",
   # Retired profiling pipeline; source retained outside the active build.
   "crates/bex_prof_store",
   "crates/baml_query_profiles",
@@ -119,6 +120,8 @@ baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 btel_types = { path = "crates/btel_types" }
+btel_clock = { path = "crates/btel_clock" }
+quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }

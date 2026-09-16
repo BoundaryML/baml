@@ -19,15 +19,33 @@ use std::{
 };
 
 use bex_vm_types::{Function, FunctionKind, FunctionMeta, HeapPtr, Value};
+use btel_clock::ClockEpoch;
 use btel_types::allocate_telemetry_id;
 pub use btel_types::{
     AwaitDuration, CallPathEdge, CallPathId, ClockDuration, ClockInstant, InvocationMode,
-    InvocationOutcome, TelemetryId, ThreadSpawnContext,
+    InvocationOutcome, TelemetryId,
 };
 use rustc_hash::FxHashMap;
 
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
+
+/// Spawn ancestry and the parent's immutable clock epoch. This is per-thread,
+/// never per-frame; children must not silently select a different clock.
+#[derive(Clone, Debug)]
+pub struct ThreadSpawnContext {
+    pub parent_id: TelemetryId,
+    pub spawn_call_path: CallPathId,
+    pub clock: Arc<ClockEpoch>,
+}
+
+impl PartialEq for ThreadSpawnContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.parent_id == other.parent_id
+            && self.spawn_call_path == other.spawn_call_path
+            && self.clock.metadata().epoch == other.clock.metadata().epoch
+    }
+}
 
 const SPAN: u8 = 1 << 0;
 const CAPTURE_OUTPUT: u8 = 1 << 1;
@@ -78,6 +96,7 @@ impl FrameTelemetry {
 #[derive(Clone, Debug)]
 pub enum ProducerEvent {
     ThreadStarted {
+        clock: Arc<ClockEpoch>,
         id: TelemetryId,
         parent_id: Option<TelemetryId>,
         spawn_call_path: CallPathId,
@@ -154,14 +173,16 @@ pub struct TelemetryState {
     call_path_keys: FxHashMap<CallPathId, CallPathKey>,
     last_call_path: Option<(CallPathKey, CallPathId)>,
     policies: Arc<TelemetryPolicies>,
+    clock: Arc<ClockEpoch>,
     #[cfg(test)]
     events: Vec<ProducerEvent>,
 }
 
 impl TelemetryState {
-    pub fn new_root(policies: Arc<TelemetryPolicies>) -> Self {
+    pub fn new_root(policies: Arc<TelemetryPolicies>, clock: Arc<ClockEpoch>) -> Self {
+        clock.attach_thread();
         let id = allocate_telemetry_id();
-        let started_at = ClockInstant::now();
+        let started_at = clock.read();
         Self {
             thread: ThreadTelemetry {
                 active_id: id,
@@ -177,12 +198,17 @@ impl TelemetryState {
             call_path_keys: FxHashMap::default(),
             last_call_path: None,
             policies,
+            clock,
             #[cfg(test)]
             events: Vec::new(),
         }
     }
 
-    pub fn configure_spawn(&mut self, context: ThreadSpawnContext) {
+    pub fn configure_spawn(&mut self, context: &ThreadSpawnContext) {
+        assert!(
+            Arc::ptr_eq(&self.clock, &context.clock),
+            "child must inherit parent clock"
+        );
         assert!(!self.thread.started, "telemetry thread already started");
         self.thread.parent_id = Some(context.parent_id);
         self.thread.spawn_call_path = context.spawn_call_path;
@@ -195,6 +221,7 @@ impl TelemetryState {
         }
         self.thread.started = true;
         self.emit(ProducerEvent::ThreadStarted {
+            clock: Arc::clone(&self.clock),
             id: self.thread.id,
             parent_id: self.thread.parent_id,
             spawn_call_path: self.thread.spawn_call_path,
@@ -223,6 +250,7 @@ impl TelemetryState {
         ThreadSpawnContext {
             parent_id: self.thread.active_id,
             spawn_call_path,
+            clock: Arc::clone(&self.clock),
         }
     }
 
@@ -285,7 +313,7 @@ impl TelemetryState {
 
         let captured_inputs = (mode == InvocationMode::Span && (policy.capture_inputs || is_ai))
             .then(|| args.to_vec().into_boxed_slice());
-        let entered_at = ClockInstant::now();
+        let entered_at = self.clock.read();
         if mode == InvocationMode::Span {
             let id = allocate_telemetry_id();
             self.thread.active_id = id;
@@ -335,7 +363,7 @@ impl TelemetryState {
             })
         };
         let flags = if reentry { REENTRY } else { 0 };
-        let entered_at = ClockInstant::now();
+        let entered_at = self.clock.read();
         self.thread.active_call_path = call_path;
         FrameTelemetry {
             entered_at,
@@ -354,7 +382,7 @@ impl TelemetryState {
         outcome: InvocationOutcome,
         value: Option<Value>,
     ) {
-        let exited_at = ClockInstant::now();
+        let exited_at = self.clock.read();
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
@@ -400,7 +428,7 @@ impl TelemetryState {
                 captured_value: capture_value,
             });
             self.thread.active_id = telemetry.saved_parent_id;
-        } else if policy.promotes(elapsed, outcome) {
+        } else if policy.promotes(elapsed, outcome, self.clock.domain()) {
             self.emit(ProducerEvent::LateSpan {
                 id: allocate_telemetry_id(),
                 parent_id: telemetry.saved_parent_id,
@@ -434,9 +462,17 @@ impl TelemetryState {
         self.emit(ProducerEvent::ThreadCompleted {
             id: self.thread.id,
             started_at: self.thread.started_at,
-            completed_at: ClockInstant::now(),
+            completed_at: self.clock.read(),
             outcome,
         });
+        self.clock.finish_thread();
+    }
+
+    pub fn clock(&self) -> &Arc<ClockEpoch> {
+        &self.clock
+    }
+    pub fn is_root_thread(&self) -> bool {
+        self.thread.parent_id.is_none()
     }
 
     #[inline(always)]
@@ -623,6 +659,10 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
 
 #[cfg(test)]
 mod tests {
+    fn test_clock() -> std::sync::Arc<btel_clock::ClockEpoch> {
+        btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run()
+    }
+
     use super::*;
 
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
@@ -671,7 +711,7 @@ mod tests {
     #[test]
     fn timing_completion_is_anonymous_and_exclusive() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let thread_id = state.active_id();
         let frame = state
@@ -704,7 +744,7 @@ mod tests {
                 client: "test".to_string(),
             }),
         );
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
@@ -733,19 +773,20 @@ mod tests {
     #[test]
     fn completion_reads_current_policy_for_late_promotion() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
             .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
             .unwrap();
-        let updater = TelemetryState::new_root(Arc::clone(&state.policies));
+        let updater =
+            TelemetryState::new_root(Arc::clone(&state.policies), Arc::clone(&state.clock));
         updater
             .set_policy(
                 &function,
                 TelemetryPolicy {
                     span_from_entry: false,
-                    promote_after: Some(ClockDuration::ZERO),
+                    promote_after: Some(state.clock.threshold(std::time::Duration::ZERO)),
                     promote_errors: false,
                     capture_inputs: false,
                     capture_output: true,
@@ -755,7 +796,7 @@ mod tests {
             .unwrap();
 
         // A VM created after publication sees the same table as an existing VM.
-        let later = TelemetryState::new_root(Arc::clone(&state.policies));
+        let later = TelemetryState::new_root(Arc::clone(&state.policies), Arc::clone(&state.clock));
         assert_eq!(
             later.policy_by_id(function.telemetry_policy_id.load()),
             state.policy_by_id(function.telemetry_policy_id.load())
@@ -782,7 +823,7 @@ mod tests {
     #[test]
     fn completions_preserve_self_await_and_reentry() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let mut outer = state
             .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
@@ -822,7 +863,7 @@ mod tests {
 
     #[test]
     fn native_policy_updates_are_rejected() {
-        let state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         let function = function(FunctionKind::NativeUnresolved, None);
         assert!(
             state
@@ -847,7 +888,8 @@ mod tests {
             for initial in [false, true] {
                 for current in [false, true] {
                     let function = function(FunctionKind::Bytecode, None);
-                    let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+                    let mut state =
+                        TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
                     state.start_thread();
                     let policy = |capture| TelemetryPolicy {
                         span_from_entry: true,
@@ -891,13 +933,14 @@ mod tests {
 
     #[test]
     fn spawned_thread_has_explicit_parent_and_structural_call_path() {
-        let mut parent = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let mut parent = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         parent.start_thread();
         let context = parent.spawn_context(None, 11, HeapPtr::null());
 
-        let mut child = TelemetryState::new_root(Arc::clone(&parent.policies));
+        let mut child =
+            TelemetryState::new_root(Arc::clone(&parent.policies), Arc::clone(&parent.clock));
         let child_id = child.active_id();
-        child.configure_spawn(context);
+        child.configure_spawn(&context);
         child.start_thread();
 
         assert_ne!(child_id, context.parent_id);

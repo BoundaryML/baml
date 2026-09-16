@@ -1,6 +1,7 @@
 //! Engine-owned immutable policies. Publication is cold; reads never lock.
 use std::sync::{Mutex, OnceLock};
 
+use btel_clock::{ClockDomainId, ClockThreshold};
 use btel_types::{ClockDuration, InvocationOutcome, TelemetryPolicyId};
 use rustc_hash::FxHashMap;
 
@@ -11,7 +12,9 @@ use rustc_hash::FxHashMap;
 )]
 pub struct TelemetryPolicy {
     pub span_from_entry: bool,
-    pub promote_after: Option<ClockDuration>,
+    /// Resolve again after a clock-domain change; stale tick thresholds never
+    /// compare against a different scale. Other capture/error rules still apply.
+    pub promote_after: Option<ClockThreshold>,
     pub promote_errors: bool,
     pub capture_inputs: bool,
     pub capture_output: bool,
@@ -29,12 +32,17 @@ impl TelemetryPolicy {
     };
 
     #[inline(always)]
-    pub(super) fn promotes(self, elapsed: ClockDuration, outcome: InvocationOutcome) -> bool {
+    pub(super) fn promotes(
+        self,
+        elapsed: ClockDuration,
+        outcome: InvocationOutcome,
+        domain: ClockDomainId,
+    ) -> bool {
         self.span_from_entry
             || self.promote_errors && outcome == InvocationOutcome::Errored
             || self
                 .promote_after
-                .is_some_and(|threshold| elapsed >= threshold)
+                .is_some_and(|threshold| threshold.reached(elapsed, domain))
     }
 }
 
@@ -117,8 +125,9 @@ mod tests {
     fn readers_observe_published_policies_during_growth_and_exhaustion() {
         let policies = TelemetryPolicies::new();
         let target = TelemetryPolicyId::none();
+        let clock = btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
         let policy = |ticks| TelemetryPolicy {
-            promote_after: Some(ClockDuration::from_ticks(ticks)),
+            promote_after: Some(clock.threshold(std::time::Duration::from_secs(ticks))),
             ..TelemetryPolicy::NONE
         };
         policies.publish(&target, policy(1)).unwrap();
