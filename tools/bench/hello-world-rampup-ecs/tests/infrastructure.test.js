@@ -124,6 +124,25 @@ test('GC grid profile passes the matrix and GC endpoint to one BAML-only load ta
   assert.throws(() => new BenchmarkStack(f.app, 'bad-node-grid', { ...f, images, profile: grid, targetCell: 'node-only-arm64' }));
   assert.throws(() => new BenchmarkStack(f.app, 'bad-matrix-grid', { ...f, images, profile: grid }));
 });
+test('GC frontier profile passes adaptive search bounds and frequencies to one BAML-only load task', () => {
+  const frontier = { mode: 'gc-frontier', gc_frequencies_hz: [1, 2, 5, 10, 20, 30, 60, 120], minimum_rps: 200,
+    probe_rps: 5000, maximum_rps: 10000, resolution_rps: 500, known_passing_rps: { 1: 5000, 2: 5000, 5: 5000, 10: 5000 },
+    seconds_per_cell: 60, connections: 1000, request_timeout_ms: 800, on_seconds: 4, off_seconds: 1 };
+  const normalized = normalizeProfile(frontier, { name: 'baml-only-arm64', variant: 'baml-only' });
+  assert.equal(normalized.maximum, 10000);
+  assert.deepEqual(normalized.gcFrequencies, frontier.gc_frequencies_hz);
+  const f = fixtures();
+  const r = resources(new BenchmarkStack(f.app, 'baml-gc-frontier', { ...f, images, profile: frontier, targetCell: 'baml-only-arm64' }));
+  const environment = r.BamlOnlyArm64LoadTask.Properties.ContainerDefinitions[0].Environment;
+  const value = name => environment.find(item => item.Name === name)?.Value;
+  assert.equal(value('LOAD_MODE'), 'gc-frontier');
+  assert.equal(value('GC_FRONTIER_MAXIMUM_RPS'), '10000');
+  assert.equal(value('GC_FRONTIER_FREQUENCIES_JSON'), JSON.stringify(frontier.gc_frequencies_hz));
+  assert.equal(value('GC_FRONTIER_KNOWN_PASSING_JSON'), JSON.stringify(frontier.known_passing_rps));
+  assert.equal(value('EXPLICIT_GC_URL'), 'http://baml-only-arm64.baml-gc-frontier.hello.internal:8080/gc');
+  assert.throws(() => normalizeProfile({ ...frontier, gc_frequencies_hz: [1, 121] }, { name: 'baml-only-arm64', variant: 'baml-only' }));
+  assert.throws(() => normalizeProfile({ ...frontier, known_passing_rps: { 3: 5000 } }, { name: 'baml-only-arm64', variant: 'baml-only' }));
+});
 test('comparison dashboard keeps twenty series and valid unique metric ids', () => {
   for (const widget of dashboard(['steady-ten', 'steady-hundred'], 'us-east-1').widgets) {
     const metrics = widget.properties.metrics;

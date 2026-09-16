@@ -56,6 +56,11 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(summary['achieved_frequency_hz'], 1)
         self.assertEqual(summary['duration_ms_median'], 20)
 
+    def test_gc_frontier_midpoint_prioritizes_the_middle_resolution_step(self):
+        self.assertEqual(load.frontier_midpoint(5000, 10000, 500), 7500)
+        self.assertEqual(load.frontier_midpoint(7500, 10000, 500), 8500)
+        self.assertEqual(load.frontier_midpoint(9500, 10000, 500), 10000)
+
     def test_binary_search_midpoint_respects_resolution(self):
         self.assertEqual(midpoint(5000, 10000, 100), 7500)
         self.assertEqual(midpoint(5000, 7500, 100), 6200)

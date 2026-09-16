@@ -176,132 +176,213 @@ def gc_summary(results, skipped, frequency_hz, elapsed_seconds):
     }
 
 
+def frontier_midpoint(highest_pass, lowest_fail, resolution):
+    return highest_pass + max(1, ((lowest_fail - highest_pass) // resolution) // 2) * resolution
+
+
+def run_gc_cell(url, target_path, collector, stop, children, children_lock, on_seconds, off_seconds,
+                rate, frequency_hz, seconds, connections, timeout_ms, explicit_gc_url):
+    planned_cycles = seconds // (on_seconds + off_seconds)
+    dimensions = collector.dimensions
+    readiness = wait_until_ready(url, explicit_gc_url, stop)
+    output_json(dict(dimensions, event='gc_grid_cell_target_ready', rate=rate,
+                     gc_frequency_hz=frequency_hz, **readiness))
+    if not readiness['ok']:
+        raise RuntimeError(f'target did not recover before testing {rate} RPS at {frequency_hz} GC/s')
+    wall_started = time.time()
+    started = time.monotonic()
+    cell_stop = threading.Event()
+    gc_results = []
+    gc_skipped = [0]
+
+    def collect_periodically():
+        if frequency_hz == 0:
+            return
+        interval = 1 / frequency_hz
+        next_due = started
+        while not stop.is_set() and not cell_stop.is_set() and next_due < started + seconds:
+            if cell_stop.wait(max(0, next_due - time.monotonic())):
+                break
+            result = request_explicit_gc(explicit_gc_url)
+            gc_results.append(result)
+            output_json(dict(dimensions, event='gc_grid_gc_finished', rate=rate,
+                             gc_frequency_hz=frequency_hz, sequence=len(gc_results) - 1, **result))
+            collector.emit({'ExplicitGcUp': int(result['ok']), 'ExplicitGcDurationMs': result['duration_ms'],
+                            'ConfiguredGcFrequencyHz': frequency_hz},
+                           {'ExplicitGcUp': 'Count', 'ExplicitGcDurationMs': 'Milliseconds',
+                            'ConfiguredGcFrequencyHz': 'Count/Second'})
+            next_due += interval
+            now = time.monotonic()
+            if next_due < now:
+                missed = math.floor((now - next_due) / interval) + 1
+                gc_skipped[0] += missed
+                next_due += missed * interval
+
+    gc_thread = threading.Thread(target=collect_periodically, daemon=True)
+    gc_thread.start()
+    cycles = []
+    output_json(dict(dimensions, event='gc_grid_cell_started', rate=rate,
+                     gc_frequency_hz=frequency_hz, planned_cycles=planned_cycles,
+                     started_at_unix_ms=int(wall_started * 1000)))
+    for cycle in range(planned_cycles):
+        if stop.is_set():
+            break
+        cycle_started = time.monotonic()
+        scheduled = rate * on_seconds
+        attack = subprocess.Popen(['vegeta', 'attack', f'-targets={target_path}', f'-rate={rate}/1s',
+                                   f'-duration={on_seconds}s', f'-timeout={timeout_ms}ms', '-dns-ttl=1s',
+                                   f'-workers={connections}', f'-max-workers={connections}',
+                                   f'-connections={connections}', f'-max-connections={connections}',
+                                   '-keepalive=true', '-http2=false', '-redirects=0', '-max-body=32'],
+                                  stdout=subprocess.PIPE)
+        reporter = subprocess.Popen(['vegeta', 'report', '-type=json'], stdin=attack.stdout, stdout=subprocess.PIPE)
+        attack.stdout.close()
+        with children_lock:
+            children[:] = [attack, reporter]
+        stop.wait(max(0, cycle_started + on_seconds + off_seconds - time.monotonic()))
+        forced_stop = finish_attack(attack, reporter, 0)
+        report_bytes = reporter.stdout.read()
+        with children_lock:
+            children.clear()
+        try:
+            report = json.loads(report_bytes) if report_bytes else {}
+            report_error = None
+        except json.JSONDecodeError as error:
+            report = {}
+            report_error = repr(error)
+        body_mismatch, probe_up = probe_body(url)
+        values = summarize_report(report, scheduled, body_mismatch)
+        values.update(TargetRps=rate, RampStep=0, ProbeUp=int(probe_up), ForcedStop=int(forced_stop),
+                      ConfiguredGcFrequencyHz=frequency_hz)
+        units = dict.fromkeys(values, 'Count')
+        units.update(TargetRps='Count/Second', ConfiguredGcFrequencyHz='Count/Second')
+        for key in ('LatencyP50Ms', 'LatencyP90Ms', 'LatencyP99Ms', 'LatencyMaxMs'):
+            if key in values:
+                units[key] = 'Milliseconds'
+        collector.emit(values, units)
+        record = dict(rate=rate, gc_frequency_hz=frequency_hz, cycle=cycle, scheduled=scheduled,
+                      requests=values['Requests'], http200=values['Http200'],
+                      success_ratio=values['Http200'] / scheduled, forced_stop=forced_stop,
+                      probe_up=probe_up, body_mismatch=body_mismatch, report_error=report_error,
+                      vegeta_errors=report.get('errors', []))
+        cycles.append(record)
+        output_json(dict(dimensions, event='gc_grid_cycle_finished', **record))
+        if not probe_up:
+            break
+    cell_stop.set()
+    gc_thread.join(timeout=12)
+    elapsed_seconds = time.monotonic() - started
+    gc = gc_summary(gc_results, gc_skipped[0], frequency_hz, elapsed_seconds)
+    scheduled = sum(record['scheduled'] for record in cycles)
+    requests = sum(record['requests'] for record in cycles)
+    http200 = sum(record['http200'] for record in cycles)
+    passed = (len(cycles) == planned_cycles and scheduled > 0 and requests / scheduled >= 0.99 and
+              http200 / scheduled >= 0.99 and min(record['success_ratio'] for record in cycles) >= 0.95 and
+              all(record['probe_up'] and not record['body_mismatch'] and not record['forced_stop'] for record in cycles) and
+              gc['failed'] == 0)
+    summary = dict(rate=rate, gc_frequency_hz=frequency_hz, cycles=len(cycles), planned_cycles=planned_cycles,
+                   completed_full_duration=len(cycles) == planned_cycles, passed=passed, scheduled=scheduled,
+                   requests=requests, http200=http200,
+                   achieved_active_rps=http200 / (len(cycles) * on_seconds) if cycles else 0,
+                   scheduled_ratio=requests / scheduled if scheduled else 0,
+                   success_ratio=http200 / scheduled if scheduled else 0,
+                   minimum_cycle_success_ratio=min((record['success_ratio'] for record in cycles), default=0),
+                   target_available_at_end=bool(cycles and cycles[-1]['probe_up']),
+                   forced_stop=any(record['forced_stop'] for record in cycles),
+                   elapsed_seconds=elapsed_seconds, started_at_unix_ms=int(wall_started * 1000),
+                   ended_at_unix_ms=int(time.time() * 1000), explicit_gc=gc)
+    output_json(dict(dimensions, event='gc_grid_cell_finished', **summary))
+    return summary
+
+
 def run_gc_grid(url, target_path, collector, stop, children, children_lock, on_seconds, off_seconds):
     rates = [int(rate) for rate in env_number_list('GC_GRID_RATES_JSON', 1, 50000)]
-    frequencies = env_number_list('GC_GRID_FREQUENCIES_JSON', 0, 10)
+    frequencies = env_number_list('GC_GRID_FREQUENCIES_JSON', 0, 120)
     seconds = env_int('GC_GRID_SECONDS_PER_CELL', '60', 5, 3600)
     connections = env_int('VEGETA_CONNECTIONS', '1000', 1, 10000)
     timeout_ms = env_int('REQUEST_TIMEOUT_MS', '800', 100, 999)
     explicit_gc_url = os.environ['EXPLICIT_GC_URL']
     if seconds % (on_seconds + off_seconds):
         raise ValueError('GC_GRID_SECONDS_PER_CELL must be a multiple of the duty-cycle duration')
-    planned_cycles = seconds // (on_seconds + off_seconds)
     dimensions = collector.dimensions
     output_json(dict(dimensions, event='gc_grid_started', rates_rps=rates, gc_frequencies_hz=frequencies,
-                     seconds_per_cell=seconds, planned_cycles=planned_cycles, connections=connections,
-                     request_timeout_ms=timeout_ms))
+                     seconds_per_cell=seconds, planned_cycles=seconds // (on_seconds + off_seconds),
+                     connections=connections, request_timeout_ms=timeout_ms, adaptive=False))
     for frequency_hz in frequencies:
         for rate in rates:
             if stop.is_set():
                 break
-            readiness = wait_until_ready(url, explicit_gc_url, stop)
-            output_json(dict(dimensions, event='gc_grid_cell_target_ready', rate=rate,
-                             gc_frequency_hz=frequency_hz, **readiness))
-            if not readiness['ok']:
-                raise RuntimeError(f'target did not recover before testing {rate} RPS at {frequency_hz} GC/s')
-            wall_started = time.time()
-            started = time.monotonic()
-            cell_stop = threading.Event()
-            gc_results = []
-            gc_skipped = [0]
-
-            def collect_periodically():
-                if frequency_hz == 0:
-                    return
-                interval = 1 / frequency_hz
-                next_due = started
-                while not stop.is_set() and not cell_stop.is_set() and next_due < started + seconds:
-                    if cell_stop.wait(max(0, next_due - time.monotonic())):
-                        break
-                    result = request_explicit_gc(explicit_gc_url)
-                    gc_results.append(result)
-                    output_json(dict(dimensions, event='gc_grid_gc_finished', rate=rate,
-                                     gc_frequency_hz=frequency_hz, sequence=len(gc_results) - 1,
-                                     **result))
-                    collector.emit({'ExplicitGcUp': int(result['ok']), 'ExplicitGcDurationMs': result['duration_ms'],
-                                    'ConfiguredGcFrequencyHz': frequency_hz},
-                                   {'ExplicitGcUp': 'Count', 'ExplicitGcDurationMs': 'Milliseconds',
-                                    'ConfiguredGcFrequencyHz': 'Count/Second'})
-                    next_due += interval
-                    now = time.monotonic()
-                    if next_due < now:
-                        missed = math.floor((now - next_due) / interval) + 1
-                        gc_skipped[0] += missed
-                        next_due += missed * interval
-
-            gc_thread = threading.Thread(target=collect_periodically, daemon=True)
-            gc_thread.start()
-            cycles = []
-            output_json(dict(dimensions, event='gc_grid_cell_started', rate=rate,
-                             gc_frequency_hz=frequency_hz, planned_cycles=planned_cycles,
-                             started_at_unix_ms=int(wall_started * 1000)))
-            for cycle in range(planned_cycles):
-                if stop.is_set():
-                    break
-                cycle_started = time.monotonic()
-                scheduled = rate * on_seconds
-                attack = subprocess.Popen(['vegeta', 'attack', f'-targets={target_path}', f'-rate={rate}/1s',
-                                           f'-duration={on_seconds}s', f'-timeout={timeout_ms}ms', '-dns-ttl=1s',
-                                           f'-workers={connections}', f'-max-workers={connections}',
-                                           f'-connections={connections}', f'-max-connections={connections}',
-                                           '-keepalive=true', '-http2=false', '-redirects=0', '-max-body=32'],
-                                          stdout=subprocess.PIPE)
-                reporter = subprocess.Popen(['vegeta', 'report', '-type=json'], stdin=attack.stdout, stdout=subprocess.PIPE)
-                attack.stdout.close()
-                with children_lock:
-                    children[:] = [attack, reporter]
-                stop.wait(max(0, cycle_started + on_seconds + off_seconds - time.monotonic()))
-                forced_stop = finish_attack(attack, reporter, 0)
-                report_bytes = reporter.stdout.read()
-                with children_lock:
-                    children.clear()
-                try:
-                    report = json.loads(report_bytes) if report_bytes else {}
-                    report_error = None
-                except json.JSONDecodeError as error:
-                    report = {}
-                    report_error = repr(error)
-                body_mismatch, probe_up = probe_body(url)
-                values = summarize_report(report, scheduled, body_mismatch)
-                values.update(TargetRps=rate, RampStep=0, ProbeUp=int(probe_up), ForcedStop=int(forced_stop),
-                              ConfiguredGcFrequencyHz=frequency_hz)
-                units = dict.fromkeys(values, 'Count')
-                units.update(TargetRps='Count/Second', ConfiguredGcFrequencyHz='Count/Second')
-                for key in ('LatencyP50Ms', 'LatencyP90Ms', 'LatencyP99Ms', 'LatencyMaxMs'):
-                    if key in values:
-                        units[key] = 'Milliseconds'
-                collector.emit(values, units)
-                record = dict(rate=rate, gc_frequency_hz=frequency_hz, cycle=cycle, scheduled=scheduled,
-                              requests=values['Requests'], http200=values['Http200'],
-                              success_ratio=values['Http200'] / scheduled, forced_stop=forced_stop,
-                              probe_up=probe_up, body_mismatch=body_mismatch, report_error=report_error,
-                              vegeta_errors=report.get('errors', []))
-                cycles.append(record)
-                output_json(dict(dimensions, event='gc_grid_cycle_finished', **record))
-                if not probe_up:
-                    break
-            cell_stop.set()
-            gc_thread.join(timeout=12)
-            elapsed_seconds = time.monotonic() - started
-            gc = gc_summary(gc_results, gc_skipped[0], frequency_hz, elapsed_seconds)
-            scheduled = sum(record['scheduled'] for record in cycles)
-            requests = sum(record['requests'] for record in cycles)
-            http200 = sum(record['http200'] for record in cycles)
-            summary = dict(rate=rate, gc_frequency_hz=frequency_hz, cycles=len(cycles),
-                           planned_cycles=planned_cycles, completed_full_duration=len(cycles) == planned_cycles,
-                           scheduled=scheduled, requests=requests, http200=http200,
-                           achieved_active_rps=http200 / (len(cycles) * on_seconds) if cycles else 0,
-                           scheduled_ratio=requests / scheduled if scheduled else 0,
-                           success_ratio=http200 / scheduled if scheduled else 0,
-                           minimum_cycle_success_ratio=min((record['success_ratio'] for record in cycles), default=0),
-                           target_available_at_end=bool(cycles and cycles[-1]['probe_up']),
-                           forced_stop=any(record['forced_stop'] for record in cycles),
-                           elapsed_seconds=elapsed_seconds, started_at_unix_ms=int(wall_started * 1000),
-                           ended_at_unix_ms=int(time.time() * 1000), explicit_gc=gc)
-            output_json(dict(dimensions, event='gc_grid_cell_finished', **summary))
+            run_gc_cell(url, target_path, collector, stop, children, children_lock, on_seconds, off_seconds,
+                        rate, frequency_hz, seconds, connections, timeout_ms, explicit_gc_url)
         if stop.is_set():
             break
     output_json(dict(dimensions, event='gc_grid_finished'))
+    while not stop.wait(60):
+        pass
+
+
+def run_gc_frontier(url, target_path, collector, stop, children, children_lock, on_seconds, off_seconds):
+    frequencies = env_number_list('GC_FRONTIER_FREQUENCIES_JSON', 0.001, 120)
+    minimum = env_int('GC_FRONTIER_MINIMUM_RPS', '200', 1, 49999)
+    probe = env_int('GC_FRONTIER_PROBE_RPS', '5000', minimum + 1, 49999)
+    maximum = env_int('GC_FRONTIER_MAXIMUM_RPS', '10000', probe + 1, 50000)
+    resolution = env_int('GC_FRONTIER_RESOLUTION_RPS', '500', 1, maximum - minimum)
+    seconds = env_int('GC_FRONTIER_SECONDS_PER_CELL', '60', 5, 3600)
+    connections = env_int('VEGETA_CONNECTIONS', '1000', 1, 10000)
+    timeout_ms = env_int('REQUEST_TIMEOUT_MS', '800', 100, 999)
+    known = json.loads(os.environ.get('GC_FRONTIER_KNOWN_PASSING_JSON', '{}'))
+    if not isinstance(known, dict):
+        raise ValueError('GC_FRONTIER_KNOWN_PASSING_JSON must be a JSON object')
+    known = {float(key): int(value) for key, value in known.items()}
+    if any(frequency not in frequencies or rate < minimum or rate >= maximum for frequency, rate in known.items()):
+        raise ValueError('known passing bounds must match a configured frequency and fit inside the search interval')
+    if seconds % (on_seconds + off_seconds):
+        raise ValueError('GC_FRONTIER_SECONDS_PER_CELL must be a multiple of the duty-cycle duration')
+    dimensions = collector.dimensions
+    explicit_gc_url = os.environ['EXPLICIT_GC_URL']
+    output_json(dict(dimensions, event='gc_grid_started', rates_rps=[minimum, probe, maximum],
+                     gc_frequencies_hz=frequencies, seconds_per_cell=seconds,
+                     planned_cycles=seconds // (on_seconds + off_seconds), connections=connections,
+                     request_timeout_ms=timeout_ms, adaptive=True, resolution_rps=resolution,
+                     known_passing_rps={str(key): value for key, value in known.items()}))
+
+    def test(rate, frequency):
+        return run_gc_cell(url, target_path, collector, stop, children, children_lock, on_seconds, off_seconds,
+                           rate, frequency, seconds, connections, timeout_ms, explicit_gc_url)['passed']
+
+    for frequency in frequencies:
+        tested = []
+
+        def record(rate):
+            passed = test(rate, frequency)
+            tested.append({'rate': rate, 'passed': passed})
+            return passed
+
+        if record(maximum):
+            result = {'status': 'upper_bound_passed', 'highest_pass': maximum, 'lowest_fail': None}
+        else:
+            highest_pass = known.get(frequency)
+            lowest_fail = maximum
+            if highest_pass is None:
+                if record(probe):
+                    highest_pass = probe
+                elif record(minimum):
+                    highest_pass, lowest_fail = minimum, probe
+                else:
+                    result = {'status': 'lower_bound_failed', 'highest_pass': None, 'lowest_fail': minimum}
+            if highest_pass is not None:
+                while lowest_fail - highest_pass > resolution and not stop.is_set():
+                    candidate = frontier_midpoint(highest_pass, lowest_fail, resolution)
+                    if record(candidate):
+                        highest_pass = candidate
+                    else:
+                        lowest_fail = candidate
+                result = {'status': 'complete', 'highest_pass': highest_pass, 'lowest_fail': lowest_fail}
+        output_json(dict(dimensions, event='gc_frontier_frequency_finished', gc_frequency_hz=frequency,
+                         resolution_rps=resolution, tested=tested, **result))
+        if stop.is_set():
+            break
+    output_json(dict(dimensions, event='gc_frontier_finished'))
     while not stop.wait(60):
         pass
 
@@ -459,12 +540,14 @@ def main():
     scraper = threading.Thread(target=scrape_process, daemon=True)
     scraper.start()
     load_mode = os.environ.get('LOAD_MODE', 'ramp')
-    if load_mode in ('binary', 'gc-grid'):
+    if load_mode in ('binary', 'gc-grid', 'gc-frontier'):
         try:
             if load_mode == 'binary':
                 run_binary_search(url, '/tmp/target.txt', collector, stop, children, children_lock, on_seconds, off_seconds)
-            else:
+            elif load_mode == 'gc-grid':
                 run_gc_grid(url, '/tmp/target.txt', collector, stop, children, children_lock, on_seconds, off_seconds)
+            else:
+                run_gc_frontier(url, '/tmp/target.txt', collector, stop, children, children_lock, on_seconds, off_seconds)
         finally:
             stop.set()
             with children_lock:

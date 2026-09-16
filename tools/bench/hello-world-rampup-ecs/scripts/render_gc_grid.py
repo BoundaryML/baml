@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import re
-import statistics
 import subprocess
 
 import matplotlib
@@ -25,9 +24,11 @@ def aws_json(profile, region, *args):
     return json.loads(subprocess.check_output(command))
 
 
-def log_messages(profile, region, group, start_ms):
-    response = aws_json(profile, region, 'logs', 'filter-log-events', '--log-group-name', group,
-                        '--start-time', str(start_ms))
+def log_messages(profile, region, group, start_ms, filter_pattern=None):
+    arguments = ['logs', 'filter-log-events', '--log-group-name', group, '--start-time', str(start_ms)]
+    if filter_pattern:
+        arguments += ['--filter-pattern', filter_pattern]
+    response = aws_json(profile, region, *arguments)
     messages = []
     decoder = json.JSONDecoder()
     for item in response.get('events', []):
@@ -73,17 +74,21 @@ def app_stops(events, run):
     return stops
 
 
-def collect(profile, region, run, start_ms):
+def collect(profile, region, run, start_ms, live=False, metadata_override=None):
     load_group = f'/baml/hello-world-rampup/{run}/load'
     task_group = f'/baml/hello-world-rampup/{run}/task-events'
-    load_events = log_messages(profile, region, load_group, start_ms)
-    task_events = log_messages(profile, region, task_group, start_ms)
+    event_names = ('gc_grid_cell_finished', 'gc_frontier_frequency_finished')
+    if metadata_override is None:
+        event_names = ('gc_grid_started',) + event_names
+    if not live:
+        event_names += ('gc_grid_cycle_finished',)
+    load_events = [event for name in event_names for event in log_messages(profile, region, load_group, start_ms, f'"{name}"')]
+    task_events = log_messages(profile, region, task_group, start_ms, '"STOPPED"')
     starts = [event for event in load_events if event.get('event') == 'gc_grid_started']
-    if len(starts) != 1:
+    if metadata_override is None and len(starts) != 1:
         raise RuntimeError(f'Expected one gc_grid_started event, found {len(starts)}')
-    metadata = starts[0]
+    metadata = starts[0] if metadata_override is None else metadata_override
     summaries = sorted((event for event in load_events if event.get('event') == 'gc_grid_cell_finished'), key=lambda event: event['started_at_unix_ms'])
-    gc_events = [event for event in load_events if event.get('event') == 'gc_grid_gc_finished']
     cycle_events = [event for event in load_events if event.get('event') == 'gc_grid_cycle_finished']
     stops = app_stops(task_events, run)
     cells = []
@@ -92,19 +97,7 @@ def collect(profile, region, run, start_ms):
         matching_stops = [stop for stop in stops if summary['started_at_unix_ms'] <= stop['timestamp_ms'] < stop_window_end]
         oom = any(stop['oom'] for stop in matching_stops)
         outcome = 'oom' if oom else ('complete' if summary['completed_full_duration'] else 'incomplete')
-        calls = [event for event in gc_events if event['rate'] == summary['rate'] and event['gc_frequency_hz'] == summary['gc_frequency_hz']]
-        durations = [event['duration_ms'] for event in calls]
-        successful = sum(event['ok'] for event in calls)
-        derived_gc = {
-            **summary['explicit_gc'],
-            'attempted': len(calls),
-            'successful': successful,
-            'failed': len(calls) - successful,
-            'achieved_frequency_hz': successful / summary['elapsed_seconds'] if summary['elapsed_seconds'] else 0,
-            'duration_ms_min': min(durations) if durations else None,
-            'duration_ms_median': statistics.median(durations) if durations else None,
-            'duration_ms_max': max(durations) if durations else None,
-        }
+        derived_gc = summary['explicit_gc']
         cells.append({**summary, 'explicit_gc': derived_gc, 'outcome': outcome, 'matching_stops': matching_stops})
     expected = {(float(frequency), int(rate)) for frequency in metadata['gc_frequencies_hz'] for rate in metadata['rates_rps']}
     actual = {(float(cell['gc_frequency_hz']), int(cell['rate'])) for cell in cells}
@@ -134,17 +127,33 @@ def collect(profile, region, run, start_ms):
             'aws_profile': profile,
             'load_log_group': load_group,
             'task_event_log_group': task_group,
-            'rates_rps': metadata['rates_rps'],
+            'rates_rps': sorted({int(rate) for rate in metadata['rates_rps']} | {int(cell['rate']) for cell in cells}),
             'gc_frequencies_hz': metadata['gc_frequencies_hz'],
             'seconds_per_cell': metadata['seconds_per_cell'],
             'on_seconds': 4,
             'off_seconds': 1,
-            'missing_cells': [{'gc_frequency_hz': frequency, 'rate': rate} for frequency, rate in sorted(expected - actual)],
+            'adaptive': metadata.get('adaptive', False),
+            'missing_cells': [] if metadata.get('adaptive') else [{'gc_frequency_hz': frequency, 'rate': rate} for frequency, rate in sorted(expected - actual)],
         },
         'cells': cells,
         'app_stops': stops,
+        'frontier': [event for event in load_events if event.get('event') == 'gc_frontier_frequency_finished'],
         'cycle_validation': {'all_cells': cycle_validation(cycle_events), 'complete_cells': cycle_validation(complete_cycles)},
     }
+
+
+def merge_data(base, current):
+    cells = {(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in base['cells']}
+    cells.update({(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in current['cells']})
+    frequencies = sorted({float(value) for source in (base, current) for value in source['metadata']['gc_frequencies_hz']})
+    rates = sorted({int(cell['rate']) for cell in cells.values()})
+    metadata = {**current['metadata'], 'rates_rps': rates, 'gc_frequencies_hz': frequencies,
+                'adaptive': True, 'missing_cells': [],
+                'runs': [source['metadata']['run'] for source in (base, current)]}
+    frontier = {float(event['gc_frequency_hz']): event for source in (base, current) for event in source.get('frontier', [])}
+    return {**current, 'metadata': metadata, 'cells': sorted(cells.values(), key=lambda cell: (cell['gc_frequency_hz'], cell['rate'])),
+            'app_stops': base.get('app_stops', []) + current.get('app_stops', []),
+            'frontier': [frontier[key] for key in sorted(frontier)]}
 
 
 def frequency_label(frequency):
@@ -167,13 +176,14 @@ def render(data, output):
     cells = {(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in data['cells']}
     cmap = matplotlib.colormaps['YlGnBu']
     norm = Normalize(vmin=0, vmax=max(rates))
-    fig = plt.figure(figsize=(16, 10), facecolor='white')
+    figure_width = max(16, 5.5 + 1.25 * len(rates))
+    fig = plt.figure(figsize=(figure_width, 10), facecolor='white')
     axis = fig.add_axes([0.115, 0.215, 0.72, 0.59])
     for row, frequency in enumerate(frequencies):
         for column, rate in enumerate(rates):
             cell = cells.get((frequency, rate))
             if cell is None:
-                color, label, text_color = '#6B7280', 'MISSING', 'white'
+                color, label, text_color = '#E5E7EB', '—', '#6B7280'
             elif cell['outcome'] == 'oom':
                 color, label, text_color = '#111827', 'OOM', '#FF8577'
             elif cell['outcome'] == 'incomplete':
@@ -183,7 +193,9 @@ def render(data, output):
                 color = cmap(norm(value))
                 label = f'{value:,.0f}'
                 text_color = contrasting_color(color)
-            axis.add_patch(plt.Rectangle((column, row), 1, 1, facecolor=color, edgecolor=(1, 1, 1, 0.35), linewidth=0.8))
+            failed = cell is not None and cell['outcome'] == 'complete' and cell.get('passed') is False
+            edgecolor = '#DC2626' if failed else (1, 1, 1, 0.35)
+            axis.add_patch(plt.Rectangle((column, row), 1, 1, facecolor=color, edgecolor=edgecolor, linewidth=2 if failed else 0.8))
             axis.text(column + 0.5, row + 0.5, label, ha='center', va='center', color=text_color, fontsize=13, fontweight='semibold')
     axis.set_xlim(0, len(rates))
     axis.set_ylim(len(frequencies), 0)
@@ -203,7 +215,10 @@ def render(data, output):
     colorbar.outline.set_visible(False)
     colorbar.ax.tick_params(labelsize=10)
     fig.text(0.855, 0.805, 'Achieved RPS', fontsize=12, fontweight='bold')
-    legend = [Patch(facecolor='#111827', edgecolor='#111827', label='OOM')]
+    legend = [Patch(facecolor='#111827', edgecolor='#111827', label='OOM'),
+              Patch(facecolor='#E5E7EB', edgecolor='#E5E7EB', label='Not tested')]
+    if any(cell.get('passed') is False and cell['outcome'] == 'complete' for cell in data['cells']):
+        legend.append(Patch(facecolor='white', edgecolor='#DC2626', linewidth=2, label='Below pass criterion'))
     if any(cell['outcome'] == 'incomplete' for cell in data['cells']):
         legend.append(Patch(facecolor='#7F1D1D', edgecolor='#7F1D1D', label='Incomplete'))
     fig.legend(handles=legend, loc='center left', bbox_to_anchor=(0.855, 0.235), frameon=False, fontsize=11)
@@ -251,9 +266,22 @@ def main():
     parser.add_argument('--region', default=os.environ.get('AWS_REGION', 'us-east-1'))
     parser.add_argument('--start-time', default='2026-09-15T00:00:00Z')
     parser.add_argument('--output-dir', type=Path, required=True)
+    parser.add_argument('--base-source', type=Path)
+    parser.add_argument('--live', action='store_true', help='Skip per-cycle records for fast in-progress heatmap refreshes')
+    parser.add_argument('--incremental-source', type=Path, help='Merge only events newer than this prior rendered source')
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    data = collect(args.aws_profile, args.region, args.name, iso_ms(args.start_time))
+    if args.incremental_source:
+        existing = json.loads(args.incremental_source.read_text())
+        start_ms = max((cell['ended_at_unix_ms'] for cell in existing['cells'] if cell.get('RunName') == args.name),
+                       default=iso_ms(args.start_time)) + 1
+        delta = collect(args.aws_profile, args.region, args.name, start_ms, live=True,
+                        metadata_override=existing['metadata'])
+        data = merge_data(existing, delta)
+    else:
+        data = collect(args.aws_profile, args.region, args.name, iso_ms(args.start_time), live=args.live)
+    if args.base_source:
+        data = merge_data(json.loads(args.base_source.read_text()), data)
     (args.output_dir / 'gc-grid-source.json').write_text(json.dumps(data, indent=2) + '\n')
     write_csv(data, args.output_dir / 'gc-grid-results.csv')
     render(data, args.output_dir / 'baml-throughput-vs-gc-frequency.png')

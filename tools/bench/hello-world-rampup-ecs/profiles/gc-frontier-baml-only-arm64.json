@@ -1,0 +1,20 @@
+{
+  "name": "gc-frontier-baml-only-arm64",
+  "mode": "gc-frontier",
+  "gc_frequencies_hz": [1, 2, 5, 10, 20, 30, 60, 120],
+  "minimum_rps": 200,
+  "probe_rps": 5000,
+  "maximum_rps": 10000,
+  "resolution_rps": 500,
+  "known_passing_rps": {
+    "1": 5000,
+    "2": 5000,
+    "5": 5000,
+    "10": 5000
+  },
+  "seconds_per_cell": 60,
+  "connections": 1000,
+  "request_timeout_ms": 800,
+  "on_seconds": 4,
+  "off_seconds": 1
+}

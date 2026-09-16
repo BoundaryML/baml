@@ -117,6 +117,14 @@ python3 scripts/render_gc_grid.py --aws-profile "$AWS_PROFILE" --name hello-baml
 
 The renderer downloads retained `gc_grid_cell_finished` records and ECS task-stop events, writes the joined JSON and a flat CSV, and produces a throughput heatmap. Numeric cells are achieved HTTP 200 responses per active second. A cell is labeled `OOM` only when its time window contains an ECS application stop with exit code 137 or an out-of-memory reason; other incomplete cells are labeled `FAIL`.
 
+Use `gc-frontier` to extend a proven grid without exhaustively filling every new cell. For each configured GC frequency it tests the maximum first, reuses an explicitly recorded passing lower bound when available, and bisects the pass/fail interval to `resolution_rps`. Frequencies without prior evidence probe `probe_rps`, then fall back to `minimum_rps` only if necessary. Cells use the same strict 99% aggregate, 95% minimum-cycle, healthy-probe, and successful-GC pass rule as the binary search.
+
+```sh
+python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-baml-gc-frontier-01 --images artifacts/BUILD/images.json --profile profiles/gc-frontier-baml-only-arm64.json --target-cell baml-only-arm64
+
+python3 scripts/render_gc_grid.py --aws-profile "$AWS_PROFILE" --name hello-baml-gc-frontier-01 --base-source PREVIOUS/gc-grid-source.json --output-dir OUTPUT_DIRECTORY
+```
+
 ## Confirm sustained rates
 
 A sustain profile accepts one rate for all cells or overrides keyed by implementation or full `implementation-architecture` cell name. Full-cell keys take precedence over implementation keys. This permits all ten coarse bounds to be tested together without changing workload images or resource allocations.
