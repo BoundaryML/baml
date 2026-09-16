@@ -13,6 +13,13 @@ name: Pages
 # publishing mechanism, and a site that silently loses half of itself the
 # first time both tools land in the same hour.
 #
+# What the coupling must not mean is that either tool can keep the other off
+# the air. The matrix job hands its half over even when it fails — built from
+# the report the site already serves — so the deploy proceeds with the matrix
+# as published and the quiz as just built. It cannot run the other way round,
+# since a quiz that did not build leaves nothing to publish; then nothing is
+# deployed and the site keeps both halves it has.
+#
 # THE MATRIX is built from canary, on the commits that can change what it
 # says: the stdlib surface, its tool, its page, and the pinned TypeScript the
 # surface is compared against. It was built from whatever the last release
@@ -73,6 +80,32 @@ concurrency:
 permissions:
   contents: read
 
+# Compiling is nearly all of what these jobs do, and sccache is what the rest
+# of the repo compiles against: a content-addressed store in R2, keyed by what
+# a rustc invocation would produce. It is the cache that works: on the morning
+# the daily refresh purged every Actions cache, the canary wasm job answered
+# 468 compiles from it with no misses and finished in 58 seconds.
+#
+# There is deliberately no Actions cache here. Swatinem/rust-cache folds the
+# runner's toolchain list and the set of CARGO_*/RUST* variables into its key,
+# so only a job set up exactly like the one that writes the key can read it —
+# a condition this workflow does not meet on ubuntu-latest, and one that is
+# silently broken elsewhere too (`wasm-pack test`, on the writer's own runner
+# and the same lockfile, logs "No cache found"). A step that cannot hit is
+# worse than no step: it reads as caching. sccache asks nothing of the runner.
+env:
+  # .envrc is the single source of truth for the rest; it maps these two to
+  # the AWS_* names sccache wants. Absent on a fork, where sccache falls back
+  # to a runner-local cache and the build is simply cold.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  # sccache cannot cache an incremental compile and declines every one of
+  # them, so leaving this on would cost the whole cache.
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
 jobs:
   quiz:
     name: "Build the quiz"
@@ -83,10 +116,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Node.js, pnpm, and wasm-pack
+      - name: Setup Node.js, pnpm, wasm-pack, sccache, and direnv
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "node npm:pnpm github:rustwasm/wasm-pack"
+          install_args: "node npm:pnpm github:rustwasm/wasm-pack sccache direnv"
 
       - name: Setup Rust WASM target
         working-directory: baml_language
@@ -95,11 +128,15 @@ jobs:
           rustup show
           rustup target add wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-wasm"
-          save-if: false
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
 
       # The release bridge: 15 MB of WebAssembly, against 100 for the debug
       # build the local `pnpm prepare:deps` makes.
@@ -154,6 +191,13 @@ jobs:
           pnpm exec playwright install --with-deps chromium
           pnpm test:smoke
 
+      # What the cache did, in the job that used it: a hit rate that falls
+      # says the compile is being paid for again, which is the whole cost of
+      # this job.
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
       - name: "Upload the quiz site"
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
@@ -183,23 +227,38 @@ jobs:
         with:
           persist-credentials: false
 
-      # No mise: nothing here comes from it. Rust arrives through rustup and
-      # baml_language/rust-toolchain.toml, node and pnpm through the setup-node
-      # actions below, and jq is on the image. Installing it with no
-      # `install_args` pulls every tool in mise.toml — including `cargo:bacon`,
-      # whose binstall failed and took the job with it.
+      # Rust arrives through rustup and baml_language/rust-toolchain.toml, node
+      # and pnpm through the setup-node actions below, and jq is on the image.
+      # mise is asked for sccache and direnv BY NAME: with no `install_args` it
+      # pulls every tool in mise.toml — including `cargo:bacon`, whose binstall
+      # failed and took the job with it.
       - name: "Install Rust toolchain"
         working-directory: baml_language
         run: rustup show
 
-      - uses: Swatinem/rust-cache@v2
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
         with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "stdlib-matrix-baml-cli"
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      # This job compiles the same CLI the quiz job does, from the same
+      # commit, so what one of them compiles the other reads back.
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
 
       - name: "Build the BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
 
       # Two workspaces, deliberately. The extractor reads the repo-pinned
       # `typescript` and `@types/node` resolved against the ROOT package.json,
@@ -367,34 +426,55 @@ jobs:
             exit 1
           fi
 
-      # Always, judged or not. The deploy replaces the whole site, so a run
-      # where the stdlib did not move still has to hand the matrix over as it
-      # stands — otherwise publishing a change to the quiz would take the
-      # matrix off the site.
+      # Reached only when the judging ran and the ratchet let its report
+      # through: a step's `if:` carries an implicit `success()`, so anything
+      # failing above leaves this unset and the site below is built from the
+      # report already published. That distinction is the whole safety of the
+      # fallback — a run whose report the ratchet REFUSED must not publish it.
+      - name: "This run's report is the one to publish"
+        id: fresh
+        if: steps.ratchet.outputs.changed == 'true'
+        run: echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      # Whatever happened above, short of this run being cancelled. A deploy
+      # replaces the whole site, so a run that judged nothing — or that failed
+      # trying — still has to hand the matrix over, or publishing a change to
+      # the quiz would take the matrix off the site. What it hands over then is
+      # the report that is already on the site, rebuilt into a page.
+      #
+      # The job still ends red when something above failed: a step that fails
+      # fails the job whatever runs after it. This only decides what is left on
+      # the site in the meantime.
       #
       # The report is fetched by the page at runtime, so it ships beside it.
       - name: "Build the site"
+        if: ${{ !cancelled() }}
         working-directory: typescript2/app-stdlib-matrix
         env:
-          CHANGED: ${{ steps.ratchet.outputs.changed }}
+          PUBLISH: ${{ steps.fresh.outputs.publish }}
         run: |
           set -euo pipefail
-          # When something was judged, `run` wrote the report straight into
-          # public/ — which is also what created that directory. When nothing
-          # was, the report to publish is the one already published.
-          if [[ "${CHANGED}" != "true" ]]; then
+          # When this run's report is the one to publish, `run` wrote it
+          # straight into public/ — which is also what created that directory.
+          # Otherwise the report to publish is the one already published.
+          if [[ "${PUBLISH}" != "true" ]]; then
+            if [[ ! -s "${GITHUB_WORKSPACE}/previous.json" || ! -s "${GITHUB_WORKSPACE}/previous.md" ]]; then
+              echo "::error::this run has no report to publish and there is nothing published to carry forward, so the matrix half cannot be built" >&2
+              exit 1
+            fi
             mkdir -p public
             cp "${GITHUB_WORKSPACE}/previous.json" public/matrix.json
           fi
           pnpm exec tsc -b --noEmit
           pnpm exec vite build
-          if [[ "${CHANGED}" == "true" ]]; then
+          if [[ "${PUBLISH}" == "true" ]]; then
             cp "${GITHUB_WORKSPACE}/tools/stdlib-matrix/report/matrix.md" dist/matrix.md
           else
             cp "${GITHUB_WORKSPACE}/previous.md" dist/matrix.md
           fi
 
       - name: "Upload the matrix site"
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: matrix-site
@@ -404,7 +484,18 @@ jobs:
   deploy:
     name: "Deploy the site"
     needs: [quiz, matrix]
-    if: github.event_name != 'pull_request' && github.repository == 'BoundaryML/baml'
+    # The quiz has to have built; the matrix only has to have handed something
+    # over. The asymmetry is what each half is made of: the matrix page is
+    # rebuilt from a report the site already serves, so a failed judging run
+    # still yields the matrix as published, while the quiz is a bundle of
+    # hash-named assets that nothing can reconstruct from the site. So a matrix
+    # that spent an hour on model calls and fell over no longer keeps a fixed
+    # quiz off the air — which is what happened the first time it went stale.
+    if: >-
+      !cancelled()
+      && github.event_name != 'pull_request'
+      && github.repository == 'BoundaryML/baml'
+      && needs.quiz.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -414,8 +505,18 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - name: "Say the matrix is being carried forward"
+        if: needs.matrix.result != 'success'
+        run: |
+          echo "::warning::the matrix job ended ${{ needs.matrix.result }}; the site keeps the report it already serves, and the quiz is published from this run"
+
+      # Tolerated: the matrix job hands its site over even when it fails, but
+      # a job that fell over before it got that far uploads nothing. The
+      # wholeness check below is what decides, so that a missing half is one
+      # error about the site rather than a download failure to interpret.
       - name: "The matrix, at the root"
         uses: actions/download-artifact@v8
+        continue-on-error: true
         with:
           name: matrix-site
           path: site
@@ -431,8 +532,10 @@ jobs:
       - name: "Check the site is whole"
         run: |
           set -euo pipefail
-          test -s site/index.html
-          test -s site/matrix.json
+          if [[ ! -s site/index.html || ! -s site/matrix.json ]]; then
+            echo "::error::the matrix half is missing — the matrix job failed before it could hand over even the published report, and a deploy replaces the whole site, so this one would take the matrix off the air" >&2
+            exit 1
+          fi
           test -s site/type-quiz/index.html
 
       - uses: actions/upload-pages-artifact@v5
