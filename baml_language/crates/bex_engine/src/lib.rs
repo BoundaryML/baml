@@ -103,7 +103,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, VmEventSourceLocation, VmExecState};
+use bex_vm::{BexVm, VmEventSourceLocation, VmExecState, telemetry::TelemetryPolicies};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
@@ -776,6 +776,8 @@ pub struct BexEngine {
     next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
+    /// One policy namespace for all function objects and VMs in this engine.
+    telemetry_policies: Arc<TelemetryPolicies>,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1676,6 +1678,8 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        let telemetry_policies = Arc::new(TelemetryPolicies::new());
+
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -1692,6 +1696,7 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
+                    Arc::clone(&telemetry_policies),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1825,6 +1830,7 @@ impl BexEngine {
             program_metadata,
             next_thread_id: AtomicU64::new(1),
             heap,
+            telemetry_policies,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -3254,6 +3260,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
+            Arc::clone(&self.telemetry_policies),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -4792,6 +4799,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
+            Arc::clone(&self.telemetry_policies),
         );
         child_vm.thread_id = thread_id;
         child_vm.configure_spawn_telemetry(telemetry);
@@ -4928,7 +4936,7 @@ impl BexEngine {
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
-        use bex_vm::telemetry::InvocationOutcome;
+        use bex_vm::telemetry::{ClockDuration, ClockInstant, InvocationOutcome};
 
         // The completion boundary owns the VM even when execution propagates
         // an error with `?` or returns early. Only the non-fallible parking
@@ -5215,7 +5223,9 @@ impl BexEngine {
                                 // can run during the wait. Re-acquire
                                 // before touching VM state.
 
-                                let (resumed, outcome) = async {
+                                thread.vm.begin_sys_op_telemetry_wait();
+                                let wait = thread.vm.take_telemetry_wait();
+                                let (resumed, outcome, elapsed) = async {
                                     let inactive =
                                         active.take().expect("active execution permit").release();
                                     self.maybe_collect_garbage().await;
@@ -5225,10 +5235,17 @@ impl BexEngine {
                                         r = fut                  => SysOpOutcome::Result(r),
                                     };
 
-                                    (inactive.acquire().await, outcome)
+                                    // End at observed completion, before permit reacquisition.
+                                    let elapsed = wait.map_or(ClockDuration::ZERO, |(_, start)| {
+                                        start.elapsed_until(ClockInstant::now())
+                                    });
+                                    (inactive.acquire().await, outcome, elapsed)
                                 }
                                 .await;
                                 thread = active.insert(resumed);
+                                thread
+                                    .vm
+                                    .record_telemetry_wait(wait.map(|(frame, _)| frame), elapsed);
 
                                 match outcome {
                                     SysOpOutcome::Cancelled => {
@@ -5509,7 +5526,8 @@ impl BexEngine {
                         // every permit) against the spawned task that fulfils
                         // this future (which needs a permit to write the heap).
 
-                        let (resumed, outcome) = async {
+                        let wait = thread.vm.take_telemetry_wait();
+                        let (resumed, outcome, elapsed) = async {
                             let inactive =
                                 active.take().expect("active execution permit").release();
                             // While parked, run a heuristic-driven GC check (no
@@ -5526,10 +5544,17 @@ impl BexEngine {
                                 r = future              => AwaitOutcome::Done(r),
                             };
 
-                            (inactive.acquire().await, outcome)
+                            // End at observed completion, before permit reacquisition.
+                            let elapsed = wait.map_or(ClockDuration::ZERO, |(_, start)| {
+                                start.elapsed_until(ClockInstant::now())
+                            });
+                            (inactive.acquire().await, outcome, elapsed)
                         }
                         .await;
                         thread = active.insert(resumed);
+                        thread
+                            .vm
+                            .record_telemetry_wait(wait.map(|(frame, _)| frame), elapsed);
 
                         match outcome {
                             AwaitOutcome::Cancelled => {
@@ -5585,7 +5610,8 @@ impl BexEngine {
                             ws.into_iter().collect::<Result<Vec<_>, _>>()?
                         };
 
-                        let (resumed, outcome) = async {
+                        let wait = thread.vm.take_telemetry_wait();
+                        let (resumed, outcome, elapsed) = async {
                             let inactive =
                                 active.take().expect("active execution permit").release();
                             self.maybe_collect_garbage().await;
@@ -5610,10 +5636,17 @@ impl BexEngine {
                                 }
                             };
 
-                            (inactive.acquire().await, outcome)
+                            // End at observed completion, before permit reacquisition.
+                            let elapsed = wait.map_or(ClockDuration::ZERO, |(_, start)| {
+                                start.elapsed_until(ClockInstant::now())
+                            });
+                            (inactive.acquire().await, outcome, elapsed)
                         }
                         .await;
                         thread = active.insert(resumed);
+                        thread
+                            .vm
+                            .record_telemetry_wait(wait.map(|(frame, _)| frame), elapsed);
 
                         match outcome {
                             AwaitAnyOutcome::Cancelled => {
@@ -5667,7 +5700,6 @@ impl BexEngine {
         let outcome = match &result {
             Ok(ThreadOutcome::RootValue(_)) => InvocationOutcome::Ok,
             Ok(ThreadOutcome::SettledChild(outcome)) => *outcome,
-            Err(EngineError::Exit { .. }) => InvocationOutcome::Exited,
             Err(error) if cancel.is_cancelled() && is_cancelled_engine_error(error) => {
                 InvocationOutcome::Cancelled
             }

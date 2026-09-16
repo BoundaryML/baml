@@ -12,16 +12,22 @@
 use std::{
     collections::HashMap,
     mem::size_of,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 
-use bex_vm_types::{Function, FunctionKind, FunctionMeta, FunctionOrigin, HeapPtr, Value};
+use bex_vm_types::{Function, FunctionKind, FunctionMeta, HeapPtr, Value};
 use btel_types::allocate_telemetry_id;
 pub use btel_types::{
     AwaitDuration, CallPathEdge, CallPathId, ClockDuration, ClockInstant, InvocationMode,
     InvocationOutcome, TelemetryId, ThreadSpawnContext,
 };
 use rustc_hash::FxHashMap;
+
+mod policy;
+pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
 const SPAN: u8 = 1 << 0;
 const CAPTURE_OUTPUT: u8 = 1 << 1;
@@ -33,7 +39,7 @@ static NEXT_CALL_PATH_ID: AtomicU32 = AtomicU32::new(1);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct CallPathKey {
     parent: CallPathId,
-    actual_caller: Option<HeapPtr>,
+    visible_caller: Option<HeapPtr>,
     caller_pc: u32,
     callee: HeapPtr,
     edge: CallPathEdge,
@@ -66,40 +72,6 @@ impl FrameTelemetry {
     #[inline(always)]
     pub fn add_await(&mut self, elapsed: ClockDuration) {
         self.await_duration = self.await_duration.saturating_add(elapsed);
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "resolved policy flags are independent and intentionally direct"
-)]
-pub struct TelemetryPolicy {
-    pub span_from_entry: bool,
-    pub promote_after: Option<ClockDuration>,
-    pub promote_errors: bool,
-    pub capture_inputs: bool,
-    pub capture_output: bool,
-    pub capture_error: bool,
-}
-
-impl TelemetryPolicy {
-    pub const NONE: Self = Self {
-        span_from_entry: false,
-        promote_after: None,
-        promote_errors: false,
-        capture_inputs: false,
-        capture_output: false,
-        capture_error: false,
-    };
-
-    #[inline(always)]
-    fn promotes(self, elapsed: ClockDuration, outcome: InvocationOutcome) -> bool {
-        self.span_from_entry
-            || self.promote_errors && outcome == InvocationOutcome::Errored
-            || self
-                .promote_after
-                .is_some_and(|threshold| elapsed >= threshold)
     }
 }
 
@@ -157,7 +129,7 @@ pub enum ProducerEvent {
     CallPathDefined {
         call_path: CallPathId,
         parent_call_path: CallPathId,
-        actual_caller: Option<HeapPtr>,
+        visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         callee: HeapPtr,
         edge: CallPathEdge,
@@ -181,13 +153,13 @@ pub struct TelemetryState {
     call_paths: FxHashMap<CallPathKey, CallPathId>,
     call_path_keys: FxHashMap<CallPathId, CallPathKey>,
     last_call_path: Option<(CallPathKey, CallPathId)>,
-    policies: Vec<TelemetryPolicy>,
+    policies: Arc<TelemetryPolicies>,
     #[cfg(test)]
     events: Vec<ProducerEvent>,
 }
 
 impl TelemetryState {
-    pub fn new_root() -> Self {
+    pub fn new_root(policies: Arc<TelemetryPolicies>) -> Self {
         let id = allocate_telemetry_id();
         let started_at = ClockInstant::now();
         Self {
@@ -204,7 +176,7 @@ impl TelemetryState {
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
             last_call_path: None,
-            policies: vec![TelemetryPolicy::NONE],
+            policies,
             #[cfg(test)]
             events: Vec::new(),
         }
@@ -237,13 +209,13 @@ impl TelemetryState {
 
     pub fn spawn_context(
         &mut self,
-        actual_caller: Option<HeapPtr>,
+        visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         callee: HeapPtr,
     ) -> ThreadSpawnContext {
         let spawn_call_path = self.resolve_call_path(CallPathKey {
             parent: self.thread.active_call_path,
-            actual_caller,
+            visible_caller,
             caller_pc,
             callee,
             edge: CallPathEdge::Spawn,
@@ -259,21 +231,19 @@ impl TelemetryState {
         &mut self,
         function: &Function,
         callee: HeapPtr,
-        actual_caller: Option<HeapPtr>,
+        visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         caller_is_observed: bool,
         args: &[Value],
     ) -> Option<FrameTelemetry> {
-        if !matches!(function.kind, FunctionKind::Bytecode)
-            || function.origin == FunctionOrigin::Internal
-        {
+        if !matches!(function.kind, FunctionKind::Bytecode) {
             return None;
         }
 
         let policy_id = function.telemetry_policy_id.load();
         let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
         if policy_id == btel_types::TelemetryPolicyId::NONE && !is_ai {
-            return Some(self.enter_timing(callee, actual_caller, caller_pc, caller_is_observed));
+            return Some(self.enter_timing(callee, visible_caller, caller_pc, caller_is_observed));
         }
 
         let policy = self.policy_by_id(policy_id);
@@ -284,7 +254,7 @@ impl TelemetryState {
 
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
-            && actual_caller == Some(callee)
+            && visible_caller == Some(callee)
             && self
                 .call_path_keys
                 .get(&saved_call_path)
@@ -294,7 +264,7 @@ impl TelemetryState {
         } else {
             self.resolve_call_path(CallPathKey {
                 parent: saved_call_path,
-                actual_caller,
+                visible_caller,
                 caller_pc,
                 callee,
                 edge: CallPathEdge::Synchronous,
@@ -342,13 +312,13 @@ impl TelemetryState {
     fn enter_timing(
         &mut self,
         callee: HeapPtr,
-        actual_caller: Option<HeapPtr>,
+        visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         caller_is_observed: bool,
     ) -> FrameTelemetry {
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
-            && actual_caller == Some(callee)
+            && visible_caller == Some(callee)
             && self
                 .call_path_keys
                 .get(&saved_call_path)
@@ -358,7 +328,7 @@ impl TelemetryState {
         } else {
             self.resolve_call_path(CallPathKey {
                 parent: saved_call_path,
-                actual_caller,
+                visible_caller,
                 caller_pc,
                 callee,
                 edge: CallPathEdge::Synchronous,
@@ -471,18 +441,24 @@ impl TelemetryState {
 
     #[inline(always)]
     fn policy_by_id(&self, policy_id: u16) -> TelemetryPolicy {
-        let id = usize::from(policy_id);
-        self.policies
-            .get(id)
-            .copied()
-            .unwrap_or(TelemetryPolicy::NONE)
+        self.policies.get(policy_id)
     }
 
-    #[cfg(test)]
-    pub(crate) fn install_policy(&mut self, policy: TelemetryPolicy) -> u16 {
-        let id = u16::try_from(self.policies.len()).expect("telemetry policy table exhausted");
-        self.policies.push(policy);
-        id
+    // Kept internal until the configuration API is designed. Native policies
+    // are immutable; only bytecode definitions may publish a new policy.
+    #[allow(
+        dead_code,
+        reason = "external policy configuration is deliberately deferred"
+    )]
+    pub(crate) fn set_policy(
+        &self,
+        function: &Function,
+        policy: TelemetryPolicy,
+    ) -> Result<(), &'static str> {
+        if !matches!(function.kind, FunctionKind::Bytecode) {
+            return Err("native telemetry policies are immutable");
+        }
+        self.policies.publish(&function.telemetry_policy_id, policy)
     }
 
     #[inline(always)]
@@ -512,7 +488,7 @@ impl TelemetryState {
         self.emit(ProducerEvent::CallPathDefined {
             call_path: id,
             parent_call_path: key.parent,
-            actual_caller: key.actual_caller,
+            visible_caller: key.visible_caller,
             caller_pc: key.caller_pc,
             callee: key.callee,
             edge: key.edge,
@@ -540,7 +516,7 @@ impl TelemetryState {
 
     pub(crate) fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         for key in self.call_paths.keys() {
-            roots.extend(key.actual_caller);
+            roots.extend(key.visible_caller);
             roots.push(key.callee);
         }
         #[cfg(test)]
@@ -554,11 +530,11 @@ impl TelemetryState {
                     roots.extend(captured_value.iter().filter_map(Value::as_object_ptr));
                 }
                 ProducerEvent::CallPathDefined {
-                    actual_caller,
+                    visible_caller,
                     callee,
                     ..
                 } => {
-                    roots.extend(*actual_caller);
+                    roots.extend(*visible_caller);
                     roots.push(*callee);
                 }
                 ProducerEvent::ThreadStarted { .. }
@@ -572,16 +548,16 @@ impl TelemetryState {
         let old_paths = std::mem::take(&mut self.call_paths);
         self.call_path_keys.clear();
         for (mut key, id) in old_paths {
-            if let Some(caller) = key.actual_caller {
-                key.actual_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
+            if let Some(caller) = key.visible_caller {
+                key.visible_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
             }
             key.callee = roots.get(&key.callee).copied().unwrap_or(key.callee);
             self.call_paths.insert(key, id);
             self.call_path_keys.insert(id, key);
         }
         self.last_call_path = self.last_call_path.map(|(mut key, id)| {
-            if let Some(caller) = key.actual_caller {
-                key.actual_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
+            if let Some(caller) = key.visible_caller {
+                key.visible_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
             }
             key.callee = roots.get(&key.callee).copied().unwrap_or(key.callee);
             (key, id)
@@ -603,11 +579,11 @@ impl TelemetryState {
                     }
                 }
                 ProducerEvent::CallPathDefined {
-                    actual_caller,
+                    visible_caller,
                     callee,
                     ..
                 } => {
-                    if let Some(caller) = actual_caller {
+                    if let Some(caller) = visible_caller {
                         *caller = roots.get(caller).copied().unwrap_or(*caller);
                     }
                     *callee = roots.get(callee).copied().unwrap_or(*callee);
@@ -633,9 +609,6 @@ fn forward_value(value: &mut Value, roots: &HashMap<HeapPtr, HeapPtr>) {
 fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode {
     match function.kind {
         FunctionKind::Native(_) | FunctionKind::SysOp(_) | FunctionKind::NativeUnresolved => {
-            InvocationMode::Hidden
-        }
-        FunctionKind::Bytecode if function.origin == FunctionOrigin::Internal => {
             InvocationMode::Hidden
         }
         FunctionKind::Bytecode
@@ -679,7 +652,7 @@ mod tests {
             throws_type: bex_vm_types::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
-            origin: FunctionOrigin::UserDefined,
+            origin: bex_vm_types::FunctionOrigin::Internal,
             is_interface_body: false,
             native_key: None,
             body_meta,
@@ -691,14 +664,14 @@ mod tests {
     #[test]
     fn vm_frame_sizes_stay_within_budget() {
         assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96);
-        assert_eq!(size_of::<crate::vm::NativeFrame>(), 24);
+        assert_eq!(size_of::<crate::vm::NativeFrame>(), 32);
         assert_eq!(size_of::<crate::vm::Frame>(), 96);
     }
 
     #[test]
     fn timing_completion_is_anonymous_and_exclusive() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root();
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
         state.start_thread();
         let thread_id = state.active_id();
         let frame = state
@@ -731,7 +704,7 @@ mod tests {
                 client: "test".to_string(),
             }),
         );
-        let mut state = TelemetryState::new_root();
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
@@ -760,22 +733,33 @@ mod tests {
     #[test]
     fn completion_reads_current_policy_for_late_promotion() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root();
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
             .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
             .unwrap();
-        let policy_id = state.install_policy(TelemetryPolicy {
-            span_from_entry: false,
-            promote_after: Some(ClockDuration::ZERO),
-            promote_errors: false,
-            capture_inputs: false,
-            capture_output: true,
-            capture_error: false,
-        });
-        function.telemetry_policy_id.store(policy_id);
+        let updater = TelemetryState::new_root(Arc::clone(&state.policies));
+        updater
+            .set_policy(
+                &function,
+                TelemetryPolicy {
+                    span_from_entry: false,
+                    promote_after: Some(ClockDuration::ZERO),
+                    promote_errors: false,
+                    capture_inputs: false,
+                    capture_output: true,
+                    capture_error: false,
+                },
+            )
+            .unwrap();
 
+        // A VM created after publication sees the same table as an existing VM.
+        let later = TelemetryState::new_root(Arc::clone(&state.policies));
+        assert_eq!(
+            later.policy_by_id(function.telemetry_policy_id.load()),
+            state.policy_by_id(function.telemetry_policy_id.load())
+        );
         state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(9)));
 
         assert_eq!(state.active_id(), parent_id);
@@ -798,7 +782,7 @@ mod tests {
     #[test]
     fn completions_preserve_self_await_and_reentry() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root();
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
         state.start_thread();
         let mut outer = state
             .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
@@ -837,12 +821,81 @@ mod tests {
     }
 
     #[test]
+    fn native_policy_updates_are_rejected() {
+        let state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+        let function = function(FunctionKind::NativeUnresolved, None);
+        assert!(
+            state
+                .set_policy(
+                    &function,
+                    TelemetryPolicy {
+                        span_from_entry: true,
+                        ..TelemetryPolicy::NONE
+                    }
+                )
+                .is_err()
+        );
+        assert_eq!(
+            function.telemetry_policy_id.load(),
+            btel_types::TelemetryPolicyId::NONE
+        );
+    }
+
+    #[test]
+    fn entry_capture_survives_policy_updates_for_output_and_error() {
+        for outcome in [InvocationOutcome::Ok, InvocationOutcome::Errored] {
+            for initial in [false, true] {
+                for current in [false, true] {
+                    let function = function(FunctionKind::Bytecode, None);
+                    let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
+                    state.start_thread();
+                    let policy = |capture| TelemetryPolicy {
+                        span_from_entry: true,
+                        capture_output: capture,
+                        capture_error: capture,
+                        ..TelemetryPolicy::NONE
+                    };
+                    state.set_policy(&function, policy(initial)).unwrap();
+                    let frame = state
+                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
+                        .unwrap();
+                    // Updating to zero must not erase an entry requirement.
+                    state
+                        .set_policy(
+                            &function,
+                            if current {
+                                policy(true)
+                            } else {
+                                TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
+                    let Some(ProducerEvent::Span {
+                        captured_value,
+                        outcome: recorded,
+                        ..
+                    }) = state.events().last()
+                    else {
+                        panic!("an entry-selected span must remain a span");
+                    };
+                    assert_eq!(*recorded, outcome);
+                    assert_eq!(
+                        *captured_value,
+                        (initial || current).then_some(Value::int(7))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn spawned_thread_has_explicit_parent_and_structural_call_path() {
-        let mut parent = TelemetryState::new_root();
+        let mut parent = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()));
         parent.start_thread();
         let context = parent.spawn_context(None, 11, HeapPtr::null());
 
-        let mut child = TelemetryState::new_root();
+        let mut child = TelemetryState::new_root(Arc::clone(&parent.policies));
         let child_id = child.active_id();
         child.configure_spawn(context);
         child.start_thread();

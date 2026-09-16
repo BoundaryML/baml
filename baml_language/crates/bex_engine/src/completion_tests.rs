@@ -75,7 +75,7 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
             RuntimeTy::int(),
             None,
             false,
-            InvocationOutcome::Exited,
+            InvocationOutcome::Errored,
         ),
     ] {
         let engine = engine(source);
@@ -98,19 +98,20 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
                 true,
             )
             .await;
-        match outcome {
-            InvocationOutcome::Ok => assert!(matches!(
-                result,
-                Ok(ThreadOutcome::RootValue(BexExternalValue::Int(1)))
-            )),
-            InvocationOutcome::Errored => {
-                assert!(matches!(result, Err(EngineError::TypeMismatch { .. })));
-            }
-            InvocationOutcome::Cancelled => {
-                assert!(is_cancelled_engine_error(result.as_ref().err().unwrap()));
-            }
-            InvocationOutcome::Exited => {
-                assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
+        if source.contains("baml.sys.exit") {
+            assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
+        } else {
+            match outcome {
+                InvocationOutcome::Ok => assert!(matches!(
+                    result,
+                    Ok(ThreadOutcome::RootValue(BexExternalValue::Int(1)))
+                )),
+                InvocationOutcome::Errored => {
+                    assert!(matches!(result, Err(EngineError::TypeMismatch { .. })));
+                }
+                InvocationOutcome::Cancelled => {
+                    assert!(is_cancelled_engine_error(result.as_ref().err().unwrap()));
+                }
             }
         }
         assert_completed(&engine, &[(id, outcome)]);
@@ -281,7 +282,7 @@ async fn child_success_and_error_settle_and_finalize_once() {
         // recognizes that value as explicit process exit when it is awaited.
         (
             "baml.sys.exit(7); 1",
-            InvocationOutcome::Exited,
+            InvocationOutcome::Errored,
             InvocationOutcome::Errored,
         ),
     ] {
@@ -298,6 +299,8 @@ async fn child_success_and_error_settle_and_finalize_once() {
             .await;
         if outcome == InvocationOutcome::Ok {
             assert!(result.is_ok());
+        } else if body.contains("baml.sys.exit") {
+            assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
         } else {
             assert!(result.is_err());
         }

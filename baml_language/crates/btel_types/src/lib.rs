@@ -176,7 +176,7 @@ pub struct ClockInstant(u64);
 
 /// An elapsed amount in producer clock ticks.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ClockDuration(u64);
 
 /// Invocation-local accumulated self-await time.
@@ -246,7 +246,6 @@ pub enum InvocationOutcome {
     Ok,
     Errored,
     Cancelled,
-    Exited,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
