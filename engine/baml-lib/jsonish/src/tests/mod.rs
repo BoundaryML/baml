@@ -15,6 +15,7 @@ mod test_literals;
 mod test_maps;
 mod test_partials;
 mod test_streaming;
+mod test_toon;
 mod test_unions;
 
 use std::{
