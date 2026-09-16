@@ -1172,12 +1172,10 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected integer", path)),
         },
 
-        // Bigint JSON decoding is not yet implemented (Phase 9+).
-        RealizedTy::Bigint { .. } => Err(raise_decode(
-            vm,
-            "bigint JSON decoding not yet implemented",
-            path,
-        )),
+        RealizedTy::Bigint { .. } => {
+            let bi = serde_to_bigint(vm, json, path)?;
+            Ok(vm.try_alloc_bigint(Arc::new(bi))?)
+        }
 
         RealizedTy::Float { .. } => match json {
             serde_json::Value::Number(n) => {
@@ -1308,12 +1306,14 @@ fn ty_serde_to_value(
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
             }
-            // Literal bigint decoding is not yet implemented (Phase 9+).
-            (baml_type::Literal::Bigint(_), _) => Err(raise_decode(
-                vm,
-                "literal bigint JSON decoding not yet implemented",
-                path,
-            )),
+            (baml_type::Literal::Bigint(expected), _) => {
+                let actual = serde_to_bigint(vm, json, path)?;
+                if *expected == actual {
+                    Ok(vm.try_alloc_bigint(Arc::new(actual))?)
+                } else {
+                    Err(raise_decode(vm, "literal bigint mismatch", path))
+                }
+            }
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 
@@ -1337,6 +1337,55 @@ fn ty_serde_to_value(
         RealizedTy::Never { .. } | RealizedTy::RustType { .. } | RealizedTy::Type { .. } => {
             Err(raise_decode(vm, "cannot decode compiler-only type", path))
         }
+    }
+}
+
+/// Decode a JSON value into a `BigInt` for a `bigint` target: either a
+/// decimal string (the `to_string` wire format, matching SAP's `BamlBigint`)
+/// or an exact-integer JSON number. Floats and every other JSON shape raise a
+/// catchable `DecodeError`; a string past the digit cap panics like
+/// `bigint.parse` does, before allocating.
+fn serde_to_bigint(
+    vm: &mut BexVm,
+    json: &serde_json::Value,
+    path: &str,
+) -> Result<num_bigint::BigInt, VmRustFnError> {
+    use super::bigint::{DecimalBigintError, parse_decimal_bigint};
+    match json {
+        serde_json::Value::String(s) => match parse_decimal_bigint(s) {
+            Ok(bi) => Ok(bi),
+            Err(DecimalBigintError::Malformed) => Err(raise_decode(
+                vm,
+                format!("cannot parse {s:?} as bigint"),
+                path,
+            )),
+            Err(DecimalBigintError::TooManyDigits { digits }) => {
+                Err(super::bigint::alloc_failure_panic(format!(
+                    "bigint JSON decode: input has {digits} decimal digits, more than the \
+                     {}-digit limit (bigint cap: {} bits)",
+                    baml_type::MAX_BIGINT_DECIMAL_DIGITS,
+                    super::bigint::MAX_BIGINT_BITS
+                )))
+            }
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Ok(num_bigint::BigInt::from(i))
+            } else if let Some(u) = n.as_u64() {
+                Ok(num_bigint::BigInt::from(u))
+            } else {
+                Err(raise_decode(
+                    vm,
+                    "expected integer or decimal string for bigint",
+                    path,
+                ))
+            }
+        }
+        _ => Err(raise_decode(
+            vm,
+            "expected integer or decimal string for bigint",
+            path,
+        )),
     }
 }
 
