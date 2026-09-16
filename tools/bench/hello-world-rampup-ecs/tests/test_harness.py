@@ -18,10 +18,27 @@ def module(name, path):
 
 load = module('load', 'load-generator/run.py')
 analyze = module('analyze', 'scripts/analyze.py')
+gc_grid_data = module('gc_grid_data', 'scripts/gc_grid_data.py')
 
 
 
 class HarnessTest(unittest.TestCase):
+    def test_gc_grid_merge_preserves_run_history_and_newer_cells(self):
+        def source(run, cells, runs=None):
+            metadata = {'run': run, 'rates_rps': [cell['rate'] for cell in cells], 'gc_frequencies_hz': [cell['gc_frequency_hz'] for cell in cells]}
+            if runs:
+                metadata['runs'] = runs
+            return {'metadata': metadata, 'cells': cells, 'app_stops': [], 'frontier': []}
+
+        original = source('original', [{'gc_frequency_hz': 0, 'rate': 300, 'outcome': 'complete'}])
+        first_merge = source('first-merge', [{'gc_frequency_hz': 0, 'rate': 325, 'outcome': 'oom'}], ['original', 'first-merge'])
+        newest = source('newest', [{'gc_frequency_hz': 0, 'rate': 300, 'outcome': 'oom'}])
+        result = gc_grid_data.merge_data(gc_grid_data.merge_data(original, first_merge), newest)
+        cells = {(cell['gc_frequency_hz'], cell['rate']): cell for cell in result['cells']}
+        self.assertEqual(result['metadata']['runs'], ['original', 'first-merge', 'newest'])
+        self.assertEqual(cells[(0, 300)]['outcome'], 'oom')
+        self.assertEqual(cells[(0, 325)]['outcome'], 'oom')
+
     def test_explicit_gc_requires_ok_response(self):
         response = unittest.mock.MagicMock()
         response.status = 200

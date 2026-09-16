@@ -127,6 +127,8 @@ python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-baml-gc-fron
 python3 scripts/render_gc_grid.py --aws-profile "$AWS_PROFILE" --name hello-baml-gc-frontier-01 --base-source PREVIOUS/gc-grid-source.json --output-dir OUTPUT_DIRECTORY
 ```
 
+Repeat `--base-source` in oldest-to-newest order to combine several retained experiment sources into one heatmap. Later sources and the current run replace earlier cells with the same GC frequency and target RPS, which lets focused OOM or threshold-confirmation runs update the main chart without discarding the wider frontier.
+
 ## Confirm sustained rates
 
 A sustain profile accepts one rate for all cells or overrides keyed by implementation or full `implementation-architecture` cell name. Full-cell keys take precedence over implementation keys. This permits all ten coarse bounds to be tested together without changing workload images or resource allocations.

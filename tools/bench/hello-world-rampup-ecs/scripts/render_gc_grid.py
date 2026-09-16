@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
 
+from gc_grid_data import merge_data
+
 
 def aws_json(profile, region, *args):
     command = ['aws', '--no-cli-pager', '--region', region]
@@ -142,20 +144,6 @@ def collect(profile, region, run, start_ms, live=False, metadata_override=None):
     }
 
 
-def merge_data(base, current):
-    cells = {(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in base['cells']}
-    cells.update({(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in current['cells']})
-    frequencies = sorted({float(value) for source in (base, current) for value in source['metadata']['gc_frequencies_hz']})
-    rates = sorted({int(cell['rate']) for cell in cells.values()})
-    metadata = {**current['metadata'], 'rates_rps': rates, 'gc_frequencies_hz': frequencies,
-                'adaptive': True, 'missing_cells': [],
-                'runs': [source['metadata']['run'] for source in (base, current)]}
-    frontier = {float(event['gc_frequency_hz']): event for source in (base, current) for event in source.get('frontier', [])}
-    return {**current, 'metadata': metadata, 'cells': sorted(cells.values(), key=lambda cell: (cell['gc_frequency_hz'], cell['rate'])),
-            'app_stops': base.get('app_stops', []) + current.get('app_stops', []),
-            'frontier': [frontier[key] for key in sorted(frontier)]}
-
-
 def frequency_label(frequency):
     if frequency == 0:
         return '0\n(never)'
@@ -266,7 +254,8 @@ def main():
     parser.add_argument('--region', default=os.environ.get('AWS_REGION', 'us-east-1'))
     parser.add_argument('--start-time', default='2026-09-15T00:00:00Z')
     parser.add_argument('--output-dir', type=Path, required=True)
-    parser.add_argument('--base-source', type=Path)
+    parser.add_argument('--base-source', type=Path, action='append',
+                        help='Merge a prior source before the current run; repeat in oldest-to-newest order')
     parser.add_argument('--live', action='store_true', help='Skip per-cycle records for fast in-progress heatmap refreshes')
     parser.add_argument('--incremental-source', type=Path, help='Merge only events newer than this prior rendered source')
     args = parser.parse_args()
@@ -281,7 +270,10 @@ def main():
     else:
         data = collect(args.aws_profile, args.region, args.name, iso_ms(args.start_time), live=args.live)
     if args.base_source:
-        data = merge_data(json.loads(args.base_source.read_text()), data)
+        base = json.loads(args.base_source[0].read_text())
+        for source in args.base_source[1:]:
+            base = merge_data(base, json.loads(source.read_text()))
+        data = merge_data(base, data)
     (args.output_dir / 'gc-grid-source.json').write_text(json.dumps(data, indent=2) + '\n')
     write_csv(data, args.output_dir / 'gc-grid-results.csv')
     render(data, args.output_dir / 'baml-throughput-vs-gc-frequency.png')
