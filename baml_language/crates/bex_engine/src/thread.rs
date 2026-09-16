@@ -20,6 +20,13 @@ pub struct BexThread {
     pub name: Option<String>,
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
+    /// Whether `baml.panics.Cancelled` has been delivered into this thread's
+    /// VM. Cancellation is delivered once, at the first yield point that
+    /// observes the token, as a throw the body unwinds through (its `defer`
+    /// bodies run, a `catch` may handle it). From then on the thread is
+    /// shielded: later yield points no longer observe the token and sys-ops
+    /// no longer see it, so cleanup may suspend and complete.
+    pub cancel_injected: bool,
 }
 
 impl BexThread {
@@ -30,6 +37,7 @@ impl BexThread {
             name: None,
             cancel,
             settles_future: None,
+            cancel_injected: false,
         }
     }
 
@@ -45,6 +53,7 @@ impl BexThread {
             name,
             cancel,
             settles_future: Some(settles_future),
+            cancel_injected: false,
         }
     }
 
