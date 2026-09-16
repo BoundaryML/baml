@@ -29,7 +29,10 @@ else:
     tag = canary.group(1) if canary else 'refs/tags/baml-language-' + version
     run(['git', '-C', str(repo), 'fetch', '--no-tags', 'origin', tag])
     revision = run(['git', '-C', str(repo), 'rev-parse', 'FETCH_HEAD^{commit}']).stdout.decode().strip()
+    run(['git', '-C', str(repo), 'reset', '--hard'])
     run(['git', '-C', str(repo), 'checkout', '--detach', revision])
+    if not canary:
+        run([sys.executable, '/usr/local/lib/atb2/stamp-cli.py', str(repo), version])
     env = dict(os.environ, CARGO_TARGET_DIR=str(root / 'version-target' / revision))
     # Build diagnostics are sent to stderr; stdout remains a framed artifact.
     subprocess.run(['cargo', 'build', '-p', 'baml_cli', '--bin', 'baml-cli'],

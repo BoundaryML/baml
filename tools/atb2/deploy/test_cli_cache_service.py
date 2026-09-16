@@ -55,4 +55,35 @@ class LazyCacheTests(unittest.TestCase):
         for v in ['../bad','canary;id','0.18.0\ncommand','--help']:
             with self.assertRaises(ValueError):service.cached(v)
 
+
+class NightlyCacheTests(unittest.TestCase):
+    def test_each_nightly_request_resolves_manifest_but_reuses_exact_cached_release(self):
+        versions=['0.18.1-nightly.20260909.a','0.18.1-nightly.20260910.a']
+        with patch.object(service,'latest_nightly',side_effect=versions) as resolve, patch.object(service,'cached',side_effect=lambda v:'/cache/'+v+'/cli') as cached, patch.object(service.subprocess,'Popen') as build:
+            self.assertIn(versions[0],service.ensure('nightly'))
+            self.assertIn(versions[1],service.ensure('nightly'))
+            self.assertEqual(resolve.call_count,2)
+            self.assertEqual([call.args[0] for call in cached.call_args_list],versions)
+            build.assert_not_called()
+
+    def test_builder_version_mismatch_is_never_published(self):
+        def build(command, **kwargs):
+            kwargs['stdout'].write(b'{"version":"0.18.0","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}\nexecutable')
+            return Mock(pid=123,wait=Mock(return_value=0))
+        with patch.object(service,'cached',return_value=None), patch.object(service.subprocess,'Popen',side_effect=build), patch.object(service.os,'killpg'), patch.object(service.cache,'publish') as publish:
+            with self.assertRaises(ValueError):service.ensure('0.18.1-nightly.20260909.a')
+            publish.assert_not_called()
+
+    def test_manifest_unavailable_never_falls_back_to_cached_old_release(self):
+        with patch.object(service,'latest_nightly',side_effect=TimeoutError),patch.object(service,'cached') as cached:
+            with self.assertRaises(TimeoutError):service.ensure('nightly')
+            cached.assert_not_called()
+
+    def test_manifest_must_name_a_nightly_not_a_channel_stable_or_path(self):
+        for value in ['canary','0.18.0','../bad',None]:
+            response=Mock();response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False)
+            response.read.return_value=__import__('json').dumps({'version':value}).encode()
+            with patch.object(service.urllib.request,'urlopen',return_value=response):
+                with self.assertRaises(ValueError):service.latest_nightly()
+
 if __name__=='__main__':unittest.main()

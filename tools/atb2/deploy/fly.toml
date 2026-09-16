@@ -36,6 +36,14 @@ primary_region = "sjc"
   # "canary" tracks origin/canary's head.
   # ATB2_CANARY_REV = ""
   ATB2_DATASET = "live"
+  # Pipeline log lines (run done / run failed / decisions) in `fly logs`.
+  BAML_LOG = "info"
+  # Everything but merge (CI/review babysitting is not wanted yet): every
+  # issue gets a fix and a PR. Remove to resume the full loop.
+  ATB2_STAGES = "ingest,triage,verify,handle,intuit"
+  # Turn cap per agent session (design pass, fix pass); the time budget by
+  # difficulty still applies on top.
+  ATB2_MAX_TURNS = "200"
   ATB2_SLACK_CHANNEL = "C0B36EDQEN6"
   ATB2_POSTHOG_PROJECT_ID = "490278"
   ATB2_POLL_S = "60"
@@ -43,7 +51,9 @@ primary_region = "sjc"
   INFISICAL_ENV = "prod"
 
 [processes]
-  runner = "runner_loop(every_s=300)"
+  # The stage list lives in ATB2_STAGES under [env] (Fly strips quotes from
+  # process arguments, so it cannot be passed here).
+  runner = "main_ingress(every_s=300)"
 
 # a panic ends the process; Fly restarts it and the loops resume from the store
 [[restart]]

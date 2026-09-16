@@ -11,7 +11,7 @@ import sys
 
 RUNTIME_KEYS = frozenset("""
 ATB2_DATASET ATB2_GIT_EMAIL ATB2_GIT_USER ATB2_ISSUES
-ATB2_KEEP_RUNS ATB2_MAX_WAIT_S ATB2_MODEL ATB2_POLL_S ATB2_REPO ATB2_REPO_URL
+ATB2_KEEP_RUNS ATB2_MAX_TURNS ATB2_MAX_WAIT_S ATB2_MODEL ATB2_POLL_S ATB2_REPO ATB2_REPO_URL
 ATB2_REVIEWERS ATB2_SHEPHERDS ATB2_ISSUE_CC ATB2_UI_URL ATB2_SLACK_BOT_TOKEN ATB2_SLACK_CHANNEL
 ATB_LINEAR_TOKEN ATB2_LINEAR_API_KEY ATB2_LINEAR_TEAM ATB2_LINEAR_ASSIGNEES ATB2_UI_RUNNER_SECRET
 ATB2_SLACK_INTAKE_CHANNEL ATB_SLACK_BOT_TOKEN ATB_SLACK_FIX_CHANNEL
@@ -19,7 +19,7 @@ ATB2_SLACK_SIGNING_SECRET ATB_SLACK_SIGNING_SECRET
 ATB2_POSTHOG_API_KEY ATB2_POSTHOG_PROJECT_ID ATB2_POSTHOG_HOST
 ATB_POSTHOG_API_KEY ATB_POSTHOG_PROJECT_ID ATB_POSTHOG_HOST
 ATB2_GITHUB_TOKEN ATB_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN FEEDBACK_SUPABASE_KEY FEEDBACK_SUPABASE_ANON_KEY FEEDBACK_SUPABASE_URL
-BAML_VERSION HOSTNAME
+BAML_VERSION HOSTNAME ATB2_SLACK_OFF ATB2_STAGES BAML_LOG
 """.split())
 FIXED_ENV = {
     "PATH": "/usr/local/lib/atb2/traced-bin:/usr/local/cargo/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -133,6 +133,13 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, OSError, subprocess.SubprocessError):
-        print("atb2: runtime secret loading/launch failed; runtime was not started", file=sys.stderr)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        # Name the failing step so a boot loop can be diagnosed from the log.
+        # ValueError messages here are fixed strings chosen above; OSError and
+        # subprocess errors are reported by class and errno text only. No
+        # exporter output or environment value is ever printed.
+        detail = str(error) if isinstance(error, ValueError) else type(error).__name__
+        if isinstance(error, OSError) and error.strerror:
+            detail += ": " + error.strerror
+        print("atb2: runtime secret loading/launch failed; runtime was not started (" + detail + ")", file=sys.stderr)
         sys.exit(1)

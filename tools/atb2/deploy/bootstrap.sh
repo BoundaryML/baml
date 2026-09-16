@@ -12,7 +12,7 @@ fi
 # runtime directories retain their contents, including the persistent CLI login.
 chown root:root /data
 chmod 711 /data
-for name in home repo target cargo rustup worktrees runs merge repro-check agent-cache agent-sessions bootstrap; do
+for name in home repo target cargo rustup worktrees runs merge repro-check agent-cache agent-sessions agent-traces bootstrap; do
   dir="/data/$name"
   if [ -L "$dir" ]; then
     echo "atb2: refusing symlink at $dir" >&2

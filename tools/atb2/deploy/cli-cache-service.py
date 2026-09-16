@@ -11,6 +11,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import urllib.request
 
 SOCKET = '/data/cli-build/request.sock'
 ROOT = Path('/data/cli-cache')
@@ -34,7 +35,23 @@ def cached(version):
     return None
 
 
+def latest_nightly():
+    # Resolve on every request; only concrete artifacts are cached.
+    request = urllib.request.Request(
+        'https://pkg.boundaryml.com/manifest/v1/nightly.json',
+        headers={'User-Agent': 'atb2-nightly-verifier/1.0', 'Accept': 'application/json'},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        manifest = json.loads(response.read(1048576))
+    version = manifest.get('version', '')
+    if not isinstance(version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[a-z]', version):
+        raise ValueError('nightly manifest has no concrete nightly version')
+    return version
+
+
 def ensure(version):
+    if version == 'nightly':
+        version = latest_nightly()
     publication_root = ROOT
     if version == 'canary':
         clean = {'PATH':'/usr/bin:/bin','HOME':'/nonexistent','GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null'}
@@ -79,6 +96,8 @@ def ensure(version):
             child.wait()
         artifact.seek(0)
         metadata = json.loads(artifact.readline(512))
+        if not version.startswith('canary:') and metadata.get('version') != version:
+            raise ValueError('builder returned a different version than requested')
         return str(cache.publish(publication_root, metadata['version'], metadata['revision'], artifact))
 
 
@@ -98,7 +117,7 @@ class Handler(socketserver.StreamRequestHandler):
 
 
 def request(version):
-    if version != 'canary' and not VERSION.fullmatch(version):
+    if version not in ('canary', 'nightly') and not VERSION.fullmatch(version):
         raise ValueError('invalid CLI version')
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(2500)
@@ -106,7 +125,7 @@ def request(version):
         connection.sendall((version+'\n').encode())
         response = json.loads(connection.makefile('rb').readline(4096))
         path = response.get('path')
-        if not path or not Path(path).is_relative_to(ROOT if version == 'canary' else ROOT/version):
+        if not path or not Path(path).is_relative_to(ROOT if version in ('canary', 'nightly') else ROOT/version):
             raise ValueError(response.get('error', 'invalid cache response'))
         return path
 

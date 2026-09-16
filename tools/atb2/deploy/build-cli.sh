@@ -47,18 +47,27 @@ print(version)
     want="$(cd "$repo" && git rev-parse 'FETCH_HEAD^{commit}')"
   fi
 fi
-if [ ! -x "$cli" ] || [ "$have" != "$want" ]; then
+actual="$("$cli" --version 2>/dev/null | tail -n 1 | awk '{print $NF}' || true)"
+if [ ! -x "$cli" ] || [ "$have" != "$want" ] || { [ -n "$version" ] && [ "$actual" != "$version" ]; }; then
   echo "atb2: building baml-cli at $want${version:+ (nightly $version)} into $runner_home/target (had: ${have:-none})"
   # A failed build may already have changed the artifact. It must not retain
   # the old revision marker and pass a later pinned-cache check.
   rm -f -- "$built" "$built_version"
-  (cd "$repo" && git checkout -q --detach "$want")
+  (cd "$repo" && git reset --hard -q && git checkout -q --detach "$want")
+  if [ -n "$version" ]; then
+    python3 -I /usr/local/lib/atb2/stamp-cli.py "$repo" "$version"
+  fi
   # an explicit environment: nothing from this process reaches cargo
   (cd "$repo/baml_language" && env -i \
       PATH="$PATH" HOME="$HOME" USER="${USER:-atb2}" LANG=C.UTF-8 TERM=dumb \
       CARGO_HOME="${CARGO_HOME:-/usr/local/cargo}" RUSTUP_HOME="${RUSTUP_HOME:-/usr/local/rustup}" \
       CARGO_TARGET_DIR="$runner_home/target" CARGO_INCREMENTAL=0 \
       cargo build -p baml_cli --bin baml-cli)
+  actual="$("$cli" --version | tail -n 1 | awk '{print $NF}')"
+  if [ -n "$version" ] && [ "$actual" != "$version" ]; then
+    echo "atb2: built CLI does not match requested nightly" >&2
+    exit 1
+  fi
   echo "$want" > "$built"
   if [ -n "$version" ]; then
     echo "$version" > "$built_version"

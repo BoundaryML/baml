@@ -19,3 +19,5 @@
 !deploy/session_home.py
 !deploy/tasks.py
 !deploy/traces.py
+
+!deploy/stamp-cli.py

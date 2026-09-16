@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
 import unittest
 
 
@@ -13,7 +14,7 @@ PIN = "a" * 40
 
 class EntrypointTests(unittest.TestCase):
     def boot(self, *, pin=PIN, cached=PIN, executable=True, fetch_ok=False, cargo_ok=True,
-             toolchain="canary", nightly=None):
+             toolchain="canary", nightly=None, built_version=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             commands = root / "bin"
@@ -36,7 +37,8 @@ class EntrypointTests(unittest.TestCase):
                     f"rev-parse) echo {PIN} ;;\n"
                     "esac\n"
                 ),
-                "cargo": f'echo cargo >> "{log}"\nexit {0 if cargo_ok else 43}\n',
+                "cargo": f'echo cargo >> "{log}"\n' + (f"printf '#!/bin/sh\\necho baml-cli {built_version or nightly or '0.18.0'}\\n' > '{cli}'\nchmod +x '{cli}'\n" if cargo_ok else '') + f'exit {0 if cargo_ok else 43}\n',
+                "python3": f'if [ "$2" = "/usr/local/lib/atb2/stamp-cli.py" ]; then echo stamp >> "{log}"; exit 0; fi\nexec "{sys.executable}" "$@"\n',
                 "curl": (
                     f'echo "curl" >> "{log}"\n'
                     + (f"echo '{{\"version\": \"{nightly}\"}}'\n" if nightly else "exit 22\n")
@@ -112,6 +114,14 @@ class EntrypointTests(unittest.TestCase):
         self.assertNotIn("origin canary", calls)
         self.assertEqual(revision, PIN)
         self.assertEqual(self.version, "0.18.1-nightly.20260908.a")
+
+    def test_nightly_rejects_a_binary_with_the_source_canary_version(self):
+        result, calls, revision = self.boot(pin=None, cached="b"*40, fetch_ok=True,
+            toolchain=None, nightly="0.18.1-nightly.20260908.a", built_version="0.18.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stamp\n", calls)
+        self.assertEqual(revision, "")
+        self.assertEqual(self.version, "")
 
     def test_nightly_manifest_failure_builds_nothing(self):
         result, calls, revision = self.boot(pin=None, cached="b" * 40, fetch_ok=True, toolchain=None)
