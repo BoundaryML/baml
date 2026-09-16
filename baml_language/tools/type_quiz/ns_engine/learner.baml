@@ -529,6 +529,115 @@ function rule_z(profile: Profile, knobs: Knobs) -> float throws never {
     z_for(knobs.confidence / rules)
 }
 
+/// One knob's value against the values it may take.
+class KnobDomain {
+    name: string,
+    /// The value, as written in a reason.
+    value: string,
+    holds: bool,
+    /// The domain in words.
+    domain: string,
+}
+
+/// Strictly between zero and one: a probability whose endpoints stop meaning
+/// what the knob says.
+function open_unit(name: string, value: float) -> KnobDomain throws never {
+    KnobDomain {
+        name,
+        value: `${value}`,
+        holds: value.is_finite() && value > 0.0 && value < 1.0,
+        domain: "strictly between zero and one",
+    }
+}
+
+function closed_unit(name: string, value: float) -> KnobDomain throws never {
+    KnobDomain {
+        name,
+        value: `${value}`,
+        holds: value.is_finite() && value >= 0.0 && value <= 1.0,
+        domain: "between zero and one",
+    }
+}
+
+function positive(name: string, value: float) -> KnobDomain throws never {
+    KnobDomain {
+        name,
+        value: `${value}`,
+        holds: value.is_finite() && value > 0.0,
+        domain: "a finite number above zero",
+    }
+}
+
+function non_negative(name: string, value: float) -> KnobDomain throws never {
+    KnobDomain {
+        name,
+        value: `${value}`,
+        holds: value.is_finite() && value >= 0.0,
+        domain: "a finite number no less than zero",
+    }
+}
+
+function counting_from(name: string, value: int, low: int) -> KnobDomain throws never {
+    KnobDomain {
+        name,
+        value: `${value}`,
+        holds: value >= low,
+        domain: `a whole number no less than ${low}`,
+    }
+}
+
+/// Every numeric knob of `knobs` against its domain. Booleans have none.
+///
+/// Outside a domain the arithmetic does one of two things, and the second is
+/// worse. `confidence` and `bar` reach `z_for` and a division, and panic. The
+/// rest answer: a `slip` of two makes the chance of a right answer negative,
+/// a `target` of one can never be reached so a sitting runs to its budget,
+/// and every probability, every posterior and every draw downstream is then
+/// a number that no longer means anything, with nothing to say so.
+///
+/// Finiteness is checked outright rather than left to the comparisons, which
+/// NaN would pass: every comparison with it is false, including the ones a
+/// bound is written as.
+function knob_domains(knobs: Knobs) -> KnobDomain[] throws never {
+    [
+        open_unit("bar", knobs.bar),
+        open_unit("confidence", knobs.confidence),
+        open_unit("target", knobs.target),
+        closed_unit("aim", knobs.aim),
+        closed_unit("contrast", knobs.contrast),
+        closed_unit("slip", knobs.slip),
+        closed_unit("trap_slip", knobs.trap_slip),
+        positive("band", knobs.band),
+        non_negative("inform", knobs.inform),
+        non_negative("exposure", knobs.exposure),
+        non_negative("drift", knobs.drift),
+        non_negative("suspect", knobs.suspect),
+        non_negative("clear", knobs.clear),
+        counting_from("budget", knobs.budget, 1),
+        counting_from("stall_after", knobs.stall_after, 1),
+        counting_from("minimum", knobs.minimum, 0),
+        counting_from("rest", knobs.rest, 0),
+        counting_from("recheck", knobs.recheck, 1),
+    ]
+}
+
+/// Why `knobs` cannot be used, or `null` when they can: the first knob
+/// outside its domain.
+///
+/// A surface whose knobs come from its own controls cannot reach a bad value.
+/// One that takes them from anywhere else — a sitting saved by an older
+/// build, a file someone edited — has to ask first, because what follows a
+/// bad value is a panic or a silently meaningless estimate, and neither is
+/// something it can show a learner. Asking here rather than restating the
+/// bounds is what keeps the two from drifting apart.
+function knobs_fault(knobs: Knobs) -> string? throws never {
+    let broken = knob_domains(knobs).find((domain) -> {
+        !domain.holds
+    })
+        ?? return null;
+    `${broken.name} is ${broken.value}, and it has to be ${broken.domain}`
+}
+
 /// The lowest strength we would bet on for `skill`.
 function floor_of(profile: Profile, knobs: Knobs, skill: Skill) -> float throws never {
     profile.ability

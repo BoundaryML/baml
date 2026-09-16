@@ -404,8 +404,9 @@ function in_fn_error(d: Derivation, ret: Ty, rule: root.engine.Rule) -> Derivati
 }
 
 /// `T | X` against `U | X`. The relation survives only when `X` is a leaf
-/// that occurs in neither side, so it can absorb no difference between them;
-/// otherwise the step is undecided and the derivation yields no case.
+/// that shares no value with either side, so it can absorb no difference
+/// between them; otherwise the step is undecided and the derivation yields no
+/// case.
 function in_union_with(
     d: Derivation,
     extra: Ty,
@@ -413,7 +414,7 @@ function in_union_with(
 ) -> Derivation throws never {
     let l = left_of(d);
     let r = right_of(d);
-    let transfer = if (is_leaf(extra) && !mentions(l, extra) && !mentions(r, extra)) {
+    let transfer = if (is_leaf(extra) && !overlaps(l, extra) && !overlaps(r, extra)) {
         absorbing
     } else {
         undecided
@@ -426,15 +427,40 @@ function is_leaf(ty: Ty) -> bool throws never {
     ty is Prim
 }
 
-/// Whether `leaf` is `ty` or one of `ty`'s union members.
-function mentions(ty: Ty, leaf: Ty) -> bool throws never {
+/// The primitive a literal inhabits: `1` is an `int`, `"sheep"` a `string`,
+/// `true` a `bool`.
+function base_of(lit: Lit) -> Ty throws never {
+    match (lit.value) {
+        int => Prim.int(),
+        string => Prim.string(),
+        bool => Prim.bool(),
+    }
+}
+
+/// Whether `leaf` shares any value with `ty` or with one of its union
+/// members.
+///
+/// Occurring in it is not the question. `1 | int` is `int`, and `true | bool`
+/// is `bool`, so a union that spells no `int` can still hold every `int`
+/// there is; adding `int` to both sides of `1 <: int | string` would collapse
+/// them to the same type while this step went on recording a strict
+/// subtyping. The answer has to be about values and not about spelling.
+///
+/// `leaf` is a primitive — `is_leaf` admits nothing else — and the spec makes
+/// concrete types atomic, so the ways to overlap one are closed: being it,
+/// being one of its literals, or being `unknown`, which holds everything. An
+/// alias is taken as overlapping rather than unfolded, which costs cases this
+/// could have kept and cannot cost a case its key.
+function overlaps(ty: Ty, leaf: Ty) -> bool throws never {
     match (ty) {
         let u: Union => {
             u.members().some((m) -> {
-                mentions(m, leaf)
+                overlaps(m, leaf)
             })
         },
-        Prim | Never | Top | Lit | EnumLit | Array | Map | Fn | Class | Enum | Iface | Alias | Var => {
+        let lit: Lit => base_of(lit) == leaf,
+        Top | Alias => true,
+        Prim | Never | EnumLit | Array | Map | Fn | Class | Enum | Iface | Var => {
             ty == leaf
         },
     }

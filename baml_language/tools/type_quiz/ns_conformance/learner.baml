@@ -686,6 +686,58 @@ test "page: an adaptive sitting downloads, reads back, and reviews with what it 
     )
 }
 
+/// Every numeric knob against the domain table, found by reflection rather
+/// than by a list here, so a knob added later without a domain fails this
+/// instead of reaching a learner's save unchecked. Booleans have no domain.
+function knob_domains_report() -> string throws never {
+    let declared = reflect.Type.of<root.engine.Knobs>().as_class()
+        ?? return "Knobs is not a class";
+    let boolean = reflect.Type.of<bool>();
+    let numeric = declared.fields()
+        .filter((field) -> {
+            field.type != boolean
+        })
+        .map((field) -> {
+            field.name
+        });
+    let stated = root.engine.knob_domains(root.engine.default_knobs()).map((domain) -> {
+        domain.name
+    });
+    let unstated = numeric.filter((name) -> {
+        !stated.includes(name)
+    });
+    let extra = stated.filter((name) -> {
+        !numeric.includes(name)
+    });
+    `unstated=${unstated} extra=${extra} defaults=${root.engine.knobs_fault(root.engine.default_knobs()) ?? "legal"}`
+}
+
+test "knobs: every numeric knob has a domain, and the defaults sit inside them" {
+    assert.equal(knob_domains_report(), `unstated=[] extra=[] defaults=legal`)
+}
+
+/// What a save that was edited by hand, or written by a build with other
+/// bounds, gets told. A probability out of range answers rather than
+/// panicking, which is the case worth pinning; an infinity parses from JSON
+/// (`1e999`) and passes every comparison a bound is written as unless
+/// finiteness is asked for; and a budget of nothing ends a sitting before it
+/// starts.
+function hostile_knobs_report() -> string throws never {
+    let base = root.engine.default_knobs();
+    let slipping = root.engine.knobs_fault(root.engine.Knobs { ...base, slip: 2.0 }) ?? "legal";
+    let endless = root.engine.knobs_fault(root.engine.Knobs { ...base, drift: float.inf() }) ?? "legal";
+    let empty = root.engine.knobs_fault(root.engine.Knobs { ...base, budget: 0 }) ?? "legal";
+    let certain = root.engine.knobs_fault(root.engine.Knobs { ...base, target: 1.0 }) ?? "legal";
+    `slip: ${slipping}\ndrift: ${endless}\nbudget: ${empty}\ntarget: ${certain}`
+}
+
+test "knobs: a save with a knob out of its domain is refused, and says which" {
+    assert.equal(
+        hostile_knobs_report(),
+        "slip: slip is 2.0, and it has to be between zero and one\ndrift: drift is Infinity, and it has to be a finite number no less than zero\nbudget: budget is 0, and it has to be a whole number no less than 1\ntarget: target is 1.0, and it has to be strictly between zero and one",
+    )
+}
+
 test "profile: survives JSON" {
     assert.equal(profile_round_trip(), "identical")
 }

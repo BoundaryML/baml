@@ -587,6 +587,15 @@ export default function App() {
 
   const store = useCallback((live: Live) => {
     writeSlot(storage, live.slot, saveOf(live));
+    // A write the browser refuses does not end the sitting: the store carries
+    // on in memory and says it is no longer keeping anything, which is worth
+    // telling the learner once, because the sitting they are in the middle of
+    // will not be there next time.
+    if (!storage.persisting) {
+      setNotice(
+        'This browser is not keeping sittings, so this one will not be here next time. It is safe to carry on, and the download at the end still works.',
+      );
+    }
     setSlots(readSlots(storage));
   }, []);
 

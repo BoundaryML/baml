@@ -7,7 +7,13 @@
 // quiz whose bank or model has since changed fails to replay and says so,
 // instead of quietly resuming with beliefs its answers no longer support.
 
-import { defaultKnobs, isSaid, type KnobValues, type Said } from './quiz';
+import {
+  defaultKnobs,
+  isSaid,
+  type KnobValues,
+  knobsFault,
+  type Said,
+} from './quiz';
 
 export const SLOTS = 3;
 export const VERSION = 1;
@@ -45,48 +51,130 @@ function keyOf(slot: number): string {
 }
 
 /**
- * Where sittings are kept: this browser's local storage, or memory when
- * there is none to be had.
+ * A place the page keeps strings between one moment and the next.
  *
- * Reading `window.localStorage` THROWS in a browser told to block storage,
- * and reading it while the module loads took the whole page down with it. A
- * learner who has turned storage off has said they do not want a sitting kept
- * between visits, which is a thing to honour rather than a reason to show
- * them nothing: the quiz runs, and the slots are empty again next time.
+ * Deliberately narrower than the browser's `Storage`: no `clear`, no `key`,
+ * no `length`. Browser storage belongs to the origin, and this site shares
+ * its origin with every other tool published beside it, so anything that
+ * walks or empties a store walks or empties theirs too. A store that cannot
+ * enumerate cannot do either.
  */
-export function storageOf(): Storage {
+export interface Store {
+  /**
+   * Whether what is written here outlives this visit. False when the browser
+   * gave no store at all, or stopped accepting writes part-way through; the
+   * page carries on in memory either way.
+   */
+  readonly persisting: boolean;
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+/**
+ * One of the browser's stores, made to never throw and never to lose a write
+ * it took.
+ *
+ * Opening a browser store can throw — a browser told to block storage throws
+ * on the property read itself, and Safari in private mode hands back a store
+ * that throws on the first write — and a write can throw later, once the
+ * origin's quota is full. Neither is a reason to end a sitting, so both
+ * degrade: writes the browser will not take are kept in memory for the rest
+ * of the visit, and reads look there first.
+ *
+ * Removal still reaches the browser after that, because removing frees space
+ * rather than taking it. Were it only removed from memory, a slot reset after
+ * the quota filled would disappear for this visit and come back on the next.
+ * Should even that fail, the memory entry is kept as a removal, so a record
+ * the browser still holds cannot show through one this visit deleted.
+ */
+function layered(open: () => Storage): Store {
+  let under: Storage | null;
   try {
-    const held = window.localStorage;
-    // Safari in private mode hands back a store that throws only on write.
+    const held = open();
     const probe = 'type-quiz/probe';
     held.setItem(probe, '1');
     held.removeItem(probe);
-    return held;
+    under = held;
   } catch {
-    return memory();
+    under = null;
   }
-}
-
-/** A store for this visit alone. */
-function memory(): Storage {
-  const held = new Map<string, string>();
+  // `null` is a removal the browser would not take.
+  const over = new Map<string, string | null>();
+  let persisting = under !== null;
   return {
-    clear: () => held.clear(),
-    getItem: (key) => held.get(key) ?? null,
-    key: (at) => Array.from(held.keys())[at] ?? null,
-    get length() {
-      return held.size;
+    getItem: (key) => {
+      if (over.has(key)) {
+        return over.get(key) ?? null;
+      }
+      try {
+        return under?.getItem(key) ?? null;
+      } catch {
+        return null;
+      }
+    },
+    get persisting() {
+      return persisting;
     },
     removeItem: (key) => {
-      held.delete(key);
+      try {
+        under?.removeItem(key);
+        over.delete(key);
+      } catch {
+        over.set(key, null);
+      }
     },
     setItem: (key, value) => {
-      held.set(key, value);
+      if (persisting && under !== null) {
+        try {
+          under.setItem(key, value);
+          over.delete(key);
+          return;
+        } catch {
+          // On every browser that throws here, the origin's quota is full.
+          persisting = false;
+        }
+      }
+      over.set(key, value);
     },
   };
 }
 
-export function readSlot(storage: Storage, slot: number): Slot {
+let sittings: Store | null = null;
+let keys: Store | null = null;
+
+/**
+ * Where sittings are kept: this browser's local storage, degrading to memory.
+ * The same store on every call, so a degradation one caller meets is the one
+ * every other caller reads through.
+ */
+export function storageOf(): Store {
+  sittings ??= layered(() => window.localStorage);
+  return sittings;
+}
+
+/**
+ * Where a key is kept: this TAB, and only while it is open, degrading to
+ * memory. The same store on every call: were a fresh one made per call, a key
+ * saved through one would be missing from the next, and a configured judge
+ * would silently become marking by hand.
+ *
+ * Storage is scoped to an origin and not to a path, and this site shares
+ * `<org>.github.io` with every other project page the organisation publishes.
+ * A key in local storage is therefore readable by any of them, at any time,
+ * for as long as it sits there. Session storage is scoped to the tab as well,
+ * so a sibling page opened in another tab cannot reach it and nothing is left
+ * behind when this one closes. It costs the learner one paste per session.
+ *
+ * This is a reduction and not a fix: a page on this origin, in this tab,
+ * could still read it. Only a hostname of our own would end that.
+ */
+export function keyStoreOf(): Store {
+  keys ??= layered(() => window.sessionStorage);
+  return keys;
+}
+
+export function readSlot(storage: Store, slot: number): Slot {
   const text = storage.getItem(keyOf(slot));
   if (text === null) {
     return { kind: 'empty' };
@@ -103,15 +191,15 @@ export function readSlot(storage: Storage, slot: number): Slot {
     : { kind: 'held', save };
 }
 
-export function readSlots(storage: Storage): Slot[] {
+export function readSlots(storage: Store): Slot[] {
   return Array.from({ length: SLOTS }, (_, slot) => readSlot(storage, slot));
 }
 
-export function writeSlot(storage: Storage, slot: number, save: Save): void {
+export function writeSlot(storage: Store, slot: number, save: Save): void {
   storage.setItem(keyOf(slot), JSON.stringify(save));
 }
 
-export function clearSlot(storage: Storage, slot: number): void {
+export function clearSlot(storage: Store, slot: number): void {
   storage.removeItem(keyOf(slot));
 }
 
@@ -183,9 +271,18 @@ function asKnobs(value: unknown): KnobValues | string {
   // Every field of the template was found above, of the template's own type,
   // and nothing else was: the object has exactly the shape the constructor
   // takes.
-  return Object.fromEntries(
+  const held = Object.fromEntries(
     Object.keys(template).map((name) => [name, value[name]]),
   ) as KnobValues;
+  // Shape is not enough. Two knobs have a domain outside which the engine's
+  // arithmetic panics rather than answering, and a save is the one place
+  // knobs arrive from outside this page's own controls. The engine states
+  // those bounds, so this asks rather than restating them.
+  const fault = knobsFault(held);
+  if (fault !== null) {
+    return fault;
+  }
+  return held;
 }
 
 function asAnswer(value: unknown): SavedAnswer | string {

@@ -197,8 +197,14 @@ Anthropic's or OpenAI's; entering one also turns on asking why, since reasons
 are what a judge reads. Keys are held one per provider, because that is what
 they belong to: the field follows the model, a learner with both can move
 between them without pasting either again, and a key can never be sent to the
-provider that did not issue it. They are kept in this browser's local storage
-and sent only to that provider, once per judgement. Anthropic asks for a
+provider that did not issue it. They are kept in this TAB, in session storage,
+and sent only to that provider, once per judgement. Browser storage is scoped
+to an address and not to a path, and this site shares `<org>.github.io` with
+every other tool published from the organisation, so a key left in local
+storage would be readable by any of them for as long as it sat there. In the
+tab it is gone when the tab closes and a sibling page opened in another tab
+cannot reach it, which is a reduction rather than a fix: only an address of
+our own would end it. Anthropic asks for a
 header before it will answer a request made from a browser and gets one;
 OpenAI asks for nothing beyond the key. This site is static, has no server,
 and nothing of ours ever sees a key. Clearing the field stops it, and marking

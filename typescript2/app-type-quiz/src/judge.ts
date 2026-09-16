@@ -10,10 +10,15 @@
 // learner with an Anthropic key and an OpenAI key can move between models
 // without pasting either again, and a key can never be sent to the provider
 // that did not issue it.
+//
+// They live in the tab rather than in the browser. Storage is scoped to an
+// origin and not to a path, and this site shares its origin with every other
+// page the organisation publishes there, so a key left in local storage is
+// readable by all of them for as long as it sits there.
 
 import { engine } from '@quiz/sdk';
 import type { Revealed } from './quiz';
-import { storageOf } from './saves';
+import { keyStoreOf } from './saves';
 
 export type Grade = engine.Grade;
 
@@ -76,7 +81,7 @@ function fresh(): JudgeSettings {
 
 export function loadJudge(): JudgeSettings {
   try {
-    const raw = storageOf().getItem(KEY);
+    const raw = keyStoreOf().getItem(KEY);
     if (raw === null) {
       return fresh();
     }
@@ -122,7 +127,7 @@ export function loadJudge(): JudgeSettings {
  */
 export function saveJudge(settings: JudgeSettings): void {
   try {
-    storageOf().setItem(KEY, JSON.stringify(settings));
+    keyStoreOf().setItem(KEY, JSON.stringify(settings));
   } catch {
     return;
   }

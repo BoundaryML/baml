@@ -215,9 +215,11 @@ export function Setup({
           explanation, in place of your marking it yourself, and says what the
           reasoning did not reach. That is one call on your key per case you
           give a reason for, and you are not asked to mark your own while there
-          is a key set. A key is kept in this browser and sent only to the
-          provider that issued it, with each judgement; this site has no server,
-          and nothing of ours ever sees it. Keys are held one per provider, so
+          is a key set. A key is kept in this tab and sent only to the provider
+          that issued it, with each judgement; this site has no server, and
+          nothing of ours ever sees it. Closing the tab forgets it, because this
+          site shares an address with the other tools published here and browser
+          storage is shared by address. Keys are held one per provider, so
           moving between models does not ask for either again. Clear the field
           to stop.
         </p>

@@ -25,14 +25,29 @@ const CASES = 8;
 const URL = `http://localhost:${PORT}/?session=${SESSION}`;
 const WAIT = { timeout: 120000 };
 
+/**
+ * Start the dev server. It is handed back as soon as it is spawned, before
+ * anything waits on it, because a server that never says it is ready is
+ * still running and still has to be stopped.
+ */
 function startServer() {
-  const server = spawn(
-    'npx',
-    ['vite', '--port', String(PORT), '--strictPort'],
+  return spawn(
+    'pnpm',
+    ['exec', 'vite', '--port', String(PORT), '--strictPort'],
     {
+      // Its own process group. `vite` spawns esbuild, and signalling only the
+      // process we spawned leaves those children alive holding the stdio
+      // pipes we opened, which keeps node's event loop alive long after the
+      // run is over: CI cancelled a job thirty-two minutes after this script
+      // had printed its success line.
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
+}
+
+/** Wait until `server` is listening, or fail saying why it is not. */
+function listening(server) {
   const said = [];
   server.stderr.on('data', (chunk) => said.push(String(chunk)));
   return new Promise((resolve, reject) => {
@@ -40,16 +55,36 @@ function startServer() {
       () => reject(new Error(`vite did not start: ${said.join('')}`)),
       60000,
     );
+    const fail = (error) => {
+      clearTimeout(timer);
+      reject(error);
+    };
     server.stdout.on('data', (chunk) => {
       if (String(chunk).includes(String(PORT))) {
         clearTimeout(timer);
-        resolve(server);
+        resolve();
       }
     });
+    // A command that cannot be run at all is reported here, not by `exit`.
+    server.on('error', fail);
     server.on('exit', (code) =>
-      reject(new Error(`vite exited with ${code}: ${said.join('')}`)),
+      fail(new Error(`vite exited with ${code}: ${said.join('')}`)),
     );
   });
+}
+
+/** Stop the server and everything it started. */
+function stopServer(server) {
+  // No pid: it was never spawned, or spawning it failed, so nothing is running.
+  if (server?.pid === undefined) {
+    return;
+  }
+  try {
+    // The negated pid is the process group: vite, esbuild, and the launcher.
+    process.kill(-server.pid, 'SIGTERM');
+  } catch {
+    // Already gone, which is the same outcome.
+  }
 }
 
 function expect(condition, message) {
@@ -198,11 +233,17 @@ async function reveal(page, asked, said, rule) {
   expect(!literal.includes('`'), `a backtick reached the page: ${literal}`);
 }
 
-const server = await startServer();
 const complaints = [];
 let browser = null;
 let failure = null;
+// Held by the guarded region from the moment it is spawned, so every way out
+// of the region stops it -- including a server that never says it is ready.
+// One left running keeps the port, and the next run fails on it and blames
+// the app.
+let server = null;
 try {
+  server = startServer();
+  await listening(server);
   browser = await chromium.launch();
   const page = await browser.newPage();
   page.on('console', (message) => {
@@ -345,7 +386,8 @@ try {
     `the second slot does not hold the mastery sitting: ${second}`,
   );
 
-  // Who marks the reasoning. With no key the learner marks their own, which
+  // Who marks the reasoning. A key is kept in session storage, which is the
+  // tab, so these seed and clear it there. With no key the learner marks their own, which
   // is the fallback; with one set, the sitting asks for reasons and says the
   // judge will read them. The judgement itself is a call on a real key, so it
   // is not made here: what is checked is that the page asks the right marker,
@@ -382,7 +424,7 @@ try {
   // The key is held under the provider that issued it, and the field follows
   // the model: switching to the other provider asks for its own key.
   const anthropic = await page.evaluate(() =>
-    JSON.parse(window.localStorage.getItem('type-quiz/judge') ?? '{}'),
+    JSON.parse(window.sessionStorage.getItem('type-quiz/judge') ?? '{}'),
   );
   expect(
     anthropic.keys?.Anthropic === 'sk-ant-not-a-key',
@@ -401,7 +443,7 @@ try {
   // Settings written before there was more than one provider held one key,
   // under the model chosen then; they still count.
   await page.evaluate(() =>
-    window.localStorage.setItem(
+    window.sessionStorage.setItem(
       'type-quiz/judge',
       JSON.stringify({ key: 'sk-ant-older-shape', model: 'claude-haiku-4-5' }),
     ),
@@ -424,7 +466,9 @@ try {
   // the answer and only where there is one to give, skipped on the first and
   // given on the second. A reason that was typed and then skipped is not a
   // reason: nothing is marked, and nothing was sent anywhere.
-  await page.evaluate(() => window.localStorage.removeItem('type-quiz/judge'));
+  await page.evaluate(() =>
+    window.sessionStorage.removeItem('type-quiz/judge'),
+  );
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('button:has-text("New sitting")', WAIT);
   await page.locator('button:has-text("New sitting")').first().click();
@@ -519,6 +563,101 @@ try {
   );
   await blocked.close();
 
+  // A browser whose session storage is unavailable keeps a judge's key in
+  // memory. It has to be ONE memory: were a fresh store made per call, the
+  // key saved from the field would be missing when the panel is next drawn,
+  // and a configured judge would silently turn into marking by hand.
+  const sessionless = await browser.newPage();
+  await sessionless.addInitScript(() => {
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new Error('Access is denied for this document.');
+      },
+    });
+  });
+  await sessionless.goto(URL, { waitUntil: 'load' });
+  await sessionless.waitForSelector('button:has-text("New sitting")', WAIT);
+  await sessionless.locator('button:has-text("New sitting")').first().click();
+  await sessionless.waitForSelector('button:has-text("Start")', WAIT);
+  await sessionless.click('details:has-text("Judge") summary');
+  await sessionless.fill('label:has-text("API key") input', 'sk-ant-not-a-key');
+  await sessionless.click('button:has-text("Back")');
+  await sessionless.waitForSelector('button:has-text("New sitting")', WAIT);
+  await sessionless.locator('button:has-text("New sitting")').first().click();
+  await sessionless.waitForSelector('button:has-text("Start")', WAIT);
+  const kept = sessionless.locator('label.check:has-text("Ask why")');
+  expect(
+    (await kept.textContent()).includes('have the judge mark'),
+    `a key typed without session storage was lost between one drawing of the panel and the next: ${await kept.textContent()}`,
+  );
+  await sessionless.close();
+
+  // A browser that stops accepting writes part-way through a sitting keeps
+  // the sitting in memory. A slot reset after that has to be gone from the
+  // browser too: removing frees space, so the browser takes it, and a reset
+  // that only reached memory would bring the slot back on the next visit.
+  const full = await browser.newPage();
+  await full.addInitScript(() => {
+    const write = Storage.prototype.setItem;
+    let slotWrites = 0;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === window.localStorage && key.startsWith('type-quiz/slot/')) {
+        slotWrites += 1;
+        // The first write, as the sitting starts, lands; every later one
+        // meets a full quota.
+        if (slotWrites > 1) {
+          throw new DOMException(
+            'The quota has been exceeded.',
+            'QuotaExceededError',
+          );
+        }
+      }
+      return write.call(this, key, value);
+    };
+  });
+  await full.goto(URL, { waitUntil: 'load' });
+  await full.waitForSelector('button:has-text("New sitting")', WAIT);
+  await full.locator('button:has-text("New sitting")').first().click();
+  await full.click('label:has-text("Practice") input[type=radio]');
+  await full.fill('label:has-text("Practice") input.count', '3');
+  await full.waitForSelector('button:has-text("Start")', WAIT);
+  await full.click('button:has-text("Start")');
+  await progress(full, 'Case 1 of 3');
+  const first = await question(full);
+  await full.click(`.question .choices button:text-is("${first.buttons[0]}")`);
+  await full.waitForSelector('.reveal', WAIT);
+  expect(
+    ((await full.textContent('.notice')) ?? '').includes(
+      'not keeping sittings',
+    ),
+    'a write the browser refused was not reported to the learner',
+  );
+  // The sitting carries on rather than breaking.
+  await full.click('.reveal .choices button:text-is("Next")');
+  await progress(full, 'Case 2 of 3');
+  await full.click('button:has-text("Leave")');
+  await full.waitForSelector('.slot', WAIT);
+  await full
+    .locator('.slot')
+    .first()
+    .locator('button:text-is("Reset")')
+    .click();
+  await full
+    .locator('.slot')
+    .first()
+    .locator('button:text-is("Really reset")')
+    .click();
+  await full.reload({ waitUntil: 'load' });
+  await full.waitForSelector('.slot', WAIT);
+  expect(
+    ((await full.locator('.slot').first().textContent()) ?? '').includes(
+      'Empty',
+    ),
+    `a slot reset after the quota filled came back on the next visit: ${await full.locator('.slot').first().textContent()}`,
+  );
+  await full.close();
+
   const starved = await browser.newPage();
   await starved.route('**/bridge_web_core_bg*.wasm', (route) => route.abort());
   await starved.goto(URL, { waitUntil: 'load' });
@@ -538,16 +677,18 @@ try {
   await starved.close();
 
   console.log(
-    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, a mastery sitting shows no total, a reason is asked only where there is one to give, skipped or marked by the learner when no judge is set, and a browser that cannot start says why`,
+    `smoke: a practice sitting of ${CASES} was sat across a reload — ${seen.verdicts} of one program and ${seen.choices} of two, ${seen.held} held back — the download carries the learner, a mastery sitting shows no total, a reason is asked only where there is one to give, skipped or marked by the learner when no judge is set, a browser that cannot start says why, and one that cannot keep a key or a sitting carries on without losing either`,
   );
 } catch (error) {
   failure = error;
 } finally {
-  // The server outlives this process if it is not killed, and the next run
-  // would then fail on a port that is already taken rather than on anything
-  // to do with the app.
-  await browser?.close();
-  server.kill();
+  // The browser first, so a page does not log the server going away; the
+  // server whatever closing the browser does.
+  try {
+    await browser?.close();
+  } finally {
+    stopServer(server);
+  }
 }
 
 if (complaints.length > 0) {
@@ -563,3 +704,8 @@ if (failure !== null) {
 if (complaints.length > 0) {
   process.exit(1);
 }
+// Explicitly, rather than by running out of work: anything still holding a
+// handle — a child that outlived its group, a socket the browser left — would
+// otherwise keep this alive until CI's own timeout, and a hang costs the
+// whole job's budget where a failure costs a minute.
+process.exit(0);

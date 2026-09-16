@@ -103,6 +103,16 @@ export function defaultKnobs(): Knobs {
   return engine.default_knobs();
 }
 
+/**
+ * Why these knob values cannot be used, or `null` when they can.
+ *
+ * The engine's answer, not the page's: the bounds belong with the arithmetic
+ * that panics outside them.
+ */
+export function knobsFault(values: KnobValues): string | null {
+  return engine.knobs_fault(knobsFrom(values));
+}
+
 export function knobsFrom(values: KnobValues): Knobs {
   return new engine.Knobs(values);
 }

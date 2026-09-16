@@ -555,10 +555,45 @@ function union_context_declines_absorbers() -> bool throws never {
         root.bank.union_member_rule(),
     );
     let member_of_side = root.algebra.knowledge(root.algebra.in_union_with(wide, root.algebra.Prim.string(), rule));
+    // Overlapping a side without occurring in it. `true | bool` is `bool` and
+    // `true | false | bool` is `bool`, so adding `bool` to both sides of
+    // `true <: true | false` collapses them to one type; a guard that asks
+    // only whether `bool` is spelled there would let the step go on claiming a
+    // strict subtyping.
+    let literals = root.algebra.pair(
+        root.algebra.Lit.new(true),
+        root.algebra.Union.new([root.algebra.Lit.new(true), root.algebra.Lit.new(false)]),
+        root.algebra.Relation.Sub,
+        root.bank.union_member_rule(),
+    );
+    let covers_literals = root.algebra.knowledge(root.algebra.in_union_with(literals, root.algebra.Prim.bool(), rule));
+    // The same the other way round: the extra is the concrete type of a
+    // literal one side holds.
+    let one_side_holds_a_literal = root.algebra.pair(
+        root.algebra.Prim.string(),
+        root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Lit.new(1)]),
+        root.algebra.Relation.Sub,
+        root.bank.union_member_rule(),
+    );
+    let covers_a_member = root.algebra.knowledge(
+        root.algebra.in_union_with(one_side_holds_a_literal, root.algebra.Prim.int(), rule),
+    );
+    // `unknown` holds every value, so nothing is disjoint from a side that is
+    // it.
+    let top = root.algebra.pair(
+        root.algebra.Never {  },
+        root.algebra.Top {  },
+        root.algebra.Relation.Sub,
+        root.bank.never_bottom_rule(),
+    );
+    let beside_top = root.algebra.knowledge(root.algebra.in_union_with(top, root.algebra.Prim.int(), rule));
     disjoint == root.algebra.Relation.Sub
         && absorbing_member == root.algebra.Undecided {  }
         && non_leaf == root.algebra.Undecided {  }
         && member_of_side == root.algebra.Undecided {  }
+        && covers_literals == root.algebra.Undecided {  }
+        && covers_a_member == root.algebra.Undecided {  }
+        && beside_top == root.algebra.Undecided {  }
 }
 
 test "relations: transfer functions match the spec's variance rules" {

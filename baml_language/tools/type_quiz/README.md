@@ -247,9 +247,10 @@ and the `mise` task keep the CLI's home, cache and profile streams under
 leaves a few hundred megabytes of them in `tools/type_quiz/.baml`, which the
 CLI marks ignored but does not clean up.
 
-The `live` profile is reserved for calibrating the answer grader against a
-real model. It selects no tests yet, and `baml-cli` exits 5 on an empty
-selection, so there is nothing to run under it until the grader lands.
+The `live` profile calibrates the answer grader against a real model. It
+registers one test unconditionally, so that a keyless run selects something
+rather than exiting 5 on an empty selection, and the two that call a model
+register only when a provider's key is in the environment.
 
 ## The judge
 
