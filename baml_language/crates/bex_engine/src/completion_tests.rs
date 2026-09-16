@@ -98,16 +98,20 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
                 true,
             )
             .await;
-        if outcome == InvocationOutcome::Ok {
-            assert!(result.is_ok());
-        } else {
-            assert!(result.is_err(), "expected failure for {source}");
-        }
-        if outcome == InvocationOutcome::Cancelled {
-            assert!(is_cancelled_engine_error(result.as_ref().err().unwrap()));
-        }
-        if outcome == InvocationOutcome::Exited {
-            assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
+        match outcome {
+            InvocationOutcome::Ok => assert!(matches!(
+                result,
+                Ok(ThreadOutcome::RootValue(BexExternalValue::Int(1)))
+            )),
+            InvocationOutcome::Errored => {
+                assert!(matches!(result, Err(EngineError::TypeMismatch { .. })));
+            }
+            InvocationOutcome::Cancelled => {
+                assert!(is_cancelled_engine_error(result.as_ref().err().unwrap()));
+            }
+            InvocationOutcome::Exited => {
+                assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
+            }
         }
         assert_completed(&engine, &[(id, outcome)]);
     }
@@ -310,8 +314,10 @@ async fn child_success_and_error_settle_and_finalize_once() {
 
 #[tokio::test]
 async fn queued_and_running_child_cancellation_finish_once() {
-    for source in [
-        r#"function Main() -> int {
+    for (running_child, source) in [
+        (
+            false,
+            r#"function Main() -> int {
             let g = baml.spawn.TaskGroup.new(1);
             let active = spawn with baml.spawn.options(group = g) { 7 };
             let queued = spawn with baml.spawn.options(group = g) { 99 };
@@ -320,28 +326,57 @@ async fn queued_and_running_child_cancellation_finish_once() {
             let b = (await queued) catch (e) { baml.panics.Cancelled => 0 };
             a + b
         }"#,
-        r#"function Main() -> int {
+        ),
+        (
+            true,
+            r#"function Main() -> int {
             let active = spawn { 7 };
             let cancelled = spawn {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 99
             };
-            cancelled.cancel();
             let a = await active;
             let b = (await cancelled) catch (e) { baml.panics.Cancelled => 0 };
             a + b
         }"#,
+        ),
     ] {
-        let engine = engine(source);
-        let result = engine
-            .call_function(
-                "Main",
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut ops = sys_native::SysOps::native();
+        ops.baml_sys_sleep = Arc::new(move |_, _, _, ctx, _| {
+            let started_tx = started_tx.clone();
+            let cancel = ctx.cancel.clone();
+            SysOpResult::Async(Box::pin(async move {
+                // Report only after this child's sys-op future is polled.
+                // The test cancels this child, leaving its parent uncancelled.
+                started_tx.send(cancel).unwrap();
+                std::future::pending().await
+            }))
+        });
+        let engine = Arc::new(
+            BexEngine::new(
+                baml_db::testing::compile_source(source),
+                Arc::new(ops),
                 vec![],
-                FunctionCallContextBuilder::new(CallId::next()).build(),
-                true,
             )
-            .await
-            .unwrap();
+            .unwrap(),
+        );
+        let running = engine.call_function(
+            "Main",
+            vec![],
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        );
+        tokio::pin!(running);
+        if running_child {
+            tokio::select! {
+                token = tokio::time::timeout(std::time::Duration::from_secs(10), started_rx.recv()) => {
+                    token.expect("child must reach its sys-op").unwrap().cancel();
+                }
+                result = &mut running => panic!("call finished before child cancellation: {result:?}"),
+            }
+        }
+        let result = running.await.unwrap();
         assert_eq!(result, BexExternalValue::Int(7));
         assert_completed(
             &engine,
@@ -362,11 +397,11 @@ async fn queued_and_running_child_cancellation_finish_once() {
 }
 
 #[tokio::test]
-async fn child_setup_failure_settles_and_finishes_both_threads() {
+async fn child_internal_error_settles_and_finishes_both_threads() {
     let engine =
         engine("function Main(f: () -> int) -> int { let child = spawn { f() }; await child }");
     let cancel = CancellationToken::new();
-    // Bypass host argument validation to exercise a VM-internal setup error
+    // Bypass host argument validation to exercise a VM-internal callee error
     // inside a dispatched child and propagation through its parent's await.
     let thread = entry(&engine, &cancel, &[Value::int(7)]).await;
     let result = engine

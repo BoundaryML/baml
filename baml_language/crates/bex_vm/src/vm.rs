@@ -451,6 +451,32 @@ pub(crate) mod tests {
         (vm, native_ptr)
     }
 
+    #[test]
+    fn hidden_native_execution_has_only_thread_events() {
+        use crate::telemetry::{InvocationOutcome, ProducerEvent};
+
+        let (mut vm, native_ptr) = vm_with_native_entry();
+        vm.set_entry_point(native_ptr, &[]);
+        assert!(vm.frames.iter().all(|frame| match frame {
+            Frame::Bytecode(frame) => frame.telemetry.is_none(),
+            Frame::Native(_) => true,
+        }));
+        assert!(
+            matches!(vm.exec().unwrap(), VmExecState::Complete(value) if value == Value::int(42))
+        );
+        vm.finish_telemetry(InvocationOutcome::Ok);
+        assert!(matches!(
+            vm.telemetry.events(),
+            [
+                ProducerEvent::ThreadStarted { .. },
+                ProducerEvent::ThreadCompleted {
+                    outcome: InvocationOutcome::Ok,
+                    ..
+                }
+            ]
+        ));
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn gc_polling_progress_survives_engine_handoffs() {

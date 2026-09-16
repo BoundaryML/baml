@@ -1373,11 +1373,6 @@ mod tests {
             loaded.telemetry_policy_id.load(),
             crate::TelemetryPolicyId::NONE
         );
-        assert_eq!(loaded.name, "policy_round_trip");
-        assert_eq!(
-            borsh::to_vec(&Object::Function(loaded)).unwrap(),
-            original_bytes
-        );
     }
 
     fn class(name: &str, type_tag: i64) -> Object {

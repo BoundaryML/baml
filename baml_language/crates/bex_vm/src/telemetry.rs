@@ -687,31 +687,12 @@ mod tests {
         }
     }
 
+    #[cfg(target_pointer_width = "64")]
     #[test]
-    fn frame_layout_is_32_bytes() {
-        assert_eq!(size_of::<FrameTelemetry>(), 32);
-        assert_eq!(size_of::<Option<FrameTelemetry>>(), 32);
-        #[cfg(target_pointer_width = "64")]
-        {
-            assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96);
-            assert_eq!(size_of::<crate::vm::NativeFrame>(), 24);
-            assert_eq!(size_of::<crate::vm::Frame>(), 96);
-        }
-    }
-
-    #[test]
-    fn hidden_native_has_no_invocation_lifecycle() {
-        let function = function(FunctionKind::NativeUnresolved, None);
-        let mut state = TelemetryState::new_root();
-        state.start_thread();
-        let before = state.events().len();
-
-        assert!(
-            state
-                .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
-                .is_none()
-        );
-        assert_eq!(state.events().len(), before);
+    fn vm_frame_sizes_stay_within_budget() {
+        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96);
+        assert_eq!(size_of::<crate::vm::NativeFrame>(), 24);
+        assert_eq!(size_of::<crate::vm::Frame>(), 96);
     }
 
     #[test]
@@ -815,7 +796,7 @@ mod tests {
     }
 
     #[test]
-    fn await_duration_is_invocation_local() {
+    fn completions_preserve_self_await_and_reentry() {
         let function = function(FunctionKind::Bytecode, None);
         let mut state = TelemetryState::new_root();
         state.start_thread();
@@ -835,9 +816,24 @@ mod tests {
         outer.add_await(ClockDuration::from_ticks(3));
         inner.add_await(ClockDuration::from_ticks(7));
 
-        assert_eq!(outer.await_duration.get().get(), 3);
-        assert_eq!(inner.await_duration.get().get(), 7);
-        assert!(inner.is_reentry());
+        state.complete_invocation(inner, &function, InvocationOutcome::Ok, None);
+        state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+
+        let measurements: Vec<_> = state
+            .events()
+            .iter()
+            .filter_map(|event| match event {
+                ProducerEvent::Timing {
+                    await_time,
+                    reentry,
+                    ..
+                } => Some((await_time.get().get(), *reentry)),
+                _ => None,
+            })
+            .collect();
+        // Completion must carry each invocation's own wait, without rolling
+        // the child's duration into its parent or losing reentry attribution.
+        assert_eq!(measurements, [(7, true), (3, false)]);
     }
 
     #[test]

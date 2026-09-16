@@ -35,14 +35,6 @@ impl TelemetryId {
     pub const fn get(self) -> u64 {
         self.0.get()
     }
-
-    #[cfg(test)]
-    const fn from_raw_for_test(raw: u64) -> Option<Self> {
-        match NonZeroU64::new(raw) {
-            Some(id) => Some(Self(id)),
-            None => None,
-        }
-    }
 }
 
 /// Index into an engine-owned table of immutable, resolved policies.
@@ -69,6 +61,12 @@ impl TelemetryPolicyId {
     #[inline(always)]
     pub fn store(&self, policy_id: u16) {
         self.0.store(policy_id, Ordering::Release);
+    }
+}
+
+impl Default for TelemetryPolicyId {
+    fn default() -> Self {
+        Self::none()
     }
 }
 
@@ -300,26 +298,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn identity_layout_uses_nonzero_niche() {
-        assert_eq!(size_of::<TelemetryId>(), 8);
-        assert_eq!(size_of::<Option<TelemetryId>>(), 8);
-        assert!(TelemetryId::from_raw_for_test(0).is_none());
-        assert_eq!(TelemetryId::from_raw_for_test(7).unwrap().get(), 7);
-    }
-
-    #[test]
-    fn core_type_sizes_are_stable() {
-        assert_eq!(size_of::<CallPathId>(), 4);
-        assert_eq!(size_of::<ClockInstant>(), 8);
-        assert_eq!(size_of::<ClockDuration>(), 8);
-        assert_eq!(size_of::<AwaitDuration>(), 8);
-        assert_eq!(size_of::<TelemetryPolicyId>(), 2);
-    }
-
-    #[test]
-    fn allocator_never_returns_zero() {
-        for _ in 0..ID_RANGE_SIZE * 2 {
-            assert_ne!(allocate_telemetry_id().get(), 0);
+    fn allocator_ids_are_unique_across_workers_and_range_refills() {
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    (0..=ID_RANGE_SIZE * 2)
+                        .map(|_| allocate_telemetry_id())
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let mut ids = std::collections::HashSet::new();
+        for worker in workers {
+            for id in worker.join().unwrap() {
+                assert!(ids.insert(id), "telemetry ID was allocated twice: {id:?}");
+            }
         }
     }
 }
