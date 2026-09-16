@@ -101,6 +101,9 @@ jobs:
       - name: "Run compiler, CLI, and snapshot tests"
         if: inputs.run-compiler-tests
         id: snapshot-test
+        # The shared upload action gates this outcome (including a tokenless
+        # fallback on forks). Do not add a second raw-outcome gate: that would
+        # override Trunk's intentional quarantine handling.
         continue-on-error: true
         run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
         working-directory: baml_language
