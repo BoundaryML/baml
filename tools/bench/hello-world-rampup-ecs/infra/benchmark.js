@@ -38,6 +38,7 @@ function cellValue(configured, cell, label) {
 
 function normalizeProfile(profile, cell) {
   if (!profile || !['ramp', 'sustain', 'binary', 'gc-grid', 'gc-frontier'].includes(profile.mode)) throw new Error('Profile mode must be ramp, sustain, binary, gc-grid, or gc-frontier');
+  if (profile.load_instance_type !== undefined && !['c7i.xlarge', 'c7i.2xlarge', 'c7i.4xlarge', 'c7i.12xlarge'].includes(profile.load_instance_type)) throw new Error('load_instance_type must be a supported c7i size');
   if (profile.on_seconds !== 4 || profile.off_seconds !== 1) throw new Error('The load duty cycle must be 4 seconds on and 1 second off');
   if (profile.explicit_gc !== undefined && typeof profile.explicit_gc !== 'boolean') throw new Error('explicit_gc must be a boolean');
   const explicitGc = profile.explicit_gc === true;
@@ -165,6 +166,7 @@ class BenchmarkStack extends cdk.Stack {
     if (localLoadCidr && (!targetCell || loadCount !== 0)) throw new Error('localLoadCidr requires one targetCell and loadCount=0');
     const run = id;
     const selectedCells = targetCell ? cells().filter(cell => cell.name === targetCell) : cells();
+    const loadInstanceType = profile.load_instance_type ?? matrix.load_instance_type;
     const vpc = foundation.vpc;
     const subnet = vpc.publicSubnets[0];
     const cluster = new ecs.CfnCluster(this, 'Cluster', { clusterName: run, clusterSettings: [{ name: 'containerInsights', value: 'enhanced' }] });
@@ -193,7 +195,7 @@ class BenchmarkStack extends cdk.Stack {
         'ECS_ENABLE_TASK_CPU_MEM_LIMIT=true', 'ECS_AWSVPC_BLOCK_IMDS=true',
         'ECS_ENABLE_AWSLOGS_EXECUTIONROLE_OVERRIDE=true', 'EOF');
       const instance = new ec2.CfnInstance(this, `${logical(name)}Instance`, { imageId: amis[arch],
-        instanceType: load ? matrix.load_instance_type : matrix.architectures[arch].instance_type,
+        instanceType: load ? loadInstanceType : matrix.architectures[arch].instance_type,
         iamInstanceProfile: instanceProfile.ref,
         networkInterfaces: [{ deviceIndex: '0', subnetId: subnet.subnetId, associatePublicIpAddress: true, groupSet: [(load ? loadSg : hostSg).securityGroupId] }],
         metadataOptions: { httpTokens: 'required', httpPutResponseHopLimit: 1 },

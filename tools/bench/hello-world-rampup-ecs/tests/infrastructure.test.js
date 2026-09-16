@@ -127,7 +127,8 @@ test('GC grid profile passes the matrix and GC endpoint to one BAML-only load ta
 test('GC frontier profile passes adaptive search bounds and frequencies to one BAML-only load task', () => {
   const frontier = { mode: 'gc-frontier', gc_frequencies_hz: [1, 2, 5, 10, 20, 30, 60, 120], minimum_rps: 200,
     probe_rps: 5000, maximum_rps: 10000, resolution_rps: 500, known_passing_rps: { 1: 5000, 2: 5000, 5: 5000, 10: 5000 },
-    seconds_per_cell: 60, connections: 1000, request_timeout_ms: 800, on_seconds: 4, off_seconds: 1 };
+    seconds_per_cell: 60, connections: 1000, request_timeout_ms: 800, on_seconds: 4, off_seconds: 1,
+    load_instance_type: 'c7i.2xlarge' };
   const normalized = normalizeProfile(frontier, { name: 'baml-only-arm64', variant: 'baml-only' });
   assert.equal(normalized.maximum, 10000);
   assert.deepEqual(normalized.gcFrequencies, frontier.gc_frequencies_hz);
@@ -140,8 +141,10 @@ test('GC frontier profile passes adaptive search bounds and frequencies to one B
   assert.equal(value('GC_FRONTIER_FREQUENCIES_JSON'), JSON.stringify(frontier.gc_frequencies_hz));
   assert.equal(value('GC_FRONTIER_KNOWN_PASSING_JSON'), JSON.stringify(frontier.known_passing_rps));
   assert.equal(value('EXPLICIT_GC_URL'), 'http://baml-only-arm64.baml-gc-frontier.hello.internal:8080/gc');
+  assert.equal(r.LoadInstance.Properties.InstanceType, 'c7i.2xlarge');
   assert.throws(() => normalizeProfile({ ...frontier, gc_frequencies_hz: [1, 121] }, { name: 'baml-only-arm64', variant: 'baml-only' }));
   assert.throws(() => normalizeProfile({ ...frontier, known_passing_rps: { 3: 5000 } }, { name: 'baml-only-arm64', variant: 'baml-only' }));
+  assert.throws(() => normalizeProfile({ ...frontier, load_instance_type: 't3.nano' }, { name: 'baml-only-arm64', variant: 'baml-only' }));
 });
 test('comparison dashboard keeps twenty series and valid unique metric ids', () => {
   for (const widget of dashboard(['steady-ten', 'steady-hundred'], 'us-east-1').widgets) {

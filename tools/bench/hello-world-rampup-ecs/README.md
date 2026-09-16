@@ -119,6 +119,8 @@ The renderer downloads retained `gc_grid_cell_finished` records and ECS task-sto
 
 Use `gc-frontier` to extend a proven grid without exhaustively filling every new cell. For each configured GC frequency it tests the maximum first, reuses an explicitly recorded passing lower bound when available, and bisects the pass/fail interval to `resolution_rps`. Frequencies without prior evidence probe `probe_rps`, then fall back to `minimum_rps` only if necessary. Cells use the same strict 99% aggregate, 95% minimum-cycle, healthy-probe, and successful-GC pass rule as the binary search.
 
+Single-target profiles may set `"load_instance_type": "c7i.2xlarge"` to avoid reserving the full matrix runner's 48-vCPU `c7i.12xlarge`. Supported overrides are `c7i.xlarge`, `c7i.2xlarge`, `c7i.4xlarge`, and the default `c7i.12xlarge`; the ECS load task retains its fixed 4-vCPU / 1-GiB allocation.
+
 ```sh
 python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-baml-gc-frontier-01 --images artifacts/BUILD/images.json --profile profiles/gc-frontier-baml-only-arm64.json --target-cell baml-only-arm64
 
