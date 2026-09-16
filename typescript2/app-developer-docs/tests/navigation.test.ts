@@ -10,6 +10,21 @@ import {
   primaryNavigation,
   searchablePages,
 } from '../lib/navigation.ts';
+import createNextConfig from '../next.config.ts';
+
+test('the legacy changelog route redirects to website-owned release notes', async () => {
+  const redirects = await createNextConfig(
+    'phase-production-build',
+  ).redirects?.();
+
+  assert.deepEqual(redirects, [
+    {
+      destination: 'https://boundaryml.com/blog?tags=release',
+      permanent: true,
+      source: '/changelog',
+    },
+  ]);
+});
 
 test('every shell navigation destination has a concrete static route', async () => {
   const hrefs = new Set([

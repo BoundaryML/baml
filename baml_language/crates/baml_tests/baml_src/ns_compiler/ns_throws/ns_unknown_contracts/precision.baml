@@ -147,3 +147,118 @@ test "an unused concrete member does not invalidate a satisfied unknown bound" {
         },
     )
 }
+
+test "rejects a lambda unknown bound when its body does not throw" {
+    root.compiler.AssertRejected(
+        {
+            "case.baml": `
+                function run() -> int {
+                    let callback = () -> int throws unknown { 1 };
+                    1
+                }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0097",
+            message: "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape",
+        },
+    )
+}
+
+test "rejects an aliased lambda unknown bound with narrower throws" {
+    root.compiler.AssertRejected(
+        {
+            "case.baml": `
+                type OpenErrors = unknown
+                function run() -> int {
+                    let callback = () -> int throws OpenErrors { throw 1 };
+                    1
+                }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0097",
+            message: "`throws unknown` is imprecise: this function only throws `int`. BAML infers thrown types automatically, so remove the declaration; write `throws int` only to explicitly bound what may escape",
+        },
+    )
+}
+
+test "nested lambda throws do not cover their enclosing lambda contract" {
+    root.compiler.AssertRejected(
+        {
+            "case.baml": `
+                function run(value: unknown) -> int {
+                    let outer = () -> int throws unknown {
+                        let inner = () -> int throws unknown { throw value };
+                        1
+                    };
+                    1
+                }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0097",
+            message: "`throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape",
+        },
+    )
+}
+
+test "contextual callback contracts do not require exact coverage" {
+    root.compiler.AssertCompiles(
+        {
+            "case.baml": `
+                function accept(callback: () -> int throws int | string) -> int { 1 }
+                function run() -> int {
+                    accept(() -> int { throw 1 })
+                }
+            `,
+        },
+    )
+}
+
+test "a lambda unknown union is precise when unknown escapes" {
+    root.compiler.AssertCompiles(
+        {
+            "case.baml": `
+                type OpenErrors = unknown
+                function run(value: unknown) -> int {
+                    let direct = () -> int throws unknown { throw value };
+                    let aliased = () -> int throws OpenErrors { throw value };
+                    let mixed = () -> int throws string | unknown { throw value };
+                    1
+                }
+            `,
+        },
+    )
+}
+
+test "lambda coverage uses finalized callback effects" {
+    root.compiler.AssertCompiles(
+        {
+            "case.baml": `
+                function invoke<E>(callback: () -> int throws E) -> int throws E {
+                    callback()
+                }
+                function run(value: unknown) -> int {
+                    let callback = () -> int throws unknown {
+                        invoke(() -> int { throw value })
+                    };
+                    1
+                }
+            `,
+        },
+    )
+}
+
+test "open lambda clauses do not require named member coverage" {
+    root.compiler.AssertCompiles(
+        {
+            "case.baml": `
+                function run() -> int {
+                    let callback = () -> int throws string | _ { throw 1 };
+                    1
+                }
+            `,
+        },
+    )
+}

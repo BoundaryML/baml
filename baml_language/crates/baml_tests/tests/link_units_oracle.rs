@@ -34,13 +34,20 @@ function greet(name: string) -> string {
 "#;
 
 /// Assert `link(emit_units(project)) == generate_project_bytecode(project)` for
-/// the project `build` produces. Two fresh databases are built (one per side) so
-/// `emit_units` and the full compile share no salsa state.
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
+}
+
 fn assert_link_matches(label: &str, build: impl Fn() -> ProjectDatabase) {
-    let full = generate_project_bytecode_with_opt(&build(), OptLevel::Two)
+    let full_db = build();
+    let full = generate_project_bytecode_with_opt(&full_db, package(&full_db), OptLevel::Two)
         .unwrap_or_else(|e| panic!("{label}: full compile: {e:?}"));
 
-    let units = emit_units(&build(), OptLevel::Two)
+    let units_db = build();
+    let units = emit_units(&units_db, package(&units_db), OptLevel::Two)
         .unwrap_or_else(|e| panic!("{label}: emit_units: {e:?}"));
     let linked = link(&units).unwrap_or_else(|e| panic!("{label}: link failed: {e}"));
 

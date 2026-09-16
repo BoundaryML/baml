@@ -55,10 +55,10 @@ struct Cx<'a> {
     member: &'a Member,
     /// The handle type named by `child: interned(..)`.
     handle: &'a syn::Type,
-    /// The family's head parameter and its declared default, when the family
-    /// is generic. The generated types are monomorphic: every occurrence of
-    /// the parameter is replaced by the default.
-    head: Option<(&'a Ident, &'a syn::Type)>,
+    /// The family's head parameter and this member's default for it, when the
+    /// family is generic. The generated types are monomorphic: every
+    /// occurrence of the parameter is replaced by the default.
+    head: Option<(Ident, syn::Type)>,
 }
 
 pub(crate) fn gen_interned_member(
@@ -66,7 +66,7 @@ pub(crate) fn gen_interned_member(
     member: &Member,
     handle: &syn::Type,
 ) -> TokenStream {
-    let head = match head_and_default(family) {
+    let head = match head_and_default(family, member) {
         Ok(head) => head,
         Err(e) => return e,
     };
@@ -90,12 +90,17 @@ pub(crate) fn gen_interned_member(
     out
 }
 
-/// The family's single head parameter and its default. A parameterless family
+/// The family's single head parameter and the default `member` fixes it at
+/// (its own `head:` if declared, else the family's). A parameterless family
 /// has no head to fix (`Ok(None)`); more than one parameter or a missing
 /// default is a spanned expansion error, since the transform could neither
 /// pick "the" head nor a type to fix it at.
-fn head_and_default(family: &Family) -> Result<Option<(&Ident, &syn::Type)>, TokenStream> {
-    let mut params = family.generics.params.iter().filter_map(|p| match p {
+fn head_and_default(
+    family: &Family,
+    member: &Member,
+) -> Result<Option<(Ident, syn::Type)>, TokenStream> {
+    let generics = member.declaration_generics(&family.generics);
+    let mut params = generics.params.iter().filter_map(|p| match p {
         GenericParam::Type(t) => Some(t),
         GenericParam::Lifetime(_) | GenericParam::Const(_) => None,
     });
@@ -119,7 +124,7 @@ fn head_and_default(family: &Family) -> Result<Option<(&Ident, &syn::Type)>, Tok
             );
         });
     };
-    Ok(Some((&first.ident, default)))
+    Ok(Some((first.ident.clone(), default.clone())))
 }
 
 fn gen_enum(cx: &Cx) -> TokenStream {
@@ -180,7 +185,7 @@ fn interned_ty(cx: &Cx, ty: &syn::Type) -> TokenStream {
         return quote!(#ty);
     }
     // The head parameter, fixed at its declared default.
-    if let Some((param, default)) = cx.head
+    if let Some((param, default)) = &cx.head
         && path_head(ty).is_some_and(|id| id == param)
     {
         return quote!(#default);
@@ -238,7 +243,7 @@ fn mentions_family_or_head(cx: &Cx, ty: &syn::Type) -> bool {
     if contains_recursion(cx.family, ty) {
         return true;
     }
-    let Some((param, _)) = cx.head else {
+    let Some((param, _)) = &cx.head else {
         return false;
     };
     fn walk(ts: TokenStream, param: &Ident) -> bool {

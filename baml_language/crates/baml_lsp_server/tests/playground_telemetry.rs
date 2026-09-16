@@ -16,7 +16,7 @@ use bex_prof_store::{
             ProfilerSession, RootAdmission, RootProfileIntent,
         },
         clock,
-        record::{FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus},
+        record::{FunctionEndStatus, MAX_RECORD_LEN, Marker, ThreadEndStatus},
     },
 };
 
@@ -65,7 +65,7 @@ fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
     ) else {
         panic!("root must be admitted");
     };
-    let emit = |record: RawRecord<'_>| {
+    let emit = |record: Marker<'_>| {
         let mut bytes = [0; MAX_RECORD_LEN];
         let len = record.encode(&mut bytes);
         backend::consume_engine_bytes(euid, engine_id, &bytes[..len]);
@@ -86,7 +86,7 @@ fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
     let unselected =
         backend::resolve_capture_plan(false, FunctionCaptureClass::Ordinary, None).to_call_flags();
 
-    emit(RawRecord::StartThread {
+    emit(Marker::BexThreadStart {
         flags: 0,
         thread_id: thread_ref.thread_id,
         parent_thread_id: BexThreadId(0),
@@ -94,7 +94,7 @@ fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
         ts_ticks: tick(0),
         name: b"",
     });
-    emit(RawRecord::CallFunction {
+    emit(Marker::FunctionEnter {
         flags: selected,
         thread_id: thread_ref.thread_id,
         call_id: BexCallId(6),
@@ -108,7 +108,7 @@ fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
     for (call_id, busy_ms) in [(7u64, 12), (8, 8)] {
         let start = tick(0);
         let end = tick(busy_ms);
-        emit(RawRecord::CallFunction {
+        emit(Marker::FunctionEnter {
             flags: unselected,
             thread_id: thread_ref.thread_id,
             call_id: BexCallId(call_id),
@@ -117,20 +117,20 @@ fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
             call_site: None,
             ts_ticks: start,
         });
-        emit(RawRecord::EndFunction {
+        emit(Marker::FunctionExit {
             status: FunctionEndStatus::Ok,
             thread_id: thread_ref.thread_id,
             call_id: BexCallId(call_id),
             ts_ticks: end,
         });
     }
-    emit(RawRecord::EndFunction {
+    emit(Marker::FunctionExit {
         status: FunctionEndStatus::Ok,
         thread_id: thread_ref.thread_id,
         call_id: BexCallId(6),
         ts_ticks: tick(6),
     });
-    emit(RawRecord::EndThread {
+    emit(Marker::BexThreadEnd {
         status: ThreadEndStatus::Completed,
         thread_id: thread_ref.thread_id,
         ts_ticks: tick(0),

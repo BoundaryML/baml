@@ -77,6 +77,10 @@ pub struct OutputWriterReport {
     pub removed_files: Vec<PathBuf>,
     /// True when a recognized legacy manifest proved ownership during migration.
     pub adopted_legacy_output: bool,
+    /// True when the installed tree already matched byte-for-byte and no file
+    /// was rewritten. `written_files` still lists the full inventory — the
+    /// generation produced them, the filesystem just already held them.
+    pub unchanged: bool,
 }
 
 #[derive(Debug)]
@@ -289,13 +293,30 @@ fn write_generated_output_with_rename(
         .cloned()
         .collect::<Vec<_>>();
 
-    create_staging_tree(&paths.staging, &unknown, &generated)?;
     let manifest = manifest_for_generated(&generated);
-    write_internal_file(
-        &paths.staging,
-        OUTPUT_MANIFEST_FILE,
-        &manifest_bytes(&manifest)?,
-    )?;
+    let manifest_json = manifest_bytes(&manifest)?;
+
+    // Nothing to install when the tree already holds exactly this inventory.
+    // Skipping keeps every file's inode and mtime, which is what downstream
+    // toolchains (cargo, uv, pnpm, gradle, msbuild) key their own caches on.
+    if tree_matches(&paths.target, &generated, &manifest_json)? {
+        // A byte-identical manifest lists exactly `next_owned`, and
+        // `tree_matches` rejects leftover pending manifests, so the prior
+        // owned set cannot contain anything this generation drops.
+        debug_assert!(
+            stale.is_empty(),
+            "matching tree reported stale owned files: {stale:?}"
+        );
+        return Ok(OutputWriterReport {
+            written_files: public_paths.into_iter().map(PathBuf::from).collect(),
+            removed_files: Vec::new(),
+            adopted_legacy_output,
+            unchanged: true,
+        });
+    }
+
+    create_staging_tree(&paths.staging, &unknown, &generated)?;
+    write_internal_file(&paths.staging, OUTPUT_MANIFEST_FILE, &manifest_json)?;
     validate_staging_tree(&paths.staging, &manifest, &unknown)?;
 
     install_staging_tree(&paths, &mut rename)?;
@@ -308,7 +329,94 @@ fn write_generated_output_with_rename(
             .map(PathBuf::from)
             .collect(),
         adopted_legacy_output,
+        unchanged: false,
     })
+}
+
+/// Whether `target` already holds precisely what this transaction would
+/// install: the ownership marker, a byte-identical manifest, every generated
+/// path as a regular file with matching contents, and no other writer-owned
+/// residue at the root.
+///
+/// Deliberately re-reads and re-compares every byte instead of trusting the
+/// manifest it just read — a hand-edited generated file must still be
+/// restored. The only work this can elide is work that would have produced an
+/// identical tree.
+///
+/// A manifestless tree (including one a legacy manifest just proved ownership
+/// of) has no version-2 manifest to match, so it always falls through to the
+/// full transaction.
+fn tree_matches(
+    target: &Path,
+    generated: &BTreeMap<String, Vec<u8>>,
+    manifest_json: &[u8],
+) -> Result<bool, OutputWriterError> {
+    if !path_lexists(target) {
+        return Ok(false);
+    }
+    if !regular_file_matches(
+        &target.join(OWNERSHIP_MARKER_FILE),
+        OWNERSHIP_MARKER_CONTENT,
+    )? || !regular_file_matches(&target.join(OUTPUT_MANIFEST_FILE), manifest_json)?
+    {
+        return Ok(false);
+    }
+    if !root_infrastructure_is_settled(target)? {
+        return Ok(false);
+    }
+    for (relative, contents) in generated {
+        if !regular_file_matches(&target.join(relative), contents)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// The three writer-owned files a completed transaction leaves at the output
+/// root. Anything else infrastructure-shaped — a pending manifest, an
+/// interrupted temp file, a legacy manifest or staging marker — is residue
+/// that the full transaction drops, so its presence forbids the skip.
+fn root_infrastructure_is_settled(target: &Path) -> Result<bool, OutputWriterError> {
+    for entry in
+        fs::read_dir(target).map_err(|source| io_error("read output directory", target, source))?
+    {
+        let entry =
+            entry.map_err(|source| io_error("read output directory entry", target, source))?;
+        let name = entry.file_name();
+        let relative = Path::new(&name);
+        if !is_root_writer_infrastructure(relative) {
+            continue;
+        }
+        let Some(segment) = name.to_str() else {
+            return Ok(false);
+        };
+        let segment = segment.to_ascii_lowercase();
+        if segment != GITIGNORE_FILE
+            && segment != OUTPUT_MANIFEST_FILE
+            && segment != OWNERSHIP_MARKER_FILE
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// `true` only for a regular file whose bytes equal `expected`. A missing
+/// path, a symlink, a directory, or any other file type answers `false`:
+/// each is a state the full transaction replaces with a regular file. A read
+/// failure also answers `false`, so the error surfaces from the real write
+/// rather than from this probe.
+fn regular_file_matches(path: &Path, expected: &[u8]) -> Result<bool, OutputWriterError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(source) => return Err(io_error("inspect installed output file", path, source)),
+    };
+    // `symlink_metadata` describes the link itself, so this rejects symlinks.
+    if !metadata.is_file() || metadata.len() != expected.len() as u64 {
+        return Ok(false);
+    }
+    Ok(fs::read(path).is_ok_and(|contents| contents == expected))
 }
 
 fn transaction_paths(output_directory: &Path) -> Result<TransactionPaths, OutputWriterError> {
@@ -2225,5 +2333,125 @@ mod tests {
         ));
         assert!(output.join("user-link").exists());
         assert!(!output.join("value.go").exists());
+    }
+
+    #[test]
+    fn identical_regeneration_rewrites_nothing() {
+        let root = TempDir::new().unwrap();
+        let output = root.path().join("sdk");
+        let inventory = || vec![file("a/value.go", "value"), file("doc.md", "doc")];
+
+        let first = write_generated_output(&output, inventory()).unwrap();
+        assert!(!first.unchanged);
+
+        let second = write_generated_output(&output, inventory()).unwrap();
+        assert!(second.unchanged);
+        // The inventory is still reported: the generation produced those
+        // files, the filesystem merely already held them.
+        assert_eq!(
+            second.written_files,
+            vec![PathBuf::from("a/value.go"), PathBuf::from("doc.md")]
+        );
+        assert!(second.removed_files.is_empty());
+    }
+
+    /// The whole point of the skip: downstream toolchains key their caches on
+    /// mtime, so an identical regeneration must leave the files themselves
+    /// alone rather than swapping in a fresh tree.
+    #[cfg(unix)]
+    #[test]
+    fn identical_regeneration_preserves_inodes() {
+        use std::os::unix::fs::MetadataExt as _;
+
+        let root = TempDir::new().unwrap();
+        let output = root.path().join("sdk");
+        let inventory = || vec![file("a/value.go", "value"), file("doc.md", "doc")];
+        let inode = |relative: &str| fs::metadata(output.join(relative)).unwrap().ino();
+
+        write_generated_output(&output, inventory()).unwrap();
+        let before = (inode("a/value.go"), inode("doc.md"), inode(GITIGNORE_FILE));
+
+        write_generated_output(&output, inventory()).unwrap();
+
+        assert_eq!(
+            before,
+            (inode("a/value.go"), inode("doc.md"), inode(GITIGNORE_FILE))
+        );
+    }
+
+    #[test]
+    fn hand_edited_generated_file_is_restored_rather_than_skipped() {
+        let root = TempDir::new().unwrap();
+        let output = root.path().join("sdk");
+        let inventory = || vec![file("value.go", "generated")];
+
+        write_generated_output(&output, inventory()).unwrap();
+        fs::write(output.join("value.go"), "tampered").unwrap();
+
+        let report = write_generated_output(&output, inventory()).unwrap();
+
+        assert!(!report.unchanged);
+        assert_eq!(
+            fs::read_to_string(output.join("value.go")).unwrap(),
+            "generated"
+        );
+    }
+
+    #[test]
+    fn changed_inventory_still_installs() {
+        let root = TempDir::new().unwrap();
+        let output = root.path().join("sdk");
+
+        write_generated_output(&output, vec![file("value.go", "first")]).unwrap();
+        let report = write_generated_output(&output, vec![file("value.go", "second")]).unwrap();
+
+        assert!(!report.unchanged);
+        assert_eq!(
+            fs::read_to_string(output.join("value.go")).unwrap(),
+            "second"
+        );
+    }
+
+    /// Residue from an interrupted write is dropped by the whole-tree swap, so
+    /// its presence must forbid the skip that would otherwise strand it.
+    #[test]
+    fn writer_residue_at_the_root_forbids_the_skip() {
+        let root = TempDir::new().unwrap();
+        let output = root.path().join("sdk");
+        let inventory = || vec![file("value.go", "value")];
+
+        write_generated_output(&output, inventory()).unwrap();
+        let residue = output.join(format!("{TEMP_PREFIX}leftover"));
+        fs::write(&residue, "interrupted").unwrap();
+
+        let report = write_generated_output(&output, inventory()).unwrap();
+
+        assert!(!report.unchanged);
+        assert!(!residue.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_over_a_generated_path_forbids_the_skip() {
+        use std::os::unix::fs::symlink;
+
+        let root = TempDir::new().unwrap();
+        let output = root.path().join("sdk");
+        let inventory = || vec![file("value.go", "value")];
+
+        write_generated_output(&output, inventory()).unwrap();
+        fs::write(root.path().join("elsewhere.go"), "value").unwrap();
+        fs::remove_file(output.join("value.go")).unwrap();
+        symlink(root.path().join("elsewhere.go"), output.join("value.go")).unwrap();
+
+        let report = write_generated_output(&output, inventory()).unwrap();
+
+        assert!(!report.unchanged);
+        assert!(
+            !fs::symlink_metadata(output.join("value.go"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
     }
 }

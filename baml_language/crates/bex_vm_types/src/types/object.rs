@@ -4,8 +4,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
 use crate::{
-    ArrayContainer, BoundMethod, Class, CollectorRef, Enum, Function, GenericFunction, HostClosure,
-    Instance, MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
+    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
+    MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
         RuntimeImplRule, TypeAliasDef,
@@ -124,9 +124,6 @@ pub enum Object {
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
     RustData(Arc<dyn Any + Send + Sync>),
 
-    /// Collector object (opaque handle to `bex_events::Collector`).
-    Collector(CollectorRef),
-
     /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
     /// described type is the whole of it: `==` is type equivalence, so a GC
     /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
@@ -171,8 +168,8 @@ impl Object {
     }
 }
 
-// Custom borsh for Object: RustData and Collector contain non-serializable
-// trait objects (Arc<dyn Any>). They should never appear in a compiled Program.
+// Custom borsh for Object: runtime-only trait objects cannot be serialized
+// and should never appear in a compiled Program.
 #[derive(BorshSerialize, BorshDeserialize)]
 enum ObjectWire {
     Function(Box<Function>),
@@ -260,12 +257,6 @@ impl BorshSerialize for Object {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "RustData cannot be serialized",
-                ));
-            }
-            Self::Collector(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Collector cannot be serialized",
                 ));
             }
             Self::HostClosure(_) => {
@@ -367,7 +358,6 @@ impl std::fmt::Display for Object {
                 map.data.lock().len()
             ),
             Object::RustData(_) => write!(f, "<rust_data>"),
-            Object::Collector(_) => write!(f, "<collector>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
@@ -402,7 +392,6 @@ pub enum ObjectType {
     Variant,
     Future(FutureType),
     UnscheduledFuture,
-    Collector,
     Type,
     RustData,
     Float,
@@ -432,7 +421,6 @@ impl ObjectType {
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::RustData(_) => Self::RustData,
-            Object::Collector(_) => Self::Collector,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
@@ -478,7 +466,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::String => write!(f, "string"),
             ObjectType::Bigint => write!(f, "bigint"),
             ObjectType::Uint8Array => write!(f, "uint8array"),
-            ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),

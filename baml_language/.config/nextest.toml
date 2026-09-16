@@ -27,6 +27,13 @@ java-gradle-serial = { max-threads = 1 }
 # matrix (isolated via --artifacts-path).
 typescript-web-workers = { max-threads = 1 }
 
+# These tests use a private four-worker Rayon pool for independent compiler
+# databases. Reserve matching slots instead of treating them as single-core.
+# Keep aligned with FIXTURE_WORKERS in type_spec/fixtures.rs.
+[[profile.default.overrides]]
+filter = 'package(=baml_tests) & test(/^type_spec::fixtures::(conforming_fixtures|bounded_pool_preserves_order_and_results)$/)'
+threads-required = 4
+
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
 test-group = 'rust-sdk-fixture'
@@ -123,7 +130,9 @@ setup = 'rust_bridge_engine_win'
 # Build it once before nextest fans the individual cases out into separate
 # processes. The setup scripts mark matching tests through NEXTEST_ENV, so the
 # test helper validates the prebuilt sibling instead of recursively invoking
-# Cargo once per case. Plain `cargo test` retains its one-process fallback.
+# Cargo once per case. CI prebuilds both binaries in its outer Cargo invocation
+# and sets BAML_PACK_HOST_PREBUILT=1, making setup a no-build pass-through.
+# Plain `cargo test` retains its one-process fallback.
 [scripts.setup.baml_pack_host_unix]
 command = './crates/baml_cli/tests/build-pack-host.sh'
 
@@ -169,7 +178,7 @@ setup = 'java_gradle_win'
 # out connecting to its forked daemon). A single package-wide override funnels
 # the entire sdk_test_java suite through the one-slot `java-gradle-serial` group,
 # which closes both races; it subsumes the old per-fixture groups. The two
-# non-gradle gates (`build_diagnostics`, `setup_guard`) ride along harmlessly.
+# non-gradle gates (`setup_guard`, `fixture_manifest`) ride along harmlessly.
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_java)'
 test-group = 'java-gradle-serial'
@@ -275,3 +284,23 @@ setup = 'csharp_cdylib_unix'
 filter = 'package(=sdk_test_csharp)'
 platform = { host = 'cfg(windows)' }
 setup = 'csharp_cdylib_win'
+
+# JUnit reporting for Trunk Flaky Tests uploads. The test-groups and setup
+# scripts on profile.default above still apply: nextest resolves both against
+# the default profile for every named profile.
+#
+# No retries: retrying masks the flakes this reporting exists to find, and
+# quarantining is the intended replacement.
+[profile.ci.junit]
+path = "junit.xml"
+
+# baml_bridge runs after the sdk suite in the same job, so it needs a
+# separate report: sharing `ci` would republish the stale sdk report
+# under the bridge outcome whenever the bridge run dies before writing.
+[profile.ci-bridge.junit]
+path = "junit.xml"
+
+# The windows CLI e2e step runs after the job's `ci` report is already
+# uploaded, so it reports separately for the same reason as the bridge.
+[profile.ci-cli-e2e.junit]
+path = "junit.xml"

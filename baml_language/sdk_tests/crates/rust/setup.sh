@@ -32,21 +32,28 @@ WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 # target dir — before the fixture CARGO_TARGET_DIR export below — which
 # is where the emitted tests look for it (next to their own binary, so
 # ambient CARGO_TARGET_DIR/profile agree by construction).
+# Generate each fixture's crate first: nothing else produces it, and the
+# pre-warm loop below silently skips any fixture whose generated/ is missing.
+# Must stay ABOVE the CARGO_TARGET_DIR export — otherwise the driver would
+# build into the fixtures' target dir and recompile the whole compiler there.
+echo "==> sdk_test_codegen rust (generate fixture crates)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- rust)
+
 echo "==> cargo build -p bridge_cffi (engine cdylib)"
 (cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi)
 
 # Shared cargo build dir under target/, matching the CARGO_TARGET_DIR
 # the emitted tests thread through (run_test_cmd / CACHE_SUBDIR in
-# harness_setup/src/rust.rs).
+# codegen/src/rust.rs).
 export CARGO_TARGET_DIR="$WORKSPACE_ROOT/target/sdk-rust-target"
 mkdir -p "$CARGO_TARGET_DIR"
 
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
     # Never run cargo without the generated manifest: cargo discovers
-    # manifests upward, so a missing Cargo.toml (codegen failure) would
-    # silently turn this into a workspace-wide build. The failure itself
-    # surfaces via the build_diagnostics test.
+    # manifests upward, so a missing Cargo.toml would silently turn this into
+    # a workspace-wide build. Codegen above aborts the script on failure, so
+    # reaching here without one means the tree was removed out from under us.
     if [[ ! -f "$fixture_dir/Cargo.toml" ]]; then
         echo "==> skipping $fixture_dir (no Cargo.toml — codegen failed?)"
         continue
@@ -61,7 +68,7 @@ done
 # this script ran *this* run. Plain `cargo test` has no $NEXTEST_ENV,
 # so the var stays unset and the guard fails with a helpful message.
 # Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/rust.rs.
+# codegen/src/rust.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_RUST_SETUP=1" >> "$NEXTEST_ENV"
 fi

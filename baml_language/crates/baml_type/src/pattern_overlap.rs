@@ -16,13 +16,14 @@
 //!    contract, whereas a wrong `No` rejects valid code and a wrong "definite"
 //!    would skip a needed test.
 
-use baml_base::TyAttr;
+use baml_base::{LangRoots, TyAttr};
 
 use crate::{
-    Interface, ParamTy, Ty, TypeName,
+    Interface, ParamTy, Ty,
     unify::{
-        EnumVariants, MAX_UNIFY_DEPTH, Overlap, TypeBindings, chase_var, contains_bound_typevar,
-        expand_alias_head, is_literal_subtype, nf, unify_into, var_under_union,
+        AliasEquivCtx, EnumVariants, MAX_UNIFY_DEPTH, Overlap, TypeBindings, chase_var,
+        contains_bound_typevar, expand_alias_head, is_literal_subtype, nf, unify_into,
+        var_under_union,
     },
 };
 
@@ -64,11 +65,24 @@ pub struct PatternOverlapEnv<'a> {
     /// the caller's normalized alias map. Raw bodies mis-decide alias-obscured
     /// unions at invariant positions (`Bar<TF>` vs `Bar<bool>` with
     /// `type TF = true | false` would be a wrong `No`).
-    pub aliases: &'a std::collections::HashMap<TypeName, Ty>,
+    pub aliases: &'a dyn crate::unify::AliasMap,
+    /// Which roots hold the language packages (the well-known `reflect`
+    /// heads resolve by identity).
+    pub lang: LangRoots,
     /// Enum schemas for `nf`'s complete-variant folding.
     pub enum_variants: EnumVariants<'a>,
     /// See [`ImplementsOracle`].
     pub implements: ImplementsOracle<'a>,
+}
+
+impl PatternOverlapEnv<'_> {
+    /// The alias-equivalence context over this scope's aliases.
+    pub fn alias_ctx(&self) -> AliasEquivCtx<'_> {
+        AliasEquivCtx {
+            aliases: self.aliases,
+            lang: self.lang,
+        }
+    }
 }
 
 /// Can the type-set denoted by `pat` intersect the set denoted by `member` under
@@ -111,8 +125,9 @@ fn pattern_overlap_at(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>, depth:
     if depth >= MAX_UNIFY_DEPTH {
         return Overlap::Unknown;
     }
-    let pat = nf(&expand_alias_head(pat, env.aliases), env.enum_variants);
-    let member = nf(&expand_alias_head(member, env.aliases), env.enum_variants);
+    let aliases = env.alias_ctx();
+    let pat = nf(&expand_alias_head(pat, &aliases), env.enum_variants);
+    let member = nf(&expand_alias_head(member, &aliases), env.enum_variants);
     let (pats, members) = (union_members(&pat), union_members(&member));
     if let ([p], [m]) = (pats, members) {
         return pattern_pair_overlap(p, m, env);
@@ -183,7 +198,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
         return Overlap::Yes;
     }
     let mut bindings = TypeBindings::default();
-    let mut result = unify_into(pat, member, env.vars, env.aliases, &mut bindings);
+    let mut result = unify_into(pat, member, env.vars, &env.alias_ctx(), &mut bindings);
     if result == Overlap::No {
         result = pattern_atom_meet(pat, member, env);
         // A meet rescue proves possibility structurally, without a witness
@@ -385,6 +400,7 @@ mod tests {
     use baml_base::{Literal, Name};
 
     use super::*;
+    use crate::DeclName;
 
     fn param(name: &str) -> ParamTy {
         ParamTy::new(0, Name::new(name))
@@ -396,7 +412,7 @@ mod tests {
 
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
         Ty::Interface(
-            TypeName::local(Name::new(name)),
+            crate::test_roots::local(Name::new(name)),
             args.into(),
             Box::new([]),
             TyAttr::default(),
@@ -420,12 +436,12 @@ mod tests {
     }
 
     fn enum_ty(name: &str) -> Ty {
-        Ty::Enum(TypeName::local(Name::new(name)), TyAttr::default())
+        Ty::Enum(crate::test_roots::local(Name::new(name)), TyAttr::default())
     }
 
     fn enum_variant(enum_name: &str, variant: &str) -> Ty {
         Ty::EnumVariant(
-            TypeName::local(Name::new(enum_name)),
+            crate::test_roots::local(Name::new(enum_name)),
             Name::new(variant),
             TyAttr::default(),
         )
@@ -438,14 +454,14 @@ mod tests {
     }
 
     /// Stub enum schema: `Cmp` has variants `Less`, `Equal`, `More`.
-    fn stub_enum_variants(qtn: &TypeName) -> Option<Vec<Name>> {
+    fn stub_enum_variants(qtn: &DeclName) -> Option<Vec<Name>> {
         (qtn.name().as_str() == "Cmp")
             .then(|| vec![Name::new("Less"), Name::new("Equal"), Name::new("More")])
     }
 
     fn class1(name: &str, arg: Ty) -> Ty {
         Ty::Class(
-            TypeName::local(Name::new(name)),
+            crate::test_roots::local(Name::new(name)),
             Box::new([arg]),
             TyAttr::default(),
         )
@@ -453,20 +469,24 @@ mod tests {
 
     fn class2(name: &str, a: Ty, b: Ty) -> Ty {
         Ty::Class(
-            TypeName::local(Name::new(name)),
+            crate::test_roots::local(Name::new(name)),
             Box::new([a, b]),
             TyAttr::default(),
         )
     }
 
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(TypeName::local(Name::new(name)), TyAttr::default())
+        Ty::TypeAlias(crate::test_roots::local(Name::new(name)), TyAttr::default())
     }
 
     /// A nullary interface constraint (the bound / registry-request form, as opposed
     /// to the [`interface`] helper's existential `Ty`).
     fn constraint(name: &str) -> Interface {
-        Interface::new(TypeName::local(Name::new(name)), Box::new([]), Box::new([]))
+        Interface::new(
+            crate::test_roots::local(Name::new(name)),
+            Box::new([]),
+            Box::new([]),
+        )
     }
 
     /// A zero-parameter function type with the given return type (`() -> ret`, never
@@ -496,13 +516,14 @@ mod tests {
         member: &Ty,
         vars: &[ParamTy],
         bounds: &TypeVarBoundsMap,
-        aliases: &std::collections::HashMap<TypeName, Ty>,
+        aliases: &std::collections::HashMap<DeclName, Ty>,
         implements: ImplementsOracle<'_>,
     ) -> Overlap {
         pattern_overlap(
             pat,
             member,
             &PatternOverlapEnv {
+                lang: crate::test_roots::lang(),
                 vars,
                 bounds,
                 aliases,
@@ -933,7 +954,7 @@ mod tests {
         assert_eq!(
             pattern_overlap_with(
                 &iface,
-                &Ty::class("Foo"),
+                &crate::test_roots::class("Foo"),
                 &vars,
                 &bounds,
                 &aliases,
@@ -944,7 +965,7 @@ mod tests {
         assert_eq!(
             pattern_overlap_with(
                 &iface,
-                &Ty::class("Foo"),
+                &crate::test_roots::class("Foo"),
                 &vars,
                 &bounds,
                 &aliases,
@@ -1015,13 +1036,13 @@ mod tests {
         let vars = params(&[]);
         let mut aliases = std::collections::HashMap::default();
         aliases.insert(
-            TypeName::local(Name::new("A")),
+            crate::test_roots::local(Name::new("A")),
             Ty::union([Ty::int(), Ty::string()]),
         );
         assert_eq!(
             pattern_overlap_with(
                 &Ty::string(),
-                &Ty::union([type_alias("A"), Ty::class("Foo")]),
+                &Ty::union([type_alias("A"), crate::test_roots::class("Foo")]),
                 &vars,
                 &TypeVarBoundsMap::default(),
                 &aliases,
@@ -1039,11 +1060,11 @@ mod tests {
         let vars = params(&[]);
         let mut aliases = std::collections::HashMap::default();
         aliases.insert(
-            TypeName::local(Name::new("A")),
+            crate::test_roots::local(Name::new("A")),
             Ty::union([Ty::int(), type_alias("B")]),
         );
         aliases.insert(
-            TypeName::local(Name::new("B")),
+            crate::test_roots::local(Name::new("B")),
             Ty::union([Ty::bool(), type_alias("A")]),
         );
         assert_eq!(

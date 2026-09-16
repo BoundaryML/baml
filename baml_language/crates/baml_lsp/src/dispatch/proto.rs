@@ -50,6 +50,11 @@ pub(super) fn hover_markdown(info: &TypeInfo) -> String {
             methods,
             canonical_fqn,
             ..
+        }
+        | TypeInfo::Enum {
+            methods,
+            canonical_fqn,
+            ..
         } if !methods.is_empty() => {
             out.push_str("\n\nRun `baml describe ");
             out.push_str(canonical_fqn);

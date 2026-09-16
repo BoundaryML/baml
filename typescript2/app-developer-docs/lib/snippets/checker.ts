@@ -32,29 +32,35 @@ export interface SnippetValidationResult {
 
 const diagnosticStartPattern = /^.*? error\[([^\]]+)\]: (.*)$/gm;
 
-function runProcess(
+export function runBamlProcess(
   binary: string,
   argumentsToPass: readonly string[],
 ): Promise<{
   exitCode: number | null;
   output: string;
+  stdout: string;
 }> {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(binary, argumentsToPass, {
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 120_000,
     });
     let output = '';
+    let stdout = '';
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
       output += chunk;
     });
     child.stderr.on('data', (chunk: string) => {
       output += chunk;
     });
     child.on('error', rejectPromise);
-    child.on('close', (exitCode) => resolvePromise({ exitCode, output }));
+    child.on('close', (exitCode) =>
+      resolvePromise({ exitCode, output, stdout }),
+    );
   });
 }
 
@@ -75,7 +81,7 @@ async function checkProject(
   binary: string,
   projectPath: string,
 ): Promise<CompilerCheckResult> {
-  const result = await runProcess(binary, [
+  const result = await runBamlProcess(binary, [
     '--output-preset',
     'agent',
     '--color',
@@ -270,8 +276,9 @@ async function validateProject(
 export async function validateSnippetCatalog(
   binary: string,
   appRoot: string,
+  onProgress?: (message: string) => void,
 ): Promise<{ results: SnippetValidationResult[]; toolchainVersion: string }> {
-  const versionResult = await runProcess(binary, ['--version']);
+  const versionResult = await runBamlProcess(binary, ['--version']);
   if (versionResult.exitCode !== 0) {
     throw new Error(
       `Unable to read BAML toolchain version from ${binary}: ${versionResult.output}`,
@@ -282,12 +289,14 @@ export async function validateSnippetCatalog(
   const projects = await discoverProjectSnippets();
   const standaloneResults: SnippetValidationResult[] = [];
   for (const snippet of standaloneSnippets) {
+    onProgress?.(`Checking snippet ${snippet.id}`);
     standaloneResults.push(
       await validateStandalone(binary, toolchainVersion, appRoot, snippet),
     );
   }
   const projectResults: SnippetValidationResult[] = [];
   for (const project of projects) {
+    onProgress?.(`Checking project ${project.id}`);
     projectResults.push(
       await validateProject(binary, toolchainVersion, appRoot, project),
     );

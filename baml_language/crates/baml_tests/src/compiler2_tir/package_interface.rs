@@ -9,7 +9,6 @@
 //! consumption; these focused tests keep the derivation contract readable.
 
 use baml_base::Name;
-use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_tir::{
     package_interface::{
         ExportedAssociatedType, ExportedFunction, ExportedImpl, ExportedImplMethod,
@@ -141,7 +140,7 @@ fn fixture_db() -> ProjectDatabase {
 }
 
 fn user_interface(db: &ProjectDatabase) -> &PackageInterface {
-    package_interface(db, PackageId::new(db, Name::new("user")))
+    package_interface(db, (db).workspace_root().unwrap())
 }
 
 #[track_caller]
@@ -467,7 +466,12 @@ fn enriched_interface_borsh_round_trips() {
     assert_eq!(iface, &decoded);
 
     // The stdlib exercises the gnarly idioms — round-trip it too.
-    let stdlib = package_interface(&db, PackageId::new(&db, Name::new("baml")));
+    let stdlib = package_interface(
+        &db,
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
+    );
     let bytes = borsh::to_vec(stdlib).expect("serialize stdlib interface");
     let decoded: PackageInterface = borsh::from_slice(&bytes).expect("deserialize stdlib");
     assert_eq!(stdlib, &decoded);
@@ -490,12 +494,16 @@ fn enriched_interface_derivation_is_deterministic() {
 
     let baml1 = borsh::to_vec(package_interface(
         &db1,
-        PackageId::new(&db1, Name::new("baml")),
+        baml_compiler2_hir::package::spelling(&db1)
+            .root(&Name::new("baml"))
+            .unwrap(),
     ))
     .expect("serialize");
     let baml2 = borsh::to_vec(package_interface(
         &db2,
-        PackageId::new(&db2, Name::new("baml")),
+        baml_compiler2_hir::package::spelling(&db2)
+            .root(&Name::new("baml"))
+            .unwrap(),
     ))
     .expect("serialize");
     assert_eq!(baml1, baml2, "stdlib derivation must be deterministic");
@@ -507,7 +515,12 @@ fn stdlib_interfaces_derive_enriched() {
 
     // Every stdlib package derives its enriched interface without panicking.
     for name in baml_builtins2::stdlib_package_names().iter().copied() {
-        let iface = package_interface(&db, PackageId::new(&db, Name::new(name)));
+        let iface = package_interface(
+            &db,
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new(name))
+                .unwrap(),
+        );
         assert!(
             iface.namespaces.contains(&Vec::new()),
             "{name} has a root namespace"
@@ -516,7 +529,12 @@ fn stdlib_interfaces_derive_enriched() {
 
     // Spot-check the gnarliest idiom: `Iterator requires
     // Iterable<Item = Self.Item, Error = Self.Error>`.
-    let baml = package_interface(&db, PackageId::new(&db, Name::new("baml")));
+    let baml = package_interface(
+        &db,
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
+    );
     let ExportedType::Interface {
         requires,
         associated_types,
@@ -842,23 +860,24 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
         "main.baml",
         "function f() -> int throws never {\n    1\n}\n",
     );
-    db.set_mounted_packages(
-        [(
-            "app".to_string(),
-            mounted::app_blob(&[(
-                "lib.baml",
-                "interface Marker {\n    function id(self) -> string throws never\n}\n",
-            )]),
-        )]
-        .into(),
-    )
-    .unwrap();
-    let res_ctx = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
+    db.mount(
+        "app",
+        mounted::app_blob(&[(
+            "lib.baml",
+            "interface Marker {\n    function id(self) -> string throws never\n}\n",
+        )]),
+    );
+    let res_ctx = package_resolution_context(&db, db.workspace_root().unwrap());
 
     let path = |parts: &[&str]| -> Vec<Name> { parts.iter().map(|p| Name::new(*p)).collect() };
 
     // The source-backed row IS exported…
-    let baml = package_interface(&db, PackageId::new(&db, Name::new("baml")));
+    let baml = package_interface(
+        &db,
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
+    );
     assert!(
         matches!(
             baml.lookup_type(&[Name::new("iter")], &Name::new("Iterator")),
@@ -990,11 +1009,22 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
 
     // Every stdlib package derives its impls table without panicking.
     for name in baml_builtins2::stdlib_package_names().iter().copied() {
-        let _ = &package_interface(&db, PackageId::new(&db, Name::new(name))).impls;
+        let _ = &package_interface(
+            &db,
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new(name))
+                .unwrap(),
+        )
+        .impls;
     }
 
     // Spot-check `implement Equals for int` (baml.ops).
-    let baml = package_interface(&db, PackageId::new(&db, Name::new("baml")));
+    let baml = package_interface(
+        &db,
+        baml_compiler2_hir::package::spelling(&db)
+            .root(&Name::new("baml"))
+            .unwrap(),
+    );
     assert!(!baml.impls.is_empty(), "the stdlib exports impl rows");
     let row = baml
         .impls
@@ -1039,7 +1069,6 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
 /// suites exercise the same blobs beyond this check-level module.
 pub(super) mod mounted {
     use baml_base::Name;
-    use baml_compiler2_hir::package::PackageId;
     use baml_compiler2_tir::package_interface::package_interface;
     use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
@@ -1060,7 +1089,12 @@ pub(super) mod mounted {
             db.file(format!("<builtin>/app/{path}"), src);
         }
         assert_no_diagnostic_errors(&db);
-        let iface = package_interface(&db, PackageId::new(&db, Name::new("app")));
+        let iface = package_interface(
+            &db,
+            baml_compiler2_hir::package::spelling(&db)
+                .root(&Name::new("app"))
+                .unwrap(),
+        );
         assert!(
             iface.types.values().any(|ns| !ns.is_empty()),
             "the library fixture must export at least one type"
@@ -1073,8 +1107,7 @@ pub(super) mod mounted {
     /// source anywhere.
     fn consumer_db(blob: Vec<u8>, files: &[(&str, &str)]) -> ProjectDatabase {
         let mut db = make_db();
-        db.set_mounted_packages([("app".to_string(), blob)].into())
-            .unwrap();
+        db.mount("app", blob);
         for (path, src) in files {
             db.file(path, src);
         }

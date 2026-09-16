@@ -13,7 +13,7 @@
 //!   `check_infer`-style [`harness::render_infer`] dump
 //! - [`fixtures`]: directory-driven runner; a test is a `.baml` file under
 //!   `fixtures/` (must pass) or `fixtures/pending/` (must fail until its
-//!   slice lands), each with an insta snapshot of the infer dump
+//!   slice lands); only explicitly selected examples snapshot the infer dump
 
 pub(crate) mod harness;
 

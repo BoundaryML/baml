@@ -128,7 +128,7 @@ export class BamlFunctionSpec<TOut> {
             { self: this, ...kwargs },
             { syncMode: true, callId: newFunctionCall(), functionName: fqn },
         );
-        return decodeCallResult(getRuntime().callFunctionSync(argsProto, null, null));
+        return decodeCallResult(getRuntime().callFunctionSync(argsProto, null));
     }
 
     private async _callAsync(
@@ -139,7 +139,7 @@ export class BamlFunctionSpec<TOut> {
             { self: this, ...kwargs },
             { callId: newFunctionCall(), functionName: fqn },
         );
-        return decodeCallResult(await getRuntime().callFunction(argsProto, null, null));
+        return decodeCallResult(await getRuntime().callFunction(argsProto, null));
     }
 
     toString(): string {

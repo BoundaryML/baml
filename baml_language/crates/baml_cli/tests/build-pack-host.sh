@@ -5,6 +5,14 @@
 
 set -euo pipefail
 
+# CI builds tests AND both binaries in one Cargo invocation, preserving its
+# feature graph. The Rust helper validates the host beside CARGO_BIN_EXE.
+# Do not rebuild it here with this script's default features/profile.
+if [[ "${BAML_PACK_HOST_PREBUILT:-}" == "1" ]]; then
+  echo "==> using pack host from the outer Cargo build"
+  exit 0
+fi
+
 workspace_root="$(cd "$(dirname "$0")/../../.." && pwd -P)"
 cd "$workspace_root"
 

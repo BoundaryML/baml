@@ -1,19 +1,17 @@
 //! Package/namespace resolution for a source file.
 //!
-//! A file's package is its [`baml_base::SourceRoot`]'s package name; its
-//! namespace chain is derived from `ns_*` path segments relative to the
-//! root's path.
+//! A file's package is its [`baml_base::SourceRoot`] (the root IS the
+//! package); its namespace chain is derived from `ns_*` path segments
+//! relative to the root's path.
 
 use baml_base::{Name, SourceFile, SourceRoot};
 
 /// Package/namespace info for a file.
 #[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct PackageInfo {
-    /// The source root the file belongs to. Lets consumers ask
-    /// `root.kind(db)` instead of sniffing path prefixes.
+    /// The package the file belongs to. Lets consumers ask `root.kind(db)`
+    /// instead of sniffing path prefixes.
     pub root: SourceRoot,
-    /// Package name (the root's package).
-    pub package: Name,
     /// Namespace path within the package.
     /// e.g., `["llm"]` for `<builtin>/baml/ns_llm/llm.baml` or `ns_llm/client.baml`.
     pub namespace_path: Vec<Name>,
@@ -41,13 +39,12 @@ fn extract_ns_name(component: &str) -> Option<Name> {
 /// compiler phase (often in per-class/per-function loops), so memoizing it
 /// removes a pervasive, repeated path-parsing cost.
 ///
-/// Reads only the file's `source_root` field and the root's `path`/`package`
-/// fields: adding or removing an unrelated root never invalidates a file's
-/// package identity.
+/// Reads only the file's `source_root` field and the root's `path` field:
+/// adding or removing an unrelated root never invalidates a file's package
+/// identity.
 #[salsa::tracked]
 pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let root = file.source_root(db);
-    let package = root.package(db);
     let root_path = root.path(db);
 
     let path = file.path(db);
@@ -67,7 +64,6 @@ pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
 
     PackageInfo {
         root,
-        package,
         namespace_path,
     }
 }

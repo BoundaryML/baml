@@ -7,6 +7,8 @@
 
 use std::fmt::Write;
 
+use baml_compiler2_hir_ty::render::Viewpoint;
+
 use crate::engine::TestDbExt;
 
 /// Lower a raw AST type expression through hir's scratch store and
@@ -41,10 +43,7 @@ fn lower_type_expr_hir(
 }
 
 use baml_base::Name;
-use baml_compiler2_hir::{
-    contributions::Definition,
-    package::{PackageId, package_items},
-};
+use baml_compiler2_hir::{contributions::Definition, package::package_items};
 use baml_db::ProjectDatabase;
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -64,7 +63,9 @@ fn generic_param_names(params: &[baml_compiler2_ppir::item_data::GenericParamDat
 /// Build a sorted, human-readable summary of what `package_items(db, "baml")`
 /// contains, separated by namespace.
 fn render_baml_package_items(db: &ProjectDatabase) -> String {
-    let baml_pkg = PackageId::new(db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(db, baml_pkg);
 
     let mut output = String::new();
@@ -174,7 +175,9 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
 #[test]
 fn baml_package_contains_array_and_map() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     // Root namespace should have Array, Map, String
@@ -211,7 +214,9 @@ fn baml_package_contains_array_and_map() {
 #[test]
 fn baml_package_contains_http_namespace() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     let http_ns_path = vec![Name::new("http")];
@@ -232,7 +237,9 @@ fn baml_package_contains_http_namespace() {
 #[test]
 fn baml_package_contains_env_functions() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     // baml.env has the low-level get ($rust_io_function)
@@ -253,7 +260,9 @@ fn baml_package_contains_env_functions() {
 #[test]
 fn baml_package_has_sys_but_not_math() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     // B-712 removed the `baml.math` namespace entirely: its aggregates moved to
@@ -291,7 +300,9 @@ fn baml_package_has_sys_but_not_math() {
 #[test]
 fn array_has_generic_param_t() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     let root_ns = items.namespaces.get(&vec![]).unwrap();
@@ -312,7 +323,9 @@ fn array_has_generic_param_t() {
 #[test]
 fn map_has_generic_params_k_v() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     let root_ns = items.namespaces.get(&vec![]).unwrap();
@@ -333,7 +346,9 @@ fn map_has_generic_params_k_v() {
 #[test]
 fn string_class_has_no_generic_params() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     let root_ns = items.namespaces.get(&vec![]).unwrap();
@@ -355,7 +370,9 @@ fn string_class_has_no_generic_params() {
 #[test]
 fn array_has_expected_methods() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     let root_ns = items.namespaces.get(&vec![]).unwrap();
@@ -390,7 +407,9 @@ fn array_has_expected_methods() {
 #[test]
 fn map_has_expected_methods() {
     let db = make_db();
-    let baml_pkg = PackageId::new(&db, Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
+        .root(&Name::new("baml"))
+        .unwrap();
     let items = package_items(&db, baml_pkg);
 
     let root_ns = items.namespaces.get(&vec![]).unwrap();
@@ -451,7 +470,12 @@ fn file_package_derives_correct_namespaces() {
         // containers.baml is at <builtin>/baml/containers.baml → namespace []
         if path_str == "<builtin>/baml/containers.baml" {
             let pkg_info = file_package(&db, *file);
-            assert_eq!(pkg_info.package.as_str(), "baml");
+            assert_eq!(
+                baml_compiler2_hir::package::spelling(&db)
+                    .of(pkg_info.root)
+                    .as_str(),
+                "baml"
+            );
             assert!(
                 pkg_info.namespace_path.is_empty(),
                 "containers.baml should be in root baml namespace, got {:?}",
@@ -462,7 +486,12 @@ fn file_package_derives_correct_namespaces() {
         // env.baml is at <builtin>/baml/ns_env/env.baml → namespace ["env"]
         if path_str == "<builtin>/baml/ns_env/env.baml" {
             let pkg_info = file_package(&db, *file);
-            assert_eq!(pkg_info.package.as_str(), "baml");
+            assert_eq!(
+                baml_compiler2_hir::package::spelling(&db)
+                    .of(pkg_info.root)
+                    .as_str(),
+                "baml"
+            );
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("env")],
@@ -473,7 +502,12 @@ fn file_package_derives_correct_namespaces() {
         // http.baml is at <builtin>/baml/ns_http/http.baml → namespace ["http"]
         if path_str == "<builtin>/baml/ns_http/http.baml" {
             let pkg_info = file_package(&db, *file);
-            assert_eq!(pkg_info.package.as_str(), "baml");
+            assert_eq!(
+                baml_compiler2_hir::package::spelling(&db)
+                    .of(pkg_info.root)
+                    .as_str(),
+                "baml"
+            );
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("http")],
@@ -484,7 +518,12 @@ fn file_package_derives_correct_namespaces() {
         // sys.baml is at <builtin>/baml/ns_sys/sys.baml → namespace ["sys"]
         if path_str == "<builtin>/baml/ns_sys/sys.baml" {
             let pkg_info = file_package(&db, *file);
-            assert_eq!(pkg_info.package.as_str(), "baml");
+            assert_eq!(
+                baml_compiler2_hir::package::spelling(&db)
+                    .of(pkg_info.root)
+                    .as_str(),
+                "baml"
+            );
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("sys")],
@@ -652,7 +691,7 @@ fn nested_namespace_resolution() {
         "class ResponsesClient { model string }",
     );
 
-    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let pkg_items = package_items(&db, pkg_id);
 
     // Verify the nested namespace exists
@@ -722,7 +761,8 @@ fn bare_name_cross_namespace_rejected() {
         "should emit exactly one diagnostic, got: {:?}",
         diags
     );
-    let msg = baml_compiler2_hir_ty::lower::lowering_diag_error(&diags[0].kind).to_string();
+    let msg = baml_compiler2_hir_ty::lower::lowering_diag_error(&diags[0].kind)
+        .render(&Viewpoint::canonical(&db));
     assert!(
         msg.contains("root.Config"),
         "diagnostic should suggest `root.Config`, got: {msg}"
@@ -755,7 +795,8 @@ fn multi_segment_bare_path_rejected() {
          is the diagnosed `!error` sentinel, never `unknown`)"
     );
     assert!(!diags.is_empty(), "should emit UnresolvedType diagnostic");
-    let msg = baml_compiler2_hir_ty::lower::lowering_diag_error(&diags[0].kind).to_string();
+    let msg = baml_compiler2_hir_ty::lower::lowering_diag_error(&diags[0].kind)
+        .render(&Viewpoint::canonical(&db));
     assert!(
         msg.contains("unresolved type: ns2.MyClass"),
         "diagnostic should mention ns2.MyClass, got: {msg}"

@@ -6,15 +6,11 @@ import {
   DocsPageNavigation,
 } from '@/components/docs-page-actions';
 import { DocsSidebar } from '@/components/docs-sidebar';
+import { DocsToc, type TocItem } from '@/components/docs-toc';
 
 interface BreadcrumbItem {
   href?: string;
   label: string;
-}
-
-interface TocItem {
-  href: string;
-  label: React.ReactNode;
 }
 
 export function DocsShell({
@@ -116,48 +112,31 @@ export function DocsShell({
               className="sticky top-[calc(var(--header-height)+1px)] z-30 ml-auto hidden h-[90svh] w-[var(--sidebar-width)] flex-col gap-4 overflow-hidden overscroll-none pb-8 xl:flex"
             >
               <div className="h-[var(--top-spacing)] shrink-0" />
-              <div className="scroll-fade scrollbar-none flex flex-col gap-8 overflow-y-auto px-8">
-                <nav className="flex flex-col gap-2 p-4 pt-0 text-sm">
-                  <p className="h-6 bg-background text-xs font-medium text-muted-foreground">
-                    On This Page
-                  </p>
-                  {toc.length ? (
-                    toc.map((item) => (
-                      <a
-                        className="text-[0.8rem] text-muted-foreground no-underline transition-colors hover:text-foreground"
-                        href={item.href}
-                        key={item.href}
-                      >
-                        {item.label}
-                      </a>
-                    ))
-                  ) : (
-                    <span className="text-[0.8rem] text-muted-foreground">
-                      Overview
-                    </span>
-                  )}
-                </nav>
+              <div className="docs-toc-scroll">
+                <DocsToc items={toc} />
               </div>
-              <div className="hidden flex-1 flex-col gap-6 px-6 xl:flex">
-                <div className="group relative flex flex-col gap-2 rounded-2xl bg-surface p-6 text-sm text-surface-foreground">
-                  <p className="text-balance text-base leading-tight font-semibold group-hover:underline">
-                    Build with BAML
-                  </p>
-                  <p className="text-muted-foreground">
-                    Start with the language guide and a checked BAML function.
-                  </p>
-                  <p className="text-muted-foreground">
-                    Continue into generated package and CLI references for the
-                    exact selected toolchain.
-                  </p>
-                  <Link
-                    className="mt-2 inline-flex h-8 w-fit items-center rounded-lg border bg-background px-3 text-xs font-medium hover:bg-accent"
-                    href="/baml/get-started"
-                  >
-                    Get started
-                  </Link>
+              {toc.length <= 8 ? (
+                <div className="hidden flex-1 flex-col gap-6 px-6 xl:flex">
+                  <div className="group relative flex flex-col gap-2 rounded-2xl bg-surface p-6 text-sm text-surface-foreground">
+                    <p className="text-balance text-base leading-tight font-semibold group-hover:underline">
+                      Build with BAML
+                    </p>
+                    <p className="text-muted-foreground">
+                      Start with the language guide and a checked BAML function.
+                    </p>
+                    <p className="text-muted-foreground">
+                      Continue into generated package and CLI references for the
+                      exact selected toolchain.
+                    </p>
+                    <Link
+                      className="mt-2 inline-flex h-8 w-fit items-center rounded-lg border bg-background px-3 text-xs font-medium hover:bg-accent"
+                      href="/baml/get-started"
+                    >
+                      Get started
+                    </Link>
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </aside>
           </div>
         </div>

@@ -32,9 +32,12 @@
 //! match's bindings, where an unbound impl param is unreachable, never a
 //! stand-in type.
 
-use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
+use baml_compiler2_hir::{
+    loc::ImplLoc,
+    package::{is_precompiled_stdlib, lang_roots},
+};
 use baml_type::{
-    Name, ParamTy, TypeName,
+    DeclName, Name, ParamTy,
     interned::{ClosedInterface, ClosedTy, InferInterface, InferTy, Ty},
     normalize::{TypeContext, equivalent_interned},
 };
@@ -322,7 +325,7 @@ pub fn impl_facts<'db>(
         .collect();
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
-        .with_bounds(bounds_map);
+        .with_bounds(bounds_map.clone());
     let Some(interface) = crate::lower::reject_holes(&ctx.lower_type_ref_at(
         &data.type_refs,
         data.interface_target,
@@ -358,20 +361,107 @@ pub fn impl_facts<'db>(
     if !unconstrained.is_empty() {
         return ImplHeaderResolution::Poisoned { unconstrained };
     }
-    let associated_types = data
-        .associated_type_bindings
-        .iter()
-        .filter_map(|binding| {
-            binding.type_ref.map(|type_ref| {
+    // A mounted interface has no `InterfaceLoc`, so `impl_data` cannot use the
+    // source declaration's canonical associated-binding lowering for it. Do
+    // that work here, on the loc-free facts surface: visit members in the
+    // mounted declaration's order and expose each resolved pin on symbolic
+    // `Self`'s interface bound before lowering the next one. This is what makes
+    // `type Item = int; type Items = Self.Item[]` produce `Items = int[]`
+    // instead of retaining an unrepresentable recovery projection.
+    let associated_types = if let Some(crate::package_interface::ExportedType::Interface {
+        self_param,
+        generic_params: interface_params,
+        associated_types: declared_associated_types,
+        ..
+    }) = crate::package_interface::mounted_type_row(db, &interface.name)
+    {
+        let interface = interface.to_plain();
+        let for_ty = for_ty_pattern.to_plain();
+        // Match `lower_interface_associated_bindings`: lower binding values with
+        // a symbolic interface `Self`, then substitute the impl receiver only
+        // after sibling projections have had a chance to resolve through the
+        // progressively pinned bound. Lowering with the concrete receiver here
+        // loses that bound for blanket impls (`for T`) and makes an explicitly
+        // qualified `(Self as dep.I).Item` re-enter impl selection on itself.
+        let self_var = baml_type::Ty::TypeVar(self_param.clone(), baml_type::TyAttr::default());
+        let mut value_scope = params.clone();
+        value_scope.push(self_param.clone());
+        let mut value_bindings: baml_type::unify::TypeBindings = params
+            .iter()
+            .map(|param| {
                 (
-                    binding.name.clone(),
-                    ClosedTy::from_plain(&crate::lower::reject_holes(
-                        &ctx.lower_type_ref(&data.type_refs, type_ref),
-                    )),
+                    param.clone(),
+                    baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()),
                 )
             })
-        })
-        .collect();
+            .collect();
+        value_bindings.insert(self_param.clone(), for_ty.clone());
+        let mut resolved_pins: Vec<(Name, baml_type::Ty)> = Vec::new();
+
+        for associated_type in declared_associated_types {
+            let ty = if let Some(binding) = data
+                .associated_type_bindings
+                .iter()
+                .find(|binding| binding.name == associated_type.name)
+                && let Some(type_ref) = binding.type_ref
+            {
+                let mut bounds = bounds_map.clone();
+                bounds.insert(
+                    self_param.clone(),
+                    vec![baml_type::Interface::new(
+                        interface.name.clone(),
+                        interface.generics.clone(),
+                        resolved_pins.clone().into(),
+                    )],
+                );
+                let lowered = crate::lower::reject_holes(
+                    &crate::lower::lower_ctx_for_file(db, file)
+                        .with_frame(value_scope.clone())
+                        .with_bounds(bounds)
+                        .with_self_ty(Some(self_var.clone()))
+                        .lower_type_ref(&data.type_refs, type_ref),
+                );
+                baml_type::unify::substitute_ty(&lowered, &value_bindings)
+            } else if let Some(default) = &associated_type.default {
+                crate::interfaces::realize_associated_default(
+                    default,
+                    interface_params,
+                    &interface.generics,
+                    self_param,
+                    &for_ty,
+                )
+            } else {
+                continue;
+            };
+            let ty = crate::interfaces::collapse_self_assoc_projections(
+                &ty,
+                &[&self_var, &for_ty],
+                Some(&interface.name),
+                &interface.generics,
+                &resolved_pins,
+            );
+            resolved_pins.push((associated_type.name.clone(), ty));
+        }
+
+        resolved_pins
+            .into_iter()
+            .map(|(name, ty)| (name, ClosedTy::from_plain(&ty)))
+            .collect()
+    } else {
+        data.associated_type_bindings
+            .iter()
+            .filter_map(|binding| {
+                binding.type_ref.map(|type_ref| {
+                    (
+                        binding.name.clone(),
+                        ClosedTy::from_plain(&crate::lower::reject_holes(
+                            &ctx.lower_type_ref(&data.type_refs, type_ref),
+                        )),
+                    )
+                })
+            })
+            .collect()
+    };
 
     let facts = ImplFacts {
         interface,
@@ -399,14 +489,14 @@ pub fn impl_facts<'db>(
 /// guarantees at most one match; stable order keeps a coherence-violating
 /// program from resolving arbitrarily).
 #[salsa::tracked(returns(ref))]
-pub fn package_impl_locs<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
-) -> Vec<ImplLoc<'db>> {
+pub fn package_impl_locs(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
+) -> Vec<ImplLoc<'_>> {
     let mut out = Vec::new();
-    // Scan only the package's own files (`package_files`), so edits to
-    // another root's file set never invalidate this query.
-    for file in baml_compiler2_hir::package::package_files(db, package) {
+    // Scan only the package's own files, so edits to another root's file
+    // set never invalidate this query.
+    for file in package.files(db) {
         out.extend(
             baml_compiler2_ppir::item_data::file_impls(db, *file)
                 .iter()
@@ -422,12 +512,14 @@ pub fn package_impl_locs<'db>(
 ///
 /// Matching is nominal on the head's qualified name (implements is nominal):
 /// every generic instantiation of `Foo` names `Foo`, so instantiations are not
-/// distinguished here. Order is deterministic — packages sorted by name (via
-/// `all_packages`), blocks in source order within each. Mounted and
-/// precompiled packages ship no source blocks, so their impls are not listed.
+/// distinguished here. Only the packages `viewer` can see are searched
+/// ([`baml_compiler2_hir::package::visible_packages`]), in that deterministic order, blocks in source
+/// order within each. Mounted and precompiled packages ship no source
+/// blocks, so their impls are not listed.
 #[salsa::tracked(returns(ref))]
 pub fn impls_naming_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
     let name = &baml_compiler2_ppir::item_data::interface_data(db, interface).name;
@@ -437,7 +529,7 @@ pub fn impls_naming_interface<'db>(
         name,
     );
     let mut out = Vec::new();
-    for &package in all_packages(db) {
+    for &package in baml_compiler2_hir::package::visible_packages(db, viewer) {
         for &block in package_impl_locs(db, package) {
             let Some(facts) = impl_facts(db, block).resolved() else {
                 continue;
@@ -479,18 +571,19 @@ impl<'db> AliasOnlyFacts<'db> {
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
-    /// A name-based context represents a declaration by its own name, so this
-    /// is the identity — no resolution step, and never `None`.
-    fn head_lookup(&self, qtn: &TypeName) -> Option<TypeName> {
-        Some(qtn.clone())
+    fn well_known(&self, head: baml_type::normalize::WellKnownHead) -> Option<DeclName> {
+        baml_type::normalize::well_known_decl(
+            baml_compiler2_hir::package::lang_roots(self.db),
+            head,
+        )
     }
-    fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
+    fn alias_def(&self, name: &DeclName) -> Option<baml_type::Ty> {
         self.memoized.as_ref().map_or_else(
             || crate::facts::uncached_alias_def(self.db, name),
             |facts| facts.alias_def(name),
         )
     }
-    fn enum_variants(&self, name: &TypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, name: &DeclName) -> Option<Vec<Name>> {
         self.memoized.as_ref().map_or_else(
             || crate::facts::uncached_enum_variants(self.db, name),
             |facts| facts.enum_variants(name),
@@ -634,7 +727,7 @@ pub enum ResolvedImplOrigin<'db> {
     /// tracked artifact queries; unlike a live mount, no owned fact payload is
     /// retained in each impl-cache entry.
     Precompiled {
-        package: PackageId<'db>,
+        package: baml_base::SourceRoot,
         row: u32,
         methods: &'db [crate::package_interface::ExportedFunction],
     },
@@ -672,7 +765,10 @@ enum CachedResolvedImplOrigin<'db> {
         facts: Box<MountedImplFacts>,
     },
     /// Fact-free identity for an immutable compiler-built interface row.
-    Precompiled { package: PackageId<'db>, row: u32 },
+    Precompiled {
+        package: baml_base::SourceRoot,
+        row: u32,
+    },
 }
 
 #[derive(Clone, PartialEq)]
@@ -722,11 +818,7 @@ impl ResolvedImpl<'_> {
     ) -> InferInterface {
         let header = self.implemented();
         let declared: Vec<baml_type::Name> = {
-            let package =
-                baml_compiler2_hir::package::PackageId::new(db, header.name.package().clone());
-            match baml_compiler2_ppir::package_items(db, package)
-                .lookup_type(header.name.namespace(), header.name.name())
-            {
+            match crate::facts::definition_of(db, &header.name) {
                 Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => {
                     baml_compiler2_ppir::item_data::interface_data(db, loc)
                         .associated_types
@@ -816,8 +908,9 @@ pub(crate) fn resolved_pin(
 }
 
 /// The interface's declared DEFAULT for `member`, realized at a use site:
-/// `Self` = `self_ty`, generic and associated slots via the shared
-/// positional instantiation (a Self-referencing default like `type Items
+/// `Self` = `self_ty` and the interface's generic parameters via the shared
+/// positional instantiation `[Self, args..]` (associated types are not
+/// slots; a Self-referencing default like `type Items
 /// = Self.Item[]` becomes a projection on `self_ty` that the canonical
 /// walk re-reduces, fuel-bounded). This implements the spec's
 /// fill-at-reference rule ("associated types with defaults may be omitted
@@ -979,7 +1072,7 @@ pub(crate) fn mounted_interface_instantiation(
     if generic_params.len() != target.generics.len() {
         debug_assert!(
             false,
-            "interface reference `{}` carries {} generic args; its declaration takes {}",
+            "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
             generic_params.len(),
@@ -1012,6 +1105,7 @@ pub(crate) fn mounted_interface_instantiation(
 /// variables).
 pub fn impl_views_for_type(
     db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
 ) -> Vec<baml_type::Interface> {
     // Enumeration takes the plain goal directly; the interned form is only
@@ -1020,7 +1114,7 @@ pub fn impl_views_for_type(
     let Some(interned) = try_interned_ty(concrete) else {
         return Vec::new();
     };
-    impls_for_type(db, concrete)
+    impls_for_type(db, viewer, concrete)
         .into_iter()
         .map(|resolved| {
             let view = resolved.implemented_view(db, &interned);
@@ -1070,6 +1164,7 @@ pub fn direct_requires_closure_plain(
 /// (`lookup_impl_member` does).
 pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
 ) -> Vec<ResolvedImpl<'db>> {
     // A literal-typed value implements what its base primitive does -
@@ -1088,9 +1183,9 @@ pub fn impls_for_type<'db>(
             baml_type::PrimitiveType::from_literal(literal),
             attr.clone(),
         );
-        return impls_for_type(db, &widened);
+        return impls_for_type(db, viewer, &widened);
     }
-    impls_for_type_cached(db, ImplTypeKey::new(db, concrete.clone()))
+    impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
         .iter()
         .map(|cached| match &cached.origin {
             CachedResolvedImplOrigin::Source { block } => {
@@ -1115,7 +1210,7 @@ pub fn impls_for_type<'db>(
             },
             CachedResolvedImplOrigin::Precompiled { package, row } => {
                 let row_index = usize::try_from(*row).expect("precompiled impl row fits usize");
-                let interface = crate::package_interface::mounted_interface(db, &package.name(db))
+                let interface = crate::package_interface::mounted_interface(db, *package)
                     .expect("cached precompiled package remains installed");
                 let exported = interface
                     .impls
@@ -1145,7 +1240,7 @@ pub fn impls_for_type<'db>(
             //
             // Read off the declared header: realization substitutes into the
             // arguments and never touches the name.
-            provides_concrete_members(&resolved.facts.interface().name)
+            provides_concrete_members(lang_roots(db), &resolved.facts.interface().name)
         })
         .collect()
 }
@@ -1154,8 +1249,8 @@ pub fn impls_for_type<'db>(
 /// concrete-receiver lookup. `AnyClass` is reachable only after explicit
 /// narrowing, so its blanket default methods must stay out of both the ground
 /// registry and the inference-variable method probe.
-pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
-    !interface.is_reflect_root_type("AnyClass")
+pub(crate) fn provides_concrete_members(lang: baml_base::LangRoots, interface: &DeclName) -> bool {
+    !interface.is_lang_root_type(lang, baml_base::LangPackage::Reflect, "AnyClass")
 }
 
 /// Compiler-derived interfaces may deliberately narrow a blanket stdlib impl.
@@ -1166,9 +1261,9 @@ pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
 fn derived_impl_allows(
     db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
-    interface: &TypeName,
+    interface: &DeclName,
 ) -> bool {
-    if !interface.is_reflect_root_type("AnyClass") {
+    if !interface.is_lang_root_type(lang_roots(db), baml_base::LangPackage::Reflect, "AnyClass") {
         return true;
     }
     let Ok(concrete_closed) = baml_type::interned::ClosedTy::try_from(concrete) else {
@@ -1187,6 +1282,8 @@ fn derived_impl_allows(
 // other reference to its pool entry.
 #[salsa::interned]
 struct ImplTypeKey<'db> {
+    /// The asking package: candidates come from what it can see.
+    viewer: baml_base::SourceRoot,
     #[returns(ref)]
     concrete: baml_type::Ty,
 }
@@ -1203,9 +1300,10 @@ fn impls_for_type_cycle_result<'db>(
 
 /// Memoized ground candidate assembly. Concrete primitive/container types recur
 /// throughout one project (especially through operator and interface lookup),
-/// while their impl set is a pure Salsa-dependent function of the type and
-/// package inputs. Cache that scan once instead of re-walking every impl block
-/// for every expression that mentions the same receiver type.
+/// while their impl set is a pure Salsa-dependent function of the type, the
+/// asking package, and package inputs. Cache that scan once instead of
+/// re-walking every visible impl block for every expression that mentions the
+/// same receiver type.
 #[salsa::tracked(returns(ref), cycle_result = impls_for_type_cycle_result)]
 fn impls_for_type_cached<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
@@ -1221,10 +1319,10 @@ fn impls_for_type_cached<'db>(
     }
     let eq = AliasOnlyFacts::memoized(db);
     let mut out = Vec::new();
-    for &package in all_packages(db) {
+    for &package in baml_compiler2_hir::package::visible_packages(db, type_key.viewer(db)) {
         // Do not short-circuit this iterator: `impl_facts` dependencies are
         // registered lazily as source rows are visited. This memoized query
-        // must exhaust every package so later fact changes invalidate it.
+        // must exhaust every visible package so later fact changes invalidate it.
         for (origin, facts) in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
@@ -1304,32 +1402,10 @@ fn impls_for_type_cached<'db>(
     out
 }
 
-/// Every package contributing files to the compilation, deduplicated.
-///
-/// Reads the source-root table (every root carries exactly one package) plus
-/// the external (mounted/precompiled) package names — never the files
-/// themselves, so adding or removing a file cannot invalidate the package set.
-#[salsa::tracked(returns(ref))]
-fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
-    let mut names: Vec<Name> = db
-        .source_roots()
-        .roots(db)
-        .iter()
-        .map(|root| root.package(db))
-        .collect();
-    names.extend(baml_compiler2_hir::package::external_package_names(db));
-    names.sort();
-    names.dedup();
-    names
-        .into_iter()
-        .map(|name| PackageId::new(db, name))
-        .collect()
-}
-
-fn package_impl_candidates<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
-) -> impl Iterator<Item = (ResolvedImplOrigin<'db>, ResolvedImplFacts<'db>)> + 'db {
+fn package_impl_candidates(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
+) -> impl Iterator<Item = (ResolvedImplOrigin<'_>, ResolvedImplFacts<'_>)> + '_ {
     let source = package_impl_locs(db, package)
         .iter()
         .filter_map(move |&block| {
@@ -1342,9 +1418,9 @@ fn package_impl_candidates<'db>(
                 ResolvedImplFacts::Source(facts),
             ))
         });
-    let precompiled = baml_compiler2_hir::package::is_precompiled_package(db, &package.name(db));
+    let precompiled = is_precompiled_stdlib(db, package);
     let immutable = precompiled
-        .then(|| crate::package_interface::mounted_interface(db, &package.name(db)))
+        .then(|| crate::package_interface::mounted_interface(db, package))
         .into_iter()
         .flatten()
         .flat_map(move |interface| {
@@ -1366,7 +1442,7 @@ fn package_impl_candidates<'db>(
                 })
         });
     let mounted = (!precompiled)
-        .then(|| crate::package_interface::mounted_interface(db, &package.name(db)))
+        .then(|| crate::package_interface::mounted_interface(db, package))
         .into_iter()
         .flatten()
         .flat_map(move |interface| {
@@ -1414,15 +1490,15 @@ fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedI
 /// Cache entries retain only `(package, row)`; all callers borrow this shared
 /// fact value and record the live package-interface dependency.
 #[salsa::tracked(returns(ref))]
-fn precompiled_impl_facts<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
+fn precompiled_impl_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    package: baml_base::SourceRoot,
     row: u32,
 ) -> Option<MountedImplFacts> {
-    if !baml_compiler2_hir::package::is_precompiled_package(db, &package.name(db)) {
+    if !is_precompiled_stdlib(db, package) {
         return None;
     }
-    let interface = crate::package_interface::mounted_interface(db, &package.name(db))?;
+    let interface = crate::package_interface::mounted_interface(db, package)?;
     let row = interface.impls.get(usize::try_from(row).ok()?)?;
     Some(exported_impl_facts(row))
 }
@@ -1435,15 +1511,15 @@ fn precompiled_impl_facts<'db>(
 pub(crate) fn impl_candidates<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     goal: &Ty,
-    interface_name: &TypeName,
+    interface_name: &DeclName,
 ) -> Vec<&'db ImplFacts<'db>> {
-    let mut names: Vec<Name> = vec![interface_name.package().clone()];
-    collect_packages(goal, &mut names);
-    names.sort();
-    names.dedup();
+    let lang = lang_roots(db);
+    let mut roots: Vec<baml_base::SourceRoot> = vec![interface_name.root()];
+    collect_packages(lang, goal, &mut roots);
+    roots.sort();
+    roots.dedup();
     let mut out = Vec::new();
-    for name in names {
-        let package = PackageId::new(db, name);
+    for package in roots {
         for &block in package_impl_locs(db, package) {
             if let Some(facts) = impl_facts(db, block).resolved()
                 && facts.interface.name == *interface_name
@@ -1455,13 +1531,16 @@ pub(crate) fn impl_candidates<'db>(
     out
 }
 
-/// Every impl block in the project, for the method PROBE's candidate
+/// Every impl block `viewer` can see, for the method PROBE's candidate
 /// assembly: the receiver's interface is unknown there, so no name
-/// filter applies - all packages, the same walk the ground registry
-/// (`impls_for_type`) does.
-pub(crate) fn all_impl_facts(db: &dyn baml_compiler2_ppir::Db) -> Vec<&ImplFacts<'_>> {
+/// filter applies - every visible package, the same walk the ground
+/// registry (`impls_for_type`) does.
+pub(crate) fn all_impl_facts(
+    db: &dyn baml_compiler2_ppir::Db,
+    viewer: baml_base::SourceRoot,
+) -> Vec<&ImplFacts<'_>> {
     let mut out = Vec::new();
-    for &package in all_packages(db) {
+    for &package in baml_compiler2_hir::package::visible_packages(db, viewer) {
         for &block in package_impl_locs(db, package) {
             if let Some(facts) = impl_facts(db, block).resolved() {
                 out.push(facts);
@@ -1577,31 +1656,29 @@ fn resolve_within_depth<'db>(
 
 /// Every package a qualified name on either side points into - the
 /// orphan rule guarantees the impl lives in one of them.
-fn search_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+fn search_roots(
+    db: &dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
     interface: &InferInterface,
-) -> Vec<PackageId<'db>> {
-    let mut names: Vec<Name> = vec![interface.name.package().clone()];
-    collect_packages(concrete, &mut names);
+) -> Vec<baml_base::SourceRoot> {
+    let lang = lang_roots(db);
+    let mut roots: Vec<baml_base::SourceRoot> = vec![interface.name.root()];
+    collect_packages(lang, concrete, &mut roots);
     for arg in &interface.generics {
-        collect_packages(arg, &mut names);
+        collect_packages(lang, arg, &mut roots);
     }
-    names.sort();
-    names.dedup();
-    names
-        .into_iter()
-        .map(|name| PackageId::new(db, name))
-        .collect()
+    roots.sort();
+    roots.dedup();
+    roots
 }
 
-fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
+fn collect_packages(lang: baml_base::LangRoots, ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
     match ty.kind() {
         InferTy::Class(qtn, ..)
         | InferTy::Interface(qtn, ..)
         | InferTy::Enum(qtn, _)
         | InferTy::EnumVariant(qtn, ..)
-        | InferTy::TypeAlias(qtn, _) => out.push(qtn.package().clone()),
+        | InferTy::TypeAlias(qtn, _) => out.push(qtn.root()),
         _ => {}
     }
     // Primitives and structural types live in the stdlib package.
@@ -1620,12 +1697,14 @@ fn collect_packages(ty: &Ty, out: &mut Vec<Name>) {
             | InferTy::Future(..)
             | InferTy::Literal(..)
     ) {
-        out.push(Name::new("baml"));
+        if let Some(baml) = lang.get(baml_base::LangPackage::Baml) {
+            out.push(baml);
+        }
     }
     let mut children = Vec::new();
     baml_type::interned::for_each_child(ty.kind(), |child| children.push(child.clone()));
     for child in children {
-        collect_packages(&child, out);
+        collect_packages(lang, &child, out);
     }
 }
 

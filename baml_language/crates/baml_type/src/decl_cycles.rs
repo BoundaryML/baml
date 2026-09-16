@@ -16,7 +16,7 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 
-use crate::{QualifiedTypeName, Ty};
+use crate::{DeclName, Ty};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RECURSIVE ALIAS DETECTION
@@ -44,9 +44,7 @@ use crate::{QualifiedTypeName, Ty};
 /// Otherwise all members are flagged as invalid.
 ///
 /// Returns a set of qualified type names that should receive cycle diagnostics.
-pub fn find_invalid_alias_cycles(
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-) -> HashSet<QualifiedTypeName> {
+pub fn find_invalid_alias_cycles(aliases: &HashMap<DeclName, Ty>) -> HashSet<DeclName> {
     // 1. Build the graph + structural edge set
     let GraphResult {
         graph,
@@ -59,7 +57,7 @@ pub fn find_invalid_alias_cycles(
     // 3. For each SCC, check if it has at least one structural edge
     let mut invalid = HashSet::new();
     for scc in &sccs {
-        let scc_set: HashSet<&QualifiedTypeName> = scc.iter().collect();
+        let scc_set: HashSet<&DeclName> = scc.iter().collect();
         let has_structural = structural_edges
             .iter()
             .any(|(from, to)| scc_set.contains(from) && scc_set.contains(to));
@@ -77,15 +75,15 @@ pub fn find_invalid_alias_cycles(
 /// Result of building a type alias dependency graph.
 struct GraphResult {
     /// The full dependency graph (all edges, structural + non-structural).
-    graph: HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>>,
+    graph: HashMap<DeclName, HashSet<DeclName>>,
     /// Edges that go through structural types (List/Map).
-    structural_edges: HashSet<(QualifiedTypeName, QualifiedTypeName)>,
+    structural_edges: HashSet<(DeclName, DeclName)>,
 }
 
 /// Build a graph of type alias dependencies, tracking which edges are structural.
-fn build_alias_graph(aliases: &HashMap<QualifiedTypeName, Ty>) -> GraphResult {
-    let mut graph: HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>> = HashMap::new();
-    let mut structural_edges: HashSet<(QualifiedTypeName, QualifiedTypeName)> = HashSet::new();
+fn build_alias_graph(aliases: &HashMap<DeclName, Ty>) -> GraphResult {
+    let mut graph: HashMap<DeclName, HashSet<DeclName>> = HashMap::new();
+    let mut structural_edges: HashSet<(DeclName, DeclName)> = HashSet::new();
 
     for (alias_name, ty) in aliases {
         let (mut non_structural, structural) = extract_type_alias_deps(ty, aliases);
@@ -113,13 +111,13 @@ fn build_alias_graph(aliases: &HashMap<QualifiedTypeName, Ty>) -> GraphResult {
 /// pass-through — it does NOT create structural context.
 fn extract_type_alias_deps(
     ty: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-) -> (HashSet<QualifiedTypeName>, HashSet<QualifiedTypeName>) {
+    aliases: &HashMap<DeclName, Ty>,
+) -> (HashSet<DeclName>, HashSet<DeclName>) {
     fn visit(
         ty: &Ty,
-        aliases: &HashMap<QualifiedTypeName, Ty>,
-        non_structural: &mut HashSet<QualifiedTypeName>,
-        structural: &mut HashSet<QualifiedTypeName>,
+        aliases: &HashMap<DeclName, Ty>,
+        non_structural: &mut HashSet<DeclName>,
+        structural: &mut HashSet<DeclName>,
         in_structural: bool,
     ) {
         match ty {
@@ -215,19 +213,17 @@ struct NodeState {
 /// Only returns real cycles (multi-node SCCs or single nodes with self-loops).
 /// Components are sorted deterministically.
 struct Tarjan<'g> {
-    graph: &'g HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>>,
+    graph: &'g HashMap<DeclName, HashSet<DeclName>>,
     index: usize,
-    stack: Vec<QualifiedTypeName>,
-    state: HashMap<QualifiedTypeName, NodeState>,
-    components: Vec<Vec<QualifiedTypeName>>,
+    stack: Vec<DeclName>,
+    state: HashMap<DeclName, NodeState>,
+    components: Vec<Vec<DeclName>>,
 }
 
 impl<'g> Tarjan<'g> {
     const UNVISITED: usize = usize::MAX;
 
-    fn components(
-        graph: &'g HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>>,
-    ) -> Vec<Vec<QualifiedTypeName>> {
+    fn components(graph: &'g HashMap<DeclName, HashSet<DeclName>>) -> Vec<Vec<DeclName>> {
         let mut tarjan = Self {
             graph,
             index: 0,
@@ -250,7 +246,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort nodes for deterministic traversal order.
         let mut nodes: Vec<_> = graph.keys().cloned().collect();
-        nodes.sort_by_key(std::string::ToString::to_string);
+        nodes.sort();
 
         for node in &nodes {
             if tarjan.state[node].index == Self::UNVISITED {
@@ -259,14 +255,12 @@ impl<'g> Tarjan<'g> {
         }
 
         // Sort components by first element for deterministic output.
-        tarjan
-            .components
-            .sort_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
+        tarjan.components.sort_by(|a, b| a[0].cmp(&b[0]));
 
         tarjan.components
     }
 
-    fn strong_connect(&mut self, node_id: &QualifiedTypeName) {
+    fn strong_connect(&mut self, node_id: &DeclName) {
         let mut node = NodeState {
             index: self.index,
             low_link: self.index,
@@ -278,7 +272,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort successors for deterministic DFS order.
         let mut successors: Vec<_> = self.graph[node_id].iter().collect();
-        successors.sort_by_key(std::string::ToString::to_string);
+        successors.sort();
 
         for successor_id in successors {
             let mut successor = self.state[successor_id];
@@ -319,7 +313,7 @@ impl<'g> Tarjan<'g> {
                 if let Some(min_idx) = component
                     .iter()
                     .enumerate()
-                    .min_by(|(_, a), (_, b)| a.to_string().cmp(&b.to_string()))
+                    .min_by(|(_, a), (_, b)| a.cmp(b))
                     .map(|(i, _)| i)
                 {
                     component.rotate_left(min_idx);
@@ -341,12 +335,27 @@ impl<'g> Tarjan<'g> {
 // Unlike type alias cycles, there is no "structural guard" exemption —
 // every SCC found is unconditionally an error.
 
-/// A class cycle: the names participating and a formatted path string.
+/// A class cycle: the classes participating, in cycle order.
 pub struct ClassCycleInfo {
     /// All class names in this cycle.
-    pub members: Vec<QualifiedTypeName>,
-    /// Human-readable cycle path, e.g. "A -> B -> A".
-    pub cycle_path: String,
+    pub members: Vec<DeclName>,
+}
+
+impl ClassCycleInfo {
+    /// The cycle as a path, `A -> B -> A`, with each head spelled by `render`
+    /// (a compile-time head has no spelling of its own; the caller supplies
+    /// the viewpoint).
+    pub fn cycle_path(&self, render: impl Fn(&DeclName) -> String) -> String {
+        match self.members.as_slice() {
+            [only] => render(only),
+            members => members
+                .iter()
+                .chain(members.first())
+                .map(render)
+                .collect::<Vec<_>>()
+                .join(" -> "),
+        }
+    }
 }
 
 /// Find all classes that participate in unconstructable required-field cycles.
@@ -356,29 +365,23 @@ pub struct ClassCycleInfo {
 ///
 /// Returns a list of `ClassCycleInfo`, one per SCC found.
 pub fn find_invalid_class_cycles(
-    class_fields: &HashMap<QualifiedTypeName, Vec<(Name, Ty)>>,
-    type_aliases: &HashMap<QualifiedTypeName, Ty>,
+    class_fields: &HashMap<DeclName, Vec<(Name, Ty)>>,
+    type_aliases: &HashMap<DeclName, Ty>,
 ) -> Vec<ClassCycleInfo> {
     let graph = build_class_graph(class_fields, type_aliases);
     let sccs = Tarjan::components(&graph);
 
     sccs.into_iter()
-        .map(|scc| {
-            let cycle_path = format_cycle_path(&scc);
-            ClassCycleInfo {
-                members: scc,
-                cycle_path,
-            }
-        })
+        .map(|scc| ClassCycleInfo { members: scc })
         .collect()
 }
 
 /// Build a dependency graph of classes based on required field types.
 fn build_class_graph(
-    class_fields: &HashMap<QualifiedTypeName, Vec<(Name, Ty)>>,
-    type_aliases: &HashMap<QualifiedTypeName, Ty>,
-) -> HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>> {
-    let mut graph: HashMap<QualifiedTypeName, HashSet<QualifiedTypeName>> = HashMap::new();
+    class_fields: &HashMap<DeclName, Vec<(Name, Ty)>>,
+    type_aliases: &HashMap<DeclName, Ty>,
+) -> HashMap<DeclName, HashSet<DeclName>> {
+    let mut graph: HashMap<DeclName, HashSet<DeclName>> = HashMap::new();
 
     // All classes must be in the graph (even if they have no required deps)
     for class_name in class_fields.keys() {
@@ -410,12 +413,12 @@ fn build_class_graph(
 /// or Map. Type aliases are resolved transparently.
 fn extract_required_class_deps(
     ty: &Ty,
-    class_fields: &HashMap<QualifiedTypeName, Vec<(Name, Ty)>>,
-    type_aliases: &HashMap<QualifiedTypeName, Ty>,
-    deps: &mut HashSet<QualifiedTypeName>,
+    class_fields: &HashMap<DeclName, Vec<(Name, Ty)>>,
+    type_aliases: &HashMap<DeclName, Ty>,
+    deps: &mut HashSet<DeclName>,
     optional: bool,
     in_list_or_map: bool,
-    visiting: &mut HashSet<QualifiedTypeName>,
+    visiting: &mut HashSet<DeclName>,
 ) {
     match ty {
         // Only add if the field is truly required.
@@ -505,25 +508,14 @@ fn extract_required_class_deps(
     }
 }
 
-/// Format a cycle path as "A -> B -> C -> A".
-fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
-    if cycle.len() == 1 {
-        cycle[0].to_string()
-    } else {
-        let mut path: Vec<String> = cycle.iter().map(std::string::ToString::to_string).collect();
-        path.push(cycle[0].to_string());
-        path.join(" -> ")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use baml_base::TyAttr;
 
     use super::*;
 
-    fn qn(name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
+    fn qn(name: &str) -> DeclName {
+        crate::test_roots::new(Name::new("test"), vec![], Name::new(name))
     }
 
     fn type_alias(name: &str) -> Ty {

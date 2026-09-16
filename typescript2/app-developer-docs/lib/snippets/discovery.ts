@@ -19,6 +19,7 @@ export interface StandaloneSnippet {
 export interface ProjectSnippetFile {
   absolutePath: string;
   displaySource: string;
+  regions?: ReadonlyMap<string, string>;
   projectPath: string;
   sourcePath: string;
 }
@@ -158,6 +159,7 @@ export async function loadProjectSnippet(id: string): Promise<ProjectSnippet> {
       absolutePath: path,
       displaySource: parsed.source,
       projectPath,
+      regions: parsed.regions,
       sourcePath,
     })),
   ];

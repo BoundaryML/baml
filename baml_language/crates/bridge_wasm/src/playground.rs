@@ -134,7 +134,7 @@ fn check_workspace_root(state: &GlobalState) -> Option<RootCheck> {
         }
         // The check above is a full sweep of the root, so `get_bytecode`'s own
         // error gate would re-derive what `has_errors` just proved.
-        match snap.db().get_bytecode_unchecked() {
+        match snap.db().get_bytecode_unchecked(entry.root) {
             Ok(program) => check.program = Some(Box::new(program)),
             Err(error) => check.emit_error = Some(error.to_string()),
         }
@@ -203,13 +203,6 @@ pub(crate) fn project_update(
     playground: &PlaygroundState,
 ) -> Option<(String, ProjectUpdate)> {
     let check = check_workspace_root(state)?;
-    let project = read(state, |snap| {
-        snap.roots()
-            .workspace_roots()
-            .next()
-            .map(|entry| entry.path.to_string_lossy().into_owned())
-    })
-    .flatten()?;
 
     let mut diagnostics = check.diagnostics;
     if let Some((revision, message)) = &playground.build_failure
@@ -229,9 +222,13 @@ pub(crate) fn project_update(
         .as_ref()
         .map_or(0, |installed| installed.generation);
 
-    let update = read(state, move |snap| {
+    read(state, move |snap| {
+        // The root and its listing come from one snapshot: the path the host
+        // addresses the project by names the root whose functions are listed.
+        let entry = snap.roots().workspace_roots().next()?;
+        let project = entry.path.to_string_lossy().into_owned();
         let db = snap.db();
-        let listing = baml_ide::list_functions_with_metadata(db);
+        let listing = baml_ide::list_functions_with_metadata(db, entry.root);
         let functions = listing
             .functions
             .into_iter()
@@ -264,7 +261,7 @@ pub(crate) fn project_update(
                     .map(|params| params.into_iter().map(Into::into).collect()),
             })
             .collect();
-        ProjectUpdate {
+        let update = ProjectUpdate {
             is_bex_current,
             generation,
             functions,
@@ -276,9 +273,10 @@ pub(crate) fn project_update(
                     .collect(),
             ),
             diagnostics,
-        }
-    })?;
-    Some((project, update))
+        };
+        Some((project, update))
+    })
+    .flatten()
 }
 
 /// One line per diagnostic, `file:line: message`, sorted so a rebuild that
@@ -624,7 +622,7 @@ pub(crate) fn workspace_root(state: &GlobalState) -> Option<(String, String)> {
         snap.roots().workspace_roots().next().map(|entry| {
             (
                 entry.path.to_string_lossy().into_owned(),
-                entry.package.to_string(),
+                entry.spelling.to_string(),
             )
         })
     })

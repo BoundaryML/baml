@@ -402,12 +402,12 @@ function anthropic_reasoning_only_turn_mid_conversation() -> string {
                 content: [ai.content.Text { text: "4" }],
                 client_id: "anthropic/claude-haiku-4-5",
             },
-            ai.events.UserMessage { content: "And 3+3?" },
+            ai.events.UserMessage.new("And 3+3?"),
             ai.events.AssistantMessage {
                 content: [ai.content.Reasoning { summary: "quietly thinking" }],
                 client_id: "anthropic/claude-haiku-4-5",
             },
-            ai.events.UserMessage { content: "And 4+4?" },
+            ai.events.UserMessage.new("And 4+4?"),
         ],
     };
     let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
@@ -446,7 +446,7 @@ function anthropic_orphaned_tool_call_is_closed() -> string {
                 ],
                 client_id: "anthropic/claude-haiku-4-5",
             },
-            ai.events.UserMessage { content: "never mind" },
+            ai.events.UserMessage.new("never mind"),
         ],
     };
     let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
@@ -1052,7 +1052,7 @@ function anthropic_replayed_tool_args_keep_nulls() -> string {
                 content: [ai.content.ToolUse { id: "t1", name: "anth_weather", args: args }],
                 client_id: "anthropic/claude-haiku-4-5",
             },
-            ai.events.ToolCompleted { id: "t1", output: "sunny in SF" },
+            ai.events.ToolCompleted.new("t1", "sunny in SF"),
         ],
     };
     let body = anth_render_body(cl, AnthMockTools@spec("weather?"), journal);
@@ -1159,4 +1159,89 @@ testset "live" with testing.Sequential() {
     } else {
         log.warn("live::anthropic not registered: ANTHROPIC_API_KEY is unset")
     }
+}
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Anthropic column of the lowering table (`_lower_block` in messages.baml):
+// image and pdf are Accepted inside `tool_result.content` and in user turns;
+// audio and video are Rejected everywhere.
+
+function _anth_media_body(media: image | audio | video | pdf) -> json {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    anth_render_body(
+        cl,
+        AnthMockTools@spec("weather?"),
+        root.llm_mock.media_journal("anthropic/claude-haiku-4-5", media),
+    )
+}
+
+// The tool-result user turn and the following user turn merge into one
+// message: [tool_result(text), tool_result(blocks), text, image]. The
+// text-only result keeps `content` as a plain string.
+function anthropic_journal_image_accepted() -> string {
+    let body = _anth_media_body(root.llm_mock.media_png());
+    let m = ".messages[2].content";
+    [
+        baml.json.path<string>(body, ".messages[2].role"),
+        baml.json.path<string>(body, `${m}[0].content`),
+        baml.json.path<string>(body, `${m}[1].content[0].text`),
+        baml.json.path<string>(body, `${m}[1].content[1].type`),
+        baml.json.path<string>(body, `${m}[1].content[1].source.data`),
+        baml.json.path<string>(body, `${m}[2].text`),
+        baml.json.path<string>(body, `${m}[3].type`),
+        baml.json.path<string>(body, `${m}[3].source.media_type`),
+        baml.json.path_or<string>(body, ".messages[3].role", "absent"),
+    ].join("|")
+}
+
+test "anthropic_journal_image_accepted" {
+    assert.equal(
+        anthropic_journal_image_accepted(),
+        "user|sunny in SF|captured:|image|SGVsbG8=|Screenshot after the tool ran:|image|image/png|absent",
+    )
+}
+
+// Audio has no input block at any position: the typed error fires before a
+// request exists, for a tool result exactly as for a user turn.
+function anthropic_journal_audio_rejected() -> string {
+    baml.json.stringify(_anth_media_body(root.llm_mock.media_mp3())) catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => invalid.detail,
+        _ => `unexpected error class: ${e.to_string()}`,
+    }
+}
+
+test "anthropic_journal_audio_rejected" {
+    assert.contains(anthropic_journal_audio_rejected(), "Anthropic does not support audio prompt input")
+}
+
+// `ai.wire.sanitize_for_client` closes a tool call still unanswered when a
+// user turn arrives, whatever the turn carries.
+function anthropic_orphaned_tool_call_closed_before_user_turn() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let args: map<string, unknown> = { "city": "SF" };
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "t1", name: "anth_weather", args: args }],
+                client_id: "anthropic/claude-haiku-4-5",
+            },
+            ai.events.UserMessage.of(["never mind, look at this instead", root.llm_mock.media_png()]),
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
+    [
+        baml.json.path<string>(body, ".messages[2].content[0].type"),
+        baml.json.path<string>(body, ".messages[2].content[0].tool_use_id"),
+        baml.json.path<bool>(body, ".messages[2].content[0].is_error").to_string(),
+        baml.json.path<string>(body, ".messages[2].content[1].text"),
+        baml.json.path<string>(body, ".messages[2].content[2].type"),
+    ].join("|")
+}
+
+test "anthropic_orphaned_tool_call_closed_before_user_turn" {
+    assert.equal(
+        anthropic_orphaned_tool_call_closed_before_user_turn(),
+        "tool_result|t1|true|never mind, look at this instead|image",
+    )
 }

@@ -57,6 +57,8 @@ fn constant_fold_int_arithmetic_chain() {
         load_const 10
         load_const 3
         mul_int
+        store_var _2
+        load_var _2
         load_const 100
         load_const 50
         sub_int

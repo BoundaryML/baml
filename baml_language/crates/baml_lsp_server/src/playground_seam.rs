@@ -40,6 +40,7 @@ use parking_lot::Mutex;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
+    PlaygroundPlatform,
     engine::{
         CollectionTicket, CommitOutcome, PrepareRunError, ProjectRuntime, RegistryLease,
         RegistryLeaseError, RunSnapshot, RuntimeRegistry, construct_engine_candidate,
@@ -47,7 +48,10 @@ use crate::{
     },
     lsp_runtime::LspRuntime,
     playground_env::PlaygroundEnvState,
-    playground_notify::{PlaygroundNotification, ProjectDiagnostic, TestExpandError},
+    playground_notify::{
+        PlaygroundNotification, ProjectDiagnostic, ProjectEntry as PlaygroundProjectEntry,
+        TestExpandError,
+    },
     playground_sender::NativePlaygroundSender,
 };
 
@@ -121,9 +125,8 @@ pub struct PlaygroundSeam {
     runtimes: Arc<RuntimeRegistry>,
     sender: Arc<NativePlaygroundSender>,
     env_state: Arc<PlaygroundEnvState>,
-    /// Built for every engine candidate; the playground intercepts HTTP, env
-    /// and IO so runs report through the webview.
-    sys_ops: Arc<sys_ops::SysOps>,
+    /// Builds every engine candidate's platform table, per project root.
+    platform: Arc<PlaygroundPlatform>,
     build_failures: Mutex<BuildFailures>,
 }
 
@@ -133,14 +136,14 @@ impl PlaygroundSeam {
         runtimes: Arc<RuntimeRegistry>,
         sender: Arc<NativePlaygroundSender>,
         env_state: Arc<PlaygroundEnvState>,
-        sys_ops: Arc<sys_ops::SysOps>,
+        platform: Arc<PlaygroundPlatform>,
     ) -> Arc<Self> {
         Arc::new(Self {
             runtime,
             runtimes,
             sender,
             env_state,
-            sys_ops,
+            platform,
             build_failures: Mutex::new(BuildFailures::default()),
         })
     }
@@ -209,6 +212,26 @@ impl PlaygroundSeam {
 
     /// Absolute paths of the workspace roots, in table order. These are the
     /// "projects" of the playground wire protocol.
+    /// Every workspace root with the name its manifest declares, in the
+    /// order the roots table holds them. [`Self::workspace_roots`] is the
+    /// same set for callers that only address projects by path.
+    pub async fn workspace_projects(&self) -> Vec<(PathBuf, Option<String>)> {
+        self.call(|state| {
+            state
+                .roots()
+                .workspace_roots()
+                .map(|entry| {
+                    (
+                        entry.path.clone(),
+                        entry.self_name.as_ref().map(ToString::to_string),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
     pub async fn workspace_roots(&self) -> Vec<PathBuf> {
         self.call(|state| {
             state
@@ -469,10 +492,13 @@ impl PlaygroundSeam {
 
     pub async fn send_list_projects(&self) {
         let projects = self
-            .workspace_roots()
+            .workspace_projects()
             .await
             .into_iter()
-            .map(|root| root.to_string_lossy().into_owned())
+            .map(|(path, name)| PlaygroundProjectEntry {
+                path: path.to_string_lossy().into_owned(),
+                name,
+            })
             .collect();
         self.sender
             .send_playground_notification(&PlaygroundNotification::ListProjects { projects });
@@ -510,16 +536,25 @@ impl PlaygroundSeam {
         let is_bex_current = installed.is_some_and(|receipt| receipt.source_revision == revision);
         let generation = installed.map_or(0, |receipt| receipt.generation);
 
+        let project = root.to_path_buf();
         let Some(update) = self
             .read(Lane::Request, move |snap| {
-                crate::playground_notify::build_project_update(
+                // `None` when `root` is not (or is no longer) a workspace root
+                // of this snapshot: nothing to describe.
+                let entry = snap
+                    .roots()
+                    .workspace_roots()
+                    .find(|entry| entry.path == project)?;
+                Some(crate::playground_notify::build_project_update(
                     snap.db(),
+                    entry.root,
                     is_bex_current,
                     generation,
                     diagnostics,
-                )
+                ))
             })
             .await
+            .flatten()
         else {
             return;
         };
@@ -545,6 +580,9 @@ impl PlaygroundSeam {
 
 /// One workspace root's check, as the playground needs it.
 struct RootCheck {
+    /// The root checked, as the database holds it: the package whose program
+    /// a build emits.
+    package: baml_db::SourceRoot,
     revision: SourceRevision,
     diagnostics: Vec<ProjectDiagnostic>,
     has_errors: bool,
@@ -565,6 +603,7 @@ fn check_root_on(snap: &Snapshot, root: &Path) -> Option<RootCheck> {
         snap.roots(),
     );
     Some(RootCheck {
+        package: entry.root,
         revision: snap.revision(),
         diagnostics: crate::playground_notify::flatten_diagnostics(&documents),
         has_errors: candidate.has_errors(),
@@ -683,7 +722,10 @@ impl PlaygroundSeam {
             return; // blocked by diagnostics, or emit failed
         };
 
-        let sys_ops = Arc::clone(&self.sys_ops);
+        // The engine's platform resolves the program's relative paths
+        // against this root: the process serves every project at once and
+        // never changes directory.
+        let sys_ops = Arc::new(self.platform.for_root(root));
         let candidate = tokio::task::spawn_blocking(move || {
             construct_engine_candidate(*program, sys_ops, revision)
         })
@@ -764,7 +806,7 @@ impl PlaygroundSeam {
             // The check above is a full sweep of the root, so
             // `get_bytecode`'s own error gate would re-derive exactly what
             // `has_errors` just proved — skip it.
-            match snap.db().get_bytecode_unchecked() {
+            match snap.db().get_bytecode_unchecked(check.package) {
                 Ok(program) => input.program = Some(Box::new(program)),
                 Err(error) => input.emit_error = Some(error.to_string()),
             }
@@ -796,7 +838,7 @@ impl PlaygroundSeam {
                     .roots()
                     .workspace_roots()
                     .find(|entry| entry.path == root_path)?
-                    .package
+                    .spelling
                     .to_string();
                 let ticket = runtimes
                     .existing(&root_path)?

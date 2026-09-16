@@ -1,13 +1,16 @@
 //! Integration tests for `baml_compiler2_emit`.
 //!
 //! Each test creates a minimal DB, adds a `.baml` file, runs the full
-//! compiler2 pipeline through `generate_project_bytecode`, and verifies
-//! the resulting `Program` has the expected structure.
+//! compiler2 pipeline through the build-time, byte-identical stdlib prefix,
+//! and verifies the resulting `Program` has the expected structure.
 
-use baml_compiler2_emit::generate_project_bytecode;
+use baml_compiler2_emit::generate_project_bytecode_with_stdlib;
 use baml_db::ProjectDatabase;
 
-use crate::engine::TestDbExt;
+use crate::{
+    engine::TestDbExt,
+    stdlib_prefix::{OptLevel, prefix},
+};
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
 const OPTIONAL_DEFAULTS_SOURCE: &str = r#"
@@ -23,11 +26,21 @@ function main() -> int {
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("."));
+    db.set_seeded_stdlib_interface(prefix(OptLevel::Two).interfaces.clone());
     db
 }
 
 fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
-    generate_project_bytecode(db).expect("compilation should succeed")
+    let package = db
+        .workspace_root()
+        .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
+    generate_project_bytecode_with_stdlib(
+        db,
+        package,
+        OptLevel::Two,
+        &prefix(OptLevel::Two).program,
+    )
+    .expect("compilation should succeed")
 }
 
 #[test]

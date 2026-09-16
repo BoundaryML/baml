@@ -110,7 +110,7 @@ func TestRustTypeDecodeRejectsMalformedAndForeignHandles(t *testing.T) {
 	}{
 		{"missing", nil},
 		{"zero", rustTypeWireHandle(0)},
-		{"wrong kind", &cffi.BamlOutboundHandle{Key: 1, HandleType: cffi.BamlHandleType_ADT_COLLECTOR}},
+		{"wrong kind", &cffi.BamlOutboundHandle{Key: 1, HandleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE}},
 		{"tagged metadata", &cffi.BamlOutboundHandle{Key: 1, HandleType: cffi.BamlHandleType_UNTAGGED_RUST_DATA, Ty: RustTypeBAMLType().value}},
 	}
 	for _, test := range cases {

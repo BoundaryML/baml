@@ -2,13 +2,20 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import test from 'node:test';
+import { z } from 'zod';
 import { bridgeDataSchema, loadBridgeData } from '../lib/content/bridges.ts';
+import {
+  loadProjectSnippet,
+  loadStandaloneSnippet,
+} from '../lib/snippets/discovery';
+import { selectProjectFiles } from '../lib/snippets/selection';
 
 const expectedAuthoredRoutes = [
   '/baml',
   '/baml/book',
-  '/baml/book/foundations',
-  '/baml/book/foundations/functions',
+  '/baml/book/concurrency',
+  '/baml/book/errors',
+  '/baml/book/interfaces',
   '/baml/bridges',
   '/baml/bridges/typescript',
   '/baml/get-started',
@@ -18,6 +25,7 @@ const expectedAuthoredRoutes = [
   '/cli',
   '/examples',
   '/examples/classify-support-tickets',
+  '/examples/vision',
   '/tutorials',
   '/tutorials/structured-extraction',
 ];
@@ -69,5 +77,59 @@ test('authored MDX never embeds a second BAML source block', async () => {
   for (const path of files) {
     const source = await readFile(path, 'utf8');
     assert.doesNotMatch(source, /```baml/i, path);
+  }
+});
+
+test('authored excerpts resolve to canonical project regions and internal links resolve', async () => {
+  const files = (await collectFiles(resolve(process.cwd(), 'content'))).filter(
+    (path) => path.endsWith('.mdx'),
+  );
+  for (const path of files) {
+    const source = await readFile(path, 'utf8');
+    for (const match of source.matchAll(
+      /<BamlSnippet id="([^"]+)"(?: region="([^"]+)")?\s*\/>/g,
+    )) {
+      const snippet = await loadStandaloneSnippet(match[1]);
+      if (match[2])
+        assert.ok(
+          snippet.parsed.regions.has(match[2]),
+          `${path}: missing region ${match[2]}`,
+        );
+    }
+    for (const match of source.matchAll(
+      /<BamlProject id="([^"]+)"(?: file="([^"]+)" regions=\{(\[[^\]]+\])\})?(?: annotation="[^"]+")?\s*\/>/g,
+    )) {
+      const project = await loadProjectSnippet(match[1]);
+      const regions = match[3]
+        ? z.array(z.string()).parse(JSON.parse(match[3]))
+        : undefined;
+      const displayed = selectProjectFiles(project, match[2], regions);
+      assert.ok(displayed.length > 0, path);
+      for (const file of displayed) {
+        assert.ok(file.displaySource.trim(), path);
+        assert.doesNotMatch(
+          file.displaySource,
+          /docs:start|docs:end|ANCHOR/,
+          path,
+        );
+      }
+    }
+    for (const match of source.matchAll(
+      /\]\((\/[^)#]+)(?:#[^)]*)?\)|href="(\/[^"#]+)"/g,
+    )) {
+      const href = match[1] ?? match[2];
+      if (href.startsWith('/examples/vision/')) {
+        const target =
+          href === '/examples/vision/source'
+            ? resolve(process.cwd(), 'app/examples/vision/source/route.ts')
+            : resolve(process.cwd(), `public${href}`);
+        await readFile(target);
+        continue;
+      }
+      assert.ok(
+        ['/', '/baml/packages', ...expectedAuthoredRoutes].includes(href),
+        `${path}: broken authored link ${href}`,
+      );
+    }
   }
 });

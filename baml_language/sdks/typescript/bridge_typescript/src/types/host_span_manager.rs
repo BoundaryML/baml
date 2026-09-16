@@ -16,10 +16,6 @@ impl HostSpanManager {
             inner: bridge_cffi::host_spans::HostSpanManager::new(),
         }
     }
-
-    pub fn host_span_context(&self) -> Option<bex_events::HostSpanContext> {
-        self.inner.host_span_context()
-    }
 }
 
 #[napi]

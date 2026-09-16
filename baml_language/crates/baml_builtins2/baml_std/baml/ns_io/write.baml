@@ -9,10 +9,7 @@
 interface Write {
     /// Attempt one write of `data` and return the number of bytes accepted.
     /// A partial write is successful.
-    function write_some(
-        self,
-        data: uint8array,
-    ) -> int throws root.errors.Io
+    function write_some(self, data: uint8array) -> int throws root.errors.Io;
 
     /// Write all of `data` to the destination.
     /// Strings are encoded as UTF-8.
@@ -22,10 +19,7 @@ interface Write {
     /// `write_some`, and pushing buffered bytes onward stays the caller's
     /// separate `flush`. Implementors are expected to make `write_some` report
     /// its own failures rather than defer them.
-    function write(
-        self,
-        data: string | uint8array,
-    ) -> int throws root.errors.Io {
+    function write(self, data: string | uint8array) -> int throws root.errors.Io {
         let remaining = match (data) {
             let text: string => text.to_utf8(),
             let bytes: uint8array => bytes,
@@ -46,5 +40,5 @@ interface Write {
     }
 
     /// Push data buffered by this writer toward its destination.
-    function flush(self) -> void throws root.errors.Io
+    function flush(self) -> void throws root.errors.Io;
 }

@@ -17,6 +17,7 @@ use crate::{
 pub enum TopLevelDeclaration {
     Function(FunctionDecl),
     Class(ClassDecl),
+    Interface(super::InterfaceDecl),
     Enum(EnumDecl),
     Client(ClientDecl),
     TestExpr(TestExprDecl),
@@ -33,6 +34,9 @@ impl FromCST for TopLevelDeclaration {
         let decl = match elem.kind() {
             SyntaxKind::FUNCTION_DEF => {
                 TopLevelDeclaration::Function(FunctionDecl::from_cst(elem)?)
+            }
+            SyntaxKind::INTERFACE_DEF => {
+                TopLevelDeclaration::Interface(super::InterfaceDecl::from_cst(elem)?)
             }
             SyntaxKind::CLASS_DEF => TopLevelDeclaration::Class(ClassDecl::from_cst(elem)?),
             SyntaxKind::ENUM_DEF => TopLevelDeclaration::Enum(EnumDecl::from_cst(elem)?),
@@ -64,6 +68,7 @@ impl Printable for TopLevelDeclaration {
         match self {
             TopLevelDeclaration::Function(function_decl) => function_decl.print(shape, printer),
             TopLevelDeclaration::Class(class_decl) => class_decl.print(shape, printer),
+            TopLevelDeclaration::Interface(decl) => decl.print(shape, printer),
             TopLevelDeclaration::Enum(enum_decl) => enum_decl.print(shape, printer),
             TopLevelDeclaration::Client(client_decl) => client_decl.print(shape, printer),
             TopLevelDeclaration::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
@@ -89,6 +94,7 @@ impl Printable for TopLevelDeclaration {
         match self {
             TopLevelDeclaration::Function(f) => f.leftmost_token(),
             TopLevelDeclaration::Class(c) => c.leftmost_token(),
+            TopLevelDeclaration::Interface(decl) => decl.leftmost_token(),
             TopLevelDeclaration::Enum(e) => e.leftmost_token(),
             TopLevelDeclaration::Client(c) => c.leftmost_token(),
             TopLevelDeclaration::TestExpr(t) => t.leftmost_token(),
@@ -104,6 +110,7 @@ impl Printable for TopLevelDeclaration {
         match self {
             TopLevelDeclaration::Function(f) => f.rightmost_token(),
             TopLevelDeclaration::Class(c) => c.rightmost_token(),
+            TopLevelDeclaration::Interface(decl) => decl.rightmost_token(),
             TopLevelDeclaration::Enum(e) => e.rightmost_token(),
             TopLevelDeclaration::Client(c) => c.rightmost_token(),
             TopLevelDeclaration::TestExpr(t) => t.rightmost_token(),
@@ -120,6 +127,45 @@ impl Printable for TopLevelDeclaration {
 /// Corresponds to a [`SyntaxKind::FUNCTION_DEF`] node.
 #[derive(Debug)]
 pub struct FunctionDecl {
+    pub signature: FunctionSignature,
+    pub body: FunctionDeclBody,
+}
+
+impl FromCST for FunctionDecl {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::FUNCTION_DEF)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let signature = FunctionSignature::take(&mut it)?;
+        let body = it.expect_node("of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY")?;
+        let body = FunctionDeclBody::from_cst(SyntaxElement::Node(body))?;
+        it.expect_end()?;
+        Ok(Self { signature, body })
+    }
+}
+
+impl KnownKind for FunctionDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FUNCTION_DEF
+    }
+}
+
+impl Printable for FunctionDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        self.signature
+            .print_with_body(Some(&self.body), shape, printer)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.signature.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
+    }
+}
+
+#[derive(Debug)]
+pub struct FunctionSignature {
+    pub attributes: Vec<BlockAttribute>,
     pub keyword: t::Function,
     pub name: t::Word,
     pub generic_params: Option<super::GenericParamList>,
@@ -127,15 +173,14 @@ pub struct FunctionDecl {
     pub arrow: super::FunctionArrow,
     pub return_type: Type,
     pub throws: Option<ThrowsClause>,
-    pub body: FunctionDeclBody,
 }
-impl FromCST for FunctionDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::FUNCTION_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(&node);
-
+impl FunctionSignature {
+    fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+        let mut attributes = Vec::new();
+        while let Some(elem) = it.next_if_kind(SyntaxKind::BLOCK_ATTRIBUTE) {
+            attributes.push(BlockAttribute::from_cst(elem)?);
+        }
         let keyword = it.expect_parse()?;
 
         let name = it.expect_parse()?;
@@ -161,12 +206,8 @@ impl FromCST for FunctionDecl {
             None
         };
 
-        let body = it.expect_node("of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY")?;
-        let body = FunctionDeclBody::from_cst(SyntaxElement::Node(body))?;
-
-        it.expect_end()?;
-
-        Ok(FunctionDecl {
+        Ok(Self {
+            attributes,
             keyword,
             name,
             generic_params,
@@ -174,131 +215,168 @@ impl FromCST for FunctionDecl {
             arrow,
             return_type,
             throws,
-            body,
         })
     }
-}
 
-impl KnownKind for FunctionDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::FUNCTION_DEF
+    fn print_with_body(
+        &self,
+        body: Option<&FunctionDeclBody>,
+        shape: Shape,
+        printer: &mut Printer,
+    ) -> PrintInfo {
+        print_leading_attributes(&self.attributes, self.keyword.span(), shape.indent, printer);
+        let start = printer.output.len();
+        let continuation = shape.indent + printer.config.indent_width;
+        printer.print_raw_token(&self.keyword);
+        printer.print_separator(
+            self.keyword.span(),
+            Some(self.name.span()),
+            continuation,
+            " ",
+        );
+        printer.print_raw_token(&self.name);
+        let mut previous = self.name.span();
+        if let Some(params) = &self.generic_params {
+            printer.print_separator(previous, Some(params.leftmost_token()), continuation, "");
+            printer.print(params, shape.clone());
+            previous = params.rightmost_token();
+        }
+        printer.print_separator(
+            previous,
+            Some(self.params.leftmost_token()),
+            continuation,
+            "",
+        );
+
+        let mut candidate = printer.sub_printer();
+        self.params
+            .print(Shape::unlimited_single_line(), &mut candidate);
+        self.print_return_and_throws(body, &Shape::unlimited_single_line(), &mut candidate);
+        let terminator_width = 1;
+        if !candidate.output.contains('\n')
+            && printer.current_line_len() + candidate.output.len() + terminator_width
+                <= printer.config.line_width
+        {
+            printer.append_from_printer(candidate);
+        } else {
+            self.params.print_multi_line(
+                Shape {
+                    width: 0,
+                    indent: shape.indent,
+                    first_line_offset: 0,
+                },
+                printer,
+            );
+            self.print_return_and_throws(body, &shape, printer);
+        }
+        if let Some(body) = body {
+            printer.print(body, shape);
+        }
+        PrintInfo {
+            multi_lined: printer.output[start..].contains('\n'),
+        }
+    }
+
+    fn print_return_and_throws(
+        &self,
+        body: Option<&FunctionDeclBody>,
+        shape: &Shape,
+        printer: &mut Printer,
+    ) {
+        let continuation = shape.indent + printer.config.indent_width;
+        printer.print_separator(
+            self.params.rightmost_token(),
+            Some(self.arrow.span()),
+            continuation,
+            " ",
+        );
+        printer.print_str("->");
+        self.arrow.print_separator_before(
+            Some(self.return_type.leftmost_token()),
+            continuation,
+            printer,
+        );
+        let remaining = if shape.width == usize::MAX {
+            Shape::unlimited_single_line()
+        } else {
+            Shape {
+                width: printer
+                    .current_line_remaining_width()
+                    .saturating_sub(if body.is_some() { 2 } else { 1 }),
+                indent: shape.indent,
+                first_line_offset: printer.current_line_len().saturating_sub(shape.indent),
+            }
+        };
+        let return_info = self.return_type.print(remaining, printer);
+        let mut previous = self.return_type.rightmost_token();
+        if let Some(throws) = &self.throws {
+            printer.print_separator(previous, Some(throws.leftmost_token()), continuation, " ");
+            printer.print(throws, shape.clone());
+            previous = throws.rightmost_token();
+        }
+        if let Some(body) = body {
+            printer.print_separator(previous, Some(body.leftmost_token()), shape.indent, " ");
+            if return_info.multi_lined
+                && self.return_type.multi_line_is_indented()
+                && printer.current_line_len() > shape.indent
+            {
+                printer
+                    .output
+                    .truncate(printer.output.trim_end_matches(' ').len());
+                printer.print_newline();
+                printer.print_spaces(shape.indent);
+            }
+        }
     }
 }
 
-impl Printable for FunctionDecl {
+impl FromCST for FunctionSignature {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::METHOD_SIG)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let signature = Self::take(&mut it)?;
+        it.expect_end()?;
+        Ok(signature)
+    }
+}
+
+impl Printable for FunctionSignature {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-        if let Some(ref gp) = self.generic_params {
-            printer.print(gp, shape.clone());
-        }
-
-        let mut param_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let param_info = param_printer.print(&self.params, Shape::unlimited_single_line());
-
-        let mut return_type_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let return_type_info =
-            return_type_printer.print(&self.return_type, Shape::unlimited_single_line());
-        let (_, return_type_line_comment) =
-            return_type_printer.print_trivia_all_trailing_for(self.return_type.rightmost_token());
-        let mut throws_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let throws_info = self
-            .throws
-            .as_ref()
-            .map(|throws| throws_printer.print(throws, Shape::unlimited_single_line()))
-            .unwrap_or_else(PrintInfo::default_single_line);
-
-        let single_line_size = printer.current_line_len()
-            + param_printer.output.len()
-            + const { " -> ".len() + " {".len() }
-            + return_type_printer.output.len()
-            + if self.throws.is_some() {
-                (const { " ".len() }) + throws_printer.output.len()
-            } else {
-                0
-            };
-        if single_line_size <= printer.config.line_width
-            && !param_info.multi_lined
-            && !return_type_info.multi_lined
-            && !throws_info.multi_lined
-            && !return_type_line_comment
-        {
-            // It fits in single line!
-            printer.append_from_printer(param_printer);
-            printer.print_spaces(1);
-            // Normalize the permissively accepted `=>` spelling to `->`.
-            printer.print_str("->");
-            self.arrow.print_separator_before(
-                Some(self.return_type.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
-            );
-            printer.append_from_printer(return_type_printer);
-            if self.throws.is_some() {
-                printer.print_spaces(1);
-                printer.append_from_printer(throws_printer);
-            }
-            printer.print_spaces(1);
-            printer.print(&self.body, shape)
-        } else {
-            let params_shape = Shape {
-                width: 0, // never single-line
-                indent: shape.indent,
-                first_line_offset: 0, // not important in function args
-            };
-            let _ = self.params.print_multi_line(params_shape, printer);
-
-            printer.print_spaces(1);
-            // Normalize the permissively accepted `=>` spelling to `->`.
-            printer.print_str("->");
-            self.arrow.print_separator_before(
-                Some(self.return_type.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
-            );
-
-            let curr_line_len = printer.current_line_len();
-            let return_type_shape = Shape {
-                width: printer
-                    .config
-                    .line_width
-                    .saturating_sub(curr_line_len + const { " {".len() }),
-                indent: shape.indent,
-                first_line_offset: curr_line_len.saturating_sub(shape.indent),
-            };
-
-            let return_info = self.return_type.print(return_type_shape, printer);
-            let (_, return_type_line_comment) =
-                printer.print_trivia_all_trailing_for(self.return_type.rightmost_token());
-            let throws_info = if let Some(ref throws) = self.throws {
-                printer.print_str(" ");
-                printer.print(throws, shape.clone())
-            } else {
-                PrintInfo::default_single_line()
-            };
-
-            if (return_info.multi_lined && self.return_type.multi_line_is_indented())
-                || throws_info.multi_lined
-                || return_type_line_comment
-            {
-                // `{` goes on its own line after the type ends
-                printer.print_newline();
-            } else {
-                printer.print_str(" ");
-            }
-
-            printer.print(&self.body, shape);
-
-            PrintInfo::default_multi_lined()
-        }
+        self.print_with_body(None, shape, printer)
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.attributes
+            .first()
+            .map_or(self.keyword.span(), Printable::leftmost_token)
     }
     fn rightmost_token(&self) -> TextRange {
-        self.body.rightmost_token()
+        self.throws.as_ref().map_or_else(
+            || self.return_type.rightmost_token(),
+            Printable::rightmost_token,
+        )
+    }
+}
+
+pub(super) fn print_leading_attributes(
+    attributes: &[BlockAttribute],
+    keyword: TextRange,
+    indent: usize,
+    printer: &mut Printer,
+) {
+    if let Some((first, rest)) = attributes.split_first() {
+        first.print(
+            Shape::standalone(printer.config.line_width, indent),
+            printer,
+        );
+        printer.print_trivia_all_trailing_for(first.rightmost_token());
+        printer.print_newline();
+        for attr in rest {
+            printer.print_standalone_with_trivia(attr, indent);
+            printer.print_newline();
+        }
+        printer.print_trivia_all_leading_with_newline_for(keyword, indent);
+        printer.print_spaces(indent);
     }
 }
 
@@ -1116,15 +1194,7 @@ impl FromCST for ClassDecl {
             match elem.kind() {
                 SyntaxKind::FIELD => {
                     let field = ClassField::from_cst(elem)?;
-                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
-                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
-                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
-                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
-                            semi_elem,
-                        )?))
-                    } else {
-                        None
-                    };
+                    let delimiter = ClassFieldDelimiter::take(&mut it)?;
                     items.push(ClassItem::Field(field, delimiter));
                 }
                 SyntaxKind::FUNCTION_DEF => {
@@ -1172,8 +1242,6 @@ impl KnownKind for ClassDecl {
 
 impl Printable for ClassDecl {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
@@ -1181,40 +1249,58 @@ impl Printable for ClassDecl {
             printer.print(gp, shape.clone());
         }
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        if let Some((first, rest)) = self.items.split_first() {
-            // first has leading empty lines trimmed
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            first.print(inner_shape, printer);
-            printer.print_trivia_trailing(first_trailing);
-            printer.print_newline();
-
-            // rest can have leading empty lines
-            for item in rest {
-                printer.print_standalone_with_trivia(item, inner_indent);
-                printer.print_newline();
-            }
-        }
-
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
-
-        PrintInfo::default_multi_lined()
+        print_declaration_body(
+            &self.open_brace,
+            &self.items,
+            &self.close_brace,
+            &shape,
+            printer,
+        )
     }
+
     fn leftmost_token(&self) -> TextRange {
         self.keyword.span()
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
     }
+}
+
+pub(super) fn print_declaration_body<T: Printable>(
+    open_brace: &t::LBrace,
+    items: &[T],
+    close_brace: &t::RBrace,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let inner_indent = shape.indent + printer.config.indent_width;
+    printer.print_raw_token(open_brace);
+    printer.print_trivia_all_trailing_for(open_brace.span());
+    printer.print_newline();
+
+    if let Some((first, rest)) = items.split_first() {
+        // first has leading empty lines trimmed
+        let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
+        printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
+        printer.print_spaces(inner_indent);
+        let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+        first.print(inner_shape, printer);
+        printer.print_trivia_trailing(first_trailing);
+        printer.print_newline();
+
+        // rest can have leading empty lines
+        for item in rest {
+            printer.print_standalone_with_trivia(item, inner_indent);
+            printer.print_newline();
+        }
+    }
+
+    let (close_brace_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
+    printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
+    printer.print_spaces(shape.indent);
+    printer.print_raw_token(close_brace);
+
+    PrintInfo::default_multi_lined()
 }
 
 #[derive(Debug)]
@@ -1482,29 +1568,53 @@ impl FromCST for AssociatedTypeDecl {
     }
 }
 
+impl AssociatedTypeDecl {
+    pub(super) fn print_delimited(
+        &self,
+        delimiter: Option<&ClassFieldDelimiter>,
+        mut shape: Shape,
+        printer: &mut Printer,
+    ) -> PrintInfo {
+        let continuation = shape.indent + printer.config.indent_width;
+        shape.width = shape.width.saturating_sub(1);
+        let info = self.print(shape, printer);
+        let delimiter_span = delimiter.map(|delimiter| {
+            ClassFieldDelimiter::rightmost(Some(delimiter), || self.rightmost_token())
+        });
+        printer.print_semicolon(self.rightmost_token(), delimiter_span, continuation);
+        info
+    }
+}
+
 impl Printable for AssociatedTypeDecl {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut multi_lined = false;
+        let start = printer.output.len();
+        let continuation = shape.indent + printer.config.indent_width;
         printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
+        printer.print_separator(
+            self.keyword.span(),
+            Some(self.name.span()),
+            continuation,
+            " ",
+        );
         printer.print_raw_token(&self.name);
+        let mut previous = self.name.span();
         if let Some((extends, ty)) = &self.bound {
-            let (_, extends_trailing) = printer.trivia.get_for_range_split(extends.span());
-            printer.print_str(" extends ");
-            printer.print_trivia_squished(extends_trailing);
-            let leading = printer.trivia.get_leading_for_element(ty);
-            printer.print_trivia_squished(leading);
-            multi_lined |= ty.print(shape.clone(), printer).multi_lined;
+            printer.print_separator(previous, Some(extends.span()), continuation, " ");
+            printer.print_raw_token(extends);
+            printer.print_separator(extends.span(), Some(ty.leftmost_token()), continuation, " ");
+            printer.print(ty, shape.clone());
+            previous = ty.rightmost_token();
         }
         if let Some((equals, ty)) = &self.default {
-            let (_, equals_trailing) = printer.trivia.get_for_range_split(equals.span());
-            printer.print_str(" = ");
-            printer.print_trivia_squished(equals_trailing);
-            let leading = printer.trivia.get_leading_for_element(ty);
-            printer.print_trivia_squished(leading);
-            multi_lined |= ty.print(shape, printer).multi_lined;
+            printer.print_separator(previous, Some(equals.span()), continuation, " ");
+            printer.print_raw_token(equals);
+            printer.print_separator(equals.span(), Some(ty.leftmost_token()), continuation, " ");
+            printer.print(ty, shape);
         }
-        PrintInfo { multi_lined }
+        PrintInfo {
+            multi_lined: printer.output[start..].contains('\n'),
+        }
     }
 
     fn leftmost_token(&self) -> TextRange {
@@ -1576,8 +1686,26 @@ pub enum ImplementsItem {
     Function(FunctionDecl),
 }
 
-impl ImplementsItem {
-    fn delimiter_rightmost(
+impl ClassFieldDelimiter {
+    pub(super) fn print_comma(delimiter: Option<&Self>, printer: &mut Printer) {
+        if let Some(Self::Comma(comma)) = delimiter {
+            printer.print_raw_token(comma);
+        } else {
+            printer.print_str(",");
+        }
+    }
+
+    pub(super) fn take(it: &mut SyntaxNodeIter) -> Result<Option<Self>, StrongAstError> {
+        if let Some(elem) = it.next_if_kind(SyntaxKind::COMMA) {
+            Ok(Some(Self::Comma(t::Comma::from_cst(elem)?)))
+        } else if let Some(elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
+            Ok(Some(Self::Semicolon(t::Semicolon::from_cst(elem)?)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(super) fn rightmost(
         delimiter: Option<&ClassFieldDelimiter>,
         fallback: impl FnOnce() -> TextRange,
     ) -> TextRange {
@@ -1592,7 +1720,9 @@ impl ImplementsItem {
 impl Printable for ImplementsItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ImplementsItem::AssociatedType(decl, _) => decl.print(shape, printer),
+            ImplementsItem::AssociatedType(decl, delimiter) => {
+                decl.print_delimited(delimiter.as_ref(), shape, printer)
+            }
             ImplementsItem::FieldLink(link, _) => link.print(shape, printer),
             ImplementsItem::Field(field, delimiter) => {
                 let info = field.print(shape, printer);
@@ -1618,13 +1748,13 @@ impl Printable for ImplementsItem {
     fn rightmost_token(&self) -> TextRange {
         match self {
             ImplementsItem::AssociatedType(decl, delimiter) => {
-                Self::delimiter_rightmost(delimiter.as_ref(), || decl.rightmost_token())
+                ClassFieldDelimiter::rightmost(delimiter.as_ref(), || decl.rightmost_token())
             }
             ImplementsItem::FieldLink(link, delimiter) => {
-                Self::delimiter_rightmost(delimiter.as_ref(), || link.rightmost_token())
+                ClassFieldDelimiter::rightmost(delimiter.as_ref(), || link.rightmost_token())
             }
             ImplementsItem::Field(field, delimiter) => {
-                Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
+                ClassFieldDelimiter::rightmost(delimiter.as_ref(), || field.rightmost_token())
             }
             ImplementsItem::Function(function) => function.rightmost_token(),
         }
@@ -1669,41 +1799,17 @@ impl FromCST for ImplementsBlock {
             match elem.kind() {
                 SyntaxKind::ASSOCIATED_TYPE_DECL => {
                     let decl = AssociatedTypeDecl::from_cst(elem)?;
-                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
-                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
-                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
-                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
-                            semi_elem,
-                        )?))
-                    } else {
-                        None
-                    };
+                    let delimiter = ClassFieldDelimiter::take(&mut it)?;
                     items.push(ImplementsItem::AssociatedType(decl, delimiter));
                 }
                 SyntaxKind::INTERFACE_FIELD_LINK => {
                     let link = InterfaceFieldLink::from_cst(elem)?;
-                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
-                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
-                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
-                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
-                            semi_elem,
-                        )?))
-                    } else {
-                        None
-                    };
+                    let delimiter = ClassFieldDelimiter::take(&mut it)?;
                     items.push(ImplementsItem::FieldLink(link, delimiter));
                 }
                 SyntaxKind::FIELD => {
                     let field = ClassField::from_cst(elem)?;
-                    let delimiter = if let Some(comma_elem) = it.next_if_kind(SyntaxKind::COMMA) {
-                        Some(ClassFieldDelimiter::Comma(t::Comma::from_cst(comma_elem)?))
-                    } else if let Some(semi_elem) = it.next_if_kind(SyntaxKind::SEMICOLON) {
-                        Some(ClassFieldDelimiter::Semicolon(t::Semicolon::from_cst(
-                            semi_elem,
-                        )?))
-                    } else {
-                        None
-                    };
+                    let delimiter = ClassFieldDelimiter::take(&mut it)?;
                     items.push(ImplementsItem::Field(field, delimiter));
                 }
                 SyntaxKind::FUNCTION_DEF => {
@@ -1828,19 +1934,7 @@ impl Printable for ClassItem {
         match self {
             ClassItem::Field(field, delimiter) => {
                 let info = field.print(shape, printer);
-                // Always print comma, but preserve trivia from original delimiter
-                match delimiter {
-                    Some(ClassFieldDelimiter::Comma(comma)) => {
-                        printer.print_raw_token(comma);
-                    }
-                    Some(ClassFieldDelimiter::Semicolon(_)) => {
-                        // Normalize to comma; parent handles trailing trivia via rightmost_token()
-                        printer.print_str(",");
-                    }
-                    None => {
-                        printer.print_str(",");
-                    }
-                }
+                ClassFieldDelimiter::print_comma(delimiter.as_ref(), printer);
                 info
             }
             ClassItem::Function(function) => function.print(shape, printer),

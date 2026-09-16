@@ -28,7 +28,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
     act(() => {
       port.emit({
         notification: {
-          projects: ['project'],
+          projects: [{ path: 'project' }],
           type: 'listProjects',
         },
         type: 'playgroundNotification',
@@ -108,7 +108,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
     act(() => {
       port.emit({
         notification: {
-          projects: ['project'],
+          projects: [{ path: 'project' }],
           type: 'listProjects',
         },
         type: 'playgroundNotification',
@@ -187,7 +187,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -297,7 +297,7 @@ describe('ExecutionPanel run history', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -425,7 +425,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -513,7 +513,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -580,7 +580,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -696,7 +696,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -773,7 +773,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -837,7 +837,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -929,7 +929,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -986,7 +986,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -1046,7 +1046,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({

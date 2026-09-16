@@ -467,6 +467,310 @@ fn subdirectory_open_merges_into_the_discovered_project() {
     assert_eq!(last.version, Some(2));
 }
 
+/// Two workspace folders are two projects in one server: each is its own
+/// root with its own diagnostics, and a declaration in one never reaches
+/// the other — the same class name in both is two types.
+#[test]
+fn two_workspace_folders_are_two_roots() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(
+        a.join("baml_src/point.baml"),
+        "class Point {\n    x int\n}\nfunction use_a(p: Point) -> int {\n    p.x\n}\n",
+    );
+    h.fs.write(
+        b.join("baml_src/point.baml"),
+        "class Point {\n    y string\n}\nfunction use_b(p: Point) -> string {\n    p.y\n}\n",
+    );
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        &[a.clone(), b.clone()],
+    );
+    h.settle();
+
+    let mut roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    roots.sort();
+    assert_eq!(roots, vec![a.clone(), b.clone()], "one root per folder");
+
+    // Each project checks clean against its own `Point`: were the two
+    // roots one world, `Point` would be declared twice.
+    let a_uri = Url::from_file_path(a.join("baml_src/point.baml")).unwrap();
+    let b_uri = Url::from_file_path(b.join("baml_src/point.baml")).unwrap();
+    for uri in [&a_uri, &b_uri] {
+        let last = h.sender(s).publications_for(uri).last().cloned().unwrap();
+        assert!(last.diagnostics.is_empty(), "{uri}: {last:?}");
+    }
+
+    // Hover in `b` resolves `b`'s `Point`, never `a`'s.
+    let b_source =
+        "class Point {\n    y string\n}\nfunction use_b(p: Point) -> string {\n    p.y\n}\n";
+    h.open(s, &b_uri, 1, b_source);
+    let response = h
+        .request(
+            s,
+            "textDocument/hover",
+            position_params(&b_uri, pos_of(b_source, "Point) -> string")),
+        )
+        .expect("hover succeeds");
+    let markdown = response["contents"]["value"].as_str().expect("markdown");
+    assert!(markdown.contains("y: string"), "b's Point: {markdown}");
+    assert!(!markdown.contains("x: int"), "not a's Point: {markdown}");
+
+    // An error in `a` is published for `a` alone; `b` is untouched.
+    let bad_uri = Url::from_file_path(a.join("baml_src/bad.baml")).unwrap();
+    h.open(s, &bad_uri, 1, BAD_SOURCE);
+    h.settle();
+    assert!(has_error(
+        h.sender(s).publications_for(&bad_uri).last().unwrap()
+    ));
+    let b_last = h
+        .sender(s)
+        .publications_for(&b_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(b_last.diagnostics.is_empty(), "b stays clean: {b_last:?}");
+}
+
+/// A folder added after `initialize` is discovered and served like the
+/// first: there is no one-workspace slot to lose.
+#[test]
+fn a_folder_added_later_is_discovered_not_refused() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(a.join("baml_src/a.baml"), "class A {\n    x int\n}\n");
+    h.fs.write(b.join("baml_src/b.baml"), BAD_SOURCE);
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        std::slice::from_ref(&a),
+    );
+    h.settle();
+    assert_eq!(h.state.roots().workspace_roots().count(), 1);
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+            "removed": [],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+
+    let mut roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    roots.sort();
+    assert_eq!(
+        roots,
+        vec![a, b.clone()],
+        "the second folder is a second root"
+    );
+    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    assert!(
+        has_error(h.sender(s).publications_for(&b_uri).last().unwrap()),
+        "the second project's diagnostics are published"
+    );
+}
+
+/// A folder withdrawn after `initialize` takes its projects with it: the
+/// root is removed and its markers cleared in every editor. Projects under
+/// the folders that remain are untouched.
+#[test]
+fn a_folder_removed_later_drops_its_roots() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(a.join("baml_src/a.baml"), BAD_SOURCE);
+    h.fs.write(b.join("baml_src/b.baml"), BAD_SOURCE);
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        &[a.clone(), b.clone()],
+    );
+    h.settle();
+    let a_uri = Url::from_file_path(a.join("baml_src/a.baml")).unwrap();
+    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    assert!(has_error(
+        h.sender(s).publications_for(&b_uri).last().unwrap()
+    ));
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [],
+            "removed": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+
+    let roots: Vec<PathBuf> = h
+        .state
+        .roots()
+        .workspace_roots()
+        .map(|entry| entry.path.clone())
+        .collect();
+    assert_eq!(roots, vec![a], "the withdrawn folder's project is gone");
+    let b_last = h
+        .sender(s)
+        .publications_for(&b_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(
+        b_last.diagnostics.is_empty(),
+        "its markers are cleared: {b_last:?}"
+    );
+    assert!(
+        has_error(h.sender(s).publications_for(&a_uri).last().unwrap()),
+        "the remaining project still stands"
+    );
+}
+
+/// An open document keeps its project served after its folder is
+/// withdrawn; closing the document lets the project go — the rule that
+/// removes a provisional root with its last document, applied to a
+/// discovered one.
+#[test]
+fn an_open_document_keeps_a_withdrawn_folders_project_until_it_closes() {
+    let mut h = Harness::new();
+    let (a, b) = (h.ws.join("a"), h.ws.join("b"));
+    h.fs.add_project(&a);
+    h.fs.add_project(&b);
+    h.fs.write(a.join("baml_src/a.baml"), "class A {\n    x int\n}\n");
+    h.fs.write(b.join("baml_src/b.baml"), BAD_SOURCE);
+    let s = SessionKey(1);
+    h.init_session_with_folders(
+        s,
+        &[lsp_types::PositionEncodingKind::UTF16],
+        &[a.clone(), b.clone()],
+    );
+    h.settle();
+    let b_uri = Url::from_file_path(b.join("baml_src/b.baml")).unwrap();
+    h.open(s, &b_uri, 1, BAD_SOURCE);
+    h.settle();
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [],
+            "removed": [{ "uri": Url::from_file_path(&b).unwrap(), "name": "b" }],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+    let roots = |h: &Harness| -> Vec<PathBuf> {
+        let mut roots: Vec<PathBuf> = h
+            .state
+            .roots()
+            .workspace_roots()
+            .map(|entry| entry.path.clone())
+            .collect();
+        roots.sort();
+        roots
+    };
+    assert_eq!(
+        roots(&h),
+        vec![a.clone(), b],
+        "the open document keeps its project"
+    );
+    assert!(
+        has_error(h.sender(s).publications_for(&b_uri).last().unwrap()),
+        "and it is still checked"
+    );
+
+    h.close(s, &b_uri);
+    h.settle();
+    assert_eq!(roots(&h), vec![a], "closing it releases the project");
+    let b_last = h
+        .sender(s)
+        .publications_for(&b_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(
+        b_last.diagnostics.is_empty(),
+        "its markers are cleared: {b_last:?}"
+    );
+}
+
+/// A folder the host itself announces (`baml lsp --workspace`, the root
+/// `baml playground` starts on) is discovered before any client connects,
+/// its standing diagnostics reach the session that initializes later, and a
+/// client withdrawing the same folder does not take the host's project
+/// with it.
+#[test]
+fn a_host_folder_is_discovered_without_a_session_and_outlives_a_withdrawal() {
+    let mut h = Harness::new();
+    let a = h.ws.join("a");
+    h.fs.add_project(&a);
+    h.fs.write(a.join("baml_src/a.baml"), BAD_SOURCE);
+    h.state.add_host_folder(&a);
+    h.settle();
+    let roots = |h: &Harness| -> Vec<PathBuf> {
+        h.state
+            .roots()
+            .workspace_roots()
+            .map(|entry| entry.path.clone())
+            .collect()
+    };
+    assert_eq!(
+        roots(&h),
+        vec![a.clone()],
+        "discovered with no session open"
+    );
+
+    let s = SessionKey(1);
+    h.init_session_with_folders(s, &[], std::slice::from_ref(&a));
+    h.settle();
+    let a_uri = Url::from_file_path(a.join("baml_src/a.baml")).unwrap();
+    assert!(
+        has_error(h.sender(s).publications_for(&a_uri).last().unwrap()),
+        "the late session receives the standing error"
+    );
+
+    h.notify(
+        s,
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": {
+            "added": [],
+            "removed": [{ "uri": Url::from_file_path(&a).unwrap(), "name": "a" }],
+        } }),
+    )
+    .unwrap();
+    h.settle();
+    assert_eq!(
+        roots(&h),
+        vec![a],
+        "the host's folder still covers the project"
+    );
+    assert!(has_error(
+        h.sender(s).publications_for(&a_uri).last().unwrap()
+    ));
+}
+
 /// A watched-files event touches exactly its URIs: three reads, no walk.
 #[test]
 fn watched_files_reload_exactly_the_named_paths() {
@@ -766,7 +1070,9 @@ fn request_gating_and_unsupported_methods() {
         .unwrap_err();
     assert!(matches!(error, LspError::RequestFailed(_)), "{error:?}");
 
-    let error = h.request(s, "textDocument/rename", json!({})).unwrap_err();
+    let error = h
+        .request(s, "textDocument/documentHighlight", json!({}))
+        .unwrap_err();
     assert!(
         matches!(error, LspError::RequestNotSupported(_)),
         "{error:?}"
@@ -1073,7 +1379,11 @@ fn completion_after_a_dot_offers_the_receivers_members() {
             position_params(&uri, pos_of(FUNCS_FIXTURE, "at(0")),
         )
         .expect("completion succeeds");
-    let items = response.as_array().expect("an item array");
+    assert_eq!(
+        response["isIncomplete"], true,
+        "the list depends on the typed prefix, so the client must re-ask"
+    );
+    let items = response["items"].as_array().expect("an item array");
     let at = items
         .iter()
         .find(|item| item["label"] == "at")
@@ -1099,6 +1409,221 @@ fn completion_after_a_dot_offers_the_receivers_members() {
     let mut sorted = ranks.clone();
     sorted.sort_unstable();
     assert_eq!(ranks, sorted, "items arrive best-first");
+}
+
+/// Two cursors on the same qualifier: one bare, one after a typed `_`.
+const INTERNALS_FIXTURE: &str = "function a() -> int throws never {\n    baml.time.AAA\n    0\n}\n\n\
+                                 function b() -> int throws never {\n    baml.time._BBB\n    0\n}\n";
+
+/// The editor half of the `_`-privacy rule: the stdlib's internals are
+/// absent until the reader asks for them, and asking means a SECOND request
+/// — which is why the list is always incomplete.
+#[test]
+fn a_typed_underscore_re_asks_for_the_stdlibs_internals() {
+    let mut harness = feature_harness();
+    let uri = harness.uri("internals.baml");
+    harness.open(SessionKey(1), &uri, 1, INTERNALS_FIXTURE);
+    harness.settle();
+
+    let labels = |response: &Value| -> Vec<String> {
+        response["items"]
+            .as_array()
+            .expect("an item array")
+            .iter()
+            .map(|item| item["label"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    let bare = harness
+        .request(
+            SessionKey(1),
+            "textDocument/completion",
+            position_params(&uri, pos_of(INTERNALS_FIXTURE, "AAA")),
+        )
+        .expect("completion succeeds");
+    let bare = labels(&bare);
+    assert!(bare.iter().any(|label| label == "Instant"), "{bare:?}");
+    assert!(
+        !bare.iter().any(|label| label.starts_with('_')),
+        "the stdlib's internal helpers stay out of the list, got {bare:?}"
+    );
+
+    let asked = harness
+        .request(
+            SessionKey(1),
+            "textDocument/completion",
+            position_params(&uri, pos_of(INTERNALS_FIXTURE, "BBB")),
+        )
+        .expect("completion succeeds");
+    let asked = labels(&asked);
+    assert!(
+        asked.iter().any(|label| label == "_tz_offset_at"),
+        "a typed `_` reaches them, got {asked:?}"
+    );
+}
+
+/// F2 over the wire: the capability, the prepare step, the edit, and the
+/// refusal a reader is meant to read.
+#[test]
+fn rename_edits_every_reference_and_refuses_what_it_cannot_cover() {
+    const SOURCE: &str = r#"enum Status {
+    Active
+}
+
+function pick(s: Status) -> Status throws never {
+    s
+}
+"#;
+
+    let mut harness = feature_harness();
+    let uri = harness.uri("rename.baml");
+    harness.open(SessionKey(1), &uri, 1, SOURCE);
+    harness.settle();
+
+    let capabilities = baml_lsp::dispatch::server_capabilities(
+        baml_lsp::position_codec::PositionEncoding::UTF16,
+        false,
+    );
+    let Some(lsp_types::OneOf::Right(rename)) = capabilities.rename_provider else {
+        unreachable!("rename is advertised with options, not a bare bool");
+    };
+    assert_eq!(
+        rename.prepare_provider,
+        Some(true),
+        "prepareProvider is what greys F2 out on a refused position"
+    );
+
+    // `prepareRename` on the enum's name returns just that token.
+    let prepared = harness
+        .request(
+            SessionKey(1),
+            "textDocument/prepareRename",
+            position_params(&uri, pos_of(SOURCE, "Status {")),
+        )
+        .expect("an enum is renameable");
+    assert_eq!(prepared["placeholder"], "Status");
+    assert_eq!(prepared["range"]["start"]["line"], 0);
+    assert_eq!(prepared["range"]["start"]["character"], 5);
+    assert_eq!(prepared["range"]["end"]["character"], 11);
+
+    // The edit covers the declaration and both annotations.
+    let edit = harness
+        .request(
+            SessionKey(1),
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "position": position_params(&uri, pos_of(SOURCE, "Status {"))["position"],
+                "newName": "State",
+            }),
+        )
+        .expect("rename succeeds");
+    let edits = edit["changes"][uri.as_str()]
+        .as_array()
+        .expect("edits for the one file");
+    assert_eq!(
+        edits.len(),
+        3,
+        "declaration and both annotations: {edits:#?}"
+    );
+    for one in edits {
+        assert_eq!(one["newText"], "State");
+    }
+
+    // A variant's references are known to be incomplete, so the server
+    // refuses rather than half-applying — and says why.
+    let error = harness
+        .request(
+            SessionKey(1),
+            "textDocument/prepareRename",
+            position_params(&uri, pos_of(SOURCE, "Active")),
+        )
+        .expect_err("an enum variant is refused");
+    let message = error.to_response_error().message;
+    assert!(
+        message.contains("an enum variant") && message.contains("every reference"),
+        "the reader is told what is wrong: {message:?}"
+    );
+}
+
+/// An interface method and its implementations are one name, and they
+/// routinely live in different files — so the edit crosses file boundaries
+/// and `WorkspaceEdit.changes` must carry one entry per URI. This is the
+/// protocol half the ide-layer tests cannot see.
+#[test]
+fn rename_spans_every_file_an_interface_is_implemented_in() {
+    const IFACE: &str = "interface Shows {\n    function show(self) -> string throws never\n}\n";
+    const IMPL: &str = "class B { v: int }\n\n                        implement Shows for B {\n                            function show(self) -> string throws never { \"b\" }\n}\n\n                        function call(b: B) -> string throws never { b.show() }\n";
+
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    harness.fs.write(harness.ws.join("iface.baml"), IFACE);
+    harness.fs.write(harness.ws.join("impl.baml"), IMPL);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+
+    let iface_uri = harness.uri("iface.baml");
+    let impl_uri = harness.uri("impl.baml");
+    harness.open(SessionKey(1), &iface_uri, 1, IFACE);
+    harness.settle();
+
+    let edit = harness
+        .request(
+            SessionKey(1),
+            "textDocument/rename",
+            serde_json::json!({
+                "textDocument": { "uri": iface_uri },
+                "position": position_params(&iface_uri, pos_of(IFACE, "show(self)"))["position"],
+                "newName": "render",
+            }),
+        )
+        .expect("an interface method renames");
+
+    let changes = &edit["changes"];
+    assert_eq!(
+        changes[iface_uri.as_str()].as_array().map(Vec::len),
+        Some(1),
+        "the interface's own declaration: {changes:#?}"
+    );
+    assert_eq!(
+        changes[impl_uri.as_str()].as_array().map(Vec::len),
+        Some(2),
+        "the other file's override AND its call: {changes:#?}"
+    );
+}
+
+/// Stdlib sources are served as read-only editor documents, so F2 inside one
+/// is a position a reader can actually reach — and must be refused, because
+/// the declaration is not theirs to rewrite. The refusal names the symbol, so
+/// it can only pass by resolving the right one.
+#[test]
+fn rename_refuses_inside_a_read_only_stdlib_document() {
+    let mut harness = feature_harness();
+    let db_path = std::path::PathBuf::from("<builtin>/baml/ns_time/timezone.baml");
+    let text = harness
+        .state
+        .file_text(&db_path)
+        .unwrap_or_else(|| unreachable!("the stdlib is loaded before any session"));
+    let uri = baml_lsp::paths::uri_for_db_path(harness.state.roots(), &db_path)
+        .unwrap_or_else(|| unreachable!("a `<builtin>/` path maps to a stdlib URI"));
+    assert_eq!(uri.scheme(), "baml-stdlib");
+
+    // A stdlib document may be opened; the overlay is refused elsewhere.
+    harness.open(SessionKey(1), &uri, 1, &text);
+    harness.settle();
+
+    let error = harness
+        .request(
+            SessionKey(1),
+            "textDocument/prepareRename",
+            position_params(&uri, pos_of(&text, "TimeZoneOffset {")),
+        )
+        .expect_err("the standard library is read-only");
+    let message = error.to_response_error().message;
+    assert!(
+        message.contains("TimeZoneOffset") && message.contains("read-only"),
+        "the reader is told whose declaration it is: {message:?}"
+    );
 }
 
 #[test]
@@ -1694,13 +2219,12 @@ fn a_late_session_receives_standing_diagnostics_in_full() {
     );
 }
 
-/// A scratch document outside every project mints a provisional root that
-/// holds the single-workspace slot; the real project's discovery is refused
-/// while it lives. Closing the scratch document frees the slot, and the
-/// owner re-runs discovery so the real project loads without further client
-/// action.
+/// A scratch document outside every project mints a provisional root, and
+/// the real project announced afterwards is discovered and served beside
+/// it: there is no one-workspace slot to hold. Closing the scratch document
+/// removes only its own root.
 #[test]
-fn closing_a_detached_document_frees_the_workspace_slot() {
+fn a_detached_document_and_a_discovered_project_are_served_together() {
     let mut h = Harness::new();
     h.fs.add_project(&h.ws);
     h.fs.write(h.ws.join("main.baml"), "class A { x int }\n");
@@ -1718,13 +2242,10 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
         .workspace_roots()
         .map(|entry| entry.path.clone())
         .collect();
-    assert_eq!(
-        roots,
-        vec![scratch.clone()],
-        "the scratch dir holds the slot"
-    );
+    assert_eq!(roots, vec![scratch.clone()], "the scratch dir is a root");
+    assert!(h.state.is_provisional_root(&scratch));
 
-    // The client announces the real workspace folder; the guard refuses it.
+    // The client announces the real workspace folder: discovered at once.
     h.notify(
         s,
         "workspace/didChangeWorkspaceFolders",
@@ -1737,16 +2258,29 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
     )
     .unwrap();
     h.settle();
-    let roots: Vec<PathBuf> = h
+    let mut roots: Vec<PathBuf> = h
         .state
         .roots()
         .workspace_roots()
         .map(|entry| entry.path.clone())
         .collect();
-    assert_eq!(roots, vec![scratch], "the slot is still held");
+    roots.sort();
+    let mut expected = vec![scratch.clone(), h.ws.clone()];
+    expected.sort();
+    assert_eq!(roots, expected, "both roots are served");
+    let main_uri = h.uri("main.baml");
+    let last = h
+        .sender(s)
+        .publications_for(&main_uri)
+        .last()
+        .cloned()
+        .unwrap();
+    assert!(
+        last.diagnostics.is_empty(),
+        "the project checks clean: {last:?}"
+    );
 
-    // Closing the scratch document removes its provisional root; the freed
-    // slot triggers rediscovery of the announced folder.
+    // Closing the scratch document removes its provisional root and nothing else.
     h.close(s, &scratch_uri);
     h.settle();
     let roots: Vec<PathBuf> = h
@@ -1755,7 +2289,8 @@ fn closing_a_detached_document_frees_the_workspace_slot() {
         .workspace_roots()
         .map(|entry| entry.path.clone())
         .collect();
-    assert_eq!(roots, vec![h.ws.clone()], "the real project loaded");
+    assert_eq!(roots, vec![h.ws.clone()], "only the project remains");
+    assert!(!h.state.is_provisional_root(&scratch));
 }
 
 /// A diagnostics pass unwound by `PropagatedPanic` retries; one unwound by

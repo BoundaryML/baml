@@ -50,6 +50,7 @@ jobs:
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
     # Drop `actions: write` for the called workflow — its jobs run
     # cargo build / test code that we don't want touching the cache
     # API. cargo-tests.reusable.yaml also declares `contents: read`

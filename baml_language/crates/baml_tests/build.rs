@@ -315,6 +315,7 @@ fn generate_tests(manifest_dir: &str) {
 
     // Discover all projects
     let projects = discover_projects(&projects_dir);
+    validate_diagnostic_error_ppir_policy(&projects);
 
     // Write to the source directory so that file!() returns a stable path
     // (OUT_DIR contains a hash that changes between builds, causing noisy
@@ -393,6 +394,81 @@ struct TestProject {
     path: PathBuf,
     files: Vec<BamlFile>,
     tier: Tier,
+}
+
+struct DiagnosticErrorPpirSnapshot {
+    project: &'static str,
+    rationale: &'static str,
+}
+
+/// Invalid programs need a small PPIR golden set to protect the exact shape of
+/// error recovery. Diagnostics already exercise PPIR construction for every
+/// project, so keep textual PPIR snapshots only where each entry adds a
+/// distinct recovery contract.
+const DIAGNOSTIC_ERROR_PPIR_SNAPSHOTS: [DiagnosticErrorPpirSnapshot; 8] = [
+    DiagnosticErrorPpirSnapshot {
+        project: "attribute_validation",
+        rationale: "PPIR recovery representative: malformed attributes remain attached to the recovered declaration.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "duplicate_method_no_cascade",
+        rationale: "PPIR recovery representative: duplicate members are suppressed without cascading body-owner damage.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "unknown_type_error",
+        rationale: "PPIR recovery representative: unresolved type references preserve a traversable declaration shape.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "patterns_class_destructure_namespaces",
+        rationale: "PPIR recovery representative: namespaced class-destructure patterns retain their recovered bindings.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "scoped_type_binding_forms",
+        rationale: "PPIR recovery representative: scoped type bindings preserve their lexical owner and operand forms.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "namespaces_stream_direct_ref",
+        rationale: "PPIR recovery representative: namespaced stream references still expand into the canonical program.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "llm_reserved_params",
+        rationale: "PPIR recovery representative: invalid reserved LLM parameters still lower into a stable prompt body.",
+    },
+    DiagnosticErrorPpirSnapshot {
+        project: "test_with_runner_ambiguity",
+        rationale: "PPIR recovery representative: ambiguous test runners retain a stable recovered test declaration.",
+    },
+];
+
+fn diagnostic_error_ppir_snapshot_rationale(project_name: &str) -> Option<&'static str> {
+    DIAGNOSTIC_ERROR_PPIR_SNAPSHOTS
+        .iter()
+        .find(|entry| entry.project == project_name)
+        .map(|entry| entry.rationale)
+}
+
+fn validate_diagnostic_error_ppir_policy(projects: &[TestProject]) {
+    let mut names = std::collections::BTreeSet::new();
+
+    for entry in &DIAGNOSTIC_ERROR_PPIR_SNAPSHOTS {
+        assert!(
+            !entry.rationale.trim().is_empty(),
+            "diagnostic-error PPIR snapshot '{}' needs a rationale",
+            entry.project,
+        );
+        assert!(
+            names.insert(entry.project),
+            "duplicate diagnostic-error PPIR snapshot policy entry: '{}'",
+            entry.project,
+        );
+        assert!(
+            projects.iter().any(|project| {
+                project.tier == Tier::DiagnosticErrors && project.name == entry.project
+            }),
+            "diagnostic-error PPIR snapshot policy names missing project '{}'",
+            entry.project,
+        );
+    }
 }
 
 struct BamlFile {
@@ -490,16 +566,20 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let diagnostics_test = generate_diagnostics_test(project, project.tier);
 
     // Tier-specific phases
-    let (hir_test, formatter_tests) = match project.tier {
+    let (ppir_test, formatter_tests) = match project.tier {
         Tier::BrokenSyntax => {
             // Tier 1: diagnostics only - no higher phases
             (quote! {}, quote! {})
         }
         Tier::DiagnosticErrors => {
-            // Tier 2: HIR, formatter — no MIR, no codegen
-            let hir = generate_hir_test(project);
+            // Tier 2: diagnostics and formatter for every project, plus PPIR
+            // snapshots for the focused invalid-program recovery policy.
+            let ppir = diagnostic_error_ppir_snapshot_rationale(&project.name)
+                .map_or_else(TokenStream::new, |rationale| {
+                    generate_ppir_test(project, rationale)
+                });
             let fmt: TokenStream = project.files.iter().map(generate_formatter_test).collect();
-            (hir, fmt)
+            (ppir, fmt)
         }
     };
 
@@ -535,7 +615,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
 
-            #hir_test
+            #ppir_test
             #diagnostics_test
             #formatter_tests
             #parser_specific_tests
@@ -543,7 +623,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     }
 }
 
-fn generate_hir_test(project: &TestProject) -> TokenStream {
+fn generate_ppir_test(project: &TestProject, rationale: &str) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -567,6 +647,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
         .collect();
 
     quote! {
+        #[doc = #rationale]
         #[test]
         fn test_03_ppir() {
             use crate::compiler2_tir::support::render_ppir;

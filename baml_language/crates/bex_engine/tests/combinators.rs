@@ -1,4 +1,4 @@
-//! BEP-034 future combinators: `baml.future.{race, any, all, all_complete, all_settled}`.
+//! BEP-034 future combinators: `baml.future.{race, any, all, all_settled}`.
 
 mod common;
 
@@ -70,13 +70,19 @@ async fn closure_no_await_direct() {
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(6));
 }
 
-/// `all_complete` awaits every future and returns their values in input order.
+/// `all_settled` awaits every future and returns their outcomes in input order.
 #[tokio::test]
-async fn all_complete_collects_in_order() {
+async fn all_settled_collects_in_order() {
     let source = r#"
         function main() -> int {
             let fs = [spawn { 1 }, spawn { 2 }, spawn { 3 }];
-            let results = await baml.future.all_complete(fs);
+            let outcomes = await baml.future.all_settled(fs);
+            let results = outcomes.map((outcome) -> {
+                match (outcome) {
+                    let s: baml.future.Success<int> => s.value,
+                    _ => baml.sys.panic("expected success"),
+                }
+            });
             results[0] * 100 + results[1] * 10 + results[2]
         }
     "#;
@@ -199,7 +205,7 @@ async fn await_catch_binds_to_await_not_future() {
 /// The inputs run concurrently: three 200ms sleeps complete in ~200ms, not
 /// ~600ms (compile/bootstrap excluded from the timing budget).
 #[tokio::test]
-async fn all_complete_runs_concurrently() {
+async fn all_settled_runs_concurrently() {
     let source = r#"
         function work() -> int {
             baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
@@ -207,7 +213,13 @@ async fn all_complete_runs_concurrently() {
         }
         function main() -> int {
             let fs = [spawn { work() }, spawn { work() }, spawn { work() }];
-            let results = await baml.future.all_complete(fs);
+            let outcomes = await baml.future.all_settled(fs);
+            let results = outcomes.map((outcome) -> {
+                match (outcome) {
+                    let s: baml.future.Success<int> => s.value,
+                    _ => baml.sys.panic("expected success"),
+                }
+            });
             results[0] + results[1] + results[2]
         }
     "#;
@@ -230,7 +242,7 @@ async fn all_complete_runs_concurrently() {
     assert_eq!(result, BexExternalValue::Int(3));
     assert!(
         elapsed < std::time::Duration::from_millis(500),
-        "all_complete inputs should run concurrently (~200ms); got {elapsed:?}"
+        "all_settled inputs should run concurrently (~200ms); got {elapsed:?}"
     );
 }
 // (The canonical fire-and-forget repro — a sibling handling a child's error —

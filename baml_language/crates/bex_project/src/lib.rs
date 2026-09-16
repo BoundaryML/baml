@@ -128,11 +128,10 @@ pub fn new(
     let mut db = baml_db::ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
-        .add_source_root(baml_db::SourceRootSpec {
-            path: std::path::PathBuf::from(root_path.as_str()),
-            package: baml_base::Name::new(baml_type::RESERVED_USER_PACKAGE),
-            kind: baml_base::SourceRootKind::Workspace,
-        })
+        .add_source_root(baml_db::SourceRootSpec::new(
+            root_path.as_str(),
+            baml_base::SourceRootKind::Workspace,
+        ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
     db.add_or_update_files_in(
         root,
@@ -164,7 +163,7 @@ pub fn new(
         return Err(RuntimeError::Compilation { message });
     }
     let program = db
-        .get_bytecode_unchecked()
+        .get_bytecode_unchecked(root)
         .map_err(|e| RuntimeError::Compilation {
             message: e.to_string(),
         })?;

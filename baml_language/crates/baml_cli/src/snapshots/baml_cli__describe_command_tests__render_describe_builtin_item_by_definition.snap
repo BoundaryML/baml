@@ -33,9 +33,12 @@ methods:
   function byte_length(self) -> int throws never  <builtin>/baml/string.baml:88-90
   /// Returns the lowercase equivalent of this string.
   function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:107-109
-  … 76 more lines (re-run with a higher `--budget` to see more; use `--budget 113` for full output)
+  … 76 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
 
 static_methods:
-  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 113` for full output)
+  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
+
+implementations (5):
+  … 15 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
 
 references (0):

@@ -31,12 +31,13 @@
 use baml_compiler2_hir::{
     contributions::Definition,
     loc::ImplLoc,
-    package::{PackageId, package_dependency_closure},
+    package::{lang_roots, package_dependency_closure},
 };
 use baml_type::{
-    FunctionParamTy, Interface, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr, TypeName,
+    DeclName, FunctionParamTy, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr,
     interned::{ClosedInterface, ClosedTy, InferInterface},
     normalize::TypeContext,
+    unify::AliasEquivCtx,
 };
 use rustc_hash::FxHashMap;
 
@@ -163,7 +164,7 @@ fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
 }
 
 /// Looks up an enum's full variant-name set (`None` if unresolvable).
-type EnumVariants<'a> = &'a dyn Fn(&TypeName) -> Option<Vec<Name>>;
+type EnumVariants<'a> = &'a dyn Fn(&DeclName) -> Option<Vec<Name>>;
 
 /// Normalize toward the union canonical form the covering solver assumes:
 /// flatten, drop `never`, absorb `unknown`, deduplicate, drop subsumed
@@ -291,7 +292,7 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
         });
     }
 
-    let mut enums: Vec<TypeName> = Vec::new();
+    let mut enums: Vec<DeclName> = Vec::new();
     for member in flat.iter() {
         if let Ty::EnumVariant(enum_name, _, _) = member
             && !enums.contains(enum_name)
@@ -325,33 +326,33 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
 /// must compare by the same union laws as its spelled-out form: without
 /// the fold, `Bar<TF>` vs `Bar<bool>` (with `type TF = true | false`) is
 /// wrongly judged disjoint - a fails-open coherence hole.
-fn normalized_alias_map<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
-) -> FxHashMap<TypeName, Ty> {
+fn normalized_alias_map(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+) -> FxHashMap<DeclName, Ty> {
     let mut aliases = FxHashMap::default();
     collect_package_aliases(db, pkg, &mut aliases);
     for dep in package_dependency_closure(db, pkg) {
         collect_package_aliases(db, *dep, &mut aliases);
     }
     let facts = crate::facts::Facts::new(db);
-    let enum_variants = |qtn: &TypeName| facts.enum_variants(qtn);
+    let enum_variants = |qtn: &DeclName| facts.enum_variants(qtn);
     for body in aliases.values_mut() {
         *body = nf(body, &enum_variants);
     }
     aliases
 }
 
-fn collect_package_aliases<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
-    out: &mut FxHashMap<TypeName, Ty>,
+fn collect_package_aliases(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+    out: &mut FxHashMap<DeclName, Ty>,
 ) {
     let items = baml_compiler2_ppir::package_items(db, pkg);
     for (ns_path, ns_items) in &items.namespaces {
         for (name, def) in &ns_items.types {
             if let Definition::TypeAlias(loc) = def {
-                let qualified = TypeName::new(items.package.clone(), ns_path.clone(), name.clone());
+                let qualified = DeclName::in_root(items.root, ns_path.clone(), name.clone());
                 out.entry(qualified)
                     .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
             }
@@ -362,61 +363,18 @@ fn collect_package_aliases<'db>(
 /// Resolve a chain of top-level aliases via the pre-normalized map,
 /// bounded against alias cycles (those are a separate diagnostic). Only
 /// the head; nested aliases are handled by the equality context.
-fn expand_alias_head(ty: &Ty, aliases: &FxHashMap<TypeName, Ty>) -> Ty {
+fn expand_alias_head(ty: &Ty, aliases: &AliasEquivCtx<'_>) -> Ty {
     let mut current = ty.clone();
     for _ in 0..64 {
         let Ty::TypeAlias(qtn, _) = &current else {
             break;
         };
-        match aliases.get(qtn) {
+        match aliases.aliases.get(qtn) {
             Some(next) => current = next.clone(),
             None => break,
         }
     }
     current
-}
-
-/// The fact-poor equality context for the unifier's ground fast path:
-/// aliases expand (two spellings differing only by an alias denote the
-/// same type); every nominal fact is opaque. Conservative equality is
-/// exactly right here - fewer coincidental equalities means fail-closed
-/// coherence - and it is the termination argument: a fact-rich context
-/// would re-enter impl resolution from inside the overlap check.
-struct AliasEquivCtx<'a>(&'a FxHashMap<TypeName, Ty>);
-
-impl TypeContext for AliasEquivCtx<'_> {
-    /// A name-based context represents a declaration by its own name, so this
-    /// is the identity — no resolution step, and never `None`.
-    fn head_lookup(&self, qtn: &TypeName) -> Option<TypeName> {
-        Some(qtn.clone())
-    }
-    fn alias_def(&self, name: &TypeName) -> Option<Ty> {
-        self.0.get(name).cloned()
-    }
-    fn implements_interface(&self, _: &Ty, _: &Interface) -> bool {
-        false
-    }
-    fn type_var_bound(&self, _: &ParamTy) -> Vec<Interface> {
-        Vec::new()
-    }
-    fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
-        false
-    }
-    fn enum_variants(&self, _: &TypeName) -> Option<Vec<Name>> {
-        None
-    }
-    fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
-        Vec::new()
-    }
-    fn project(
-        &self,
-        _: &Ty,
-        _: &Interface,
-        _: &Name,
-        _: u32,
-    ) -> baml_type::normalize::ProjectionStep {
-        baml_type::normalize::ProjectionStep::Opaque
-    }
 }
 
 /// Symmetric first-order EQUALITY unification: is there a substitution of
@@ -427,7 +385,7 @@ fn unify_into(
     x: &Ty,
     y: &Ty,
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     unify_into_at(x, y, vars, aliases, bindings, 0)
@@ -437,7 +395,7 @@ fn unify_into_at(
     x: &Ty,
     y: &Ty,
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -469,7 +427,7 @@ fn unify_into_at(
         return bind_unify_var(n, &x, vars, aliases, bindings, depth + 1);
     }
 
-    if AliasEquivCtx(aliases).equivalent(&x, &y) {
+    if aliases.equivalent(&x, &y) {
         return Overlap::Yes;
     }
 
@@ -593,7 +551,7 @@ fn unify_all(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -616,7 +574,7 @@ fn unify_associated_bindings(
     xb: &[(Name, Ty)],
     yb: &[(Name, Ty)],
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -644,7 +602,7 @@ fn unify_union_members_at(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -694,7 +652,7 @@ fn unify_union_members(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     unify_union_members_at(xs, ys, vars, aliases, bindings, 0)
@@ -705,7 +663,7 @@ fn try_union_set_equality(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
 ) -> Option<Overlap> {
     let has_var = |members: &[Ty]| members.iter().any(|m| contains_bound_typevar(m, vars));
     if has_var(xs) || has_var(ys) {
@@ -729,11 +687,11 @@ fn is_bare_var(m: &Ty, vars: &[ParamTy]) -> bool {
     matches!(m, Ty::TypeVar(n, _) if vars.contains(n))
 }
 
-fn unions_set_equal(xs: &[Ty], ys: &[Ty], aliases: &FxHashMap<TypeName, Ty>) -> bool {
+fn unions_set_equal(xs: &[Ty], ys: &[Ty], aliases: &AliasEquivCtx<'_>) -> bool {
     xs.len() == ys.len()
         && xs
             .iter()
-            .all(|x| ys.iter().any(|y| AliasEquivCtx(aliases).equivalent(x, y)))
+            .all(|x| ys.iter().any(|y| aliases.equivalent(x, y)))
 }
 
 /// The covering oracle: can `member` be a SUBTYPE of `candidate` under
@@ -750,7 +708,7 @@ fn cover_at(
     member: &Ty,
     candidate: &Ty,
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -770,7 +728,7 @@ fn cover(
     member: &Ty,
     candidate: &Ty,
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     cover_at(member, candidate, vars, aliases, bindings, 0)
@@ -808,7 +766,7 @@ fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
 fn cover_search(
     obligations: &[(Ty, Vec<Ty>)],
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     budget: &mut usize,
     depth: usize,
@@ -895,7 +853,7 @@ fn bind_unify_var(
     n: &ParamTy,
     t: &Ty,
     vars: &[ParamTy],
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -1076,7 +1034,7 @@ unsafe impl salsa::Update for CoherenceReport<'_> {
 #[salsa::tracked(returns(ref))]
 pub fn package_coherence_violations<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
+    pkg: baml_base::SourceRoot,
 ) -> CoherenceReport<'db> {
     let mut own = package_impls(db, pkg);
     // Stable textual order for attribution (the later impl carries the
@@ -1085,6 +1043,10 @@ pub fn package_coherence_violations<'db>(
     own.sort_by_key(|&(loc, _)| impl_sort_key(db, loc));
 
     let aliases = normalized_alias_map(db, pkg);
+    let alias_ctx = AliasEquivCtx {
+        aliases: &aliases,
+        lang: lang_roots(db),
+    };
     let dep_impls: Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> = package_dependency_closure(db, pkg)
         .iter()
         .flat_map(|dep| package_impls(db, *dep))
@@ -1095,7 +1057,7 @@ pub fn package_coherence_violations<'db>(
         // own x own - each unordered pair once; the later impl is primary.
         for &(other_loc, other_facts) in &own[i + 1..] {
             if let Some(indeterminate) =
-                overlap_violation(impls_conflict(db, own_facts, other_facts, &aliases))
+                overlap_violation(impls_conflict(db, own_facts, other_facts, &alias_ctx))
             {
                 violations.push(CoherenceViolation {
                     primary: other_loc,
@@ -1107,7 +1069,7 @@ pub fn package_coherence_violations<'db>(
         // own x dependency - the owning package's impl is primary.
         for &(dep_loc, dep_facts) in &dep_impls {
             if let Some(indeterminate) =
-                overlap_violation(impls_conflict(db, own_facts, dep_facts, &aliases))
+                overlap_violation(impls_conflict(db, own_facts, dep_facts, &alias_ctx))
             {
                 violations.push(CoherenceViolation {
                     primary: own_loc,
@@ -1129,10 +1091,10 @@ fn overlap_violation(overlap: Overlap) -> Option<bool> {
     }
 }
 
-fn package_impls<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
-) -> Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> {
+fn package_impls(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+) -> Vec<(ImplLoc<'_>, &'_ ImplFacts<'_>)> {
     package_impl_locs(db, pkg)
         .iter()
         .filter_map(|&loc| impl_facts(db, loc).resolved().map(|facts| (loc, facts)))
@@ -1163,7 +1125,7 @@ pub fn impls_conflict(
     db: &dyn baml_compiler2_ppir::Db,
     a: &ImplFacts<'_>,
     b: &ImplFacts<'_>,
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
 ) -> Overlap {
     if a.interface.name != b.interface.name {
         return Overlap::No;
@@ -1177,7 +1139,7 @@ pub fn impls_conflict(
 /// mounted side structural because there is no legitimate `ImplLoc` to mint.
 pub fn source_mounted_impl_conflict(
     db: &dyn baml_compiler2_ppir::Db,
-    source_package: PackageId<'_>,
+    source_package: baml_base::SourceRoot,
     source: &ImplFacts<'_>,
     mounted: &crate::package_interface::ExportedImpl,
 ) -> Overlap {
@@ -1212,7 +1174,10 @@ pub fn source_mounted_impl_conflict(
         db,
         source,
         &mounted_facts,
-        &normalized_alias_map(db, source_package),
+        &AliasEquivCtx {
+            aliases: &normalized_alias_map(db, source_package),
+            lang: lang_roots(db),
+        },
     )
 }
 
@@ -1228,10 +1193,10 @@ fn impls_overlap(
     db: &dyn baml_compiler2_ppir::Db,
     a: &ImplFacts<'_>,
     b: &ImplFacts<'_>,
-    aliases: &FxHashMap<TypeName, Ty>,
+    aliases: &AliasEquivCtx<'_>,
 ) -> Overlap {
     let facts = crate::facts::Facts::new(db);
-    let enum_variants = |qtn: &TypeName| facts.enum_variants(qtn);
+    let enum_variants = |qtn: &DeclName| facts.enum_variants(qtn);
     let (a_for, a_args) = renamed_subject(a, 'a', &enum_variants);
     let (b_for, b_args) = renamed_subject(b, 'b', &enum_variants);
     if a_args.len() != b_args.len() {
@@ -1377,7 +1342,7 @@ fn renamed_subject(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrphanViolation<'db> {
     pub block: ImplLoc<'db>,
-    pub interface: TypeName,
+    pub interface: DeclName,
     /// `Some` = the RFC-2451 uncovered-param flavor; `None` = no local
     /// type anywhere in the impl's inputs.
     pub uncovered_param: Option<Name>,
@@ -1409,16 +1374,15 @@ unsafe impl salsa::Update for OrphanReport<'_> {
 /// impl's inputs - the for-type then the interface args, in order - with
 /// any generic param BEFORE it uncovered and rejected).
 #[salsa::tracked(returns(ref))]
-pub fn package_orphan_violations<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
-    pkg: PackageId<'db>,
-) -> OrphanReport<'db> {
-    let current_package = pkg.name(db);
+pub fn package_orphan_violations(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+) -> OrphanReport<'_> {
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
         let for_ty = facts.for_ty_pattern.to_plain();
         let args: Vec<Ty> = facts.interface.to_plain().generics.to_vec();
-        match orphan_check(&current_package, &facts.interface.name, &for_ty, &args) {
+        match orphan_check(pkg, &facts.interface.name, &for_ty, &args) {
             OrphanOutcome::Ok => {}
             OrphanOutcome::UncoveredParam(name) => violations.push(OrphanViolation {
                 block: loc,
@@ -1442,17 +1406,17 @@ enum OrphanOutcome {
 }
 
 fn orphan_check(
-    current_package: &Name,
-    interface: &TypeName,
+    current_package: baml_base::SourceRoot,
+    interface: &DeclName,
     for_ty: &Ty,
     interface_args: &[Ty],
 ) -> OrphanOutcome {
-    if interface.package() == current_package {
+    if interface.root() == current_package {
         return OrphanOutcome::Ok;
     }
     for input in std::iter::once(for_ty).chain(interface_args.iter()) {
         match input {
-            Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.package() == current_package => {
+            Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.root() == current_package => {
                 return OrphanOutcome::Ok;
             }
             Ty::TypeVar(param, _) => {
@@ -1476,7 +1440,7 @@ mod tests {
 
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
         Ty::Interface(
-            TypeName::local(Name::new(name)),
+            crate::test_heads::local(Name::new(name)),
             args.into(),
             Box::new([]),
             TyAttr::default(),
@@ -1485,7 +1449,7 @@ mod tests {
 
     fn interface_with_assoc(name: &str, assoc: Vec<(&str, Ty)>) -> Ty {
         Ty::Interface(
-            TypeName::local(Name::new(name)),
+            crate::test_heads::local(Name::new(name)),
             Box::new([]),
             assoc
                 .into_iter()
@@ -1504,12 +1468,12 @@ mod tests {
     }
 
     fn enum_ty(name: &str) -> Ty {
-        Ty::Enum(TypeName::local(Name::new(name)), TyAttr::default())
+        Ty::Enum(crate::test_heads::local(Name::new(name)), TyAttr::default())
     }
 
     fn enum_variant(enum_name: &str, variant: &str) -> Ty {
         Ty::EnumVariant(
-            TypeName::local(Name::new(enum_name)),
+            crate::test_heads::local(Name::new(enum_name)),
             Name::new(variant),
             TyAttr::default(),
         )
@@ -1522,7 +1486,7 @@ mod tests {
     }
 
     /// Stub enum schema for `nf` tests: `Cmp` has `Less`, `Equal`, `More`.
-    fn stub_enum_variants(qtn: &TypeName) -> Option<Vec<Name>> {
+    fn stub_enum_variants(qtn: &DeclName) -> Option<Vec<Name>> {
         (qtn.name().as_str() == "Cmp")
             .then(|| vec![Name::new("Less"), Name::new("Equal"), Name::new("More")])
     }
@@ -1530,7 +1494,7 @@ mod tests {
     #[test]
     fn contains_bound_typevar_checks_interface_associated_bindings() {
         let ty = Ty::Interface(
-            TypeName::local(Name::new("Source")),
+            crate::test_heads::local(Name::new("Source")),
             Box::new([]),
             Box::new([(
                 Name::new("Item"),
@@ -1551,7 +1515,13 @@ mod tests {
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::string(), Ty::type_var("V")];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1564,9 +1534,15 @@ mod tests {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::int(), Ty::type_var("T")];
-        let ys = vec![Ty::int(), Ty::string(), Ty::class("Foo")];
+        let ys = vec![Ty::int(), Ty::string(), crate::test_heads::class("Foo")];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1577,9 +1553,15 @@ mod tests {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
         let xs = vec![Ty::int(), Ty::type_var("T")];
-        let ys = vec![Ty::string(), Ty::class("Foo")];
+        let ys = vec![Ty::string(), crate::test_heads::class("Foo")];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1589,10 +1571,22 @@ mod tests {
         let vars = vec![param("T")];
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
-        let xs = vec![Ty::class("A1"), Ty::class("A2"), Ty::type_var("T")];
-        let ys: Vec<Ty> = (1..=9).map(|i| Ty::class(&format!("A{i}"))).collect();
+        let xs = vec![
+            crate::test_heads::class("A1"),
+            crate::test_heads::class("A2"),
+            Ty::type_var("T"),
+        ];
+        let ys: Vec<Ty> = (1..=9)
+            .map(|i| crate::test_heads::class(&format!("A{i}")))
+            .collect();
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1608,10 +1602,16 @@ mod tests {
             Ty::type_var("V"),
         ];
         let ys: Vec<Ty> = (1..=9)
-            .map(|i| Ty::list(Ty::class(&format!("A{i}"))))
+            .map(|i| Ty::list(crate::test_heads::class(&format!("A{i}"))))
             .collect();
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1628,9 +1628,18 @@ mod tests {
             Ty::list(Ty::type_var("U")),
             Ty::list(Ty::type_var("W")),
         ];
-        let ys = vec![Ty::list(Ty::class("A1")), Ty::list(Ty::class("A2"))];
+        let ys = vec![
+            Ty::list(crate::test_heads::class("A1")),
+            Ty::list(crate::test_heads::class("A2")),
+        ];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1642,17 +1651,23 @@ mod tests {
         let vars = vec![param("T")];
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
-        let pair = |a: Ty, b: Ty| Ty::user_class_with_args("Pair", vec![a, b]);
-        let a1 = || Ty::class("A1");
-        let a2 = || Ty::class("A2");
+        let pair = |a: Ty, b: Ty| crate::test_heads::class_with_args("Pair", vec![a, b]);
+        let a1 = || crate::test_heads::class("A1");
+        let a2 = || crate::test_heads::class("A2");
         let xs = vec![pair(Ty::type_var("T"), a1()), pair(Ty::type_var("T"), a2())];
         let mut ys: Vec<Ty> = Vec::new();
         for i in 0..2050 {
-            ys.push(pair(Ty::class(&format!("L{i}")), a1()));
-            ys.push(pair(Ty::class(&format!("R{i}")), a2()));
+            ys.push(pair(crate::test_heads::class(&format!("L{i}")), a1()));
+            ys.push(pair(crate::test_heads::class(&format!("R{i}")), a2()));
         }
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Unknown
         );
     }
@@ -1665,7 +1680,13 @@ mod tests {
         let xs = vec![int_literal(1), Ty::type_var("T")];
         let ys = vec![Ty::int(), Ty::string()];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1679,7 +1700,13 @@ mod tests {
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![int_literal(1), Ty::string()];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1691,7 +1718,13 @@ mod tests {
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::string())]);
         assert_eq!(
-            unify_into(&a, &b, &[], &aliases, &mut bindings),
+            unify_into(
+                &a,
+                &b,
+                &[],
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1704,7 +1737,13 @@ mod tests {
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::type_var("T"))]);
         assert_eq!(
-            unify_into(&a, &b, &vars, &aliases, &mut bindings),
+            unify_into(
+                &a,
+                &b,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
         assert_eq!(bindings.get(&param("T")), Some(&Ty::int()));
@@ -1716,16 +1755,22 @@ mod tests {
         // SAME type (the mu-automaton's canonical forms coincide), so the
         // pair is a proven overlap - and the walk terminates instead of
         // growing head-first forever.
-        let r = TypeName::local(Name::new("R"));
-        let s = TypeName::local(Name::new("S"));
+        let r = crate::test_heads::local(Name::new("R"));
+        let s = crate::test_heads::local(Name::new("S"));
         let mut aliases = FxHashMap::default();
         aliases.insert(
             r.clone(),
-            Ty::user_class_with_args("Box", vec![Ty::TypeAlias(r.clone(), TyAttr::default())]),
+            crate::test_heads::class_with_args(
+                "Box",
+                vec![Ty::TypeAlias(r.clone(), TyAttr::default())],
+            ),
         );
         aliases.insert(
             s.clone(),
-            Ty::user_class_with_args("Box", vec![Ty::TypeAlias(s.clone(), TyAttr::default())]),
+            crate::test_heads::class_with_args(
+                "Box",
+                vec![Ty::TypeAlias(s.clone(), TyAttr::default())],
+            ),
         );
         let mut bindings = TypeBindings::default();
         assert_eq!(
@@ -1733,7 +1778,7 @@ mod tests {
                 &Ty::TypeAlias(r, TyAttr::default()),
                 &Ty::TypeAlias(s, TyAttr::default()),
                 &[],
-                &aliases,
+                &crate::test_heads::alias_ctx(&aliases),
                 &mut bindings,
             ),
             Overlap::Yes,
@@ -1746,16 +1791,34 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::string())]);
-        assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::No);
+        assert_eq!(
+            cover(
+                &a,
+                &b,
+                &[],
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
+            Overlap::No
+        );
     }
 
     #[test]
     fn cover_class_vs_interface_is_conservative_yes() {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
-        let a = Ty::class("A");
+        let a = crate::test_heads::class("A");
         let b = interface("I", vec![]);
-        assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::Yes);
+        assert_eq!(
+            cover(
+                &a,
+                &b,
+                &[],
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
+            Overlap::Yes
+        );
     }
 
     #[test]
@@ -1781,7 +1844,7 @@ mod tests {
     fn alias_body_normalization_makes_alias_equal_to_its_folded_form() {
         // `type TF = true | false` must unify with `bool` - otherwise
         // `Bar<TF>` vs `Bar<bool>` is judged disjoint (fails open).
-        let tf = TypeName::local(Name::new("TF"));
+        let tf = crate::test_heads::local(Name::new("TF"));
         let mut aliases = FxHashMap::default();
         aliases.insert(
             tf.clone(),
@@ -1797,7 +1860,7 @@ mod tests {
                 &Ty::TypeAlias(tf, TyAttr::default()),
                 &Ty::bool(),
                 &[],
-                &aliases,
+                &crate::test_heads::alias_ctx(&aliases),
                 &mut bindings,
             ),
             Overlap::Yes,
@@ -1822,7 +1885,7 @@ mod tests {
                 &func(Ty::type_var("T")),
                 &func(Ty::int()),
                 &vars,
-                &aliases,
+                &crate::test_heads::alias_ctx(&aliases),
                 &mut bindings,
             ),
             Overlap::Yes,
@@ -1844,7 +1907,13 @@ mod tests {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
         assert_eq!(
-            unify_into(&proj, &Ty::int(), &[], &aliases, &mut bindings),
+            unify_into(
+                &proj,
+                &Ty::int(),
+                &[],
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes,
         );
     }
@@ -1896,10 +1965,11 @@ mod tests {
 
     #[test]
     fn nf_recurses_into_arguments() {
-        let wrapped = Ty::user_class_with_args("Wrap", vec![Ty::union(vec![Ty::int(), never()])]);
+        let wrapped =
+            crate::test_heads::class_with_args("Wrap", vec![Ty::union(vec![Ty::int(), never()])]);
         assert_eq!(
             nf(&wrapped, &stub_enum_variants),
-            Ty::user_class_with_args("Wrap", vec![Ty::int()])
+            crate::test_heads::class_with_args("Wrap", vec![Ty::int()])
         );
     }
 
@@ -1911,7 +1981,13 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![enum_variant("Cmp", "Less"), Ty::type_var("T")]);
         assert_eq!(
-            unify_into(&u, &enum_ty("Cmp"), &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &enum_ty("Cmp"),
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1925,7 +2001,13 @@ mod tests {
             enum_variant("Cmp", "Equal"),
         ]);
         assert_eq!(
-            unify_into(&u, &enum_ty("Cmp"), &[], &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &enum_ty("Cmp"),
+                &[],
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1935,10 +2017,16 @@ mod tests {
         let vars = vec![param("T")];
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
-        let c = || Ty::class("C");
+        let c = || crate::test_heads::class("C");
         let u = Ty::union(vec![c(), Ty::type_var("T")]);
         assert_eq!(
-            unify_into(&u, &c(), &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &c(),
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1950,7 +2038,13 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![int_literal(1), Ty::type_var("T")]);
         assert_eq!(
-            unify_into(&u, &Ty::int(), &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &Ty::int(),
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1962,10 +2056,16 @@ mod tests {
         let vars = vec![param("T")];
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
-        let u = Ty::union(vec![Ty::class("D"), Ty::type_var("T")]);
-        let c = Ty::class("C");
+        let u = Ty::union(vec![crate::test_heads::class("D"), Ty::type_var("T")]);
+        let c = crate::test_heads::class("C");
         assert_eq!(
-            unify_into(&u, &c, &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &c,
+                &vars,
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1982,7 +2082,7 @@ mod tests {
                 &Ty::type_var("T"),
                 &Ty::unknown(),
                 &vars,
-                &aliases,
+                &crate::test_heads::alias_ctx(&aliases),
                 &mut bindings
             ),
             Overlap::Yes
@@ -1994,7 +2094,13 @@ mod tests {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
         assert_eq!(
-            unify_into(&Ty::unknown(), &Ty::int(), &[], &aliases, &mut bindings),
+            unify_into(
+                &Ty::unknown(),
+                &Ty::int(),
+                &[],
+                &crate::test_heads::alias_ctx(&aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -2005,7 +2111,7 @@ mod tests {
             .collect();
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
-        let pair = |a: Ty, b: Ty| Ty::user_class_with_args("Pair", vec![a, b]);
+        let pair = |a: Ty, b: Ty| crate::test_heads::class_with_args("Pair", vec![a, b]);
         let xs: Vec<Ty> = (0..holes)
             .map(|i| {
                 let t = Ty::type_var(&format!("T{i}"));
@@ -2014,11 +2120,17 @@ mod tests {
             .collect();
         let ys: Vec<Ty> = (0..pigeons)
             .map(|i| {
-                let a = Ty::class(&format!("A{i}"));
+                let a = crate::test_heads::class(&format!("A{i}"));
                 pair(a.clone(), a)
             })
             .collect();
-        unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings)
+        unify_union_members(
+            &xs,
+            &ys,
+            &vars,
+            &crate::test_heads::alias_ctx(&aliases),
+            &mut bindings,
+        )
     }
 
     #[test]
@@ -2039,12 +2151,12 @@ mod tests {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
         let v = |i: usize| Ty::type_var(&format!("V{i}"));
-        let val = |b: bool| Ty::class(if b { "Pos" } else { "Neg" });
+        let val = |b: bool| crate::test_heads::class(if b { "Pos" } else { "Neg" });
         let mut xs: Vec<Ty> = Vec::new();
         let mut ys: Vec<Ty> = Vec::new();
         for (j, clause) in clauses.iter().enumerate() {
-            let tag = Ty::class(&format!("C{j}"));
-            xs.push(Ty::user_class_with_args(
+            let tag = crate::test_heads::class(&format!("C{j}"));
+            xs.push(crate::test_heads::class_with_args(
                 "Cl",
                 vec![tag.clone(), v(clause[0].0), v(clause[1].0), v(clause[2].0)],
             ));
@@ -2054,7 +2166,7 @@ mod tests {
                         let satisfied =
                             (sp == clause[0].1) || (sq == clause[1].1) || (sr == clause[2].1);
                         if satisfied {
-                            ys.push(Ty::user_class_with_args(
+                            ys.push(crate::test_heads::class_with_args(
                                 "Cl",
                                 vec![tag.clone(), val(sp), val(sq), val(sr)],
                             ));
@@ -2068,7 +2180,13 @@ mod tests {
             .map(|i| ParamTy::new(0, Name::new(format!("V{i}"))))
             .collect();
         vars.push(param("ABSORB"));
-        unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings)
+        unify_union_members(
+            &xs,
+            &ys,
+            &vars,
+            &crate::test_heads::alias_ctx(&aliases),
+            &mut bindings,
+        )
     }
 
     fn unsat_exclusion_clauses(n: usize) -> Vec<[(usize, bool); 3]> {
@@ -2097,13 +2215,13 @@ mod tests {
 
     // ── orphan_check unit tests ─────────────────────────────────────────
 
-    fn foreign(name: &str) -> TypeName {
-        TypeName::new(Name::new("dep"), Vec::new(), Name::new(name))
+    fn foreign(name: &str) -> DeclName {
+        crate::test_heads::new(Name::new("dep"), Vec::new(), Name::new(name))
     }
 
     fn local_class(package: &str, name: &str) -> Ty {
         Ty::Class(
-            TypeName::new(Name::new(package), Vec::new(), Name::new(name)),
+            crate::test_heads::new(Name::new(package), Vec::new(), Name::new(name)),
             Box::new([]),
             TyAttr::default(),
         )
@@ -2111,9 +2229,14 @@ mod tests {
 
     #[test]
     fn orphan_local_interface_is_ok() {
-        let iface = TypeName::new(Name::new("me"), Vec::new(), Name::new("I"));
+        let iface = crate::test_heads::new(Name::new("me"), Vec::new(), Name::new("I"));
         assert!(matches!(
-            orphan_check(&Name::new("me"), &iface, &local_class("dep", "C"), &[]),
+            orphan_check(
+                crate::test_heads::root("me"),
+                &iface,
+                &local_class("dep", "C"),
+                &[]
+            ),
             OrphanOutcome::Ok
         ));
     }
@@ -2122,7 +2245,7 @@ mod tests {
     fn orphan_foreign_interface_local_for_type_is_ok() {
         assert!(matches!(
             orphan_check(
-                &Name::new("me"),
+                crate::test_heads::root("me"),
                 &foreign("I"),
                 &local_class("me", "C"),
                 &[]
@@ -2135,7 +2258,7 @@ mod tests {
     fn orphan_foreign_interface_no_local_type_is_violation() {
         assert!(matches!(
             orphan_check(
-                &Name::new("me"),
+                crate::test_heads::root("me"),
                 &foreign("I"),
                 &local_class("dep", "C"),
                 &[]
@@ -2150,7 +2273,7 @@ mod tests {
         // first local type (RFC-2451's covered rule).
         assert!(matches!(
             orphan_check(
-                &Name::new("me"),
+                crate::test_heads::root("me"),
                 &foreign("I"),
                 &Ty::type_var("T"),
                 &[local_class("me", "C")]
@@ -2165,7 +2288,7 @@ mod tests {
         // interface args, not only the for-type.
         assert!(matches!(
             orphan_check(
-                &Name::new("me"),
+                crate::test_heads::root("me"),
                 &foreign("I"),
                 &Ty::int(),
                 &[local_class("me", "C")]

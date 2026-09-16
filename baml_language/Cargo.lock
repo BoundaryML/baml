@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "baml_release",
@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -743,6 +743,7 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "borsh",
  "la-arena",
  "num-bigint",
@@ -831,6 +832,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str",
+ "subenum",
 ]
 
 [[package]]
@@ -841,6 +843,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler_parser",
+ "baml_type",
  "indexmap",
  "rustc-hash 2.1.2",
  "salsa",
@@ -923,11 +926,14 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "ignore",
+ "indexmap",
  "rayon",
  "salsa",
+ "serde",
  "tempfile",
  "text-size",
  "thiserror 2.0.18",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1204,6 +1210,7 @@ dependencies = [
  "bitflags 2.11.1",
  "borsh",
  "rustc-hash 2.1.2",
+ "salsa",
 ]
 
 [[package]]
@@ -1311,7 +1318,6 @@ name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
  "base64",
- "bex_external_types",
  "bex_prof_store",
  "bex_vm_types",
  "crossbeam-channel",
@@ -1358,6 +1364,8 @@ dependencies = [
  "parking_lot",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "web-time",
 ]
 
 [[package]]
@@ -6314,39 +6322,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
-name = "sdk_test_cpp"
-version = "0.1.0"
-dependencies = [
- "sdk_test_harness_runner",
- "sdk_test_harness_setup",
-]
-
-[[package]]
-name = "sdk_test_csharp"
-version = "0.1.0"
-dependencies = [
- "base64",
- "bex_project",
- "bridge_ctypes",
- "indexmap",
- "prost",
- "sdk_test_harness_setup",
-]
-
-[[package]]
-name = "sdk_test_go"
-version = "0.1.0"
-dependencies = [
- "sdk_test_harness_runner",
- "sdk_test_harness_setup",
-]
-
-[[package]]
-name = "sdk_test_harness_runner"
-version = "0.1.0"
-
-[[package]]
-name = "sdk_test_harness_setup"
+name = "sdk_test_codegen"
 version = "0.1.0"
 dependencies = [
  "baml_artifact",
@@ -6358,6 +6334,7 @@ dependencies = [
  "baml_version",
  "proc-macro2",
  "quote",
+ "sdk_test_harness_runner",
  "sdkgen_cpp",
  "sdkgen_csharp",
  "sdkgen_go",
@@ -6369,11 +6346,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_cpp"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+]
+
+[[package]]
+name = "sdk_test_csharp"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bex_project",
+ "bridge_ctypes",
+ "indexmap",
+ "prost",
+]
+
+[[package]]
+name = "sdk_test_go"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+]
+
+[[package]]
+name = "sdk_test_harness_runner"
+version = "0.1.0"
+
+[[package]]
 name = "sdk_test_java"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6391,7 +6396,6 @@ name = "sdk_test_python_pydantic2"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6406,7 +6410,6 @@ name = "sdk_test_rust"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6414,7 +6417,6 @@ name = "sdk_test_swift"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6422,7 +6424,6 @@ name = "sdk_test_typescript"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6430,7 +6431,6 @@ name = "sdk_test_typescript_web"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
- "sdk_test_harness_setup",
 ]
 
 [[package]]
@@ -6890,6 +6890,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "subenum"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eee3fb942ed39f3971438fcc7e05e20717e599e14c5c7cb50edd0df2a44b274"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
  "syn 2.0.117",
 ]
 

@@ -1069,7 +1069,6 @@ export namespace baml_bridge {
                 ADT_MEDIA_PDF = 9,
                 ADT_MEDIA_GENERIC = 10,
                 ADT_PROMPT_AST = 11,
-                ADT_COLLECTOR = 12,
                 ADT_TYPE = 13,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,

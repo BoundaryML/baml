@@ -16,9 +16,12 @@ use std::{
     },
 };
 
-use baml_base::{FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
-use baml_compiler2_hir::inputs::{
-    MountedPackages, SeededCallableThrows, SeededStdlibInterface, SeededThrowFacts,
+use baml_base::{
+    Dependency, FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable,
+};
+use baml_compiler2_hir::{
+    inputs::{LangRootsInput, SeededCallableThrows, SeededStdlibInterface, SeededThrowFacts},
+    package::package_dependency_closure,
 };
 use salsa::Setter;
 
@@ -31,34 +34,74 @@ pub struct SourceRootSpec {
     /// Root directory (canonicalized when it exists on disk; virtual paths
     /// such as `<builtin>/baml` are kept verbatim).
     pub path: PathBuf,
-    /// The package every file under the root belongs to.
-    pub package: Name,
     pub kind: SourceRootKind,
+    /// The package's own name (`[package].name`, or a stdlib package's
+    /// language-fixed name); `None` for an unnamed package.
+    pub self_name: Option<Name>,
+    /// The package's serialized compiler interface when it is served
+    /// source-less (a runtime mount, a precompiled stdlib package).
+    pub interface: Option<Vec<u8>>,
+    /// The package's DECLARED dependency edges. The stdlib prelude is added
+    /// by the database to every non-`Stdlib` root; only explicit edges go
+    /// here, and every root they name must already be live.
+    pub dependencies: Vec<Dependency>,
 }
 
-/// Why [`ProjectDatabase::add_source_root`] refused a spec.
+impl SourceRootSpec {
+    /// An unnamed, source-backed root with no declared dependencies.
+    pub fn new(path: impl Into<PathBuf>, kind: SourceRootKind) -> Self {
+        Self {
+            path: path.into(),
+            kind,
+            self_name: None,
+            interface: None,
+            dependencies: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn named(mut self, name: Name) -> Self {
+        self.self_name = Some(name);
+        self
+    }
+
+    #[must_use]
+    pub fn served_from(mut self, interface: Vec<u8>) -> Self {
+        self.interface = Some(interface);
+        self
+    }
+
+    #[must_use]
+    pub fn depending_on(mut self, dependencies: Vec<Dependency>) -> Self {
+        self.dependencies = dependencies;
+        self
+    }
+}
+
+/// Why [`ProjectDatabase::add_source_root`] or
+/// [`ProjectDatabase::add_dependency`] refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SourceRootError {
-    /// Another live root already carries this package name — one root per
-    /// package, in every kind (two `Stdlib` roots may not share a name
-    /// either).
-    #[error("package name `{name}` is already taken by another source root")]
-    PackageNameTaken { name: Name, by: SourceRoot },
     /// A live root already sits at this (canonical) path.
     #[error("a source root already exists at this path")]
     PathTaken(SourceRoot),
-    /// A `Workspace` root already exists. The compiler is single-world (impl
-    /// resolution, `definition_of`, and `Ty`'s `Package::Local` carry no
-    /// viewpoint), so a database holds at most one `Workspace` root until the
-    /// world-viewpoint rework lands.
-    #[error("the database already has a workspace source root")]
-    SecondWorkspaceRoot(SourceRoot),
-    /// The package name is reserved (a builtin package, `user`, `root`, or
-    /// `env`) and this root kind may not claim it: only `Stdlib` roots carry
-    /// builtin names, and only a `Workspace` root carries the reserved user
-    /// package name.
-    #[error("package name `{name}` is reserved")]
-    ReservedPackageName { name: Name },
+    /// The edge name is one no package may declare: a stdlib package's name
+    /// (already an implicit edge of every package) or a source-level
+    /// qualifier (`root`, `env`).
+    #[error("dependency name `{name}` is reserved")]
+    ReservedDependencyName { name: Name },
+    /// The root already has an edge under this name.
+    #[error("dependency `{name}` is declared twice")]
+    DuplicateDependencyName { name: Name },
+    /// The edge names a root that is not live in this database.
+    #[error("dependency `{name}` names a source root that does not exist")]
+    UnknownDependencyRoot { name: Name },
+    /// The edge would make the dependency graph cyclic.
+    #[error("dependency `{name}` would form a dependency cycle")]
+    DependencyCycle { name: Name },
+    /// The interface bytes are not a valid `PackageInterface` artifact.
+    #[error("invalid package interface: {message}")]
+    InvalidInterface { message: String },
 }
 
 /// The main database for BAML projects.
@@ -74,11 +117,7 @@ pub enum SourceRootError {
 /// ```ignore
 /// let mut db = ProjectDatabase::new();
 /// db.ensure_stdlib_sources();
-/// let root = db.add_source_root(SourceRootSpec {
-///     path: PathBuf::from("/my/project"),
-///     package: Name::new("user"),
-///     kind: SourceRootKind::Workspace,
-/// })?;
+/// let root = db.add_source_root(SourceRootSpec::new("/my/project", SourceRootKind::Workspace))?;
 /// db.add_or_update_file_in(root, Path::new("/my/project/main.baml"), "class Foo {}");
 ///
 /// let result = db.check();
@@ -113,6 +152,12 @@ pub struct ProjectDatabase {
     /// seed map through a **tracked** dependency: mutating via the setter bumps
     /// the revision and correctly invalidates dependents.
     seeded_throw_facts: Option<SeededThrowFacts>,
+
+    /// Where the language packages live (`baml`, `reflect`, ...): the one
+    /// place a package is found by its manifest name. `None` until the
+    /// stdlib is installed; created once by [`Self::install_stdlib`] and
+    /// re-pointed through its Salsa setter on every later install.
+    lang_roots: Option<LangRootsInput>,
     /// Stdlib packages' typed interfaces seeded from a previous compile
     /// (bytecode cache). Same present-from-construction discipline as
     /// `seeded_throw_facts`, so `package_interface::package_interface` reads
@@ -125,9 +170,12 @@ pub struct ProjectDatabase {
     /// other seeds, so `callable::callable_throws` reads the seed through a
     /// **tracked** dependency.
     seeded_callable_throws: Option<SeededCallableThrows>,
-    /// Source-less dependency packages, present from database construction so
-    /// Salsa queries always track the mount map even while it is empty.
-    mounted_packages: Option<MountedPackages>,
+    /// The stdlib packages every non-`Stdlib` root implicitly depends on,
+    /// under their own names — the `[package] prelude = true` packages of
+    /// the embedded stdlib manifests. Filled by the stdlib installer, which
+    /// runs before any other root exists, and added to every later root's
+    /// edges at creation (see [`Self::add_source_root`]).
+    stdlib_prelude: Arc<[Dependency]>,
     /// Maps canonical file paths to their live `SourceFile` handles (every
     /// root's files, stdlib included).
     ///
@@ -180,8 +228,8 @@ impl baml_compiler2_hir::Db for ProjectDatabase {
         self.seeded_callable_throws
     }
 
-    fn mounted_packages(&self) -> Option<MountedPackages> {
-        self.mounted_packages
+    fn lang_roots_input(&self) -> Option<LangRootsInput> {
+        self.lang_roots
     }
 }
 
@@ -307,7 +355,7 @@ impl ProjectDatabase {
     }
 
     /// Build a database over `storage`, installing the source-root table and
-    /// the seed/mount inputs empty from construction. Holding each
+    /// the seed inputs empty from construction. Holding each
     /// `#[salsa::input]` handle present (not `None`) from the start is what
     /// lets the reading queries record a *tracked* dependency on the
     /// initially-empty values, so a later mutation on a reused database
@@ -319,9 +367,10 @@ impl ProjectDatabase {
             next_file_id: Arc::new(AtomicU32::new(0)),
             source_roots: None,
             seeded_throw_facts: None,
+            lang_roots: None,
             seeded_stdlib_interface: None,
             seeded_callable_throws: None,
-            mounted_packages: None,
+            stdlib_prelude: Arc::from(Vec::new()),
             file_map: Arc::new(HashMap::new()),
             file_id_to_path: Arc::new(HashMap::new()),
             removed_file_tombstones: Arc::new(HashMap::new()),
@@ -332,11 +381,6 @@ impl ProjectDatabase {
         db.seeded_throw_facts = Some(SeededThrowFacts::new(&db, BTreeMap::new()));
         db.seeded_stdlib_interface = Some(SeededStdlibInterface::new(&db, BTreeMap::new()));
         db.seeded_callable_throws = Some(SeededCallableThrows::new(&db, BTreeMap::new()));
-        db.mounted_packages = Some(MountedPackages::new(
-            &db,
-            BTreeMap::new(),
-            std::collections::BTreeSet::new(),
-        ));
         db
     }
 
@@ -350,67 +394,167 @@ impl ProjectDatabase {
 
     /// Install one `Stdlib` root per embedded builtin package (path
     /// `<builtin>/<pkg>`), holding that package's files from
-    /// [`baml_builtins2::ALL`].
+    /// [`baml_builtins2::ALL`], with the dependency edges its own `baml.toml`
+    /// declares.
     ///
     /// Idempotent: a stdlib root that already exists is left in place and its
     /// files are (re)synchronized to the embedded contents, so calling this
     /// on a database that already has the stdlib is a no-op revision-wise.
+    pub fn ensure_stdlib_sources(&mut self) {
+        self.install_stdlib(|package| StdlibProvenance::Source {
+            files: baml_builtins2::ALL
+                .iter()
+                .filter(|builtin| builtin.package == package)
+                .map(|builtin| (PathBuf::from(builtin.virtual_path()), builtin.contents))
+                .collect(),
+        });
+    }
+
+    /// Install one `Stdlib` root per embedded builtin package served from its
+    /// compiler-built interface (`borsh(PackageInterface)`, keyed by package
+    /// name) instead of from source — the runtime compiler's shape, where the
+    /// stdlib arrives precompiled and no builtin source is materialized. The
+    /// dependency edges come from the embedded manifests exactly as for
+    /// source roots.
     ///
     /// # Panics
     ///
-    /// Panics if a non-stdlib root already claims a builtin package name —
-    /// a caller bug, since those names are reserved
-    /// (`baml_compiler2_hir::package::is_reserved_package_name`).
-    pub fn ensure_stdlib_sources(&mut self) {
-        // Group by package in `ALL` order (a `Vec` of buckets, not a hash
-        // map, so root creation order — and therefore table order among the
-        // stdlib roots — is the manifest's order, not process-dependent).
-        let mut buckets: Vec<(&'static str, Vec<&'static baml_builtins2::BuiltinFile>)> =
-            Vec::new();
-        for builtin in baml_builtins2::ALL {
-            match buckets.iter_mut().find(|(pkg, _)| *pkg == builtin.package) {
-                Some((_, files)) => files.push(builtin),
-                None => buckets.push((builtin.package, vec![builtin])),
-            }
-        }
-        for (package, builtins) in buckets {
-            let path = PathBuf::from(format!("<builtin>/{package}"));
-            let root = match self.roots_by_path.get(&path) {
-                Some(&root) => root,
-                None => self
-                    .add_source_root(SourceRootSpec {
-                        path,
-                        package: Name::new(package),
-                        kind: SourceRootKind::Stdlib,
-                    })
-                    .unwrap_or_else(|err| {
-                        panic!("cannot install the stdlib source root for `{package}`: {err}")
-                    }),
-            };
-            let files: Vec<(PathBuf, &'static str)> = builtins
-                .into_iter()
-                .map(|builtin| (PathBuf::from(builtin.virtual_path()), builtin.contents))
+    /// Panics if `interfaces` lacks a stdlib package: a precompiled stdlib is
+    /// all-or-nothing.
+    pub fn ensure_precompiled_stdlib(&mut self, interfaces: &BTreeMap<String, Vec<u8>>) {
+        self.install_stdlib(|package| StdlibProvenance::Interface {
+            bytes: interfaces
+                .get(package)
+                .unwrap_or_else(|| panic!("precompiled stdlib is missing package `{package}`"))
+                .clone(),
+        });
+    }
+
+    /// The one stdlib installer: create (or reuse) the roots of
+    /// [`stdlib_layout`] in dependency order, each with its manifest-declared
+    /// edges, and record the prelude every later root receives at creation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a non-`Stdlib` root already exists: the stdlib is installed
+    /// first, so its roots are the lowest ids in the database and the root
+    /// order the type algebra sorts by agrees with the table order emit
+    /// iterates.
+    fn install_stdlib(&mut self, provenance: impl Fn(&str) -> StdlibProvenance) {
+        // The stdlib is installed before any other root, so the stdlib roots
+        // are the lowest ids in the database: the root order the type algebra
+        // sorts by (creation order) and the table order emit iterates agree
+        // that the stdlib comes first, and every later root receives the
+        // prelude edges at creation instead of by retrofit.
+        let late = self
+            .roots_by_path
+            .values()
+            .find(|root| root.kind(self) != SourceRootKind::Stdlib);
+        assert!(
+            late.is_none(),
+            "the stdlib must be installed before any other source root is added (found {:?} at {})",
+            late.map(|root| root.kind(self)),
+            late.map_or_else(String::new, |root| root.path(self).display().to_string()),
+        );
+        let layout = stdlib_layout();
+        let mut roots: HashMap<&'static str, SourceRoot> = HashMap::new();
+        for package in &layout.packages {
+            let path = PathBuf::from(format!("<builtin>/{}", package.name));
+            let dependencies: Vec<Dependency> = package
+                .dependencies
+                .iter()
+                .map(|(name, target)| Dependency {
+                    name: name.clone(),
+                    root: roots[target],
+                })
                 .collect();
-            self.add_or_update_files_in(
-                root,
-                files
-                    .iter()
-                    .map(|(path, contents)| (path.as_path(), *contents)),
-            );
+            let root = match self.roots_by_path.get(&path) {
+                // Reuse only matches the provenance the root already has.
+                // Switching one would need the root's interface bytes and file
+                // set rebuilt, and the reuse path does neither: it would keep
+                // a source-backed root and silently discard the interface it
+                // was just handed. No caller does this today; fail loudly if
+                // one starts.
+                Some(&root) => {
+                    assert_eq!(
+                        root.interface(self).is_some(),
+                        matches!(provenance(package.name), StdlibProvenance::Interface { .. }),
+                        "the stdlib root for `{}` is already installed with the other provenance",
+                        package.name
+                    );
+                    root
+                }
+                None => {
+                    let mut spec = SourceRootSpec::new(path, SourceRootKind::Stdlib)
+                        .named(Name::new(package.name))
+                        .depending_on(dependencies);
+                    if let StdlibProvenance::Interface { bytes } = provenance(package.name) {
+                        spec = spec.served_from(bytes);
+                    }
+                    self.add_source_root(spec).unwrap_or_else(|err| {
+                        panic!(
+                            "cannot install the stdlib source root for `{}`: {err}",
+                            package.name
+                        )
+                    })
+                }
+            };
+            if let StdlibProvenance::Source { files } = provenance(package.name) {
+                self.add_or_update_files_in(
+                    root,
+                    files
+                        .iter()
+                        .map(|(path, contents)| (path.as_path(), *contents)),
+                );
+            }
+            roots.insert(package.name, root);
         }
+        let lang = baml_base::LangPackage::ALL
+            .into_iter()
+            .filter_map(|package| {
+                roots
+                    .get(package.manifest_name())
+                    .map(|&root| (package, root))
+            })
+            .fold(baml_base::LangRoots::default(), |lang, (package, root)| {
+                lang.with(package, root)
+            });
+        match self.lang_roots {
+            Some(input) => {
+                input.set_roots(self).to(lang);
+            }
+            None => self.lang_roots = Some(LangRootsInput::new(self, lang)),
+        }
+        let prelude: Vec<Dependency> = layout
+            .packages
+            .iter()
+            .filter(|package| package.prelude)
+            .map(|package| Dependency {
+                name: Name::new(package.name),
+                root: roots[package.name],
+            })
+            .collect();
+        self.stdlib_prelude = Arc::from(prelude);
+    }
+
+    /// The prelude edges every non-`Stdlib` root carries (empty until the
+    /// stdlib is installed).
+    pub fn stdlib_prelude(&self) -> &[Dependency] {
+        &self.stdlib_prelude
     }
 
     /// Add a source root, or revive the tombstoned root at the same path.
     ///
     /// Invariants enforced (each is a [`SourceRootError`]):
     /// - at most one live root per canonical path;
-    /// - at most one `Workspace` root per database (the compiler is
-    ///   single-world);
-    /// - one live root per package name, across every kind. A mounted
-    ///   source-less package (an interface blob) may share a name with a
-    ///   source root: the runtime compiler mounts a dependency's interface
-    ///   and adds a stub source root for the same package, and the compiler's
-    ///   source-vs-blob contract decides which is authoritative.
+    /// - one live root per wire name (`self_name`, else the unnamed default)
+    ///   — the interim consequence of name-spelled type heads;
+    /// - every declared dependency names a live root, under a name that is
+    ///   neither reserved nor declared twice;
+    /// - a served-from-interface root's bytes decode as a `PackageInterface`.
+    ///
+    /// Every non-`Stdlib` root also receives the stdlib prelude edges ahead
+    /// of its declared ones (see [`Self::stdlib_prelude`]).
     ///
     /// The root is inserted into its kind's bucket of the table (`Stdlib` <
     /// `Dependency` < `Workspace` < `Dynamic`, [`SourceRootKind`]'s order),
@@ -418,44 +562,22 @@ impl ProjectDatabase {
     pub fn add_source_root(&mut self, spec: SourceRootSpec) -> Result<SourceRoot, SourceRootError> {
         let SourceRootSpec {
             path,
-            package,
             kind,
+            self_name,
+            interface,
+            dependencies,
         } = spec;
         let path = canonicalize_lossy(&path);
 
         if let Some(&existing) = self.roots_by_path.get(&path) {
             return Err(SourceRootError::PathTaken(existing));
         }
-        // Reserved names are claimable only by the kind they are reserved
-        // FOR: builtin packages by `Stdlib` roots (`ensure_stdlib_sources`),
-        // the reserved user package by the `Workspace` root. Anything else
-        // would silently merge into a package it does not own —
-        // `package_files` unions roots by name.
-        let reserved_for_kind = match kind {
-            SourceRootKind::Stdlib => true,
-            SourceRootKind::Workspace => package.as_str() == baml_type::RESERVED_USER_PACKAGE,
-            SourceRootKind::Dependency | SourceRootKind::Dynamic => false,
-        };
-        if !reserved_for_kind
-            && baml_builtins2::reserved_package_names().contains(&package.as_str())
-        {
-            return Err(SourceRootError::ReservedPackageName { name: package });
-        }
-        if kind == SourceRootKind::Workspace
-            && let Some(existing) = self.workspace_root()
-        {
-            return Err(SourceRootError::SecondWorkspaceRoot(existing));
-        }
-        if let Some(&existing) = self
-            .roots_by_path
-            .values()
-            .find(|root| root.package(self) == package)
-        {
-            return Err(SourceRootError::PackageNameTaken {
-                name: package,
-                by: existing,
-            });
-        }
+        let wire_interface = interface
+            .as_deref()
+            .map(|bytes| Self::decode_interface(kind, bytes))
+            .transpose()?;
+        let dependencies = self.complete_dependencies(kind, dependencies)?;
+
         // Revive the tombstoned input if a root lived at this path before —
         // creating a fresh input would leak the old one forever.
         let root = match self.removed_root_tombstones.get(&path).copied() {
@@ -465,11 +587,21 @@ impl ProjectDatabase {
                     root.files(self).is_empty(),
                     "a tombstoned root must have had its files emptied on removal"
                 );
-                root.set_package(self).to(package);
                 root.set_kind(self).to(kind);
+                root.set_self_name(self).to(self_name);
+                root.set_interface(self).to(interface);
+                root.set_dependencies(self).to(dependencies);
                 root
             }
-            None => SourceRoot::new(self, path.clone(), package, kind, Vec::new()),
+            None => SourceRoot::new(
+                self,
+                path.clone(),
+                kind,
+                self_name,
+                Vec::new(),
+                interface,
+                dependencies,
+            ),
         };
 
         // Insert at the end of this kind's bucket. The table is sorted by
@@ -480,7 +612,126 @@ impl ProjectDatabase {
         roots.insert(at, root);
         table.set_roots(self).to(roots);
         Arc::make_mut(&mut self.roots_by_path).insert(path, root);
+
+        // A served-from-interface root's blob must resolve from the root it
+        // now is: every head it spells names the root itself or a package
+        // reached by one of its edges. A blob that names anything else is
+        // not mountable here, and the root does not stay.
+        if let Some(wire) = wire_interface
+            && let Err(error) =
+                baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)
+        {
+            self.remove_source_root(root);
+            return Err(SourceRootError::InvalidInterface {
+                message: error.to_string(),
+            });
+        }
         Ok(root)
+    }
+
+    /// Add one dependency edge to a live root.
+    ///
+    /// Rejects a reserved or already-declared name, a target that is not
+    /// live, and an edge that would close a cycle.
+    pub fn add_dependency(
+        &mut self,
+        from: SourceRoot,
+        dependency: Dependency,
+    ) -> Result<(), SourceRootError> {
+        self.validate_dependency(from.kind(self), from.dependencies(self), &dependency)?;
+        if dependency.root == from
+            || package_dependency_closure(self, dependency.root).contains(&from)
+        {
+            return Err(SourceRootError::DependencyCycle {
+                name: dependency.name,
+            });
+        }
+        let mut edges = from.dependencies(self).clone();
+        edges.push(dependency);
+        from.set_dependencies(self).to(edges);
+        Ok(())
+    }
+
+    /// The full edge list of a new root of `kind`: the stdlib prelude (for
+    /// every kind but `Stdlib`, which IS the stdlib) followed by the declared
+    /// edges, each validated.
+    fn complete_dependencies(
+        &self,
+        kind: SourceRootKind,
+        declared: Vec<Dependency>,
+    ) -> Result<Vec<Dependency>, SourceRootError> {
+        let mut edges: Vec<Dependency> = if kind == SourceRootKind::Stdlib {
+            Vec::new()
+        } else {
+            self.stdlib_prelude.iter().cloned().collect()
+        };
+        for dependency in declared {
+            self.validate_dependency(kind, &edges, &dependency)?;
+            edges.push(dependency);
+        }
+        Ok(edges)
+    }
+
+    /// One edge's admissibility against the edges a root of `kind` already
+    /// has. A stdlib package may name its stdlib siblings (that is how the
+    /// stdlib graph is declared); every other package reaches them through
+    /// the implicit prelude, so for it those names are reserved.
+    fn validate_dependency(
+        &self,
+        kind: SourceRootKind,
+        existing: &[Dependency],
+        dependency: &Dependency,
+    ) -> Result<(), SourceRootError> {
+        let name = dependency.name.as_str();
+        let reserved = if kind == SourceRootKind::Stdlib {
+            matches!(name, "root" | "env")
+        } else {
+            baml_builtins2::reserved_edge_names().contains(&name)
+        };
+        if reserved {
+            return Err(SourceRootError::ReservedDependencyName {
+                name: dependency.name.clone(),
+            });
+        }
+        if existing.iter().any(|edge| edge.name == dependency.name) {
+            return Err(SourceRootError::DuplicateDependencyName {
+                name: dependency.name.clone(),
+            });
+        }
+        if !self
+            .roots_by_path
+            .values()
+            .any(|root| *root == dependency.root)
+        {
+            return Err(SourceRootError::UnknownDependencyRoot {
+                name: dependency.name.clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// A served-from-interface root's bytes must decode: a precompiled stdlib
+    /// package is raw `borsh(PackageInterface)`, anything else a versioned
+    /// `baml_artifact`.
+    fn decode_interface(
+        kind: SourceRootKind,
+        bytes: &[u8],
+    ) -> Result<
+        baml_compiler2_hir_ty::package_interface::PackageInterface<baml_type::TypeName>,
+        SourceRootError,
+    > {
+        use baml_compiler2_hir_ty::package_interface::PackageInterface;
+        let decoded = if kind == SourceRootKind::Stdlib {
+            borsh::from_slice::<PackageInterface<baml_type::TypeName>>(bytes)
+                .map_err(|error| error.to_string())
+        } else {
+            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+                baml_artifact::ArtifactKind::PackageInterface,
+                bytes,
+            )
+            .map_err(|error| error.to_string())
+        };
+        decoded.map_err(|message| SourceRootError::InvalidInterface { message })
     }
 
     /// Remove a source root: its files are tombstoned (see
@@ -504,10 +755,29 @@ impl ProjectDatabase {
         roots.remove(position);
         table.set_roots(self).to(roots);
 
+        // No live root may keep an edge to a root that is gone.
+        let live: Vec<SourceRoot> = self.roots_by_path.values().copied().collect();
+        for other in live {
+            if other
+                .dependencies(self)
+                .iter()
+                .any(|edge| edge.root == root)
+            {
+                let remaining: Vec<Dependency> = other
+                    .dependencies(self)
+                    .iter()
+                    .filter(|edge| edge.root != root)
+                    .cloned()
+                    .collect();
+                other.set_dependencies(self).to(remaining);
+            }
+        }
+
         for file in root.files(self).clone() {
             self.park_file(file);
         }
         root.set_files(self).to(Vec::new());
+        root.set_dependencies(self).to(Vec::new());
 
         let path = root.path(self).clone();
         Arc::make_mut(&mut self.roots_by_path).remove(&path);
@@ -520,7 +790,12 @@ impl ProjectDatabase {
         self.table().roots(self).clone()
     }
 
-    /// The sole `Workspace` root, if one has been added.
+    /// The first `Workspace` root, if one has been added.
+    ///
+    /// Test scaffolding: a fixture that adds one workspace root reads it back
+    /// here. Production code holds the root it added and threads that — a
+    /// database may hold several workspace roots, and none of them is "the"
+    /// workspace.
     pub fn workspace_root(&self) -> Option<SourceRoot> {
         self.table()
             .roots(self)
@@ -773,19 +1048,16 @@ impl ProjectDatabase {
             .map(|(_, file)| *file)
     }
 
-    /// Add compiler-generated source for a `Session.eval` submission to the
-    /// workspace root. Session files use the dedicated CST→AST lowering mode
-    /// that admits persistent root bindings; ordinary source files remain
-    /// unchanged.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the database has no `Workspace` root — a session is
-    /// workspace-bound by construction.
-    pub fn add_session_file(&mut self, path: impl AsRef<Path>, content: &str) -> SourceFile {
-        let Some(root) = self.workspace_root() else {
-            panic!("add_session_file requires a Workspace source root");
-        };
+    /// Add compiler-generated source for a `Session.eval` submission to
+    /// `root`, the session's workspace. Session files use the dedicated
+    /// CST→AST lowering mode that admits persistent root bindings; ordinary
+    /// source files remain unchanged.
+    pub fn add_session_file_in(
+        &mut self,
+        root: SourceRoot,
+        path: impl AsRef<Path>,
+        content: &str,
+    ) -> SourceFile {
         let file = self.add_or_update_file_in(root, path.as_ref(), content);
         file.set_is_session_submission(self).to(true);
         file
@@ -803,7 +1075,10 @@ impl ProjectDatabase {
     /// call before *or* after queries have run.
     pub fn set_seeded_throw_facts(
         &mut self,
-        by_path: BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+        by_path: BTreeMap<
+            String,
+            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+        >,
     ) {
         let seeds = self.seeded_throw_facts.unwrap_or_else(|| {
             unreachable!("SeededThrowFacts input is created in ProjectDatabase::new")
@@ -840,7 +1115,7 @@ impl ProjectDatabase {
     /// infers honestly.
     pub fn set_seeded_callable_throws(
         &mut self,
-        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty>>,
+        by_path: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>>,
     ) {
         let seeds = self.seeded_callable_throws.unwrap_or_else(|| {
             unreachable!("SeededCallableThrows input is created in ProjectDatabase::new")
@@ -848,63 +1123,14 @@ impl ProjectDatabase {
         seeds.set_by_path(self).to(by_path);
     }
 
-    /// The always-present mounted-package input (see the `mounted_packages`
-    /// field).
-    fn mounts(&self) -> MountedPackages {
-        self.mounted_packages.unwrap_or_else(|| {
-            unreachable!("MountedPackages input is created in ProjectDatabase::new")
-        })
-    }
-
-    /// Replace the mounted source-less package map and invalidate all tracked
-    /// package/interface lookups that read it.
-    pub fn set_mounted_packages(
-        &mut self,
-        by_package: BTreeMap<String, Vec<u8>>,
-    ) -> Result<(), String> {
-        for (name, bytes) in &by_package {
-            baml_artifact::decode::<baml_compiler2_hir_ty::package_interface::PackageInterface>(
-                baml_artifact::ArtifactKind::PackageInterface,
-                bytes,
-            )
-            .map_err(|error| format!("mounted package `{name}`: {error}"))?;
-        }
-        let mounts = self.mounts();
-        mounts.set_by_package(self).to(by_package);
-        mounts
-            .set_immutable_precompiled(self)
-            .to(std::collections::BTreeSet::new());
-        Ok(())
-    }
-
-    /// Install compiler-built stdlib interfaces into the mounted-package
-    /// transport and mark them image-immutable.
-    ///
-    /// Only embedded stdlib names are accepted. Ordinary runtime mounts remain
-    /// replaceable and keep the conservative mounted impl-facts shape; these
-    /// rows are build artifacts from this exact compiler and can therefore be
-    /// re-hydrated like source-backed facts instead of being retained in every
-    /// impl-cache entry.
-    pub fn set_precompiled_stdlib_packages(&mut self, by_package: BTreeMap<String, Vec<u8>>) {
-        let mounts = self.mounts();
-        let stdlib_names = baml_builtins2::stdlib_package_names();
-        let mut merged = mounts.by_package(self).clone();
-        let mut immutable = std::collections::BTreeSet::new();
-        for (name, bytes) in by_package {
-            if stdlib_names.contains(&name.as_str()) {
-                immutable.insert(name.clone());
-                merged.insert(name, bytes);
-            }
-        }
-        mounts.set_by_package(self).to(merged);
-        mounts.set_immutable_precompiled(self).to(immutable);
-    }
-
     // ── Bytecode ─────────────────────────────────────────────────────────────
 
-    /// Get the compiled bytecode for the project using the compiler2 pipeline.
+    /// The compiled bytecode of `root`'s program — the root and its
+    /// dependency closure, never another workspace root that shares this
+    /// database.
     pub fn get_bytecode(
         &self,
+        root: SourceRoot,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
         // Bytecode generation lowers types through the runtime-conversion
         // boundary (`ResolvedAliases::convert`), which deliberately panics on
@@ -914,14 +1140,16 @@ impl ProjectDatabase {
         // recoverable `LoweringError`. The diagnostics themselves are reported
         // through the normal check path. (CLI commands gate before calling
         // `generate_project_bytecode` directly; this protects the in-process /
-        // runtime-eval callers that go through `get_bytecode`.) The error filter
-        // matches `testing::assert_no_diagnostic_errors` — workspace-file
-        // errors only.
-        let user_file_ids: std::collections::HashSet<FileId> = self
-            .workspace_files()
-            .iter()
-            .map(|f| f.file_id(self))
-            .collect();
+        // runtime-eval callers that go through `get_bytecode`.) The filter is
+        // the emitted WORLD's files, not the root's own: emit lowers the root
+        // plus its dependency closure, and an error left in a dependency
+        // reaches the runtime conversion, which has no error case and panics.
+        // Gating on the root alone would let exactly that through.
+        let user_file_ids: std::collections::HashSet<FileId> =
+            baml_compiler2_hir::package::world_files(self, root)
+                .iter()
+                .map(|f| f.file_id(self))
+                .collect();
         let error_count = crate::check::collect_compiler2_diagnostics(self)
             .iter()
             .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
@@ -933,7 +1161,7 @@ impl ProjectDatabase {
         if error_count > 0 {
             return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
         }
-        self.get_bytecode_unchecked()
+        self.get_bytecode_unchecked(root)
     }
 
     /// [`Self::get_bytecode`] without the error gate: goes straight to codegen.
@@ -946,9 +1174,118 @@ impl ProjectDatabase {
     /// the gate comment above).
     pub fn get_bytecode_unchecked(
         &self,
+        root: SourceRoot,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
-        baml_compiler2_emit::generate_project_bytecode(self)
+        baml_compiler2_emit::generate_project_bytecode(self, root)
     }
+}
+
+/// How a stdlib package's contents arrive in the database.
+enum StdlibProvenance {
+    /// The embedded sources.
+    Source { files: Vec<(PathBuf, &'static str)> },
+    /// A compiler-built `borsh(PackageInterface)`.
+    Interface { bytes: Vec<u8> },
+}
+
+/// One embedded stdlib package as its manifest declares it.
+struct StdlibPackage {
+    name: &'static str,
+    /// `[package] prelude = true`: implicitly reachable from every package.
+    prelude: bool,
+    /// `[dependencies]`: the edge name and the stdlib package it reaches,
+    /// resolved from the manifest's `path`.
+    dependencies: Vec<(Name, &'static str)>,
+}
+
+/// The embedded stdlib's package graph, in dependency order (every package
+/// after the packages it depends on).
+struct StdlibLayout {
+    packages: Vec<StdlibPackage>,
+}
+
+/// Parse the embedded stdlib manifests once per process.
+///
+/// # Panics
+///
+/// The stdlib ships with the compiler, so a manifest that does not parse, a
+/// `path` that leaves the stdlib, or a dependency cycle is a build defect,
+/// not a runtime condition: each panics with the offending package.
+fn stdlib_layout() -> &'static StdlibLayout {
+    static LAYOUT: std::sync::OnceLock<StdlibLayout> = std::sync::OnceLock::new();
+    LAYOUT.get_or_init(|| {
+        let known: Vec<&'static str> = baml_builtins2::MANIFESTS
+            .iter()
+            .map(|manifest| manifest.package)
+            .collect();
+        let mut packages: Vec<StdlibPackage> = baml_builtins2::MANIFESTS
+            .iter()
+            .map(|manifest| {
+                let parsed = crate::manifest::parse(manifest.contents).unwrap_or_else(|error| {
+                    panic!("stdlib package `{}` has an invalid baml.toml: {error}", manifest.package)
+                });
+                let package = parsed.package.as_ref().unwrap_or_else(|| {
+                    panic!("stdlib package `{}` declares no [package]", manifest.package)
+                });
+                assert_eq!(
+                    package.name.as_deref(),
+                    Some(manifest.package),
+                    "stdlib package `{}` must be named after its directory",
+                    manifest.package
+                );
+                let dependencies = parsed
+                    .dependencies
+                    .iter()
+                    .map(|(edge, spec)| {
+                        let target = lexically_normalize(
+                            &PathBuf::from(format!("<builtin>/{}", manifest.package))
+                                .join(&spec.path),
+                        );
+                        let target = target
+                            .strip_prefix("<builtin>")
+                            .ok()
+                            .and_then(|rest| rest.to_str())
+                            .and_then(|rest| known.iter().copied().find(|name| *name == rest))
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "stdlib package `{}` depends on `{}` at `{}`, which is not an embedded stdlib package",
+                                    manifest.package, edge, spec.path
+                                )
+                            });
+                        (Name::new(edge.as_str()), target)
+                    })
+                    .collect();
+                StdlibPackage {
+                    name: manifest.package,
+                    prelude: package.prelude,
+                    dependencies,
+                }
+            })
+            .collect();
+
+        // Dependency order (Kahn), keeping manifest order among the ready set
+        // so the table order — and every index space built from it — is the
+        // manifest's, not process-dependent.
+        let mut ordered: Vec<StdlibPackage> = Vec::with_capacity(packages.len());
+        let mut placed: Vec<&'static str> = Vec::new();
+        while !packages.is_empty() {
+            let Some(index) = packages.iter().position(|package| {
+                package
+                    .dependencies
+                    .iter()
+                    .all(|(_, target)| placed.contains(target))
+            }) else {
+                panic!(
+                    "stdlib dependency cycle among {:?}",
+                    packages.iter().map(|p| p.name).collect::<Vec<_>>()
+                );
+            };
+            let package = packages.remove(index);
+            placed.push(package.name);
+            ordered.push(package);
+        }
+        StdlibLayout { packages: ordered }
+    })
 }
 
 impl Default for ProjectDatabase {
@@ -971,19 +1308,11 @@ mod tests {
     use super::*;
 
     fn workspace_spec(path: &str) -> SourceRootSpec {
-        SourceRootSpec {
-            path: PathBuf::from(path),
-            package: Name::new("user"),
-            kind: SourceRootKind::Workspace,
-        }
+        SourceRootSpec::new(path, SourceRootKind::Workspace)
     }
 
     fn dependency_spec(path: &str, package: &str) -> SourceRootSpec {
-        SourceRootSpec {
-            path: PathBuf::from(path),
-            package: Name::new(package),
-            kind: SourceRootKind::Dependency,
-        }
+        SourceRootSpec::new(path, SourceRootKind::Dependency).named(Name::new(package))
     }
 
     #[test]
@@ -1055,7 +1384,6 @@ mod tests {
     #[test]
     fn stdlib_sources_are_idempotent_and_first() {
         let mut db = ProjectDatabase::new();
-        let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
         db.ensure_stdlib_sources();
         let roots_before = db.source_roots();
         let file_count = db.file_map.len();
@@ -1063,20 +1391,22 @@ mod tests {
         assert_eq!(db.source_roots(), roots_before);
         assert_eq!(db.file_map.len(), file_count);
 
-        // Stdlib roots precede the workspace root regardless of insertion order.
+        // Installed first, the stdlib roots are the lowest ids: the order the
+        // type algebra sorts by (creation) and the table order agree.
+        let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
         assert_eq!(db.source_roots().last().copied(), Some(workspace));
         assert!(
             db.source_roots()
                 .iter()
-                .take(roots_before.len() - 1)
-                .all(|root| root.kind(&db) == SourceRootKind::Stdlib)
+                .take(roots_before.len())
+                .all(|root| root.kind(&db) == SourceRootKind::Stdlib && *root < workspace)
         );
         // One stdlib root per builtin package, holding all of its files.
         for name in baml_builtins2::stdlib_package_names() {
             let root = db
                 .source_root_for_path(Path::new(&format!("<builtin>/{name}")))
                 .expect("stdlib root");
-            assert_eq!(root.package(&db).as_str(), *name);
+            assert_eq!(root.self_name(&db).as_ref().map(Name::as_str), Some(*name));
             let expected = baml_builtins2::ALL
                 .iter()
                 .filter(|b| b.package == *name)
@@ -1084,6 +1414,109 @@ mod tests {
             assert_eq!(db.root_files(root).len(), expected);
         }
         assert_eq!(db.workspace_root(), Some(workspace));
+        // A root created after the stdlib receives the prelude edges at
+        // creation.
+        let prelude: Vec<&str> = workspace
+            .dependencies(&db)
+            .iter()
+            .map(|edge| edge.name.as_str())
+            .collect();
+        assert!(prelude.contains(&"baml") && prelude.contains(&"reflect"));
+    }
+
+    #[test]
+    #[should_panic(expected = "the stdlib must be installed before any other source root")]
+    fn stdlib_refuses_to_install_after_other_roots() {
+        let mut db = ProjectDatabase::new();
+        db.add_source_root(workspace_spec("/ws")).unwrap();
+        db.ensure_stdlib_sources();
+    }
+
+    #[test]
+    fn stdlib_graph_comes_from_the_stdlib_manifests() {
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let root_of = |name: &str| {
+            db.source_root_for_path(Path::new(&format!("<builtin>/{name}")))
+                .expect("stdlib root")
+        };
+        let edges = |name: &str| -> Vec<(String, SourceRoot)> {
+            root_of(name)
+                .dependencies(&db)
+                .iter()
+                .map(|edge| (edge.name.to_string(), edge.root))
+                .collect()
+        };
+        assert_eq!(edges("log"), vec![]);
+        assert_eq!(edges("baml"), vec![("log".to_string(), root_of("log"))]);
+        assert_eq!(
+            edges("testing"),
+            vec![("baml".to_string(), root_of("baml"))]
+        );
+        assert!(edges("openai").iter().any(|(name, _)| name == "ai"));
+        // Stdlib roots carry no prelude edges of their own.
+        assert!(!edges("log").iter().any(|(name, _)| name == "reflect"));
+        // Dependency order: every package after its dependencies.
+        let roots = db.source_roots();
+        let index = |root: SourceRoot| roots.iter().position(|r| *r == root).unwrap();
+        for root in &roots {
+            for edge in root.dependencies(&db) {
+                assert!(index(edge.root) < index(*root));
+            }
+        }
+    }
+
+    /// The stdlib must compile with no errors under the dependency graph its
+    /// own manifests declare: a stdlib package that reaches a sibling it does
+    /// not list, or lists a sibling that does not exist, fails here with the
+    /// offending file and message rather than deep inside runtime lowering.
+    #[test]
+    fn stdlib_compiles_cleanly_under_its_declared_graph() {
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let errors: Vec<String> = crate::check::collect_diagnostics(&db)
+            .into_iter()
+            .filter(|diagnostic| {
+                matches!(
+                    diagnostic.severity,
+                    baml_compiler_diagnostics::Severity::Error
+                )
+            })
+            .map(|diagnostic| {
+                let at = diagnostic
+                    .primary_span()
+                    .and_then(|span| db.file_id_to_path(span.file_id).cloned())
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_default();
+                format!("{at}: {}", diagnostic.message)
+            })
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "the embedded stdlib has errors under its declared graph:\n{}",
+            errors.join("\n")
+        );
+    }
+
+    /// Every package the compiler's `"provider/model"` shorthand table names
+    /// must be reachable from every package: a literal `client
+    /// "bedrock/..."` lowers to `aws.BedrockClient.new(...)` in the user's own
+    /// package, and the runtime half is a lambda synthesized there too.
+    #[test]
+    fn every_shorthand_provider_package_is_in_the_prelude() {
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let prelude: Vec<&str> = db
+            .stdlib_prelude()
+            .iter()
+            .map(|edge| edge.name.as_str())
+            .collect();
+        for (prefix, package, _) in baml_compiler2_ast::SHORTHAND_PROVIDERS {
+            assert!(
+                prelude.contains(package),
+                "shorthand `{prefix}/…` constructs a client from `{package}`, which is not a prelude package"
+            );
+        }
     }
 
     #[test]
@@ -1141,25 +1574,74 @@ mod tests {
             db.add_source_root(workspace_spec("/ws")),
             Err(SourceRootError::PathTaken(workspace))
         );
+        // Spellings are not an identity: two roots may share one, and the
+        // boundary that needs the spelling table injective reports it.
+        let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
+        let dep2 = db.add_source_root(dependency_spec("/dep2", "dep")).unwrap();
         assert_eq!(
-            db.add_source_root(workspace_spec("/ws2")),
-            Err(SourceRootError::SecondWorkspaceRoot(workspace))
+            baml_compiler2_hir::package::spelling(&db).collisions(),
+            &[baml_compiler2_hir::package::SpellingCollision::SharedName {
+                name: Name::new("dep"),
+                roots: vec![dep, dep2],
+            }]
         );
-        // The reserved user package is rejected for non-workspace kinds
-        // before the duplicate-name check even runs.
+        // Dependency roots sort before the workspace root; Dynamic roots
+        // (runtime-loaded) sort after it, whatever the insertion order.
+        let dynamic = db
+            .add_source_root(
+                SourceRootSpec::new("<builtin>/mount", SourceRootKind::Dynamic)
+                    .named(Name::new("mount")),
+            )
+            .unwrap();
+        assert_eq!(db.source_roots(), vec![dep, dep2, workspace, dynamic]);
+
+        // Edges: the target must be live, the name unique per root, and the
+        // graph acyclic.
+        let edge = |name: &str, root: SourceRoot| Dependency {
+            name: Name::new(name),
+            root,
+        };
+        db.add_dependency(workspace, edge("dep", dep)).unwrap();
         assert_eq!(
-            db.add_source_root(dependency_spec("/dep0", "user")),
-            Err(SourceRootError::ReservedPackageName {
-                name: Name::new("user")
+            db.add_dependency(workspace, edge("dep", dynamic)),
+            Err(SourceRootError::DuplicateDependencyName {
+                name: Name::new("dep")
             })
         );
-        // A mounted interface blob and a source root may share a name: the
-        // runtime compiler mounts a dependency's interface (the semantic
-        // authority) and adds a stub source root for the same package (emit
-        // slots); the compiler's source-vs-blob contract decides precedence.
+        assert_eq!(
+            db.add_dependency(dep, edge("ws", workspace)),
+            Err(SourceRootError::DependencyCycle {
+                name: Name::new("ws")
+            })
+        );
+        assert_eq!(
+            db.add_dependency(dep, edge("me", dep)),
+            Err(SourceRootError::DependencyCycle {
+                name: Name::new("me")
+            })
+        );
+        db.remove_source_root(dep);
+        assert_eq!(
+            db.add_dependency(workspace, edge("gone", dep)),
+            Err(SourceRootError::UnknownDependencyRoot {
+                name: Name::new("gone")
+            })
+        );
+        // Removing a root strips the edges that reached it.
+        assert!(workspace.dependencies(&db).is_empty());
+
+        // A served-from-interface root's bytes must decode.
+        assert!(matches!(
+            db.add_source_root(
+                SourceRootSpec::new("<mount>/bad", SourceRootKind::Dynamic)
+                    .named(Name::new("bad"))
+                    .served_from(vec![1, 2, 3]),
+            ),
+            Err(SourceRootError::InvalidInterface { .. })
+        ));
         let blob = baml_artifact::encode(
             baml_artifact::ArtifactKind::PackageInterface,
-            &baml_compiler2_hir_ty::package_interface::PackageInterface {
+            &baml_compiler2_hir_ty::package_interface::PackageInterface::<baml_type::TypeName> {
                 types: std::iter::empty().collect(),
                 functions: std::iter::empty().collect(),
                 throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
@@ -1168,55 +1650,55 @@ mod tests {
             },
         )
         .unwrap();
-        db.set_mounted_packages(BTreeMap::from([("dep".to_owned(), blob)]))
-            .unwrap();
-        let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
-        // Dependency roots sort before the workspace root; Dynamic roots
-        // (runtime-loaded) sort after it, whatever the insertion order.
-        let dynamic = db
-            .add_source_root(SourceRootSpec {
-                path: PathBuf::from("<builtin>/mount"),
-                package: Name::new("mount"),
-                kind: SourceRootKind::Dynamic,
-            })
-            .unwrap();
-        assert_eq!(db.source_roots(), vec![dep, workspace, dynamic]);
-        assert_eq!(
-            db.add_source_root(dependency_spec("/dep2", "dep")),
-            Err(SourceRootError::PackageNameTaken {
-                name: Name::new("dep"),
-                by: dep
-            })
-        );
+        db.add_source_root(
+            SourceRootSpec::new("<mount>/good", SourceRootKind::Dynamic)
+                .named(Name::new("good"))
+                .served_from(blob),
+        )
+        .unwrap();
     }
 
     #[test]
-    fn reserved_package_names_are_kind_gated() {
+    fn reserved_edge_names_are_rejected_for_user_packages() {
         let mut db = ProjectDatabase::new();
-        // Builtin names belong to `Stdlib` roots (`ensure_stdlib_sources`).
-        assert_eq!(
-            db.add_source_root(dependency_spec("/vendor/baml", "baml")),
-            Err(SourceRootError::ReservedPackageName {
-                name: Name::new("baml")
-            })
-        );
-        assert_eq!(
-            db.add_source_root(SourceRootSpec {
-                path: PathBuf::from("<builtin>/user"),
-                package: Name::new("user"),
-                kind: SourceRootKind::Dynamic,
-            }),
-            Err(SourceRootError::ReservedPackageName {
-                name: Name::new("user")
-            })
-        );
-        // The reserved user package is exactly what a `Workspace` root
-        // claims; the stdlib claims builtin names through its own kind.
-        db.add_source_root(workspace_spec("/ws"))
-            .unwrap_or_else(|e| {
-                unreachable!("workspace root claims the reserved user package: {e}")
-            });
         db.ensure_stdlib_sources();
+        let baml = db
+            .source_root_for_path(Path::new("<builtin>/baml"))
+            .expect("stdlib root");
+        let workspace = db.add_source_root(workspace_spec("/ws")).unwrap();
+        // The prelude already reaches `baml`; a declared edge may not reuse
+        // a stdlib name, nor a source-level qualifier. `user` is refused for
+        // a reason that is not a language rule and will not last: the wire
+        // still reads that spelling as the artifact's own package, so an edge
+        // carrying it would fuse a dependency's declarations into the
+        // emitting package. See the constant naming that condition.
+        for name in ["baml", "root", "env", "user"] {
+            assert_eq!(
+                db.add_dependency(
+                    workspace,
+                    Dependency {
+                        name: Name::new(name),
+                        root: baml
+                    }
+                ),
+                Err(SourceRootError::ReservedDependencyName {
+                    name: Name::new(name)
+                })
+            );
+        }
+        // Every non-stdlib root gets the prelude, in stdlib table order.
+        let prelude: Vec<&str> = workspace
+            .dependencies(&db)
+            .iter()
+            .map(|edge| edge.name.as_str())
+            .collect();
+        assert_eq!(
+            prelude,
+            db.stdlib_prelude()
+                .iter()
+                .map(|edge| edge.name.as_str())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -1227,7 +1709,7 @@ mod tests {
         // A live session file re-upserted as an ordinary file loses the flag
         // (the flag is set AFTER upsert by `add_session_file`, so an
         // ordinary upsert is the only way the file re-enters the maps).
-        let session = db.add_session_file("/ws/s.baml", "let a = 1;");
+        let session = db.add_session_file_in(workspace, "/ws/s.baml", "let a = 1;");
         assert!(session.is_session_submission(&db));
         let plain = db.add_or_update_file_in(workspace, Path::new("/ws/s.baml"), "class A {}");
         assert_eq!(plain, session, "same input, updated in place");
@@ -1235,7 +1717,7 @@ mod tests {
 
         // A tombstoned session file revived as an ordinary file loses the
         // flag too.
-        let session = db.add_session_file("/ws/t.baml", "let b = 2;");
+        let session = db.add_session_file_in(workspace, "/ws/t.baml", "let b = 2;");
         assert!(session.is_session_submission(&db));
         db.remove_file(Path::new("/ws/t.baml"));
         let revived = db.add_or_update_file_in(workspace, Path::new("/ws/t.baml"), "enum E { X }");
@@ -1261,7 +1743,10 @@ mod tests {
         // revives the file and re-points it at the revived root.
         let revived = db.add_source_root(dependency_spec("/dep", "dep2")).unwrap();
         assert_eq!(revived, dep);
-        assert_eq!(revived.package(&db).as_str(), "dep2");
+        assert_eq!(
+            revived.self_name(&db).as_ref().map(Name::as_str),
+            Some("dep2")
+        );
         let file_again = db.add_or_update_file_in(revived, path, "class B {}");
         assert_eq!(file_again.file_id(&db), file_id);
         assert_eq!(file_again.source_root(&db), revived);

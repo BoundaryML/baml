@@ -16,7 +16,6 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::AdtMediaPdf => "pdf",
         BamlHandleType::AdtMediaGeneric => "media",
         BamlHandleType::AdtPromptAst => "prompt_ast",
-        BamlHandleType::AdtCollector => "collector",
         BamlHandleType::AdtType => "type",
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
         BamlHandleType::AdtFunctionSpec => "function_spec",
@@ -58,7 +57,9 @@ impl BamlHandle {
         }
     }
 
-    /// Clone this handle — new key, same underlying value.
+    /// Take one more ownership of this handle's row: a new key for
+    /// identity-free values, the same (refcounted) key for an engine-heap
+    /// handle.
     #[wasm_bindgen(js_name = "cloneHandle")]
     pub fn clone_handle(&self) -> Result<BamlHandle, JsError> {
         let new_key = HANDLE_TABLE

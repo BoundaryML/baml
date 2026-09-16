@@ -49,7 +49,7 @@ interface Add<Rhs extends root.Concrete> requires root.Concrete {
     /// `bigint` mix is `bigint`, and any `float` mix is `float`.
     type Output extends root.Concrete;
     /// Adds `rhs` to `self`.
-    function add(self, rhs: Rhs) -> Self.Output throws never
+    function add(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The subtraction operator, `self - rhs`.
@@ -66,7 +66,7 @@ interface Subtract<Rhs extends root.Concrete> requires root.Concrete {
     /// `int`, any `bigint` mix is `bigint`, and any `float` mix is `float`.
     type Output extends root.Concrete;
     /// Subtracts `rhs` from `self`.
-    function sub(self, rhs: Rhs) -> Self.Output throws never
+    function sub(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The multiplication operator, `self * rhs`.
@@ -82,7 +82,7 @@ interface Multiply<Rhs extends root.Concrete> requires root.Concrete {
     /// any `bigint` mix is `bigint`, and any `float` mix is `float`.
     type Output extends root.Concrete;
     /// Multiplies `self` by `rhs`.
-    function mul(self, rhs: Rhs) -> Self.Output throws never
+    function mul(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The division operator, `self / rhs`.
@@ -111,7 +111,7 @@ interface Divide<Rhs extends root.Concrete> requires root.Concrete {
     /// any `bigint` mix is `bigint`, and any `float` mix is `float`.
     type Output extends root.Concrete;
     /// Divides `self` by `rhs`.
-    function div(self, rhs: Rhs) -> Self.Output throws never
+    function div(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The remainder operator, `self % rhs`.
@@ -131,7 +131,7 @@ interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
     /// any `bigint` mix is `bigint`, and any `float` mix is `float`.
     type Output extends root.Concrete;
     /// The remainder of dividing `self` by `rhs`.
-    function rem(self, rhs: Rhs) -> Self.Output throws never
+    function rem(self, rhs: Rhs) -> Self.Output throws never;
 }
 
 /// The unary negation operator, `-self`.
@@ -149,7 +149,7 @@ interface Negate requires root.Concrete {
     /// `int` to `int`, `float` to `float`, `bigint` to `bigint`.
     type Output extends root.Concrete;
     /// Negates `self`.
-    function neg(self) -> Self.Output throws never
+    function neg(self) -> Self.Output throws never;
 }
 
 // ==== int ====

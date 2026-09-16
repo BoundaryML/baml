@@ -15,17 +15,19 @@
 // Shipped single-link behavior: a lone caught error has no cause, so
 // `root_cause()` is the error itself.
 
-function ec_single_boom() -> string { throw "kaboom" }
+function ec_single_boom() -> string {
+    throw "kaboom"
+}
 
 function ec_single_main() -> string {
-  ec_single_boom() catch (e, ctx) {
-    _ => {
-      match (ctx.root_cause().error) {
-        let s: string => s
-        _ => "unexpected non-string error"
-      }
+    ec_single_boom() catch (e, ctx) {
+        _ => {
+            match (ctx.root_cause().error) {
+                let s: string => s,
+                _ => "unexpected non-string error",
+            }
+        }
     }
-  }
 }
 
 test "single_error_root_cause_is_self" {
@@ -36,23 +38,28 @@ test "single_error_root_cause_is_self" {
 // Nested `catch`: throwing a different error while handling one chains the
 // new error onto the error being handled (Python `__context__`-style).
 
-function ec_nested_fail_a() -> string { throw "A" }
-function ec_nested_fail_b() -> string { throw "B" }
+function ec_nested_fail_a() -> string {
+    throw "A"
+}
+
+function ec_nested_fail_b() -> string {
+    throw "B"
+}
 
 function ec_nested_main() -> string {
-  ec_nested_fail_a() catch (e, ctx) {
-    _ => {
-      // B is thrown while A is being handled -> B.cause == A.
-      ec_nested_fail_b() catch (e2, ctx2) {
+    ec_nested_fail_a() catch (e, ctx) {
         _ => {
-          match (ctx2.root_cause().error) {
-            let s: string => s
-            _ => "no cause found"
-          }
+            // B is thrown while A is being handled -> B.cause == A.
+            ec_nested_fail_b() catch (e2, ctx2) {
+                _ => {
+                    match (ctx2.root_cause().error) {
+                        let s: string => s,
+                        _ => "no cause found",
+                    }
+                }
+            }
         }
-      }
     }
-  }
 }
 
 test "nested_catch_chains_to_handled_error" {
@@ -67,23 +74,28 @@ test "nested_catch_chains_to_handled_error" {
 // `defer` pad and a nested `catch`) that fragment the handler body across
 // basic blocks.
 
-function ec_hazard_a_fail_outer() -> string { throw "E" }
-function ec_hazard_a_fail_inner() -> string { throw "Y" }
+function ec_hazard_a_fail_outer() -> string {
+    throw "E"
+}
+
+function ec_hazard_a_fail_inner() -> string {
+    throw "Y"
+}
 
 function ec_hazard_a_main() -> string {
-  ec_hazard_a_fail_outer() catch (e, ctx) {
-    _ => {
-      defer { }
-      ec_hazard_a_fail_inner() catch (e2, ctx2) {
+    ec_hazard_a_fail_outer() catch (e, ctx) {
         _ => {
-          match (ctx2.root_cause().error) {
-            let s: string => s
-            _ => "MISSED: enclosing handled error not found in chain"
-          }
+            defer { }
+            ec_hazard_a_fail_inner() catch (e2, ctx2) {
+                _ => {
+                    match (ctx2.root_cause().error) {
+                        let s: string => s,
+                        _ => "MISSED: enclosing handled error not found in chain",
+                    }
+                }
+            }
         }
-      }
     }
-  }
 }
 
 test "hazard_a_nested_construct_in_catch_arm_chains_to_outer_error" {
@@ -99,24 +111,28 @@ test "hazard_a_nested_construct_in_catch_arm_chains_to_outer_error" {
 // the catch is examining (also "B"), a self-link. Because nothing was being
 // handled when "B" arose, its `cause` must stay empty.
 
-function ec_rethrow_fail_b() -> string { throw "B" }
+function ec_rethrow_fail_b() -> string {
+    throw "B"
+}
 
 function ec_rethrow_main() -> string {
-  // The inner catch binds `ictx`, so "B" is materialized into its context
-  // slot. The arm does not match the string "B", so "B" re-raises from the
-  // dispatch block — which must NOT chain "B" onto its own context.
-  (
-    ec_rethrow_fail_b() catch (inner, ictx) {
-      baml.errors.InvalidArgument => { "unreachable" }
+    // The inner catch binds `ictx`, so "B" is materialized into its context
+    // slot. The arm does not match the string "B", so "B" re-raises from the
+    // dispatch block — which must NOT chain "B" onto its own context.
+    (
+        ec_rethrow_fail_b() catch (inner, ictx) {
+            baml.errors.InvalidArgument => {
+                "unreachable"
+            }
+        }
+    ) catch (e2, ctx2) {
+        _ => {
+            match (ctx2.cause) {
+                null => "no cause",
+                let c: baml.errors.Context => "MISCHAINED: rethrow self-linked",
+            }
+        }
     }
-  ) catch (e2, ctx2) {
-    _ => {
-      match (ctx2.cause) {
-        null => "no cause"
-        let c: baml.errors.Context => "MISCHAINED: rethrow self-linked"
-      }
-    }
-  }
 }
 
 test "no_match_rethrow_does_not_self_chain" {
@@ -132,26 +148,31 @@ test "no_match_rethrow_does_not_self_chain" {
 // span would over-cover it and mis-chain "C" onto "A"; per-block ranges keep
 // it outside, so "C" has no cause.
 
-function ec_gap_fail_a() -> string { throw "A" }
-function ec_gap_fail_c() -> string { throw "C" }
+function ec_gap_fail_a() -> string {
+    throw "A"
+}
+
+function ec_gap_fail_c() -> string {
+    throw "C"
+}
 
 function ec_gap_main() -> string {
-  let recovered = ec_gap_fail_a() catch (e, ctx) {
-    _ => {
-      defer { }
-      "recovered"
+    let recovered = ec_gap_fail_a() catch (e, ctx) {
+        _ => {
+            defer { }
+            "recovered"
+        }
+    };
+    // "A" is fully handled; this is a brand-new failure, not "during handling
+    // of A". Its context must have no cause.
+    ec_gap_fail_c() catch (e2, ctx2) {
+        _ => {
+            match (ctx2.cause) {
+                null => recovered,
+                let c: baml.errors.Context => "MISCHAINED: gap over-covered",
+            }
+        }
     }
-  }
-  // "A" is fully handled; this is a brand-new failure, not "during handling
-  // of A". Its context must have no cause.
-  ec_gap_fail_c() catch (e2, ctx2) {
-    _ => {
-      match (ctx2.cause) {
-        null => recovered
-        let c: baml.errors.Context => "MISCHAINED: gap over-covered"
-      }
-    }
-  }
 }
 
 test "throw_after_catch_in_layout_gap_does_not_chain" {
@@ -166,21 +187,21 @@ test "throw_after_catch_in_layout_gap_does_not_chain" {
 // `root_cause` walks to the original failure "X".
 
 function ec_sibling_scope() -> string {
-  defer { throw "A" }
-  defer { throw "B" }
-  defer { throw "C" }
-  throw "X"
+    defer { throw "A" }
+    defer { throw "B" }
+    defer { throw "C" }
+    throw "X"
 }
 
 function ec_sibling_main() -> string {
-  ec_sibling_scope() catch (e, ctx) {
-    _ => {
-      match (ctx.root_cause().error) {
-        let s: string => s
-        _ => "no root cause found"
-      }
+    ec_sibling_scope() catch (e, ctx) {
+        _ => {
+            match (ctx.root_cause().error) {
+                let s: string => s,
+                _ => "no root cause found",
+            }
+        }
     }
-  }
 }
 
 test "sibling_defers_that_throw_chain_to_root_cause" {
@@ -193,25 +214,30 @@ test "sibling_defers_that_throw_chain_to_root_cause" {
 // pre-walk's runtime read of the context slot must keep it alive (handled via
 // the analysis use-injection in `analysis.rs` + `optimize.rs`).
 
-function ec_hazard_b_fail_outer() -> string { throw "E" }
-function ec_hazard_b_fail_inner() -> string { throw "Y" }
+function ec_hazard_b_fail_outer() -> string {
+    throw "E"
+}
+
+function ec_hazard_b_fail_inner() -> string {
+    throw "Y"
+}
 
 function ec_hazard_b_main() -> string {
-  ec_hazard_b_fail_outer() catch (e, ctx) {
-    _ => {
-      let a = 1 + 2
-      let b = a * a
-      let c = b + a
-      ec_hazard_b_fail_inner() catch (e2, ctx2) {
+    ec_hazard_b_fail_outer() catch (e, ctx) {
         _ => {
-          match (ctx2.root_cause().error) {
-            let s: string => s
-            _ => "GARBAGE: outer context slot was recolored before the inner throw"
-          }
+            let a = 1 + 2;
+            let b = a * a;
+            let c = b + a;
+            ec_hazard_b_fail_inner() catch (e2, ctx2) {
+                _ => {
+                    match (ctx2.root_cause().error) {
+                        let s: string => s,
+                        _ => "GARBAGE: outer context slot was recolored before the inner throw",
+                    }
+                }
+            }
         }
-      }
     }
-  }
 }
 
 test "hazard_b_unused_binding_slot_liveness_preserves_cause" {
@@ -229,24 +255,26 @@ test "hazard_b_unused_binding_slot_liveness_preserves_cause" {
 // wrap's throw site (`thrown_value_causes` in `vm.rs`), so `root_cause`
 // walks past "wrap" to the original "origin".
 
-function ec_deferunwind_fail_low() -> string { throw "origin" }
+function ec_deferunwind_fail_low() -> string {
+    throw "origin"
+}
 
 function ec_deferunwind_mid() -> string {
-  defer { }
-  ec_deferunwind_fail_low() catch (e, ctx) {
-    _ => throw "wrap"
-  }
+    defer { }
+    ec_deferunwind_fail_low() catch (e, ctx) {
+        _ => throw "wrap"
+    }
 }
 
 function ec_deferunwind_main() -> string {
-  ec_deferunwind_mid() catch (e, ctx) {
-    _ => {
-      match (ctx.root_cause().error) {
-        let s: string => s
-        _ => "LOST: cause chain wiped by the defer re-raise"
-      }
+    ec_deferunwind_mid() catch (e, ctx) {
+        _ => {
+            match (ctx.root_cause().error) {
+                let s: string => s,
+                _ => "LOST: cause chain wiped by the defer re-raise",
+            }
+        }
     }
-  }
 }
 
 test "defer_on_unwind_preserves_cause_chain" {
@@ -258,28 +286,30 @@ test "defer_on_unwind_preserves_cause_chain" {
 // across the defer re-raise. Same shape as above, but return `to_string`: the
 // full chain (origin, then wrap) must survive, not just the surviving "wrap".
 
-function ec_tostring_fail_low() -> string { throw "origin" }
+function ec_tostring_fail_low() -> string {
+    throw "origin"
+}
 
 function ec_tostring_mid() -> string {
-  defer { }
-  ec_tostring_fail_low() catch (e, ctx) {
-    _ => throw "wrap"
-  }
+    defer { }
+    ec_tostring_fail_low() catch (e, ctx) {
+        _ => throw "wrap"
+    }
 }
 
 function ec_tostring_main() -> string {
-  ec_tostring_mid() catch (e, ctx) {
-    _ => ctx.to_string()
-  }
+    ec_tostring_mid() catch (e, ctx) {
+        _ => ctx.to_string()
+    }
 }
 
 function ec_tostring_check() -> bool {
-  let rendered = ec_tostring_main();
-  // missing chain separator => the defer re-raise dropped the cause
-  let has_sep = rendered.includes("During handling of the above error, another error occurred");
-  let has_origin = rendered.includes("origin");
-  let has_wrap = rendered.includes("wrap");
-  has_sep && has_origin && has_wrap
+    let rendered = ec_tostring_main();
+    // missing chain separator => the defer re-raise dropped the cause
+    let has_sep = rendered.includes("During handling of the above error, another error occurred");
+    let has_origin = rendered.includes("origin");
+    let has_wrap = rendered.includes("wrap");
+    has_sep && has_origin && has_wrap
 }
 
 test "defer_on_unwind_preserves_to_string_chain" {
@@ -292,25 +322,27 @@ test "defer_on_unwind_preserves_to_string_chain" {
 // preserve the cause. The defer mutates an outer local (a real, observable
 // body) yet does not throw.
 
-function ec_deferbody_fail_low() -> string { throw "origin" }
+function ec_deferbody_fail_low() -> string {
+    throw "origin"
+}
 
 function ec_deferbody_mid() -> string {
-  let marker = "start"
-  defer { marker = marker + "-cleanup" }
-  ec_deferbody_fail_low() catch (e, ctx) {
-    _ => throw "wrap"
-  }
+    let marker = "start";
+    defer { marker = marker + "-cleanup" }
+    ec_deferbody_fail_low() catch (e, ctx) {
+        _ => throw "wrap"
+    }
 }
 
 function ec_deferbody_main() -> string {
-  ec_deferbody_mid() catch (e, ctx) {
-    _ => {
-      match (ctx.root_cause().error) {
-        let s: string => s
-        _ => "LOST: cause chain wiped by the defer re-raise"
-      }
+    ec_deferbody_mid() catch (e, ctx) {
+        _ => {
+            match (ctx.root_cause().error) {
+                let s: string => s,
+                _ => "LOST: cause chain wiped by the defer re-raise",
+            }
+        }
     }
-  }
 }
 
 test "defer_with_body_preserves_cause_chain" {
@@ -321,25 +353,27 @@ test "defer_with_body_preserves_cause_chain" {
 // B-611 — two stacked non-throwing defers on the unwind frame each add a
 // transparent re-raise; the cause must survive all of them.
 
-function ec_stackdefers_fail_low() -> string { throw "origin" }
+function ec_stackdefers_fail_low() -> string {
+    throw "origin"
+}
 
 function ec_stackdefers_mid() -> string {
-  defer { }
-  defer { }
-  ec_stackdefers_fail_low() catch (e, ctx) {
-    _ => throw "wrap"
-  }
+    defer { }
+    defer { }
+    ec_stackdefers_fail_low() catch (e, ctx) {
+        _ => throw "wrap"
+    }
 }
 
 function ec_stackdefers_main() -> string {
-  ec_stackdefers_mid() catch (e, ctx) {
-    _ => {
-      match (ctx.root_cause().error) {
-        let s: string => s
-        _ => "LOST: cause chain wiped by a stacked defer re-raise"
-      }
+    ec_stackdefers_mid() catch (e, ctx) {
+        _ => {
+            match (ctx.root_cause().error) {
+                let s: string => s,
+                _ => "LOST: cause chain wiped by a stacked defer re-raise",
+            }
+        }
     }
-  }
 }
 
 test "nested_defers_nonthrowing_preserve_cause" {
@@ -355,34 +389,147 @@ test "nested_defers_nonthrowing_preserve_cause" {
 // "wrap" link is not dropped — confirming the fix preserves a pre-existing
 // chain even when the defer contributes a fresh link on top of it.
 
-function ec_deferthrow_fail_low() -> string { throw "origin" }
+function ec_deferthrow_fail_low() -> string {
+    throw "origin"
+}
 
 function ec_deferthrow_mid() -> string {
-  defer { throw "cleanup" }
-  ec_deferthrow_fail_low() catch (e, ctx) {
-    _ => throw "wrap"
-  }
+    defer { throw "cleanup" }
+    ec_deferthrow_fail_low() catch (e, ctx) {
+        _ => throw "wrap"
+    }
 }
 
 function ec_deferthrow_main() -> string {
-  ec_deferthrow_mid() catch (e, ctx) {
-    _ => ctx.to_string()
-  }
+    ec_deferthrow_mid() catch (e, ctx) {
+        _ => ctx.to_string()
+    }
 }
 
 function ec_deferthrow_check() -> bool {
-  let rendered = ec_deferthrow_main();
-  // Oldest -> newest: origin, wrap, cleanup — all three present, in order.
-  let origin_at = rendered.index_of("origin") ?? -1;
-  let wrap_at = rendered.index_of("wrap") ?? -1;
-  let cleanup_at = rendered.index_of("cleanup") ?? -1;
-  let all_present = origin_at >= 0 && wrap_at >= 0 && cleanup_at >= 0;
-  let ordered = origin_at < wrap_at && wrap_at < cleanup_at;
-  // Two chain separators (origin->wrap->cleanup) => split yields 3 pieces.
-  let pieces = rendered.split("During handling of the above error, another error occurred").length();
-  all_present && ordered && pieces == 3
+    let rendered = ec_deferthrow_main();
+    // Oldest -> newest: origin, wrap, cleanup — all three present, in order.
+    let origin_at = rendered.index_of("origin") ?? -1;
+    let wrap_at = rendered.index_of("wrap") ?? -1;
+    let cleanup_at = rendered.index_of("cleanup") ?? -1;
+    let all_present = origin_at >= 0 && wrap_at >= 0 && cleanup_at >= 0;
+    let ordered = origin_at < wrap_at && wrap_at < cleanup_at;
+    // Two chain separators (origin->wrap->cleanup) => split yields 3 pieces.
+    let pieces = rendered.split("During handling of the above error, another error occurred").length();
+    all_present && ordered && pieces == 3
 }
 
 test "defer_that_throws_still_chains_through_wrap" {
     assert.is_true(ec_deferthrow_check())
+}
+
+// ─── structural rendering of arbitrary errors ───────────────────────────────
+
+class EcRenderDetail {
+    label: string,
+
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            "DETAIL OVERRIDE"
+        }
+    }
+}
+
+class EcRenderAppError {
+    message: string,
+    detail: EcRenderDetail,
+
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            "ERROR OVERRIDE"
+        }
+    }
+}
+
+function ec_render_class_error() -> string {
+    (
+        throw EcRenderAppError {
+      message: "boom",
+      detail: EcRenderDetail { label: "visible" },
+    }
+    ) catch (e, ctx) {
+        _ => ctx.to_string(),
+    }
+}
+
+test "class error rendering keeps identity and structural fields" {
+    let rendered = ec_render_class_error();
+    assert.contains(
+        rendered,
+        `user.errorcontext.EcRenderAppError { message: "boom", detail: user.errorcontext.EcRenderDetail { label: "visible" } }`,
+    );
+    assert.is_true(!rendered.includes("OVERRIDE"))
+}
+
+function ec_render_map_error() -> string {
+    (throw { "first": "alpha", "second": "beta" }) catch (e, ctx) {
+        _ => ctx.to_string(),
+    }
+}
+
+test "non-class error rendering is structural" {
+    let rendered = ec_render_map_error();
+    assert.contains(rendered, `{"first": "alpha", "second": "beta"}`);
+    assert.is_true(!rendered.includes("<error>"))
+}
+
+class EcRecursiveError {
+    next: EcRecursiveError?,
+}
+
+function ec_render_recursive_error() -> string {
+    let error = EcRecursiveError { next: null };
+    error.next = error;
+    (throw error) catch (e, ctx) {
+        _ => ctx.to_string(),
+    }
+}
+
+test "structural error rendering truncates object cycles" {
+    assert.contains(ec_render_recursive_error(), "user.errorcontext.EcRecursiveError { next: … }")
+}
+
+class EcBudgetLink {
+    next: EcBudgetLink?,
+}
+
+function ec_render_deep_error() -> string {
+    let root = EcBudgetLink { next: null };
+    let current = root;
+    let i = 0;
+    while (i < 40) {
+        let next = EcBudgetLink { next: null };
+        current.next = next;
+        current = next;
+        i += 1;
+    }
+    (throw root) catch (e, ctx) {
+        _ => ctx.to_string(),
+    }
+}
+
+function ec_render_wide_error() -> string {
+    let values: int[] = [];
+    let i = 0;
+    while (i < 300) {
+        values.push(i);
+        i += 1;
+    }
+    (throw values) catch (e, ctx) {
+        _ => ctx.to_string(),
+    }
+}
+
+test "structural error rendering enforces depth and node budgets" {
+    let deep = ec_render_deep_error();
+    let wide = ec_render_wide_error();
+    assert.contains(deep, "…");
+    assert.contains(wide, "…");
+    assert.equal(wide.split("…").length(), 2);
+    assert.is_true(wide.length() < 2000)
 }

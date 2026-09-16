@@ -1,6 +1,7 @@
-// Canonical assistant content: what a model turn produced, normalized away
-// from any one provider's envelope. Clients build these; the journal records
-// them inside root.events.AssistantMessage.
+// Canonical content: the blocks a turn carries, normalized away from any one
+// provider's envelope. `Block` is what ANY turn may carry (a user turn, a tool
+// result, a model turn); `root.content.ModelBlock` adds what only a model turn produces.
+// Clients build these; the journal records them inside root.events.*.
 //
 // Mirrors _planv2/pages/04_reference/01_api.md (the `ai.content` namespace).
 
@@ -20,9 +21,13 @@ class ToolUse {
     args: map<string, unknown>,
 }
 
-/// A media payload the turn produced: a generated image, a file a provider-side
-/// tool wrote. The value is a real BAML media value, so `-> image` returns
-/// something callers can save or pass straight back into another prompt.
+/// A media payload: a screenshot a runner attaches to a user turn, a file a
+/// tool returned, a generated image a model produced. The value is a real BAML
+/// media value, so `-> image` returns something callers can save or pass
+/// straight back into another prompt.
+///
+/// `provider_id` and `revised_prompt` are provenance of GENERATED output and
+/// are null on input.
 class Media {
     media: root.MediaPart,
     // The provider's own handle for this output, when it names one
@@ -44,31 +49,68 @@ class Media {
 
     /// Wrap a media value a client just built from a provider payload.
     /// `baml.media.Image.from_base64` and its siblings return the `image` /
-    /// `audio` / `video` / `pdf` primitives, which are distinct static types
-    /// from the `baml.media.*` wrapper classes `MediaPart` is a union of, so
-    /// the value bridges through its BEP-038 `{kind, source, value, mime}`
-    /// envelope. The decode discriminates on the envelope's `kind`, so the
-    /// union lands on the wrapper for the value's own media kind.
+    /// `audio` / `video` / `pdf` primitives, and `baml.media.Image` is the
+    /// declaration that carries `image`'s members rather than a second
+    /// nominal type, so the value already is a `MediaPart` member.
     function new(
         value: image | audio | video | pdf,
         provider_id: string? = null,
         revised_prompt: string? = null,
     ) -> Media {
-        let envelope = baml.json.to_json(value) catch_all (e) {
-            _ => {
-                throw baml.errors.InvalidArgument { message: `media output could not be encoded: ${e.to_string()}` }
-            },
-        };
-        let part: root.MediaPart = baml.json.from_json<root.MediaPart>(envelope) catch_all (e) {
-            _ => {
-                throw baml.errors.InvalidArgument { message: `media output could not be decoded: ${e.to_string()}` }
-            },
-        };
-        Media { media: part, provider_id: provider_id, revised_prompt: revised_prompt }
+        Media { media: value, provider_id: provider_id, revised_prompt: revised_prompt }
     }
 }
 
-type Block = Text | Reasoning | ToolUse | Media;
+/// What any turn may carry.
+type Block = Text | Media;
+
+/// What a model turn produces: any `Block` plus the model-only reasoning and
+/// tool-use blocks. Every other turn carries `Block[]`.
+type ModelBlock = Block | Reasoning | ToolUse;
+
+/// Content blocks from ordinary values: a bare `string` becomes `Text`, a bare
+/// `image` / `audio` / `video` / `pdf` becomes `Media` with null provenance, and
+/// a block already built passes through. The one constructor behind
+/// `root.events.UserMessage.of` and `root.events.ToolCompleted.of`.
+function blocks(items: (string | image | audio | video | pdf | Text | Media)[]) -> Block[] {
+    let out: Block[] = [];
+    for (let item in items) {
+        match (item) {
+            let text: string => {
+                out.push(Text { text: text });
+                null
+            },
+            let block: Block => {
+                out.push(block);
+                null
+            },
+            let media: image | audio | video | pdf => {
+                out.push(Media.new(media));
+                null
+            },
+        };
+    }
+    out
+}
+
+/// The readable projection of a block list: `Text` blocks as written, each
+/// `Media` block as a `[image]`-style placeholder, joined in order.
+function text(content: Block[]) -> string {
+    let out = "";
+    for (let block in content) {
+        match (block) {
+            let t: Text => {
+                out = `${out}${t.text}`;
+                null
+            },
+            let m: Media => {
+                out = `${out}[${m.kind()}]`;
+                null
+            },
+        };
+    }
+    out
+}
 
 /// Why the model stopped. `ToolUse` means the turn ended with tool calls the
 /// runner must execute before the next turn.

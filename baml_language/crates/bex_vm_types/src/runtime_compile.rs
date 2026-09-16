@@ -9,7 +9,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, RealizedTy, Ty};
+use baml_type::{Interface, Name, RealizedTy, Ty, TypeName};
 use indexmap::IndexMap;
 
 use crate::CompilationUnit;
@@ -26,7 +26,7 @@ pub struct RuntimeMountedClass {
     pub name: Name,
     pub tag: baml_type::typetag::TypeTag,
     pub docstring: Option<String>,
-    pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
+    pub fields: Vec<(Name, Ty<TypeName>, RuntimeMountedFieldAttrs)>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,11 +60,37 @@ pub struct RuntimeTypeMount {
     pub ty: RealizedTy,
     pub classes: Vec<RuntimeMountedClass>,
     pub enums: Vec<RuntimeMountedEnum>,
-    pub witnesses: Vec<(Interface, Vec<(Name, Name)>)>,
+    pub witnesses: Vec<MountedWitness>,
 }
 
-#[derive(Clone, Debug, Default)]
+/// One interface a mounted type witnesses, with the `(field, method)` links
+/// its implementation is read through.
+pub type MountedWitness = (Interface<TypeName>, Vec<(Name, Name)>);
+
+/// The identity of a runtime package object across the compile seam: an
+/// opaque token minted from the object's address, valid for the request
+/// that carries it (the request pins its packages). Two aliases naming one
+/// package object carry one identity, so the compile world mounts one
+/// package reached under two names, never two look-alike packages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RuntimePackageIdentity(usize);
+
+impl RuntimePackageIdentity {
+    /// The identity of the package object at `ptr`.
+    pub fn of(ptr: crate::HeapPtr) -> Self {
+        Self(ptr.as_ptr() as usize)
+    }
+
+    /// A distinct identity for tests that hold no runtime object.
+    pub fn synthetic(token: usize) -> Self {
+        Self(token)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct RuntimePackageMount {
+    /// Which package object this is: two aliases of one object share it.
+    pub identity: RuntimePackageIdentity,
     /// Versioned `PackageInterface` artifact checked before the mount is used.
     pub interface_blob: Vec<u8>,
     pub types: Vec<RuntimeTypeMount>,
@@ -241,12 +267,77 @@ pub enum RuntimeDiagnosticSeverity {
     Info,
 }
 
+/// Compiler phase retained from the structured compiler diagnostic stream.
+///
+/// Runtime-generated diagnostics (linking, mounting, session contracts, and
+/// similar host-side failures) have no compiler phase and therefore carry no
+/// [`RuntimeDiagnosticDetails`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeDiagnosticPhase {
+    Parse,
+    Hir,
+    Validation,
+    Type,
+}
+
+/// Semantic category attached to a byte range inside diagnostic text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeDiagnosticHighlightKind {
+    IdentifierType,
+    IdentifierFunction,
+    IdentifierField,
+    IdentifierVariable,
+    IdentifierEnumVariant,
+    IdentifierAttribute,
+    TypeExpression,
+    Code,
+}
+
+/// A byte range inside a diagnostic message or annotation label.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticHighlight {
+    pub start: u32,
+    pub end: u32,
+    pub kind: RuntimeDiagnosticHighlightKind,
+}
+
 /// A byte range in one of the paths submitted to the compile call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeSourceSpan {
     pub file: String,
     pub start: usize,
     pub end: usize,
+}
+
+/// One primary or secondary source annotation on a compiler diagnostic.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticAnnotation {
+    pub span: RuntimeSourceSpan,
+    pub message: Option<String>,
+    pub message_highlights: Vec<RuntimeDiagnosticHighlight>,
+    pub is_primary: bool,
+}
+
+/// One related source location attached to a compiler diagnostic.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticRelatedInfo {
+    pub span: RuntimeSourceSpan,
+    pub message: String,
+    pub message_highlights: Vec<RuntimeDiagnosticHighlight>,
+    pub file_path: Option<String>,
+}
+
+/// Compiler-only diagnostic detail retained while the transient compiler DB
+/// is alive. The legacy flattened `message` and primary `span` remain directly
+/// on [`RuntimeCompileDiagnostic`] for compatibility with existing consumers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeDiagnosticDetails {
+    pub headline: String,
+    pub primary_label: Option<String>,
+    pub phase: RuntimeDiagnosticPhase,
+    pub message_highlights: Vec<RuntimeDiagnosticHighlight>,
+    pub annotations: Vec<RuntimeDiagnosticAnnotation>,
+    pub related_info: Vec<RuntimeDiagnosticRelatedInfo>,
 }
 
 /// Stable diagnostic data safe to retain after the transient compiler DB drops.
@@ -256,6 +347,7 @@ pub struct RuntimeCompileDiagnostic {
     pub message: String,
     pub severity: RuntimeDiagnosticSeverity,
     pub span: Option<RuntimeSourceSpan>,
+    pub details: Option<Box<RuntimeDiagnosticDetails>>,
 }
 
 /// Successful compiler output retained by the runtime.

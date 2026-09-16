@@ -8,17 +8,17 @@
 //! `NamespaceItems::conflicts` but do not prevent resolution — downstream
 //! layers always see a resolved symbol (the first one).
 
-use baml_base::{Name, SourceFile, Span};
+use baml_base::{Name, SourceFile, SourceRoot, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use indexmap::{IndexMap, IndexSet};
 use text_size::TextRange;
 
 use crate::contributions::{Contribution, Definition};
 
-/// Interned namespace identity — package name + path within package.
+/// Interned namespace identity — the package (its root) + path within it.
 #[salsa::interned]
 pub struct NamespaceId<'db> {
-    pub package: Name,
+    pub package: SourceRoot,
     pub path: Vec<Name>,
 }
 
@@ -167,11 +167,11 @@ pub fn namespace_items<'db>(
     let package = namespace_id.package(db);
     let ns_path = namespace_id.path(db);
 
-    // Collect matching files from the package's own roots
-    // (`package_files`), then sort alphabetically by path — so edits to
-    // another package's file set never invalidate this namespace.
-    let package_id = crate::package::PackageId::new(db, package);
-    let mut matching_files: Vec<SourceFile> = crate::package::package_files(db, package_id)
+    // Collect matching files from the package's own root, then sort
+    // alphabetically by path — so edits to another package's file set never
+    // invalidate this namespace.
+    let mut matching_files: Vec<SourceFile> = package
+        .files(db)
         .iter()
         .copied()
         .filter(|file| {

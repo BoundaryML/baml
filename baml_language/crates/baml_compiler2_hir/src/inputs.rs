@@ -1,18 +1,25 @@
 //! Compile-cache Salsa inputs read through [`crate::Db`] accessors.
 //!
 //! These are owner-set inputs that let a fresh database skip work a previous
-//! compile already did (bytecode cache seeds) or resolve packages that have
-//! no source in this database (mounted interface blobs). They live in this
-//! crate — the bottom of the compiler2 `Db` trait chain — because their
-//! payloads name `baml_type` types, which sit above `baml_base`.
+//! compile already did (bytecode cache seeds). They live in this crate — the
+//! bottom of the compiler2 `Db` trait chain — because their payloads name
+//! `baml_type` types, which sit above `baml_base`. (A package served from a
+//! serialized interface instead of source is not a seed: that is the root's
+//! own [`baml_base::SourceRoot::interface`] field.)
 
 /// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
 /// the full source-file path string (`SourceFile::path` display form).
+///
+/// Seeds are wire data (the cache manifest persists them), so their heads are
+/// spelled: the reader re-spells them into the file's root through the
+/// [`Spelling`](crate::package::Spelling) before use.
 #[salsa::input]
 pub struct SeededThrowFacts {
     #[returns(ref)]
-    pub by_path:
-        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    pub by_path: std::collections::BTreeMap<
+        String,
+        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
+    >,
 }
 
 /// Input: exact per-function `callable_throws` results from a previous compile,
@@ -29,7 +36,18 @@ pub struct SeededThrowFacts {
 #[salsa::input]
 pub struct SeededCallableThrows {
     #[returns(ref)]
-    pub by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
+    pub by_path: std::collections::BTreeMap<
+        String,
+        std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
+    >,
+}
+
+/// Input: where the language packages ([`baml_base::LangPackage`]) are
+/// installed — the compiler's `core`/`std`. Set once by the stdlib installer,
+/// which is the one place a package is found by its manifest name.
+#[salsa::input]
+pub struct LangRootsInput {
+    pub roots: baml_base::LangRoots,
 }
 
 /// Input: the stdlib packages' resolved `PackageInterface`s from a previous
@@ -46,29 +64,4 @@ pub struct SeededCallableThrows {
 pub struct SeededStdlibInterface {
     #[returns(ref)]
     pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
-}
-
-/// Input: source-less dependency packages mounted as serialized
-/// `PackageInterface` blobs, keyed by package name (the mount alias); each
-/// value is `borsh(PackageInterface)`.
-///
-/// Opaque bytes for the same reason as [`SeededStdlibInterface`]:
-/// `PackageInterface` lives in `baml_compiler2_hir_ty`, which depends on this
-/// crate. It deserializes a package's bytes when its `package_interface` is
-/// queried. A Salsa input, so mounting/unmounting a package invalidates
-/// dependents for free (the B-694 delivery mechanism generalized to any
-/// alias, per BEP-066 mounted-package linking).
-#[salsa::input]
-pub struct MountedPackages {
-    #[returns(ref)]
-    pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
-
-    /// Names whose blobs are compiler-built, image-immutable dependencies.
-    ///
-    /// This is deliberately metadata on the mounted-package transport rather
-    /// than a second interface store: both ordinary runtime mounts and the
-    /// precompiled stdlib use the same `PackageInterface` bytes, while the
-    /// compiler can still keep immutable rows on its fact-free fast path.
-    #[returns(ref)]
-    pub immutable_precompiled: std::collections::BTreeSet<String>,
 }

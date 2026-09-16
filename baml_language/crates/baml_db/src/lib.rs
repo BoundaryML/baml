@@ -16,6 +16,7 @@
 pub mod check;
 pub mod db;
 pub mod discovery;
+pub mod manifest;
 pub mod project_resolution;
 pub mod stdlib_prefix;
 pub mod testing;

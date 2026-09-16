@@ -4,9 +4,11 @@ import Foundation
 /// An engine-owned resource riding in a generated model's `$rust_type`
 /// field (`File._handle`, `Response._body`, media `_data`, …). The
 /// wire carries only a key into the engine's handle table; the Swift
-/// object owns that key: deinit releases it, and encoding clones a
-/// fresh key for the wire so this instance stays independently
-/// droppable (Python's `_clone_key_for_wire` semantics).
+/// object owns one release of that key: deinit performs it, and
+/// encoding clones one more ownership for the wire (a fresh key for
+/// media, the same refcounted key for an engine-heap handle) so this
+/// instance stays independently droppable (Python's
+/// `_clone_key_for_wire` semantics).
 public final class BamlHandle: @unchecked Sendable {
     let key: UInt64
     let handleType: BamlBridge_Cffi_V1_BamlHandleType
@@ -40,10 +42,13 @@ public final class BamlHandle: @unchecked Sendable {
 }
 
 extension BamlHandle: Equatable {
-    /// Identity is the table key. Two handles to the same resource
-    /// minted separately compare unequal — generated structs holding
-    /// handles compare by resource identity, mirroring Python where
-    /// private handle attrs sit outside pydantic equality.
+    /// Identity is the table key. For an engine-heap handle the table
+    /// issues one key per heap object, so two handles to the same object
+    /// compare EQUAL however they were minted; identity-free rows (media)
+    /// get a key per minting and compare unequal even for the same
+    /// resource. Generated structs holding handles compare by this key,
+    /// mirroring Python where private handle attrs sit outside pydantic
+    /// equality.
     public static func == (lhs: BamlHandle, rhs: BamlHandle) -> Bool {
         lhs.key == rhs.key
     }

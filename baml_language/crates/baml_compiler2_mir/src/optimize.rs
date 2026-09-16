@@ -12,8 +12,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use baml_base::Name;
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, Local, MirFunction, MirFunctionBody, MirFunctionKind,
-    Operand, Place, Terminator,
+    BasicBlock, BlockId, CatchRegion, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    Operand, Place, Terminator, memory,
 };
 
 mod effects;
@@ -27,7 +27,7 @@ pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
     optimize_body(body, func.arity, opt);
 
     #[cfg(debug_assertions)]
-    verify_mir(body, &func.item_ref);
+    verify_mir(body, func.arity, &func.item_ref);
 }
 
 /// Run all cleanup phases directly on a `MirFunctionBody`.
@@ -40,6 +40,7 @@ pub(crate) fn optimize_function_body(body: &mut MirFunctionBody, opt: crate::Opt
     #[cfg(debug_assertions)]
     verify_mir(
         body,
+        0,
         &crate::ItemRef::Free {
             package: Name::new("$init_let"),
             namespace: vec![],
@@ -365,6 +366,8 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
         match p {
             Place::Local(_) => {}
             Place::Capture(_) => {}
+            // The local behind a deref can't be replaced with a constant.
+            Place::Deref(cell) => set.extend(cell.local()),
             Place::Field { base, .. } => {
                 // The base local of a field projection can't be replaced with a constant.
                 if let Place::Local(l) = base.as_ref() {
@@ -427,13 +430,6 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
                 scan_operand(operand, set);
             }
-            crate::Rvalue::RuntimeIsType {
-                operand,
-                type_value,
-            } => {
-                scan_operand(operand, set);
-                scan_operand(type_value, set);
-            }
             crate::Rvalue::MakeClosure { captures, .. } => {
                 for cap in captures {
                     scan_operand(cap, set);
@@ -487,7 +483,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 // declines to write into the `Local`-typed position, while the
                 // defining assignment is dropped regardless — leaving the
                 // projection pointing at a local nothing defines.
-                crate::StatementKind::FreshCell(_) | crate::StatementKind::Nop => {}
+                crate::StatementKind::FreshCell { .. } | crate::StatementKind::Nop => {}
             }
         }
         if let Some(term) = &block.terminator {
@@ -687,6 +683,12 @@ fn count_in_place(p: &Place, uses: &mut [usize]) {
                 // Captures have no local base — nothing to count.
                 break;
             }
+            Place::Deref(cell) => {
+                if let Some(local) = cell.local() {
+                    uses[local.0] += 1;
+                }
+                break;
+            }
             Place::Field { base, .. } => cur = base,
             Place::Index { base, index, .. } => {
                 uses[index.0] += 1;
@@ -734,13 +736,6 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             count_in_operand(operand, uses);
         }
-        crate::Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            count_in_operand(operand, uses);
-            count_in_operand(type_value, uses);
-        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 count_in_operand(cap, uses);
@@ -786,8 +781,8 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
             count_in_operand(value, uses);
         }
         crate::StatementKind::Drop(p) => count_in_place(p, uses),
-        crate::StatementKind::FreshCell(l) => {
-            uses[l.0] += 1;
+        crate::StatementKind::FreshCell { local, .. } => {
+            uses[local.0] += 1;
         }
         crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
@@ -945,11 +940,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                     continue;
                 }
 
-                // Captured locals need a stable slot so emit can wrap them in a
-                // cell and closure construction can pass that cell pointer.
-                if body.locals[dest.0].is_captured {
-                    continue;
-                }
+                // A captured local's slot holds its cell pointer, written only
+                // by `FreshCell`; a value store goes through `Deref`.
+                debug_assert!(
+                    !body.locals[dest.0].is_captured,
+                    "bare store to captured {dest}"
+                );
 
                 // Skip locals with multiple definition sites (phi-like).
                 if defs[dest.0] != 1 {
@@ -961,9 +957,14 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                         if src.0 >= 1
                             && src.0 <= arity
                             && defs[src.0] == 0
-                            && !body.locals[src.0].is_captured
                             && !place_bound.contains(dest) =>
                     {
+                        // A bare captured parameter would be its cell pointer,
+                        // which no `Use` reads.
+                        debug_assert!(
+                            !body.locals[src.0].is_captured,
+                            "bare read of captured {src}"
+                        );
                         // Copy of param — substitute. Skip locals that appear
                         // as a Place::Index index, since removing the copy would
                         // leave the destination Place referencing a dead local.
@@ -1041,7 +1042,7 @@ fn propagate_block_param_copies(body: &mut MirFunctionBody<'_>, arity: usize) {
                     destination: Place::Local(local),
                     ..
                 }
-                | crate::StatementKind::FreshCell(local) => *local,
+                | crate::StatementKind::FreshCell { local, .. } => *local,
                 _ => continue,
             };
             copies.retain(|local, value| {
@@ -1059,9 +1060,11 @@ fn propagate_block_param_copies(body: &mut MirFunctionBody<'_>, arity: usize) {
                 && (1..=arity).contains(&source.0)
                 && defs[source.0] > 0
                 && body.locals[destination.0].name.is_none()
-                && !body.locals[destination.0].is_captured
-                && !body.locals[source.0].is_captured
             {
+                debug_assert!(
+                    !body.locals[destination.0].is_captured && !body.locals[source.0].is_captured,
+                    "bare value access of a captured local"
+                );
                 copies.insert(destination, Operand::copy_local(*source));
             }
         }
@@ -1103,6 +1106,13 @@ fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand<'_>
         }
         Place::Capture(_) => {
             // Captures are indexed into the closure's capture array — no local to substitute.
+        }
+        Place::Deref(cell) => {
+            // A cell's local is a captured local's pointer, never substituted:
+            // copy propagation only ever maps uncaptured temps.
+            if let Some(local) = cell.local() {
+                debug_assert!(!subst.contains_key(&local), "substituting captured {local}");
+            }
         }
         Place::Field { base, .. } => {
             apply_subst_to_place_locals(base, subst);
@@ -1149,13 +1159,6 @@ fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local
         }
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             apply_subst_to_operand(operand, subst);
-        }
-        crate::Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            apply_subst_to_operand(operand, subst);
-            apply_subst_to_operand(type_value, subst);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
@@ -1207,7 +1210,7 @@ fn apply_subst_to_statement<'db>(
         // propagation has already retired, and the emitter then loads a slot
         // nothing ever stored to.
         crate::StatementKind::Drop(_)
-        | crate::StatementKind::FreshCell(_)
+        | crate::StatementKind::FreshCell { .. }
         | crate::StatementKind::Nop => {}
     }
 }
@@ -1463,6 +1466,11 @@ fn remap_place(p: &mut Place, map: &[Option<Local>]) {
         Place::Capture(_) => {
             // Capture indices index into the closure's captures array — no local to remap.
         }
+        Place::Deref(cell) => {
+            if let CellId::Local(local) = cell {
+                remap_local(local, map);
+            }
+        }
         Place::Field { base, .. } => remap_place(base, map),
         Place::Index { base, index, .. } => {
             remap_local(index, map);
@@ -1509,13 +1517,6 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             remap_operand(operand, map);
         }
-        crate::Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            remap_operand(operand, map);
-            remap_operand(type_value, map);
-        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 remap_operand(cap, map);
@@ -1555,7 +1556,7 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
             remap_operand(value, map);
         }
         crate::StatementKind::Drop(p) => remap_place(p, map),
-        crate::StatementKind::FreshCell(l) => remap_local(l, map),
+        crate::StatementKind::FreshCell { local, .. } => remap_local(local, map),
         crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
@@ -1680,7 +1681,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 /// Debug-only — catches invariant drift between lowering, optimization, and
 /// downstream consumers. Modeled after V1's `verifier.rs`.
 #[cfg(debug_assertions)]
-fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
+fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
     let num_blocks = body.blocks.len();
     let num_locals = body.locals.len();
 
@@ -1742,6 +1743,17 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                     // Capture index — no local to check.
                     break;
                 }
+                Place::Deref(cell) => {
+                    // The value in a cell: a local's cell is a captured local's.
+                    if let CellId::Local(l) = cell {
+                        check_local(*l, ctx);
+                        assert!(
+                            body.local(*l).is_captured,
+                            "deref of uncaptured {l} in {ctx} of MIR function {name}",
+                        );
+                    }
+                    break;
+                }
                 Place::Field { base, .. } => cur = base,
                 Place::Index { base, index, .. } => {
                     check_local(*index, ctx);
@@ -1793,13 +1805,6 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                         | crate::Rvalue::IsTypeTag { operand, .. } => {
                             check_operand(operand, &blk);
                         }
-                        crate::Rvalue::RuntimeIsType {
-                            operand,
-                            type_value,
-                        } => {
-                            check_operand(operand, &blk);
-                            check_operand(type_value, &blk);
-                        }
                         crate::Rvalue::MakeClosure { captures, .. } => {
                             for cap in captures {
                                 check_operand(cap, &blk);
@@ -1837,7 +1842,7 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                     }
                 }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),
-                crate::StatementKind::FreshCell(l) => check_local(*l, &blk),
+                crate::StatementKind::FreshCell { local, .. } => check_local(*local, &blk),
                 // Exhaustive rather than wildcarded: an operand-carrying
                 // statement kind that skips this check loses the one cheap
                 // tripwire for a reference to a retired local.
@@ -2010,6 +2015,489 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
         body.entry,
         name,
     );
+
+    // 10. Every read is definitely assigned; every captured access has its cell.
+    verify_definite_assignment(body, arity, name);
+}
+
+/// Every read of a local is dominated by a write to it, and every read, write,
+/// or closure capture of a captured local is dominated by one of its
+/// `FreshCell`s — parameters by frame entry, where the emitter cells them.
+///
+/// The cell half is what lets the emitter discard an unused deref load and
+/// what makes a closure created in a loop see its own iteration's binding:
+/// lowering creates a captured binding's cell exactly where the binding is
+/// created, and this check is the tripwire for a declaration site that did
+/// not.
+///
+/// A forward dataflow over "definitely assigned" and "definitely celled",
+/// meeting by intersection. Roots are the entry block, with the parameters
+/// assigned (and celled when captured), and each catch handler, which the
+/// runtime enters with the region's error local and stack-trace local
+/// written. A trap anywhere in a protected block reaches the handler, so each
+/// body block's end-of-statements state flows there too; that over-counts
+/// what the handler can rely on only for locals declared inside the protected
+/// body, which the handler cannot name.
+#[cfg(debug_assertions)]
+fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
+    #[derive(Clone)]
+    struct State {
+        assigned: Vec<bool>,
+        celled: Vec<bool>,
+    }
+
+    impl State {
+        /// Intersect `other` into `self`; whether anything changed.
+        fn meet(&mut self, other: &State) -> bool {
+            let mut changed = false;
+            for (mine, theirs) in self
+                .assigned
+                .iter_mut()
+                .chain(self.celled.iter_mut())
+                .zip(other.assigned.iter().chain(other.celled.iter()))
+            {
+                if *mine && !*theirs {
+                    *mine = false;
+                    changed = true;
+                }
+            }
+            changed
+        }
+    }
+
+    fn join(
+        block: BlockId,
+        incoming: &State,
+        state_in: &mut [Option<State>],
+        worklist: &mut VecDeque<BlockId>,
+    ) {
+        let changed = match &mut state_in[block.0] {
+            Some(existing) => existing.meet(incoming),
+            slot @ None => {
+                *slot = Some(incoming.clone());
+                true
+            }
+        };
+        if changed {
+            worklist.push_back(block);
+        }
+    }
+
+    // A failed check prints the body, since the block id alone rarely says
+    // which lowering path is wrong.
+    macro_rules! check {
+        ($cond:expr, $($arg:tt)+) => {
+            if !$cond {
+                panic!(
+                    "{}\n\n{}",
+                    format_args!($($arg)+),
+                    crate::pretty::display_body(body, arity)
+                );
+            }
+        };
+    }
+
+    let num_locals = body.locals.len();
+    let is_captured = |local: Local| body.local(local).is_captured;
+
+    // What a terminator assigns on each outgoing edge. Handler edges from
+    // traps are not terminator edges; they are added from the catch regions.
+    let edges = |term: &Terminator<'_>| -> Vec<(BlockId, Option<Local>)> {
+        let local_of = |place: &Place| match place {
+            Place::Local(local) => Some(*local),
+            Place::Capture(_) | Place::Field { .. } | Place::Index { .. } | Place::Deref(_) => None,
+        };
+        match term {
+            Terminator::Goto { target } => vec![(*target, None)],
+            Terminator::Branch {
+                then_block,
+                else_block,
+                ..
+            } => vec![(*then_block, None), (*else_block, None)],
+            Terminator::NarrowBind {
+                destination,
+                then_block,
+                else_block,
+                ..
+            } => vec![(*then_block, Some(*destination)), (*else_block, None)],
+            Terminator::Switch {
+                arms, otherwise, ..
+            } => arms
+                .iter()
+                .map(|(_, block)| (*block, None))
+                .chain(std::iter::once((*otherwise, None)))
+                .collect(),
+            Terminator::Call {
+                destination,
+                target,
+                unwind,
+                ..
+            }
+            | Terminator::VirtualCall {
+                destination,
+                target,
+                unwind,
+                ..
+            }
+            | Terminator::SysOp {
+                destination,
+                target,
+                unwind,
+                ..
+            }
+            | Terminator::Await {
+                destination,
+                target,
+                unwind,
+                ..
+            }
+            | Terminator::AwaitAny {
+                destination,
+                target,
+                unwind,
+                ..
+            } => std::iter::once((*target, local_of(destination)))
+                .chain(unwind.map(|block| (block, None)))
+                .collect(),
+            Terminator::Spawn { future, resume, .. } => vec![(*resume, local_of(future))],
+            Terminator::ThrowIfPanic { otherwise, .. } => vec![(*otherwise, None)],
+            Terminator::ShortCircuit {
+                destination,
+                eval_rhs,
+                join,
+                ..
+            } => vec![(*eval_rhs, None), (*join, local_of(destination))],
+            Terminator::Return
+            | Terminator::Unreachable
+            | Terminator::Throw { .. }
+            | Terminator::Rethrow { .. } => vec![],
+        }
+    };
+
+    // The locals the runtime writes when it enters a handler, and the handler
+    // each protected block traps to.
+    let mut handler_defs: HashMap<BlockId, Vec<Local>> = HashMap::new();
+    let mut trap_targets: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+    for region in &body.catch_regions {
+        let defs = handler_defs.entry(region.handler).or_default();
+        defs.push(region.error_local);
+        defs.extend(region.stack_trace_local);
+        for block in &region.body_blocks {
+            trap_targets.entry(*block).or_default().push(region.handler);
+        }
+    }
+
+    // Transfer function, without checks: the checks run once at the fixpoint.
+    // A store through a captured local's cell gives the binding its value.
+    let transfer = |state: &mut State, kind: &crate::StatementKind<'_>| match kind {
+        crate::StatementKind::Assign {
+            destination: Place::Local(local),
+            ..
+        } => state.assigned[local.0] = true,
+        crate::StatementKind::Assign {
+            destination: Place::Deref(cell),
+            ..
+        } => {
+            if let Some(local) = cell.local() {
+                state.assigned[local.0] = true;
+            }
+        }
+        crate::StatementKind::FreshCell { local, carry_value } => {
+            state.celled[local.0] = true;
+            // The new cell holds `null` unless the old value was carried.
+            if !carry_value {
+                state.assigned[local.0] = false;
+            }
+        }
+        crate::StatementKind::Assign { .. }
+        | crate::StatementKind::Drop(_)
+        | crate::StatementKind::Intrinsic { .. }
+        | crate::StatementKind::VirtualFieldStore { .. }
+        | crate::StatementKind::Nop => {}
+    };
+
+    let mut entry = State {
+        assigned: vec![false; num_locals],
+        celled: vec![false; num_locals],
+    };
+    for param in (1..=arity).map(Local) {
+        entry.assigned[param.0] = true;
+        entry.celled[param.0] = is_captured(param);
+    }
+
+    let mut state_in: Vec<Option<State>> = vec![None; body.blocks.len()];
+    let mut worklist: VecDeque<BlockId> = VecDeque::new();
+    join(body.entry, &entry, &mut state_in, &mut worklist);
+
+    // A block's state at the end of its statements, from its entry state.
+    let after_statements = |block: BlockId, state_in: &[Option<State>]| -> State {
+        let mut state = state_in[block.0]
+            .clone()
+            .unwrap_or_else(|| unreachable!("only reached blocks are processed"));
+        if let Some(defs) = handler_defs.get(&block) {
+            for local in defs {
+                state.assigned[local.0] = true;
+            }
+        }
+        for stmt in &body.blocks[block.0].statements {
+            transfer(&mut state, &stmt.kind);
+        }
+        state
+    };
+
+    while let Some(block) = worklist.pop_front() {
+        let out = after_statements(block, &state_in);
+        if let Some(handlers) = trap_targets.get(&block) {
+            for handler in handlers {
+                join(*handler, &out, &mut state_in, &mut worklist);
+            }
+        }
+        if let Some(term) = &body.blocks[block.0].terminator {
+            for (successor, def) in edges(term) {
+                let mut edge_state = out.clone();
+                if let Some(local) = def {
+                    edge_state.assigned[local.0] = true;
+                }
+                join(successor, &edge_state, &mut state_in, &mut worklist);
+            }
+        }
+    }
+
+    // Checks, at the fixpoint, over every reached block.
+    for (idx, block) in body.blocks.iter().enumerate() {
+        let Some(mut state) = state_in[idx].clone() else {
+            continue;
+        };
+        let block_id = BlockId(idx);
+        if let Some(defs) = handler_defs.get(&block_id) {
+            for local in defs {
+                state.assigned[local.0] = true;
+            }
+        }
+        let read_local = |state: &State, local: Local, what: &str| {
+            check!(
+                state.assigned[local.0],
+                "{what} {local} in {block_id:?} of {name} before it is definitely assigned"
+            );
+            if is_captured(local) {
+                check!(
+                    state.celled[local.0],
+                    "{what} captured {local} in {block_id:?} of {name} before its cell exists"
+                );
+            }
+        };
+        // A value read. A bare captured local or capture is a cell pointer,
+        // which only a closure capture operand or a `FreshCell` may name.
+        let read_place = |state: &State, place: &Place| {
+            let mut place = place;
+            loop {
+                match place {
+                    Place::Local(local) => {
+                        check!(
+                            !is_captured(*local),
+                            "bare read of captured {local}'s pointer in {block_id:?} of {name}"
+                        );
+                        break read_local(state, *local, "read of");
+                    }
+                    Place::Capture(_) => {
+                        check!(
+                            false,
+                            "bare read of a capture pointer in {block_id:?} of {name}"
+                        );
+                    }
+                    Place::Deref(cell) => {
+                        if let Some(local) = cell.local() {
+                            read_local(state, local, "read through");
+                        }
+                        break;
+                    }
+                    Place::Field { base, .. } => place = base,
+                    Place::Index { base, index, .. } => {
+                        read_local(state, *index, "index read of");
+                        place = base;
+                    }
+                }
+            }
+        };
+        let read_operand = |state: &State, operand: &Operand<'_>| match operand {
+            Operand::Copy(place) | Operand::Move(place) => read_place(state, place),
+            Operand::Constant(_) => {}
+        };
+        // A destination: its projections are reads, and a captured local is
+        // written only through its cell, which must exist.
+        let write_place = |state: &State, place: &Place| match place {
+            Place::Local(local) => check!(
+                !is_captured(*local),
+                "bare store to captured {local}'s pointer in {block_id:?} of {name}"
+            ),
+            Place::Deref(cell) => {
+                if let Some(local) = cell.local() {
+                    check!(
+                        state.celled[local.0],
+                        "write through captured {local} in {block_id:?} of {name} before its cell exists"
+                    );
+                }
+            }
+            Place::Capture(_) => {
+                check!(
+                    false,
+                    "store to a bare capture pointer in {block_id:?} of {name}"
+                );
+            }
+            Place::Field { .. } | Place::Index { .. } => read_place(state, place),
+        };
+
+        for stmt in &block.statements {
+            match &stmt.kind {
+                crate::StatementKind::Assign { destination, value } => {
+                    match value {
+                        // A capture operand is the cell pointer: it needs the
+                        // cell, not a value in it.
+                        crate::Rvalue::MakeClosure { captures, .. } => {
+                            for capture in captures {
+                                match capture {
+                                    Operand::Copy(Place::Local(local))
+                                    | Operand::Move(Place::Local(local)) => check!(
+                                        state.celled[local.0],
+                                        "closure captures {local} in {block_id:?} of {name} before its cell exists"
+                                    ),
+                                    Operand::Copy(Place::Capture(_))
+                                    | Operand::Move(Place::Capture(_)) => {}
+                                    Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => {
+                                        check!(
+                                            false,
+                                            "closure capture operand {capture:?} in {block_id:?} of {name} is not a cell pointer"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        _ => memory::walk_rvalue_places(value, &mut |place| {
+                            read_place(&state, place);
+                        }),
+                    }
+                    write_place(&state, destination);
+                }
+                crate::StatementKind::FreshCell { local, carry_value } => {
+                    check!(
+                        is_captured(*local),
+                        "fresh_cell on {local} in {block_id:?} of {name}, which no closure captures"
+                    );
+                    check!(
+                        local.0 > arity,
+                        "fresh_cell on parameter {local} in {block_id:?} of {name}; parameters are celled at entry"
+                    );
+                    if *carry_value {
+                        read_local(&state, *local, "carrying re-cell of");
+                    }
+                }
+                crate::StatementKind::Drop(place) => read_place(&state, place),
+                crate::StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        read_operand(&state, arg);
+                    }
+                }
+                crate::StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    read_operand(&state, receiver);
+                    read_operand(&state, value);
+                }
+                crate::StatementKind::Nop => {}
+            }
+            transfer(&mut state, &stmt.kind);
+        }
+
+        match block.terminator.as_ref() {
+            Some(Terminator::Branch { condition, .. }) => read_operand(&state, condition),
+            Some(Terminator::NarrowBind { source, .. }) => read_operand(&state, source),
+            Some(Terminator::Switch { discriminant, .. }) => read_operand(&state, discriminant),
+            Some(Terminator::Return) => read_local(&state, Local(0), "return of"),
+            Some(
+                Terminator::Call {
+                    callee,
+                    args,
+                    runtime_id,
+                    destination,
+                    ..
+                }
+                | Terminator::SysOp {
+                    callee,
+                    args,
+                    runtime_id,
+                    destination,
+                    ..
+                },
+            ) => {
+                read_operand(&state, callee);
+                for arg in args {
+                    read_operand(&state, arg);
+                }
+                if let Some(runtime_id) = runtime_id {
+                    read_operand(&state, runtime_id);
+                }
+                write_place(&state, destination);
+            }
+            Some(Terminator::VirtualCall {
+                args,
+                runtime_id,
+                destination,
+                ..
+            }) => {
+                for arg in args {
+                    read_operand(&state, arg);
+                }
+                if let Some(runtime_id) = runtime_id {
+                    read_operand(&state, runtime_id);
+                }
+                write_place(&state, destination);
+            }
+            Some(Terminator::Spawn {
+                closure,
+                name: spawn_name,
+                config,
+                future,
+                ..
+            }) => {
+                read_operand(&state, closure);
+                read_operand(&state, spawn_name);
+                if let Some(config) = config {
+                    read_operand(&state, config);
+                }
+                write_place(&state, future);
+            }
+            Some(Terminator::Await {
+                future,
+                destination,
+                ..
+            }) => {
+                read_place(&state, future);
+                write_place(&state, destination);
+            }
+            Some(Terminator::AwaitAny {
+                futures,
+                destination,
+                ..
+            }) => {
+                read_operand(&state, futures);
+                write_place(&state, destination);
+            }
+            Some(
+                Terminator::Throw { value }
+                | Terminator::Rethrow { value }
+                | Terminator::ThrowIfPanic { value, .. },
+            ) => read_operand(&state, value),
+            Some(Terminator::ShortCircuit {
+                operand,
+                destination,
+                ..
+            }) => {
+                read_operand(&state, operand);
+                write_place(&state, destination);
+            }
+            Some(Terminator::Goto { .. } | Terminator::Unreachable) | None => {}
+        }
+    }
 }
 
 // ============================================================================

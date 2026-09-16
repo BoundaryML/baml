@@ -103,7 +103,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Status; missing: user.Status.Pending
+  × non-exhaustive match on type Status; missing: Status.Pending
      ╭─[match_exhaustiveness.baml:457:5]
  457 │ ╭─▶     match (s) {
  458 │ │           Status.Active => "active",
@@ -113,7 +113,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
+  × non-exhaustive match on type Status; missing: Status.Inactive, Status.Pending
      ╭─[match_exhaustiveness.baml:465:5]
  465 │ ╭─▶     match (s) {
  466 │ │           Status.Active => "active"
@@ -248,7 +248,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Status | null; missing: user.Status.Pending
+  × non-exhaustive match on type Status | null; missing: Status.Pending
      ╭─[match_exhaustiveness.baml:710:5]
  710 │ ╭─▶     match (s) {
  711 │ │           Status.Active => "active",
@@ -378,7 +378,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type Status; missing: user.Status.Inactive, user.Status.Pending
+  × non-exhaustive match on type Status; missing: Status.Inactive, Status.Pending
      ╭─[match_exhaustiveness.baml:905:5]
  905 │ ╭─▶     match (s) {
  906 │ │           Status.Active => "active only"

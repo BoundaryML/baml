@@ -8,7 +8,7 @@ enum RetrySafety {
 }
 
 interface Failure {
-    function retry_safety(self) -> RetrySafety throws never
+    function retry_safety(self) -> RetrySafety throws never;
 }
 
 /// The closed error channel of the client surface: every typed failure the

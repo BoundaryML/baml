@@ -4,8 +4,10 @@
 // the shapes that previously routed through the interface's method ref and
 // ran the default body with an empty frame (a runtime trap).
 //
-// Test bodies live in top-level helper functions (test-block local-boxing VM
-// bug — locals holding instances misbehave inside test blocks).
+// Test bodies live in top-level helper functions. (Historical: a test-block
+// local-boxing VM bug once made instance-holding locals misbehave inside
+// `test` blocks; it no longer reproduces — ns_test_block_locals pins the
+// fixed behavior.)
 
 interface Greeter {
     function greet(self) -> string throws never {
@@ -39,9 +41,10 @@ implements<T> Tagged for Box<T> {
     }
 }
 
-/// A GENERIC free impl's override called statically: the resolution carries
-/// the impl's bindings (`T = int`), which the body observes by reflection.
-function call_generic_override() -> string throws never {
+/// A GENERIC free impl's PROVIDED method called statically: the resolution
+/// carries the impl's bindings (`T = int`), which the body observes by
+/// reflection.
+function call_generic_provided() -> string throws never {
     let b = Box { value: 1 };
     b.tag()
 }
@@ -64,12 +67,12 @@ function call_generic_interface_default() -> string throws never {
     c.describe()
 }
 
-test "static call reaches an inherited default" {
+test "static call reaches an adopted default" {
     assert.equal(call_adopted_default(), "default")
 }
 
-test "static call reaches a generic impl override with its bindings" {
-    assert.equal(call_generic_override(), "int")
+test "static call reaches a generic impl's provided method with its bindings" {
+    assert.equal(call_generic_provided(), "int")
 }
 
 test "a generic interface default observes its pinned argument" {

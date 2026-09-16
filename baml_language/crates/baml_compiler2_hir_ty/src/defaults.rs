@@ -5,7 +5,7 @@
 
 use baml_base::Name;
 use baml_compiler2_ast as ast;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeBindingValue};
 use baml_compiler2_hir::loc::FunctionLoc;
 use rustc_hash::FxHashSet;
 use text_size::TextRange;
@@ -115,13 +115,6 @@ fn collect_default_expr_forward_references(
             for arm_id in arms {
                 let arm = &body.match_arms[*arm_id];
                 let saved_len = shadowed.len();
-                collect_default_pattern_forward_references(
-                    arm.pattern,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
                 push_pattern_bindings(arm.pattern, body, shadowed);
                 if let Some(guard) = arm.guard {
                     collect_default_expr_forward_references(
@@ -150,13 +143,6 @@ fn collect_default_expr_forward_references(
         } => {
             collect_default_expr_forward_references(*scrutinee, body, later_params, shadowed, refs);
             let saved_len = shadowed.len();
-            collect_default_pattern_forward_references(
-                *pattern,
-                body,
-                later_params,
-                shadowed,
-                refs,
-            );
             push_pattern_bindings(*pattern, body, shadowed);
             collect_default_expr_forward_references(
                 *then_branch,
@@ -176,48 +162,20 @@ fn collect_default_expr_forward_references(
                 );
             }
         }
-        Expr::Is { scrutinee, pattern } => {
+        Expr::Is { scrutinee, .. } => {
             collect_default_expr_forward_references(*scrutinee, body, later_params, shadowed, refs);
-            collect_default_pattern_forward_references(
-                *pattern,
-                body,
-                later_params,
-                shadowed,
-                refs,
-            );
         }
         Expr::Catch { base, clauses } => {
             collect_default_expr_forward_references(*base, body, later_params, shadowed, refs);
             for clause in clauses {
                 let clause_saved_len = shadowed.len();
-                collect_default_pattern_forward_references(
-                    clause.binding,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
                 push_pattern_bindings(clause.binding, body, shadowed);
                 if let Some(stack_trace_binding) = clause.stack_trace_binding {
-                    collect_default_pattern_forward_references(
-                        stack_trace_binding,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
                     push_pattern_bindings(stack_trace_binding, body, shadowed);
                 }
                 for arm_id in &clause.arms {
                     let arm = &body.catch_arms[*arm_id];
                     let arm_saved_len = shadowed.len();
-                    collect_default_pattern_forward_references(
-                        arm.pattern,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
                     push_pattern_bindings(arm.pattern, body, shadowed);
                     collect_default_expr_forward_references(
                         arm.body,
@@ -243,25 +201,8 @@ fn collect_default_expr_forward_references(
             collect_default_expr_forward_references(*lhs, body, later_params, shadowed, refs);
             collect_default_expr_forward_references(*rhs, body, later_params, shadowed, refs);
         }
-        Expr::Call {
-            callee,
-            type_args,
-            args,
-        } => {
+        Expr::Call { callee, args, .. } => {
             collect_default_expr_forward_references(*callee, body, later_params, shadowed, refs);
-            for type_arg in type_args {
-                let mut operands = Vec::new();
-                type_arg.unreflect_operands(&mut operands);
-                for operand in operands {
-                    collect_default_expr_forward_references(
-                        operand,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
-                }
-            }
             for arg in args {
                 collect_default_expr_forward_references(
                     arg.expr,
@@ -463,13 +404,6 @@ fn collect_default_expr_forward_references_in_template_segments(
                     refs,
                 );
                 let saved_len = shadowed.len();
-                collect_default_pattern_forward_references(
-                    *binding,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
                 push_pattern_bindings(*binding, body, shadowed);
                 collect_default_expr_forward_references_in_template_segments(
                     inner,
@@ -508,13 +442,6 @@ fn collect_default_expr_forward_references_in_template_segments(
                 // forward references.
                 let saved_len = shadowed.len();
                 if let Some(p) = init_pattern {
-                    collect_default_pattern_forward_references(
-                        p,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
                     push_pattern_bindings(p, body, shadowed);
                 }
                 collect_default_expr_forward_references(*cond, body, later_params, shadowed, refs);
@@ -567,23 +494,6 @@ fn push_pattern_bindings(pat_id: PatId, body: &ExprBody, shadowed: &mut Vec<Name
     }
 }
 
-fn collect_default_pattern_forward_references(
-    pat_id: PatId,
-    body: &ExprBody,
-    later_params: &FxHashSet<Name>,
-    shadowed: &mut Vec<Name>,
-    refs: &mut Vec<Name>,
-) {
-    let mut operands = Vec::new();
-    body.pattern_expr_children(pat_id, &mut operands);
-    for operand in operands {
-        let ast::traverse::BodyNode::Expr(operand) = operand else {
-            unreachable!("patterns only contribute expression operands")
-        };
-        collect_default_expr_forward_references(operand, body, later_params, shadowed, refs);
-    }
-}
-
 fn collect_default_stmt_forward_references(
     stmt_id: StmtId,
     body: &ExprBody,
@@ -595,19 +505,16 @@ fn collect_default_stmt_forward_references(
         Stmt::Expr(expr) | Stmt::Return(Some(expr)) | Stmt::Throw { value: expr } => {
             collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
         }
-        Stmt::TypeBinding { value, .. } => {
-            let mut operands = Vec::new();
-            value.unreflect_operands(&mut operands);
-            for operand in operands {
-                collect_default_expr_forward_references(
-                    operand,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
-            }
+        Stmt::TypeBinding {
+            value: TypeBindingValue::Runtime(operand),
+            ..
+        } => {
+            collect_default_expr_forward_references(*operand, body, later_params, shadowed, refs);
         }
+        Stmt::TypeBinding {
+            value: TypeBindingValue::Static(_),
+            ..
+        } => {}
         Stmt::Let {
             pattern,
             initializer,
@@ -617,13 +524,6 @@ fn collect_default_stmt_forward_references(
             if let Some(expr) = initializer {
                 collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
             }
-            collect_default_pattern_forward_references(
-                *pattern,
-                body,
-                later_params,
-                shadowed,
-                refs,
-            );
             if let Some(else_expr) = else_branch {
                 // The else branch runs before the pattern's bindings
                 // exist, so it can't see them — recurse with the
@@ -664,13 +564,6 @@ fn collect_default_stmt_forward_references(
             // `Stmt::For` (collection then pattern then body).
             collect_default_expr_forward_references(*scrutinee, body, later_params, shadowed, refs);
             let saved_len = shadowed.len();
-            collect_default_pattern_forward_references(
-                *pattern,
-                body,
-                later_params,
-                shadowed,
-                refs,
-            );
             push_pattern_bindings(*pattern, body, shadowed);
             collect_default_expr_forward_references(*loop_body, body, later_params, shadowed, refs);
             shadowed.truncate(saved_len);
@@ -689,13 +582,6 @@ fn collect_default_stmt_forward_references(
                 refs,
             );
             let saved_len = shadowed.len();
-            collect_default_pattern_forward_references(
-                *binding,
-                body,
-                later_params,
-                shadowed,
-                refs,
-            );
             push_pattern_bindings(*binding, body, shadowed);
             collect_default_expr_forward_references(*loop_body, body, later_params, shadowed, refs);
             shadowed.truncate(saved_len);
@@ -723,10 +609,6 @@ fn collect_default_stmt_forward_references(
 
 #[cfg(test)]
 mod tests {
-    use baml_base::Literal;
-    use baml_compiler2_ast::{CallArg, Pattern, TypeExprKind};
-    use text_size::TextRange;
-
     use super::*;
 
     fn later_params() -> FxHashSet<Name> {
@@ -734,39 +616,14 @@ mod tests {
     }
 
     #[test]
-    fn hidden_runtime_operands_participate_in_default_forward_references() {
-        let mut call_body = ExprBody::default();
-        let callee = call_body
-            .exprs
-            .alloc(Expr::Path(vec![Name::new("identity")]));
-        let operand = call_body.exprs.alloc(Expr::Path(vec![Name::new("later")]));
-        let call = call_body.exprs.alloc(Expr::Call {
-            callee,
-            type_args: vec![
-                TypeExprKind::Unreflect {
-                    operand: Some(operand),
-                    attrs: Vec::new(),
-                }
-                .at(TextRange::default()),
-            ],
-            args: Vec::<CallArg>::new(),
-        });
-        assert_eq!(
-            default_expr_forward_references(call, &call_body, &later_params()),
-            vec![Name::new("later")],
-        );
-
+    fn a_type_binding_operand_participates_in_default_forward_references() {
         let mut binding_body = ExprBody::default();
         let value = binding_body
             .exprs
             .alloc(Expr::Path(vec![Name::new("later")]));
         let stmt = binding_body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value: TypeExprKind::Unreflect {
-                operand: Some(value),
-                attrs: Vec::new(),
-            }
-            .at(TextRange::default()),
+            value: TypeBindingValue::Runtime(value),
         });
         let block = binding_body.exprs.alloc(Expr::Block {
             stmts: vec![stmt],
@@ -774,18 +631,6 @@ mod tests {
         });
         assert_eq!(
             default_expr_forward_references(block, &binding_body, &later_params()),
-            vec![Name::new("later")],
-        );
-
-        let mut pattern_body = ExprBody::default();
-        let scrutinee = pattern_body.exprs.alloc(Expr::Literal(Literal::Int(1)));
-        let operand = pattern_body
-            .exprs
-            .alloc(Expr::Path(vec![Name::new("later")]));
-        let pattern = pattern_body.patterns.alloc(Pattern::Unreflect(operand));
-        let test = pattern_body.exprs.alloc(Expr::Is { scrutinee, pattern });
-        assert_eq!(
-            default_expr_forward_references(test, &pattern_body, &later_params()),
             vec![Name::new("later")],
         );
     }

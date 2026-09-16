@@ -4,13 +4,12 @@ expression: output
 ---
 class IntDecoder  interfaces.baml:7-14
 
-class IntDecoder {
-    implements Decoder<string> {
-        type Output = int
-    }
-}
+class IntDecoder {}
 
-methods:
-  function decode(self, raw: string) -> int throws never  interfaces.baml:10-12
+implementations (2):
+  implement Decoder<string> for IntDecoder  interfaces.baml:8
+    type Output = int
+    function decode(self, raw: string) -> int throws never  interfaces.baml:10-12
+  implement<T> Concrete for T  <builtin>/baml/core.baml:20
 
 references (0):

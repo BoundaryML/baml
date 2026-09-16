@@ -16,7 +16,7 @@ test "bare generic function binding reports both concrete fixes" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "generic function `identity` needs concrete type arguments before it can be stored in `copy`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let copy: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "generic function `identity` needs concrete type arguments before it can be stored in `copy`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let copy: (value: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }
@@ -36,7 +36,7 @@ test "multiple generic parameters produce an arity-correct diagnostic" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "generic function `project` needs concrete type arguments before it can be stored in `project_value`. Specialize it explicitly, for example `project<int, int>`. Or write the concrete function type after the binding name: `let project_value: (int, int, int) -> int throws never = project`. Calling `project(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "generic function `project` needs concrete type arguments before it can be stored in `project_value`. Specialize it explicitly, for example `project<int, int>`. Or write the concrete function type after the binding name: `let project_value: (first: int, second: int, fallback: int) -> int throws never = project`. Calling `project(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }
@@ -57,7 +57,7 @@ test "bounded generic diagnostic does not invent invalid type arguments" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "generic function `bounded` needs concrete type arguments before it can be stored in `bounded_value`. Specialize it explicitly by choosing concrete types for A, B; each type must satisfy its declared bounds. Or write the concrete function type after the binding name, using `(A, B) -> A throws never` as the shape and replacing A, B with the types you want: `let bounded_value: ... = bounded`. Calling `bounded(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "generic function `bounded` needs concrete type arguments before it can be stored in `bounded_value`. Specialize it explicitly by choosing concrete types for A, B; each type must satisfy its declared bounds. Or write the concrete function type after the binding name, using `(first: A, second: B) -> A throws never` as the shape and replacing A, B with the types you want: `let bounded_value: ... = bounded`. Calling `bounded(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }
@@ -95,7 +95,7 @@ test "erased reflection function type does not specialize a generic value" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "cannot determine every type argument for generic function `ident` from the expected function type. Specialize it explicitly, for example `ident<int>`. Or write the concrete function type after the binding name: `let f: (int) -> int throws never = ident`. Calling `ident(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "cannot determine every type argument for generic function `ident` from the expected function type. Specialize it explicitly, for example `ident<int>`. Or write the concrete function type after the binding name: `let f: (x: int) -> int throws never = ident`. Calling `ident(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }
@@ -118,11 +118,11 @@ test "multiple bare bindings report distinct ordered diagnostics" {
         [
             root.compiler.ExactDiagnostic {
                 code: "E0001",
-                message: "generic function `identity` needs concrete type arguments before it can be stored in `first`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let first: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
+                message: "generic function `identity` needs concrete type arguments before it can be stored in `first`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let first: (value: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
             },
             root.compiler.ExactDiagnostic {
                 code: "E0001",
-                message: "generic function `identity` needs concrete type arguments before it can be stored in `second`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let second: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
+                message: "generic function `identity` needs concrete type arguments before it can be stored in `second`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let second: (value: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
             },
         ],
     )

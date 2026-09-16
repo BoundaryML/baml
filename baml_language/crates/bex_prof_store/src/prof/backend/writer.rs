@@ -17,7 +17,7 @@ use super::{
     DataGroup, EvidenceFact, ExecutionEndStatus, ExecutionHandle, ExecutionHealthSnapshot,
     MetaRecord, ProfilerStore, PublishBatchResult, Reservation, ResolveIndeterminateResult,
     SealedCctEpoch, StreamHighWater,
-    decoder::{DirectDecoder, EvidenceBatchStats, ExecutionRuntime, with_runtime},
+    decoder::{DirectDecoder, EvidenceBatchStats, ExecutionDecodeAccumulator, with_runtime},
     encode_cct_epoch, encode_evidence_facts,
 };
 use crate::ids::ThreadRef;
@@ -69,7 +69,7 @@ pub mod counters {
 }
 
 pub(super) struct WriterEnv<'a> {
-    pub publishers: &'a [Mutex<Option<ExecutionRuntime>>],
+    pub publishers: &'a [Mutex<Option<ExecutionDecodeAccumulator>>],
 }
 
 pub(super) struct PendingGroup {
@@ -618,7 +618,7 @@ impl StreamWriter {
         });
     }
 
-    /// The health sink (streams spec §5.3): the live `ExecutionRuntime` while
+    /// The health sink (streams spec §5.3): the live `ExecutionDecodeAccumulator` while
     /// the slot is valid, else the still-pending `RootEnded`'s snapshot.
     fn record_health(
         &mut self,
@@ -729,7 +729,7 @@ mod tests {
         platform: Arc<TestPlatform>,
         memory: ProfilerMemoryGovernor,
         writer: StreamWriter,
-        publishers: Vec<Mutex<Option<ExecutionRuntime>>>,
+        publishers: Vec<Mutex<Option<ExecutionDecodeAccumulator>>>,
         decoder: DirectDecoder,
     }
 
@@ -781,14 +781,14 @@ mod tests {
         }
     }
 
-    /// Installs a live `ExecutionRuntime` for `handle(slot)` so the writer's
+    /// Installs a live `ExecutionDecodeAccumulator` for `handle(slot)` so the writer's
     /// health sink finds it (the production invariant: a group can only be
     /// in flight while its slot is live or its `RootEnded` is pending).
     fn install_runtime(harness: &mut Harness, slot: u32, root: ThreadRef) {
         while harness.publishers.len() <= slot as usize {
             harness.publishers.push(Mutex::new(None));
         }
-        *harness.publishers[slot as usize].lock().unwrap() = Some(ExecutionRuntime::new(
+        *harness.publishers[slot as usize].lock().unwrap() = Some(ExecutionDecodeAccumulator::new(
             1,
             root,
             BoundaryId::from_bytes([7; 16]),

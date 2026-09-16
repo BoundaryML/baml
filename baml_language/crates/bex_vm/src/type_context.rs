@@ -29,7 +29,7 @@
 //! stricter than the compiler where it would break a proven-exhaustive match —
 //! see the List/Map-invariance sequencing constraint).
 
-use baml_type::{Name, ParamTy, QualifiedTypeName, normalize::TypeContext};
+use baml_type::{Name, ParamTy, normalize::TypeContext};
 use bex_vm_types::{RealizedTy, TypeHead, types::Object};
 
 use crate::BexVm;
@@ -47,8 +47,9 @@ impl TypeContext<TypeHead> for BexVm {
     /// the algebra's own source. It resolves through the package surfaces —
     /// never by content-addressing a guess — so the head it returns carries the
     /// declaration's real tag and pointer.
-    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<TypeHead> {
-        self.declaration_head(qtn)
+    fn well_known(&self, head: baml_type::normalize::WellKnownHead) -> Option<TypeHead> {
+        use baml_type::normalize::SpelledHead as _;
+        self.declaration_head(&baml_type::TypeName::well_known(head))
     }
 
     fn alias_def(&self, head: &TypeHead) -> Option<Ty> {
@@ -244,9 +245,9 @@ impl TypeContext<TypeHead> for BexVm {
 pub(crate) struct StructuralEquivCtx<'a>(pub(crate) &'a BexVm);
 
 impl TypeContext<TypeHead> for StructuralEquivCtx<'_> {
-    /// Delegated: resolving a name to its declaration is not re-entrant.
-    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<TypeHead> {
-        self.0.head_lookup(qtn)
+    /// Delegated: resolving a well-known declaration is not re-entrant.
+    fn well_known(&self, head: baml_type::normalize::WellKnownHead) -> Option<TypeHead> {
+        TypeContext::well_known(self.0, head)
     }
 
     fn alias_def(&self, head: &TypeHead) -> Option<Ty> {

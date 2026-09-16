@@ -20,7 +20,7 @@
 /// resumes.sort()
 /// ```
 interface Sortable {
-  function sort(self) -> Self throws never
+    function sort(self) -> Self throws never;
 }
 
 implements<T extends baml.ops.Compare> Sortable for T[] {

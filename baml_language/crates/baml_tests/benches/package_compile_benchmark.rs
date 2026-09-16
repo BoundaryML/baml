@@ -68,9 +68,9 @@ fn main() {
 
 fn engine() -> Arc<BexEngine> {
     let mut db = ProjectDatabase::new();
-    db.workspace(Path::new("."));
+    let package = db.workspace(Path::new("."));
     db.file("package_compile_bench.baml", OUTER_SOURCE);
-    let program = generate_project_bytecode_with_opt(&db, OptLevel::One)
+    let program = generate_project_bytecode_with_opt(&db, package, OptLevel::One)
         .expect("compile Package.compile benchmark host");
     Arc::new(
         BexEngine::new_with_runtime_compiler(

@@ -81,34 +81,7 @@ fn write_bytecode_function(
         write!(f, " -> {}", ret.ty)?;
     }
     writeln!(f, " {{")?;
-
-    // Local declarations
-    writeln!(f, "    // Locals:")?;
-    for (i, local) in body.locals.iter().enumerate() {
-        write!(f, "    let _{i}: {}", local.ty)?;
-        if let Some(name) = &local.name {
-            write!(f, " // {name}")?;
-        }
-        if i == 0 {
-            write!(f, " // return")?;
-        } else if i <= func.arity {
-            write!(f, " // param")?;
-        }
-        if local.is_captured {
-            write!(f, " [captured]")?;
-        }
-        writeln!(f)?;
-    }
-    writeln!(f)?;
-
-    // Basic blocks
-    for (i, block) in body.blocks.iter().enumerate() {
-        write_block(f, block)?;
-        if i + 1 < body.blocks.len() {
-            writeln!(f)?;
-        }
-    }
-
+    write_body(f, body, func.arity)?;
     writeln!(f, "}}")?;
 
     // Recursively display child lambda functions, labeled by index.
@@ -118,6 +91,43 @@ fn write_bytecode_function(
         write_function(f, lambda)?;
     }
 
+    Ok(())
+}
+
+/// Pretty print a function body on its own: its locals and blocks, without
+/// the signature header.
+pub fn display_body(body: &MirFunctionBody<'_>, arity: usize) -> String {
+    let mut output = String::new();
+    let _ = write_body(&mut output, body, arity);
+    output
+}
+
+/// Write a body's locals and blocks.
+fn write_body(f: &mut impl Write, body: &MirFunctionBody<'_>, arity: usize) -> fmt::Result {
+    writeln!(f, "    // Locals:")?;
+    for (i, local) in body.locals.iter().enumerate() {
+        write!(f, "    let _{i}: {}", local.ty)?;
+        if let Some(name) = &local.name {
+            write!(f, " // {name}")?;
+        }
+        if i == 0 {
+            write!(f, " // return")?;
+        } else if i <= arity {
+            write!(f, " // param")?;
+        }
+        if local.is_captured {
+            write!(f, " [captured]")?;
+        }
+        writeln!(f)?;
+    }
+    writeln!(f)?;
+
+    for (i, block) in body.blocks.iter().enumerate() {
+        write_block(f, block)?;
+        if i + 1 < body.blocks.len() {
+            writeln!(f)?;
+        }
+    }
     Ok(())
 }
 
@@ -172,8 +182,17 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
-        StatementKind::FreshCell(local) => {
+        StatementKind::FreshCell {
+            local,
+            carry_value: false,
+        } => {
             write!(f, "fresh_cell({local});")
+        }
+        StatementKind::FreshCell {
+            local,
+            carry_value: true,
+        } => {
+            write!(f, "fresh_cell({local}, carry);")
         }
         StatementKind::Intrinsic { op, args } => {
             let op_str = match op {
@@ -181,7 +200,14 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
-                IntrinsicOp::BindType(slot) => return write!(f, "bind_type({slot}, {args:?});"),
+                IntrinsicOp::BindType(slot) => {
+                    write!(f, "bind_type({slot}")?;
+                    for arg in args {
+                        write!(f, ", ")?;
+                        write_operand(f, arg)?;
+                    }
+                    return write!(f, ");");
+                }
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -261,7 +287,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
-            runtime_type_check,
             destination,
             target,
             unwind,
@@ -289,9 +314,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
-            if *runtime_type_check {
-                write!(f, "; runtime_type_check")?;
-            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -304,7 +326,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
-            runtime_type_check,
             destination,
             target,
             unwind,
@@ -331,9 +352,6 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
-            if *runtime_type_check {
-                write!(f, "; runtime_type_check")?;
-            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -566,16 +584,6 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {})", type_tag_name(*tag))
         }
-        Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            write!(f, "runtime_is_type(")?;
-            write_operand(f, operand)?;
-            write!(f, ", ")?;
-            write_operand(f, type_value)?;
-            write!(f, ")")
-        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -675,7 +683,6 @@ fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
         t::FUNCTION => "FUNCTION",
         t::FUTURE => "FUTURE",
         t::TYPE => "TYPE",
-        t::COLLECTOR => "COLLECTOR",
         t::UINT8ARRAY => "UINT8ARRAY",
         t::BIGINT => "BIGINT",
         other => return std::borrow::Cow::Owned(other.to_string()),
@@ -742,8 +749,8 @@ mod tests {
         let terminator = Terminator::Call {
             callee: local_copy(1),
             args: Vec::new(),
+            argument_layout: None,
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),
@@ -759,6 +766,7 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
+            argument_layout: None,
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
                 Box::new([]),
@@ -767,7 +775,6 @@ mod tests {
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),

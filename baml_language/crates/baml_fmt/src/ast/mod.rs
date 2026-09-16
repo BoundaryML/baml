@@ -1,6 +1,7 @@
 mod attributes;
 mod declarations;
 mod expressions;
+mod interfaces;
 mod pattern;
 mod statements;
 mod tokens;
@@ -12,6 +13,7 @@ pub use attributes::*;
 use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use declarations::*;
 pub use expressions::*;
+pub use interfaces::*;
 pub use pattern::*;
 use rowan::TextRange;
 pub use statements::*;

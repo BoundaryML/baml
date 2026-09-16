@@ -10,12 +10,14 @@
 //!
 //! Collected today: pattern type ascriptions (`let x: T`, type patterns in
 //! match arms), array-pattern ascriptions, explicit expression-position type
-//! args (`f<int>(..)`, `f<unreflect(t)>(..)`, `Box<int> { .. }` turbofish),
-//! `.as<T>` upcast targets, match scrutinee annotations, and lambda signature
-//! slots. Class-destructure generic args join when pattern inference needs them.
+//! args (`f<int>(..)`, `Box<int> { .. }` turbofish), `.as<T>` upcast targets,
+//! match scrutinee annotations, lambda signature slots, and the static
+//! right-hand side of a `type T = …` binding (a runtime `unreflect(expr)`
+//! right-hand side is an ordinary body expression, not a type reference).
+//! Class-destructure generic args join when pattern inference needs them.
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TypeExprKind};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TypeBindingValue};
 use rustc_hash::FxHashMap;
 
 use crate::type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore};
@@ -57,8 +59,10 @@ pub struct BodyTypeRefs {
     /// Explicit expression-position type arguments (`Call`, `GenericApply`,
     /// and `Object` constructors), in written order. Never empty when
     /// present.
-    pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeArgRef]>>,
-    /// RHS types of lexical `type T = ...` bindings.
+    pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeRefId]>>,
+    /// The STATIC right-hand sides of lexical `type T = ...` bindings. A
+    /// binding whose right-hand side is `unreflect(expr)` has no entry: its
+    /// operand is an expression in the body arena.
     pub stmt_type_bindings: FxHashMap<StmtId, BodyTypeRefId>,
     /// Written annotations on match scrutinees (`match (value: T)`).
     pub match_scrutinee_types: FxHashMap<ExprId, BodyTypeRefId>,
@@ -80,18 +84,6 @@ pub struct QualifiedPathTypeRefs {
     pub qself: BodyTypeRefId,
     /// The interface the item is projected through.
     pub interface: BodyTypeRefId,
-}
-
-/// One explicit expression-position type argument, preserving whether the
-/// written slot is a static type reference or a runtime type-value operand.
-///
-/// Runtime operands stay as ordinary body expression identities. They are not
-/// lowered to a type reference and must never be represented as solver-owned
-/// inference variables.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BodyTypeArgRef {
-    Static(BodyTypeRefId),
-    Runtime { operand: ExprId },
 }
 
 /// A lambda's written signature slots (each optional: lambdas may omit any
@@ -169,35 +161,16 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
 
     for (expr_id, expr) in body.exprs.iter() {
         match expr {
-            Expr::Call { type_args, .. } if !type_args.is_empty() => {
-                refs.expr_type_args.insert(
-                    expr_id,
-                    type_args
-                        .iter()
-                        .map(|arg| match &arg.kind {
-                            TypeExprKind::Unreflect {
-                                operand: Some(operand),
-                                ..
-                            } => BodyTypeArgRef::Runtime { operand: *operand },
-                            _ => BodyTypeArgRef::Static(BodyTypeRefId(builder.lower(arg))),
-                        })
-                        .collect(),
-                );
-            }
-            Expr::GenericApply { type_args, .. } | Expr::Object { type_args, .. }
+            Expr::Call { type_args, .. }
+            | Expr::GenericApply { type_args, .. }
+            | Expr::Object { type_args, .. }
                 if !type_args.is_empty() =>
             {
                 refs.expr_type_args.insert(
                     expr_id,
                     type_args
                         .iter()
-                        .map(|arg| match &arg.kind {
-                            TypeExprKind::Unreflect {
-                                operand: Some(operand),
-                                ..
-                            } => BodyTypeArgRef::Runtime { operand: *operand },
-                            _ => BodyTypeArgRef::Static(BodyTypeRefId(builder.lower(arg))),
-                        })
+                        .map(|arg| BodyTypeRefId(builder.lower(arg)))
                         .collect(),
                 );
             }
@@ -255,7 +228,11 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
     }
 
     for (stmt_id, stmt) in body.stmts.iter() {
-        if let Stmt::TypeBinding { value, .. } = stmt {
+        if let Stmt::TypeBinding {
+            value: TypeBindingValue::Static(value),
+            ..
+        } = stmt
+        {
             refs.stmt_type_bindings
                 .insert(stmt_id, BodyTypeRefId(builder.lower(value)));
         }
@@ -268,79 +245,76 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_ast::{Expr, ExprBody, TypeExprKind};
+    use baml_compiler2_ast::{Expr, ExprBody, Stmt, TypeExprKind};
     use text_size::{TextRange, TextSize};
 
     use super::*;
     use crate::type_ref::TypeRefKind;
 
     #[test]
-    fn expression_type_arguments_preserve_static_runtime_order_and_identity() {
+    fn expression_type_arguments_preserve_order_and_identity() {
         let mut body = ExprBody::default();
         let callee = body.exprs.alloc(Expr::Path(vec![Name::new("f")]));
-        let operand = body
-            .exprs
-            .alloc(Expr::Path(vec![Name::new("runtime_type")]));
-        let static_span = TextRange::new(TextSize::from(10), TextSize::from(13));
-        let static_ty = TypeExprKind::Int { attrs: Vec::new() }.at(static_span);
-        let runtime_ty = TypeExprKind::Unreflect {
-            operand: Some(operand),
-            attrs: Vec::new(),
-        }
-        .at(TextRange::new(TextSize::from(15), TextSize::from(38)));
+        let int_span = TextRange::new(TextSize::from(10), TextSize::from(13));
+        let string_span = TextRange::new(TextSize::from(15), TextSize::from(21));
         let call = body.exprs.alloc(Expr::Call {
             callee,
-            type_args: vec![static_ty, runtime_ty],
+            type_args: vec![
+                TypeExprKind::Int { attrs: Vec::new() }.at(int_span),
+                TypeExprKind::String { attrs: Vec::new() }.at(string_span),
+            ],
             args: Vec::new(),
         });
 
         let (refs, source_map) = collect_body_type_refs(&body);
         let slots = refs.expr_type_args.get(&call).expect("call type slots");
-        let [
-            BodyTypeArgRef::Static(static_ref),
-            BodyTypeArgRef::Runtime { operand: runtime },
-        ] = slots.as_ref()
-        else {
-            panic!("expected ordered static/runtime slots, got {slots:?}");
+        let [first, second] = slots.as_ref() else {
+            panic!("expected two ordered slots, got {slots:?}");
         };
-        assert_eq!(*runtime, operand);
-        assert_eq!(source_map.span(*static_ref), static_span);
-        assert_eq!(refs.store.iter().count(), 1, "runtime slots are not types");
+        assert_eq!(source_map.span(*first), int_span);
+        assert_eq!(source_map.span(*second), string_span);
+        assert!(matches!(
+            refs.store.get(refs.raw_id(*second)).kind,
+            TypeRefKind::String
+        ));
     }
 
     #[test]
-    fn match_scrutinee_annotations_preserve_runtime_operands() {
+    fn only_static_type_binding_right_hand_sides_are_type_references() {
         let mut body = ExprBody::default();
-        let scrutinee = body.exprs.alloc(Expr::Path(vec![Name::new("value")]));
         let operand = body
             .exprs
             .alloc(Expr::Path(vec![Name::new("runtime_type")]));
-        let annotation_span = TextRange::new(TextSize::from(10), TextSize::from(33));
-        let annotation = body.type_annotations.alloc(
-            TypeExprKind::Unreflect {
-                operand: Some(operand),
-                attrs: Vec::new(),
-            }
-            .at(annotation_span),
-        );
-        let match_expr = body.exprs.alloc(Expr::Match {
-            scrutinee,
-            scrutinee_type: Some(annotation),
-            arms: Vec::new(),
+        let runtime = body.stmts.alloc(Stmt::TypeBinding {
+            name: Name::new("R"),
+            value: TypeBindingValue::Runtime(operand),
+        });
+        let static_span = TextRange::new(TextSize::from(30), TextSize::from(35));
+        let static_binding = body.stmts.alloc(Stmt::TypeBinding {
+            name: Name::new("S"),
+            value: TypeBindingValue::Static(
+                TypeExprKind::List {
+                    inner: Box::new(TypeExprKind::Int { attrs: Vec::new() }.at(static_span)),
+                    attrs: Vec::new(),
+                }
+                .at(static_span),
+            ),
         });
 
         let (refs, source_map) = collect_body_type_refs(&body);
+        assert!(
+            !refs.stmt_type_bindings.contains_key(&runtime),
+            "a runtime operand is a body expression, never a type reference"
+        );
         let type_ref = refs
-            .match_scrutinee_types
-            .get(&match_expr)
+            .stmt_type_bindings
+            .get(&static_binding)
             .copied()
-            .expect("match scrutinee type reference");
+            .expect("static binding type reference");
         assert!(matches!(
             refs.store.get(refs.raw_id(type_ref)).kind,
-            TypeRefKind::Unreflect {
-                operand: Some(found)
-            } if found == operand
+            TypeRefKind::List { .. }
         ));
-        assert_eq!(source_map.span(type_ref), annotation_span);
+        assert_eq!(source_map.span(type_ref), static_span);
     }
 }

@@ -1,7 +1,7 @@
 /// A stateful hasher that can be used to compute a digest of data.
 interface Hasher {
     /// Feeds data into the hasher's internal state.
-    function update(self, data: uint8array) -> void throws never
+    function update(self, data: uint8array) -> void throws never;
     /// Returns the digest of the hasher's internal state.
     ///
     /// Hasher state may either reset after this call or remain unchanged.
@@ -10,7 +10,7 @@ interface Hasher {
     ///
     /// Provides no contract about the size or format of the digest,
     /// each implementation should document its own digest format.
-    function finish(self) -> uint8array throws never
+    function finish(self) -> uint8array throws never;
 }
 
 /// Authenticated Encryption with Associated Data.
@@ -57,7 +57,7 @@ interface Aead {
         nonce: uint8array,
         plaintext: uint8array,
         aad: uint8array,
-    ) -> uint8array throws root.errors.InvalidArgument
+    ) -> uint8array throws root.errors.InvalidArgument;
 
     /// Authenticates and decrypts `ciphertext`.
     ///
@@ -82,7 +82,7 @@ interface Aead {
         nonce: uint8array,
         ciphertext: uint8array,
         aad: uint8array,
-    ) -> uint8array throws root.errors.InvalidArgument | DecryptionFailure
+    ) -> uint8array throws root.errors.InvalidArgument | DecryptionFailure;
 }
 
 /// Implemented by algorithms that can draw a fresh key of their own size.
@@ -92,7 +92,7 @@ interface Aead {
 /// get a cipher back.
 interface GenerateKey {
     /// The algorithm's key material.
-    type Key = uint8array
+    type Key = uint8array;
 
     /// Draws a fresh key of the algorithm's key length from `rng`.
     ///
@@ -101,5 +101,5 @@ interface GenerateKey {
     /// a `baml.random.ChaCha20` seeded from it. Never pass
     /// `baml.random.Xoshiro256PlusPlus`, whose output is predictable from
     /// observed draws.
-    function random_key(rng: root.random.Rng) -> Self.Key throws never
+    function random_key(rng: root.random.Rng) -> Self.Key throws never;
 }

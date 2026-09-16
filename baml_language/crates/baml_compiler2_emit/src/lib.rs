@@ -15,15 +15,19 @@ pub use analysis::OptLevel;
 use baml_base::{Name, Span};
 use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
 use baml_compiler2_hir::{
-    compiler2_all_files,
     contributions::Definition,
     file_package::file_package,
     loc::{FunctionLoc, LetLoc},
-    package::PackageId,
+    package::{
+        Spelling, is_precompiled_stdlib, is_served_from_interface, spelling, spelling_within,
+        world_files, world_roots,
+    },
 };
 use baml_compiler2_mir::{
-    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
-    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body, native_key_for,
+    BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases,
+    RuntimeLowering, Rvalue, StatementKind, def_to_item_ref, lower_function, lower_let_body,
+    memory::{self, CellId},
+    native_key_for,
 };
 // PPIR item-data firewall (canonical / post-expansion view, including synthetic
 // `*$stream` items) — enumeration + lookup queries in place of the raw item tree.
@@ -39,27 +43,41 @@ use baml_type::{ParamTy, RuntimeTy, TyAttr};
 use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
     FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
-    Object, ObjectIndex, ObjectPool, Program,
+    InterfaceBound, Object, ObjectIndex, ObjectPool, Program,
     unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
     },
 };
 
-/// Build a per-package `ResolvedAliases` cache, keyed by package name.
+/// Build a per-package `ResolvedAliases` cache, keyed by package.
 fn build_alias_caches(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
-) -> HashMap<Name, ResolvedAliases> {
-    let mut caches: HashMap<Name, ResolvedAliases> = HashMap::new();
+) -> HashMap<baml_base::SourceRoot, ResolvedAliases> {
+    let mut caches: HashMap<baml_base::SourceRoot, ResolvedAliases> = HashMap::new();
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        caches.entry(pkg_info.package.clone()).or_insert_with(|| {
-            let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            baml_compiler2_mir::resolved_aliases_for_package(db, pkg_id)
-        });
+        caches
+            .entry(pkg_info.root)
+            .or_insert_with(|| baml_compiler2_mir::resolved_aliases_for_package(db, pkg_info.root));
     }
     caches
+}
+
+/// The compile-time → wire crossing for `root`'s declarations: its alias
+/// environment plus the program's spelling.
+fn runtime_lowering<'a>(
+    db: &'a dyn baml_compiler2_mir::Db,
+    caches: &'a HashMap<baml_base::SourceRoot, ResolvedAliases>,
+    root: baml_base::SourceRoot,
+) -> RuntimeLowering<'a> {
+    RuntimeLowering {
+        aliases: &caches[&root],
+        spelling: spelling(db),
+        db,
+        viewpoint: root,
+    }
 }
 
 /// Build the runtime [`InterfaceDef`](bex_vm_types::types::InterfaceDef) signature
@@ -75,11 +93,11 @@ fn build_alias_caches(
 fn build_interface_def(
     db: &dyn baml_compiler2_mir::Db,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
-    iface_tn: baml_type::TypeName,
+    iface_tn: &baml_type::DeclName,
     // Minted by the caller through `claim_type_tag`, not derived here, so every
     // head passes the one collision detector.
     type_tag: baml_type::typetag::TypeTag,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
 ) -> bex_vm_types::types::InterfaceDef {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_ppir::item_data::{FunctionParamData, function_data, interface_data};
@@ -87,6 +105,7 @@ fn build_interface_def(
     use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
 
     let file = iface_loc.file(db);
+    let iface_wire = resolved.wire(iface_tn);
     let interface = interface_data(db, iface_loc);
     let generics = &interface.generic_params;
     let interface_frame_params = baml_compiler2_hir_ty::lower::interface_frame(db, iface_loc);
@@ -111,9 +130,11 @@ fn build_interface_def(
                     id: TypeRefId|
      -> bex_vm_types::RuntimeTy {
         let ty = baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref(store, id));
-        let runtime = baml_type::lower_to_runtime(&ty, resolved).unwrap_or_else(|e| {
-            unreachable!("interface `{iface_tn}` declares a non-runtime type: {e:?}")
-        });
+        let runtime = baml_type::lower_to_runtime(&ty, resolved.aliases)
+            .unwrap_or_else(|e| {
+                unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
+            })
+            .map_heads(&mut |decl| resolved.wire(decl));
         bex_vm_types::anchor_runtime_ty(&runtime)
     };
     // Lower an interface bound / `requires` target / associated-type bound.
@@ -137,9 +158,13 @@ fn build_interface_def(
             return None;
         };
         let to_runtime = |t: &baml_type::Ty| {
-            baml_type::lower_to_runtime(t, resolved).unwrap_or_else(|e| {
-                unreachable!("interface `{iface_tn}` declares a non-runtime constraint: {e:?}")
-            })
+            baml_type::lower_to_runtime(t, resolved.aliases)
+                .unwrap_or_else(|e| {
+                    unreachable!(
+                        "interface `{iface_wire}` declares a non-runtime constraint: {e:?}"
+                    )
+                })
+                .map_heads(&mut |decl| resolved.wire(decl))
         };
         let generics = args.iter().map(to_runtime).collect();
         let associated_types = assoc
@@ -147,7 +172,7 @@ fn build_interface_def(
             .map(|(n, t)| (n.clone(), to_runtime(t)))
             .collect();
         Some(bex_vm_types::anchor_interface(&RuntimeInterface::new(
-            qtn,
+            resolved.wire(&qtn),
             generics,
             associated_types,
         )))
@@ -276,7 +301,7 @@ fn build_interface_def(
 
     InterfaceDef {
         type_tag,
-        name: iface_tn,
+        name: iface_wire,
         args,
         requires,
         assoc,
@@ -332,23 +357,25 @@ struct PackageBuildMetadata<'a, 'db> {
 }
 
 fn external_call_target_name(
+    spelling: &Spelling,
     target: &baml_compiler2_hir_ty::callable::ExternalCallTarget,
 ) -> String {
     use baml_compiler2_hir_ty::callable::ExternalCallTarget;
     let (package, namespace, owner, name) = match target {
-        ExternalCallTarget::Free {
-            package,
-            namespace,
+        ExternalCallTarget::Free { function } => (
+            spelling.of(function.root()),
+            function.namespace().as_slice(),
+            None,
+            function.name(),
+        ),
+        ExternalCallTarget::Method { class, name } => (
+            spelling.of(class.root()),
+            class.namespace().as_slice(),
+            Some(class.name()),
             name,
-        } => (package, namespace.as_slice(), None, name),
-        ExternalCallTarget::Method {
-            package,
-            namespace,
-            class,
-            name,
-        } => (package, namespace.as_slice(), Some(class), name),
+        ),
         ExternalCallTarget::Interface { interface, method } => (
-            interface.package(),
+            spelling.of(interface.root()),
             interface.namespace().as_slice(),
             Some(interface.name()),
             method,
@@ -368,25 +395,31 @@ fn capture_package_exports(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
 ) -> indexmap::IndexMap<Name, PackageExportArtifact> {
-    let package_names: std::collections::BTreeSet<_> = all_files
+    // Keyed by wire name so the artifact map's order is name order.
+    let spelling = spelling(db);
+    let packages: std::collections::BTreeMap<Name, baml_base::SourceRoot> = all_files
         .iter()
-        .map(|file| file_package(db, *file).package)
+        .map(|file| {
+            let root = file_package(db, *file).root;
+            (spelling.of(root).clone(), root)
+        })
         .collect();
-    package_names
+    packages
         .into_iter()
-        .map(|package_name| {
-            let package_id = PackageId::new(db, package_name.clone());
+        .map(|(package_name, package)| {
             let interface =
-                baml_compiler2_hir_ty::package_interface::package_interface(db, package_id);
+                baml_compiler2_hir_ty::package_interface::package_interface(db, package);
             // Runtime compilers already own the exact stdlib sources, so only
             // mountable packages need to carry a serialized compiler surface.
-            let interface_blob =
-                if baml_builtins2::stdlib_package_names().contains(&package_name.as_str()) {
-                    Vec::new()
-                } else {
-                    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
-                        .expect("PackageInterface artifact serialization into Vec is infallible")
-                };
+            let interface_blob = if package.kind(db) == baml_base::SourceRootKind::Stdlib {
+                Vec::new()
+            } else {
+                baml_artifact::encode(
+                    baml_artifact::ArtifactKind::PackageInterface,
+                    &baml_compiler2_hir_ty::package_interface::export_interface(db, package),
+                )
+                .expect("PackageInterface artifact serialization into Vec is infallible")
+            };
             let functions = interface
                 .functions
                 .iter()
@@ -397,7 +430,7 @@ fn capture_package_exports(
                                 namespace: namespace.clone(),
                                 name: name.clone(),
                             },
-                            external_call_target_name(&function.target),
+                            external_call_target_name(spelling, &function.target),
                         )
                     })
                 })
@@ -517,7 +550,7 @@ type IfaceParts = (
 /// associated bindings as `TyTemplate`s (generic params → `TypeArgRef`).
 fn split_interface(
     iface_ty: &baml_type::Ty,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
     generics: &[ParamTy],
 ) -> Option<IfaceParts> {
     let baml_type::Ty::Interface(qtn, args, assoc, _) = iface_ty else {
@@ -542,7 +575,7 @@ fn split_interface(
             )
         })
         .collect();
-    Some((qtn.clone(), arg_templates, assoc_templates))
+    Some((resolved.wire(qtn), arg_templates, assoc_templates))
 }
 
 /// The lowered head of one `implements` block's baked rule — the pieces that
@@ -565,15 +598,40 @@ struct ImplRuleTarget {
     for_ty_pattern: bex_vm_types::TyTemplate,
     impl_params: Vec<ParamTy>,
     impl_bounds: ImplBoundsMap,
+    /// Each declared param's bound conjunction, in frame order, each
+    /// conjunction canonically sorted — the constraint-set third of the
+    /// rule's [`ImplCoherenceKey`]. The bake stores exactly this, so a rule
+    /// and its declaring block cannot disagree on it.
+    generic_param_bounds: Vec<Vec<InterfaceBound>>,
+}
+
+impl ImplRuleTarget {
+    /// The block's identity key (see [`ImplCoherenceKey`]'s invariant).
+    fn coherence_key(&self) -> bex_vm_types::ImplCoherenceKey {
+        bex_vm_types::ImplCoherenceKey {
+            for_ty_pattern: self.for_ty_pattern.clone(),
+            interface_args: self.interface_args.clone(),
+            generic_param_bounds: self.generic_param_bounds.clone(),
+        }
+    }
 }
 
 /// Lower one `implements` block's target and for-type. `None` when the target
-/// does not lower to an interface (already diagnosed upstream).
+/// does not lower to an interface (already diagnosed upstream), or when a
+/// declared bound failed to lower: the uniform bound surface
+/// (`impl_generic_bounds`) keeps only bounds that lower to interfaces —
+/// E0145 / unresolved-name diagnostics own the rest — so a declared/lowered
+/// count mismatch means the declared rule is NARROWER than anything bakeable.
+/// Baking without the bound WIDENS the rule; declining here drops the whole
+/// rule from BOTH the bake and the decompose attribution (the two callers),
+/// which loses a dispatch — recoverable — and can never over-match or
+/// mis-attribute. Fires only on programs that already carry diagnostics and
+/// never reach a runnable artifact.
 fn impl_rule_target<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
-    resolved: &ResolvedAliases,
+    resolved: &RuntimeLowering<'_>,
 ) -> Option<ImplRuleTarget> {
     let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
     let store = &block.type_refs;
@@ -601,6 +659,44 @@ fn impl_rule_target<'db>(
         resolved,
         &impl_params,
     ));
+    // Fail closed on a bound the LOWERING dropped (doc above).
+    let (declared_generics, _) =
+        baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
+    let declared_bound_count: usize = declared_generics.iter().map(|g| g.bounds.len()).sum();
+    let lowered_bound_count: usize = impl_params
+        .iter()
+        .map(|param| impl_bounds.get(param).map_or(0, Vec::len))
+        .sum();
+    if lowered_bound_count != declared_bound_count {
+        return None;
+    }
+    // Each declared param's bound conjunction, converted through the same
+    // `split_interface` road as the target. The Option-collect is a second
+    // belt on the same law (a bound that does not split drops the rule);
+    // with the arity gate above it should never fire. Each conjunction is
+    // sorted canonically so a written reorder cannot fork the identity key.
+    let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
+        .iter()
+        .map(|param| {
+            let mut bounds: Vec<InterfaceBound> = impl_bounds
+                .get(param)
+                .into_iter()
+                .flatten()
+                .map(|bound| {
+                    split_interface(&bound.to_ty(), resolved, &impl_params).map(
+                        |(interface, args, assoc)| InterfaceBound {
+                            interface: bex_vm_types::TypeHead::of_name(&interface),
+                            args,
+                            assoc,
+                        },
+                    )
+                })
+                .collect::<Option<_>>()?;
+            bounds.sort_by_cached_key(|bound| format!("{bound:?}"));
+            Some(bounds)
+        })
+        .collect();
+    let generic_param_bounds = generic_param_bounds?;
     Some(ImplRuleTarget {
         iface_tn,
         iface_ty,
@@ -610,13 +706,15 @@ fn impl_rule_target<'db>(
         for_ty_pattern,
         impl_params,
         impl_bounds,
+        generic_param_bounds,
     })
 }
 
 fn build_packages<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    roots: &[baml_base::SourceRoot],
     all_files: &[baml_base::SourceFile],
-    alias_caches: &HashMap<Name, ResolvedAliases>,
+    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
     // Threaded emit state, including the field-name → slot map for every
     // emitted class. That map is the *same* one the class pass built
@@ -632,7 +730,7 @@ fn build_packages<'db>(
     use baml_type as ty;
     use bex_vm_types::{
         ObjectIndex,
-        types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
+        types::{ProgramImplRule, ProgramMethodImpl},
     };
     type BoundsMap = ImplBoundsMap;
 
@@ -666,10 +764,10 @@ fn build_packages<'db>(
     // with symbolic `Self` by the shared query) where one is declared. Rule
     // construction bakes the default into every impl that leaves the member
     // unpinned, so the registry answers every declared member identically —
-    // pinned or defaulted — and an adopted default's frame layout
-    // (`[Self ++ interface generic args ++ associated types]`, matching MIR's
-    // `enclosing_generic_params` for interface-owned bodies) carries a real
-    // binding in every slot.
+    // pinned or defaulted. Associated types are NOT frame slots (an adopted
+    // default's frame is `[Self ++ interface generic args]`; a body's
+    // `Self.Assoc` lowers as a projection), so this table is the RULE's
+    // reduction source for those projections, never a frame filler.
     let mut iface_assoc_decls: indexmap::IndexMap<baml_type::TypeName, IfaceAssocDecls> =
         indexmap::IndexMap::new();
     // Per field-bearing interface, its declared field names **in declaration order** —
@@ -678,10 +776,15 @@ fn build_packages<'db>(
     // fields are absent (their impls get an empty table).
     let mut iface_field_decls: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
         indexmap::IndexMap::new();
+    let spelling = spelling(db);
     for file in all_files {
         for &iface_loc in file_interfaces(db, *file) {
             let iface_data = interface_data(db, iface_loc);
-            let iface_tn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+            let iface_tn = spelling.wire(&qualify_def(
+                db,
+                Definition::Interface(iface_loc),
+                &iface_data.name,
+            ));
             if !iface_data.fields.is_empty() {
                 iface_field_decls
                     .entry(iface_tn.clone())
@@ -733,9 +836,9 @@ fn build_packages<'db>(
     // mounted artifact before walking the consumer's source blocks: otherwise
     // `class Local { implements dep.I {} }` would prove membership at check
     // time but emit neither adopted defaults nor virtual-field links.
-    for package in baml_compiler2_hir::package::external_package_names(db) {
+    for &package_root in roots {
         let Some(interface) =
-            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, package_root)
         else {
             continue;
         };
@@ -756,6 +859,7 @@ fn build_packages<'db>(
             else {
                 continue;
             };
+            let qtn = spelling.wire(qtn);
             if !fields.is_empty() {
                 iface_field_decls
                     .entry(qtn.clone())
@@ -790,37 +894,38 @@ fn build_packages<'db>(
     // the baked template; the runtime reduces them back through this same
     // rule at realization time (fuel-bounded against cycles). A member with
     // neither pin nor default is a diagnosed incomplete impl and stays absent.
-    let complete_interface_assoc = |interface_assoc: &mut Vec<(Name, bex_vm_types::TyTemplate)>,
-                                    iface_tn: &baml_type::TypeName,
-                                    iface_arg_tys: &[ty::Ty],
-                                    for_ty: &ty::Ty,
-                                    generics: &[ParamTy],
-                                    resolved: &ResolvedAliases| {
-        let Some((self_param, params, decls)) = iface_assoc_decls.get(iface_tn) else {
-            return;
-        };
-        for (name, default) in decls {
-            if interface_assoc.iter().any(|(an, _)| an == name) {
-                continue;
-            }
-            let Some(default) = default else {
-                continue;
+    let complete_interface_assoc =
+        |interface_assoc: &mut Vec<(Name, bex_vm_types::TyTemplate)>,
+         iface_tn: &baml_type::TypeName,
+         iface_arg_tys: &[ty::Ty],
+         for_ty: &ty::Ty,
+         generics: &[ParamTy],
+         resolved: &RuntimeLowering<'_>| {
+            let Some((self_param, params, decls)) = iface_assoc_decls.get(iface_tn) else {
+                return;
             };
-            let mut bindings: rustc_hash::FxHashMap<ParamTy, ty::Ty> =
-                rustc_hash::FxHashMap::default();
-            bindings.insert(self_param.clone(), for_ty.clone());
-            for (param, arg) in params.iter().zip(iface_arg_tys) {
-                bindings.insert(param.clone(), arg.clone());
+            for (name, default) in decls {
+                if interface_assoc.iter().any(|(an, _)| an == name) {
+                    continue;
+                }
+                let Some(default) = default else {
+                    continue;
+                };
+                let mut bindings: rustc_hash::FxHashMap<ParamTy, ty::Ty> =
+                    rustc_hash::FxHashMap::default();
+                bindings.insert(self_param.clone(), for_ty.clone());
+                for (param, arg) in params.iter().zip(iface_arg_tys) {
+                    bindings.insert(param.clone(), arg.clone());
+                }
+                let completed = baml_type::unify::substitute_ty(default, &bindings);
+                interface_assoc.push((
+                    name.clone(),
+                    bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                        &completed, resolved, generics,
+                    )),
+                ));
             }
-            let completed = baml_type::unify::substitute_ty(default, &bindings);
-            interface_assoc.push((
-                name.clone(),
-                bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                    &completed, resolved, generics,
-                )),
-            ));
-        }
-    };
+        };
     // The interface objects themselves were pooled before their default bodies
     // were, so they still carry `default: None`; hand back what to fill in now
     // that every function has an index. Only interfaces pooled *by this emit*
@@ -844,9 +949,8 @@ fn build_packages<'db>(
 
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let resolved = &alias_caches[&pkg_info.package];
+        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
         // Lower a type ref (in the owner's `TypeRefStore`) in this file's
         // namespace, discarding diagnostics (these targets were already validated
         // upstream). `bounds` carries the enclosing impl's/class's generic-param
@@ -868,23 +972,48 @@ fn build_packages<'db>(
         };
         // Associated-type bindings written in an `implements` block body
         // (`type Item = int`) live beside the target, not in it (`split_interface`
-        // only sees the target), so lower them here to fold into the implemented
-        // interface's bindings.
-        let lower_assoc = |store: &TypeRefStore,
+        // only sees the target), so fold them into the implemented interface's
+        // bindings here. Prefer `impl_data`'s canonical checked value: it lowers
+        // bindings in declaration order with `Self` carrying the pins resolved so
+        // far, so `type Item = int; type Items = Self.Item[]` becomes `int[]`.
+        // Mounted interfaces have no source `InterfaceLoc`; their equivalent
+        // canonical values live in the loc-free `impl_facts` surface. Re-lowering
+        // a raw binding in the plain impl scope loses the earlier witness and
+        // leaves an error-recovery projection that RuntimeTy cannot represent.
+        let lower_assoc = |impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+                           store: &TypeRefStore,
                            bindings: &[AssociatedTypeBindingData],
                            generics: &[ParamTy],
                            bounds: &BoundsMap|
          -> Vec<(Name, bex_vm_types::TyTemplate)> {
+            let canonical = baml_compiler2_hir_ty::interfaces::impl_data(db, impl_loc)
+                .as_ref()
+                .ok();
+            let loc_free = baml_compiler2_hir_ty::impls::impl_facts(db, impl_loc).for_display();
             bindings
                 .iter()
                 .filter_map(|b| {
-                    let id = b.type_ref?;
+                    let ty = canonical
+                        .and_then(|data| {
+                            data.associated_types
+                                .iter()
+                                .find(|(name, _)| *name == b.name)
+                                .map(|(_, ty)| ty.clone())
+                        })
+                        .or_else(|| {
+                            loc_free.and_then(|facts| {
+                                facts
+                                    .associated_types
+                                    .iter()
+                                    .find(|(name, _)| *name == b.name)
+                                    .map(|(_, ty)| ty.to_plain())
+                            })
+                        })
+                        .or_else(|| b.type_ref.map(|id| lower(store, id, generics, bounds)))?;
                     Some((
                         b.name.clone(),
                         bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                            &lower(store, id, generics, bounds),
-                            resolved,
-                            generics,
+                            &ty, resolved, generics,
                         )),
                     ))
                 })
@@ -913,11 +1042,13 @@ fn build_packages<'db>(
                 for_ty_pattern,
                 impl_params,
                 impl_bounds,
+                generic_param_bounds,
             }) = impl_rule_target(db, *file, impl_loc, resolved)
             else {
                 continue;
             };
             interface_assoc.extend(lower_assoc(
+                impl_loc,
                 store,
                 &block.associated_type_bindings,
                 &impl_params,
@@ -935,54 +1066,10 @@ fn build_packages<'db>(
                 &impl_params,
                 resolved,
             );
-            // Fail closed on a bound the LOWERING dropped: the uniform bound
-            // surface (`impl_generic_bounds`) keeps only bounds that lower
-            // to interfaces — E0145 / unresolved-name diagnostics own the
-            // rest — so a declared/lowered count mismatch means the declared
-            // rule is NARROWER than anything bakeable. Baking without the
-            // bound WIDENS the rule (a rule narrowed by two bounds must stay
-            // narrowed by both); dropping the whole rule loses a dispatch,
-            // which is recoverable — over-matching is not. Fires only on
-            // programs that already carry diagnostics and never reach a
-            // runnable artifact.
-            let (declared_generics, _) =
-                baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
-            let declared_bound_count: usize =
-                declared_generics.iter().map(|g| g.bounds.len()).sum();
-            let lowered_bound_count: usize = impl_params
-                .iter()
-                .map(|param| impl_bounds.get(param).map_or(0, Vec::len))
-                .sum();
-            if lowered_bound_count != declared_bound_count {
-                continue;
-            }
-            // Each declared param's bound conjunction, in frame order — the
-            // same uniform surface, converted through the same
-            // `split_interface` road as the target. The Option-collect is a
-            // second belt on the same law (a bound that does not split drops
-            // the rule); with the arity gate above it should never fire.
-            let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
-                .iter()
-                .map(|param| {
-                    impl_bounds
-                        .get(param)
-                        .into_iter()
-                        .flatten()
-                        .map(|bound| {
-                            split_interface(&bound.to_ty(), resolved, &impl_params).map(
-                                |(interface, args, assoc)| InterfaceBound {
-                                    interface: bex_vm_types::TypeHead::of_name(&interface),
-                                    args,
-                                    assoc,
-                                },
-                            )
-                        })
-                        .collect()
-                })
-                .collect();
-            let Some(generic_param_bounds) = generic_param_bounds else {
-                continue;
-            };
+            // The constraint set was lowered (and fail-closed gated) inside
+            // `impl_rule_target`, so the bake, the decompose attribution,
+            // and the rule's `ImplCoherenceKey` all carry the identical
+            // canonicalized bounds.
             // A block's own method is compiled against the owner frame — the
             // impl's declared generics, which for an in-class block ARE the
             // class's.
@@ -1061,7 +1148,8 @@ fn build_packages<'db>(
                 }
                 (Some(declared), Some(class)) => {
                     let class_item = class_data(db, class);
-                    let class_tn = qualify_def(db, Definition::Class(class), &class_item.name);
+                    let class_tn =
+                        spelling.wire(&qualify_def(db, Definition::Class(class), &class_item.name));
                     let class_slots = class_field_indices.get(&class_tn.to_string());
                     declared
                         .iter()
@@ -1088,7 +1176,7 @@ fn build_packages<'db>(
                 continue;
             };
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(spelling.of(pkg_info.root).clone())
                 .or_default()
                 .impl_rules
                 .entry(interface_head)
@@ -1245,6 +1333,46 @@ fn emitted_function_origin(
 pub(crate) type ClassFieldSnapshot =
     HashMap<baml_type::typetag::TypeTag, Vec<(String, bex_vm_types::RuntimeTy)>>;
 
+/// Statically-resolved references recorded during codegen — the emit-time
+/// source of the incremental reverse-dependency edges
+/// ([`CompilationUnit::referenced_names`] / `bakes_type_layout`).
+///
+/// Codegen calls [`Self::record`] at every site that resolves an item to a
+/// baked operand (function and `let` global slots — including
+/// interface-machinery bodies, which have no runtime name — and class/enum
+/// object indices), so the edge set is produced by the resolutions
+/// themselves. Deriving it from the finished bytecode instead (reversing
+/// operands through the runtime name maps) is forbidden: the maps cover only
+/// named items, so a name class leaving them severs every edge into it
+/// silently — exactly what happened when interface bodies became anonymous.
+#[derive(Debug, Default)]
+pub(crate) struct UnitReferences {
+    /// Last-segment names of the resolved items — the dirty partition's
+    /// grain, matching the CLI's `defined_names` (the last dotted segment of
+    /// the item's `def_to_item_ref` rendering).
+    pub(crate) names: std::collections::BTreeSet<String>,
+    /// OR of [`bex_vm_types::relink::visit_index_operands_ref`]'s
+    /// layout-baking bit over every function compiled into this record.
+    pub(crate) bakes_type_layout: bool,
+}
+
+impl UnitReferences {
+    /// Record one resolved item reference by its rendered spelling; only the
+    /// last dotted segment is kept.
+    pub(crate) fn record(&mut self, name: &str) {
+        let last = name.rsplit('.').next().unwrap_or(name);
+        if !self.names.contains(last) {
+            self.names.insert(last.to_string());
+        }
+    }
+
+    /// Fold another record into this one (per-function → per-file).
+    pub(crate) fn merge(&mut self, other: UnitReferences) {
+        self.names.extend(other.names);
+        self.bakes_type_layout |= other.bakes_type_layout;
+    }
+}
+
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub globals: &'ctx HashMap<String, usize>,
@@ -1271,6 +1399,11 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub capture_types: &'ctx [RuntimeTy],
     /// Capture slots whose cells may be touched by spawned code.
     pub spawn_capture_indices: &'ctx HashSet<usize>,
+    /// Reference record the compiled function's resolutions accumulate into
+    /// (see [`UnitReferences`]). Callers pick the accumulation target: a
+    /// per-function record on the parallel path (merged per-file at the
+    /// serial stage), the per-file record directly on the serial paths.
+    pub references: &'obj mut UnitReferences,
 }
 
 /// Database trait for compiler2 emit queries.
@@ -1494,40 +1627,89 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
-/// Generate bytecode for the entire project (default: `OptLevel::Two`).
-pub fn generate_project_bytecode(db: &dyn crate::Db) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_opt(db, OptLevel::Two)
+/// What one emit compiles: the roots of one program in source-root table
+/// order, their files, and the program's spelling table. A program is built
+/// for one root's world — the root and its dependency closure — never for
+/// the whole database, which may hold other workspace roots that cannot
+/// share a program with this one (§5 invariant 2: emit sees one world).
+struct EmitWorld {
+    roots: Vec<baml_base::SourceRoot>,
+    files: Vec<baml_base::SourceFile>,
+    spelling: Spelling,
 }
 
-/// Generate bytecode for the entire project with a specific optimization level.
+impl EmitWorld {
+    /// The world of `root`'s program.
+    fn of_root(db: &dyn crate::Db, root: baml_base::SourceRoot) -> Self {
+        Self {
+            roots: world_roots(db, root).clone(),
+            files: world_files(db, root).clone(),
+            spelling: spelling_within(db, root).clone(),
+        }
+    }
+
+    /// The stdlib alone: every `Stdlib` root, the user-independent prefix of
+    /// every program's world.
+    fn stdlib(db: &dyn crate::Db) -> Self {
+        let roots: Vec<baml_base::SourceRoot> = db
+            .source_roots()
+            .roots(db)
+            .iter()
+            .copied()
+            .filter(|root| root.kind(db) == baml_base::SourceRootKind::Stdlib)
+            .collect();
+        let files = roots
+            .iter()
+            .flat_map(|root| root.files(db).iter().copied())
+            .collect();
+        let spelling = spelling(db).within(&roots);
+        Self {
+            roots,
+            files,
+            spelling,
+        }
+    }
+}
+
+/// Generate bytecode for `root`'s program (default: `OptLevel::Two`).
+pub fn generate_project_bytecode(
+    db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
+) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_opt(db, root, OptLevel::Two)
+}
+
+/// Generate bytecode for `root`'s program with a specific optimization level.
 pub fn generate_project_bytecode_with_opt(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_with_opt_coords(db, opt).map(|(program, _)| program)
+    generate_with_opt_coords(db, root, opt).map(|(program, _)| program)
 }
 
 /// [`generate_project_bytecode_with_opt`] plus the emit's
 /// [`FunctionCoordinates`], for callers that go on to decompose.
 fn generate_with_opt_coords(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
 ) -> Result<(Program, FunctionCoordinates<'_>), LoweringError> {
-    let (mut program, coords) = generate_impl(db, opt, None, false, None)?;
-    program.source_content_hash = Some(project_source_content_hash(db));
+    let (mut program, coords) = generate_impl(db, &EmitWorld::of_root(db, root), opt, None, None)?;
+    program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok((program, coords))
 }
 
-/// The conservative source-content identity of this compile's project file
-/// set (profiling streams spec §2.3): any byte change in any project file, or
-/// a compiler version change, yields a new hash. Stdlib stubs are excluded —
+/// The conservative source-content identity of `root`'s program file set
+/// (profiling streams spec §2.3): any byte change in any project file, or a
+/// compiler version change, yields a new hash. Stdlib stubs are excluded —
 /// they are a compiler-build constant already covered by the version input.
-pub fn project_source_content_hash(db: &dyn crate::Db) -> [u8; 32] {
+pub fn project_source_content_hash(db: &dyn crate::Db, root: baml_base::SourceRoot) -> [u8; 32] {
     // The `<builtin>/` path prefix is the wire-contract spelling of "stdlib
     // stub" (and of runtime mount stubs), the same rule `builtin_count`
     // keys on — filtering by root KIND here would diverge for databases
     // that hold both source stdlib and mount-stub roots.
-    let files: Vec<(String, String)> = compiler2_all_files(db)
+    let files: Vec<(String, String)> = world_files(db, root)
         .iter()
         .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
         .map(|file| {
@@ -1556,7 +1738,7 @@ pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, opt, None, true, None).map(|(program, _)| program)
+    generate_impl(db, &EmitWorld::stdlib(db), opt, None, None).map(|(program, _)| program)
 }
 
 /// Generate project bytecode on top of a precompiled stdlib `Program` slice
@@ -1569,10 +1751,11 @@ pub fn generate_stdlib_program(
 /// `emit_determinism` integration tests).
 pub fn generate_project_bytecode_with_stdlib(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_with_stdlib_coords(db, opt, base).map(|(program, _)| program)
+    generate_with_stdlib_coords(db, root, opt, base).map(|(program, _)| program)
 }
 
 /// [`generate_project_bytecode_with_stdlib`] plus the decomposed symbolic
@@ -1581,11 +1764,12 @@ pub fn generate_project_bytecode_with_stdlib(
 /// (mirrors [`generate_project_bytecode_with_reuse_artifacts`]).
 pub fn generate_project_bytecode_with_stdlib_artifacts(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
 ) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
-    let (program, coords) = generate_with_stdlib_coords(db, opt, base)?;
-    let units = decompose_units(db, &program, &coords)?;
+    let (program, coords) = generate_with_stdlib_coords(db, root, opt, base)?;
+    let units = decompose_units(db, world_files(db, root), &program, &coords)?;
     Ok((program, units))
 }
 
@@ -1593,11 +1777,13 @@ pub fn generate_project_bytecode_with_stdlib_artifacts(
 /// [`FunctionCoordinates`], for callers that go on to decompose.
 fn generate_with_stdlib_coords<'db>(
     db: &'db dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
 ) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
-    let (mut program, coords) = generate_impl(db, opt, Some(base), false, None)?;
-    program.source_content_hash = Some(project_source_content_hash(db));
+    let (mut program, coords) =
+        generate_impl(db, &EmitWorld::of_root(db, root), opt, Some(base), None)?;
+    program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok((program, coords))
 }
 
@@ -1606,12 +1792,13 @@ fn generate_with_stdlib_coords<'db>(
 /// resolution; `dependency_units` provide the matching runtime symbols.
 pub fn generate_project_bytecode_with_mounted_units(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<Program, MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    generate_impl(db, opt, Some(&base), false, None)
+    generate_impl(db, &EmitWorld::of_root(db, root), opt, Some(&base), None)
         .map(|(program, _)| program)
         .map_err(MountedPackageLinkError::Consumer)
 }
@@ -1623,15 +1810,18 @@ pub fn generate_project_bytecode_with_mounted_units(
 /// into it becomes a symbolic import, exactly as on the stdlib-prefix path.
 pub fn generate_project_bytecode_with_mounted_units_artifacts(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<(Program, Vec<CompilationUnit>), MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    let (program, coords) = generate_impl(db, opt, Some(&base), false, None)
+    let world = EmitWorld::of_root(db, root);
+    let (program, coords) = generate_impl(db, &world, opt, Some(&base), None)
         .map_err(MountedPackageLinkError::Consumer)?;
-    let units = decompose_units_after_prefix(db, &program, &coords, base.objects.len())
-        .map_err(MountedPackageLinkError::Consumer)?;
+    let units =
+        decompose_units_after_prefix(db, &world.files, &program, &coords, base.objects.len())
+            .map_err(MountedPackageLinkError::Consumer)?;
     Ok((program, units))
 }
 
@@ -1659,12 +1849,13 @@ pub fn generate_project_bytecode_with_mounted_units_artifacts(
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_reuse_artifacts(db, opt, base, prev_units, clean_files)
+    generate_project_bytecode_with_reuse_artifacts(db, root, opt, base, prev_units, clean_files)
         .map(|(program, _)| program)
 }
 
@@ -1673,12 +1864,14 @@ pub fn generate_project_bytecode_with_reuse_units(
 /// the linked program a second time.
 pub fn generate_project_bytecode_with_reuse_artifacts(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
-    let mismatches = reuse_throws_mismatches(db, prev_units, clean_files);
+    let world = EmitWorld::of_root(db, root);
+    let mismatches = reuse_throws_mismatches(db, root, prev_units, clean_files);
     let effective_clean;
     let clean_files = if mismatches.is_empty() {
         clean_files
@@ -1697,9 +1890,9 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
     // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
     // so a dirty tail-producing file no longer aborts reuse.
-    let (partial, coords) = generate_impl(db, opt, Some(base), false, Some(clean_files))?;
+    let (partial, coords) = generate_impl(db, &world, opt, Some(base), Some(clean_files))?;
 
-    let mut fresh_units = decompose_units(db, &partial, &coords)?;
+    let mut fresh_units = decompose_units(db, &world.files, &partial, &coords)?;
 
     // The freshly-synthesized (symbolic) tail: whichever fresh unit the
     // decomposition placed it on. It reflects the *current* project's lets/tests
@@ -1728,10 +1921,20 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // Assemble: clean files verbatim from `prev_units`, dirty files fresh. A
     // clean unit's PACKAGE-LEVEL fragment (declaration maps, interface blob —
     // whole-package products on the carrier) is recomputed so a clean carrier
-    // never goes stale, but its IMPL RULES stay the cached unit's own: a rule
-    // is a pure function of its declaring file (provided-only method tables),
-    // and its body offsets index the cached unit's `code` bucket, which a
-    // fresh dirty-only emit cannot see. The tail is placed once, below.
+    // never goes stale, but its IMPL RULES stay the cached unit's own: a
+    // rule's method table is provided-only, and its body offsets index the
+    // cached unit's `code` bucket, which a fresh dirty-only emit cannot see.
+    //
+    // A rule is NOT a pure function of its declaring file, though: its
+    // `interface_assoc` completion and its positional `field_links` are
+    // derived from the INTERFACE's declaration, which may live in another
+    // file. Keeping the cached rule is sound only because the CLI's dirty
+    // partition dirties every file that spells the interface's name
+    // (`syntactic_type_names`) whenever the interface's signature moves, so
+    // a clean unit here has, by construction, an interface that did not
+    // change shape. (A mounted dependency's interface changing shape is the
+    // open half — it rides the dependency fingerprint, not this partition.)
+    // The tail is placed once, below.
     let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
         .iter()
         .map(|u| (u.source_file.as_str(), u))
@@ -1776,7 +1979,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     let program = bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
     let mut program = program;
-    program.source_content_hash = Some(project_source_content_hash(db));
+    program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok((program, assembled))
 }
 
@@ -1786,6 +1989,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
 /// a full link solely for this comparison.
 pub fn reuse_throws_mismatches(
     db: &dyn baml_compiler2_mir::Db,
+    root: baml_base::SourceRoot,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> HashMap<String, String> {
@@ -1797,18 +2001,22 @@ pub fn reuse_throws_mismatches(
             _ => None,
         })
         .collect();
-    let all_files = compiler2_all_files(db);
-    let alias_caches = build_alias_caches(db, &all_files);
+    let all_files = world_files(db, root);
+    let alias_caches = build_alias_caches(db, all_files);
     let mut mismatches = HashMap::new();
 
-    for file in all_files {
+    for &file in all_files {
         let rel = relative_source_path(db, file);
         if !clean_files.contains(&rel) {
             continue;
         }
         let pkg = file_package(db, file);
-        if let Err(detail) = spliced_throws_match(db, file, &previous, &alias_caches[&pkg.package])
-        {
+        if let Err(detail) = spliced_throws_match(
+            db,
+            file,
+            &previous,
+            &runtime_lowering(db, &alias_caches, pkg.root),
+        ) {
             mismatches.insert(rel, detail);
         }
     }
@@ -1838,10 +2046,11 @@ pub fn reuse_throws_mismatches(
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
 pub fn emit_units(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let (program, coords) = generate_with_opt_coords(db, opt)?;
-    decompose_units(db, &program, &coords)
+    let (program, coords) = generate_with_opt_coords(db, root, opt)?;
+    decompose_units(db, world_files(db, root), &program, &coords)
 }
 
 /// Emit relocatable source units on top of a compiler-built stdlib prefix.
@@ -1853,11 +2062,18 @@ pub fn emit_units(
 /// objects and impl rules instead of copying them into a runtime package.
 pub fn emit_units_with_stdlib(
     db: &dyn crate::Db,
+    root: baml_base::SourceRoot,
     opt: OptLevel,
     stdlib: &Program,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let (program, coords) = generate_with_stdlib_coords(db, opt, stdlib)?;
-    decompose_units_after_prefix(db, &program, &coords, stdlib.objects.len())
+    let (program, coords) = generate_with_stdlib_coords(db, root, opt, stdlib)?;
+    decompose_units_after_prefix(
+        db,
+        world_files(db, root),
+        &program,
+        &coords,
+        stdlib.objects.len(),
+    )
 }
 
 /// Per-object attribution kind, computed during the pool walk.
@@ -1887,20 +2103,42 @@ enum PoolObjKind {
 /// decomposition cannot attribute to a source file.
 fn decompose_units<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
     program: &Program,
     coords: &FunctionCoordinates<'db>,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    decompose_units_after_prefix(db, program, coords, 0)
+    decompose_units_after_prefix(db, files, program, coords, 0)
+}
+
+/// The unit export/import key for a function: the display spelling plus —
+/// for an impl-provided interface body — the impl's canonical constraint-set
+/// suffix (`interface_body_link_bounds_suffix`).
+///
+/// Display stays head-only everywhere a human reads it; the KEY carries the
+/// full [`bex_vm_types::ImplCoherenceKey`] discriminant so two admitted
+/// same-head impls can never share a link key, even under a coherence regime
+/// that separates them only by bounds. Identity for named functions and
+/// interface defaults (no impl owner, no suffix) — for those the key IS the
+/// display spelling.
+fn interface_body_link_key<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> String {
+    let mut key = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+    if let Some(suffix) = baml_compiler2_mir::interface_body_link_bounds_suffix(db, func_loc) {
+        key.push_str(&suffix);
+    }
+    key
 }
 
 #[expect(clippy::too_many_lines)]
 fn decompose_units_after_prefix<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    all_files: &[baml_base::SourceFile],
     program: &Program,
     coords: &FunctionCoordinates<'db>,
     prefix_objects: usize,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let all_files = compiler2_all_files(db);
     let n_files = all_files.len();
 
     // ---- Per-file identity maps ---------------------------------------------
@@ -1911,7 +2149,7 @@ fn decompose_units_after_prefix<'db>(
         let rel = relative_source_path(db, *file);
         rel_to_file.insert(rel.clone(), fi);
         unit_source.push(rel);
-        unit_package.push(file_package(db, *file).package);
+        unit_package.push(spelling(db).of(file_package(db, *file).root).clone());
     }
 
     // Ordered owners for the pass-major definition buckets: the k-th class /
@@ -1944,7 +2182,9 @@ fn decompose_units_after_prefix<'db>(
                 Definition::TypeAlias(alias_loc),
                 &alias_data.name,
             );
-            alias_name_to_file.entry(qtn).or_insert(fi);
+            alias_name_to_file
+                .entry(spelling(db).wire(&qtn))
+                .or_insert(fi);
         }
         // Owner vectors are consumed by walking the object pool in emission order,
         // so they must be built in the SAME order the `Object::Class`/`Enum`/
@@ -1965,7 +2205,7 @@ fn decompose_units_after_prefix<'db>(
             if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
-            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            let fq = interface_body_link_key(db, func_loc);
             func_name_to_file.insert(fq, fi);
         }
         for &let_loc in file_lets(db, *file) {
@@ -1977,6 +2217,12 @@ fn decompose_units_after_prefix<'db>(
     // obj idx -> fq name for named functions (reverse of `function_indices`)
     // and interface bodies (recovered below). Decomposition treats a body like
     // any slot-owning function — its key is a link-internal string.
+    //
+    // Body keys carry the impl's constraint-set suffix
+    // (`interface_body_link_key`), so every map in this region that joins on
+    // a function's key — `func_name_to_file`, `fn_obj_name`,
+    // `interface_body_slot_names`, and the export tables built from them —
+    // must be filled through that one helper.
     let mut fn_obj_name: HashMap<usize, String> = HashMap::new();
     for (name, &idx) in &program.function_indices {
         fn_obj_name.insert(idx, name.clone());
@@ -1994,7 +2240,7 @@ fn decompose_units_after_prefix<'db>(
         let Some(slot) = placement.interface_body_slot() else {
             continue;
         };
-        let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+        let fq = interface_body_link_key(db, func_loc);
         fn_obj_name.insert(placement.reference_object(), fq.clone());
         interface_body_slot_names.push((slot, fq));
     }
@@ -2004,10 +2250,14 @@ fn decompose_units_after_prefix<'db>(
     interface_body_slot_names.sort_unstable();
     // Body spellings are LINK KEYS — the unit export/import tables key by
     // string — so they must be unique across the union of bodies and named
-    // functions. Coherence plus the canonical `<(target as iface)>`
-    // rendering guarantee that for accepted programs; this converts the
-    // prose invariant into the same hard error named items get at Pass 1,
-    // instead of a silent last-writer-wins at link.
+    // functions. The key is the display spelling plus the impl's
+    // constraint-set suffix: the rendered [`bex_vm_types::ImplCoherenceKey`],
+    // which coherence guarantees injective over admitted impls (the key
+    // carries coherence's full discriminant — see that type's invariant).
+    // This hard error is the backstop for the day coherence gains a
+    // discriminant the key lacks, converting the prose invariant into the
+    // same loud failure named items get at Pass 1 instead of a silent
+    // last-writer-wins at link.
     let mut interface_body_names: HashSet<String> = HashSet::new();
     for (_, name) in &interface_body_slot_names {
         if program.function_indices.contains_key(name) || !interface_body_names.insert(name.clone())
@@ -2183,10 +2433,20 @@ fn decompose_units_after_prefix<'db>(
 
     // ---- Bucket objects into units + record local layout --------------------
     let mut units: Vec<CompilationUnit> = (0..n_files)
-        .map(|fi| CompilationUnit {
-            source_file: unit_source[fi].clone(),
-            package: unit_package[fi].clone(),
-            ..CompilationUnit::default()
+        .map(|fi| {
+            // Stamp the emit-recorded reference edges onto the unit they
+            // describe. A file the emit never lowered (a clean file's
+            // placeholder unit, discarded at assembly) has no record.
+            let refs = coords.file_references.get(&unit_source[fi]);
+            CompilationUnit {
+                source_file: unit_source[fi].clone(),
+                package: unit_package[fi].clone(),
+                referenced_names: refs
+                    .map(|r| r.names.iter().cloned().collect())
+                    .unwrap_or_default(),
+                bakes_type_layout: refs.is_some_and(|r| r.bakes_type_layout),
+                ..CompilationUnit::default()
+            }
         })
         .collect();
     // Per pool object: its LocalRef within its owning unit (bucket + offset).
@@ -2440,18 +2700,15 @@ fn decompose_units_after_prefix<'db>(
     // provided-method bodies are that unit's own `code` objects, referenced by
     // bucket offset — a body has no name on any wire. Pairing each baked rule
     // back to its block replays the same per-block lowering `build_packages`
-    // bakes from (`impl_rule_target`) and matches on the rule's COHERENCE KEY
-    // — per interface head, `(for_ty_pattern, interface_args)` — so
-    // canonicalized rule order and same-package sibling churn cannot skew the
-    // attribution.
+    // bakes from (`impl_rule_target`) and matches on the rule's
+    // [`ImplCoherenceKey`] — per interface head: for-pattern, interface args,
+    // and the constraint set — so canonicalized rule order and same-package
+    // sibling churn cannot skew the attribution, and two same-head rules
+    // differing only in bounds attribute exactly.
     {
         // Per pooled interface: each declaring block's coherence key + file.
-        type RuleOwner = (
-            bex_vm_types::TyTemplate,
-            Vec<bex_vm_types::TyTemplate>,
-            usize,
-        );
-        let alias_caches = build_alias_caches(db, &all_files);
+        type RuleOwner = (bex_vm_types::ImplCoherenceKey, usize);
+        let alias_caches = build_alias_caches(db, all_files);
         // Pooled interface object index by declared type name (the bake's
         // `interface_indices` reconstructed from the pool, exactly as
         // `EmitTables::from_stdlib_program` does).
@@ -2463,7 +2720,7 @@ fn decompose_units_after_prefix<'db>(
         }
         let mut rule_owners: HashMap<usize, Vec<RuleOwner>> = HashMap::new();
         for (fi, file) in all_files.iter().enumerate() {
-            let resolved = &alias_caches[&file_package(db, *file).package];
+            let resolved = &runtime_lowering(db, &alias_caches, file_package(db, *file).root);
             for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, *file) {
                 let Some(target) = impl_rule_target(db, *file, impl_loc, resolved) else {
                     continue;
@@ -2471,13 +2728,26 @@ fn decompose_units_after_prefix<'db>(
                 let Some(&iface_idx) = iface_idx_by_tn.get(&target.iface_tn) else {
                     continue;
                 };
-                rule_owners.entry(iface_idx).or_default().push((
-                    target.for_ty_pattern,
-                    target.interface_args,
-                    fi,
-                ));
+                rule_owners
+                    .entry(iface_idx)
+                    .or_default()
+                    .push((target.coherence_key(), fi));
             }
         }
+        // A Stage-6 clean file's functions are never pooled by this emit;
+        // their rule-table references are past-the-pool placeholders the
+        // placement registry knows by identity — the ONLY object indices a
+        // provided body may legitimately point outside the walked range at.
+        let clean_placeholders: HashSet<usize> = coords
+            .placements
+            .values()
+            .filter_map(|placement| match placement {
+                PlacedFunction::ReusedClean {
+                    placeholder_object, ..
+                } => Some(*placeholder_object),
+                PlacedFunction::Live { .. } | PlacedFunction::Spliced { .. } => None,
+            })
+            .collect();
         // Per unit, rules grouped by interface (insertion order = package/
         // interface iteration order, deterministic).
         let mut unit_rules: Vec<indexmap::IndexMap<String, Vec<ProgramImplRuleFrag>>> =
@@ -2500,38 +2770,66 @@ fn decompose_units_after_prefix<'db>(
                 };
                 let owners = rule_owners.get(&iface_idx.raw());
                 for rule in rules {
+                    let rule_key = rule.coherence_key();
                     let fi = owners
                         .and_then(|owners| {
-                            owners.iter().find_map(|(pattern, args, fi)| {
-                                (*pattern == rule.for_ty_pattern && args == &rule.interface_args)
-                                    .then_some(*fi)
-                            })
+                            owners
+                                .iter()
+                                .find_map(|(key, fi)| (*key == rule_key).then_some(*fi))
                         })
                         .ok_or_else(|| {
                             LoweringError::Internal(format!(
-                                "impl rule for `{iface_fq}` matches no declaring `implements` block"
+                                "impl rule for `{iface_fq}` matches no declaring `implements` \
+                                 block by its coherence key (if coherence gained a discriminant, \
+                                 `ImplCoherenceKey` must gain it too)"
                             ))
                         })?;
+                    // A rule declared by a SPLICED file (the stdlib prefix, a
+                    // mounted dependency's stubs) rides the prefix image's own
+                    // units: this decomposition neither walks its bodies nor
+                    // emits its unit, so it is skipped by attribution — never
+                    // inferred from where a body index happens to land.
+                    if fi < prefix_files {
+                        continue;
+                    }
                     // Provided-method bodies must be this unit's own pooled
-                    // code objects. A placeholder index (Stage 6 clean file)
-                    // means the declaring unit is not re-emitted: its CACHED
-                    // unit already carries this rule, so the fresh fragment
-                    // skips it (the reuse assembly keeps cached rules for
-                    // clean units).
+                    // code objects. A clean placeholder (Stage 6) means the
+                    // declaring unit is not re-emitted: its CACHED unit
+                    // already carries this rule, so the fresh fragment skips
+                    // it (the reuse assembly keeps cached rules for clean
+                    // units). Every other way a body can fall outside the
+                    // walked range — the spliced prefix, the `$init` tail, an
+                    // unclaimed index — is a miswired rule and fails the
+                    // decomposition instead of being read as "clean".
                     let mut methods = Vec::with_capacity(rule.methods.len());
                     let mut clean_body = false;
                     for (name, method) in &rule.methods {
                         let idx = method.fqn.raw();
-                        let local = idx
-                            .checked_sub(prefix_objects)
-                            .and_then(|i| obj_localref.get(i));
-                        match local {
+                        if clean_placeholders.contains(&idx) {
+                            clean_body = true;
+                            break;
+                        }
+                        if idx < prefix_objects {
+                            return Err(LoweringError::Internal(format!(
+                                "provided body `{name}` of `{iface_fq}` rule lives in the \
+                                 spliced prefix (object {idx}), which no user unit owns"
+                            )));
+                        }
+                        if idx >= tail_start {
+                            return Err(LoweringError::Internal(format!(
+                                "provided body `{name}` of `{iface_fq}` rule lives in the \
+                                 `$init` tail (object {idx})"
+                            )));
+                        }
+                        match obj_localref.get(idx - prefix_objects) {
                             Some(LocalRef::Code(k)) => {
-                                debug_assert_eq!(
-                                    obj_owner[idx], fi,
-                                    "provided body owned by a different file than its rule's \
-                                     `implements` block",
-                                );
+                                if obj_owner[idx] != fi {
+                                    return Err(LoweringError::Internal(format!(
+                                        "provided body `{name}` of `{iface_fq}` rule is owned \
+                                         by file {} but its `implements` block is in file {fi}",
+                                        obj_owner[idx]
+                                    )));
+                                }
                                 methods.push((
                                     name.clone(),
                                     ProgramMethodImplFrag {
@@ -2542,13 +2840,16 @@ fn decompose_units_after_prefix<'db>(
                             }
                             Some(other) => {
                                 return Err(LoweringError::Internal(format!(
-                                    "provided body of `{iface_fq}` rule is a non-code object \
-                                     ({other:?})"
+                                    "provided body `{name}` of `{iface_fq}` rule is a \
+                                     non-code object ({other:?})"
                                 )));
                             }
                             None => {
-                                clean_body = true;
-                                break;
+                                return Err(LoweringError::Internal(format!(
+                                    "provided body `{name}` of `{iface_fq}` rule is object \
+                                     {idx}, which this decomposition never walked and no \
+                                     clean placeholder claims"
+                                )));
                             }
                         }
                     }
@@ -2589,8 +2890,9 @@ fn decompose_units_after_prefix<'db>(
             continue;
         }
         let fragment =
-            baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(db, *file);
-        if let Ok(bytes) = borsh::to_vec(fragment) {
+            baml_compiler2_hir_ty::package_interface::file_callable_throws_fragment(db, *file)
+                .map_heads(&mut |decl| spelling(db).wire(decl));
+        if let Ok(bytes) = borsh::to_vec(&fragment) {
             units[fi].callable_throws_fragment = bytes;
         }
     }
@@ -3245,6 +3547,15 @@ struct FunctionCoordinates<'db> {
     /// these files' entries from its positional owner vectors — their objects
     /// are below the prefix and never walked.
     spliced_files: usize,
+    /// Per-file reference records accumulated by this emit's codegen (see
+    /// [`UnitReferences`]), keyed by project-relative source path. Covers
+    /// every function the emit lowered — bodies, lambdas, and `let`
+    /// initializer helpers (attributed to the `let`'s file) — for user files
+    /// only. Decomposition stamps each unit's `referenced_names` /
+    /// `bakes_type_layout` from here; a clean file skipped by an incremental
+    /// emit has no entry, and its discarded placeholder unit's empty stamp
+    /// never survives assembly (the cached unit's own record does).
+    file_references: HashMap<String, UnitReferences>,
 }
 
 /// Emit the whole project (B-693 Stage 6 core).
@@ -3257,14 +3568,26 @@ struct FunctionCoordinates<'db> {
 /// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl<'db>(
     db: &'db dyn crate::Db,
+    world: &EmitWorld,
     opt: OptLevel,
     base: Option<&Program>,
-    stdlib_only: bool,
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
-    let mut all_files = compiler2_all_files(db);
+    // Every root of the world is emitted into one program, so its spelling
+    // table must be injective: a shared spelling would fuse two packages'
+    // declarations under one wire name.
+    if let Some(collision) = world.spelling.collisions().first() {
+        return Err(LoweringError::Internal(format!(
+            "cannot emit one program from these packages: {collision}"
+        )));
+    }
+    let all_files: &[baml_base::SourceFile] = &world.files;
     let builtin_count = if base.is_some()
-        && !baml_compiler2_hir::package::precompiled_package_names(db).is_empty()
+        && db
+            .source_roots()
+            .roots(db)
+            .iter()
+            .any(|&root| is_precompiled_stdlib(db, root))
     {
         // A source-less stdlib database has no builtin sources to skip. Any
         // `<builtin>/…` files it does hold are link stubs for ordinary runtime
@@ -3276,16 +3599,11 @@ fn generate_impl<'db>(
             .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
             .count()
     };
-    if stdlib_only {
-        // The builtin prefix is user-independent, so compiling "just the
-        // stdlib" is the full pipeline over the builtin files alone.
-        all_files.truncate(builtin_count);
-    }
-    let alias_caches = build_alias_caches(db, &all_files);
+    let alias_caches = build_alias_caches(db, all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
     // stdlib occupies a contiguous, user-independent prefix of the ObjectPool
-    // and the globals table (`compiler2_all_files` puts builtins first for the
+    // and the globals table (`world_files` puts builtins first for the
     // same reason). The precompiled-stdlib splice depends on that prefix.
     let (builtin_files, user_files) = all_files.split_at(builtin_count.min(all_files.len()));
     // The provenance-typed placement registry this emit fills — the
@@ -3330,10 +3648,38 @@ fn generate_impl<'db>(
                             "stdlib splice: global slot {slot} does not hold an object",
                         )));
                     };
-                    debug_assert!(
-                        matches!(base.objects.get(idx.into_raw()), Some(Object::Function(_))),
-                        "stdlib splice: global slot {slot} does not hold a function",
-                    );
+                    // The replay is ordinal, so it is only as sound as the
+                    // enumeration agreement between this compiler and the one
+                    // that produced `base`. Verify each pairing by the one
+                    // spelling both sides derive from the declaration: a
+                    // skew (a stale artifact that passed the header checks,
+                    // a future skip-set drift) would otherwise map every
+                    // later declaration onto the wrong object silently, and
+                    // the default backfill below would then overwrite correct
+                    // spliced defaults.
+                    let expected = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+                    let actual = match base.objects.get(idx.into_raw()) {
+                        Some(Object::Function(function)) => &function.name,
+                        Some(other) => {
+                            return Err(LoweringError::Internal(format!(
+                                "stdlib splice: global slot {slot} holds a {} object, not a \
+                                 function",
+                                obj_variant_name(other)
+                            )));
+                        }
+                        None => {
+                            return Err(LoweringError::Internal(format!(
+                                "stdlib splice: global slot {slot} points past the pool",
+                            )));
+                        }
+                    };
+                    if *actual != expected {
+                        return Err(LoweringError::Internal(format!(
+                            "stdlib splice: global slot {slot} holds `{actual}` where this \
+                             compiler enumerates `{expected}` — the precompiled stdlib's \
+                             declaration order disagrees with this build's",
+                        )));
+                    }
                     let interface_body_slot =
                         baml_compiler2_mir::function_is_interface_body(db, func_loc)
                             .then_some(slot);
@@ -3354,6 +3700,7 @@ fn generate_impl<'db>(
         }
         None => (Program::new(), EmitTables::default()),
     };
+    let mut file_references: HashMap<String, UnitReferences> = HashMap::new();
     if base.is_none() {
         emit_file_group(
             db,
@@ -3363,6 +3710,7 @@ fn generate_impl<'db>(
             &alias_caches,
             &mut placements,
             &mut interface_body_slots,
+            &mut file_references,
             opt,
             None,
         )?;
@@ -3375,6 +3723,7 @@ fn generate_impl<'db>(
         &alias_caches,
         &mut placements,
         &mut interface_body_slots,
+        &mut file_references,
         opt,
         skip_clean,
     )?;
@@ -3382,7 +3731,7 @@ fn generate_impl<'db>(
     // populated Salsa's body/signature caches. The artifact is unchanged; only
     // the scheduling avoids a cold whole-package inference traversal before
     // the same bodies are lowered for emit.
-    let package_exports = capture_package_exports(db, &all_files);
+    let package_exports = capture_package_exports(db, all_files);
 
     // --- Pass 6: Retry policies ---
     // Retry policies are now synthesized as Item::Let bindings during CST lowering.
@@ -3395,7 +3744,8 @@ fn generate_impl<'db>(
 
     let interface_default_backfill = build_packages(
         db,
-        &all_files,
+        &world.roots,
+        all_files,
         &alias_caches,
         &tables.interface_object_indices,
         &PackageBuildMetadata {
@@ -3412,7 +3762,11 @@ fn generate_impl<'db>(
     // their compiled package records from the linked prefix after the ordinary
     // source-backed package pass rebuilds the consumer metadata.
     if let Some(base) = base {
-        for pkg_name in baml_compiler2_hir::package::external_package_names(db) {
+        for &root in &world.roots {
+            if !is_served_from_interface(db, root) {
+                continue;
+            }
+            let pkg_name = spelling(db).of(root).clone();
             let Some(base_pkg) = base.packages.get(&pkg_name) else {
                 continue;
             };
@@ -3441,6 +3795,7 @@ fn generate_impl<'db>(
         FunctionCoordinates {
             placements,
             spliced_files: if base.is_some() { builtin_count } else { 0 },
+            file_references,
         },
     ))
 }
@@ -3570,7 +3925,7 @@ fn spliced_throws_match(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
     previous: &HashMap<&str, &bex_vm_types::TyTemplate>,
-    cache: &ResolvedAliases,
+    cache: &RuntimeLowering<'_>,
 ) -> Result<(), String> {
     for &func_loc in file_functions(db, file) {
         // Required interface methods are signature-only items: nothing
@@ -3621,9 +3976,10 @@ fn emit_file_group<'db>(
     files: &[baml_base::SourceFile],
     tables: &mut EmitTables,
     program: &mut Program,
-    alias_caches: &HashMap<Name, ResolvedAliases>,
+    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     placements: &mut FunctionPlacements<'db>,
     interface_body_slots: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(), LoweringError> {
@@ -3686,8 +4042,12 @@ fn emit_file_group<'db>(
                 // spelling enters no name map here. The spelling must still
                 // be unique — decompose renders it as the unit
                 // export/import key and enforces that there.
-                let prev = interface_body_slots.insert(func_loc, global_idx);
-                debug_assert!(prev.is_none(), "one declaration slotted twice");
+                if interface_body_slots.insert(func_loc, global_idx).is_some() {
+                    return Err(LoweringError::Internal(format!(
+                        "interface body `{}` slotted twice in Pass 1",
+                        def_to_item_ref(db, Definition::Function(func_loc))
+                    )));
+                }
             } else {
                 let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
                 // Insertion-unique: two definitions rendering to one key would
@@ -3740,9 +4100,8 @@ fn emit_file_group<'db>(
 
     for file in files {
         let pkg_info = file_package(db, *file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let cache = &alias_caches[&pkg_info.package];
+        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
         for &class_loc in file_classes(db, *file) {
             let class = class_data(db, class_loc);
             let store = &class.type_refs;
@@ -3753,7 +4112,7 @@ fn emit_file_group<'db>(
             // byte-identical output or `Switch`/`JumpTable` dispatch silently
             // mismatches; sharing the one renderer is what pins them together.
             let fq_name = baml_type::QualifiedTypeName::new(
-                pkg_info.package.clone(),
+                spelling(db).of(pkg_info.root).clone(),
                 pkg_info.namespace_path.clone(),
                 class.name.clone(),
             )
@@ -3871,7 +4230,7 @@ fn emit_file_group<'db>(
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(spelling(db).of(pkg_info.root).clone())
                 .or_default()
                 .classes
                 .insert(
@@ -3882,23 +4241,17 @@ fn emit_file_group<'db>(
                     ObjectIndex::from_raw(class_obj_idx),
                 );
             classes.insert(fq_name.clone(), field_indices);
-            // MIR TypeName display for user-defined classes omits the `user.`
-            // package prefix in diagnostics/snapshots. Register the same key
-            // so emit-time type checks can do a direct display-name lookup.
-            let display_name = if pkg_info.package.as_str() == "user" {
-                if pkg_info.namespace_path.is_empty() {
-                    class.name.to_string()
-                } else {
-                    let ns: Vec<&str> = pkg_info
-                        .namespace_path
-                        .iter()
-                        .map(baml_base::Name::as_str)
-                        .collect();
-                    format!("{}.{}", ns.join("."), class.name)
-                }
-            } else {
-                fq_name.clone()
-            };
+            // MIR TypeName display for user-defined classes omits the local
+            // package prefix in diagnostics/snapshots (`display_name`). Register
+            // the same key so emit-time type checks can do a direct
+            // display-name lookup.
+            let display_name = baml_type::QualifiedTypeName::new(
+                spelling(db).of(pkg_info.root).clone(),
+                pkg_info.namespace_path.clone(),
+                class.name.clone(),
+            )
+            .display_name()
+            .to_string();
             class_object_indices
                 .entry(display_name.clone())
                 .or_insert(class_obj_idx);
@@ -3935,7 +4288,7 @@ fn emit_file_group<'db>(
             // fully-qualified name construction identical everywhere so the two
             // never drift.
             let fq_name = baml_type::QualifiedTypeName::new(
-                pkg_info.package.clone(),
+                spelling(db).of(pkg_info.root).clone(),
                 pkg_info.namespace_path.clone(),
                 enm.name.clone(),
             )
@@ -3971,7 +4324,7 @@ fn emit_file_group<'db>(
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(spelling(db).of(pkg_info.root).clone())
                 .or_default()
                 .enums
                 .insert(
@@ -3994,7 +4347,7 @@ fn emit_file_group<'db>(
     // package's impl rules below.
     for file in files {
         let pkg_info = file_package(db, *file);
-        let resolved = &alias_caches[&pkg_info.package];
+        let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
         for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, *file) {
             let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             let iface_tn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -4004,13 +4357,13 @@ fn emit_file_group<'db>(
             );
             // Same single renderer as the class and enum passes, so a head's
             // identity does not depend on which kind of declaration produced it.
-            let iface_tag = claim_type_tag(type_tags, &iface_tn.render_dotted(false))?;
-            let iface_def =
-                build_interface_def(db, iface_loc, iface_tn.clone(), iface_tag, resolved);
+            let iface_wire = resolved.wire(&iface_tn);
+            let iface_tag = claim_type_tag(type_tags, &iface_wire.render_dotted(false))?;
+            let iface_def = build_interface_def(db, iface_loc, &iface_tn, iface_tag, resolved);
             let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
-            interface_object_indices.insert(iface_tn, iface_obj_idx);
+            interface_object_indices.insert(iface_wire, iface_obj_idx);
             program_packages
-                .entry(pkg_info.package.clone())
+                .entry(spelling(db).of(pkg_info.root).clone())
                 .or_default()
                 .interfaces
                 .insert(
@@ -4051,7 +4404,7 @@ fn emit_file_group<'db>(
     let mut emitted_aliases = HashSet::new();
     for file in files {
         let pkg_info = file_package(db, *file);
-        let cache = &alias_caches[&pkg_info.package];
+        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
         for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, *file) {
             let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -4064,33 +4417,34 @@ fn emit_file_group<'db>(
             // cache would re-emit an imported alias under every importer. Walking
             // declarations instead emits each alias exactly once, in the file that
             // declares it — which is also what per-file dirty tracking needs.
-            if !cache.recursive.contains(&qtn) || !emitted_aliases.insert(qtn.clone()) {
+            if !cache.aliases.recursive.contains(&qtn) || !emitted_aliases.insert(qtn.clone()) {
                 continue;
             }
-            let tir_ty = &cache.aliases[&qtn];
+            let tir_ty = &cache.aliases.aliases[&qtn];
             let mir_ty = cache.convert(tir_ty);
             // Aliases have no type-parameter list, so nothing is in scope for the
             // right-hand side to reference — a non-realized alias body means
             // lowering produced something impossible, not a program to carry.
+            let wire = spelling(db).wire(&qtn);
             let definition = baml_type::RealizedTy::try_from(&mir_ty).map_err(|e| {
                 LoweringError::Internal(format!(
                     "type alias `{}` lowered to a non-realized type (`{}`); aliases \
                      cannot be generic, so this is a compiler bug",
-                    qtn.render_dotted(false),
+                    wire.render_dotted(false),
                     e.variant,
                 ))
             })?;
-            let fq_name = qtn.render_dotted(false);
+            let fq_name = wire.render_dotted(false);
             let obj_idx = program.add_object(Object::TypeAlias(Box::new(
                 bex_vm_types::types::TypeAliasDef {
-                    name: qtn.clone(),
+                    name: wire.clone(),
                     type_tag: claim_type_tag(type_tags, &fq_name)?,
                     definition: bex_vm_types::anchor_realized(&definition),
                     owner: bex_vm_types::HeapPtr::null(),
                 },
             )));
             program_packages
-                .entry(qtn.package().clone())
+                .entry(wire.package().clone())
                 .or_default()
                 .type_aliases
                 .insert(
@@ -4124,6 +4478,7 @@ fn emit_file_group<'db>(
             alias_caches,
             program,
             placements,
+            file_references,
             opt,
         );
     } else {
@@ -4141,6 +4496,7 @@ fn emit_file_group<'db>(
             alias_caches,
             program,
             placements,
+            file_references,
             opt,
         );
     }
@@ -4176,7 +4532,7 @@ fn emit_file_group<'db>(
                     program.let_global_indices.insert(fq_name.clone(), slot);
                 }
                 pkg_lets
-                    .entry(pkg_info.package.to_string())
+                    .entry(spelling(db).of(pkg_info.root).clone().to_string())
                     .or_default()
                     .push((fq_name, let_loc, *file));
             }
@@ -4214,6 +4570,7 @@ fn emit_file_group<'db>(
                 enum_variants,
                 &class_fields,
                 &mut *program,
+                file_references,
                 opt,
             )?;
 
@@ -4279,7 +4636,7 @@ fn emit_file_group<'db>(
                 if fq_name.contains("$init_test_") {
                     if let Some(&global_slot) = program.function_global_indices.get(&fq_name) {
                         pkg_init_tests
-                            .entry(pkg_info.package.to_string())
+                            .entry(spelling(db).of(pkg_info.root).clone().to_string())
                             .or_default()
                             .push((fq_name, global_slot));
                     }
@@ -4415,7 +4772,7 @@ fn compute_throws_type(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
     func_name: &baml_base::Name,
-    cache: &ResolvedAliases,
+    cache: &RuntimeLowering<'_>,
     frame_params: &[baml_type::ParamTy],
 ) -> baml_type::TyTemplate {
     // An empty throw set is `never` — the empty error set — not an absent one.
@@ -4423,7 +4780,7 @@ fn compute_throws_type(
         attr: baml_type::TyAttr::default(),
     };
     let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
 
     let key = baml_compiler2_hir_ty::package_interface::throw_set_key(
@@ -4534,7 +4891,7 @@ fn compute_function_metadata<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
-    cache: &ResolvedAliases,
+    cache: &RuntimeLowering<'_>,
 ) -> baml_compiler2_mir::RuntimeSignature {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
@@ -4563,6 +4920,11 @@ fn compute_function_metadata<'db>(
             .unzip()
     }
 
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(
+        db,
+        file_package(db, func_loc.file(db)).root,
+    );
+
     let file = func_loc.file(db);
     let func = function_data(db, func_loc);
     // The arena holding this function's own signature type refs (params, return).
@@ -4576,7 +4938,7 @@ fn compute_function_metadata<'db>(
         .collect();
 
     let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_id = pkg_info.root;
     let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     // The item this method belongs to, via the firewall (mirrors MIR's enclosing
@@ -4792,7 +5154,7 @@ fn compute_function_metadata<'db>(
             Some(bounds) => {
                 let rendered = bounds
                     .iter()
-                    .map(Ty::render_user_facing)
+                    .map(|ty| ty.render_with(&vp))
                     .collect::<Vec<_>>()
                     .join(" & ");
                 format!("{} extends {rendered}", name.as_str())
@@ -4855,7 +5217,7 @@ fn compute_function_metadata<'db>(
                 .into_iter()
                 .flatten()
                 .map(|bound| baml_compiler2_mir::RuntimeInterfaceBound {
-                    interface: bound.name.clone(),
+                    interface: cache.wire(&bound.name),
                     args: bound.generics.iter().map(to_template).collect(),
                     assoc: bound
                         .associated_types
@@ -4870,18 +5232,30 @@ fn compute_function_metadata<'db>(
         attr: baml_type::TyAttr::default(),
     };
 
+    // Runtime parameter templates come from the ELABORATED signature — the one
+    // the checker types calls against. Only the effect differs from the raw
+    // spelling: a callback parameter with an omitted `throws` is opened to a
+    // synthetic effect parameter that each call site instantiates, which
+    // `tir2_to_template` erases to `unknown` (an open contract the host
+    // boundary accepts opaquely), whereas the raw lowering falls back to
+    // `never` — the spelling of an EXPLICIT `throws never`, a closed contract
+    // the boundary enforces. Display keeps the raw spelling the user wrote.
+    let elaborated = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+    debug_assert_eq!(elaborated.params.len(), func.params.len());
     let mut param_types = Vec::with_capacity(func.params.len());
     let mut display_param_types = Vec::with_capacity(func.params.len());
-    for param in &func.params {
-        let resolved = if let Some(id) = param.type_ref {
-            Some(resolve_display_tir(func_store, id))
-        } else if param.name.as_str() == "self" {
-            self_param_ty()
-        } else {
-            None
-        };
-        if let Some(tir_ty) = resolved {
-            display_param_types.push(tir_ty.render_user_facing());
+    for (param, elaborated_param) in func.params.iter().zip(&elaborated.params) {
+        if let Some(id) = param.type_ref {
+            display_param_types.push(resolve_display_tir(func_store, id).render_with(&vp));
+            param_types.push(to_template(&resolve_display_tir(
+                &elaborated.type_refs,
+                elaborated_param.type_ref,
+            )));
+        } else if let Some(tir_ty) = (param.name.as_str() == "self")
+            .then(self_param_ty)
+            .flatten()
+        {
+            display_param_types.push(tir_ty.render_with(&vp));
             param_types.push(to_template(&tir_ty));
         } else {
             display_param_types.push("null".to_string());
@@ -4891,7 +5265,7 @@ fn compute_function_metadata<'db>(
 
     let (return_type, display_return_type) = if let Some(id) = func.return_type {
         let tir_ty = resolve_display_tir(func_store, id);
-        (to_template(&tir_ty), tir_ty.render_user_facing())
+        (to_template(&tir_ty), tir_ty.render_with(&vp))
     } else {
         (null_template(), "null".to_string())
     };
@@ -4962,17 +5336,18 @@ fn topological_sort_packages(
 ) -> Vec<baml_base::Name> {
     use std::collections::{HashMap, VecDeque};
 
-    use baml_compiler2_hir::package::{PackageId, package_dependencies};
-
+    let spelling = spelling(db);
     let pkg_set: std::collections::HashSet<&baml_base::Name> = pkg_names.iter().collect();
     let mut in_degree: HashMap<baml_base::Name, usize> = HashMap::new();
     let mut dependents: HashMap<baml_base::Name, Vec<baml_base::Name>> = HashMap::new();
 
     for name in pkg_names {
         in_degree.entry(name.clone()).or_insert(0);
-        let pkg_id = PackageId::new(db, name.clone());
-        for dep_id in package_dependencies(db, pkg_id) {
-            let dep_name = dep_id.name(db).clone();
+        let Some(root) = spelling.root(name) else {
+            continue;
+        };
+        for dependency in root.dependencies(db) {
+            let dep_name = spelling.of(dependency.root).clone();
             if pkg_set.contains(&dep_name) {
                 *in_degree.entry(name.clone()).or_insert(0) += 1;
                 dependents.entry(dep_name).or_default().push(name.clone());
@@ -5106,22 +5481,6 @@ fn unknown_capture_ty() -> RuntimeTy {
     }
 }
 
-fn local_def_rvalue<'a, 'db>(
-    body: &'a MirFunctionBody<'db>,
-    local: Local,
-) -> Option<&'a Rvalue<'db>> {
-    body.blocks
-        .iter()
-        .flat_map(|block| &block.statements)
-        .find_map(|statement| match &statement.kind {
-            StatementKind::Assign {
-                destination: Place::Local(dest),
-                value,
-            } if *dest == local => Some(value),
-            _ => None,
-        })
-}
-
 fn resolve_capture_operand_type<'db>(
     body: &MirFunctionBody<'db>,
     parent_capture_types: &[RuntimeTy],
@@ -5151,104 +5510,9 @@ fn resolve_capture_place_type(
     match place {
         Place::Local(local) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
         Place::Capture(idx) => parent_capture_types.get(*idx).cloned(),
+        Place::Deref(CellId::Local(local)) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
+        Place::Deref(CellId::Capture(idx)) => parent_capture_types.get(*idx).cloned(),
         Place::Field { .. } | Place::Index { .. } => None,
-    }
-}
-
-fn operand_reads_spawn_capture<'db>(
-    body: &MirFunctionBody<'db>,
-    parent_spawn_capture_indices: &HashSet<usize>,
-    operand: &Operand<'db>,
-    seen: &mut HashSet<Local>,
-) -> bool {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => {
-            place_reads_spawn_capture(body, parent_spawn_capture_indices, place, seen)
-        }
-        Operand::Constant(_) => false,
-    }
-}
-
-fn place_reads_spawn_capture(
-    body: &MirFunctionBody<'_>,
-    parent_spawn_capture_indices: &HashSet<usize>,
-    place: &Place,
-    seen: &mut HashSet<Local>,
-) -> bool {
-    match place {
-        Place::Local(local) => {
-            if !seen.insert(*local) {
-                return false;
-            }
-            match local_def_rvalue(body, *local) {
-                Some(Rvalue::Use(operand)) => {
-                    operand_reads_spawn_capture(body, parent_spawn_capture_indices, operand, seen)
-                }
-                _ => false,
-            }
-        }
-        Place::Capture(idx) => parent_spawn_capture_indices.contains(idx),
-        Place::Field { base, .. } => {
-            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
-        }
-        Place::Index { base, index, .. } => {
-            place_reads_spawn_capture(body, parent_spawn_capture_indices, base, seen)
-                || place_reads_spawn_capture(
-                    body,
-                    parent_spawn_capture_indices,
-                    &Place::Local(*index),
-                    seen,
-                )
-        }
-    }
-}
-
-fn make_closure_for_operand<'a, 'db>(
-    body: &'a MirFunctionBody<'db>,
-    operand: &'a Operand<'db>,
-    seen: &mut HashSet<Local>,
-) -> Option<(usize, &'a [Operand<'db>])> {
-    match operand {
-        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-            if !seen.insert(*local) {
-                return None;
-            }
-            match local_def_rvalue(body, *local)? {
-                Rvalue::MakeClosure {
-                    lambda_idx,
-                    captures,
-                    ..
-                } => Some((*lambda_idx, captures)),
-                Rvalue::Use(operand) => make_closure_for_operand(body, operand, seen),
-                _ => None,
-            }
-        }
-        _ => None,
-    }
-}
-
-fn mark_spawned_closure_operand<'db>(
-    body: &MirFunctionBody<'db>,
-    infos: &mut [LambdaCaptureInfo],
-    operand: &Operand<'db>,
-    seen_locals: &mut HashSet<Local>,
-    seen_lambdas: &mut HashSet<usize>,
-) {
-    let Some((lambda_idx, captures)) = make_closure_for_operand(body, operand, seen_locals) else {
-        return;
-    };
-    let Some(info) = infos.get_mut(lambda_idx) else {
-        return;
-    };
-
-    if !seen_lambdas.insert(lambda_idx) {
-        return;
-    }
-
-    info.spawn_capture_indices.extend(0..captures.len());
-
-    for capture in captures {
-        mark_spawned_closure_operand(body, infos, capture, seen_locals, seen_lambdas);
     }
 }
 
@@ -5259,6 +5523,7 @@ fn collect_lambda_capture_infos(
     parent_spawn_capture_indices: &HashSet<usize>,
 ) -> Vec<LambdaCaptureInfo> {
     let mut infos = vec![LambdaCaptureInfo::default(); lambda_count];
+    let shared_cells = memory::spawn_shared_cells(body);
 
     for block in &body.blocks {
         for statement in &block.statements {
@@ -5285,30 +5550,22 @@ fn collect_lambda_capture_infos(
                 })
                 .collect();
 
+            // A capture is shared with a task when this body spawns something
+            // reaching its cell, or when it forwards one of this body's own
+            // captures that an enclosing body already shares.
             for (capture_idx, capture) in captures.iter().enumerate() {
-                if operand_reads_spawn_capture(
-                    body,
-                    parent_spawn_capture_indices,
-                    capture,
-                    &mut HashSet::new(),
-                ) {
+                let (Operand::Copy(place) | Operand::Move(place)) = capture else {
+                    continue;
+                };
+                let cell = CellId::try_from(place.clone())
+                    .unwrap_or_else(|_| unreachable!("a capture operand is a cell pointer"));
+                let shared = shared_cells.contains(&cell)
+                    || matches!(cell, CellId::Capture(idx) if parent_spawn_capture_indices.contains(&idx));
+                if shared {
                     info.spawn_capture_indices.insert(capture_idx);
                 }
             }
         }
-    }
-
-    for block in &body.blocks {
-        let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
-            continue;
-        };
-        mark_spawned_closure_operand(
-            body,
-            &mut infos,
-            closure,
-            &mut HashSet::new(),
-            &mut HashSet::new(),
-        );
     }
 
     infos
@@ -5329,9 +5586,10 @@ fn emit_functions_serial<'db>(
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
-    alias_caches: &HashMap<Name, ResolvedAliases>,
+    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) {
     for file in files {
@@ -5350,7 +5608,7 @@ fn emit_functions_serial<'db>(
         let line_starts = build_line_starts(file.text(db));
         let pkg_info_pass4 = file_package(db, *file);
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
-        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
+        let cache_pass4 = &runtime_lowering(db, alias_caches, pkg_info_pass4.root);
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
@@ -5364,6 +5622,7 @@ fn emit_functions_serial<'db>(
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
                     let source_file = relative_source_path(db, *file);
+                    let mut references = UnitReferences::default();
                     let empty_capture_types = Vec::new();
                     let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
@@ -5382,6 +5641,7 @@ fn emit_functions_serial<'db>(
                         class_fields,
                         &mut program.objects,
                         0,
+                        &mut references,
                         opt,
                     );
                     let lambda_obj_indices: Vec<usize> =
@@ -5402,11 +5662,18 @@ fn emit_functions_serial<'db>(
                         lambda_names: &lambda_names_vec,
                         capture_types: &empty_capture_types,
                         spawn_capture_indices: &empty_spawn_capture_indices,
+                        references: &mut references,
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
                     f.source_file.clone_from(&source_file);
+                    if !is_builtin_file {
+                        file_references
+                            .entry(source_file.clone())
+                            .or_default()
+                            .merge(references);
+                    }
                     f
                 }
                 MirFunctionKind::Builtin(kind) => {
@@ -5602,9 +5869,10 @@ fn emit_functions_parallel<'db>(
     enum_object_indices: &HashMap<String, usize>,
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
-    alias_caches: &HashMap<Name, ResolvedAliases>,
+    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) {
     use rayon::prelude::*;
@@ -5659,7 +5927,7 @@ fn emit_functions_parallel<'db>(
 
     // --- Stage B: compile bytecode bodies (parallel: pure codegen) ---
     let watermark = program.objects.len();
-    let compiled: Vec<Option<(Function, ObjectPool)>> = work
+    let compiled: Vec<Option<(Function, ObjectPool, UnitReferences)>> = work
         .par_iter()
         .map(|item| {
             let MirFunctionKind::Bytecode(body) = &item.mir.kind else {
@@ -5667,6 +5935,7 @@ fn emit_functions_parallel<'db>(
                 return None;
             };
             let mut fragment = ObjectPool::default();
+            let mut references = UnitReferences::default();
             let empty_capture_types = Vec::new();
             let empty_spawn_capture_indices = HashSet::new();
             let lambda_info = compile_lambdas_flat(
@@ -5685,6 +5954,7 @@ fn emit_functions_parallel<'db>(
                 class_fields,
                 &mut fragment,
                 watermark,
+                &mut references,
                 opt,
             );
             let lambda_obj_indices: Vec<usize> = lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -5704,6 +5974,7 @@ fn emit_functions_parallel<'db>(
                 lambda_names: &lambda_names_vec,
                 capture_types: &empty_capture_types,
                 spawn_capture_indices: &empty_spawn_capture_indices,
+                references: &mut references,
             };
             let mut f = compile_mir_function(
                 body,
@@ -5715,7 +5986,7 @@ fn emit_functions_parallel<'db>(
             );
             f.name.clone_from(&item.fq_name);
             f.source_file.clone_from(&item.source_file);
-            Some((f, fragment))
+            Some((f, fragment, references))
         })
         .collect();
 
@@ -5733,7 +6004,13 @@ fn emit_functions_parallel<'db>(
     for (item, slot) in work.into_iter().zip(compiled) {
         let func_loc = FunctionLoc::new(db, item.file, item.local_id);
         let mut compiled_fn = match slot {
-            Some((function, fragment)) => {
+            Some((function, fragment, references)) => {
+                if !item.is_builtin_file {
+                    file_references
+                        .entry(item.source_file.clone())
+                        .or_default()
+                        .merge(references);
+                }
                 merge_function_fragment(program, watermark, fragment, function, &mut intern)
             }
             None => {
@@ -5755,7 +6032,7 @@ fn emit_functions_parallel<'db>(
         };
 
         let pkg_info = file_package(db, item.file);
-        let cache = &alias_caches[&pkg_info.package];
+        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
         attach_function_metadata(
             db,
             func_loc,
@@ -5954,7 +6231,7 @@ fn builtin_emit_function(
 fn attach_function_metadata<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    cache: &ResolvedAliases,
+    cache: &RuntimeLowering<'_>,
     is_builtin_file: bool,
     fq_name: &str,
     compiled_fn: &mut Function,
@@ -6054,6 +6331,7 @@ fn compile_lambdas_flat<'db>(
     class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
     objects_base: usize,
+    references: &mut UnitReferences,
     opt: OptLevel,
 ) -> Vec<(usize, String)> {
     let capture_infos = parent_body.map_or_else(
@@ -6090,6 +6368,7 @@ fn compile_lambdas_flat<'db>(
                     class_fields,
                     objects,
                     objects_base,
+                    references,
                     opt,
                 );
                 let nested_obj_indices: Vec<usize> =
@@ -6110,6 +6389,7 @@ fn compile_lambdas_flat<'db>(
                     lambda_names: &nested_names,
                     capture_types: &capture_info.capture_types,
                     spawn_capture_indices: &capture_info.spawn_capture_indices,
+                    references: &mut *references,
                 };
                 let mut f =
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
@@ -6156,6 +6436,7 @@ fn compile_init_function<'db>(
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
     program: &mut Program,
+    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
@@ -6179,6 +6460,11 @@ fn compile_init_function<'db>(
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
                 let source_file = relative_source_path(db, *file);
+                // The helper's references are the `let`'s own dependencies:
+                // attribute them to the file that declares the `let`, not to
+                // the synthesized `$init` tail (which is rebuilt every
+                // compile and belongs to no file).
+                let mut references = UnitReferences::default();
                 let empty_capture_types = Vec::new();
                 let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
@@ -6197,6 +6483,7 @@ fn compile_init_function<'db>(
                     class_fields,
                     &mut program.objects,
                     0,
+                    &mut references,
                     opt,
                 );
                 let lambda_let_obj_indices: Vec<usize> =
@@ -6217,11 +6504,18 @@ fn compile_init_function<'db>(
                     lambda_names: &lambda_let_names,
                     capture_types: &empty_capture_types,
                     spawn_capture_indices: &empty_spawn_capture_indices,
+                    references: &mut references,
                 };
                 let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
                 helper.name = format!("$init_let_{i}");
                 helper.source_file.clone_from(&source_file);
                 helper.arity = 0;
+                if !source_file.starts_with("<builtin>/") {
+                    file_references
+                        .entry(source_file.clone())
+                        .or_default()
+                        .merge(references);
+                }
                 helper
             }
             None => {
@@ -6355,7 +6649,7 @@ mod tests {
         sync::atomic::{AtomicU32, Ordering},
     };
 
-    use baml_base::{FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
+    use baml_base::{FileId, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
     use salsa::Setter;
 
@@ -6381,8 +6675,10 @@ mod tests {
             let workspace = SourceRoot::new(
                 &db,
                 PathBuf::from("."),
-                Name::new(baml_type::RESERVED_USER_PACKAGE),
                 SourceRootKind::Workspace,
+                None,
+                Vec::new(),
+                None,
                 Vec::new(),
             );
             db.roots = Some(SourceRootTable::new(&db, vec![workspace]));
@@ -6524,9 +6820,15 @@ mod tests {
             .expect("test file declares `f`");
         let parameter_defaults =
             baml_compiler2_hir::signature::function_parameter_defaults(&db, func_loc);
-        let cache = ResolvedAliases {
+        let aliases = ResolvedAliases {
             aliases: HashMap::new(),
             recursive: HashSet::new(),
+        };
+        let cache = RuntimeLowering {
+            aliases: &aliases,
+            spelling: baml_compiler2_hir::package::spelling(&db),
+            db: &db,
+            viewpoint: file_package(&db, file).root,
         };
 
         let metadata = compute_function_metadata(&db, func_loc, &parameter_defaults, &cache);
@@ -6551,14 +6853,24 @@ mod tests {
                     == name
             })
             .expect("test file declares the interface");
-        let cache = ResolvedAliases {
+        let aliases = ResolvedAliases {
             aliases: HashMap::new(),
             recursive: HashSet::new(),
+        };
+        let cache = RuntimeLowering {
+            aliases: &aliases,
+            spelling: baml_compiler2_hir::package::spelling(&db),
+            db: &db,
+            viewpoint: file_package(&db, file).root,
         };
         build_interface_def(
             &db,
             iface_loc,
-            baml_type::TypeName::local(baml_base::Name::new(name)),
+            &baml_type::DeclName::in_root(
+                file_package(&db, file).root,
+                Vec::new(),
+                baml_base::Name::new(name),
+            ),
             baml_type::typetag::TypeTag::of_head(name),
             &cache,
         )

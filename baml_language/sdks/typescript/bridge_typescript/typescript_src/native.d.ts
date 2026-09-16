@@ -103,9 +103,9 @@ export declare class BamlRuntime {
   /** Initialize the process-global runtime from precompiled BAML bytecode. */
   static initializeRuntimeFromBytecode(bytecode: Buffer, embeddedBamlToml?: string | undefined | null): BamlRuntime
   /** Call a BAML function synchronously (blocking). */
-  callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Buffer
+  callFunctionSync(argsProto: Buffer, ctx?: HostSpanManager | undefined | null): Buffer
   /** Call a BAML function asynchronously. */
-  callFunction(argsProto: Buffer, ctx?: HostSpanManager | undefined | null, collectors?: Array<Collector> | undefined | null): Promise<Buffer>
+  callFunction(argsProto: Buffer, ctx?: HostSpanManager | undefined | null): Promise<Buffer>
 }
 
 export declare class BamlVideo {
@@ -130,26 +130,6 @@ export declare class BamlVideo {
   _toHandle(): BamlHandle
 }
 
-export declare class Collector {
-  constructor(name?: string | undefined | null)
-  get name(): string
-  get logs(): Array<FunctionLog>
-  get last(): FunctionLog | null
-  get usage(): Usage
-  clear(): number
-  id(functionLogId: string): FunctionLog | null
-}
-
-export declare class FunctionLog {
-  get id(): string
-  get functionName(): string
-  get timing(): Timing
-  get usage(): Usage
-  get calls(): Array<LLMCall>
-  get tags(): Record<string, string>
-  get result(): Buffer | null
-}
-
 export declare class HostSpanManager {
   constructor()
   enter(name: string, args: any): void
@@ -160,24 +140,18 @@ export declare class HostSpanManager {
   contextDepth(): number
 }
 
-export declare class LlmCall {
-  get functionName(): string
-  get provider(): string | null
-  get timing(): Timing
-  get usage(): Usage
-}
-export type LLMCall = LlmCall
+/**
+ * Test-only: the outstanding ownership count of a live key — the releases it
+ * still owes — or `null` for a dead/unknown key. Lets an audit see an
+ * exactly-once imbalance on a shared engine-heap key, which row counts hide.
+ */
+export declare function _handleRefcount(key: HandleKey): number | null
 
-export declare class Timing {
-  get startTimeUtcMs(): number
-  get durationMs(): number | null
-}
-
-export declare class Usage {
-  get inputTokens(): number | null
-  get outputTokens(): number | null
-  get cachedInputTokens(): number | null
-}
+/**
+ * Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
+ * row counts once however many owners it has).
+ */
+export declare function _liveHandleCount(): number
 
 /**
  * Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
@@ -187,6 +161,13 @@ export declare function _seedFunctionRefHandle(globalIndex: number): [HandleKey,
 
 /** Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`. */
 export declare function _seedGenericMediaHandle(): [HandleKey, number]
+
+/**
+ * Test-only: seed an engine-heap (`BexHeapHandle`) entry into `HANDLE_TABLE`
+ * — the identity-bearing, deduplicating arm — returning `[key, handleType]`.
+ * Two seeds of one `slabKey` share a key.
+ */
+export declare function _seedHeapHandle(slabKey: number): [HandleKey, number]
 
 export declare function cancelFunctionCall(callId: string): boolean
 

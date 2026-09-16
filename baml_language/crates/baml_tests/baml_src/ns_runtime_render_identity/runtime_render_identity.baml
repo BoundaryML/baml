@@ -20,8 +20,9 @@ test "non-equivalent same-name runtime classes fail before render" {
     let left = reflect.class.new("Collision", { "left": reflect.Type.of<int>() });
     let right = reflect.class.new("Collision", { "right": reflect.Type.of<string>() });
     let combined = reflect.union.new([left.as_type(), right.as_type()]);
+    type Combined = unreflect(combined.as_type());
     assert.equal(
-        Render@render_prompt<unreflect(combined.as_type())>().text() catch (e) {
+        Render@render_prompt<Combined>().text() catch (e) {
             reflect.errors.CompilationError => {
                 `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
             },
@@ -36,13 +37,15 @@ test "recursive and equivalent same-name runtime classes still render" {
     node.field("value", reflect.Type.of<int>());
     node.field("next", node.type().optional());
     let node_t = node.build();
-    let recursive_prompt = Render@render_prompt<unreflect(node_t.as_type())>().text();
+    type Node = unreflect(node_t.as_type());
+    let recursive_prompt = Render@render_prompt<Node>().text();
     assert.is_true(recursive_prompt.includes("Node"));
 
     let left = reflect.class.new("Collision", { "value": reflect.Type.of<int>() });
     let right = reflect.class.new("Collision", { "value": reflect.Type.of<int>() });
     let equivalent = reflect.union.new([left.as_type(), right.as_type()]);
-    let equivalent_prompt = Render@render_prompt<unreflect(equivalent.as_type())>().text();
+    type Equivalent = unreflect(equivalent.as_type());
+    let equivalent_prompt = Render@render_prompt<Equivalent>().text();
     assert.is_true(equivalent_prompt.includes("value"))
 }
 
@@ -152,8 +155,10 @@ function RenderPair<T, U>() -> BoxRec<T> | BoxRec<U> {
 test "runtime type arguments with the same display name remain distinct" {
     let left = reflect.class.new("Arg", { "value": reflect.Type.of<int>() });
     let right = reflect.class.new("Arg", { "value": reflect.Type.of<int>() });
+    type Left = unreflect(left.as_type());
+    type Right = unreflect(right.as_type());
     assert.equal(
-        RenderPair@render_prompt<unreflect(left.as_type()), unreflect(right.as_type())>().text() catch (e) {
+        RenderPair@render_prompt<Left, Right>().text() catch (e) {
             reflect.errors.CompilationError => {
                 `${e.diagnostics[0].code}|${e.diagnostics[0].message}`
             },

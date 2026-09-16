@@ -28,8 +28,10 @@
 // With that, `env!("CARGO_BIN_FILE_BAML_PACK_HOST_baml-pack-host")` would give
 // us the binary path, cargo would handle rebuilds, and we'd delete the setup
 // below. But `artifact = "bin"` requires `-Z bindeps` and is nightly-only as of
-// Rust 1.93 (2026-01). The workspace is pinned to stable, so nextest runs one
-// filtered setup script that builds the host before it launches any test case.
+// Rust 1.93 (2026-01). CI builds with `cargo build --tests --bins`, selecting
+// both packages and the same features as nextest, then sets
+// BAML_PACK_HOST_PREBUILT=1. Local nextest runs use a filtered setup script
+// to build the host when that outer prebuild was not requested.
 // Plain `cargo test` has no setup-script facility; its single test process uses
 // the fallback build in [`ensure_built`]. `baml pack` locates the host as a
 // sibling of the running `baml-cli`, so both paths build it into the same

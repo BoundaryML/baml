@@ -232,7 +232,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.Error"
         | "baml.csv.Position"
         | "baml.csv.ReaderOptions"
-        | "baml.csv.WriterOptions" => Some(BuiltinProjection::StructuralClass),
+        | "baml.csv.WriterOptions"
+        | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "baml.spawn.TaskGroup"
         | "baml.spawn.CancelToken"
@@ -249,7 +250,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.Writer"
         | "baml.net.TcpStream"
         | "baml.net.TcpListener"
-        | "baml.net.UdpSocket" => Some(BuiltinProjection::Resource),
+        | "baml.net.UdpSocket"
+        | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
         "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
         "ai.Prompt" => Some(BuiltinProjection::Prompt),
         "baml.csv._NeedData"

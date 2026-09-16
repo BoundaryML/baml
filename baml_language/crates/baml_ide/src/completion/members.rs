@@ -8,7 +8,6 @@
 //! already resolved; what remains here is each arm's own filter — which
 //! names a reader can actually write at this position.
 
-use baml_base::SourceFile;
 use baml_compiler2_hir::contributions::Definition;
 use baml_compiler2_hir_ty::method_resolution::MemberDecl;
 use baml_compiler2_ppir::resolve::NamespaceMemberKind;
@@ -22,10 +21,9 @@ use crate::symbols;
 
 pub(crate) fn complete(
     db: &dyn baml_compiler2_ppir::Db,
-    file: SourceFile,
     target: &DotTarget<'_>,
     kind: PathKind,
-    out: &mut Completions,
+    out: &mut Completions<'_>,
 ) {
     match target {
         DotTarget::Value { owner, receiver } => {
@@ -41,7 +39,7 @@ pub(crate) fn complete(
                 if candidate.is_static {
                     continue;
                 }
-                out.add_member(db, file, &candidate, MemberForm::Instance);
+                out.add_member(&candidate, MemberForm::Instance);
             }
         }
         DotTarget::Type(definition) => {
@@ -54,15 +52,13 @@ pub(crate) fn complete(
                 {
                     continue;
                 }
-                out.add_member(db, file, &candidate, MemberForm::Qualified);
+                out.add_member(&candidate, MemberForm::Qualified);
             }
         }
         DotTarget::Namespace(members) => {
             for member in members {
                 if let NamespaceMemberKind::Item(def) = &member.kind {
-                    if symbols::is_synthesized(db, &member.name, *def)
-                        || is_builtin_companion(db, *def)
-                    {
+                    if !symbols::offered_in_completion(db, &member.name, *def) {
                         continue;
                     }
                     // A type position reaches the namespace's TYPES; its
@@ -71,7 +67,7 @@ pub(crate) fn complete(
                         continue;
                     }
                 }
-                out.add_namespace_member(db, file, member);
+                out.add_namespace_member(member);
             }
         }
     }
@@ -87,24 +83,4 @@ fn is_type_definition(def: Definition<'_>) -> bool {
             | DefinitionKind::Interface
             | DefinitionKind::TypeAlias
     )
-}
-
-/// Whether a definition is a COMPANION CARRIER — the class a builtin's
-/// methods are declared on, whose written spelling is the builtin itself.
-///
-/// `baml.Int` is where `int`'s methods live and `int` is how it is written;
-/// likewise `baml.Array<T>.item` reads `T[].item` and `baml.Map<K, V>.item`
-/// reads `map<K, V>.item`. Offering the carrier under its package path would
-/// teach a spelling nobody uses, so `baml.` lists neither it nor its
-/// siblings. The set is the language's own
-/// ([`builtin_companion_of`](baml_type::type_kind::builtin_companion_of)),
-/// not a list kept here.
-fn is_builtin_companion(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> bool {
-    let Definition::Class(class) = def else {
-        return false;
-    };
-    let data = baml_compiler2_ppir::item_data::class_data(db, class);
-    let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-    let qtn = baml_type::QualifiedTypeName::new(pkg.package, pkg.namespace_path, data.name.clone());
-    baml_type::type_kind::builtin_companion_of(&qtn).is_some()
 }

@@ -438,7 +438,7 @@ function bedrock_multi_turn() -> string {
             content: [ai.content.Text { text: "4" }],
             client_id: `bedrock/${_model()}`,
         },
-        ai.events.UserMessage { content: "And 3+3?" },
+        ai.events.UserMessage.new("And 3+3?"),
     ];
     let journal = ai.Journal { log: log };
     let body = _body(_client(null), _turn_input(BedrockEcho@spec("What is 2+2?"), journal, _no_tools()));
@@ -459,7 +459,7 @@ test "bedrock_multi_turn" {
 // An assistant turn that lowers to NOTHING is dropped, not sent as
 // `content: []` — Converse answers that shape with a ValidationException.
 //
-// A reasoning-only turn is exactly it: `_assistant_content` drops `Reasoning`
+// A reasoning-only turn is exactly it: `_lower_journal` drops `Reasoning`
 // (Converse replays reasoning only with the provider's opaque signature, which
 // `ai.content.Reasoning` cannot reproduce) and drops `Media`. Nothing upstream
 // removes the turn either — `ai.wire.sanitize_for_client` KEEPS reasoning whose
@@ -476,7 +476,7 @@ function bedrock_reasoning_only_turn_is_dropped() -> string {
             content: [ai.content.Reasoning { summary: "thinking about it" }],
             client_id: `bedrock/${_model()}`,
         },
-        ai.events.UserMessage { content: "And 3+3?" },
+        ai.events.UserMessage.new("And 3+3?"),
     ];
     let journal = ai.Journal { log: log };
     let body = _body(_client(null), _turn_input(BedrockEcho@spec("What is 2+2?"), journal, _no_tools()));
@@ -507,12 +507,12 @@ function bedrock_reasoning_only_turn_mid_conversation() -> string {
             content: [ai.content.Text { text: "4" }],
             client_id: `bedrock/${_model()}`,
         },
-        ai.events.UserMessage { content: "And 3+3?" },
+        ai.events.UserMessage.new("And 3+3?"),
         ai.events.AssistantMessage {
             content: [ai.content.Reasoning { summary: "thinking about it" }],
             client_id: `bedrock/${_model()}`,
         },
-        ai.events.UserMessage { content: "And 4+4?" },
+        ai.events.UserMessage.new("And 4+4?"),
     ];
     let journal = ai.Journal { log: log };
     let body = _body(_client(null), _turn_input(BedrockEcho@spec("What is 2+2?"), journal, _no_tools()));
@@ -622,7 +622,7 @@ test "bedrock_no_tool_config_without_tools" {
 function bedrock_tool_replay() -> string {
     let args: map<string, unknown> = { "city": "SF" };
     let log: ai.events.Event[] = [
-        ai.events.UserMessage { content: "weather in SF and NY?" },
+        ai.events.UserMessage.new("weather in SF and NY?"),
         ai.events.AssistantMessage {
             content: [
                 ai.content.ToolUse { id: "tu_1", name: "get_weather", args: args },
@@ -630,7 +630,7 @@ function bedrock_tool_replay() -> string {
             ],
             client_id: `bedrock/${_model()}`,
         },
-        ai.events.ToolCompleted { id: "tu_1", output: "sunny" },
+        ai.events.ToolCompleted.new("tu_1", "sunny"),
         ai.events.ToolFailed { id: "tu_2", message: "upstream down" },
     ];
     let journal = ai.Journal { log: log };
@@ -673,7 +673,7 @@ function bedrock_tool_replay_null_arg() -> string {
             content: [ai.content.ToolUse { id: "tu_1", name: "get_weather", args: args }],
             client_id: `bedrock/${_model()}`,
         },
-        ai.events.ToolCompleted { id: "tu_1", output: "sunny" },
+        ai.events.ToolCompleted.new("tu_1", "sunny"),
     ];
     let journal = ai.Journal { log: log };
     let body = _body(_client(null), _turn_input(BedrockUserOnly@spec("go"), journal, _weather_tools()));
@@ -1266,4 +1266,67 @@ testset "live" with testing.Sequential() {
     } else {
         log.warn("live::bedrock not registered: AWS_PROFILE is unset (local SSO session required)")
     }
+}
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Bedrock column of the lowering table (`_lower_block` in bedrock.baml):
+// image, pdf and video are Accepted inside `toolResult.content`; audio has
+// no toolResult member and Degrades into a trailing user turn.
+
+function _bedrock_media_body(media: image | audio | video | pdf) -> json {
+    _body(
+        _client(null),
+        _turn_input(
+            BedrockUserOnly@spec("go"),
+            root.llm_mock.media_journal(`bedrock/${_model()}`, media),
+            _weather_tools(),
+        ),
+    )
+}
+
+// One merged user message: [toolResult(text), toolResult(text, image), text,
+// image]. The text-only result is a single text block.
+function bedrock_journal_image_accepted() -> string {
+    let body = _bedrock_media_body(root.llm_mock.media_png());
+    let m = ".messages[2].content";
+    [
+        baml.json.path<string>(body, `${m}[0].toolResult.content[0].text`),
+        _array_len(body, `${m}[0].toolResult.content`).to_string(),
+        baml.json.path<string>(body, `${m}[1].toolResult.content[0].text`),
+        baml.json.path<string>(body, `${m}[1].toolResult.content[1].image.format`),
+        baml.json.path<string>(body, `${m}[1].toolResult.content[1].image.source.bytes`),
+        baml.json.path<string>(body, `${m}[2].text`),
+        baml.json.path<string>(body, `${m}[3].image.format`),
+        _array_len(body, ".messages").to_string(),
+    ].join("|")
+}
+
+test "bedrock_journal_image_accepted" {
+    assert.equal(
+        bedrock_journal_image_accepted(),
+        "sunny in SF|1|captured:|png|SGVsbG8=|Screenshot after the tool ran:|png|3",
+    )
+}
+
+// Degrade: the result keeps its text; the audio follows the toolResult
+// blocks behind a note naming the tool, then the user turn carries its own.
+function bedrock_journal_audio_degrades() -> string {
+    let body = _bedrock_media_body(root.llm_mock.media_mp3());
+    let m = ".messages[2].content";
+    [
+        baml.json.path<string>(body, `${m}[1].toolResult.content[0].text`),
+        _array_len(body, `${m}[1].toolResult.content`).to_string(),
+        baml.json.path<string>(body, `${m}[2].text`),
+        baml.json.path<string>(body, `${m}[3].audio.format`),
+        baml.json.path<string>(body, `${m}[4].text`),
+        baml.json.path<string>(body, `${m}[5].audio.source.bytes`),
+    ].join("|")
+}
+
+test "bedrock_journal_audio_degrades" {
+    assert.equal(
+        bedrock_journal_audio_degrades(),
+        `captured:|1|${root.llm_mock.degrade_note("capture")}|mp3|Screenshot after the tool ran:|QUJD`,
+    )
 }

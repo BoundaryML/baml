@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Web/Wasm bridge and generated fixture setup for sdk_test_typescript_web.
 # The canonical checked-in tests live in the sibling typescript crate and are
-# copied into this crate's generated trees by build.rs.
+# copied into this crate's generated trees by `sdk_test_codegen`, below.
 
 set -euo pipefail
 
@@ -9,6 +9,12 @@ cd "$(dirname "$0")"
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 BRIDGE_TYPESCRIPT_WEB="$WORKSPACE_ROOT/sdks/typescript/bridge_typescript_web"
+
+# Generate each fixture's Web and Workers trees first: nothing else produces
+# them, and the per-fixture `pnpm install` loop below silently skips any
+# fixture whose generated/ is missing.
+echo "==> sdk_test_codegen typescript_web (generate fixture SDKs)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- typescript_web)
 
 export npm_config_store_dir="$WORKSPACE_ROOT/target/pnpm-store"
 mkdir -p "$npm_config_store_dir"

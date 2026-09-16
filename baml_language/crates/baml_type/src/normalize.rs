@@ -36,40 +36,127 @@ use std::{
 };
 
 use crate::{
-    FunctionParamMode, FunctionParamTy, Head, Interface, Literal, MediaKind, Name, ParamTy,
-    QualifiedTypeName, Ty, TyAttr,
+    DeclName, FunctionParamMode, FunctionParamTy, Head, Interface, Literal, MediaKind, Name,
+    ParamTy, Ty, TyAttr, TypeName,
 };
 
-/// The one declaration the algebra special-cases by identity: `AnyFunction`'s
-/// pins are covariant, unlike every other interface.
-///
-/// Built once rather than per comparison — the subtyping walk reaches the arms
-/// that consult it on every interface-vs-interface node. Resolving it to a head
-/// still goes through [`TypeContext::head_lookup`] per call, which is cheap for
-/// a name-based context and a registry hit for a runtime one.
-static ANY_FUNCTION: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
-    QualifiedTypeName::new(Name::new("reflect"), Vec::new(), Name::new("AnyFunction"))
-});
+/// The declarations the algebra special-cases by identity. Each is a
+/// language-fixed item of the `reflect` package; a context resolves it to
+/// whatever head it represents that declaration by
+/// ([`TypeContext::well_known`]), so the algebra never spells one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WellKnownHead {
+    /// `reflect.AnyFunction`, whose associated-type pins are covariant unlike
+    /// every other interface's.
+    AnyFunction,
+    /// `reflect.AnyClass`, the compiler-derived interface every class value
+    /// inhabits.
+    AnyClass,
+}
 
-/// Whether `head` is the [`ANY_FUNCTION`] declaration, decided by identity
-/// against the head `ctx` uses for it rather than by inspecting `head` itself.
+impl WellKnownHead {
+    /// The declaration's short name at the root namespace of `reflect`.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::AnyFunction => "AnyFunction",
+            Self::AnyClass => "AnyClass",
+        }
+    }
+}
+
+/// A head that recovers a well-known declaration from its language-fixed
+/// spelling alone, with no context to ask: the wire's name-based head. The
+/// compiler's root-based head is deliberately NOT one — which root is
+/// `reflect` is a fact the database holds — and neither is the runtime's.
+pub trait SpelledHead: Head {
+    fn well_known(head: WellKnownHead) -> Self;
+}
+
+impl SpelledHead for TypeName {
+    fn well_known(head: WellKnownHead) -> Self {
+        TypeName::new(Name::new("reflect"), Vec::new(), Name::new(head.name()))
+    }
+}
+
+/// [`NoFacts`] for the compiler's head: every nominal fact opaque, except
+/// which heads are the well-known `reflect` declarations — a language fact the
+/// database holds ([`LangRoots`](baml_base::LangRoots)), which is why the
+/// compiler cannot use `NoFacts` itself (a [`DeclName`] recovers nothing from
+/// its spelling). Deprecated for the same reason `NoFacts` is: each use marks
+/// a boundary awaiting a real fact context.
+#[deprecated = "every LangFacts site is a boundary awaiting a real fact context — supply one (compiler: the scope's Facts) instead of comparing fact-free"]
+#[derive(Debug, Clone, Copy)]
+pub struct LangFacts(pub baml_base::LangRoots);
+
+#[expect(
+    deprecated,
+    reason = "naming `LangFacts` to define its own trait impl fires the lint; this is \
+              the type's definition, not a consumer site to migrate off it"
+)]
+impl TypeContext<DeclName> for LangFacts {
+    fn well_known(&self, head: WellKnownHead) -> Option<DeclName> {
+        well_known_decl(self.0, head)
+    }
+
+    fn alias_def(&self, _name: &DeclName) -> Option<Ty> {
+        None
+    }
+
+    fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
+        false
+    }
+
+    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
+        Vec::new()
+    }
+
+    fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
+        false
+    }
+
+    fn enum_variants(&self, _name: &DeclName) -> Option<Vec<Name>> {
+        None
+    }
+
+    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+        Vec::new()
+    }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &Interface,
+        _member: &Name,
+        _fuel: u32,
+    ) -> ProjectionStep {
+        ProjectionStep::Opaque
+    }
+}
+
+/// The compiler's head for a well-known declaration: an item at the root
+/// namespace of the installed `reflect` package, or `None` when it is not
+/// installed. Every compiler-side [`TypeContext`] answers
+/// [`well_known`](TypeContext::well_known) through here.
+pub fn well_known_decl(lang: baml_base::LangRoots, head: WellKnownHead) -> Option<DeclName> {
+    lang.get(baml_base::LangPackage::Reflect)
+        .map(|reflect| DeclName::in_root(reflect, Vec::new(), Name::new(head.name())))
+}
+
+/// Whether `head` is the [`WellKnownHead::AnyFunction`] declaration, decided
+/// by identity against the head `ctx` uses for it rather than by inspecting
+/// `head` itself.
 ///
 /// An unknown declaration is not `AnyFunction` as far as this can tell, so the
 /// covariance special case does not fire — conservative, per the context's
 /// fail-safe contract.
 fn is_any_function<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
-    ctx.head_lookup(&ANY_FUNCTION)
+    ctx.well_known(WellKnownHead::AnyFunction)
         .is_some_and(|any_function| *head == any_function)
 }
 
-/// The compiler-derived interface every class value inhabits.
-static ANY_CLASS: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
-    QualifiedTypeName::new(Name::new("reflect"), Vec::new(), Name::new("AnyClass"))
-});
-
-/// [`is_any_function`] for [`ANY_CLASS`].
+/// [`is_any_function`] for [`WellKnownHead::AnyClass`].
 fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
-    ctx.head_lookup(&ANY_CLASS)
+    ctx.well_known(WellKnownHead::AnyClass)
         .is_some_and(|any_class| *head == any_class)
 }
 
@@ -89,7 +176,7 @@ pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
-pub enum ProjectionStep<H: Head = QualifiedTypeName> {
+pub enum ProjectionStep<H: Head = DeclName> {
     /// The projection *is* this type — the impl's binding or the qualifier's pin.
     /// `(int as Foo).Assoc` with `impl Foo for int { type Assoc = string }` reduces
     /// to `string`; the projection is a pure, side-effect-free type-level operator,
@@ -108,27 +195,22 @@ pub enum ProjectionStep<H: Head = QualifiedTypeName> {
 /// not" or merely "cannot determine") makes the algebra conservative — it will
 /// not collapse, absorb, or equate what it cannot confirm. A missing fact
 /// therefore degrades only to "not necessarily equivalent / subtype".
-pub trait TypeContext<H: Head = QualifiedTypeName> {
-    /// The head this context represents the declaration at `qtn` with.
+pub trait TypeContext<H: Head = DeclName> {
+    /// The head this context represents the well-known declaration `head` with.
     ///
     /// The algebra never inspects a head's spelling — heads are opaque values it
     /// threads through — so recognizing a *particular* declaration is done by
     /// obtaining its head here and comparing with `==`. That indirection is what
-    /// lets the question be answered by a representation with no name to
-    /// inspect: a name-based context returns the name itself (the identity,
-    /// always available), while a runtime context resolves the declaration on
-    /// its heap and hands back a handle — state only the context has, and the
+    /// lets the question be answered by every representation: the wire's
+    /// name-based context spells the name, the compiler's context knows which
+    /// root is `reflect`, and a runtime context resolves the declaration on its
+    /// heap and hands back a handle — state only the context has, and the
     /// reason this cannot live on [`Head`].
     ///
-    /// Used for the algebra's one nominal special case, `reflect.AnyFunction`,
-    /// whose pins are covariant unlike every other interface.
-    ///
-    /// `None` means the declaration could not be resolved *at all*, and fails
-    /// safe in the usual way: the special case does not fire, which is
-    /// conservative. Note this is about resolvability, not knowledge — a
-    /// name-based context answers unconditionally, since naming a declaration
-    /// asserts nothing about it.
-    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<H>;
+    /// `None` means the declaration could not be resolved *at all* (the
+    /// package is not installed, say), and fails safe in the usual way: the
+    /// special case does not fire, which is conservative.
+    fn well_known(&self, head: WellKnownHead) -> Option<H>;
 
     /// The type a type alias expands to, or `None` if the alias is unknown.
     ///
@@ -480,46 +562,46 @@ pub struct NoFacts;
     reason = "naming `NoFacts` to define its own trait impl fires the lint; this is \
               the type's definition, not a consumer site to migrate off it"
 )]
-impl TypeContext for NoFacts {
-    /// The identity, like every name-based context: naming a declaration is not
-    /// a *fact* about it, so this is answerable even here. Returning `None`
-    /// would silently disable the `AnyFunction` covariance rule, which used to
-    /// fire under this context on the name alone.
-    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<QualifiedTypeName> {
-        Some(qtn.clone())
+impl<H: SpelledHead> TypeContext<H> for NoFacts {
+    /// Answered from the spelling alone: naming a declaration is not a *fact*
+    /// about it, so this is answerable even here. Returning `None` would
+    /// silently disable the `AnyFunction` covariance rule, which fires under
+    /// this context on the name alone.
+    fn well_known(&self, head: WellKnownHead) -> Option<H> {
+        Some(H::well_known(head))
     }
 
-    fn alias_def(&self, _name: &QualifiedTypeName) -> Option<Ty> {
+    fn alias_def(&self, _name: &H) -> Option<Ty<H>> {
         None
     }
 
-    fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
+    fn implements_interface(&self, _concrete: &Ty<H>, _interface: &Interface<H>) -> bool {
         false
     }
 
-    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface> {
+    fn type_var_bound(&self, _param: &ParamTy) -> Vec<Interface<H>> {
         Vec::new()
     }
 
-    fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
+    fn interface_requires(&self, _sub: &Interface<H>, _sup: &Interface<H>) -> bool {
         false
     }
 
-    fn enum_variants(&self, _name: &QualifiedTypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, _name: &H) -> Option<Vec<Name>> {
         None
     }
 
-    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+    fn associated_type_bound(&self, _interface: &Interface<H>, _assoc: Name) -> Vec<Interface<H>> {
         Vec::new()
     }
 
     fn project(
         &self,
-        _base: &Ty,
-        _interface: &Interface,
+        _base: &Ty<H>,
+        _interface: &Interface<H>,
         _member: &Name,
         _fuel: u32,
-    ) -> ProjectionStep<QualifiedTypeName> {
+    ) -> ProjectionStep<H> {
         ProjectionStep::Opaque
     }
 }
@@ -1014,7 +1096,7 @@ impl<H: Head> MuPhase<H> for Canonical {
 /// Ordering (`PartialOrd`/`Ord`) is the canonical sort key for union members; it
 /// has no semantic meaning beyond producing a deterministic canonical form.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum NormalTy<H: Head = QualifiedTypeName, P: MuPhase<H> = Canonical> {
+enum NormalTy<H: Head = DeclName, P: MuPhase<H> = Canonical> {
     // Primitive leaves
     Int,
     Bigint,
@@ -2885,10 +2967,10 @@ impl NormalTy {
     }
 }
 
-/// The interned representation is name-headed by construction
-/// (`interned::InferTy::Class(TypeName, ..)`), so this whole ingestion path is
-/// fixed at `H = QualifiedTypeName`; only the μ-phase varies.
-impl NormalTy<QualifiedTypeName, Named> {
+/// The interned representation is headed by the compiler's head by construction
+/// (`interned::InferTy::Class(DeclName, ..)`), so this whole ingestion path is
+/// fixed at `H = DeclName`; only the μ-phase varies.
+impl NormalTy<DeclName, Named> {
     /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`. The one
     /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
     /// `Unknown`); TIR's `Unknown` recovery sentinel is
@@ -2896,9 +2978,9 @@ impl NormalTy<QualifiedTypeName, Named> {
     fn from_interned<C: TypeContext>(
         ty: &interned::Ty,
         ctx: &C,
-        expanding: &mut HashSet<QualifiedTypeName>,
+        expanding: &mut HashSet<DeclName>,
         fuel: u32,
-    ) -> NormalTy<QualifiedTypeName, Named> {
+    ) -> NormalTy<DeclName, Named> {
         use interned::InferTy as K;
         match ty.kind() {
             K::Int { .. } => NormalTy::Int,
@@ -3055,9 +3137,9 @@ impl NormalTy<QualifiedTypeName, Named> {
     fn from_interned_all<C: TypeContext>(
         tys: &[interned::Ty],
         ctx: &C,
-        expanding: &mut HashSet<QualifiedTypeName>,
+        expanding: &mut HashSet<DeclName>,
         fuel: u32,
-    ) -> Vec<NormalTy<QualifiedTypeName, Named>> {
+    ) -> Vec<NormalTy<DeclName, Named>> {
         tys.iter()
             .map(|ty| Self::from_interned(ty, ctx, expanding, fuel))
             .collect()

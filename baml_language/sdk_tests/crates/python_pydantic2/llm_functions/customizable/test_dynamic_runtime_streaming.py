@@ -124,7 +124,8 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     )
 
     # First mirror the original VetRec wrapper: the runtime type is constructed
-    # inside BAML and only the public Stream slots are widened to `unknown`.
+    # inside BAML and the stream is handed back as `unknown`; the handle's tag
+    # still selects the `BamlStream` wrapper.
     wrapped_final = _drain_runtime_stream(
         "wrapped", hs7_open_collision_stream("ignored-by-replay-server")
     )

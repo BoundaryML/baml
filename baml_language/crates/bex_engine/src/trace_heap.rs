@@ -502,7 +502,6 @@ impl<'a> TraceSnapshotBuilder<'a> {
             | Object::Cell(_)
             | Object::Future(_)
             | Object::UnscheduledFuture(_)
-            | Object::Collector(_)
             | Object::Type(_) => self.omitted(
                 TraceOmissionReason::UnsupportedValue,
                 unsupported_object_message(object),
@@ -718,7 +717,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::Future(_) => "future",
         Object::UnscheduledFuture(_) => "unscheduled future",
         Object::RustData(_) => "host-owned rust data",
-        Object::Collector(_) => "collector",
         Object::Type(_) => "type descriptor",
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => "heap sentinel",

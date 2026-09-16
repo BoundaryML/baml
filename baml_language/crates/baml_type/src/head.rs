@@ -27,7 +27,7 @@
 ///   (see `mu`'s `never`/`unknown_top`/…), keeping its interner borrowing.
 /// - `Eq` + `Hash` — the normalized form is compared and memoized by value, and
 ///   head identity is decided by `==` against a head obtained from the context
-///   (see [`TypeContext::head_lookup`](crate::normalize::TypeContext::head_lookup)).
+///   (see [`TypeContext::well_known`](crate::normalize::TypeContext::well_known)).
 ///
 /// Note what is absent: nothing that recovers a display name, and nothing that
 /// recognizes a particular builtin. Both would force every head representation

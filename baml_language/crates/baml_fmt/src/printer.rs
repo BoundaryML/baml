@@ -282,6 +282,79 @@ impl<'a> Printer<'a> {
         trivia_len
     }
 
+    /// Prints comments between adjacent elements, then their canonical separator.
+    pub(crate) fn print_separator(
+        &mut self,
+        previous: TextRange,
+        next_leftmost: Option<TextRange>,
+        continuation_indent: usize,
+        separator: &str,
+    ) {
+        let (_, previous_trailing) = self.trivia.get_for_range_split(previous);
+        let next_leading = next_leftmost
+            .map(|range| self.trivia.get_for_range_split(range).0)
+            .unwrap_or(&[]);
+        let mut printed_comment = false;
+        let mut continued_on_newline = false;
+
+        for trivia in previous_trailing.iter().chain(next_leading) {
+            if !trivia.is_comment() {
+                continue;
+            }
+            if !continued_on_newline {
+                self.print_spaces(1);
+            }
+            self.print_trivia(trivia);
+            printed_comment = true;
+            continued_on_newline = trivia.single_line_len(self.input).is_none();
+            if continued_on_newline {
+                self.print_newline();
+                self.print_spaces(continuation_indent);
+            }
+        }
+
+        if !printed_comment {
+            self.print_str(separator);
+        } else if !continued_on_newline {
+            self.print_spaces(1);
+        }
+    }
+
+    pub(crate) fn try_print_empty_braces(
+        &mut self,
+        open_brace: &impl Token,
+        close_brace: &impl Token,
+    ) -> bool {
+        let (_, open_trailing) = self.trivia.get_for_range_split(open_brace.span());
+        let (close_leading, _) = self.trivia.get_for_range_split(close_brace.span());
+        if open_trailing
+            .iter()
+            .chain(close_leading)
+            .any(EmittableTrivia::is_comment)
+        {
+            return false;
+        }
+        self.print_raw_token(open_brace);
+        self.print_raw_token(close_brace);
+        true
+    }
+
+    pub(crate) fn print_semicolon(
+        &mut self,
+        previous: TextRange,
+        original: Option<TextRange>,
+        continuation_indent: usize,
+    ) {
+        if let Some(original) = original {
+            self.print_separator(previous, Some(original), continuation_indent, "");
+            let trimmed = self.output.trim_end_matches(' ');
+            if !trimmed.ends_with('\n') {
+                self.output.truncate(trimmed.len());
+            }
+        }
+        self.print_str(";");
+    }
+
     /// Append the output and warnings from another printer to this one.
     ///
     /// Generally used to append the output from a nested printer.

@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase6.rs
+expression: "render_tir(&db, file)"
+---
+function user.image_url_returns_optional_string(img: image) -> string | null throws never {
+  { : string | null
+    img.url() : string | null
+  }
+}
+function user.image_base64_returns_string(img: image) -> string throws never {
+  { : string
+    img.base64() : string
+  }
+}
+function user.image_mime_type_returns_optional_string(img: image) -> string | null throws never {
+  { : string | null
+    img.mime_type() : string | null
+  }
+}
+function user.pdf_url_returns_optional_string(doc: pdf) -> string | null throws never {
+  { : string | null
+    doc.url() : string | null
+  }
+}
+function user.audio_base64_returns_string(a: audio) -> string throws never {
+  { : string
+    a.base64() : string
+  }
+}
+function user.video_file_returns_optional_string(v: video) -> string | null throws never {
+  { : string | null
+    v.file() : string | null
+  }
+}

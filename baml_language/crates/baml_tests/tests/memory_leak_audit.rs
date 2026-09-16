@@ -105,7 +105,10 @@ fn editing_session_memory_growth() {
         // Simulate the rest of an editor's didChange path: bytecode
         // generation on top of the diagnostics sweep.
         if full_lsp_path && diags.is_empty() {
-            let _bytecode = db.get_bytecode();
+            let package = db
+                .workspace_root()
+                .unwrap_or_else(|| unreachable!("the audit adds one workspace root"));
+            let _bytecode = db.get_bytecode(package);
         }
 
         if i % 50 == 0 {

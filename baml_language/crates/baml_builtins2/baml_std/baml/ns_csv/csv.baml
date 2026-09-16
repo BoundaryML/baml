@@ -355,8 +355,8 @@ class Reader {
     _owns_file: bool,
 
     implements root.iter.Iterable {
-        type Item = root.csv.Record
-        type Error = root.csv.Error | root.errors.Io
+        type Item = root.csv.Record;
+        type Error = root.csv.Error | root.errors.Io;
 
         /// Returns `self`: a `Reader` is its own iterator, so a reader can be
         /// consumed exactly once. There is only one cursor to hand out, and a
@@ -369,8 +369,8 @@ class Reader {
     }
 
     implements root.iter.Iterator {
-        type Item = root.csv.Record
-        type Error = root.csv.Error | root.errors.Io
+        type Item = root.csv.Record;
+        type Error = root.csv.Error | root.errors.Io;
 
         /// Yields the next raw `Record`, pumping input from the source as the
         /// parser needs it.
@@ -586,8 +586,8 @@ class Rows<T> {
     reader: Reader,
 
     implements root.iter.Iterable {
-        type Item = T
-        type Error = root.csv.Error | root.errors.Io
+        type Item = T;
+        type Error = root.csv.Error | root.errors.Io;
 
         /// Returns `self`, for the same one-cursor reason `Reader` is its own
         /// iterator.
@@ -599,8 +599,8 @@ class Rows<T> {
     }
 
     implements root.iter.Iterator {
-        type Item = T
-        type Error = root.csv.Error | root.errors.Io
+        type Item = T;
+        type Error = root.csv.Error | root.errors.Io;
 
         /// Yields the next record decoded into `T`.
         ///

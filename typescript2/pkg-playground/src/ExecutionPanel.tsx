@@ -56,6 +56,7 @@ import { setGatewayEnabled } from './gateway';
 import { GraphView } from './graph/GraphView';
 import { findLatestGraphRunSnapshot } from './graph-run-selection';
 import { cn } from './lib/utils';
+import { projectLabels, toProjectEntry } from './project-label';
 import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
 import { ResultDisplay } from './ResultDisplay';
 import { RunOutputTerminal } from './RunOutputTerminal';
@@ -557,6 +558,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   }, [executionStore]);
 
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
+  // Declared package names, keyed by root path. Absent for a project that
+  // names no name, which is most of them; the label falls back to the
+  // directory. See `projectLabels`.
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({});
+  // Short, mutually distinct labels for the project tabs; the tab's tooltip
+  // carries the full path.
+  const projectTabLabels = useMemo(
+    () =>
+      projectLabels(
+        projectRoots.map((path) => ({ name: projectNames[path], path })),
+      ),
+    [projectRoots, projectNames],
+  );
   const [projectUpdates, setProjectUpdates] = useState<
     Record<string, ProjectUpdate>
   >({});
@@ -1097,13 +1111,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           const n = data.notification;
           if (!n) break;
           switch (n.type) {
-            case 'listProjects':
-              setProjectRoots(n.projects ?? []);
-              setSelectedProject((prev) => {
-                if (prev && (n.projects ?? []).includes(prev)) return prev;
-                return (n.projects ?? [])[0] ?? null;
-              });
+            case 'listProjects': {
+              const entries = (n.projects ?? []).map(toProjectEntry);
+              const paths = entries.map((entry) => entry.path);
+              setProjectRoots(paths);
+              setProjectNames(
+                Object.fromEntries(
+                  entries.flatMap((entry) =>
+                    entry.name ? [[entry.path, entry.name] as const] : [],
+                  ),
+                ),
+              );
+              setSelectedProject((prev) =>
+                prev && paths.includes(prev) ? prev : (paths[0] ?? null),
+              );
               break;
+            }
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
               // A current build re-enables run controls automatically after a
@@ -2558,6 +2581,35 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         // Cmd/Ctrl+Enter from the host's code editor.
         value={activeTab}
       >
+        {/* ──── Project tabs ────
+            Only when the window holds more than one project: a row of one
+            says nothing, and a single project's path is already in the API
+            keys tooltip. Each tab is labelled by the package's own name when
+            it declares one and by its directory otherwise, with the full path
+            on hover. */}
+        {projectRoots.length > 1 && (
+          <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 overflow-x-auto border-b border-vsc-border bg-vsc-surface">
+            <ToggleGroup
+              onValueChange={(v) => setSelectedProject(v)}
+              options={projectRoots.map((root) => ({
+                label: (
+                  <>
+                    {projectTabLabels.get(root) ?? root}
+                    {projectUpdates[root] &&
+                      !projectUpdates[root].isBexCurrent && (
+                        <span className="ml-0.5 text-vsc-yellow">*</span>
+                      )}
+                  </>
+                ),
+                title: root,
+                value: root,
+              }))}
+              size="sm"
+              value={selectedProject ?? projectRoots[0]}
+            />
+          </div>
+        )}
+
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
           <TooltipProvider>
@@ -2626,26 +2678,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           )}
 
           <div className="flex-1" />
-
-          {projectRoots.length > 1 && (
-            <ToggleGroup
-              onValueChange={(v) => setSelectedProject(v)}
-              options={projectRoots.map((root) => ({
-                label: (
-                  <>
-                    {root}
-                    {projectUpdates[root] &&
-                      !projectUpdates[root].isBexCurrent && (
-                        <span className="ml-0.5 text-vsc-yellow">*</span>
-                      )}
-                  </>
-                ),
-                value: root,
-              }))}
-              size="sm"
-              value={selectedProject ?? projectRoots[0]}
-            />
-          )}
 
           {/* The primary Run button lives next to the args editor inside the
               Run tab; other tabs keep a compact icon so re-running while

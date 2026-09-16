@@ -17,26 +17,39 @@ type Selector = root.Client | string | baml.env.Ref;
 /// Resolve a `Selector` to the client to call, at CALL time.
 ///
 ///   * a `ai.Client` is returned unchanged (identity);
-///   * a string is the `"provider/model"` shorthand, constructed here — the
-///     runtime twin of the compiler's literal-`client:` lowering. An unknown
-///     prefix throws `ai.errors.InvalidRequest` listing the valid ones;
+///   * a string is the `"provider/model"` shorthand, constructed through
+///     `providers` — the runtime twin of the compiler's literal-`client:`
+///     lowering. An unknown prefix throws `ai.errors.InvalidRequest` listing
+///     the valid ones;
 ///   * a `baml.env.Ref` is read now and its value takes the string path. An
 ///     UNSET variable is a typed `ai.errors.InvalidRequest` naming it — not
 ///     a panic, so a `catch_all` at the call boundary can still fall back.
 ///
+/// Write it as `ai.clients.resolve(selector)`: the call is compiler-assisted.
+/// Only the compiler knows every provider (each provider package depends on
+/// this one, so this package cannot name them), so at every call site it
+/// appends `providers` — constructing the client for a prefix and model, or
+/// `null` for a prefix it does not know — and `prefixes`, the prefixes it
+/// knows, both synthesized from the one provider table the literal
+/// `client "provider/model"` lowering reads.
+///
 /// This is what makes `client: env.MODEL.get() ?? "openai/gpt-4o-mini"` work:
 /// nothing about the selection is decided until the call happens.
-function resolve(selector: Selector) -> root.Client {
+function resolve(
+    selector: Selector,
+    providers: (string, string) -> root.Client?,
+    prefixes: string[],
+) -> root.Client {
     match (selector) {
-        let shorthand: string => root.internal._from_shorthand(shorthand),
+        let shorthand: string => root.internal._from_shorthand(shorthand, providers, prefixes),
         let named: baml.env.Ref => {
             if let value: string = named.get() {
-                root.internal._from_shorthand(value)
+                root.internal._from_shorthand(value, providers, prefixes)
             } else {
                 throw root.errors.InvalidRequest {
                     provider: "ai.clients",
                     status_code: null,
-                    detail: `client selector env.${named.name} is not set: point it at a "provider/model" string (valid prefixes are ${root.internal._shorthand_prefixes()}), or give the client: position a value with a fallback — env.${named.name}.get() ?? "openai/gpt-4o-mini"`,
+                    detail: `client selector env.${named.name} is not set: point it at a "provider/model" string (valid prefixes are ${prefixes.join(", ")}), or give the client: position a value with a fallback — env.${named.name}.get() ?? "openai/gpt-4o-mini"`,
                     raw_body: null,
                 }
             }

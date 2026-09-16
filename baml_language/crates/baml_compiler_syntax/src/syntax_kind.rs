@@ -402,7 +402,7 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
-    /// Runtime type binding: `type T = unreflect(expr)`.
+    /// Body-level type binding: `type T = unreflect(expr)` or `type T = <type>`.
     TYPE_BINDING_STMT,
     BREAK_STMT,
     CONTINUE_STMT,

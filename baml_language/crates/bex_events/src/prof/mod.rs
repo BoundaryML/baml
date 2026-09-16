@@ -19,7 +19,7 @@
 //! and is unrelated to the per-function-call ids that flow through these
 //! records as plain `u64`s. The id newtypes ([`crate::ids::BexCallId`],
 //! [`crate::ids::BexThreadId`], [`crate::ids::FunctionId`]) landed with the
-//! M0 `ids.rs` milestone; adopting them in [`record::RawRecord`]'s fields
+//! M0 `ids.rs` milestone; adopting them in [`record::Marker`]'s fields
 //! is the remaining follow-up. Nothing here should reuse
 //! `sys_types::CallId`.
 
@@ -72,7 +72,7 @@ pub use config::ProfConfig;
 pub use consumer::{consumer_thread_started, engine_closed, flush_and_join};
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
-pub use ring::{Ring, RingHandle};
+pub use ring::{OSThreadMarkerRing, OSThreadMarkerRingHandle};
 
 // wasm32 has no native background consumer. Generic embedders keep profiling
 // off through config, while adapters such as bridge_wasm may opt into a

@@ -6,8 +6,7 @@ name: Size Gate — Daily Baseline Refresh
 # Key idea: it does NOT rebuild anything. Every canary CI run already builds
 # and measures the artifacts and uploads `size-gate-<platform>.json`. This
 # job just adopts the newest of those reports as the new baseline and opens
-# a PR. (Rebuilding here would re-pay the mac/windows release builds that are
-# already CI's long pole — no reason to pay them twice.)
+# a PR, without repeating the Linux/WASM release builds.
 #
 # What the PR changes:
 #   * .ci/size-gate/<platform>.toml  — exact recorded sizes (the relative
@@ -74,7 +73,7 @@ jobs:
         working-directory: baml_language
         env:
           # `bake --branch` shells out to `gh` to find the newest completed
-          # CI run on the branch that has all four size-gate reports, download
+          # CI run on the branch that has the enabled Linux/WASM reports, download
           # them, and adopt them. This is the SAME path a developer runs
           # locally to fix a stale baseline — one tool, one code path.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

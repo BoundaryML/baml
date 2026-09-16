@@ -33,7 +33,7 @@ class BamlRuntimeValue:
             new_function_call(),
             function_name="baml.json.from",
         )
-        return decode_call_result(get_runtime().call_function_sync(encoded, None, None))
+        return decode_call_result(get_runtime().call_function_sync(encoded, None))
 
     async def to_data_async(self) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
@@ -47,7 +47,7 @@ class BamlRuntimeValue:
             function_name="baml.json.from",
         )
         try:
-            result = await get_runtime().call_function(encoded, None, None)
+            result = await get_runtime().call_function(encoded, None)
         except asyncio.CancelledError:
             try:
                 cancel_function_call(call_id)

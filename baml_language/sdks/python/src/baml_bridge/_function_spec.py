@@ -91,7 +91,7 @@ class BamlFunctionSpec(Generic[TOut]):
             new_function_call(),
             function_name=fqn,
         )
-        return decode_call_result(get_runtime().call_function_sync(encoded, None, None))
+        return decode_call_result(get_runtime().call_function_sync(encoded, None))
 
     async def _call_async(self, fqn: str, kwargs: dict[str, Any] | None = None) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
@@ -103,7 +103,7 @@ class BamlFunctionSpec(Generic[TOut]):
         call_id = new_function_call()
         encoded = encode_call_args(values, call_id, function_name=fqn)
         try:
-            result = await get_runtime().call_function(encoded, None, None)
+            result = await get_runtime().call_function(encoded, None)
         except asyncio.CancelledError:
             try:
                 cancel_function_call(call_id)

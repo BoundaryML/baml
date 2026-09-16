@@ -204,8 +204,11 @@ impl TypeContext<bex_vm_types::TypeHead> for PackageSubtypeContext<'_> {
     /// Resolution is the VM's: a head is a pointer into the one heap this
     /// package lives on, so scoping the *facts* to a package does not change
     /// how a name becomes a head.
-    fn head_lookup(&self, qtn: &baml_type::QualifiedTypeName) -> Option<bex_vm_types::TypeHead> {
-        TypeContext::head_lookup(self.vm, qtn)
+    fn well_known(
+        &self,
+        head: baml_type::normalize::WellKnownHead,
+    ) -> Option<bex_vm_types::TypeHead> {
+        TypeContext::well_known(self.vm, head)
     }
 
     fn alias_def(&self, head: &bex_vm_types::TypeHead) -> Option<Ty> {
@@ -588,22 +591,173 @@ fn mounted_declaration(
     None
 }
 
-fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDiagnostic) -> Value {
-    let span = diagnostic.span.as_ref().map_or(Value::NULL, |span| {
-        let file = Value::object(vm.alloc_string(span.file.as_str()));
-        copy::Span {
-            file,
-            start: i64::try_from(span.start).expect("source offsets fit BAML int"),
-            end: i64::try_from(span.end).expect("source offsets fit BAML int"),
-        }
-        .to_value(vm)
-    });
+fn reflected_class_ty(vm: &BexVm, fqn: &str) -> RealizedTy {
+    let qtn = baml_type::QualifiedTypeName::from_dotted_path(fqn);
+    let head = vm
+        .declaration_head(&qtn)
+        .unwrap_or_else(|| unreachable!("`{fqn}` is declared by the stdlib"));
+    RealizedTy::Class(head, Box::new([]), TyAttr::default())
+}
+
+fn diagnostic_span_value(vm: &mut BexVm, span: &bex_vm_types::RuntimeSourceSpan) -> Value {
+    let file = Value::object(vm.alloc_string(span.file.as_str()));
+    copy::Span {
+        file,
+        start: i64::try_from(span.start).expect("source offsets fit BAML int"),
+        end: i64::try_from(span.end).expect("source offsets fit BAML int"),
+    }
+    .to_value(vm)
+}
+
+fn diagnostic_highlights_value(
+    vm: &mut BexVm,
+    highlights: &[bex_vm_types::RuntimeDiagnosticHighlight],
+) -> Value {
+    let values = highlights
+        .iter()
+        .map(|highlight| {
+            let kind = match highlight.kind {
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierType => "identifier.type",
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierFunction => {
+                    "identifier.function"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierField => "identifier.field",
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierVariable => {
+                    "identifier.variable"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierEnumVariant => {
+                    "identifier.enum_variant"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierAttribute => {
+                    "identifier.attribute"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::TypeExpression => "type_expression",
+                bex_vm_types::RuntimeDiagnosticHighlightKind::Code => "code",
+            };
+            let kind = Value::object(vm.alloc_string(kind));
+            copy::DiagnosticHighlight {
+                start: i64::from(highlight.start),
+                end: i64::from(highlight.end),
+                kind,
+            }
+            .to_value(vm)
+        })
+        .collect();
+    Value::object(vm.tlab.alloc_array(
+        reflected_class_ty(vm, "reflect.DiagnosticHighlight"),
+        values,
+    ))
+}
+
+pub(super) fn diagnostic_value(
+    vm: &mut BexVm,
+    diagnostic: &bex_vm_types::RuntimeCompileDiagnostic,
+) -> Value {
+    let span = diagnostic
+        .span
+        .as_ref()
+        .map_or(Value::NULL, |span| diagnostic_span_value(vm, span));
     let code = Value::object(vm.alloc_string(diagnostic.code.as_str()));
     let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
+    let severity = match diagnostic.severity {
+        bex_vm_types::RuntimeDiagnosticSeverity::Error => "error",
+        bex_vm_types::RuntimeDiagnosticSeverity::Warning => "warning",
+        bex_vm_types::RuntimeDiagnosticSeverity::Info => "info",
+    };
+    let severity = Value::object(vm.alloc_string(severity));
+    let (phase, headline, primary_label, message_highlights, annotations, related_info) =
+        match diagnostic.details.as_ref() {
+            None => {
+                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
+                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                (
+                    Value::NULL,
+                    Value::object(vm.alloc_string(diagnostic.message.as_str())),
+                    Value::NULL,
+                    diagnostic_highlights_value(vm, &[]),
+                    Value::object(vm.tlab.alloc_array(annotation_ty, Vec::new())),
+                    Value::object(vm.tlab.alloc_array(related_ty, Vec::new())),
+                )
+            }
+            Some(details) => {
+                let phase = match details.phase {
+                    bex_vm_types::RuntimeDiagnosticPhase::Parse => "parse",
+                    bex_vm_types::RuntimeDiagnosticPhase::Hir => "hir",
+                    bex_vm_types::RuntimeDiagnosticPhase::Validation => "validation",
+                    bex_vm_types::RuntimeDiagnosticPhase::Type => "type",
+                };
+                let phase = Value::object(vm.alloc_string(phase));
+                let headline = Value::object(vm.alloc_string(details.headline.as_str()));
+                let primary_label = details.primary_label.as_ref().map_or(Value::NULL, |label| {
+                    Value::object(vm.alloc_string(label.as_str()))
+                });
+                let message_highlights =
+                    diagnostic_highlights_value(vm, &details.message_highlights);
+                let annotation_values = details
+                    .annotations
+                    .iter()
+                    .map(|annotation| {
+                        let span = diagnostic_span_value(vm, &annotation.span);
+                        let message = annotation.message.as_ref().map_or(Value::NULL, |message| {
+                            Value::object(vm.alloc_string(message.as_str()))
+                        });
+                        let message_highlights =
+                            diagnostic_highlights_value(vm, &annotation.message_highlights);
+                        copy::DiagnosticAnnotation {
+                            span,
+                            message,
+                            message_highlights,
+                            is_primary: annotation.is_primary,
+                        }
+                        .to_value(vm)
+                    })
+                    .collect();
+                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
+                let annotations =
+                    Value::object(vm.tlab.alloc_array(annotation_ty, annotation_values));
+                let related_values = details
+                    .related_info
+                    .iter()
+                    .map(|related| {
+                        let span = diagnostic_span_value(vm, &related.span);
+                        let message = Value::object(vm.alloc_string(related.message.as_str()));
+                        let message_highlights =
+                            diagnostic_highlights_value(vm, &related.message_highlights);
+                        let file_path = related.file_path.as_ref().map_or(Value::NULL, |path| {
+                            Value::object(vm.alloc_string(path.as_str()))
+                        });
+                        copy::DiagnosticRelatedInfo {
+                            span,
+                            message,
+                            message_highlights,
+                            file_path,
+                        }
+                        .to_value(vm)
+                    })
+                    .collect();
+                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                let related_info = Value::object(vm.tlab.alloc_array(related_ty, related_values));
+                (
+                    phase,
+                    headline,
+                    primary_label,
+                    message_highlights,
+                    annotations,
+                    related_info,
+                )
+            }
+        };
     copy::Diagnostic {
         code,
         span,
         message,
+        severity,
+        phase,
+        headline,
+        primary_label,
+        message_highlights,
+        annotations,
+        related_info,
     }
     .to_value(vm)
 }
@@ -772,7 +926,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let mut dependencies = IndexMap::<String, HeapPtr>::new();
         for (alias, value) in packages {
             // Keep runtime rejection single-sourced with compiler mount filtering.
-            if baml_builtins2::reserved_package_names().contains(&alias.as_str()) {
+            if baml_builtins2::reserved_edge_names().contains(&alias.as_str()) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),
@@ -2283,7 +2437,7 @@ impl BamlClassSession for PackageReflectImpl {
         let mut dependencies = IndexMap::new();
         for (alias, value) in packages {
             // Keep runtime rejection single-sourced with compiler mount filtering.
-            if baml_builtins2::reserved_package_names().contains(&alias.as_str()) {
+            if baml_builtins2::reserved_edge_names().contains(&alias.as_str()) {
                 let diagnostic = super::type_kinds::compiler_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     format!("package alias `{alias}` is reserved"),

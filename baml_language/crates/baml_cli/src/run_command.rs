@@ -7,7 +7,9 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_db::{
+    ProjectDatabase, SourceRoot, baml_compiler_diagnostics::Severity, baml_compiler2_emit,
+};
 use bex_engine::{
     BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
     logger::TraceLogger,
@@ -20,8 +22,8 @@ use sys_native::{CallId, SysOpsExt};
 use crate::{
     log_output::{LogLevel as RunLogLevel, LogOutput},
     project_load::{
-        add_workspace_file, find_project_root_from, load_project_or_default,
-        resolve_standalone_file, validate_file_project_flags, workspace_db,
+        find_project_root_from, load_project_or_default, resolve_standalone_file,
+        validate_file_project_flags, workspace_db,
     },
     reporter::Reporter,
 };
@@ -258,6 +260,17 @@ pub use baml_exec::OutputFormat;
 // Main entry point
 // ============================================================================
 
+/// A project compiled to an engine, with the database it was compiled from
+/// and its package — the `Workspace` root its sources were added under —
+/// which `[scripts]` and the project root are read through.
+struct Compiled {
+    db: ProjectDatabase,
+    package: SourceRoot,
+    engine: BexEngine,
+    /// Whether any source would change under `baml fmt`.
+    needs_format_hint: bool,
+}
+
 impl RunArgs {
     fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder = FunctionCallContextBuilder::new(call_id);
@@ -336,8 +349,13 @@ impl RunArgs {
     }
 
     /// Compile `db` to bytecode and build a `BexEngine`.
-    fn compile_to_engine(&self, db: &ProjectDatabase, argv: Vec<String>) -> Result<BexEngine> {
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(db)
+    fn compile_to_engine(
+        &self,
+        db: &ProjectDatabase,
+        package: SourceRoot,
+        argv: Vec<String>,
+    ) -> Result<BexEngine> {
+        let bytecode = baml_compiler2_emit::generate_project_bytecode(db, package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         BexEngine::new_with_runtime_compiler(
             bytecode,
@@ -429,13 +447,18 @@ impl RunArgs {
                     .unwrap_or_else(|| "baml".to_string()),
                 "--list".to_string(),
             ];
-            let (db, engine, _) = self.load_and_compile(bootstrap_argv, reporter)?;
+            let Compiled {
+                db,
+                package,
+                engine,
+                ..
+            } = self.load_and_compile(bootstrap_argv, reporter)?;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
             let scripts = if self.file.is_some() {
                 HashMap::new()
             } else {
-                let (_toml_path, toml_content) = Self::project_toml(&db)?;
+                let (_toml_path, toml_content) = Self::project_toml(&db, package);
                 Self::parse_scripts(&toml_content)
             };
             let namespaces = collect_namespaces(&engine);
@@ -475,9 +498,14 @@ impl RunArgs {
     /// `[scripts]` aliases are resolved here too (positional only).
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_single(target);
-        let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
+        let Compiled {
+            db,
+            package,
+            mut engine,
+            needs_format_hint,
+        } = self.load_and_compile(argv.clone(), reporter)?;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
-        let project_root = Self::project_root(&db)?;
+        let project_root = Self::project_root(&db, package);
 
         // `[scripts]` are a project-mode concept. In `--file` (standalone)
         // mode the project's `baml.toml` shouldn't be consulted — the
@@ -490,7 +518,7 @@ impl RunArgs {
                 HashMap::new(),
             )
         } else {
-            let (toml_path, content) = Self::project_toml(&db)?;
+            let (toml_path, content) = Self::project_toml(&db, package);
             let parsed = Self::parse_scripts(&content);
             (toml_path, content, parsed)
         };
@@ -578,8 +606,11 @@ impl RunArgs {
     /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_subcommand();
-        let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
-        let _ = db;
+        let Compiled {
+            mut engine,
+            needs_format_hint,
+            ..
+        } = self.load_and_compile(argv.clone(), reporter)?;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
         let (entries, lookups) = self.resolve_subcommand_targets(&engine)?;
@@ -794,11 +825,7 @@ impl RunArgs {
 
     /// Load the project (or standalone `--file`), check diagnostics,
     /// compile to bytecode, create engine.
-    fn load_and_compile(
-        &self,
-        argv: Vec<String>,
-        reporter: &Reporter,
-    ) -> Result<(ProjectDatabase, BexEngine, bool)> {
+    fn load_and_compile(&self, argv: Vec<String>, reporter: &Reporter) -> Result<Compiled> {
         if let Some(file) = self.file.as_deref() {
             return self.load_and_compile_standalone(file, argv, reporter);
         }
@@ -825,7 +852,14 @@ impl RunArgs {
                 argv.clone(),
                 bex_project::runtime_compiler(),
             ) {
-                Ok(engine) => return Ok((session.db, engine, needs_format_hint)),
+                Ok(engine) => {
+                    return Ok(Compiled {
+                        db: session.db,
+                        package: session.package,
+                        engine,
+                        needs_format_hint,
+                    });
+                }
                 Err(error) => crate::bytecode_cache::cache_debug(format_args!(
                     "cached program rejected by VM; recompiling: {error:?}"
                 )),
@@ -846,6 +880,7 @@ impl RunArgs {
             ));
         }
         let db = &session.db;
+        let package = session.package;
         let cache = &session.cache;
 
         // `baml run` keeps the compile phase silent; the program's output is
@@ -856,7 +891,7 @@ impl RunArgs {
         // their cached blobs, returning the fresh per-file blobs to persist.
         // Without a cache, run the honest full check (no blobs to store).
         let fresh_diagnostics = if let Some(ctx) = cache {
-            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+            let incremental = ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
             self.render_and_bail_on_errors(
                 &incremental.merged,
                 db,
@@ -871,6 +906,7 @@ impl RunArgs {
         self.vlog(format_args!("Compiling..."));
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             db,
+            package,
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
@@ -880,12 +916,11 @@ impl RunArgs {
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
-                db,
+                &session,
                 &compiled,
                 fresh,
                 reuse_plan.as_ref(),
                 stdlib_interface_hit,
-                || session.honest_db(),
             )?;
         }
         // Warm-incremental evidence: with the diagnostics cache serving clean
@@ -913,7 +948,12 @@ impl RunArgs {
             "Compiled {} user function(s)",
             engine.user_functions().len()
         ));
-        Ok((session.db, engine, needs_format_hint))
+        Ok(Compiled {
+            db: session.db,
+            package: session.package,
+            engine,
+            needs_format_hint,
+        })
     }
 
     /// Load a single .baml file in hermetic standalone mode.
@@ -925,7 +965,7 @@ impl RunArgs {
         file_path: &Path,
         argv: Vec<String>,
         reporter: &Reporter,
-    ) -> Result<(ProjectDatabase, BexEngine, bool)> {
+    ) -> Result<Compiled> {
         let display = file_path.display().to_string();
         let canonical = resolve_standalone_file(file_path)?;
         self.vlog(format_args!(
@@ -940,8 +980,8 @@ impl RunArgs {
         // Project root is the file's parent so relative imports resolve.
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
 
-        let (mut db, workspace) = workspace_db(parent);
-        db.add_or_update_file_in(workspace, &canonical, &content);
+        let (mut db, package) = workspace_db(parent);
+        db.add_or_update_file_in(package, &canonical, &content);
 
         // Keep standalone compilation quiet for `baml run`; diagnostics still
         // render through the reporter when needed.
@@ -950,12 +990,17 @@ impl RunArgs {
             &format!("cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        let engine = self.compile_to_engine(&db, argv)?;
+        let engine = self.compile_to_engine(&db, package, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
         ));
-        Ok((db, engine, needs_format_hint))
+        Ok(Compiled {
+            db,
+            package,
+            engine,
+            needs_format_hint,
+        })
     }
 
     // ========================================================================
@@ -1005,7 +1050,7 @@ impl RunArgs {
             .iter()
             .any(|diagnostic| diagnostic.severity == Severity::Error);
 
-        let db = if isolated_has_errors {
+        let (db, package) = if isolated_has_errors {
             if discovered_root.is_none() {
                 self.render_and_bail_on_errors(
                     &isolated_diagnostics,
@@ -1019,33 +1064,32 @@ impl RunArgs {
             // The expression may refer to project declarations. Preserve that
             // existing behavior by retrying with the surrounding project only
             // when the isolated compile proves it is necessary.
-            let (mut project_db, project_root, baml_files) =
-                load_project_or_default(self.from.as_deref())?;
+            let mut project = load_project_or_default(self.from.as_deref())?;
             self.vlog(format_args!(
                 "Expression requires project context: loaded {} file(s)",
-                baml_files.len()
+                project.files.len()
             ));
-            add_workspace_file(
-                &mut project_db,
-                &project_root.join("__expr__.baml"),
-                &synthetic,
-            );
+            let expr_path = project.root().join("__expr__.baml");
+            project
+                .db
+                .add_or_update_file_in(project.package, &expr_path, &synthetic);
             self.check_project_diagnostics(
-                &project_db,
+                &project.db,
                 "cannot evaluate expression: compilation errors",
                 reporter,
             )?;
-            project_db
+            (project.db, project.package)
         } else {
             self.vlog(format_args!("Expression compiled without project context"));
-            isolated_db
+            (isolated_db, isolated_workspace)
         };
 
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
         // source" — the loaded body text, not the `@path` reference. This
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
         // `file` containing `2 + 2`) produce the same argv.
-        let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
+        let engine =
+            self.compile_to_engine(&db, package, self.build_argv_for_expression(expr_body))?;
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -1127,7 +1171,7 @@ impl RunArgs {
     /// does not block direct function execution. `baml run` stays quiet on
     /// successful execution; validation errors are surfaced separately.
     fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
-        let manifest = match crate::manifest::parse(content) {
+        let manifest = match baml_db::manifest::parse(content) {
             Ok(m) => m,
             Err(_e) => {
                 return HashMap::new();
@@ -1169,16 +1213,15 @@ impl RunArgs {
         }
     }
 
-    fn project_root(db: &ProjectDatabase) -> Result<PathBuf> {
-        db.workspace_root()
-            .map(|root| root.path(db).clone())
-            .ok_or_else(|| anyhow!("no project context"))
+    /// The project root: the directory the package's root was added at.
+    fn project_root(db: &ProjectDatabase, package: SourceRoot) -> PathBuf {
+        package.path(db).clone()
     }
 
-    fn project_toml(db: &ProjectDatabase) -> Result<(PathBuf, String)> {
-        let toml_path = Self::project_root(db)?.join("baml.toml");
+    fn project_toml(db: &ProjectDatabase, package: SourceRoot) -> (PathBuf, String) {
+        let toml_path = Self::project_root(db, package).join("baml.toml");
         let content = std::fs::read_to_string(&toml_path).unwrap_or_default();
-        Ok((toml_path, content))
+        (toml_path, content)
     }
 
     /// Validate `[scripts]` entries at load time per BEP-027.

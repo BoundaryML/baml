@@ -75,10 +75,12 @@ class OaFunctionCallItem {
     arguments: string,
 }
 
+/// `output` is the plain string for a text-only result and a list of input
+/// parts (text, image, file) when the result carries media.
 class OaFunctionCallOutputItem {
     type: string,
     call_id: string,
-    output: string,
+    output: string | OaInputPart[],
 }
 
 type OaInputItem = OaMessageItem | OaFunctionCallItem | OaFunctionCallOutputItem;
@@ -344,120 +346,126 @@ function _media_role_error(kind: string, role: string) -> ai.errors.Failure {
     }
 }
 
-/// (internal) A rendered structural prompt message becomes typed Responses content parts.
-function _prompt_content(
-    message: ai.PromptMessage,
-    role: string,
+/// (internal) One content block at `position` -> its typed input part. The Responses
+/// API's input modalities, per position:
+///
+///   position    | text   | image  | pdf    | audio   | video
+///   system      | Accept | Accept | Reject | Reject  | Reject
+///   user        | Accept | Accept | Accept | Accept  | Reject
+///   assistant   | Accept | Reject | Reject | Reject  | Reject
+///   tool_result | Accept | Accept | Accept | Degrade | Reject
+///
+/// An image in a system message is kept for compatibility: the legacy lowering
+/// accepted image parts in the system message a role-less prompt produced.
+/// `function_call_output.output` takes text, image and file parts but no
+/// audio, so audio in a tool result degrades into a user turn after the run of results
+/// (`lower_journal`). There is no video input part at all.
+function _lower_block(
+    block: ai.content.Block,
+    position: string,
     preview: bool = false,
-) -> OaInputPart[] {
-    let content: OaInputPart[] = [];
-    for (let part in message.parts) {
-        match (part) {
-            let text: string => {
-                if (role == "assistant") {
-                    content.push(OaOutputText { type: "output_text", text: text });
-                    null
-                } else {
-                    content.push(OaInputText { type: "input_text", text: text });
-                    null
-                };
-                null
-            },
-            let image: baml.media.Image => {
-                // The legacy OpenAI Responses lowering accepted image parts in
-                // the system message produced for a role-less prompt. Keep
-                // that compatibility while still rejecting assistant/tool
-                // authored media, which has no valid Responses input shape.
-                if (role != "user" && role != "system") {
-                    throw _media_role_error("image", role)
-                }
-                let resolved = if (preview) {
-                    ai.wire.resolve_media_preview(image)
-                } else {
-                    ai.wire.resolve_media(image, false)
-                };
-                let image_url = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
-                content.push(
+) -> OaInputPart {
+    match (block) {
+        let text: ai.content.Text => {
+            if (position == "assistant") {
+                OaOutputText { type: "output_text", text: text.text }
+            } else {
+                OaInputText { type: "input_text", text: text.text }
+            }
+        },
+        let media: ai.content.Media => {
+            let user_input = position == "user" || position == "tool_result";
+            match (media.media) {
+                let image: baml.media.Image => {
+                    if (!user_input && position != "system") {
+                        throw _media_role_error("image", position)
+                    }
+                    let resolved = if (preview) {
+                        ai.wire.resolve_media_preview(image)
+                    } else {
+                        ai.wire.resolve_media(image, false)
+                    };
+                    let image_url = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
                     OaInputImage {
                         type: "input_image",
                         image_url: image_url,
                         file_id: null,
                         detail: "auto",
-                    },
-                );
-                null
-            },
-            let audio: baml.media.Audio => {
-                if (role != "user") {
-                    throw _media_role_error("audio", role)
-                }
-                // audio has no URL form on the wire: always inline base64.
-                let resolved = if (preview) {
-                    ai.wire.resolve_media_preview(audio)
-                } else {
-                    ai.wire.resolve_media(audio, true)
-                };
-                if (preview && resolved.url != null) {
-                    throw ai.errors.PreviewUnsupported {
-                        provider: "openai",
-                        detail: "OpenAI Responses audio input requires downloaded bytes during request preview",
                     }
-                }
-                content.push(
+                },
+                let audio: baml.media.Audio => {
+                    if (!user_input) {
+                        throw _media_role_error("audio", position)
+                    }
+                    // audio has no URL form on the wire: always inline base64.
+                    let resolved = if (preview) {
+                        ai.wire.resolve_media_preview(audio)
+                    } else {
+                        ai.wire.resolve_media(audio, true)
+                    };
+                    if (preview && resolved.url != null) {
+                        throw ai.errors.PreviewUnsupported {
+                            provider: "openai",
+                            detail: "OpenAI Responses audio input requires downloaded bytes during request preview",
+                        }
+                    }
                     OaInputAudio {
                         type: "input_audio",
                         input_audio: OaAudioPayload {
                             data: resolved.base64 ?? "",
                             format: _audio_format(resolved.mime_type),
                         },
-                    },
-                );
-                null
-            },
-            let pdf: baml.media.Pdf => {
-                if (role != "user") {
-                    throw _media_role_error("PDF", role)
-                }
-                let resolved = if (preview) {
-                    ai.wire.resolve_media_preview(pdf)
-                } else {
-                    ai.wire.resolve_media(pdf, false)
-                };
-                let name = _file_name(pdf.file() ?? pdf.url());
-                if let url: string = resolved.url {
-                    content.push(
+                    }
+                },
+                let pdf: baml.media.Pdf => {
+                    if (!user_input) {
+                        throw _media_role_error("PDF", position)
+                    }
+                    let resolved = if (preview) {
+                        ai.wire.resolve_media_preview(pdf)
+                    } else {
+                        ai.wire.resolve_media(pdf, false)
+                    };
+                    let name = _file_name(pdf.file() ?? pdf.url());
+                    if let url: string = resolved.url {
                         OaInputFile {
                             type: "input_file",
                             filename: name,
                             file_data: null,
                             file_url: url,
                             file_id: null,
-                        },
-                    );
-                    null
-                } else {
-                    content.push(
+                        }
+                    } else {
                         OaInputFile {
                             type: "input_file",
                             filename: name,
                             file_data: `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
                             file_url: null,
                             file_id: null,
-                        },
-                    );
-                    null
-                };
-                null
-            },
-            let video: baml.media.Video => {
-                throw ai.errors.InvalidRequest {
-                    provider: "openai",
-                    status_code: null,
-                    detail: "OpenAI Responses does not support video prompt input",
-                    raw_body: null,
-                }
-            },
-        };
+                        }
+                    }
+                },
+                let video: baml.media.Video => {
+                    throw ai.errors.InvalidRequest {
+                        provider: "openai",
+                        status_code: null,
+                        detail: "OpenAI Responses does not support video prompt input",
+                        raw_body: null,
+                    }
+                },
+            }
+        },
+    }
+}
+
+function _lower_blocks(
+    blocks: ai.content.Block[],
+    position: string,
+    preview: bool = false,
+) -> OaInputPart[] {
+    let content: OaInputPart[] = [];
+    for (let block in blocks) {
+        content.push(_lower_block(block, position, preview = preview));
     }
     content
 }
@@ -473,7 +481,10 @@ function lower_prompt(prompt: ai.Prompt, preview: bool = false) -> OaInputItem[]
             _ => message.role,
         };
         items.push(
-            OaMessageItem { role: role, content: _prompt_content(message, role, preview = preview) },
+            OaMessageItem {
+                role: role,
+                content: _lower_blocks(ai.wire.prompt_blocks(message), role, preview = preview),
+            },
         );
     }
     items
@@ -549,32 +560,55 @@ function _apply_message_metadata(
     body
 }
 
+/// (internal) A tool result's `output`: the plain string when the result is text
+/// only (one text part, or nothing), the part list otherwise.
+function _tool_output(parts: OaInputPart[]) -> string | OaInputPart[] {
+    if (parts.length() == 0) {
+        return "";
+    }
+    if (parts.length() == 1) {
+        if let text: OaInputText = parts.at(0) {
+            return text.text;
+        }
+    }
+    parts
+}
+
 /// ai.Journal -> Responses API input items. Only promptable events lower;
 /// ai.RunStarted, ai.ToolRequested, ai.Usage, and ai.FinalProduced are
 /// journal-only. Callers pass the SANITIZED journal (see _request).
-function lower_journal(j: ai.Journal) -> OaInputItem[] {
+///
+/// `metadata` is the per-item directive list `_apply_message_metadata` walks:
+/// one map is appended per item produced here (a user turn's own, an empty
+/// one for everything else) so it stays aligned one-to-one with `input`.
+function lower_journal(
+    j: ai.Journal,
+    metadata: map<string, baml.json.json>[],
+    preview: bool = false,
+) -> OaInputItem[] {
     let items: OaInputItem[] = [];
+    let none: map<string, baml.json.json> = {};
     for (let e in j.entries()) {
         match (e) {
             let u: ai.events.UserMessage => {
-                items.push(
-                    OaMessageItem {
-                        role: "user",
-                        content: [OaInputText { type: "input_text", text: u.content }],
-                    },
-                );
+                let content = _lower_blocks(u.content, "user", preview = preview);
+                if (content.length() > 0) {
+                    items.push(OaMessageItem { role: "user", content: content });
+                    metadata.push(u.metadata);
+                }
                 null
             },
             let a: ai.events.AssistantMessage => {
                 for (let b in a.content) {
                     match (b) {
-                        let t: ai.content.Text => {
+                        let content: ai.content.Block => {
                             items.push(
                                 OaMessageItem {
                                     role: "assistant",
-                                    content: [OaOutputText { type: "output_text", text: t.text }],
+                                    content: [_lower_block(content, "assistant", preview = preview)],
                                 },
                             );
+                            metadata.push(none);
                             null
                         },
                         let use: ai.content.ToolUse => {
@@ -586,25 +620,29 @@ function lower_journal(j: ai.Journal) -> OaInputItem[] {
                                     arguments: baml.json.stringify(baml.json.to_json(use.args)),
                                 },
                             );
+                            metadata.push(none);
                             null
                         },
-                        // ai.Reasoning does not round-trip yet (the API wants
+                        // ai.Reasoning does not round-trip yet: the API wants
                         // the encrypted item back, which ai.content.Reasoning
-                        // does not carry), and a generated ai.content.Media is
-                        // an output, not replayable input.
-                        _ => null,
+                        // does not carry.
+                        let r: ai.content.Reasoning => null,
                     };
                 }
                 null
             },
             let c: ai.events.ToolCompleted => {
+                // `function_call_output.output` carries text, image and file
+                // parts inline; `ai.wire.degrade_tool_media` has already moved
+                // audio out of the result and behind the run of results.
                 items.push(
                     OaFunctionCallOutputItem {
                         type: "function_call_output",
                         call_id: c.id,
-                        output: c.output,
+                        output: _tool_output(_lower_blocks(c.content, "tool_result", preview = preview)),
                     },
                 );
+                metadata.push(none);
                 null
             },
             let f: ai.events.ToolFailed => {
@@ -617,6 +655,7 @@ function lower_journal(j: ai.Journal) -> OaInputItem[] {
                         output: baml.json.stringify(baml.json.to_json(err)),
                     },
                 );
+                metadata.push(none);
                 null
             },
             _ => null,
@@ -744,8 +783,12 @@ function _request(
     let items = lower_prompt(prompt, preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
-    let journal = ai.wire.sanitize_for_client(input.journal, c.id());
-    for (let item in lower_journal(journal)) {
+    let journal = ai.wire.degrade_tool_media(
+        ai.wire.sanitize_for_client(input.journal, c.id()),
+        ["image", "pdf", "video"],
+    );
+    let metadata = prompt_metadata(prompt);
+    for (let item in lower_journal(journal, metadata, preview = preview)) {
         items.push(item);
     }
     let wants_image = _wants_image(input.output_type);
@@ -772,10 +815,7 @@ function _request(
     // open-ended JSON back (tool schemas, then the per-message directives that
     // ride on a content part) -> user passthrough LAST.
     let pruned = _restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools);
-    let body = ai.wire.merge_request_body(
-        _apply_message_metadata(pruned, prompt_metadata(prompt)),
-        c.request_body,
-    );
+    let body = ai.wire.merge_request_body(_apply_message_metadata(pruned, metadata), c.request_body);
     baml.http.Request {
         method: "POST",
         url: _url(c),
@@ -869,7 +909,7 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
     if ((resp.status ?? "") == "failed" || resp.error != null) {
         throw _response_failure(resp)
     }
-    let content: ai.content.Block[] = [];
+    let content: ai.content.ModelBlock[] = [];
     let has_call = false;
     let refused = false;
     let output: OaOutputItem[] = resp.output ?? [];

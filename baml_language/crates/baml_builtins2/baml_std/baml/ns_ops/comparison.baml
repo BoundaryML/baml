@@ -49,7 +49,7 @@ interface Equals {
     /// [`Eq`](https://doc.rust-lang.org/std/cmp/trait.Eq.html), not
     /// `PartialEq`: the `float` impl keeps the law by making `NaN` equal to
     /// itself rather than agreeing with IEEE.
-    function eq(self, other: Self) -> bool throws never
+    function eq(self, other: Self) -> bool throws never;
     /// Whether `self` and `other` differ. Defaults to `!self.eq(other)`.
     ///
     /// Override this only to compute the answer more directly; an override that
@@ -85,7 +85,7 @@ interface Compare requires Equals {
     ///
     /// The one method with no default; the rest of the interface is defined in
     /// terms of it.
-    function cmp(self, other: Self) -> Ordering throws never
+    function cmp(self, other: Self) -> Ordering throws never;
 
     /// Whether `self` orders strictly before `other`. Defaults to
     /// `self.cmp(other) == Ordering.Less`.

@@ -6,12 +6,15 @@ use std::collections::HashMap;
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
-    package::{PackageId, PackageItems, package_items},
+    package::{PackageItems, lang_roots, package_items, spelling},
 };
 use baml_type::{BuiltinTypeName, Package};
 use text_size::TextSize;
 
-use crate::line_index::LineIndex;
+use crate::{
+    line_index::LineIndex,
+    symbols::{Internals, Surface},
+};
 
 // ── ResolvedTarget ────────────────────────────────────────────────────────────
 
@@ -25,10 +28,10 @@ pub enum ResolvedTarget<'db> {
     /// A whole package (e.g. the workspace package, `baml`, `testing`).
     /// Resolved when the input is a bare package name or empty (= the
     /// workspace package).
-    Package(PackageId<'db>),
+    Package(baml_base::SourceRoot),
     /// A namespace within a package. `ns_path` is non-empty by construction.
     Namespace {
-        package: PackageId<'db>,
+        package: baml_base::SourceRoot,
         ns_path: Vec<Name>,
     },
     /// A specific item (class, enum, function, etc.).
@@ -75,7 +78,7 @@ impl std::fmt::Debug for ResolvedTarget<'_> {
 /// project-level case.
 pub fn resolve_target<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
-    package: PackageId<'db>,
+    package: baml_base::SourceRoot,
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
     if name.is_empty() {
@@ -107,9 +110,13 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| {
-            !def.is_language_internal(db) && !is_hidden_synthesized_type(db, &item_name, *def)
-        }) {
+        // `Internals::Show`: reaching an EXACT path is itself the explicit
+        // naming the `_` convention asks for — the reader spelled every
+        // segment, `_tz_offset_at` included. Hiding here contradicted the
+        // did-you-mean list, which uses `Internals::for_query` and so
+        // suggested the very path this refused. `LanguageInternal` stays
+        // unaddressable either way: `is_listed` rejects it regardless.
+        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Show)) {
             return Some(ResolvedTarget::Item(def));
         }
     }
@@ -122,9 +129,9 @@ pub fn resolve_target<'db>(
         let def = pkg
             .lookup_type(&ns_path, &item_name)
             .or_else(|| pkg.lookup_value(&ns_path, &item_name));
-        if let Some(def) = def.filter(|def| {
-            !def.is_language_internal(db) && !is_hidden_synthesized_type(db, &item_name, *def)
-        }) {
+        // Show, for the same reason: naming a member of an internal names
+        // the internal.
+        if let Some(def) = def.filter(|def| is_listed(db, &item_name, *def, Internals::Show)) {
             return Some(ResolvedTarget::Member {
                 parent: def,
                 member_name,
@@ -154,7 +161,7 @@ pub fn resolve_builtin_type_target<'db>(
         target.push_str(member_path);
     }
 
-    let package = PackageId::new(db, Name::new(baml_base::BAML_PACKAGE));
+    let package = lang_roots(db).get(baml_base::LangPackage::Baml)?;
     resolve_target(db, package, &target)
 }
 
@@ -225,11 +232,12 @@ impl ListingEntry {
 /// as `ns_path.join(".") + "." + item_name` (or bare `item_name` for root namespace).
 pub fn list_package_items(
     db: &dyn baml_compiler2_ppir::Db,
-    package_id: PackageId<'_>,
+    package_id: baml_base::SourceRoot,
+    internals: Internals,
 ) -> Vec<ListingEntry> {
     let pkg = package_items(db, package_id);
-    let package_name = package_id.name(db);
-    collect_entries_from_package(db, pkg, &package_name)
+    let package_name = spelling(db).of(package_id).clone();
+    collect_entries_from_package(db, pkg, &package_name, internals)
 }
 
 /// Collect listing entries from a `PackageItems`, including all namespaces.
@@ -237,6 +245,7 @@ fn collect_entries_from_package(
     db: &dyn baml_compiler2_ppir::Db,
     pkg: &PackageItems<'_>,
     package_name: &Name,
+    internals: Internals,
 ) -> Vec<ListingEntry> {
     let mut entries = Vec::new();
     let mut line_indexes = HashMap::new();
@@ -252,6 +261,7 @@ fn collect_entries_from_package(
                 ns_path.clone(),
                 name.clone(),
                 *def,
+                internals,
             ) {
                 entries.push(entry);
             }
@@ -279,11 +289,12 @@ fn collect_entries_from_package(
 /// includes `baml.env.GetEnv`).
 pub fn list_namespace_items(
     db: &dyn baml_compiler2_ppir::Db,
-    package_id: PackageId<'_>,
+    package_id: baml_base::SourceRoot,
     namespace_path: &[Name],
+    internals: Internals,
 ) -> Option<Vec<ListingEntry>> {
     let pkg = package_items(db, package_id);
-    let package_name = package_id.name(db);
+    let package_name = spelling(db).of(package_id).clone();
 
     // Check that the requested namespace path exists or has children.
     let has_exact = pkg.namespaces.contains_key(namespace_path);
@@ -316,6 +327,7 @@ pub fn list_namespace_items(
                 ns_path.clone(),
                 name.clone(),
                 *def,
+                internals,
             ) {
                 entries.push(entry);
             }
@@ -324,33 +336,6 @@ pub fn list_namespace_items(
 
     entries.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.line.cmp(&b.line)));
     Some(entries)
-}
-
-/// Every package name known to the database except the workspace packages':
-/// the packages of non-`Workspace` source roots (stdlib builtins plus
-/// source-bearing dependency and dynamic roots) and the mounted source-less
-/// packages, deduplicated and sorted.
-///
-/// The `baml describe` dispatcher uses this for cross-package routing: a
-/// leading path segment naming one of these packages addresses that package
-/// instead of a workspace item.
-pub fn non_workspace_package_names(db: &dyn baml_compiler2_ppir::Db) -> Vec<Name> {
-    let mut names: Vec<Name> = db
-        .source_roots()
-        .roots(db)
-        .iter()
-        .filter(|root| match root.kind(db) {
-            baml_base::SourceRootKind::Stdlib
-            | baml_base::SourceRootKind::Dependency
-            | baml_base::SourceRootKind::Dynamic => true,
-            baml_base::SourceRootKind::Workspace => false,
-        })
-        .map(|root| root.package(db))
-        .collect();
-    names.extend(baml_compiler2_hir::package::external_package_names(db));
-    names.sort();
-    names.dedup();
-    names
 }
 
 /// Return whether `package_name` identifies the implicit local (workspace)
@@ -363,16 +348,35 @@ fn is_local_package_name(package_name: &Name) -> bool {
     matches!(Package::from_name(package_name.clone()), Package::Local)
 }
 
-/// Generated partial-output types (`Foo$stream`) are compiler artifacts, not
-/// addressable describe targets. Callable `@...` companions remain visible so
-/// BAML source references such as `Foo@spec` continue to round-trip through
-/// listing and resolution.
-fn is_hidden_synthesized_type(
+/// What `baml describe`'s listings show, stated once for every call site.
+///
+/// A listing is an ADDRESSING view: its output is meant to paste back into
+/// `baml describe`, so it keeps everything that resolves and drops only what
+/// cannot be named at all. That is why it is the one view that shows
+/// carriers and `@` companions.
+fn is_listed(
     db: &dyn baml_compiler2_ppir::Db,
     item_name: &Name,
     def: Definition<'_>,
+    internals: Internals,
 ) -> bool {
-    !matches!(def, Definition::Function(_)) && crate::symbols::is_synthesized(db, item_name, def)
+    match crate::symbols::surface_of(db, item_name, def) {
+        Surface::LanguageInternal => false,
+        // `$invoke_collector` is hand-written stdlib that resolves from
+        // source, so an addressing view keeps it. The predicate this
+        // replaced also asked whether the declaration was a function; that
+        // branch was vestigial, since a `$`-named TYPE never reaches a
+        // listing (PPIR synthesizes those rather than lowering them).
+        Surface::Synthetic => true,
+        // `Foo@spec` is written in real BAML source and resolves, so an
+        // addressing view lists it.
+        Surface::Companion => true,
+        // `baml.Int` resolves and has documentation worth reading, even
+        // though `int` is how one writes it.
+        Surface::AliasedCarrier => true,
+        Surface::StdlibInternal => internals == Internals::Show,
+        Surface::Public => true,
+    }
 }
 
 /// Build a single `ListingEntry` from a definition.
@@ -383,8 +387,9 @@ fn make_entry<'db>(
     ns_path: Vec<Name>,
     item_name: Name,
     def: Definition<'db>,
+    internals: Internals,
 ) -> Option<ListingEntry> {
-    if def.is_language_internal(db) || is_hidden_synthesized_type(db, &item_name, def) {
+    if !is_listed(db, &item_name, def, internals) {
         return None;
     }
     let (file, name_span) = crate::syntax::definition_span(db, def)?;
@@ -423,8 +428,6 @@ fn entry_line<'db>(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_hir::package::sole_workspace_package;
-
     use super::*;
     use crate::test_support::ProjectTest;
 
@@ -432,8 +435,8 @@ mod tests {
 
     /// Run `list_package_items()` for the fixture's workspace package.
     fn list_package_items_user(project: &ProjectTest) -> Vec<ListingEntry> {
-        let package_id = sole_workspace_package(&project.db);
-        list_package_items(&project.db, package_id)
+        let package_id = project.package;
+        list_package_items(&project.db, package_id, Internals::Hide)
     }
 
     /// Run `list_namespace_items()` for a workspace-package namespace.
@@ -441,9 +444,9 @@ mod tests {
         project: &ProjectTest,
         ns_segments: &[&str],
     ) -> Option<Vec<ListingEntry>> {
-        let package_id = sole_workspace_package(&project.db);
+        let package_id = project.package;
         let ns_path: Vec<Name> = ns_segments.iter().map(Name::new).collect();
-        list_namespace_items(&project.db, package_id, &ns_path)
+        list_namespace_items(&project.db, package_id, &ns_path, Internals::Hide)
     }
 
     /// Format a `ListingEntry` for snapshot comparison.
@@ -572,8 +575,8 @@ class Baz {
     #[test]
     fn list_package_items_builtin_fqns_include_package_name() {
         let project = make_multi_ns_project();
-        let pkg_id = PackageId::new(&project.db, Name::new("baml"));
-        let entries = list_package_items(&project.db, pkg_id);
+        let pkg_id = spelling(&project.db).root(&Name::new("baml")).unwrap();
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         assert!(
             entries.iter().any(|e| e.fqn() == "baml.iter.Range"),
@@ -601,7 +604,7 @@ test "identity" {
 "#,
         );
         let project = builder.build();
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = project.package;
         let pkg = package_items(&project.db, pkg_id);
         let (internal_name, internal_def) = pkg
             .namespaces
@@ -612,7 +615,7 @@ test "identity" {
 
         assert!(internal_def.is_language_internal(&project.db));
         assert!(
-            list_package_items(&project.db, pkg_id)
+            list_package_items(&project.db, pkg_id, Internals::Hide)
                 .iter()
                 .all(|entry| entry.item_name.as_str() != internal_name.as_str())
         );
@@ -644,8 +647,8 @@ function summarize_structured(input: string) -> Summary {
 "##,
         );
         let project = builder.build();
-        let pkg_id = sole_workspace_package(&project.db);
-        let entries = list_package_items(&project.db, pkg_id);
+        let pkg_id = project.package;
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         for name in [
             "summarize@spec",
@@ -721,8 +724,8 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_listing_to_resolve() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
-        let entries = list_package_items(&project.db, pkg_id);
+        let pkg_id = project.package;
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         for entry in &entries {
             let fqn = entry.fqn();
@@ -735,12 +738,52 @@ function summarize_structured(input: string) -> Summary {
         }
     }
 
+    /// The round-trip property in the direction the `Internals::Hide`
+    /// listings never exercise: what a listing SHOWS must navigate, and a
+    /// listing asked to show internals shows `_`-prefixed stdlib helpers.
+    ///
+    /// Regression: exact resolution hid them while `describe`'s did-you-mean
+    /// (which asks [`Internals::for_query`]) offered them, so
+    /// `baml describe baml.time._tz_offset_at` reported "no symbol found"
+    /// and then suggested that exact path back.
+    #[test]
+    fn round_trip_listing_to_resolve_internals() {
+        let project = make_multi_ns_project();
+        let stdlib = spelling(&project.db).root(&Name::new("baml")).unwrap();
+        let entries = list_package_items(&project.db, stdlib, Internals::Show);
+
+        let internals: Vec<String> = entries
+            .iter()
+            .filter(|entry| entry.item_name.as_str().starts_with('_'))
+            .map(super::ListingEntry::fqn)
+            .collect();
+        assert!(
+            !internals.is_empty(),
+            "the stdlib declares `_`-prefixed helpers; showing internals must list them"
+        );
+
+        for fqn in &internals {
+            // A builtin listing emits package-qualified paths; the CLI
+            // dispatcher routes the package and hands the rest to
+            // `resolve_target`, so the test addresses them the same way.
+            let within_package = fqn
+                .strip_prefix("baml.")
+                .unwrap_or_else(|| unreachable!("a `baml` listing is package-qualified: {fqn}"));
+            let resolved = resolve_target(&project.db, stdlib, within_package);
+            assert!(
+                matches!(resolved, Some(ResolvedTarget::Item(_))),
+                "`{fqn}` was listed but does not resolve as Item; got {:?}",
+                resolved.as_ref().map(std::mem::discriminant),
+            );
+        }
+    }
+
     /// Same round-trip property on a project with a 2-deep namespace.
     #[test]
     fn round_trip_listing_to_resolve_deep_ns() {
         let project = make_deep_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
-        let entries = list_package_items(&project.db, pkg_id);
+        let pkg_id = project.package;
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         assert!(
             !entries.is_empty(),
@@ -762,7 +805,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_namespace() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = project.package;
         let pkg = package_items(&project.db, pkg_id);
 
         for ns_path in pkg.namespaces.keys() {
@@ -787,7 +830,7 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_namespace_deep() {
         let project = make_deep_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
+        let pkg_id = project.package;
         let pkg = package_items(&project.db, pkg_id);
 
         let mut checked = 0;
@@ -818,8 +861,8 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_member() {
         let project = make_multi_ns_project();
-        let pkg_id = sole_workspace_package(&project.db);
-        let entries = list_package_items(&project.db, pkg_id);
+        let pkg_id = project.package;
+        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
 
         let mut checked = 0;
 
@@ -864,28 +907,5 @@ function summarize_structured(input: string) -> Summary {
         }
 
         assert!(checked > 0, "expected at least one member to be checked");
-    }
-
-    // ── Package-name enumeration ─────────────────────────────────────────────
-
-    #[test]
-    fn non_workspace_package_names_excludes_workspace_and_is_sorted() {
-        let project = make_multi_ns_project();
-        let names = non_workspace_package_names(&project.db);
-        let workspace = sole_workspace_package(&project.db).name(&project.db);
-
-        assert!(
-            names.iter().all(|name| *name != workspace),
-            "workspace package must not be listed; got {names:?}"
-        );
-        assert!(
-            names.iter().any(|name| name.as_str() == "baml"),
-            "stdlib packages should be listed; got {names:?}"
-        );
-        assert!(names.is_sorted(), "names should be sorted; got {names:?}");
-        assert!(
-            names.windows(2).all(|pair| pair[0] != pair[1]),
-            "names should be deduplicated; got {names:?}"
-        );
     }
 }

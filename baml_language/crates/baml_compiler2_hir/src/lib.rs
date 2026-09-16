@@ -46,9 +46,9 @@ use crate::{
 /// Database trait for `compiler2_hir` queries — the base of the compiler2
 /// `Db` trait chain.
 ///
-/// Provides the source-root table (which files exist, grouped into packages)
-/// plus the compile-cache seed inputs ([`inputs`]). Use `file_semantic_index`
-/// for HIR queries.
+/// Provides the source-root table (the packages, their files, and their
+/// dependency edges) plus the compile-cache seed inputs ([`inputs`]). Use
+/// `file_semantic_index` for HIR queries.
 #[salsa::db]
 pub trait Db: salsa::Database {
     /// The ordered set of source roots in this database.
@@ -99,19 +99,11 @@ pub trait Db: salsa::Database {
         None
     }
 
-    /// Source-less dependency packages mounted into this database as serialized
-    /// `PackageInterface` blobs, keyed by the package name (the mount alias).
-    ///
-    /// When present (BEP-066 mounted-package linking), each entry makes its name a *dependency*
-    /// of every user package (`package_dependencies`) whose `package_interface`
-    /// is served straight from the blob — the mounted package has **no source
-    /// files** (`package_items` is empty; that is the point). Cross-package
-    /// resolution for a mounted name goes through the interface rows instead of
-    /// raw items. Names colliding with the reserved package set (the stdlib
-    /// packages, `user`, `root`, `env`) are ignored entirely — see
-    /// `crate::package::mounted_package_names`. Defaults to `None`:
-    /// every other database resolves dependencies from source only.
-    fn mounted_packages(&self) -> Option<inputs::MountedPackages> {
+    /// Where the language packages are installed (see
+    /// [`package::lang_roots`]). Defaults to `None`: a database with no
+    /// stdlib knows no language package, and every identity test against
+    /// one is `false`.
+    fn lang_roots_input(&self) -> Option<inputs::LangRootsInput> {
         None
     }
 }
@@ -130,8 +122,8 @@ pub trait Db: salsa::Database {
 /// only ever shift *user* indices.
 ///
 /// Whole-program consumers only (check drivers, emit, MIR tags, caches).
-/// Package-scoped readers use [`package::package_files`] so edits in one
-/// root cannot invalidate another package's file-set-derived queries.
+/// Package-scoped readers use `root.files(db)` so edits in one root cannot
+/// invalidate another package's file-set-derived queries.
 pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
     let roots = db.source_roots().roots(db);
     debug_assert!(

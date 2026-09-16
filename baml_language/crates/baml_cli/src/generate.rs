@@ -24,6 +24,55 @@ use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::{commands::release_version, reporter::Reporter};
 
+#[derive(Debug, PartialEq, Eq)]
+struct GenerationPresentation {
+    details: Vec<String>,
+    status: Option<String>,
+}
+
+fn generation_presentation(
+    generator_name: &str,
+    count: usize,
+    output_dir: &Path,
+    identifier_renames: &[sdkgen_python_pydantic2::IdentifierRename],
+    quiet: bool,
+    verbose: bool,
+) -> GenerationPresentation {
+    if quiet {
+        return GenerationPresentation {
+            details: Vec::new(),
+            status: None,
+        };
+    }
+
+    let details = if verbose {
+        identifier_renames
+            .iter()
+            .map(|rename| {
+                format!(
+                    "Renamed {} `{}`: `{}` → `{}` ({})",
+                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let rename_count = identifier_renames.len();
+    let rename_label = if rename_count == 1 {
+        "identifier rename"
+    } else {
+        "identifier renames"
+    };
+    GenerationPresentation {
+        details,
+        status: Some(format!(
+            "{generator_name} ({count} file(s), {rename_count} {rename_label} → {})",
+            output_dir.display()
+        )),
+    }
+}
+
 /// Generate client code from BAML definitions.
 ///
 /// Reads every `[generator.<name>]` section in `baml.toml`, validates the
@@ -113,9 +162,14 @@ impl AddGeneratorArgs {
 
         let content = std::fs::read_to_string(&toml_path)
             .with_context(|| format!("failed to read {}", toml_path.display()))?;
-        let manifest = crate::manifest::parse(&content)
+        let manifest = baml_db::manifest::parse(&content)
             .with_context(|| format!("failed to parse {}", toml_path.display()))?;
-        crate::manifest::package_name(&manifest, &toml_path)?;
+        baml_db::manifest::package_name(&manifest, &toml_path)?;
+        // Every other manifest reader rejects these, so accepting them here
+        // would write a generator into a file that the next build refuses to
+        // load, reporting a failure that names neither this command nor the
+        // table it choked on.
+        baml_db::manifest::reject_stdlib_only_tables(&manifest, &toml_path)?;
 
         let mut generator = Generator::from(self.output_type);
         match (self.output_type, self.sdk_import_path.as_deref()) {
@@ -170,7 +224,7 @@ fn add_output_type_parser() -> impl TypedValueParser<Value = OutputType> {
 }
 
 fn add_generator_to_manifest(content: &str, generator: &Generator) -> Result<(String, String)> {
-    let manifest = crate::manifest::parse(content).context("invalid baml.toml")?;
+    let manifest = baml_db::manifest::parse(content).context("invalid baml.toml")?;
     let name = (1..)
         .map(|index| format!("client{index}"))
         .find(|name| !manifest.generator.contains_key(name))
@@ -256,7 +310,7 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep_seeds_only();
         session.prime();
-        let (db, from) = (session.db, session.resolved.root);
+        let (db, package, from) = (session.db, session.package, session.resolved.root);
         // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
         // the root too so Windows short paths and `\\?\` paths can be relativized.
         let from = from
@@ -268,7 +322,7 @@ impl GenerateArgs {
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
-        let source_files = db.workspace_files();
+        let source_files = package.files(&db).clone();
         let diagnostics = baml_db::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()
@@ -341,7 +395,7 @@ impl GenerateArgs {
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
-            .get_bytecode()
+            .get_bytecode(package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
@@ -540,31 +594,25 @@ impl GenerateArgs {
                 )
             })?;
             let count = report.written_files.len();
-            for rename in &identifier_renames {
-                crate::reporter::print_verbose(format_args!(
-                    "Renamed {} `{}`: `{}` → `{}` ({})",
-                    rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
-                ));
+            let presentation = generation_presentation(
+                &generator.name,
+                count,
+                &output_dir,
+                &identifier_renames,
+                crate::reporter::quiet(),
+                crate::reporter::verbose(),
+            );
+            for detail in presentation.details {
+                crate::reporter::print_verbose(format_args!("{detail}"));
             }
-            let rename_count = identifier_renames.len();
-            let rename_label = if rename_count == 1 {
-                "identifier rename"
-            } else {
-                "identifier renames"
-            };
 
             // Persistent status line in the scrollback — one per
             // generator block. Matches cargo's `   Compiling foo
             // v0.1.0` pattern: per-unit progress that sticks around
             // above the spinner.
-            reporter.status(
-                "Generated",
-                format!(
-                    "{} ({count} file(s), {rename_count} {rename_label} → {})",
-                    generator.name,
-                    output_dir.display()
-                ),
-            );
+            if let Some(status) = presentation.status {
+                reporter.status("Generated", status);
+            }
             total_files += count;
         }
 
@@ -630,7 +678,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     let Ok(content) = std::fs::read_to_string(root.join("baml.toml")) else {
         return (generators, diags);
     };
-    let Ok(manifest) = crate::manifest::parse(&content) else {
+    let Ok(manifest) = baml_db::manifest::parse(&content) else {
         return (generators, diags);
     };
 
@@ -901,8 +949,40 @@ mod tests {
     use super::{
         AddGeneratorArgs, Diagnostic, Generator, GeneratorDef, OutputType,
         add_generator_to_manifest, build_embedded_baml_toml, discover_generators,
-        is_valid_go_import_path, parse_add_output_type,
+        generation_presentation, is_valid_go_import_path, parse_add_output_type,
     };
+
+    #[test]
+    fn identifier_rename_presentation_respects_normal_verbose_and_quiet_modes() {
+        let rename = sdkgen_python_pydantic2::IdentifierRename {
+            kind: "enum variant".to_string(),
+            fqn: "user.Choice.None".to_string(),
+            original: "None".to_string(),
+            generated: "None_".to_string(),
+            reason: sdkgen_python_pydantic2::IdentifierRenameReason::PythonKeyword,
+        };
+        let output = std::path::Path::new("generated");
+
+        let normal =
+            generation_presentation("py", 4, output, std::slice::from_ref(&rename), false, false);
+        assert!(normal.details.is_empty());
+        assert_eq!(
+            normal.status.as_deref(),
+            Some("py (4 file(s), 1 identifier rename → generated)")
+        );
+
+        let verbose =
+            generation_presentation("py", 4, output, std::slice::from_ref(&rename), false, true);
+        assert_eq!(
+            verbose.details,
+            ["Renamed enum variant `user.Choice.None`: `None` → `None_` (Python keyword)"]
+        );
+        assert_eq!(verbose.status, normal.status);
+
+        let quiet = generation_presentation("py", 4, output, &[rename], true, true);
+        assert!(quiet.details.is_empty());
+        assert_eq!(quiet.status, None);
+    }
 
     fn go_manifest(threshold: Option<i64>) -> String {
         let threshold = threshold
@@ -1004,7 +1084,7 @@ mod tests {
 
         assert_eq!(name, "client2");
         assert!(updated.contains("# keep this comment"));
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         let added = manifest.generator["client2"].get_ref();
         assert_eq!(
             added.output_type.as_ref().unwrap().get_ref(),
@@ -1025,7 +1105,7 @@ mod tests {
             add_generator_to_manifest("[package]\nname = \"test\"\n", &generator).unwrap();
 
         assert_eq!(name, "client1");
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         let added = manifest.generator["client1"].get_ref();
         assert_eq!(added.output_type.as_ref().unwrap().get_ref(), "go");
         assert_eq!(
@@ -1057,7 +1137,7 @@ mod tests {
 
         assert!(matches!(result, crate::ExitCode::Success));
         let updated = fs::read_to_string(directory.path().join("baml.toml")).unwrap();
-        let manifest = crate::manifest::parse(&updated).unwrap();
+        let manifest = baml_db::manifest::parse(&updated).unwrap();
         assert_eq!(
             manifest.generator["client1"]
                 .get_ref()

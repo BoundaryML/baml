@@ -53,6 +53,14 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0097
 
   ⚠ extraneous throws declaration: baml.json.ParseError
+     ╭─[json_auto_derive.baml:137:108]
+ 137 │         self.items.map((x: T) -> baml.json.json throws baml.json.SerializationError | baml.json.ParseError { x.to_json() })
+     ·                                                                                                            ───────────────
+     ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.json.ParseError
      ╭─[json_auto_derive.baml:150:109]
  150 │ ╭─▶ function primitive_field_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
  151 │ │       let c: C1 = C1 { x: 42 };

@@ -1127,3 +1127,66 @@ testset "live" with testing.Sequential() {
         )
     }
 }
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Gemini column of the lowering table (`_lower_block` in gemini.baml): every
+// media kind is Accepted at every position. A result's text is the
+// `functionResponse.response.result`; its media rides in
+// `functionResponse.parts`. Both backends lower the same way.
+
+function _google_media_input() -> ai.ModelTurnInput {
+    let spec = GoogleToolEcho@spec("Weather in NYC?");
+    ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: root.llm_mock.media_journal("google/gemini-2.5-flash", root.llm_mock.media_png()),
+        toolbox: spec.tools(),
+        output_type: spec.output_type(),
+    }
+}
+
+function _google_media_shape(body: json) -> string {
+    let results = ".contents[2].parts";
+    [
+        baml.json.path<string>(body, ".contents[1].parts[1].functionCall.name"),
+        baml.json.path<string>(body, `${results}[0].functionResponse.response.result`),
+        baml.json.path_or<string>(body, `${results}[0].functionResponse.parts[0].inlineData.data`, "absent"),
+        baml.json.path<string>(body, `${results}[1].functionResponse.name`),
+        baml.json.path<string>(body, `${results}[1].functionResponse.response.result`),
+        baml.json.path<string>(body, `${results}[1].functionResponse.parts[0].inlineData.mimeType`),
+        baml.json.path<string>(body, ".contents[3].role"),
+        baml.json.path<string>(body, ".contents[3].parts[0].text"),
+        baml.json.path<string>(body, ".contents[3].parts[1].inlineData.data"),
+        baml.json.path_or<string>(body, ".contents[4].role", "absent"),
+    ].join("|")
+}
+
+function google_journal_image_accepted() -> string {
+    let cl = google.GeminiClient.new(
+        model = "gemini-2.5-flash",
+        api_key = "test-key",
+        base_url = "https://example.test",
+    );
+    _google_media_shape(baml.json.parse(google.internal.render(cl, _google_media_input()).body))
+}
+
+test "google_journal_image_accepted" {
+    assert.equal(
+        google_journal_image_accepted(),
+        "capture|sunny in SF|absent|capture|captured:|image/png|user|Screenshot after the tool ran:|SGVsbG8=|absent",
+    )
+}
+
+function vertex_journal_image_accepted() -> string {
+    let cl = google.VertexClient.new(
+        model = "gemini-2.5-flash",
+        project_id = "my-project",
+        location = "us-central1",
+        api_key = "express-key",
+    );
+    _google_media_shape(baml.json.parse(google.internal.vertex_render(cl, _google_media_input()).body))
+}
+
+test "vertex_journal_image_accepted" {
+    assert.equal(vertex_journal_image_accepted(), google_journal_image_accepted())
+}

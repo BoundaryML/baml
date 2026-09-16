@@ -1,0 +1,28 @@
+---
+name: "Sheep Council Monday TODO_DATE"
+campaignGroupId: "cmtc7a2fx078l0j4jwqydy4m4"
+mailingListId: "cmpzwi95b07yc0j5z217rfahn"
+subject: "Sheep Council Monday TODO_DATE, 9am PT - TODO_TOPIC"
+previewText: "TODO_PREVIEW"
+fromName: "Vaibhav from Boundary"
+fromEmail: "vbv"
+replyToEmail: "vbv@boundaryml.com"
+emailFormat: "styled"
+contactPropertiesFallbacks: {"firstName":"there"}
+---
+<Style backgroundColor="" backgroundXPadding="0" backgroundYPadding="0" bodyColor="" bodyXPadding="0" bodyYPadding="0" bodyFontFamily="Default" bodyFontCategory="sans-serif" borderColor="" borderWidth="0" borderRadius="4" buttonBodyColor="" buttonBodyXPadding="16" buttonBodyYPadding="12" buttonBorderColor="" buttonBorderWidth="0" buttonBorderRadius="4" buttonTextColor="" buttonTextFormat="0" buttonTextFontSize="16" dividerColor="" dividerBorderWidth="1" textBaseColor="" textBaseFontSize="14" textBaseLineHeight="150" textBaseLetterSpacing="0" textLinkColor="" heading1Color="" heading1FontSize="28" heading1LineHeight="125" heading1LetterSpacing="0" heading2Color="" heading2FontSize="24" heading2LineHeight="125" heading2LetterSpacing="0" heading3Color="" heading3FontSize="20" heading3LineHeight="125" heading3LetterSpacing="0" />
+<Paragraph>Hello Sheep Councillor {contact.firstName}!</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>We’ll see you on <Strong textColor="#6d28d9">Monday TODO_DATE, 9am PT.</Strong></Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>This week we’ll be talking about <Text textColor="#6d28d9">TODO_TOPIC</Text>.</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>TODO_DETAILS</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>If you’re interested in seeing a demo, sharing feedback about your use case, or influencing how BAML does this, make sure to be there :)</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph><Link href="https://calendar.google.com/calendar/event?action=TEMPLATE&amp;tmeid=NmpyOGc2a2tqdWxtbjZjb3NhNXZzZzl0Mjkgc2FtQGJvdW5kYXJ5bWwuY29t&amp;tmsrc=sam%40boundaryml.com"><Underline>Add to your calendar by using this link</Underline></Link></Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>See you all then!</Paragraph>
+<Paragraph></Paragraph>
+<Paragraph>Vaibhav</Paragraph>

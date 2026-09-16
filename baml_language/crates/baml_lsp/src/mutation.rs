@@ -13,8 +13,10 @@ use baml_base::{Name, SourceRootKind};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootSpec {
     pub path: PathBuf,
-    pub package: Name,
     pub kind: SourceRootKind,
+    /// The package's own name (`[package].name`); `None` for an unnamed
+    /// project.
+    pub self_name: Option<Name>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

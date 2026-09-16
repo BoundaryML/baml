@@ -1,10 +1,7 @@
 //! `//^^^ ty` annotation checks and `check_infer`-style dumps, after
 //! rust-analyzer's `check_types` / `check_infer`
-//! (`crates/hir-ty/src/tests.rs` there), run DIFFERENTIALLY against both
-//! engines: `baml_compiler2_hir_ty` (the one being built) and TIR (the one
-//! being replaced). The annotation check runs per engine so a fixture can
-//! encode which engine satisfies the spec; the dump merges both engines per
-//! node so every snapshot is a live diff of the two systems.
+//! (`crates/hir-ty/src/tests.rs` there), against `baml_compiler2_hir_ty`.
+//! Every fixture checks its annotations; only selected examples render a dump.
 //!
 //! A fixture is a single BAML file. Annotation lines are comments whose first
 //! non-space content after `//` is a caret run; the carets select a byte range
@@ -23,9 +20,7 @@
 //! A caret range matches an expression span or a binding-pattern span. The
 //! check is strict in both directions: an annotation that matches nothing
 //! fails, an annotation whose type differs fails, and a fixture with no
-//! annotations fails. For TIR, error-severity diagnostics also fail (the
-//! hir_ty engine has no diagnostics yet; the plan's S17 adds them and the
-//! gate). Annotation lines are ordinary comments to the compiler, so ranges
+//! annotations fails. Annotation lines are ordinary comments to the compiler, so ranges
 //! are computed against the exact text that gets compiled. Fixtures must be
 //! ASCII (caret columns are byte offsets).
 //!
@@ -41,18 +36,9 @@
 //! //  ^^^^ non-exhaustive
 //! ```
 //!
-//! Both are hir_ty-only assertions (TIR's gate stays its diagnostics), and
-//! the dump gains a trailing `[mismatch]` / `[non-exhaustive]` section so
-//! snapshots show the error channel evolving alongside the types. S17 turns
-//! these recorded entries into rendered diagnostics; the assertion surface
-//! is already here.
-//!
-//! The dump side renders one line per inferred node, sorted by range:
-//! `start..end 'text': ty` where the engines agree, and
-//! `start..end 'text': hir_ty=[..] tir=[..]` where they differ (with
-//! `<missing>` for an engine that inferred nothing there). Counting
-//! difference lines across snapshots is the progress metric; at cutover the
-//! only ones left should be the spec-mandated improvements.
+//! Dumps render one line per inferred node, sorted by source range, followed
+//! by the mismatch/non-exhaustiveness channel. The checks run even when dump
+//! rendering is disabled; a snapshot is never the only assertion on a fixture.
 //!
 //! Not yet supported (add when a fixture needs it): multi-file fixtures,
 //! `|` continuation lines, `^file` whole-file annotations, top-level `let`
@@ -98,15 +84,15 @@ enum AnnotationKind {
     NonExhaustive,
 }
 
-/// Per-engine annotation-check results plus the merged infer-dump.
-pub(crate) struct DifferentialOutcome {
+/// Annotation-check results plus an optional rendered infer-dump.
+pub(crate) struct FixtureOutcome {
     pub(crate) hir_ty: Result<(), String>,
     pub(crate) dump: String,
 }
 
-/// Runs both engines over `fixture` (as `test.baml`), checks the caret
-/// annotations against each, and renders the merged dump.
-pub(crate) fn run_differential(fixture: &str) -> DifferentialOutcome {
+/// Infer `fixture` (as `test.baml`) and check every caret/error annotation.
+/// Render the full node dump only for an explicitly selected golden.
+pub(crate) fn run_fixture(fixture: &str, render_dump: bool) -> FixtureOutcome {
     assert!(fixture.is_ascii(), "fixtures must be ASCII");
     let annotations = extract_annotations(fixture);
     assert!(
@@ -123,10 +109,15 @@ pub(crate) fn run_differential(fixture: &str) -> DifferentialOutcome {
     let mut hir_ty_failures = check_annotations(&hir_ty_nodes, fixture, &annotations);
     hir_ty_failures.extend(check_error_channel(&channel, fixture, &annotations));
 
-    let mut dump = render_infer(&hir_ty_nodes, fixture);
-    dump.push_str(&render_error_channel(&channel, fixture));
+    let dump = if render_dump {
+        let mut dump = render_infer(&hir_ty_nodes, fixture);
+        dump.push_str(&render_error_channel(&channel, fixture));
+        dump
+    } else {
+        String::new()
+    };
 
-    DifferentialOutcome {
+    FixtureOutcome {
         hir_ty: to_result(hir_ty_failures),
         dump,
     }
@@ -144,6 +135,7 @@ pub(crate) fn collect_hir_ty_error_channel(
     db: &ProjectDatabase,
     file: baml_base::SourceFile,
 ) -> ErrorChannel {
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let mut mismatches: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
     let mut non_exhaustive = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
@@ -158,8 +150,8 @@ pub(crate) fn collect_hir_ty_error_channel(
         for (&expr_id, (expected, actual)) in &result.type_mismatches {
             let rendered = format!(
                 "expected {}, got {}",
-                expected.render_canonical(),
-                actual.render_canonical()
+                expected.render_with(&vp),
+                actual.render_with(&vp)
             );
             let entry = mismatches
                 .entry(range_key(source_map.expr_span(expr_id)))
@@ -280,7 +272,7 @@ fn render_error_channel(channel: &ErrorChannel, fixture: &str) -> String {
 #[track_caller]
 #[allow(dead_code, reason = "inline-test entry point; fixtures use the runner")]
 pub(crate) fn check_types(fixture: &str) {
-    if let Err(report) = run_differential(fixture).hir_ty {
+    if let Err(report) = run_fixture(fixture, false).hir_ty {
         panic!("check_types failed:\n  {report}");
     }
 }
@@ -336,9 +328,8 @@ fn check_annotations(
     failures
 }
 
-/// Merges both engines' nodes into one dump line per source range:
-/// `start..end 'text': ty` on agreement, `hir_ty=[..] tir=[..]` on
-/// difference. The name-narrowed binding entries used by caret matching are
+/// Render inferred nodes as `start..end 'text': ty`.
+/// The name-narrowed binding entries used by caret matching are
 /// excluded: the dump reflects real node spans only.
 fn render_infer(hir_ty: &[TypedNode], fixture: &str) -> String {
     let mut merged: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
@@ -507,6 +498,7 @@ pub(crate) fn collect_hir_ty_nodes(
     file: baml_base::SourceFile,
     fixture: &str,
 ) -> Vec<TypedNode> {
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
     // Inference results per body owner, keyed by the owner's scope so
@@ -553,7 +545,7 @@ pub(crate) fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: name_span,
                 kind: NodeKind::Expr,
-                ty: format!("throws {}", owner.result.throws.render_canonical()),
+                ty: format!("throws {}", owner.result.throws.render_with(&vp)),
             });
         }
     }
@@ -565,7 +557,7 @@ pub(crate) fn collect_hir_ty_nodes(
             nodes.push(TypedNode {
                 range: owner.source_map.expr_span(expr_id),
                 kind: NodeKind::Expr,
-                ty: ty.render_canonical(),
+                ty: ty.render_with(&vp),
             });
         }
         let Some(body) = owner.body.expr_body() else {
@@ -579,7 +571,7 @@ pub(crate) fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: owner.source_map.pattern_span(pat_id),
                     kind: NodeKind::Pattern,
-                    ty: ty.render_canonical(),
+                    ty: ty.render_with(&vp),
                 });
             }
         }
@@ -603,7 +595,7 @@ pub(crate) fn collect_hir_ty_nodes(
                 nodes.push(TypedNode {
                     range: binding_name_range(fixture, binding),
                     kind: NodeKind::BindingName,
-                    ty: ty.render_canonical(),
+                    ty: ty.render_with(&vp),
                 });
             }
         }

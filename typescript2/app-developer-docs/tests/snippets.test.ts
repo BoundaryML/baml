@@ -12,6 +12,7 @@ import {
 } from '../lib/snippets/discovery';
 import { highlightCode } from '../lib/snippets/highlighter';
 import { parseBamlSource } from '../lib/snippets/parser';
+import { selectProjectFiles } from '../lib/snippets/selection';
 
 test('snippet metadata and named regions are parsed and removed from display source', () => {
   const parsed = parseBamlSource(
@@ -55,7 +56,7 @@ test('snippet directives and metadata fail closed', () => {
         '// docs:start first\n// docs:start second\n// docs:end second',
         'nested.baml',
       ),
-    /nested inside/,
+    /no matching end/,
   );
   assert.throws(
     () =>
@@ -149,4 +150,51 @@ test('the canonical BAML grammar produces highlighted light and dark tokens', as
     );
     assert.ok(tokens.flat().some(({ color }) => color !== undefined));
   }
+});
+
+test('nested regions keep the enclosing example and inner excerpt in sync', () => {
+  const parsed = parseBamlSource(
+    '// docs:start outer\nfunction main() -> int {\n// docs:start inner\n  42\n// docs:end inner\n}\n// docs:end outer',
+    'nested.baml',
+  );
+  assert.equal(
+    parsed.regions.get('outer'),
+    'function main() -> int {\n  42\n}',
+  );
+  assert.equal(parsed.regions.get('inner'), '42');
+  assert.throws(
+    () =>
+      parseBamlSource(
+        '// docs:start outer\n// docs:start inner\n// docs:end outer',
+        'crossed.baml',
+      ),
+    /closes active region inner/,
+  );
+  assert.throws(
+    () =>
+      parseBamlSource(
+        '// docs:start same\n// docs:end same\n// docs:start same',
+        'duplicate.baml',
+      ),
+    /duplicate region/,
+  );
+});
+
+test('project excerpts fail on missing files or regions and preserve requested order', async () => {
+  const project = await loadProjectSnippet('listing-08-01');
+  const selected = selectProjectFiles(project, 'baml_src/main.baml', [
+    'excerpt-02',
+    'excerpt-01',
+  ]);
+  assert.match(selected[0].displaySource, /^function display_tool_name/);
+  assert.ok(selected[0].displaySource.indexOf('class BadToolInput') > 0);
+  assert.throws(() => selectProjectFiles(project, '../missing'), /has no file/);
+  assert.throws(
+    () => selectProjectFiles(project, 'baml_src/main.baml', ['missing']),
+    /has no region/,
+  );
+  assert.throws(
+    () => selectProjectFiles(project, undefined, ['excerpt-01']),
+    /require a file/,
+  );
 });

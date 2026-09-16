@@ -117,28 +117,22 @@ export function parseBamlSource(
   );
   const regionLines = new Map<string, string[]>();
   const cleanedLines: string[] = [];
-  let activeRegion: { name: string; startLine: number } | null = null;
+  const activeRegions: { name: string; startLine: number }[] = [];
 
   for (const [index, line] of sourceLines.entries()) {
     const startMatch = line.match(regionStartPattern);
     if (startMatch) {
-      if (activeRegion) {
-        fail(
-          sourceName,
-          index + 1,
-          `region ${startMatch[1]} is nested inside ${activeRegion.name}`,
-        );
-      }
       if (regionLines.has(startMatch[1])) {
         fail(sourceName, index + 1, `duplicate region ${startMatch[1]}`);
       }
-      activeRegion = { name: startMatch[1], startLine: index + 1 };
+      activeRegions.push({ name: startMatch[1], startLine: index + 1 });
       regionLines.set(startMatch[1], []);
       continue;
     }
 
     const endMatch = line.match(regionEndPattern);
     if (endMatch) {
+      const activeRegion = activeRegions.at(-1);
       if (!activeRegion) {
         fail(sourceName, index + 1, `region ${endMatch[1]} has no start`);
       }
@@ -149,7 +143,7 @@ export function parseBamlSource(
           `region ${endMatch[1]} closes active region ${activeRegion.name}`,
         );
       }
-      activeRegion = null;
+      activeRegions.pop();
       continue;
     }
 
@@ -162,12 +156,12 @@ export function parseBamlSource(
     }
 
     cleanedLines.push(line);
-    if (activeRegion) {
+    for (const activeRegion of activeRegions) {
       regionLines.get(activeRegion.name)?.push(line);
     }
   }
 
-  if (activeRegion) {
+  for (const activeRegion of activeRegions) {
     fail(
       sourceName,
       activeRegion.startLine,

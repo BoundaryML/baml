@@ -168,7 +168,7 @@ P0:
    exists). `EngineStarted` rides the registry-side vector, drained *after*
    the slot scan, ordered before same-engine `RootStarted`s.
 5. **`started_ns` = `admitted_ticks` sampled in `register_root`**, not the
-   `StartThread` record (emitted later, can be lost).
+   `BexThreadStart` record (emitted later, can be lost).
 6. **`Owner::Writer` has a 64 KiB minimum charge** — the writer takes one
    `meta_queue` reservation at session start, never per-record reservations.
 7. **`StreamStarted` only when `high_water().meta == 0`** — re-opened

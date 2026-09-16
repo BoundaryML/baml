@@ -137,7 +137,7 @@ impl CapturePlan {
     const MANUAL: u8 = 1 << 6;
     const RESERVED: u8 = 1 << 7;
 
-    /// Encodes the complete plan into the reserved `CallFunction.flags` byte.
+    /// Encodes the complete plan into the reserved `FunctionEnter.flags` byte.
     #[must_use]
     pub const fn to_call_flags(self) -> u8 {
         let mut flags = self.roles.bits();

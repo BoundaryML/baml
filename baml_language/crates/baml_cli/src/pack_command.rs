@@ -269,9 +269,9 @@ impl PackArgs {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
-            let (db, needs_format_hint) = self.load_standalone(file)?;
+            let (db, package, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(&db)
+            let program = baml_compiler2_emit::generate_project_bytecode(&db, package)
                 .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
@@ -314,6 +314,7 @@ impl PackArgs {
         let warmth = session.warm_prep();
         let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
         let db = &session.db;
+        let package = session.package;
         let cache = &session.cache;
 
         // Keep `baml pack` quiet during compilation. Its visible progress is
@@ -325,7 +326,7 @@ impl PackArgs {
         // their cached blobs, returning the fresh per-file blobs to persist.
         // Without a cache, run the honest full check (no blobs to store).
         let fresh_diagnostics = if let Some(ctx) = cache {
-            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+            let incremental = ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
             bail_on_error_diagnostics(
                 db,
                 &incremental.merged,
@@ -340,6 +341,7 @@ impl PackArgs {
 
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             db,
+            package,
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
@@ -349,18 +351,20 @@ impl PackArgs {
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
-                db,
+                &session,
                 &compiled,
                 fresh,
                 reuse_plan.as_ref(),
                 stdlib_interface_hit,
-                || session.honest_db(),
             )?;
         }
         Ok((session.db, compiled.program, needs_format_hint))
     }
 
-    fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
+    fn load_standalone(
+        &self,
+        file_path: &Path,
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, bool)> {
         let canonical = resolve_standalone_file(file_path)?;
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("failed to read {}", canonical.display()))?;
@@ -368,7 +372,7 @@ impl PackArgs {
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
         let (mut db, workspace) = workspace_db(parent);
         db.add_or_update_file_in(workspace, &canonical, &content);
-        Ok((db, needs_format_hint))
+        Ok((db, workspace, needs_format_hint))
     }
 
     /// Resolve into `(mode, targets)`. Positional `<TARGET>` →

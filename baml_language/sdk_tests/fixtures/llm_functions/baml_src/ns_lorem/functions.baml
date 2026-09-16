@@ -145,9 +145,13 @@ function hs7_collision_type() -> reflect.Type {
 }
 
 // Mirror the original VetRec wrapper: create and bind the runtime type inside
-// BAML, then erase only the public Stream slots to `unknown`. The live stream
-// object must retain its realized dynamic type arguments for next/final.
-function hs7_open_collision_stream(text: string) -> ai.stream.Stream<unknown, unknown> {
+// BAML and hand the stream to the host as `unknown`. `OutputType` is scoped
+// to this body and generics are invariant, so `Stream<OutputType?, OutputType>`
+// cannot be published as `Stream<unknown, unknown>`; the host still receives a
+// stream handle (the bridge selects the wrapper from the handle's tag), and
+// the live stream object retains its realized dynamic type arguments for
+// next/final.
+function hs7_open_collision_stream(text: string) -> unknown {
   let output_type = hs7_collision_type();
   type OutputType = unreflect(output_type);
   hs7_dynamic_extract@stream<OutputType>(text)

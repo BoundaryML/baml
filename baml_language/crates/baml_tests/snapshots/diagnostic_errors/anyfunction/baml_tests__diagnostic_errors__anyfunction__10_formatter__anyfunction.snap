@@ -21,7 +21,7 @@ class Holder<T extends reflect.AnyFunction> {
 }
 
 interface Registry {
-    type Callee extends reflect.AnyFunction
+    type Callee extends reflect.AnyFunction;
 }
 
 // BEP-062: AnyFunction coercion failures. The derived conformance checks the

@@ -384,10 +384,10 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
-    /// An inline `unreflect(value)` type argument would escape its call: the
-    /// runtime type parameter is rigid for that one call, but the expression's
-    /// published type still mentions it. The lexical `type T = unreflect(v)`
-    /// binding is the spelling that outlives the call.
+    /// `unreflect(value)` was written somewhere other than as the whole
+    /// right-hand side of a body-level `type T = …;` binding. The binding is
+    /// the one spelling that lifts a runtime type; every other position names
+    /// the bound `T`.
     RuntimeTypeMustBeNamed,
     /// `reflect.function.Type.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a
@@ -396,6 +396,16 @@ pub enum DiagnosticId {
     ReflectSpecializationFailed,
     /// An ordinary inference variable remained unresolved at writeback (E0155).
     TypeMustBeKnown,
+    /// A builtin type spelling was written with type arguments or
+    /// associated-type bindings it does not take (`image<string>`,
+    /// `map<string>`), diagnosed at AST lowering before the arguments could
+    /// be silently erased.
+    InvalidBuiltinTypeArguments,
+    /// A value typed by a body-scoped `type T = …` binding would be
+    /// observable outside the block that binds `T`: the block's value, a
+    /// thrown type a published clause would carry, or a type still being
+    /// inferred that would be decided as one.
+    ScopedTypeEscapesBlock,
 }
 
 impl DiagnosticId {
@@ -607,6 +617,8 @@ impl DiagnosticId {
             DiagnosticId::ReflectSpecializationFailed => "E0169",
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
             DiagnosticId::TypeMustBeKnown => "E0155",
+            DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
+            DiagnosticId::ScopedTypeEscapesBlock => "E0172",
         }
     }
 }
@@ -924,5 +936,73 @@ mod tests {
             let bytes = borsh::to_vec(&id).unwrap();
             assert_eq!(borsh::from_slice::<DiagnosticId>(&bytes).unwrap(), id);
         }
+    }
+
+    /// Every variant, recovered from the declaration-order discriminant the
+    /// Borsh derive assigns. Deserializing `[i]` for ascending `i` enumerates
+    /// the enum without a hand-maintained list to fall out of date.
+    fn all_diagnostic_ids() -> Vec<DiagnosticId> {
+        (0..=u8::MAX)
+            .map_while(|byte| borsh::from_slice::<DiagnosticId>(&[byte]).ok())
+            .collect()
+    }
+
+    #[test]
+    fn a_code_is_shared_only_where_this_test_says_so() {
+        // Two ids may map to one code only when they are the same error to a
+        // reader. Everything else here is a pre-existing collision between
+        // unrelated errors: two authors reached for the next free number at
+        // the same time, and nothing failed. Adding a row is a decision, not
+        // a formality - a new id takes a fresh code.
+        const SHARED: &[(&str, &[&str])] = &[
+            ("E0010", &["UnexpectedToken", "InvalidSyntax"]),
+            // One error to a reader: the role-remapping config is invalid.
+            (
+                "E0044",
+                &[
+                    "RemapRolesNotMap",
+                    "RemapRoleValueNotString",
+                    "RemapRoleNotAllowed",
+                    "AllowedRolesEmpty",
+                    "AllowedRoleNotString",
+                ],
+            ),
+            ("E0093", &["DuplicateMethod", "InvalidCatchBindingType"]),
+            ("E0094", &["DuplicateBinding", "NonExhaustiveCatch"]),
+            ("E0112", &["IrrefutablePatternInIfLet", "UnknownInterface"]),
+            ("E0113", &["LetElseMustDiverge", "MissingInterfaceMethod"]),
+            (
+                "E0114",
+                &["IrrefutablePatternInLetElse", "DuplicateImplementsBlock"],
+            ),
+            (
+                "E0153",
+                &[
+                    "GenericSysOpMethodInInterfaceImpl",
+                    "BuiltinInterfaceNotImplementable",
+                ],
+            ),
+        ];
+
+        let mut by_code: std::collections::BTreeMap<&str, Vec<String>> =
+            std::collections::BTreeMap::new();
+        for id in all_diagnostic_ids() {
+            by_code
+                .entry(id.code())
+                .or_default()
+                .push(format!("{id:?}"));
+        }
+        let shared: Vec<(&str, Vec<String>)> = by_code
+            .into_iter()
+            .filter(|(_, ids)| ids.len() > 1)
+            .collect();
+        let expected: Vec<(&str, Vec<String>)> = SHARED
+            .iter()
+            .map(|(code, ids)| (*code, ids.iter().map(ToString::to_string).collect()))
+            .collect();
+        assert_eq!(
+            shared, expected,
+            "a diagnostic code is shared by ids this test does not list; give the new id its own code"
+        );
     }
 }

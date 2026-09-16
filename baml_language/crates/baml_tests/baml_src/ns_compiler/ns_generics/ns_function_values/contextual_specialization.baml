@@ -91,7 +91,7 @@ test "a later use cannot retroactively specialize a stored value" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "generic function `identity` needs concrete type arguments before it can be stored in `copy`. Specialize it explicitly, for example `identity<string>`. Or write the concrete function type after the binding name: `let copy: (string) -> string throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "generic function `identity` needs concrete type arguments before it can be stored in `copy`. Specialize it explicitly, for example `identity<string>`. Or write the concrete function type after the binding name: `let copy: (value: string) -> string throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }
@@ -232,7 +232,7 @@ test "ambiguous callback union does not guess a specialization" {
         },
         root.compiler.ExactDiagnostic {
             code: "E0001",
-            message: "cannot determine every type argument for generic function `identity` from the expected function type. Specialize it explicitly, for example `identity<int>`. Bind it first with a concrete function type: `let function_value: (int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
+            message: "cannot determine every type argument for generic function `identity` from the expected function type. Specialize it explicitly, for example `identity<int>`. Bind it first with a concrete function type: `let function_value: (value: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument",
         },
     )
 }

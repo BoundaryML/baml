@@ -1,11 +1,15 @@
 //! Package-level cross-file symbol aggregation.
 //!
-//! `package_items` merges all `namespace_items` within a package into a single
-//! lookup structure. This is the top-level cross-file query used by the TIR
-//! layer for name resolution.
+//! A package IS a [`SourceRoot`]: package identity is the root's input id,
+//! every package-level query is keyed on it, and a package reaches another
+//! only through an edge in its own [`SourceRoot::dependencies`] list, under
+//! the name that edge carries. `package_items` merges all `namespace_items`
+//! within a package into a single lookup structure — the top-level
+//! cross-file query used by the TIR layer for name resolution.
 
-use baml_base::{Name, Span};
+use baml_base::{LangPackage, LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
+use baml_type::{DeclName, RESERVED_USER_PACKAGE, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -65,74 +69,390 @@ impl<'db> NamespaceShadow<'db> {
     }
 }
 
-/// Interned package identity.
-#[salsa::interned]
-pub struct PackageId<'db> {
-    pub name: Name,
-}
-
-/// Files of the roots carrying `package_id`'s name, in table order.
-///
-/// The package-scoped counterpart of [`crate::compiler2_all_files`]: readers
-/// that fold over one package's files (namespace discovery, impl-loc scans)
-/// use this so an edit to another root's file set never invalidates them.
-/// Depends on the table, each root's `package` field, and only the matching
-/// roots' `files`.
-#[salsa::tracked(returns(ref))]
-pub fn package_files<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-) -> Vec<baml_base::SourceFile> {
-    let name = package_id.name(db);
-    db.source_roots()
-        .roots(db)
-        .iter()
-        .filter(|root| root.package(db) == *name)
-        .flat_map(|root| root.files(db).iter().copied())
-        .collect()
-}
+// ── Roots as packages ────────────────────────────────────────────────────────
 
 /// The `Workspace`-kind source roots, in table order.
 #[salsa::tracked(returns(ref))]
-pub fn workspace_roots(db: &dyn crate::Db) -> Vec<baml_base::SourceRoot> {
+pub fn workspace_roots(db: &dyn crate::Db) -> Vec<SourceRoot> {
     db.source_roots()
         .roots(db)
         .iter()
         .copied()
-        .filter(|root| root.kind(db) == baml_base::SourceRootKind::Workspace)
+        .filter(|root| root.kind(db) == SourceRootKind::Workspace)
         .collect()
 }
 
-/// The distinct package names of `Workspace` roots, in table order.
-pub fn workspace_package_names(db: &dyn crate::Db) -> Vec<Name> {
-    let mut names: Vec<Name> = workspace_roots(db)
-        .iter()
-        .map(|root| root.package(db))
-        .collect();
-    names.dedup();
-    names
+/// The packages `viewer` can see: itself, then its dependency closure in
+/// deterministic order. Every "which impls (or items) exist?" question is
+/// asked from a package and answered over exactly this set — never the
+/// whole database, which also holds packages `viewer` cannot name.
+#[salsa::tracked(returns(ref))]
+pub fn visible_packages(db: &dyn crate::Db, viewer: SourceRoot) -> Vec<SourceRoot> {
+    std::iter::once(viewer)
+        .chain(package_dependency_closure(db, viewer).iter().copied())
+        .collect()
 }
 
-/// The sole workspace package.
-///
-/// Phase-A stopgap for the single-workspace-root invariant: the compiler is
-/// single-world (impl resolution, `definition_of`, and `Ty`'s `Package::Local`
-/// carry no viewpoint), so a database holds at most one `Workspace` package
-/// until the world-viewpoint rework lands. Callers that today spell the
-/// reserved `"user"` name as a resolution key use this instead, so the Phase-B
-/// sweep has one seam to widen.
-pub fn sole_workspace_package(db: &dyn crate::Db) -> PackageId<'_> {
-    let names = workspace_package_names(db);
-    debug_assert!(
-        names.len() <= 1,
-        "multiple workspace packages in one database requires the world-viewpoint rework"
-    );
-    let name = names
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| Name::new(baml_type::RESERVED_USER_PACKAGE));
-    PackageId::new(db, name)
+/// The roots emitted into `root`'s program — `root` and its dependency
+/// closure — in source-root table order (`Stdlib < Dependency < Workspace <
+/// Dynamic`), so the stdlib keeps its user-independent prefix of every index
+/// space. This is the world an emit sees: never the whole database, which
+/// may hold other workspace roots that cannot share a program with this one.
+#[salsa::tracked(returns(ref))]
+pub fn world_roots(db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceRoot> {
+    let visible = visible_packages(db, root);
+    db.source_roots()
+        .roots(db)
+        .iter()
+        .copied()
+        .filter(|candidate| visible.contains(candidate))
+        .collect()
 }
+
+/// Every file of [`world_roots`], root by root in table order, each root's
+/// files in its own order — the file set a program built for `root` is
+/// emitted from.
+#[salsa::tracked(returns(ref))]
+pub fn world_files(db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceFile> {
+    world_roots(db, root)
+        .iter()
+        .flat_map(|root| root.files(db).iter().copied())
+        .collect()
+}
+
+/// The dependency edge of `root` named `name`, if it has one.
+///
+/// The ONE place a source-level package spelling becomes a package: `baml`
+/// in `baml.Array` resolves through the spelling package's own edge list and
+/// nowhere else. A package that lists no edge under a name cannot reach it,
+/// whatever else the database holds.
+pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Option<SourceRoot> {
+    root.dependencies(db)
+        .iter()
+        .find(|dependency| dependency.name == *name)
+        .map(|dependency| dependency.root)
+}
+
+/// The package `root` spells as `name`: itself, when `name` is its own
+/// declared name (a named package may qualify its own items by it), else the
+/// dependency reached by the edge named `name`. Anything else is invisible.
+/// An unnamed package has no name to spell itself by besides `root`.
+pub fn accessible_package(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Option<SourceRoot> {
+    if root.self_name(db).is_some_and(|own| own == *name) {
+        return Some(root);
+    }
+    dependency_named(db, root, name)
+}
+
+/// Where the language packages are installed in this database.
+pub fn lang_roots(db: &dyn crate::Db) -> LangRoots {
+    db.lang_roots_input()
+        .map(|input| input.roots(db))
+        .unwrap_or_default()
+}
+
+/// The full transitive dependency closure of `root` (excluding itself), in
+/// deterministic breadth-first order with duplicates removed.
+///
+/// What coherence and membership checks need: every package whose impls
+/// could be visible from `root`. The walk is cycle-safe (a `seen` set), though
+/// the dependency graph is a DAG by construction.
+#[salsa::tracked(returns(ref))]
+pub fn package_dependency_closure(db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceRoot> {
+    let mut seen: std::collections::HashSet<SourceRoot> = std::collections::HashSet::new();
+    let mut order: Vec<SourceRoot> = Vec::new();
+    let mut queue: std::collections::VecDeque<SourceRoot> = root
+        .dependencies(db)
+        .iter()
+        .map(|dependency| dependency.root)
+        .collect();
+    while let Some(dep) = queue.pop_front() {
+        if dep == root || !seen.insert(dep) {
+            continue;
+        }
+        order.push(dep);
+        queue.extend(
+            dep.dependencies(db)
+                .iter()
+                .map(|dependency| dependency.root),
+        );
+    }
+    order
+}
+
+/// Whether `root` is served from its serialized compiler interface rather
+/// than from source (a runtime mount, or a precompiled stdlib package in a
+/// runtime compile). Such a package has no source rows: its `files`, if any,
+/// are link-only stubs, and its interface is the semantic authority.
+pub fn is_served_from_interface(db: &dyn crate::Db, root: SourceRoot) -> bool {
+    root.interface(db).is_some()
+}
+
+/// Whether `root` is a compiler-built, image-immutable stdlib package served
+/// from its interface. Ordinary runtime mounts remain replaceable and keep
+/// the conservative mounted impl-facts shape; these rows are build artifacts
+/// from this exact compiler and can be re-hydrated like source-backed facts.
+pub fn is_precompiled_stdlib(db: &dyn crate::Db, root: SourceRoot) -> bool {
+    root.kind(db) == SourceRootKind::Stdlib && root.interface(db).is_some()
+}
+
+// ── Spelling ─────────────────────────────────────────────────────────────────
+
+/// How every root in the database is spelled on the wire: its own name if it
+/// declares one, else the one name every dependency edge reaching it uses,
+/// else — for a nameless root nothing depends on, the primary package of a
+/// project with no manifest — the default [`RESERVED_USER_PACKAGE`].
+///
+/// This is the boundary's table. Compile-time heads carry the root itself
+/// ([`DeclName`]) and never a spelling; the spelling is consulted exactly
+/// where a head leaves the session — emit, package-interface export,
+/// describe/export output, canonical dumps — and where one enters it (a
+/// package-interface blob, a throw-fact seed). Today every root in the
+/// database is compiled into one program, so the table is database-wide and
+/// viewpoint-free; when emit compiles a root's closure alone it becomes
+/// per-closure.
+///
+/// A spelling two roots share, or a root reached under two names, is a
+/// [`collision`](Self::collisions): a boundary that needs the table injective
+/// reports it; a renderer may still spell the root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spelling {
+    by_root: IndexMap<SourceRoot, Name>,
+    by_name: IndexMap<Name, SourceRoot>,
+    collisions: Vec<SpellingCollision>,
+}
+
+/// Why a [`Spelling`] is not injective.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpellingCollision {
+    /// Two or more roots spell the same; the table holds the first.
+    SharedName { name: Name, roots: Vec<SourceRoot> },
+    /// A nameless root is reached under several edge names; the table holds
+    /// the first.
+    ManyNames { root: SourceRoot, names: Vec<Name> },
+}
+
+impl std::fmt::Display for SpellingCollision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SharedName { name, roots } => write!(
+                f,
+                "{} packages are spelled `{name}`; name them in their manifests",
+                roots.len()
+            ),
+            Self::ManyNames { names, .. } => write!(
+                f,
+                "an unnamed package is depended on under {} different names ({}); name it in \
+                 its manifest",
+                names.len(),
+                names
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+impl Spelling {
+    /// A table from explicit `(root, spelling)` pairs, shared-name collisions
+    /// included — for callers that hold the roots and their names outside a
+    /// database (tests, tooling over an explicit graph).
+    pub fn from_pairs(pairs: impl IntoIterator<Item = (SourceRoot, Name)>) -> Self {
+        let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
+        let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
+        let mut collisions = Vec::new();
+        for (root, name) in pairs {
+            by_root.insert(root, name.clone());
+            match by_name.entry(name) {
+                indexmap::map::Entry::Vacant(slot) => {
+                    slot.insert(root);
+                }
+                indexmap::map::Entry::Occupied(slot) => {
+                    // One entry per name, holding every root that claims it,
+                    // the way `spelling` builds them. Pushing a fresh pair per
+                    // clash would report three colliding roots as two separate
+                    // pairs, and the same table would describe itself
+                    // differently depending on which constructor built it.
+                    let name = slot.key().clone();
+                    let first = *slot.get();
+                    match collisions.iter_mut().find_map(|collision| match collision {
+                        SpellingCollision::SharedName { name: seen, roots } if *seen == name => {
+                            Some(roots)
+                        }
+                        SpellingCollision::SharedName { .. }
+                        | SpellingCollision::ManyNames { .. } => None,
+                    }) {
+                        Some(roots) => roots.push(root),
+                        None => collisions.push(SpellingCollision::SharedName {
+                            name,
+                            roots: vec![first, root],
+                        }),
+                    }
+                }
+            }
+        }
+        Self {
+            by_root,
+            by_name,
+            collisions,
+        }
+    }
+
+    /// The spelling of a live root.
+    pub fn of(&self, root: SourceRoot) -> &Name {
+        self.by_root
+            .get(&root)
+            .unwrap_or_else(|| unreachable!("every live root is in the spelling table: {root:?}"))
+    }
+
+    /// The root spelled `name`, if the table holds one.
+    pub fn root(&self, name: &Name) -> Option<SourceRoot> {
+        self.by_name.get(name).copied()
+    }
+
+    /// Every root with its spelling, in table order.
+    pub fn roots(&self) -> impl Iterator<Item = (SourceRoot, &Name)> + '_ {
+        self.by_root.iter().map(|(root, name)| (*root, name))
+    }
+
+    /// The wire name of a compile-time head.
+    pub fn wire(&self, decl: &DeclName) -> TypeName {
+        TypeName::new(
+            self.of(decl.root()).clone(),
+            decl.namespace().clone(),
+            decl.name().clone(),
+        )
+    }
+
+    /// The compile-time head a wire name denotes as seen from `viewpoint`:
+    /// the artifact's own root is `viewpoint`; a dependency is the root
+    /// `viewpoint` spells that way ([`accessible_package`]), else the root
+    /// the program spells that way if it lies in `viewpoint`'s dependency
+    /// closure — an interface names its transitive dependencies' types too
+    /// (a field's type, a throw set), under the spelling the program gives
+    /// them. `None` is the explicit unreachable-from-here outcome.
+    pub fn resolve(
+        &self,
+        db: &dyn crate::Db,
+        viewpoint: SourceRoot,
+        name: &TypeName,
+    ) -> Option<DeclName> {
+        let root = if name.is_local() {
+            viewpoint
+        } else if let Some(root) = accessible_package(db, viewpoint, name.package()) {
+            root
+        } else {
+            let root = self.root(name.package())?;
+            package_dependency_closure(db, viewpoint)
+                .contains(&root)
+                .then_some(root)?
+        };
+        Some(DeclName::in_root(
+            root,
+            name.namespace().clone(),
+            name.name().clone(),
+        ))
+    }
+
+    /// Why the table is not injective, if it is not.
+    pub fn collisions(&self) -> &[SpellingCollision] {
+        &self.collisions
+    }
+
+    /// This table restricted to `roots`: every root keeps the spelling it has
+    /// here (a root's spelling depends on its own name and the edges reaching
+    /// it, never on which other roots share a program with it), and the
+    /// collisions are judged among `roots` alone — two workspace roots that
+    /// both take the default spelling collide only if one program holds both.
+    /// A root reached under several edge names stays a collision wherever it
+    /// appears.
+    #[must_use]
+    pub fn within(&self, roots: &[SourceRoot]) -> Spelling {
+        let mut restricted =
+            Self::from_pairs(roots.iter().map(|&root| (root, self.of(root).clone())));
+        restricted.collisions.extend(
+            self.collisions
+                .iter()
+                .filter(|collision| match collision {
+                    SpellingCollision::ManyNames { root, .. } => roots.contains(root),
+                    SpellingCollision::SharedName { .. } => false,
+                })
+                .cloned(),
+        );
+        restricted
+    }
+}
+
+/// The [`Spelling`] of the program built for `root`: [`spelling`] restricted
+/// to [`world_roots`], so a shared default spelling between two workspace
+/// roots that never meet in one program is no collision for either program.
+/// Emit judges its wire table by this; rendering keeps the database-wide one.
+#[salsa::tracked(returns(ref))]
+pub fn spelling_within(db: &dyn crate::Db, root: SourceRoot) -> Spelling {
+    spelling(db).within(world_roots(db, root))
+}
+
+/// The [`Spelling`] of every live root.
+#[salsa::tracked(returns(ref))]
+pub fn spelling(db: &dyn crate::Db) -> Spelling {
+    let roots = db.source_roots().roots(db);
+    // Every name a root is reached by, in table order of the depending root.
+    let mut edge_names: IndexMap<SourceRoot, Vec<Name>> = IndexMap::new();
+    for &from in roots {
+        for dependency in from.dependencies(db) {
+            let names = edge_names.entry(dependency.root).or_default();
+            if !names.contains(&dependency.name) {
+                names.push(dependency.name.clone());
+            }
+        }
+    }
+    let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
+    let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
+    let mut collisions = Vec::new();
+    for &root in roots {
+        let name = match root.self_name(db) {
+            Some(own) => own,
+            None => match edge_names.get(&root).map(Vec::as_slice) {
+                Some([only]) => only.clone(),
+                Some(names @ [first, ..]) => {
+                    collisions.push(SpellingCollision::ManyNames {
+                        root,
+                        names: names.to_vec(),
+                    });
+                    first.clone()
+                }
+                Some([]) | None => Name::new(RESERVED_USER_PACKAGE),
+            },
+        };
+        by_root.insert(root, name.clone());
+        match by_name.entry(name) {
+            indexmap::map::Entry::Vacant(slot) => {
+                slot.insert(root);
+            }
+            indexmap::map::Entry::Occupied(slot) => {
+                let name = slot.key().clone();
+                match collisions.iter_mut().find(|collision| {
+                    matches!(collision, SpellingCollision::SharedName { name: n, .. } if *n == name)
+                }) {
+                    Some(SpellingCollision::SharedName { roots, .. }) => roots.push(root),
+                    _ => collisions.push(SpellingCollision::SharedName {
+                        name,
+                        roots: vec![*slot.get(), root],
+                    }),
+                }
+            }
+        }
+    }
+    Spelling {
+        by_root,
+        by_name,
+        collisions,
+    }
+}
+
+// ── Package items ────────────────────────────────────────────────────────────
 
 /// Rare/optional data for `PackageItems`. Heap-allocated only when
 /// at least one conflict or shadow exists.
@@ -145,10 +465,9 @@ pub struct PackageItemsExtra<'db> {
 /// All items across all namespaces within a package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageItems<'db> {
-    /// The name of the package these items belong to — the scope in which they,
-    /// and any impls resolving their members, are visible. Reconstruct the
-    /// interned id with `PackageId::new(db, package.clone())` when one is needed.
-    pub package: Name,
+    /// The package these items belong to — the scope in which they, and any
+    /// impls resolving their members, are visible.
+    pub root: SourceRoot,
     /// Namespace path -> items within that namespace.
     pub namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.
@@ -220,16 +539,14 @@ impl<'db> PackageItems<'db> {
 
 /// Merges all `namespace_items` within a package.
 ///
-/// Discovers all unique namespace paths for the package by scanning project
+/// Discovers all unique namespace paths for the package from its root's
 /// files, then calls `namespace_items` for each — allowing Salsa to cache
 /// each namespace's contribution independently.
 #[salsa::tracked(returns(ref))]
-pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) -> PackageItems<'db> {
-    let package_name = package_id.name(db);
-
+pub fn package_items<'db>(db: &'db dyn crate::Db, root: SourceRoot) -> PackageItems<'db> {
     // Discover all unique namespace paths for this package from the
-    // package's own files ([`package_files`]), so edits to another root's
-    // file set never invalidate this fold.
+    // package's own files, so edits to another root's file set never
+    // invalidate this fold.
     //
     // `IndexSet` (not `HashSet`) so the downstream `namespaces` map is built
     // in a deterministic insertion order. Without this, when two namespaces
@@ -239,16 +556,16 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     // namespace was inserted last — flipping the choice of bytecode lowering
     // path across runs.
     let mut ns_paths: indexmap::IndexSet<Vec<Name>> = indexmap::IndexSet::new();
-    for file in package_files(db, package_id) {
+    for file in root.files(db) {
         let pkg_info = crate::file_package::file_package(db, *file);
-        debug_assert_eq!(pkg_info.package, *package_name);
+        debug_assert_eq!(pkg_info.root, root);
         ns_paths.insert(pkg_info.namespace_path.clone());
     }
 
     let mut namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>> = IndexMap::new();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
-        let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
+        let ns_id = NamespaceId::new(db, root, ns_path.clone());
         let items = namespace_items(db, ns_id);
         all_conflicts.extend(items.conflicts().iter().cloned());
         namespaces.insert(ns_path, items.clone());
@@ -267,7 +584,7 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
                 .get(first_segment)
                 .or_else(|| root_ns.values.get(first_segment))
             {
-                if is_allowed_builtin_namespace_shadow(db, &package_name, ns_path, *def) {
+                if is_allowed_builtin_namespace_shadow(db, root, ns_path, *def) {
                     continue;
                 }
                 shadows.push(NamespaceShadow {
@@ -292,19 +609,22 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     };
 
     PackageItems {
-        package: package_name,
+        root,
         namespaces,
         extra,
     }
 }
 
+/// The one allowlisted builtin collision: the stdlib `boundary` package's
+/// root-level `id` function beside its `ns_id/` namespace.
 fn is_allowed_builtin_namespace_shadow(
     db: &dyn crate::Db,
-    package_name: &Name,
+    root: SourceRoot,
     ns_path: &[Name],
     def: Definition<'_>,
 ) -> bool {
-    package_name.as_str() == "boundary"
+    root.kind(db) == SourceRootKind::Stdlib
+        && lang_roots(db).is(LangPackage::Boundary, root)
         && ns_path.len() == 1
         && ns_path[0].as_str() == "id"
         && def.kind() == DefinitionKind::Function
@@ -318,21 +638,23 @@ mod tests {
         sync::atomic::{AtomicU32, Ordering},
     };
 
-    use baml_base::{FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
+    use baml_base::{
+        Dependency, FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable,
+    };
     use salsa::Setter;
 
     use super::{
-        PackageId, is_allowed_builtin_namespace_shadow, is_external_package, is_mounted_package,
-        is_precompiled_package, package_items,
+        dependency_named, is_allowed_builtin_namespace_shadow, package_dependency_closure,
+        package_items,
     };
-    use crate::{Db, inputs::MountedPackages};
+    use crate::Db;
 
     #[salsa::db]
     struct TestDb {
         storage: salsa::Storage<TestDb>,
         next_file_id: AtomicU32,
         roots: Option<SourceRootTable>,
-        mounted: Option<MountedPackages>,
+        lang_roots: Option<crate::inputs::LangRootsInput>,
     }
 
     impl Default for TestDb {
@@ -341,7 +663,7 @@ mod tests {
                 storage: salsa::Storage::default(),
                 next_file_id: AtomicU32::new(0),
                 roots: None,
-                mounted: None,
+                lang_roots: None,
             };
             db.roots = Some(SourceRootTable::new(&db, Vec::new()));
             db
@@ -352,10 +674,19 @@ mod tests {
         fn add_root(
             &mut self,
             path: impl Into<PathBuf>,
-            package: &str,
+            self_name: Option<&str>,
             kind: SourceRootKind,
+            dependencies: Vec<Dependency>,
         ) -> SourceRoot {
-            let root = SourceRoot::new(self, path.into(), Name::new(package), kind, Vec::new());
+            let root = SourceRoot::new(
+                self,
+                path.into(),
+                kind,
+                self_name.map(Name::new),
+                Vec::new(),
+                None,
+                dependencies,
+            );
             let table = self.roots.expect("table present from construction");
             let mut roots = table.roots(self).clone();
             roots.push(root);
@@ -378,7 +709,7 @@ mod tests {
             file
         }
 
-        fn with_builtins() -> Self {
+        fn with_builtins() -> (Self, std::collections::BTreeMap<&'static str, SourceRoot>) {
             let mut db = Self::default();
             let mut roots: std::collections::BTreeMap<&str, SourceRoot> =
                 std::collections::BTreeMap::new();
@@ -386,8 +717,9 @@ mod tests {
                 let root = *roots.entry(builtin.package).or_insert_with(|| {
                     db.add_root(
                         PathBuf::from(format!("<builtin>/{}", builtin.package)),
-                        builtin.package,
+                        Some(builtin.package),
                         SourceRootKind::Stdlib,
+                        Vec::new(),
                     )
                 });
                 db.add_file_in(
@@ -396,16 +728,18 @@ mod tests {
                     builtin.contents,
                 );
             }
-            db
-        }
-
-        fn with_mounts(
-            by_package: std::collections::BTreeMap<String, Vec<u8>>,
-            immutable_precompiled: std::collections::BTreeSet<String>,
-        ) -> Self {
-            let mut db = Self::default();
-            db.mounted = Some(MountedPackages::new(&db, by_package, immutable_precompiled));
-            db
+            let lang = baml_base::LangPackage::ALL
+                .into_iter()
+                .filter_map(|package| {
+                    roots
+                        .get(package.manifest_name())
+                        .map(|&root| (package, root))
+                })
+                .fold(baml_base::LangRoots::default(), |lang, (package, root)| {
+                    lang.with(package, root)
+                });
+            db.lang_roots = Some(crate::inputs::LangRootsInput::new(&db, lang));
+            (db, roots)
         }
     }
 
@@ -414,21 +748,21 @@ mod tests {
 
     #[salsa::db]
     impl Db for TestDb {
-        fn source_roots(&self) -> SourceRootTable {
-            self.roots.expect("table present from construction")
+        fn lang_roots_input(&self) -> Option<crate::inputs::LangRootsInput> {
+            self.lang_roots
         }
 
-        fn mounted_packages(&self) -> Option<MountedPackages> {
-            self.mounted
+        fn source_roots(&self) -> SourceRootTable {
+            self.roots.expect("table present from construction")
         }
     }
 
     #[test]
     fn boundary_id_builtin_namespace_shadow_is_allowlisted() {
-        let db = TestDb::with_builtins();
-        let boundary = baml_base::Name::new("boundary");
+        let (db, roots) = TestDb::with_builtins();
+        let boundary = roots["boundary"];
         let id = baml_base::Name::new("id");
-        let package = package_items(&db, PackageId::new(&db, boundary.clone()));
+        let package = package_items(&db, boundary);
         let root = package.namespaces.get(&Vec::new()).expect("root namespace");
         let id_namespace = vec![id.clone()];
 
@@ -438,7 +772,7 @@ mod tests {
             "boundary.id namespace should exist"
         );
         assert!(
-            is_allowed_builtin_namespace_shadow(&db, &boundary, &id_namespace, id_def),
+            is_allowed_builtin_namespace_shadow(&db, boundary, &id_namespace, id_def),
             "boundary.id root function shadowed by boundary.id namespace is the only allowed builtin collision"
         );
         assert!(
@@ -449,284 +783,68 @@ mod tests {
 
     #[test]
     fn builtin_namespace_shadow_allowlist_rejects_other_builtin_collisions() {
-        let db = TestDb::with_builtins();
-        let boundary = baml_base::Name::new("boundary");
+        let (db, roots) = TestDb::with_builtins();
+        let boundary = roots["boundary"];
         let id = baml_base::Name::new("id");
-        let package = package_items(&db, PackageId::new(&db, boundary.clone()));
+        let package = package_items(&db, boundary);
         let root = package.namespaces.get(&Vec::new()).expect("root namespace");
         let id_def = root.values.get(&id).copied().expect("boundary.id function");
 
         assert!(!is_allowed_builtin_namespace_shadow(
             &db,
-            &baml_base::Name::new("baml"),
+            roots["baml"],
             std::slice::from_ref(&id),
             id_def
         ));
         assert!(!is_allowed_builtin_namespace_shadow(
             &db,
-            &boundary,
+            boundary,
             &[baml_base::Name::new("other")],
             id_def
         ));
     }
 
     #[test]
-    fn external_package_fast_path_matches_composed_classification() {
-        let absent = TestDb::default();
-        assert!(!is_external_package(&absent, &baml_base::Name::new("app")));
+    fn edges_resolve_by_name_and_close_transitively() {
+        let mut db = TestDb::default();
+        let leaf = db.add_root(
+            "/leaf",
+            Some("leaf"),
+            SourceRootKind::Dependency,
+            Vec::new(),
+        );
+        let mid = db.add_root(
+            "/mid",
+            Some("mid"),
+            SourceRootKind::Dependency,
+            vec![Dependency {
+                name: Name::new("leaf"),
+                root: leaf,
+            }],
+        );
+        // The same root reached under a different spelling: names are on
+        // edges, so the consumer's alias resolves to the one root.
+        let app = db.add_root(
+            "/app",
+            None,
+            SourceRootKind::Workspace,
+            vec![
+                Dependency {
+                    name: Name::new("middle"),
+                    root: mid,
+                },
+                Dependency {
+                    name: Name::new("l"),
+                    root: leaf,
+                },
+            ],
+        );
 
-        let by_package = ["app", "baml", "log", "user"]
-            .into_iter()
-            .map(|name| (name.to_owned(), Vec::new()))
-            .collect();
-        let immutable_precompiled = ["baml", "user", "missing"]
-            .into_iter()
-            .map(str::to_owned)
-            .collect();
-        let db = TestDb::with_mounts(by_package, immutable_precompiled);
-
-        for raw_name in ["app", "baml", "log", "user", "missing", "env"] {
-            let name = baml_base::Name::new(raw_name);
-            assert_eq!(
-                is_external_package(&db, &name),
-                is_mounted_package(&db, &name) || is_precompiled_package(&db, &name),
-                "fused classification diverged for {raw_name}"
-            );
-        }
+        assert_eq!(dependency_named(&db, app, &Name::new("middle")), Some(mid));
+        assert_eq!(dependency_named(&db, app, &Name::new("l")), Some(leaf));
+        assert_eq!(dependency_named(&db, app, &Name::new("mid")), None);
+        assert_eq!(dependency_named(&db, app, &Name::new("leaf")), None);
+        assert_eq!(package_dependency_closure(&db, app), &[mid, leaf]);
+        assert_eq!(package_dependency_closure(&db, leaf), &[]);
     }
-}
-
-/// Whether `name` is reserved against mounting (BEP-066 mounted-package linking): builtin
-/// packages, `user`, `root`, and `env`. The complete list is single-sourced in
-/// [`baml_builtins2::reserved_package_names`], shared with runtime reflection.
-pub fn is_reserved_package_name(name: &str) -> bool {
-    baml_builtins2::reserved_package_names().contains(&name)
-}
-
-/// The names of every mounted source-less dependency package (BEP-066
-/// mounted-package linking): the keys of the [`crate::inputs::MountedPackages`]
-/// input, minus any
-/// reserved name ([`is_reserved_package_name`] — a blob may not shadow the
-/// stdlib, `user`, `root`, or `env`). Deterministically ordered (`BTreeMap`
-/// keys). Empty for databases that mount nothing.
-///
-/// Reading the input inside a tracked query records a dependency on the mount
-/// map, so mounting/unmounting invalidates dependents for free.
-pub fn mounted_package_names(db: &dyn crate::Db) -> Vec<Name> {
-    let Some(mounted) = db.mounted_packages() else {
-        return Vec::new();
-    };
-    mounted
-        .by_package(db)
-        .keys()
-        .filter(|name| !is_reserved_package_name(name))
-        .map(|name| Name::new(name.as_str()))
-        .collect()
-}
-
-/// Compiler-built, source-less stdlib packages carried by the mounted-package
-/// interface transport.
-///
-/// Reserved names are accepted only when both the immutable marker and the
-/// blob are present, and only for names in the embedded stdlib manifest. A
-/// caller therefore cannot use ordinary mounting to shadow a builtin package.
-pub fn precompiled_package_names(db: &dyn crate::Db) -> Vec<Name> {
-    let Some(mounted) = db.mounted_packages() else {
-        return Vec::new();
-    };
-    mounted
-        .immutable_precompiled(db)
-        .iter()
-        .filter(|name| {
-            baml_builtins2::stdlib_package_names().contains(&name.as_str())
-                && mounted.by_package(db).contains_key(name.as_str())
-        })
-        .map(|name| Name::new(name.as_str()))
-        .collect()
-}
-
-/// Every source-less dependency visible to compiler2, regardless of whether
-/// it is an ordinary mutable mount or a compiler-built immutable stdlib row.
-pub fn external_package_names(db: &dyn crate::Db) -> Vec<Name> {
-    let mut names = mounted_package_names(db);
-    names.extend(precompiled_package_names(db));
-    names.sort();
-    names.dedup();
-    names
-}
-
-/// Whether `name` is a mounted source-less dependency package (a
-/// non-reserved key of the `MountedPackages` input).
-pub fn is_mounted_package(db: &dyn crate::Db, name: &Name) -> bool {
-    if is_reserved_package_name(name.as_str()) {
-        return false;
-    }
-    db.mounted_packages()
-        .is_some_and(|mounted| mounted.by_package(db).contains_key(name.as_str()))
-}
-
-/// Whether `name` is a compiler-built immutable stdlib dependency.
-pub fn is_precompiled_package(db: &dyn crate::Db, name: &Name) -> bool {
-    baml_builtins2::stdlib_package_names().contains(&name.as_str())
-        && db.mounted_packages().is_some_and(|mounted| {
-            mounted.immutable_precompiled(db).contains(name.as_str())
-                && mounted.by_package(db).contains_key(name.as_str())
-        })
-}
-
-/// Whether `name` is any source-less dependency served from a serialized
-/// `PackageInterface`.
-pub fn is_external_package(db: &dyn crate::Db, name: &Name) -> bool {
-    let Some(mounted) = db.mounted_packages() else {
-        return false;
-    };
-    if !mounted.by_package(db).contains_key(name.as_str()) {
-        return false;
-    }
-    if !is_reserved_package_name(name.as_str()) {
-        return true;
-    }
-    baml_builtins2::stdlib_package_names().contains(&name.as_str())
-        && mounted.immutable_precompiled(db).contains(name.as_str())
-}
-
-/// The *direct* dependencies of `package_id` (hardcoded for now).
-///
-/// Note these lists are not uniformly flattened: `testing`/`assert` list `baml`
-/// but not `baml`'s own `log`. Callers that need every package whose
-/// items could be visible from `package_id` (interface coherence,
-/// `type_implements_with_deps`) must use [`package_dependency_closure`], not this
-/// direct list.
-#[salsa::tracked(returns(ref))]
-pub fn package_dependencies<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-) -> Vec<PackageId<'db>> {
-    match package_id.name(db).as_str() {
-        // "log" has no deps — it only uses primitives, and "baml" depends on
-        // it so the stdlib can emit log events.
-        "log" => vec![],
-        // "boundary" has no deps — it only returns the current boundary id as
-        // a primitive string.
-        "boundary" => vec![],
-        // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
-        "baml" => vec![PackageId::new(db, Name::new("log"))],
-        // Reflection is a true root package with NO dependencies: it
-        // deliberately references nothing from `baml` (its typed reads throw
-        // `reflect.errors.TypeMismatch`, and `AnyFunction`/`AnyClass` live
-        // here). The one cross-package tie runs the other way — `baml`
-        // implements its `ToString` for `reflect.Type` beside the interface
-        // (conversions.baml), which needs no `baml -> reflect` edge because
-        // `reflect.Type` is the compiler metatype. Keeping both directions
-        // empty keeps the stdlib dependency graph acyclic by construction;
-        // emit's topological package sort asserts that invariant.
-        "reflect" => vec![],
-        // The "testing" and "assert" packages depend on "baml" only.
-        "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // The "ai" package uses BAML primitives and runtime type reflection.
-        "ai" => vec![
-            PackageId::new(db, Name::new("baml")),
-            PackageId::new(db, Name::new("reflect")),
-        ],
-        // Provider packages implement `ai.Client`; claude_code also logs its
-        // own event stream.
-        "openai" | "anthropic" | "google" | "claude_code" => vec![
-            PackageId::new(db, Name::new("baml")),
-            PackageId::new(db, Name::new("log")),
-            PackageId::new(db, Name::new("ai")),
-        ],
-        // User packages depend on public builtin packages — plus every mounted
-        // source-less package (BEP-066 mounted-package linking) and every
-        // source-bearing `Dependency` root. The latter makes the source side
-        // of the source-vs-blob contract real: a package such as
-        // `<builtin>/app/…` is the same direct dependency whether its source
-        // root or its mounted interface is present. A mounted/dependency
-        // package itself keeps the stdlib list only, avoiding dependency
-        // cycles.
-        name => {
-            let mut deps = vec![
-                PackageId::new(db, Name::new("baml")),
-                PackageId::new(db, Name::new("reflect")),
-                PackageId::new(db, Name::new("boundary")),
-                PackageId::new(db, Name::new("testing")),
-                PackageId::new(db, Name::new("assert")),
-                PackageId::new(db, Name::new("log")),
-                PackageId::new(db, Name::new("ai")),
-                PackageId::new(db, Name::new("openai")),
-                PackageId::new(db, Name::new("anthropic")),
-                PackageId::new(db, Name::new("google")),
-                PackageId::new(db, Name::new("claude_code")),
-            ];
-            let mounted = mounted_package_names(db);
-            if !mounted.iter().any(|m| m.as_str() == name) {
-                deps.extend(
-                    mounted
-                        .into_iter()
-                        .map(|mounted_name| PackageId::new(db, mounted_name)),
-                );
-            }
-            if workspace_package_names(db)
-                .iter()
-                .any(|w| w.as_str() == name)
-            {
-                // Workspace packages additionally see every source-bearing
-                // dependency root, build-time (`Dependency`) or runtime-loaded
-                // (`Dynamic`). Reads only the table and per-root package/kind
-                // fields — never any file set.
-                let source_packages: std::collections::BTreeSet<Name> = db
-                    .source_roots()
-                    .roots(db)
-                    .iter()
-                    .filter(|root| match root.kind(db) {
-                        baml_base::SourceRootKind::Dependency
-                        | baml_base::SourceRootKind::Dynamic => true,
-                        baml_base::SourceRootKind::Stdlib
-                        | baml_base::SourceRootKind::Workspace => false,
-                    })
-                    .map(|root| root.package(db))
-                    .filter(|package| {
-                        package.as_str() != name
-                            && !is_reserved_package_name(package.as_str())
-                            && !is_external_package(db, package)
-                    })
-                    .collect();
-                deps.extend(
-                    source_packages
-                        .into_iter()
-                        .map(|package| PackageId::new(db, package)),
-                );
-            }
-            deps
-        }
-    }
-}
-
-/// The full transitive dependency closure of `package_id` (excluding itself), in
-/// deterministic breadth-first order with duplicates removed.
-///
-/// Unlike [`package_dependencies`] (direct-only, not uniformly flattened), this
-/// is what coherence and membership checks need: every package whose impls could
-/// be visible from `package_id`, regardless of how flat the direct lists happen
-/// to be. The walk is cycle-safe (a `seen` set), though the dependency graph is
-/// currently a DAG.
-#[salsa::tracked(returns(ref))]
-pub fn package_dependency_closure<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-) -> Vec<PackageId<'db>> {
-    let mut seen: std::collections::HashSet<PackageId<'db>> = std::collections::HashSet::new();
-    let mut order: Vec<PackageId<'db>> = Vec::new();
-    let mut queue: std::collections::VecDeque<PackageId<'db>> =
-        package_dependencies(db, package_id)
-            .iter()
-            .copied()
-            .collect();
-    while let Some(dep) = queue.pop_front() {
-        if dep == package_id || !seen.insert(dep) {
-            continue;
-        }
-        order.push(dep);
-        queue.extend(package_dependencies(db, dep).iter().copied());
-    }
-    order
 }

@@ -31,7 +31,7 @@ use crate::syntax;
 /// A resolved source location: the target file and the byte range of the
 /// name token (not the full item body). The LSP layer converts `file` to a
 /// URI and `range` to an LSP `Range`.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Location {
     pub file: SourceFile,
     pub range: TextRange,
@@ -68,14 +68,13 @@ pub enum SymbolTarget<'db> {
         enum_loc: EnumLoc<'db>,
         variant_index: usize,
     },
-    /// A method with a concrete body: a class method, an `implements`-block
-    /// method, or an interface *default* method.
+    /// Any method, as the function item it is: a class method, an
+    /// `implements`-block method, or an interface method — bodyless
+    /// (required) and bodied (default) alike, since
+    /// [`baml_compiler2_ppir::item_data::InterfaceData::methods`] holds both
+    /// as real items. Ask
+    /// [`baml_compiler2_ppir::item_data::method_owner`] which kind it is.
     Method { func: FunctionLoc<'db> },
-    /// A required (signature-only) interface method, by position.
-    InterfaceRequiredMethod {
-        iface: InterfaceLoc<'db>,
-        method_index: usize,
-    },
     /// An interface field declaration, by position.
     InterfaceField {
         iface: InterfaceLoc<'db>,
@@ -263,12 +262,14 @@ fn member_position_at(
             };
         for (expr_id, expr) in expr_body.exprs.iter() {
             match expr {
-                Expr::MemberAccess { member, .. } => {
-                    let member_span = source_map.member_access_member_span(expr_id);
-                    // The accessor falls back to the whole expression span
-                    // when no member span was recorded; that would over-claim
-                    // (the receiver too), so require a strict sub-span.
-                    if member_span != source_map.expr_span(expr_id)
+                // Every spelling that reads one member of one receiver. They
+                // differ in how the receiver is written — a value, a
+                // null-short-circuiting value, a `(T as I)` projection — and
+                // not at all in what the cursor is sitting on.
+                Expr::MemberAccess { member, .. }
+                | Expr::OptionalMemberAccess { member, .. }
+                | Expr::QualifiedPath { member, .. } => {
+                    if let Some(member_span) = source_map.member_name_span(expr_id)
                         && (member_span.contains(offset) || member_span.end() == offset)
                         && spells(member_span, member.as_str())
                     {
@@ -309,7 +310,10 @@ fn member_position_at(
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner);
     let target = match &expr_body.exprs[expr_id] {
         Expr::Object { .. } => constructor_field_at(db, offset, expr_body, &source_map, inference?),
-        Expr::MemberAccess { .. } | Expr::Path(_) => {
+        Expr::MemberAccess { .. }
+        | Expr::OptionalMemberAccess { .. }
+        | Expr::QualifiedPath { .. }
+        | Expr::Path(_) => {
             let inference = inference?;
             let resolution = match segment_idx {
                 Some(idx) => inference
@@ -487,7 +491,7 @@ pub fn type_qualifier_at<'db>(
             .map(Name::new)
             .collect();
         let (name, namespace) = path.split_last()?;
-        let baml = baml_compiler2_hir::package::PackageId::new(db, Name::new("baml"));
+        let baml = baml_compiler2_hir::package::lang_roots(db).get(baml_base::LangPackage::Baml)?;
         return baml_compiler2_ppir::package_items(db, baml).lookup_type(namespace, name);
     }
 
@@ -978,9 +982,11 @@ pub(crate) fn template_driver_at(
             .as_ref()
             .is_some_and(|spans| hit(spans.literal))
     }) {
-        let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("ai"));
-        if let Some(Definition::Function(func)) =
-            baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt"))
+        if let Some(package) =
+            baml_compiler2_hir::package::lang_roots(db).get(baml_base::LangPackage::Ai)
+            && let Some(Definition::Function(func)) =
+                baml_compiler2_ppir::package_items(db, package)
+                    .lookup_value(&[], &Name::new("prompt"))
         {
             return Some(func);
         }
@@ -1046,8 +1052,11 @@ fn llm_prompt_position_at(
         return None;
     }
 
-    let package = baml_compiler2_hir::package::PackageId::new(db, Name::new("ai"));
-    match baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt")) {
+    match baml_compiler2_hir::package::lang_roots(db)
+        .get(baml_base::LangPackage::Ai)
+        .and_then(|package| {
+            baml_compiler2_ppir::package_items(db, package).lookup_value(&[], &Name::new("prompt"))
+        }) {
         Some(Definition::Function(func)) => Some(TemplatePosition::Driver(func)),
         _ => Some(TemplatePosition::DefaultText),
     }
@@ -1248,7 +1257,7 @@ fn declaration_name_at(
         let bound_name = &data.associated_type_bindings.get(binding_index)?.name;
         let facts = baml_compiler2_hir_ty::impls::impl_facts(db, *block).resolved()?;
         let interface = &facts.interface.name;
-        let package = baml_compiler2_hir::package::PackageId::new(db, interface.package().clone());
+        let package = interface.root();
         let Some(Definition::Interface(iface)) = baml_compiler2_ppir::package_items(db, package)
             .lookup_type(interface.namespace(), interface.name())
         else {
@@ -1379,25 +1388,17 @@ pub(crate) fn member_resolution_target<'db>(
             Some(SymbolTarget::Method { func: *func })
         }
         MemberResolution::InterfaceVirtualMethod { interface, method } => {
-            // Only the slot (interface + name) is known statically: address
-            // the declaration — the required signature, or the default
-            // method's definition.
-            let iface_data = item_data::interface_data(db, *interface);
-            if let Some(method_index) = iface_data
-                .required_methods
-                .iter()
-                .position(|m| m.name == *method)
-            {
-                return Some(SymbolTarget::InterfaceRequiredMethod {
-                    iface: *interface,
-                    method_index,
-                });
-            }
-            let default_loc = *iface_data
-                .default_methods
+            // Only the slot (interface + name) is known statically — and the
+            // interface's own declaration IS that slot: `methods` holds every
+            // one as a real function item, bodyless required and bodied
+            // default alike. Addressing the item is what makes a virtual call
+            // and the declaration under the cursor the SAME target, which is
+            // what lets the reference search compare them by equality.
+            let func = *item_data::interface_data(db, *interface)
+                .methods
                 .iter()
                 .find(|&&fn_loc| item_data::function_data(db, fn_loc).name == *method)?;
-            Some(SymbolTarget::Method { func: default_loc })
+            Some(SymbolTarget::Method { func })
         }
         MemberResolution::InterfaceVirtualField {
             interface,
@@ -1448,7 +1449,7 @@ fn constructor_field_at<'db>(
             return None;
         };
 
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
+        let pkg_id = qtn.root();
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
         let def = pkg_items.lookup_type(qtn.namespace(), qtn.name())?;
         let Definition::Class(class) = def else {
@@ -1484,15 +1485,20 @@ pub fn target_definition<'db>(
                     let local = index.scope_bindings[binding.scope.index() as usize]
                         .bindings
                         .get(idx as usize)?;
-                    Some(Location {
-                        file,
-                        range: local.name_range,
-                    })
+                    // `LocalBinding::name_range` is the whole pattern (`x: T`,
+                    // and for a `let` the keyword too); a definition is the
+                    // NAME. Synthesized binds have no name token, and nothing
+                    // in source can address one, so the pattern span is only
+                    // ever reached for spans no cursor lands on.
+                    let range = baml_compiler2_ppir::function_body_source_map(db, func)
+                        .and_then(|source_map| source_map.bind_name_span(local.bind_pattern))
+                        .unwrap_or(local.name_range);
+                    Some(Location { file, range })
                 }
                 BindingKind::Parameter(idx) => {
                     let sig_map =
                         baml_compiler2_hir::signature::function_signature_source_map(db, func);
-                    let range = sig_map.param_spans.get(idx).copied()?;
+                    let range = sig_map.param_name_spans.get(idx).copied()?;
                     Some(Location { file, range })
                 }
             }
@@ -1522,19 +1528,6 @@ pub fn target_definition<'db>(
             file: func.file(db),
             range: item_data::function_source_map(db, func).name_span,
         }),
-        SymbolTarget::InterfaceRequiredMethod {
-            iface,
-            method_index,
-        } => {
-            let range = item_data::interface_source_map(db, iface)
-                .required_method_spans
-                .get(method_index)?
-                .name_span;
-            Some(Location {
-                file: iface.file(db),
-                range,
-            })
-        }
         SymbolTarget::InterfaceField { iface, field_index } => {
             let range = *item_data::interface_source_map(db, iface)
                 .field_name_spans

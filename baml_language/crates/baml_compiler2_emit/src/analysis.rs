@@ -3,8 +3,12 @@
 //! This module provides:
 //! - CFG predecessor computation
 //! - Dominator tree computation (Cooper-Harvey-Kennedy algorithm)
-//! - Def-use information collection
-//! - Local classification (Virtual vs Real)
+//! - Def-use information collection, over locals and over the frame type-arg
+//!   slots an rvalue's templates read (rebound by `BindType`)
+//! - Local classification (Virtual vs Real), from one rematerialization
+//!   judgment: an evaluation may move to its use when it is repeatable and
+//!   nothing it reads (see `baml_compiler2_mir::memory`) is written on any
+//!   path from its definition to that use
 //! - Jump threading (redirect targets for empty goto-only blocks)
 //! - Phi-like local detection (locals assigned in all predecessors, used once at join)
 //! - Constant propagation (pure constants with single definition inlined at all use sites)
@@ -16,10 +20,10 @@ use std::collections::{HashMap, HashSet};
 
 pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
-    BinOp, BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator, UnaryOp,
+    BlockId, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator, memory,
 };
-use baml_type::{Literal, RuntimeTy};
+use memory::Resources;
 
 use crate::stack_carry;
 
@@ -158,12 +162,15 @@ impl<'db> AnalysisResult<'db> {
     pub(crate) fn analyze(body: &MirFunctionBody<'db>, arity: usize, opt: OptLevel) -> Self {
         // Step 1: Build predecessor map
         let predecessors = build_predecessors(body);
+        let trap_cfg = TrapCfg::new(body);
 
         // Step 2: Compute reverse postorder
         let rpo = compute_rpo(body);
 
         // Step 3: Compute dominators
         let dominators = compute_dominators(body, &rpo, &predecessors);
+        #[cfg(debug_assertions)]
+        assert_rebound_slots_dominate_their_reads(body);
 
         // Step 4: Collect def-use information
         let def_use = collect_def_use(body);
@@ -171,23 +178,30 @@ impl<'db> AnalysisResult<'db> {
         // Step 5: Conservative jump threading (truly empty goto-only blocks).
         let initial_redirect_targets = build_redirect_targets(body);
 
-        // Step 6: First classification pass.
-        let (mut classifications, mut copy_sources) = classify_locals(
+        // Step 6: What every instruction writes, once.
+        let clobbers = Clobbers::new(body);
+        let cx = ClassifyCx {
             body,
             arity,
-            &def_use,
-            &dominators,
-            &predecessors,
-            &initial_redirect_targets,
+            def_use: &def_use,
+            dominators: &dominators,
+            predecessors: &predecessors,
+            trap_cfg: &trap_cfg,
+            clobbers: &clobbers,
+            track_type_slots: body_rebinds_type_slots(body),
             opt,
-        );
+        };
 
-        // Step 7: Enhanced jump threading using classification info.
+        // Step 7: First classification pass.
+        let (mut classifications, mut copy_sources) =
+            classify_locals(&cx, &initial_redirect_targets);
+
+        // Step 8: Enhanced jump threading using classification info.
         // Some blocks have statements that produce no bytecode (Virtual, Dead,
         // CopyOf assignments). These are effectively empty and can be threaded.
         let redirect_targets = build_redirect_targets_with_classifications(body, &classifications);
 
-        // Step 8: Re-run classification once if redirects changed.
+        // Step 9: Re-run classification once if redirects changed.
         // `ReturnPhi` checks walk through redirects, so this lets classification
         // observe the final threaded CFG without requiring a general fixpoint loop.
         //
@@ -198,15 +212,7 @@ impl<'db> AnalysisResult<'db> {
         // (or iterative transforms like branch folding/DCE rewrite CFG edges between
         // rounds), upgrade this to a true fixed-point convergence loop.
         if redirect_targets != initial_redirect_targets {
-            let (reclassified, recopy_sources) = classify_locals(
-                body,
-                arity,
-                &def_use,
-                &dominators,
-                &predecessors,
-                &redirect_targets,
-                opt,
-            );
+            let (reclassified, recopy_sources) = classify_locals(&cx, &redirect_targets);
             classifications = reclassified;
             copy_sources = recopy_sources;
         }
@@ -245,8 +251,95 @@ impl<'db> AnalysisResult<'db> {
 // CFG Analysis
 // ============================================================================
 
-/// Build predecessor map for all blocks.
+/// Build predecessor map for all blocks over the terminator edges.
 fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockId>> {
+    build_predecessors_with(body, &|block| successors_of(body, block))
+}
+
+/// The catch handler(s) each protected block can land in.
+///
+/// A throwing call reaches its handler through the terminator's `unwind`
+/// edge, but a call-free trap (division, indexing) reaches it through the
+/// exception table with no CFG edge at all. Any walk that must see every
+/// path a value can take from a definition to a use has to add these edges.
+fn catch_handlers_of(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockId>> {
+    let mut handlers_of: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+    for region in &body.catch_regions {
+        for &protected in &region.body_blocks {
+            handlers_of
+                .entry(protected)
+                .or_default()
+                .push(region.handler);
+        }
+    }
+    handlers_of
+}
+
+/// The terminator successors of `block` plus the handlers a trap inside it
+/// can land in (see [`catch_handlers_of`]).
+fn successors_with_handlers(
+    body: &MirFunctionBody<'_>,
+    handlers_of: &HashMap<BlockId, Vec<BlockId>>,
+    block: BlockId,
+) -> Vec<BlockId> {
+    let mut successors = successors_of(body, block);
+    if let Some(handlers) = handlers_of.get(&block) {
+        successors.extend(handlers.iter().copied());
+    }
+    successors
+}
+
+/// The CFG a def-to-use path walk must use: the terminator edges plus the trap
+/// edges into catch handlers (see [`catch_handlers_of`]). A trap is a real path
+/// that the terminator edges alone do not show, so a walk over them alone can
+/// miss a clobber sitting in a handler.
+struct TrapCfg {
+    handlers_of: HashMap<BlockId, Vec<BlockId>>,
+    predecessors: HashMap<BlockId, Vec<BlockId>>,
+    /// The catch regions each block's code is protected by, as sorted region
+    /// indices: two blocks with the same list unwind to the same handler.
+    regions_of: HashMap<BlockId, Vec<usize>>,
+}
+
+impl TrapCfg {
+    fn new(body: &MirFunctionBody<'_>) -> Self {
+        let handlers_of = catch_handlers_of(body);
+        let predecessors = build_predecessors_with(body, &|block| {
+            successors_with_handlers(body, &handlers_of, block)
+        });
+        let mut regions_of: HashMap<BlockId, Vec<usize>> = HashMap::new();
+        for (index, region) in body.catch_regions.iter().enumerate() {
+            for &block in &region.body_blocks {
+                regions_of.entry(block).or_default().push(index);
+            }
+        }
+        Self {
+            handlers_of,
+            predecessors,
+            regions_of,
+        }
+    }
+
+    /// Whether a trap in `a` and a trap in `b` reach the same handler.
+    fn same_handler(&self, a: BlockId, b: BlockId) -> bool {
+        self.regions_of.get(&a).map_or(&[][..], Vec::as_slice)
+            == self.regions_of.get(&b).map_or(&[][..], Vec::as_slice)
+    }
+
+    fn successors(&self, body: &MirFunctionBody<'_>, block: BlockId) -> Vec<BlockId> {
+        successors_with_handlers(body, &self.handlers_of, block)
+    }
+
+    fn predecessors(&self, block: BlockId) -> Vec<BlockId> {
+        self.predecessors.get(&block).cloned().unwrap_or_default()
+    }
+}
+
+/// Build predecessor map for all blocks over the edges `successors` yields.
+fn build_predecessors_with(
+    body: &MirFunctionBody<'_>,
+    successors: &impl Fn(BlockId) -> Vec<BlockId>,
+) -> HashMap<BlockId, Vec<BlockId>> {
     let mut preds: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
 
     // Initialize with empty vecs
@@ -254,13 +347,10 @@ fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockI
         preds.insert(block.id, Vec::new());
     }
 
-    // Collect predecessor edges from terminators
     for block in &body.blocks {
-        if let Some(term) = &block.terminator {
-            for succ in term.successors() {
-                if let Some(pred_list) = preds.get_mut(&succ) {
-                    pred_list.push(block.id);
-                }
+        for succ in successors(block.id) {
+            if let Some(pred_list) = preds.get_mut(&succ) {
+                pred_list.push(block.id);
             }
         }
     }
@@ -270,7 +360,7 @@ fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockI
 
 /// DFS helper for computing postorder.
 fn rpo_dfs(
-    body: &MirFunctionBody<'_>,
+    successors: &impl Fn(BlockId) -> Vec<BlockId>,
     block_id: BlockId,
     visited: &mut HashSet<BlockId>,
     postorder: &mut Vec<BlockId>,
@@ -280,17 +370,23 @@ fn rpo_dfs(
     }
     visited.insert(block_id);
 
-    let block = body.block(block_id);
-    if let Some(term) = &block.terminator {
-        for succ in term.successors() {
-            rpo_dfs(body, succ, visited, postorder);
-        }
+    for succ in successors(block_id) {
+        rpo_dfs(successors, succ, visited, postorder);
     }
     postorder.push(block_id);
 }
 
-/// Compute reverse postorder (depth-first, postorder reversed).
+/// Compute reverse postorder (depth-first, postorder reversed) over the
+/// terminator edges.
 fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
+    compute_rpo_with(body, &|block| successors_of(body, block))
+}
+
+/// Compute reverse postorder over the edges `successors` yields.
+fn compute_rpo_with(
+    body: &MirFunctionBody<'_>,
+    successors: &impl Fn(BlockId) -> Vec<BlockId>,
+) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
@@ -299,7 +395,7 @@ fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
     // try-body entry blocks. Layout order does not affect exception-table
     // correctness (the table lists each region's protected blocks' exact PC
     // ranges), so this is purely about code locality and readability.
-    rpo_dfs(body, body.entry, &mut visited, &mut postorder);
+    rpo_dfs(successors, body.entry, &mut visited, &mut postorder);
 
     // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
     // like division-by-zero where there's no Call/Await with an unwind
@@ -307,7 +403,12 @@ fn compute_rpo(body: &MirFunctionBody<'_>) -> Vec<BlockId> {
     // blocks in the reversed RPO.
     let mut handler_postorder = Vec::new();
     for region in &body.catch_regions {
-        rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);
+        rpo_dfs(
+            successors,
+            region.handler,
+            &mut visited,
+            &mut handler_postorder,
+        );
     }
     handler_postorder.append(&mut postorder);
 
@@ -572,8 +673,12 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
                             });
                         }
                         Place::Local(_) => {}
+                        // A store through a cell reads the pointer local.
+                        Place::Deref(_) => {
+                            collect_uses_in_place(destination, block.id, stmt_ref, &mut def_use);
+                        }
                         Place::Capture(_) => {
-                            // StoreCapture — no local use to record.
+                            unreachable!("a bare capture is a pointer nothing stores to")
                         }
                     }
 
@@ -595,12 +700,13 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
                         collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
                     }
                 }
-                StatementKind::FreshCell(local) => {
-                    // FreshCell only has an effect when the local is captured
-                    // (it replaces the cell). For non-captured locals it's a no-op,
-                    // so don't add a use that would prevent Virtual classification.
-                    if body.local(*local).is_captured {
-                        def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                StatementKind::FreshCell { local, carry_value } => {
+                    // A definition of the pointer slot (it now holds a new
+                    // cell); carrying also reads the cell being replaced.
+                    let du = def_use.get_mut(local).unwrap();
+                    du.all_defs.push((block.id, stmt_ref));
+                    if *carry_value {
+                        du.uses.push(UseLocation {
                             block: block.id,
                             statement_ref: stmt_ref,
                         });
@@ -656,8 +762,15 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
 fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
     match place {
         Place::Local(local) => f(*local),
+        Place::Deref(cell) => {
+            if let Some(local) = cell.local() {
+                f(local);
+            }
+        }
         Place::Capture(_) => {
-            // Captures are not locals — nothing to walk.
+            // A capture slot is a cell in the closure object, not a local:
+            // there is no local-level definition to count. As a resource it
+            // is `memory::CellId::Capture`.
         }
         Place::Field { base, .. } => walk_place_locals(base, f),
         Place::Index { base, index, .. } => {
@@ -669,71 +782,80 @@ fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
 
 /// Walk all locals referenced by an operand, calling `f` for each.
 fn walk_operand_locals(operand: &Operand<'_>, f: &mut impl FnMut(Local)) {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => walk_place_locals(place, f),
-        Operand::Constant(_) => {}
-    }
+    memory::walk_operand_places(operand, &mut |place| walk_place_locals(place, f));
 }
 
 /// Walk all locals referenced by an rvalue, calling `f` for each.
 fn walk_rvalue_locals(rvalue: &Rvalue<'_>, f: &mut impl FnMut(Local)) {
-    match rvalue {
-        Rvalue::Use(operand) => walk_operand_locals(operand, f),
-        Rvalue::BinaryOp { left, right, .. } => {
-            walk_operand_locals(left, f);
-            walk_operand_locals(right, f);
-        }
-        Rvalue::UnaryOp { operand, .. } => walk_operand_locals(operand, f),
-        Rvalue::Array(_, elements) => {
-            for elem in elements {
-                walk_operand_locals(elem, f);
+    memory::walk_rvalue_places(rvalue, &mut |place| walk_place_locals(place, f));
+}
+
+/// Debug tripwire for the lowering invariant the cross-block virtualization
+/// check leans on: a frame type-arg slot this body rebinds is read only where
+/// some `BindType` of it has already run, i.e. one that dominates the read.
+/// Slots with no writer in this body belong to the caller (generic arguments,
+/// a captured layout) and are outside the check.
+///
+/// Exception entry is control flow too: a handler runs after any block of its
+/// protected region raises. The CFG the emitter lays out carries only the
+/// unwind edges of calls — a call-free panic (division, indexing) reaches its
+/// handler through the exception table alone — so dominance here is computed
+/// over that CFG plus one edge from every protected block to its handler. A
+/// block reachable neither way never runs, and its reads are vacuous.
+#[cfg(debug_assertions)]
+fn assert_rebound_slots_dominate_their_reads(body: &MirFunctionBody<'_>) {
+    let mut writers: HashMap<u32, Vec<(BlockId, usize)>> = HashMap::new();
+    for block in &body.blocks {
+        for (idx, stmt) in block.statements.iter().enumerate() {
+            if let StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot),
+                ..
+            } = &stmt.kind
+            {
+                writers.entry(*slot).or_default().push((block.id, idx));
             }
         }
-        Rvalue::Uint8Array(_) => {}
-        Rvalue::Map(_, _, entries) => {
-            for (key, value) in entries {
-                walk_operand_locals(key, f);
-                walk_operand_locals(value, f);
-            }
+    }
+    if writers.is_empty() {
+        return;
+    }
+    let handlers_of = catch_handlers_of(body);
+    let successors = |block: BlockId| successors_with_handlers(body, &handlers_of, block);
+    let rpo = compute_rpo_with(body, &successors);
+    let predecessors = build_predecessors_with(body, &successors);
+    let dominators = compute_dominators(body, &rpo, &predecessors);
+    let bound_before = |slot: u32, block: BlockId, position: usize| {
+        if !dominators.idom.contains_key(&block) {
+            return true;
         }
-        Rvalue::Aggregate { fields, .. } => {
-            for field in fields {
-                walk_operand_locals(field, f);
-            }
+        writers.get(&slot).is_none_or(|sites| {
+            sites.iter().any(|&(writer_block, writer_idx)| {
+                if writer_block == block {
+                    writer_idx < position
+                } else {
+                    dominators.dominates(writer_block, block)
+                }
+            })
+        })
+    };
+    for block in &body.blocks {
+        for (idx, stmt) in block.statements.iter().enumerate() {
+            memory::walk_statement_type_slots(&stmt.kind, &mut |slot| {
+                assert!(
+                    bound_before(slot, block.id, idx),
+                    "frame type-arg slot {slot} is read at {:?}[{idx}] before any `BindType` of it has run",
+                    block.id
+                );
+            });
         }
-        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-            walk_place_locals(place, f);
-        }
-        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
-            walk_operand_locals(operand, f);
-        }
-        Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => {
-            walk_operand_locals(operand, f);
-            walk_operand_locals(type_value, f);
-        }
-        Rvalue::MakeClosure { captures, .. } => {
-            for cap in captures {
-                walk_operand_locals(cap, f);
-            }
-        }
-        Rvalue::MakeBoundMethod { receiver, .. }
-        | Rvalue::MakeVirtualBoundMethod { receiver, .. }
-        | Rvalue::VirtualFieldAccess { receiver, .. } => {
-            walk_operand_locals(receiver, f);
-        }
-        Rvalue::MakeVirtualFunction { type_args, .. } => {
-            for arg in type_args {
-                walk_operand_locals(arg, f);
-            }
-        }
-        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
-            // No local operands — the templates are compile-time data.
-        }
-        Rvalue::MakeGenericFunctionFromValue { value, .. } => {
-            walk_operand_locals(value, f);
+        if let Some(terminator) = &block.terminator {
+            memory::walk_terminator_type_slots(terminator, &mut |slot| {
+                assert!(
+                    bound_before(slot, block.id, block.statements.len()),
+                    "frame type-arg slot {slot} is read by the terminator of {:?} before any `BindType` of it has run",
+                    block.id
+                );
+            });
         }
     }
 }
@@ -997,18 +1119,347 @@ fn collect_uses_in_terminator<'db>(
 // Local Classification
 // ============================================================================
 
+/// Everything classification reads, computed once per body.
+struct ClassifyCx<'a, 'db> {
+    body: &'a MirFunctionBody<'db>,
+    arity: usize,
+    def_use: &'a HashMap<Local, LocalDefUse<'db>>,
+    dominators: &'a Dominators,
+    /// Predecessors over the terminator edges.
+    predecessors: &'a HashMap<BlockId, Vec<BlockId>>,
+    trap_cfg: &'a TrapCfg,
+    clobbers: &'a Clobbers,
+    /// Whether reads collect frame type-arg slots. Only a body that rebinds a
+    /// slot can have one clobbered, and walking templates is what makes read
+    /// collection expensive, so every other body skips it.
+    track_type_slots: bool,
+    opt: OptLevel,
+}
+
+/// Whether any `BindType` rebinds a frame type-arg slot in this body.
+fn body_rebinds_type_slots(body: &MirFunctionBody<'_>) -> bool {
+    body.blocks.iter().any(|block| {
+        block.statements.iter().any(|stmt| {
+            matches!(
+                stmt.kind,
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::BindType(_),
+                    ..
+                }
+            )
+        })
+    })
+}
+
+/// What one block writes: on entry, per statement, and in its terminator.
+struct BlockClobbers {
+    /// What the VM writes when control enters the block (a handler's error
+    /// bindings).
+    entry: Resources,
+    statements: Vec<Resources>,
+    terminator: Resources,
+    /// `entry`, every statement, and `terminator` together.
+    all: Resources,
+}
+
+/// What every block writes, indexed by block id.
+struct Clobbers {
+    blocks: Vec<BlockClobbers>,
+}
+
+impl Clobbers {
+    fn new(body: &MirFunctionBody<'_>) -> Self {
+        let model = memory::ClobberModel::for_body(body);
+        let blocks = body
+            .blocks
+            .iter()
+            .map(|block| {
+                let entry = memory::block_entry_clobbers(body, block.id);
+                let statements: Vec<Resources> = block
+                    .statements
+                    .iter()
+                    .map(|stmt| memory::statement_clobbers(body, model, &stmt.kind))
+                    .collect();
+                let terminator = block
+                    .terminator
+                    .as_ref()
+                    .map(|terminator| memory::terminator_clobbers(model, terminator))
+                    .unwrap_or_default();
+                let mut all = entry.clone();
+                for statement in &statements {
+                    all.extend(statement);
+                }
+                all.extend(&terminator);
+                BlockClobbers {
+                    entry,
+                    statements,
+                    terminator,
+                    all,
+                }
+            })
+            .collect();
+        Self { blocks }
+    }
+
+    fn block(&self, id: BlockId) -> &BlockClobbers {
+        &self.blocks[id.0]
+    }
+
+    /// Whether a statement of `block` in `range` writes something in `reads`.
+    fn statements_clobber(
+        &self,
+        block: BlockId,
+        range: std::ops::Range<usize>,
+        reads: &Resources,
+    ) -> bool {
+        self.block(block).statements[range]
+            .iter()
+            .any(|clobbers| clobbers.intersects(reads))
+    }
+}
+
+/// Everything re-evaluating a definition's rvalue at a use reads: the rvalue's
+/// own reads plus those of every single-definition local it reads, transitively.
+///
+/// A sunk evaluation re-evaluates the whole chain, and each link is judged
+/// pairwise over its own segment: a link classified `Virtual` was proven
+/// unclobbered from its definition to this one, and this one must be proven
+/// unclobbered from here to the use for everything the chain reads. A local
+/// with several definitions, or defined by a terminator, is a slot the sunk
+/// evaluation loads, so it stays a leaf and the path walk finds its writes.
+fn transitive_reads(cx: &ClassifyCx<'_, '_>, def: &DefLocation<'_>) -> Resources {
+    let mut reads = memory::rvalue_reads(cx.body, &def.rvalue, cx.track_type_slots);
+    let mut worklist: Vec<Local> = reads.locals.iter().copied().collect();
+    let mut followed: HashSet<Local> = HashSet::new();
+    while let Some(local) = worklist.pop() {
+        if !followed.insert(local) {
+            continue;
+        }
+        let du = &cx.def_use[&local];
+        if du.all_defs.len() != 1 {
+            continue;
+        }
+        let Some(inner) = &du.def else {
+            continue;
+        };
+        if inner.statement_ref == StatementRef::Terminator {
+            continue;
+        }
+        let inner_reads = memory::rvalue_reads(cx.body, &inner.rvalue, cx.track_type_slots);
+        worklist.extend(inner_reads.locals.iter().copied());
+        reads.extend(&inner_reads);
+    }
+    reads
+}
+
+/// Whether something in `reads` is written on some path from the definition at
+/// statement `def_idx` of `def_block` to the use at `use_loc`.
+///
+/// Across blocks, the path's interior is exactly the blocks reachable from the
+/// definition's successors and able to reach the use, both without entering
+/// the definition's block — two reachability sweeps over the trap CFG, not path
+/// enumeration. A path that re-enters the definition's block re-executes the
+/// definition, so it is not a path the sunk evaluation observes. Interior
+/// blocks are scanned whole, the use block included when a cycle brings the
+/// use back to itself, so a write placed after the use that a later iteration
+/// would observe counts too; the definition block's tail and terminator and the
+/// use block's entry and head are scanned exactly.
+fn clobbered_between(
+    cx: &ClassifyCx<'_, '_>,
+    def_block: BlockId,
+    def_idx: usize,
+    use_loc: &UseLocation,
+    reads: &Resources,
+) -> bool {
+    let statement_count = |block: BlockId| cx.body.block(block).statements.len();
+    let use_end = match use_loc.statement_ref {
+        StatementRef::Statement(index) => index,
+        StatementRef::Terminator => statement_count(use_loc.block),
+    };
+    if def_block == use_loc.block {
+        return cx
+            .clobbers
+            .statements_clobber(def_block, def_idx + 1..use_end, reads);
+    }
+    if cx
+        .clobbers
+        .statements_clobber(def_block, def_idx + 1..statement_count(def_block), reads)
+        || cx.clobbers.block(def_block).terminator.intersects(reads)
+    {
+        return true;
+    }
+    let forward = reachable_avoiding(
+        cx.trap_cfg.successors(cx.body, def_block),
+        def_block,
+        |block| cx.trap_cfg.successors(cx.body, block),
+    );
+    let backward = reachable_avoiding(
+        cx.trap_cfg.predecessors(use_loc.block),
+        def_block,
+        |block| cx.trap_cfg.predecessors(block),
+    );
+    if forward
+        .intersection(&backward)
+        .any(|block| cx.clobbers.block(*block).all.intersects(reads))
+    {
+        return true;
+    }
+    cx.clobbers.block(use_loc.block).entry.intersects(reads)
+        || cx
+            .clobbers
+            .statements_clobber(use_loc.block, 0..use_end, reads)
+}
+
+/// How an rvalue's evaluation may be moved.
+enum Repeatability {
+    /// No reads and no effects: may be evaluated at any number of uses.
+    Constant,
+    /// May be evaluated at its use instead of its definition when nothing it
+    /// reads is written in between. `once` marks an evaluation that is
+    /// observable each time it runs — an allocation with observable identity,
+    /// or an evaluation that can trap — which additionally may not run on a
+    /// path that repeats the use without the definition.
+    Movable { once: bool },
+}
+
+fn repeatability(body: &MirFunctionBody<'_>, rvalue: &Rvalue<'_>) -> Repeatability {
+    if matches!(rvalue, Rvalue::Use(Operand::Constant(_))) {
+        Repeatability::Constant
+    } else {
+        Repeatability::Movable {
+            once: memory::rvalue_allocates_identity(rvalue)
+                || memory::rvalue_can_trap(body, rvalue),
+        }
+    }
+}
+
+/// Whether a use in `block` is re-executed by a loop it heads. Sinking an
+/// evaluation from outside a loop into its header repeats it every iteration:
+/// a cost policy, not a soundness rule, since the path walk sees the body's
+/// writes.
+fn sinks_into_loop_header(cx: &ClassifyCx<'_, '_>, block: BlockId) -> bool {
+    cx.predecessors
+        .get(&block)
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .any(|&pred| cx.dominators.dominates(block, pred))
+}
+
+/// Whether `use_block` can execute again without `def_block` executing first:
+/// the shape `header -> body(use) -> header` for a definition before the loop.
+fn use_repeats_without_definition(
+    cx: &ClassifyCx<'_, '_>,
+    def_block: BlockId,
+    use_block: BlockId,
+) -> bool {
+    reachable_avoiding(
+        cx.trap_cfg.successors(cx.body, use_block),
+        def_block,
+        |block| cx.trap_cfg.successors(cx.body, block),
+    )
+    .contains(&use_block)
+}
+
+/// Whether the local's single definition may be evaluated at its use instead
+/// of where it is written, and the local dropped: the judgment behind
+/// `Virtual`.
+fn rematerializable(cx: &ClassifyCx<'_, '_>, du: &LocalDefUse<'_>) -> bool {
+    let Some(def) = &du.def else {
+        return false;
+    };
+    // The value comes from the operation itself, not from a re-emittable rvalue.
+    if def.statement_ref == StatementRef::Terminator {
+        return false;
+    }
+    // Several definitions would make "the" rvalue ambiguous.
+    if du.all_defs.len() != 1 {
+        return false;
+    }
+    let once = match repeatability(cx.body, &def.rvalue) {
+        Repeatability::Constant => return !du.uses.is_empty(),
+        Repeatability::Movable { once } => once,
+    };
+    // Evaluating a non-constant at several uses would repeat its work.
+    if du.uses.len() != 1 {
+        return false;
+    }
+    let use_loc = &du.uses[0];
+    let StatementRef::Statement(def_idx) = def.statement_ref else {
+        unreachable!("terminator definitions were rejected above");
+    };
+    if !cx.dominators.dominates(def.block, use_loc.block) {
+        return false;
+    }
+    if def.block == use_loc.block
+        && let StatementRef::Statement(use_idx) = use_loc.statement_ref
+        && use_idx <= def_idx
+    {
+        return false;
+    }
+    let reads = transitive_reads(cx, def);
+    if clobbered_between(cx, def.block, def_idx, use_loc, &reads) {
+        return false;
+    }
+    if def.block != use_loc.block {
+        // A trap is delivered to the handler of the block it happens in.
+        if reads.order && !cx.trap_cfg.same_handler(def.block, use_loc.block) {
+            return false;
+        }
+        if sinks_into_loop_header(cx, use_loc.block) {
+            return false;
+        }
+        if once && use_repeats_without_definition(cx, def.block, use_loc.block) {
+            return false;
+        }
+    }
+    true
+}
+
+/// The parameter a local is a plain copy of, when every use may load the
+/// parameter instead: `CopyOf`, the multi-use form of rematerialization for
+/// the one rvalue whose re-evaluation is a single load.
+///
+/// Only a parameter qualifies as the source. Its slot exists before every use
+/// whatever the source's own classification; another local's might not.
+fn copy_source(cx: &ClassifyCx<'_, '_>, du: &LocalDefUse<'_>) -> Option<Local> {
+    let def = du.def.as_ref()?;
+    if def.statement_ref == StatementRef::Terminator || du.all_defs.len() != 1 {
+        return None;
+    }
+    let source = match &def.rvalue {
+        Rvalue::Use(Operand::Copy(Place::Local(source)) | Operand::Move(Place::Local(source))) => {
+            *source
+        }
+        _ => return None,
+    };
+    if source.0 == 0 || source.0 > cx.arity {
+        return None;
+    }
+    let StatementRef::Statement(def_idx) = def.statement_ref else {
+        unreachable!("terminator definitions were rejected above");
+    };
+    let reads = memory::rvalue_reads(cx.body, &def.rvalue, cx.track_type_slots);
+    du.uses
+        .iter()
+        .all(|use_loc| !clobbered_between(cx, def.block, def_idx, use_loc, &reads))
+        .then_some(source)
+}
+
 /// Classify each local as Virtual, Real, `PhiLike`, `CopyOf`, or Dead.
 ///
 /// Returns both the classifications and the `copy_sources` map for copy propagation.
 fn classify_locals(
-    body: &MirFunctionBody<'_>,
-    arity: usize,
-    def_use: &HashMap<Local, LocalDefUse>,
-    dominators: &Dominators,
-    predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    cx: &ClassifyCx<'_, '_>,
     redirect_targets: &HashMap<BlockId, BlockId>,
-    opt: OptLevel,
 ) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
+    let ClassifyCx {
+        body,
+        arity,
+        def_use,
+        predecessors,
+        opt,
+        ..
+    } = *cx;
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
     let mut stack_carry_candidates: HashMap<Local, stack_carry::StackCarryKind> = HashMap::new();
@@ -1043,7 +1494,8 @@ fn classify_locals(
             LocalClassification::Parameter
         } else if local_decl.is_captured {
             // Captured locals must always be Real - they need a stable stack slot
-            // so that the cell-wrapping preamble (MakeCell/LoadDeref/StoreDeref) works.
+            // holding the cell (made by `FreshCell`, or the entry preamble for a
+            // parameter) that `LoadDeref`/`StoreDeref` go through.
             // Virtual/CopyOf/PhiLike classification would inline away the slot.
             LocalClassification::Real
         } else if narrow_bind_destinations.contains(&local) {
@@ -1056,7 +1508,7 @@ fn classify_locals(
             // Skip _0 which is implicitly used by return.
             LocalClassification::Dead
         } else if idx != 0
-            && let Some(source) = get_copy_source(du, arity, def_use)
+            && let Some(source) = copy_source(cx, du)
         {
             if opt == OptLevel::Zero && is_user_local {
                 // At O0, keep user-named locals as Real.
@@ -1071,12 +1523,12 @@ fn classify_locals(
             && is_call_result_aggregate_operand(local, du, body, def_use)
         {
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::AggregateOperand);
-            if can_be_virtual(du, dominators, body, arity, def_use, predecessors) {
+            if rematerializable(cx, du) {
                 LocalClassification::Virtual
             } else {
                 LocalClassification::Real
             }
-        } else if can_be_virtual(du, dominators, body, arity, def_use, predecessors) {
+        } else if rematerializable(cx, du) {
             if opt == OptLevel::Zero && is_user_local {
                 LocalClassification::Real
             } else {
@@ -1118,8 +1570,9 @@ fn classify_locals(
 ///
 /// This predicate is the *entire* soundness proof for `StackCarryKind::PhiLike`.
 /// The stack simulation in [`crate::stack_carry`] starts AT the use block and
-/// only validates that block's own statement prefix — it never inspects the
-/// local's definitions, nor the use block's predecessors. So every def this
+/// only validates that block's statements and the straight-line blocks Virtual
+/// forwarding may carry the use into — it never inspects the local's
+/// definitions, nor the use block's predecessors. So every def this
 /// function accepts is emitted as a push with no store, and the use pops
 /// exactly one value: an uncovered incoming edge leaves the pop consuming an
 /// unrelated value, and a definition off the covered paths leaves a push that
@@ -1359,7 +1812,7 @@ fn call_result_carried_into(terminator: Option<&Terminator<'_>>, block: BlockId)
 fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
     match kind {
         // Replaces a captured cell in place - doesn't touch the stack
-        StatementKind::FreshCell(_) => true,
+        StatementKind::FreshCell { .. } => true,
         // Intrinsics push args then SendEvent consumes them - net neutral
         StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,
@@ -1487,545 +1940,29 @@ fn is_return_phi(
     true
 }
 
-/// Check if a local can be classified as Virtual.
-fn can_be_virtual(
-    du: &LocalDefUse,
-    dominators: &Dominators,
-    body: &MirFunctionBody<'_>,
-    arity: usize,
-    def_use: &HashMap<Local, LocalDefUse>,
-    predecessors: &HashMap<BlockId, Vec<BlockId>>,
-) -> bool {
-    // Must have exactly one definition
-    let Some(def) = &du.def else {
-        return false;
-    };
-
-    // Definitions in terminators (Call/Await/SysOp) cannot be inlined
-    // because the value comes from the operation itself, not from a re-emittable rvalue
-    if def.statement_ref == StatementRef::Terminator {
-        return false;
-    }
-
-    // Pure constants with a SINGLE definition can be inlined even with multiple uses.
-    // They have no side effects and always produce the same value.
-    // If there are multiple definitions (e.g., from if-else branches), we can't inline
-    // because we'd inline the wrong definition for some execution paths.
-    let has_single_def = du.all_defs.len() == 1;
-    if has_single_def && is_pure_constant(&def.rvalue) {
-        // Just need at least one use to not be dead
-        return !du.uses.is_empty();
-    }
-
-    // `Rvalue::Len` must be materialized eagerly at the binding site.
-    // Re-evaluating a virtualized `len` after intervening mutations (e.g.
-    // `push`) changes observable semantics for `let` bindings.
-    if matches!(def.rvalue, Rvalue::Len(_)) {
-        return false;
-    }
-
-    // For non-constant rvalues, require exactly one definition site.
-    // Virtual emission inlines `du.def` directly; multiple defs would be ambiguous.
-    if !has_single_def {
-        return false;
-    }
-
-    // For non-constant rvalues, must have exactly one use
-    if du.uses.len() != 1 {
-        return false;
-    }
-
-    let use_loc = &du.uses[0];
-
-    // Definition must dominate use
-    if !dominators.dominates(def.block, use_loc.block) {
-        return false;
-    }
-
-    // The def must be a statement (terminator defs were rejected above).
-    let StatementRef::Statement(def_idx) = def.statement_ref else {
-        unreachable!("terminator defs already rejected");
-    };
-
-    // If in same block, use must come after def
-    if def.block == use_loc.block {
-        match use_loc.statement_ref {
-            StatementRef::Terminator => {
-                // Terminator always comes after all statements, so this is fine
-                // But check for side effects between def and end of block
-                if has_side_effects_between(
-                    body,
-                    def.block,
-                    def_idx + 1,
-                    body.block(def.block).statements.len(),
-                    &def.rvalue,
-                    def_use,
-                ) {
-                    return false;
-                }
-            }
-            StatementRef::Statement(use_idx) => {
-                if use_idx <= def_idx {
-                    return false;
-                }
-                // Check for intervening side effects
-                if has_side_effects_between(
-                    body,
-                    def.block,
-                    def_idx + 1,
-                    use_idx,
-                    &def.rvalue,
-                    def_use,
-                ) {
-                    return false;
-                }
-            }
-        }
-    } else {
-        // Cross-block def-use: the rvalue will be re-evaluated at the use site,
-        // so we must ensure no path from def to use modifies any dependency.
-        //
-        // Reads through projections (field/index) are especially hard to reason about
-        // with this local-only analysis because writes to `x.field` don't appear as
-        // defs of `x`. Be conservative and avoid cross-block inlining for those.
-        if rvalue_has_projection_reads(&def.rvalue) {
-            return false;
-        }
-        // A panicking evaluation is itself observable, and every path from the
-        // def block to the use block crosses at least the def block's
-        // terminator — a call, whose effects would then run before the panic.
-        // The use site can also sit in a different exception region than the
-        // def, which changes the handler and can double-run a `defer` body
-        // (once inline on the way out, once in the unwind landing pad).
-        if rvalue_can_panic(body, &def.rvalue) {
-            return false;
-        }
-        //
-        // Rather than walking all intermediate blocks (which requires full path
-        // enumeration), we use a sound conservative check: if any local read by
-        // the rvalue (including transitive same-block deps) has multiple
-        // definitions, it may be modified on some path between def and use, so
-        // we refuse to virtualize.
-        let reads = collect_transitive_reads(&def.rvalue, def_use, def.block, def_idx);
-
-        for read_local in &reads {
-            if let Some(read_du) = def_use.get(read_local) {
-                // Parameters have an implicit entry definition not tracked
-                // in all_defs, so any explicit def means multiple definitions.
-                let is_param = read_local.0 > 0 && read_local.0 <= arity;
-                let has_multiple_defs = if is_param {
-                    !read_du.all_defs.is_empty()
-                } else {
-                    read_du.all_defs.len() > 1
-                };
-                if has_multiple_defs {
-                    return false;
-                }
-            }
-        }
-
-        // Preserve the existing protection for values used directly in a loop
-        // header.
-        let use_preds = predecessors
-            .get(&use_loc.block)
-            .map_or(&[] as &[_], Vec::as_slice);
-        let use_is_loop_header = use_preds
-            .iter()
-            .any(|&pred| dominators.dominates(use_loc.block, pred));
-
-        // An allocation with observable identity cannot be repeated implicitly.
-        // Merely checking whether the use block is a loop header misses the
-        // common shape `header -> body(use) -> header`: sinking an allocation
-        // made before that loop into its body creates a fresh object on every
-        // iteration. Look for a path from the use back to itself which does not
-        // cross the definition block, and keep the allocation materialized when
-        // such a path exists.
-        let repeats_allocation = rvalue_allocates_with_identity(&def.rvalue)
-            && use_repeats_without_definition(body, def.block, use_loc.block);
-
-        if use_is_loop_header || repeats_allocation {
-            return false;
-        }
-
-        // Still check the def block (from def to end) and the use block
-        // (from start to use) for same-block side effects.
-        if has_side_effects_between(
-            body,
-            def.block,
-            def_idx + 1,
-            body.block(def.block).statements.len(),
-            &def.rvalue,
-            def_use,
-        ) {
-            return false;
-        }
-
-        if let StatementRef::Statement(use_idx) = use_loc.statement_ref {
-            if use_idx > 0
-                && has_side_effects_between(body, use_loc.block, 0, use_idx, &def.rvalue, def_use)
-            {
-                return false;
-            }
-        }
-    }
-
-    true
+fn successors_of(body: &MirFunctionBody<'_>, block: BlockId) -> Vec<BlockId> {
+    body.block(block)
+        .terminator
+        .as_ref()
+        .map_or_else(Vec::new, Terminator::successors)
 }
 
-/// Whether evaluating this rvalue allocates a fresh object whose identity is
-/// observable (mutable containers, class instances, and callable objects).
-///
-/// Matched exhaustively on purpose: a wrong `false` silently miscompiles.
-fn rvalue_allocates_with_identity(rvalue: &Rvalue<'_>) -> bool {
-    match rvalue {
-        Rvalue::Map(..)
-        | Rvalue::Array(..)
-        | Rvalue::Uint8Array(_)
-        | Rvalue::Aggregate { .. }
-        | Rvalue::MakeClosure { .. }
-        | Rvalue::MakeBoundMethod { .. }
-        | Rvalue::MakeVirtualBoundMethod { .. }
-        | Rvalue::MakeVirtualFunction { .. } => true,
-        Rvalue::Use(_)
-        | Rvalue::BinaryOp { .. }
-        | Rvalue::UnaryOp { .. }
-        | Rvalue::Discriminant(_)
-        | Rvalue::TypeTag(_)
-        | Rvalue::Len(_)
-        | Rvalue::IsType { .. }
-        | Rvalue::IsTypeTag { .. }
-        | Rvalue::RuntimeIsType { .. }
-        | Rvalue::VirtualFieldAccess { .. }
-        | Rvalue::MakeGenericFunction { .. }
-        | Rvalue::MakeGenericFunctionFromValue { .. }
-        | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_) => false,
-    }
-}
-
-/// Whether `use_block` can execute again without first executing `def_block`.
-///
-/// `can_be_virtual` sinks an rvalue from its definition to its use. If a CFG
-/// cycle can revisit the use while bypassing the definition, sinking changes a
-/// once-evaluated binding into a per-iteration evaluation. That is observably
-/// wrong for an allocation with observable identity, so its cross-block
-/// virtualization must reject the shape.
-fn use_repeats_without_definition(
-    body: &MirFunctionBody<'_>,
-    def_block: BlockId,
-    use_block: BlockId,
-) -> bool {
-    let Some(terminator) = body.block(use_block).terminator.as_ref() else {
-        return false;
-    };
-
-    let mut worklist = terminator.successors();
+/// Every block reachable from `start` by repeatedly following `next`, never
+/// entering `barrier` (so never yielding it either).
+fn reachable_avoiding(
+    start: Vec<BlockId>,
+    barrier: BlockId,
+    next: impl Fn(BlockId) -> Vec<BlockId>,
+) -> HashSet<BlockId> {
+    let mut worklist = start;
     let mut visited = HashSet::new();
-
     while let Some(block) = worklist.pop() {
-        if block == def_block {
+        if block == barrier || !visited.insert(block) {
             continue;
         }
-        if block == use_block {
-            return true;
-        }
-        if !visited.insert(block) {
-            continue;
-        }
-        if let Some(terminator) = body.block(block).terminator.as_ref() {
-            worklist.extend(terminator.successors());
-        }
+        worklist.extend(next(block));
     }
-
-    false
-}
-
-/// Whether evaluating this rvalue reads through any field/index projection.
-///
-/// Cross-block virtual inlining re-evaluates the rvalue at use site. Projection
-/// reads are difficult to prove safe with local-only def-use, so we conservatively
-/// block cross-block virtualization when they appear.
-fn rvalue_has_projection_reads(rvalue: &Rvalue<'_>) -> bool {
-    fn place_has_projection(place: &Place) -> bool {
-        match place {
-            Place::Local(_) => false,
-            Place::Capture(_) => false,
-            Place::Field { .. } | Place::Index { .. } => true,
-        }
-    }
-
-    fn operand_has_projection(operand: &Operand<'_>) -> bool {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => place_has_projection(place),
-            Operand::Constant(_) => false,
-        }
-    }
-
-    match rvalue {
-        Rvalue::Use(operand) => operand_has_projection(operand),
-        Rvalue::BinaryOp { left, right, .. } => {
-            operand_has_projection(left) || operand_has_projection(right)
-        }
-        Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
-        Rvalue::Array(_, elements) => elements.iter().any(operand_has_projection),
-        Rvalue::Uint8Array(_) => false,
-        Rvalue::Map(_, _, entries) => entries
-            .iter()
-            .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
-        Rvalue::Aggregate { fields, .. } => fields.iter().any(operand_has_projection),
-        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-            place_has_projection(place)
-        }
-        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
-            operand_has_projection(operand)
-        }
-        Rvalue::RuntimeIsType {
-            operand,
-            type_value,
-        } => operand_has_projection(operand) || operand_has_projection(type_value),
-        Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
-        Rvalue::MakeBoundMethod { receiver, .. }
-        | Rvalue::MakeVirtualBoundMethod { receiver, .. }
-        | Rvalue::VirtualFieldAccess { receiver, .. } => operand_has_projection(receiver),
-        Rvalue::MakeVirtualFunction { type_args, .. } => {
-            type_args.iter().any(operand_has_projection)
-        }
-        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
-            false
-        }
-        Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
-    }
-}
-
-/// Check for side effects between two statement indices in a block.
-///
-/// A side effect is anything that could change the value of the rvalue when re-evaluated:
-/// - Function calls (may have side effects)
-/// - Assignments to variables that the rvalue reads from (transitively)
-///
-/// Checks the half-open range `[start, end)`.
-fn has_side_effects_between<'db>(
-    body: &MirFunctionBody<'db>,
-    block_id: BlockId,
-    start: usize,
-    end: usize,
-    rvalue: &Rvalue<'db>,
-    def_use: &HashMap<Local, LocalDefUse>,
-) -> bool {
-    let block = body.block(block_id);
-    // Collect transitive reads - if this rvalue reads from local X which is defined
-    // as reading from local Y, we need to track both X and Y.
-    // Only follow definitions that happen BEFORE start (the current statement).
-    let rvalue_reads = collect_transitive_reads(rvalue, def_use, block_id, start);
-
-    for stmt_idx in start..end {
-        let stmt = &block.statements[stmt_idx];
-        if has_side_effect(&stmt.kind, &rvalue_reads) {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Collect all locals that an rvalue reads from, transitively.
-///
-/// If the rvalue reads from local X, and X is defined as the result of an
-/// expression that reads from Y, we include both X and Y. This is necessary
-/// because inlining X will re-evaluate its definition, which reads from Y.
-///
-/// We only follow definitions that occur before `def_block:def_stmt_idx` to
-/// avoid including dependencies on values computed later.
-fn collect_transitive_reads(
-    rvalue: &Rvalue<'_>,
-    def_use: &HashMap<Local, LocalDefUse>,
-    def_block: BlockId,
-    def_stmt_idx: usize,
-) -> HashSet<Local> {
-    let mut locals = HashSet::new();
-    let mut worklist: Vec<Local> = Vec::new();
-
-    // First, collect direct reads
-    walk_rvalue_locals(rvalue, &mut |local| worklist.push(local));
-
-    // Then, transitively expand
-    while let Some(local) = worklist.pop() {
-        if locals.insert(local) {
-            // New local - check if it has a definition with an rvalue we should follow
-            // Only follow if the definition is in the same block AND before the current statement
-            if let Some(du) = def_use.get(&local) {
-                if let Some(def) = &du.def {
-                    // Only follow if definition is earlier in the same block
-                    // This ensures we don't include dependencies on values computed later
-                    if let StatementRef::Statement(idx) = def.statement_ref {
-                        if def.block == def_block && idx < def_stmt_idx {
-                            walk_rvalue_locals(&def.rvalue, &mut |local| worklist.push(local));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    locals
-}
-
-/// Check if a statement has side effects that would prevent inlining.
-fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> bool {
-    match kind {
-        StatementKind::Assign { destination, value } => {
-            // Check if this assignment modifies a variable (or field/index of a variable)
-            // that the rvalue reads from.
-            let Some(base_local) = destination.base_local() else {
-                // Capture reads are not represented in `rvalue_reads`, so a
-                // capture-rooted write must conservatively block inlining.
-                return true;
-            };
-            if rvalue_reads.contains(&base_local) {
-                return true;
-            }
-            // All other assignments (including loading constants) are pure
-            _ = value;
-            false
-        }
-        StatementKind::Drop(_) => true,
-        StatementKind::FreshCell(local) => rvalue_reads.contains(local),
-        StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
-        // A write through an interface field mutates the receiver.
-        StatementKind::VirtualFieldStore { .. } => true,
-        StatementKind::Nop => false,
-    }
-}
-
-/// Check if an rvalue is a pure constant that can be safely duplicated.
-///
-/// Pure constants have no side effects and always produce the same value,
-/// so they can be re-emitted at every use site even with multiple uses.
-fn is_pure_constant(rvalue: &Rvalue<'_>) -> bool {
-    matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
-}
-
-/// Can evaluating this rvalue raise a catchable panic (`baml.panics.*`)?
-///
-/// Virtual emission *moves* an rvalue's evaluation from its definition to its
-/// use site. That is only sound when the evaluation cannot fail: a panicking
-/// evaluation is itself an observable event, so moving it past a call, a store,
-/// or an exception-region boundary changes which effects run before the panic
-/// and which handler receives it.
-///
-/// Concretely, a `defer` block's inline replay is emitted between the
-/// definition and the `return` that uses it. Sinking a panicking arithmetic op
-/// past that replay runs the defer body once on the way out and a second time
-/// in the unwind landing pad.
-///
-/// Only arithmetic can fail, and only `/` fails for every operand type. The
-/// rest are `int`-only failures — `float` saturates to infinity or NaN,
-/// `bigint` grows, and `string + string` is concatenation — so they ask
-/// [`operand_could_be_int`]. Bitwise and/or/xor and the comparisons stay in
-/// range whatever the operands are.
-///
-/// Matched exhaustively on purpose. This is a soundness predicate, and a
-/// wrong `false` miscompiles silently — so a new `Rvalue` variant must fail to
-/// compile here rather than default into the infallible group.
-fn rvalue_can_panic<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -> bool {
-    match rvalue {
-        Rvalue::BinaryOp { op, left, right } => match op {
-            // `/` rejects a zero divisor on both numeric paths — BAML throws
-            // rather than yielding IEEE infinity (`OpCode::DivFloat`), so this
-            // holds whatever the operands are.
-            BinOp::Div => true,
-            // `%` is guarded on the `int` path only; the float path yields NaN.
-            BinOp::Mod | BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr => {
-                operand_could_be_int(body, left) && operand_could_be_int(body, right)
-            }
-            BinOp::Eq
-            | BinOp::Ne
-            | BinOp::Lt
-            | BinOp::Le
-            | BinOp::Gt
-            | BinOp::Ge
-            | BinOp::BitAnd
-            | BinOp::BitOr
-            | BinOp::BitXor => false,
-        },
-        Rvalue::UnaryOp { op, operand } => match op {
-            UnaryOp::Neg => operand_could_be_int(body, operand),
-            UnaryOp::Not | UnaryOp::Truthy => false,
-        },
-        // Allocation can report `AllocFailure`, but that is a host resource
-        // condition rather than a property of the program point, and treating
-        // every allocation as a barrier would disable virtualization outright.
-        //
-        // `Use` is the one entry here with a real failing case: reading through
-        // an index projection can raise `IndexOutOfBounds`. Every rvalue with a
-        // projection read is rejected a few lines above this predicate's only
-        // caller, on the same cross-block path, so it never reaches here.
-        Rvalue::Use(_)
-        | Rvalue::Array(..)
-        | Rvalue::Uint8Array(_)
-        | Rvalue::Map(..)
-        | Rvalue::Aggregate { .. }
-        | Rvalue::Discriminant(_)
-        | Rvalue::TypeTag(_)
-        | Rvalue::Len(_)
-        | Rvalue::IsType { .. }
-        | Rvalue::IsTypeTag { .. }
-        | Rvalue::RuntimeIsType { .. }
-        | Rvalue::MakeClosure { .. }
-        | Rvalue::MakeBoundMethod { .. }
-        | Rvalue::MakeVirtualBoundMethod { .. }
-        | Rvalue::VirtualFieldAccess { .. }
-        | Rvalue::MakeGenericFunction { .. }
-        | Rvalue::MakeGenericFunctionFromValue { .. }
-        | Rvalue::MakeVirtualFunction { .. }
-        | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_) => false,
-    }
-}
-
-/// Could this operand hold an `int` at runtime?
-///
-/// Deliberately answers `true` for anything whose runtime representation is not
-/// pinned down — a union, a type variable, a value read through a projection, a
-/// type family variant added later. Only a type that provably never holds an
-/// `int` answers `false`.
-fn operand_could_be_int<'db>(body: &MirFunctionBody<'db>, operand: &Operand<'db>) -> bool {
-    match operand {
-        Operand::Constant(c) => matches!(c, Constant::Int(_)),
-        Operand::Copy(place) | Operand::Move(place) => match place {
-            Place::Local(local) => ty_could_be_int(&body.local(*local).ty),
-            // A field / index / capture read carries no type here.
-            Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => true,
-        },
-    }
-}
-
-/// See [`operand_could_be_int`]. The `_ => true` fallback keeps an unlisted or
-/// newly added variant on the conservative side.
-fn ty_could_be_int(ty: &RuntimeTy) -> bool {
-    match ty {
-        RuntimeTy::Int { .. } => true,
-        RuntimeTy::Literal(lit, ..) => matches!(lit, Literal::Int(_)),
-        RuntimeTy::Bigint { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::String { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Null { .. }
-        | RuntimeTy::Void { .. }
-        | RuntimeTy::Media(..)
-        | RuntimeTy::Class(..)
-        | RuntimeTy::Enum(..)
-        | RuntimeTy::EnumVariant(..)
-        | RuntimeTy::List(..)
-        | RuntimeTy::Map { .. }
-        | RuntimeTy::Function { .. }
-        | RuntimeTy::Future(..)
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. }
-        | RuntimeTy::Resource { .. }
-        | RuntimeTy::PromptAst { .. } => false,
-        _ => true,
-    }
+    visited
 }
 
 /// Check if a local is a "call result immediate": defined by a call-like terminator,
@@ -2256,64 +2193,6 @@ fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionB
     }
 }
 
-/// Check if a local is a simple copy of another local (for copy propagation).
-///
-/// Returns `Some(source_local)` if the local is defined as `_X = copy _Y` where:
-/// 1. There is exactly one definition of `_X`
-/// 2. The definition is `Rvalue::Use(Operand::Copy(Place::Local(source)))` or
-///    `Rvalue::Use(Operand::Move(Place::Local(source)))`
-/// 3. The source is a parameter (not modified) or another suitable local
-///
-/// This optimization is particularly useful for match expressions where the
-/// scrutinee is copied into a temporary before comparisons.
-fn get_copy_source(
-    du: &LocalDefUse,
-    arity: usize,
-    def_use: &HashMap<Local, LocalDefUse>,
-) -> Option<Local> {
-    // Must have exactly one definition
-    let def = du.def.as_ref()?;
-
-    // Definition must not be from a terminator (Call/Await results aren't copies)
-    if def.statement_ref == StatementRef::Terminator {
-        return None;
-    }
-
-    // Must have exactly one definition site
-    if du.all_defs.len() != 1 {
-        return None;
-    }
-
-    // The rvalue must be a simple copy/move of a local (not a field or index)
-    let source = match &def.rvalue {
-        Rvalue::Use(Operand::Copy(Place::Local(src))) => *src,
-        Rvalue::Use(Operand::Move(Place::Local(src))) => *src,
-        _ => return None,
-    };
-
-    // The source must be a parameter that is never reassigned.
-    // We only propagate copies of parameters to keep the analysis simple and safe.
-    // Propagating copies of other locals would require verifying the source isn't
-    // modified between the copy and all uses of the copy.
-    let source_idx = source.0;
-    if source_idx == 0 || source_idx > arity {
-        // Source is not a parameter (_0 is return value, > arity are locals)
-        return None;
-    }
-
-    // The source parameter must not be reassigned anywhere in the function.
-    // BAML allows parameter mutation (e.g., `x = 3` where x is a param),
-    // so we must verify the parameter has no explicit defs.
-    if let Some(source_du) = def_use.get(&source) {
-        if !source_du.all_defs.is_empty() {
-            // Parameter is reassigned somewhere — not safe to propagate.
-            return None;
-        }
-    }
-
-    Some(source)
-}
-
 // ============================================================================
 // Tests
 // ============================================================================
@@ -2321,8 +2200,8 @@ fn get_copy_source(
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, CatchRegion, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement,
-        Terminator,
+        BasicBlock, CatchRegion, CellId, Constant, LocalDecl, MirFunctionBody, Operand, Place,
+        Statement, Terminator,
     };
     use baml_type::{RuntimeTy, TyAttr};
 
@@ -2363,10 +2242,10 @@ mod tests {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
-                        runtime_type_check: false,
                         runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
@@ -2428,10 +2307,10 @@ mod tests {
                     id: BlockId(0),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
-                        runtime_type_check: false,
                         runtime_id: None,
                         destination: Place::Local(result),
                         target: BlockId(1),
@@ -2623,6 +2502,487 @@ mod tests {
 
     fn analyzed_classification(body: &MirFunctionBody<'_>, local: Local) -> LocalClassification {
         AnalysisResult::analyze(body, 0, OptLevel::One).classifications[&local]
+    }
+
+    fn block(
+        id: usize,
+        statements: Vec<Statement<'static>>,
+        terminator: Terminator<'static>,
+    ) -> BasicBlock<'static> {
+        BasicBlock {
+            id: BlockId(id),
+            statements,
+            terminator: Some(terminator),
+            span: None,
+            terminator_span: None,
+        }
+    }
+
+    fn goto(target: usize) -> Terminator<'static> {
+        Terminator::Goto {
+            target: BlockId(target),
+        }
+    }
+
+    fn branch(then_block: usize, else_block: usize) -> Terminator<'static> {
+        Terminator::Branch {
+            condition: Operand::Constant(Constant::Bool(true)),
+            then_block: BlockId(then_block),
+            else_block: BlockId(else_block),
+        }
+    }
+
+    /// `type T = …` on frame slot `slot`; the operand is immaterial here.
+    fn bind_type(slot: u32) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot),
+                args: vec![Operand::Constant(Constant::Null)],
+            },
+            span: None,
+        }
+    }
+
+    /// `reflect.Type.of<T>()` for the `T` bound on frame slot `slot`.
+    fn load_type_slot(destination: Local, slot: u32) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::LoadType(baml_type::TyTemplate::TypeArgRef(slot)),
+            },
+            span: None,
+        }
+    }
+
+    fn copy_into(destination: Local, source: Local) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::copy_local(source)),
+            },
+            span: None,
+        }
+    }
+
+    /// `destination = *cell`: read the value behind a captured local's cell.
+    fn copy_cell_into(destination: Local, cell: Local) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::Copy(Place::Deref(CellId::Local(cell)))),
+            },
+            span: None,
+        }
+    }
+
+    /// Two sequential binding blocks reuse one frame slot; the descriptor
+    /// computed under the first is consumed after the second has rebound it.
+    fn sibling_rebinding_body(rebinds_between: bool) -> MirFunctionBody<'static> {
+        let between = if rebinds_between {
+            vec![bind_type(0)]
+        } else {
+            vec![]
+        };
+        MirFunctionBody {
+            blocks: vec![
+                block(0, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(1)),
+                block(1, between, goto(2)),
+                block(2, vec![copy_into(Local(0), Local(1))], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![int_local_decl(None), int_local_decl(None)],
+            catch_regions: vec![],
+        }
+    }
+
+    #[test]
+    fn a_sibling_rebinding_of_a_read_slot_keeps_the_descriptor_materialized() {
+        let body = sibling_rebinding_body(true);
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    #[test]
+    fn a_slot_bound_once_lets_its_descriptor_sink_across_blocks() {
+        let body = sibling_rebinding_body(false);
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// A loop whose body rebinds the slot at its scope top and recomputes the
+    /// descriptor each iteration: the only path from the definition back to
+    /// the rebinding re-executes the definition, so sinking stays sound.
+    #[test]
+    fn a_rebinding_reached_only_through_the_definition_does_not_block_sinking() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(0, vec![], goto(1)),
+                block(1, vec![], branch(2, 4)),
+                block(2, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(3)),
+                block(3, vec![copy_into(Local(2), Local(1))], goto(1)),
+                block(4, vec![], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// The descriptor is computed before a loop and consumed inside it, and the
+    /// loop body rebinds the slot after the use: the second iteration's use
+    /// would observe the rebinding, so the descriptor must be materialized.
+    #[test]
+    fn a_rebinding_after_the_use_inside_a_cycle_keeps_the_descriptor_materialized() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(0, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(1)),
+                block(1, vec![], branch(2, 3)),
+                block(
+                    2,
+                    vec![copy_into(Local(2), Local(1)), bind_type(0)],
+                    goto(1),
+                ),
+                block(3, vec![], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    /// A rebinding that only a trap can reach: the protected block has no
+    /// call, so its handler has no terminator edge, but a division inside it
+    /// lands there through the exception table and the use runs afterwards.
+    #[test]
+    fn a_rebinding_in_a_trap_handler_keeps_the_descriptor_materialized() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(0, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(1)),
+                block(1, vec![], goto(2)),
+                block(2, vec![copy_into(Local(0), Local(1))], Terminator::Return),
+                block(3, vec![bind_type(0)], goto(2)),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![CatchRegion {
+                body_entry: BlockId(1),
+                handler: BlockId(3),
+                body_blocks: vec![BlockId(1)],
+                handler_body: vec![BlockId(3)],
+                error_local: Local(2),
+                stack_trace_local: None,
+            }],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    /// A captured integer local: its slot holds a cell that closures (and
+    /// other tasks) write to.
+    fn captured_int_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            is_captured: true,
+            ..int_local_decl(name)
+        }
+    }
+
+    fn call_into_dest(destination: Local, target: usize) -> Terminator<'static> {
+        Terminator::Call {
+            argument_layout: None,
+            callee: Operand::Constant(Constant::Null),
+            args: vec![],
+            ntypeargs: 0,
+            runtime_id: None,
+            destination: Place::Local(destination),
+            target: BlockId(target),
+            unwind: None,
+        }
+    }
+
+    fn assign_int(destination: Place, value: i64) -> Statement<'static> {
+        Statement {
+            kind: StatementKind::Assign {
+                destination,
+                value: Rvalue::Use(Operand::Constant(Constant::Int(value))),
+            },
+            span: None,
+        }
+    }
+
+    /// `_1 = x` snapshotted in one block and consumed in the next, with `x` a
+    /// cell (`is_captured`); the terminator between them is the parameter.
+    fn captured_read_across_blocks(between: Terminator<'static>) -> MirFunctionBody<'static> {
+        MirFunctionBody {
+            blocks: vec![
+                block(0, vec![copy_cell_into(Local(1), Local(2))], between),
+                block(1, vec![copy_into(Local(0), Local(1))], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                captured_int_local_decl(Some("x")),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        }
+    }
+
+    /// The call may run a closure that writes the cell; re-reading `x` at the
+    /// use would observe it.
+    #[test]
+    fn a_captured_read_never_sinks_across_a_call() {
+        let body = captured_read_across_blocks(call_into_dest(Local(3), 1));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    /// With nothing but a jump between the blocks nothing can write the cell,
+    /// so the read sinks: the rule is about writers on the path, not blocks.
+    #[test]
+    fn a_captured_read_sinks_across_a_bare_jump() {
+        let body = captured_read_across_blocks(goto(1));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// The same read of a non-captured local sinks as before.
+    #[test]
+    fn a_plain_read_still_sinks_across_a_block_boundary() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(
+                    0,
+                    vec![
+                        assign_int(Place::Local(Local(2)), 7),
+                        copy_into(Local(1), Local(2)),
+                    ],
+                    goto(1),
+                ),
+                block(1, vec![copy_into(Local(0), Local(1))], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// Inside a closure: the read goes through a capture slot, and the next
+    /// block writes that slot before the use.
+    #[test]
+    fn a_capture_slot_read_never_sinks_across_a_block_boundary() {
+        let read_capture = Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(Local(1)),
+                value: Rvalue::Use(Operand::Copy(Place::Deref(CellId::Capture(0)))),
+            },
+            span: None,
+        };
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(0, vec![read_capture], goto(1)),
+                block(
+                    1,
+                    vec![
+                        assign_int(Place::Deref(CellId::Capture(0)), 5),
+                        copy_into(Local(0), Local(1)),
+                    ],
+                    Terminator::Return,
+                ),
+            ],
+            entry: BlockId(0),
+            locals: vec![int_local_decl(None), int_local_decl(None)],
+            catch_regions: vec![],
+        };
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    /// A copy of a never-reassigned parameter is normally read straight from
+    /// the parameter at its uses; a captured parameter is a cell, so it is not.
+    #[test]
+    fn a_captured_parameter_is_never_a_copy_source() {
+        let body = MirFunctionBody {
+            blocks: vec![
+                block(
+                    0,
+                    vec![copy_cell_into(Local(2), Local(1))],
+                    call_into_dest(Local(3), 1),
+                ),
+                block(1, vec![copy_into(Local(0), Local(2))], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                captured_int_local_decl(Some("x")),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        };
+        let classification =
+            AnalysisResult::analyze(&body, 1, OptLevel::One).classifications[&Local(2)];
+        assert_eq!(classification, LocalClassification::Real);
+    }
+
+    /// `_2 = _1.field` then a store to a field of some object, then the use.
+    fn field_read_then_store(stored_field: usize) -> MirFunctionBody<'static> {
+        let read_field = Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(Local(2)),
+                value: Rvalue::Use(Operand::Copy(Place::Field {
+                    base: Box::new(Place::Local(Local(1))),
+                    field: 0,
+                })),
+            },
+            span: None,
+        };
+        let store = assign_int(
+            Place::Field {
+                base: Box::new(Place::Local(Local(1))),
+                field: stored_field,
+            },
+            5,
+        );
+        MirFunctionBody {
+            blocks: vec![block(
+                0,
+                vec![read_field, store, copy_into(Local(0), Local(2))],
+                Terminator::Return,
+            )],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(Some("obj")),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![],
+        }
+    }
+
+    /// The heap model is field-sensitive: a store to the field that was read
+    /// may have changed it, whatever object it went to.
+    #[test]
+    fn a_field_read_does_not_sink_past_a_store_to_that_field() {
+        let body = field_read_then_store(0);
+        assert_eq!(
+            analyzed_classification(&body, Local(2)),
+            LocalClassification::Real
+        );
+    }
+
+    /// A store to a different field cannot change the one that was read.
+    #[test]
+    fn a_field_read_sinks_past_a_store_to_another_field() {
+        let body = field_read_then_store(1);
+        assert_eq!(
+            analyzed_classification(&body, Local(2)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// `_1 = _2 / _3` inside a protected block, used in `use_block`; whether
+    /// that block is protected by the same handler is the parameter.
+    fn trapping_read_across_regions(use_protected: bool) -> MirFunctionBody<'static> {
+        let divide = Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(Local(1)),
+                value: Rvalue::BinaryOp {
+                    op: baml_compiler2_mir::BinOp::Div,
+                    left: Operand::copy_local(Local(2)),
+                    right: Operand::copy_local(Local(3)),
+                },
+            },
+            span: None,
+        };
+        let mut body_blocks = vec![BlockId(1)];
+        if use_protected {
+            body_blocks.push(BlockId(2));
+        }
+        MirFunctionBody {
+            blocks: vec![
+                block(0, vec![], goto(1)),
+                block(1, vec![divide], goto(2)),
+                block(2, vec![copy_into(Local(0), Local(1))], Terminator::Return),
+                block(3, vec![], Terminator::Return),
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+                int_local_decl(None),
+            ],
+            catch_regions: vec![CatchRegion {
+                body_entry: BlockId(1),
+                handler: BlockId(3),
+                body_blocks,
+                handler_body: vec![BlockId(3)],
+                error_local: Local(4),
+                stack_trace_local: None,
+            }],
+        }
+    }
+
+    /// A trap is delivered to the handler of the block it happens in, so an
+    /// evaluation that can trap does not leave its catch region.
+    #[test]
+    fn a_trapping_evaluation_does_not_leave_its_catch_region() {
+        let body = trapping_read_across_regions(false);
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    #[test]
+    fn a_trapping_evaluation_sinks_within_its_catch_region() {
+        let body = trapping_read_across_regions(true);
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Virtual
+        );
     }
 
     #[test]
@@ -2842,10 +3202,10 @@ mod tests {
 
     fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator<'static> {
         Terminator::Call {
+            argument_layout: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: None,
             destination: Place::Local(Local(1)),
             target,
@@ -2855,6 +3215,7 @@ mod tests {
 
     fn virtual_call_into(target: BlockId) -> Terminator<'static> {
         Terminator::VirtualCall {
+            argument_layout: None,
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
                 Box::new([]),
@@ -2863,7 +3224,6 @@ mod tests {
             method: "eq".to_string(),
             args: vec![],
             ntypeargs: 0,
-            runtime_type_check: false,
             runtime_id: None,
             destination: Place::Local(Local(1)),
             target,
@@ -3109,10 +3469,10 @@ mod tests {
                     id: BlockId(1),
                     statements: vec![],
                     terminator: Some(Terminator::Call {
+                        argument_layout: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![Operand::copy_local(array)],
                         ntypeargs: 0,
-                        runtime_type_check: false,
                         runtime_id: None,
                         destination: Place::Local(call_result),
                         target: BlockId(2),
@@ -3197,54 +3557,62 @@ mod tests {
         );
     }
 
-    /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
-    #[test]
-    fn len_bindings_are_not_virtualized() {
+    /// `let n = xs.length()` followed by `n`: a length lives with the elements,
+    /// and nothing between the two statements touches them.
+    fn length_read(between: Terminator<'static>) -> MirFunctionBody<'static> {
         let arr = Local(1);
         let len = Local(2);
-        let body = MirFunctionBody {
-            blocks: vec![BasicBlock {
-                id: BlockId(0),
-                statements: vec![
-                    Statement {
-                        kind: StatementKind::Assign {
-                            destination: Place::Local(arr),
-                            value: Rvalue::Use(Operand::Constant(Constant::Null)),
+        MirFunctionBody {
+            blocks: vec![
+                block(
+                    0,
+                    vec![
+                        Statement {
+                            kind: StatementKind::Assign {
+                                destination: Place::Local(arr),
+                                value: Rvalue::Use(Operand::Constant(Constant::Null)),
+                            },
+                            span: None,
                         },
-                        span: None,
-                    },
-                    Statement {
-                        kind: StatementKind::Assign {
-                            destination: Place::Local(len),
-                            value: Rvalue::Len(Place::Local(arr)),
+                        Statement {
+                            kind: StatementKind::Assign {
+                                destination: Place::Local(len),
+                                value: Rvalue::Len(Place::Local(arr)),
+                            },
+                            span: None,
                         },
-                        span: None,
-                    },
-                    Statement {
-                        kind: StatementKind::Assign {
-                            destination: Place::Local(Local(0)),
-                            value: Rvalue::Use(Operand::copy_local(len)),
-                        },
-                        span: None,
-                    },
-                ],
-                terminator: Some(Terminator::Return),
-                span: None,
-                terminator_span: None,
-            }],
+                    ],
+                    between,
+                ),
+                block(1, vec![copy_into(Local(0), len)], Terminator::Return),
+            ],
             entry: BlockId(0),
             locals: vec![
                 int_local_decl(None),
-                int_local_decl(Some("arr")),
+                int_list_local_decl(Some("arr")),
                 int_local_decl(Some("n")),
+                int_local_decl(None),
             ],
             catch_regions: vec![],
-        };
+        }
+    }
 
-        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+    #[test]
+    fn an_unmutated_length_read_sinks() {
+        let body = length_read(goto(1));
         assert_eq!(
-            analysis.classifications.get(&len),
-            Some(&LocalClassification::Real)
+            analyzed_classification(&body, Local(2)),
+            LocalClassification::Virtual
+        );
+    }
+
+    /// A call may push: the length must be taken before it.
+    #[test]
+    fn a_length_read_does_not_sink_across_a_call() {
+        let body = length_read(call_into_dest(Local(3), 1));
+        assert_eq!(
+            analyzed_classification(&body, Local(2)),
+            LocalClassification::Real
         );
     }
 }

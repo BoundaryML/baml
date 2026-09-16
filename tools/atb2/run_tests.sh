@@ -49,7 +49,7 @@ die() { echo "run_tests: $*" >&2; exit 1; }
 command -v infisical >/dev/null || die "infisical CLI not found — brew install infisical"
 env="${FEEDBACK_INFISICAL_ENV:-dev}"
 # boundary-tools: where FEEDBACK_SUPABASE_*, ATB_SLACK_* and (prod) ATB_POSTHOG_* live.
-# The repo's own .infisical.json points at another workspace.
+# This matches the repo's .infisical.json workspace.
 project_id="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
 project="$project_id"
 # (no arrays: macOS ships bash 3.2, where an empty array trips `set -u`)

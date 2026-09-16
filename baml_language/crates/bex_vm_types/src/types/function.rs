@@ -485,3 +485,35 @@ impl From<&FunctionKind> for FunctionType {
         }
     }
 }
+
+impl Function {
+    /// The name of parameter `index` when it is optional. Synthesized
+    /// functions may carry no parameter metadata; their slots are required.
+    fn optional_param_name(&self, index: usize) -> Option<&str> {
+        self.param_has_default
+            .get(index)
+            .copied()
+            .unwrap_or(false)
+            .then(|| self.param_names.get(index).map(String::as_str))
+            .flatten()
+    }
+
+    /// The value slots the body reads, receiver included for a method.
+    pub fn argument_layout(&self) -> baml_type::CallLayout {
+        baml_type::CallLayout(
+            (0..self.arity)
+                .map(|index| self.optional_param_name(index).map(baml_type::Name::new))
+                .collect(),
+        )
+    }
+
+    /// Whether `layout` equals [`Self::argument_layout`], without building it.
+    pub fn argument_layout_is(&self, layout: &baml_type::CallLayout) -> bool {
+        layout.len() == self.arity
+            && layout
+                .0
+                .iter()
+                .enumerate()
+                .all(|(index, slot)| slot.as_deref() == self.optional_param_name(index))
+    }
+}

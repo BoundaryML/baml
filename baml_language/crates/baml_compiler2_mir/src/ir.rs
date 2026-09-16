@@ -8,6 +8,7 @@ use std::fmt;
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
+use subenum::subenum;
 
 // ============================================================================
 // Optimization Level
@@ -157,10 +158,9 @@ pub struct RuntimeSignature {
     pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
-    /// Runtime-checkable interface bounds, parallel to the callee frame's
-    /// De Bruijn generic parameter slots.  Kept separately from display text
-    /// so `unreflect(...)` calls can validate opaque runtime types before the
-    /// callee executes.
+    /// Interface bounds, parallel to the callee frame's De Bruijn generic
+    /// parameter slots. Kept as executable metadata (not display text) so
+    /// reflection and runtime specialization can check them.
     pub generic_param_bounds: Vec<Vec<RuntimeInterfaceBound>>,
     /// Display strings for the parameter types, parallel to `param_names`.
     pub display_param_types: Vec<String>,
@@ -264,10 +264,15 @@ pub struct LocalDecl {
     /// This is debugger metadata used to resolve in-scope variables from
     /// source locations.
     pub scope_span: Option<Span>,
-    /// Whether this local is captured by a nested closure.
+    /// Whether a nested closure captures this local.
     ///
     /// When `true`, the local's stack slot holds an `Object::Cell` rather than
-    /// the value directly. Reads/writes go through `LoadDeref`/`StoreDeref`.
+    /// the value directly, and reads/writes go through `LoadDeref`/`StoreDeref`.
+    /// The slot holds a cell from the binding's [`StatementKind::FreshCell`]
+    /// onward — parameters from frame entry, where the emitter wraps them —
+    /// and every access is dominated by that statement (`verify_mir` checks
+    /// this). Set when the local is declared, from HIR's capture analysis;
+    /// nothing flips it afterwards.
     pub is_captured: bool,
 }
 
@@ -342,7 +347,12 @@ pub enum IntrinsicOp {
     /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
     Log(LogLevel),
     /// Bind an exact runtime type value into this bytecode frame's type slot.
-    BindType(usize),
+    ///
+    /// The slot is a frame type-argument index, the same space
+    /// `TyTemplate::TypeArgRef` reads, so it carries that space's width: emit
+    /// compares the two directly, and a lossy conversion there would decide a
+    /// soundness question (whether a template read is clobbered) by accident.
+    BindType(u32),
 }
 
 /// The kind of a MIR statement.
@@ -358,10 +368,20 @@ pub enum StatementKind<'db> {
     /// Drop a value (run destructor if any).
     Drop(Place),
 
-    /// Replace a captured local's cell with a fresh one.
-    /// Emitted at the top of for-loop iteration bodies so each iteration's
-    /// closures capture a distinct cell.
-    FreshCell(Local),
+    /// Give a captured local a new cell: the slot now points at a cell no
+    /// closure has captured yet.
+    ///
+    /// Emitted where the binding is created, so a declaration that runs once
+    /// per loop iteration hands each iteration's closures their own cell. The
+    /// new cell holds `null`, or — with `carry_value` — the value of the cell
+    /// it replaces, which is how a C-style `for` header binding is copied into
+    /// the next iteration before the step runs (JS/Go semantics).
+    ///
+    /// Only ever targets a local whose `is_captured` is set, and every read,
+    /// write, or closure capture of that local is dominated by one of its
+    /// `FreshCell`s: that is what makes a deref load discardable
+    /// ([`Rvalue::can_discard`]) and per-iteration closures correct.
+    FreshCell { local: Local, carry_value: bool },
 
     /// Compiler intrinsic — a void side effect (log, send event).
     /// Lowered from calls to `$compiler_intrinsic` functions.
@@ -441,6 +461,10 @@ pub enum Terminator<'db> {
 
     /// Call a function.
     Call {
+        /// The value slots this site was checked against, leading type
+        /// arguments excluded. `None` only for compiler-synthesized calls,
+        /// whose operands are already in the callee's own layout.
+        argument_layout: Option<baml_type::CallLayout>,
         /// The function to call.
         callee: Operand<'db>,
         /// Arguments to pass.
@@ -456,10 +480,6 @@ pub enum Terminator<'db> {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
-        /// At least one explicit type argument was supplied through
-        /// `unreflect(...)`. The emitter encodes this on the call instruction so
-        /// the VM performs M-5/M-6 checks only for marker-instantiated calls.
-        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         ///
         /// This is not part of ordinary call arity. Emitters push it above the
@@ -484,6 +504,9 @@ pub enum Terminator<'db> {
     /// materialized. This is the open-world replacement for the old
     /// compile-time type-tag switch.
     VirtualCall {
+        /// The value slots this site was checked against (receiver included,
+        /// type arguments excluded); see [`Terminator::Call::argument_layout`].
+        argument_layout: Option<baml_type::CallLayout>,
         /// The interface to resolve against, as a template the emitter pushes
         /// with `LoadType`. Non-generic today (`baml.ops.Equals`/`Compare`); a
         /// parameterized interface bakes its arguments into the template.
@@ -500,9 +523,6 @@ pub enum Terminator<'db> {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
-        /// Whether this call carries an `unreflect(...)` type argument and must
-        /// execute the runtime generic gate before entering the resolved method.
-        runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
         runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
@@ -725,9 +745,19 @@ pub enum IndexKind {
 /// A place in memory (lvalue).
 ///
 /// Places represent locations that can be read from or written to.
+///
+/// Cell access is explicit. A local a closure captures
+/// ([`LocalDecl::is_captured`]) holds a cell pointer, and `Local(l)` names
+/// that pointer; `Capture(i)` names the pointer in a closure's capture array.
+/// Those two variants are also [`CellId`], the identity of a cell; the value
+/// behind one is `Deref(cell)`, and every read or write of a captured binding
+/// goes through it. Only a `MakeClosure` capture operand and a `FreshCell`
+/// target name the pointer bare. `verify_mir` checks all of this.
+#[subenum(CellId(derive(Copy)))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Place {
-    /// A local variable: `_1`
+    /// A local variable: `_1`. For a captured local, its cell pointer.
+    #[subenum(CellId)]
     Local(Local),
 
     /// Field access: `_1.field_idx`
@@ -740,12 +770,36 @@ pub enum Place {
         kind: IndexKind,
     },
 
-    /// A captured variable in a closure body, by capture index.
-    ///
-    /// `Capture(idx)` refers to the `idx`-th capture in the enclosing
-    /// `Object::Closure.captures` array.  Reads emit `LoadCapture(idx)` and
-    /// writes emit `StoreCapture(idx)`.  Only valid inside a lambda body.
+    /// The cell pointer in the `idx`-th slot of the enclosing
+    /// `Object::Closure.captures` array. Reading it bare emits `CaptureRef`
+    /// (forwarding the cell to a nested closure); the value behind it is
+    /// `Deref(Capture(idx))`. Only valid inside a lambda body.
+    #[subenum(CellId)]
     Capture(usize),
+
+    /// The value in a cell: `*_1`, `*capture[0]`.
+    ///
+    /// Reads emit `LoadDeref`/`LoadCapture` and writes `StoreDeref`/`StoreCapture`.
+    Deref(CellId),
+}
+
+impl CellId {
+    /// The local whose slot holds this cell's pointer, if it is a local's cell.
+    pub fn local(&self) -> Option<Local> {
+        match self {
+            CellId::Local(local) => Some(*local),
+            CellId::Capture(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for CellId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CellId::Local(l) => write!(f, "{l}"),
+            CellId::Capture(idx) => write!(f, "capture[{idx}]"),
+        }
+    }
 }
 
 impl Place {
@@ -755,10 +809,14 @@ impl Place {
     }
 
     /// Get the base local of this place, if it is rooted in a local.
+    ///
+    /// Transparent through `Deref`: the local whose cell holds the value is
+    /// still the local the place is rooted in.
     pub fn base_local(&self) -> Option<Local> {
         match self {
             Place::Local(l) => Some(*l),
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
+            Place::Deref(cell) => cell.local(),
             Place::Capture(_) => None,
         }
     }
@@ -771,6 +829,7 @@ impl fmt::Display for Place {
             Place::Field { base, field } => write!(f, "{base}.{field}"),
             Place::Index { base, index, .. } => write!(f, "{base}[{index}]"),
             Place::Capture(idx) => write!(f, "capture[{idx}]"),
+            Place::Deref(cell) => write!(f, "*{cell}"),
         }
     }
 }
@@ -863,14 +922,6 @@ pub enum Rvalue<'db> {
     /// other coarse tag checks.
     IsTypeTag { operand: Operand<'db>, tag: i64 },
 
-    /// Runtime-mint identity filter used by `is unreflect(t)` patterns.
-    /// `type_value` evaluates to an `Object::Type`; the VM reconstructs the
-    /// nominal mint of `operand` and compares the two identity tokens.
-    RuntimeIsType {
-        operand: Operand<'db>,
-        type_value: Operand<'db>,
-    },
-
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
@@ -936,11 +987,12 @@ pub enum Rvalue<'db> {
         /// The interface method's name.
         method: String,
         /// Method-level type-argument OPERANDS from the reference site,
-        /// appended to the resolved impl frame by the VM. Operands rather
-        /// than templates so a runtime type argument (`m<unreflect(t)>(…)`)
-        /// flows like any other — a written static argument is materialized
-        /// by the producer as a `LoadType` temp. The VM pops each as an
-        /// `Object::Type` either way.
+        /// appended to the resolved impl frame by the VM. Every argument is
+        /// a template today - a scoped `type T = …` slot included - so these
+        /// could be templates; they stay operands because the producer
+        /// materializes each as a `LoadType` temp anyway and the VM pops an
+        /// `Object::Type` either way, which keeps one stack discipline for
+        /// the whole call shape.
         type_args: Vec<Operand<'db>>,
     },
 
@@ -1025,7 +1077,9 @@ impl Rvalue<'_> {
     pub(crate) fn can_discard_with(&self, in_bounds: impl Fn(&Place) -> bool) -> bool {
         fn read(place: &Place, in_bounds: &impl Fn(&Place) -> bool) -> bool {
             match place {
-                Place::Local(_) | Place::Capture(_) => true,
+                // A deref load cannot fail: every access of a captured local is
+                // dominated by its `FreshCell` (`verify_mir`), so the cell exists.
+                Place::Local(_) | Place::Capture(_) | Place::Deref(_) => true,
                 // A fixed field projection is type-checked, not a user accessor.
                 // An indexing operation in its base still needs its own proof.
                 Place::Field { base, .. } => read(base, in_bounds),
@@ -1059,10 +1113,6 @@ impl Rvalue<'_> {
             Self::IsType { operand: arg, .. } | Self::IsTypeTag { operand: arg, .. } => {
                 operand(arg)
             }
-            Self::RuntimeIsType {
-                operand: arg,
-                type_value,
-            } => operand(arg) && operand(type_value),
             Self::TypeTag(place) | Self::Discriminant(place) | Self::Len(place) => {
                 read(place, &in_bounds)
             }

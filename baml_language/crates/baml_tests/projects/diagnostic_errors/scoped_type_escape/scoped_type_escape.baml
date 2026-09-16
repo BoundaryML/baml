@@ -1,0 +1,258 @@
+// Nothing typed by a block-scoped `type T = …` binding may be observable
+// outside the block that binds it (E0172): the binding re-executes on every
+// pass through its block and may bind `T` differently each time. A value
+// leaves only through a type that does not mention `T`, and a thrown type an
+// inferred `throws` clause or a `catch` outside the block would publish is
+// refused at the throw.
+
+class Boom<T> { payload T }
+
+function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
+    if (fail) { throw Boom<T> { payload: v } }
+    0
+}
+
+function as_t<T>(v: unknown) -> T throws string {
+    match (v) {
+        let x: T => x,
+        _ => throw "not a T",
+    }
+}
+
+// The block's value has type `T`, and nothing says what it may leave as.
+function unannotated_block_value(t: reflect.Type) -> unknown {
+    let escaped = {
+        type T = unreflect(t)
+        as_t<T>(1)
+    }
+    escaped
+}
+
+// The body's expected type `int` does not admit a `T`.
+function body_value_against_a_narrower_return(t: reflect.Type) -> int {
+    type T = unreflect(t)
+    as_t<T>(1)
+}
+
+// An omitted clause would publish `Boom<T>` as this function's surface.
+function inferred_throws_publish_the_binding(t: reflect.Type) -> int {
+    type T = unreflect(t)
+    risky<T>(as_t<T>("x"), false)
+}
+
+// A lambda with no clause of its own publishes its body's throws as its type.
+function lambda_infers_its_own_clause(t: reflect.Type) -> unknown throws never {
+    let f = () -> {
+        type T = unreflect(t)
+        risky<T>(as_t<T>("x"), false)
+    }
+    f
+}
+
+// A catch outside the block would bind the fact past the block.
+function catch_outside_the_block(t: reflect.Type) -> int throws never {
+    let n = {
+        type T = unreflect(t)
+        risky<T>(as_t<T>("x"), true)
+    } catch (e) {
+        _ => 0
+    }
+    n
+}
+
+// A list declared outside the block cannot take `T` as its element type:
+// it would carry `T` after the block, and after a rebinding.
+function outer_container_takes_the_binding(t: reflect.Type) -> unknown {
+    let xs = []
+    {
+        type T = unreflect(t)
+        xs.push(as_t<T>(1))
+    }
+    xs
+}
+
+// With no clause, a thrown `T[]` cannot be published, and it is never
+// relaxed for the author: its nearest relaxation is `unknown` (an invariant
+// `T[]` collapses whole, never to `unknown[]`), which the clause must say.
+function thrown_list_without_a_clause(t: reflect.Type) -> string {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1)
+    let a: T[] = [v]
+    throw a
+}
+
+// `unknown[]` is NOT a relaxation of `T[]`, nor `Boom<unknown>` of
+// `Boom<T>`: their arguments are invariant, so the clause must say `unknown`.
+// Each is judged at the throw against the clause as written.
+function list_relaxed_wrongly(t: reflect.Type) -> string throws unknown[] | string {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1)
+    let a: T[] = [v]
+    throw a
+}
+
+function boom_relaxed_wrongly(t: reflect.Type) -> int throws Boom<unknown> | string {
+    type T = unreflect(t)
+    risky<T>(as_t<T>("x"), true)
+}
+
+function ident<T>(v: T) -> T throws never { v }
+
+// `throws unknown` is imprecise when something closer exists: a thrown
+// `() -> T throws never` relaxes to `() -> unknown throws never` (the return
+// is covariant), and that is what the clause should say.
+function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
+    type T = unreflect(t)
+    let v: T = as_t<T>(1)
+    throw () -> { ident<T>(v) }
+}
+
+// A `return` leaves every block of its lambda at once, and a lambda with no
+// declared return type would publish `T` as its result.
+function return_from_an_inferred_lambda(t: reflect.Type) -> unknown throws never {
+    let f = () -> {
+        type T = unreflect(t)
+        return as_t<T>("x")
+    }
+    f
+}
+
+// The frame's declared `int` does not admit a `T`, so the return escapes.
+function return_against_a_narrower_type(t: reflect.Type) -> int {
+    type T = unreflect(t)
+    return as_t<T>(1)
+}
+
+// The block's value is a callee's still-open instantiation variable whose
+// only bound is `T`. Left open past the brace it would outlive the binding:
+// the later `string` context cannot solve it (a rigid `T` is not a
+// `string`), but nothing after the brace can name `T` either, so the
+// conflict has nowhere to be reported and `s` silently holds whatever `t`
+// was. Deciding the variable at the brace makes it a `T`, judged as the
+// block's value.
+function value_through_an_open_variable(t: reflect.Type) -> string {
+    let v = {
+        type T = unreflect(t);
+        ident(as_t<T>(42))
+    }
+    let s: string = v
+    s
+}
+
+// The same variable one constructor down. `vs` could legitimately be an
+// `unknown[]` holding this element, but only an annotation can say so:
+// `let` takes its initializer's type, and lists are invariant, so a `T[]`
+// inferred here can never widen to the `unknown[]` the return wants.
+// `let vs: unknown[] = { … }` is the legal spelling (pinned in
+// `ns_scoped_type_bindings`).
+function value_through_a_nested_open_variable(t: reflect.Type) -> unknown[] {
+    let vs = {
+        type T = unreflect(t);
+        [ident(as_t<T>(42))]
+    }
+    vs
+}
+
+// A list created BEFORE the binding statement runs cannot carry `T` even
+// though it dies with the block: its element type is fixed when the list is
+// allocated, and `T`'s frame slot is bound only when the statement executes.
+function block_local_list_before_the_binding(t: reflect.Type) -> int {
+    let ys = []
+    type T = unreflect(t)
+    ys.push(as_t<T>(1))
+    ys.length()
+}
+
+// A context that is itself an error is already reported; the value it would
+// have taken is not judged again, so the block's `T` is not a second report.
+function erroneous_context(t: reflect.Type) -> Undefined {
+    type T = unreflect(t)
+    as_t<T>(1)
+}
+
+// The same rule through an INDIRECT deposit: the value reaches the outer
+// list's element slot through the inner list's, which is still open when
+// the deposit is made and becomes `T` only at the closing brace. The escape
+// is reported where the outer deposit was made, on every deposit road.
+function outer_list_through_an_inner_variable(t: reflect.Type) -> unknown {
+    let xs = []
+    {
+        type T = unreflect(t)
+        let ys = []
+        ys.push(ident(as_t<T>(1)))
+        xs.push(ys)
+    }
+    xs
+}
+
+function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
+    let m = map {}
+    {
+        type T = unreflect(t)
+        let ys = []
+        ys.push(ident(as_t<T>(1)))
+        m.set("k", ys)
+    }
+    m
+}
+
+// A `map { … }` literal with entries carries the binding in its value type,
+// so the block's value publishes it exactly as any other container would.
+function block_value_is_a_map_literal(t: reflect.Type) -> unknown {
+    let escaped = {
+        type T = unreflect(t)
+        map { key: as_t<T>(1) }
+    }
+    escaped
+}
+
+class Cell<T> { value T }
+
+function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
+    let xs = []
+    {
+        type T = unreflect(t)
+        xs.push(Cell { value: ident(as_t<T>(1)) })
+    }
+    xs
+}
+
+function outer_variable_through_assignment(t: reflect.Type) -> unknown {
+    let xs = []
+    {
+        type T = unreflect(t)
+        let ys = []
+        ys.push(ident(as_t<T>(1)))
+        xs = ys
+    }
+    xs
+}
+
+// A PARTIAL clause is judged by the names it wrote: `unknown | _` would
+// publish this throw (pinned in `ns_scoped_type_bindings`), but `string | _`
+// does not admit it, and the open remainder is not a name - it is what the
+// body fills, so it cannot absorb a binding the body opened.
+function partial_clause_too_narrow(t: reflect.Type) -> unknown throws string | _ {
+    type T = unreflect(t)
+    throw as_t<T>(1)
+}
+
+// A lambda's own partial clause is judged by the same rule: `unknown | _`
+// admits the thrown type, so this reports nothing, while `string | _` below
+// does not admit it. (Pinned here rather than in `ns_scoped_type_bindings`
+// because a called lambda with a partial clause cannot run today.)
+function lambda_partial_clause_covers(t: reflect.Type) -> int throws unknown {
+    let f = () -> int throws unknown | _ {
+        type T = unreflect(t)
+        throw as_t<T>(1)
+    }
+    f()
+}
+
+function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
+    let f = () -> int throws string | _ {
+        type T = unreflect(t)
+        throw as_t<T>(1)
+    }
+    f()
+}

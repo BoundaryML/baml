@@ -151,7 +151,8 @@ pub fn members_for_receiver<'db>(
     // Total: a plain receiver has no inference variables to begin with, so
     // the proof is constructed, never checked.
     let receiver = baml_type::interned::ClosedTy::from_plain(receiver);
-    crate::method_resolution::member_candidates(db, &facts, &receiver)
+    let viewer = baml_compiler2_hir::file_package::file_package(db, owner.file(db)).root;
+    crate::method_resolution::member_candidates(db, viewer, &facts, &receiver)
 }
 
 /// The members a TYPE qualifier reaches: `int.parse`, `Range.new`,

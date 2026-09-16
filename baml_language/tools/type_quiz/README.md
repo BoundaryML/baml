@@ -358,10 +358,17 @@ end of a sitting as the conversation grows.
 ## Compiler issues surfaced by this tool
 
 Building the quiz is dogfooding, and each of these was found by it. Repros are
-minimal single-file packages; none is fixed at the time of writing.
+minimal single-file packages. One has since been fixed and says so; the rest
+still reproduce. The numbering is referred to from code comments, so an entry
+keeps its number once it has one.
 
-1. **Emit panic on an interface method call on a captured existential inside
-   a closure.** `crates/baml_compiler2_emit/src/emit.rs:2025` panics with
+1. **FIXED on canary.** No longer reproduces as of the September 2026 canary
+   merge; the closure capture and memory-effect rework in #4891 is the likely
+   cause. Three workarounds still cite this entry — `main.baml`, and two in
+   `ns_engine/sample.baml` — and are no longer forced, though they are still
+   correct. **Emit panic on an interface method call on a captured existential
+   inside a closure.** `crates/baml_compiler2_emit/src/emit.rs:2025` panicked
+   with
    `undefined function: user.Item.id` for
    `items().filter_map((item) -> { [0].every((i) -> { item.id() == "x" }); null })`
    where `items(): Item[]` and `Item` is an interface: the inner closure calls
@@ -468,25 +475,3 @@ minimal single-file packages; none is fixed at the time of writing.
    takes the `Grade` rather than its `understanding`. The encoder would need
    the declared parameter type, which the wire already carries, to lower a
    string against an enum position.
-
-15. **An interface method called from inside a nested closure panics the
-   emitter.** `crates/baml_compiler2_emit/src/emit.rs:2025`, `undefined
-   function: user.engine.Item.id`. It type-checks and dies at emit, as a
-   panic rather than a diagnostic, so there is no span and nothing to act on.
-   The same call one level out is fine:
-
-   ```
-   items().flat_map((item) -> {                 // panics
-       range.filter_map((i) -> { item.id() })
-   })
-   items().flat_map((item) -> {                 // compiles
-       let id = item.id();
-       range.filter_map((i) -> { id })
-   })
-   ```
-
-   It is why `pairings` in `ns_conformance/bank.baml` binds `let id =
-   item.id()` before its inner closure. A free function taking the same
-   interface value closes over fine, so it is the method dispatch that is
-   lost.
-

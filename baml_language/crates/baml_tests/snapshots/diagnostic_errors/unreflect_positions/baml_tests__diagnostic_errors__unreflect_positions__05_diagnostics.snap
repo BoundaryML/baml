@@ -1,0 +1,138 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:24:22]
+ 24 │     let call = ident<unreflect(t)>(1)
+    ·                      ──────┬─────
+    ·                            ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:25:25]
+ 25 │     let applied = ident<unreflect(t)>
+    ·                         ──────┬─────
+    ·                               ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:26:26]
+ 26 │     let literal = Holder<unreflect(t)> { label: "h" }
+    ·                          ──────┬─────
+    ·                                ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:27:30]
+ 27 │     let constructed = Holder<unreflect(t)>.new("h")
+    ·                              ──────┬─────
+    ·                                    ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:28:28]
+ 28 │     let annotated: Wrapper<unreflect(t)>? = null
+    ·                            ──────┬─────
+    ·                                  ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:29:23]
+ 29 │     let tested = 1 is unreflect(t)
+    ·                       ──────┬─────
+    ·                             ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:31:9]
+ 31 │         unreflect(t) => 1,
+    ·         ──────┬─────
+    ·               ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:34:37]
+ 34 │     let reflected = reflect.Type.of<unreflect(t)>()
+    ·                                     ──────┬─────
+    ·                                           ╰── bind it first with `type T = unreflect(…);`, then write `T` here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:35:27]
+ 35 │     type Nested = Wrapper<unreflect(t)>
+    ·                           ──────┬─────
+    ·                                 ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:45:19]
+ 45 │     value Wrapper<unreflect(reflect.Type.of<string>())>
+    ·                   ──────────────────┬─────────────────
+    ·                                     ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:49:23]
+ 49 │     implements Marker<unreflect(reflect.Type.of<string>())> {}
+    ·                       ──────────────────┬─────────────────
+    ·                                         ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:53:20]
+ 53 │     value: Wrapper<unreflect(reflect.Type.of<string>())>
+    ·                    ──────────────────┬─────────────────
+    ·                                      ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:54:14]
+ 54 │ ) -> Wrapper<unreflect(reflect.Type.of<string>())> {
+    ·              ──────────────────┬─────────────────
+    ·                                ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:58:39]
+ 58 │ function bound_site<T extends Wrapper<unreflect(reflect.Type.of<string>())>>() -> null { null }
+    ·                                       ──────────────────┬─────────────────
+    ·                                                         ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[unreflect_positions.baml:60:26]
+ 60 │ type AliasSite = Wrapper<unreflect(reflect.Type.of<string>())>
+    ·                          ──────────────────┬─────────────────
+    ·                                            ╰── a runtime type has no scope in a declaration; bind it inside a function body with `type T = unreflect(…);`
+    ╰────

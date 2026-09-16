@@ -49,7 +49,6 @@ pub enum BamlCffiHandleType {
     MediaPdf = 9,
     MediaGeneric = 10,
     PromptAst = 11,
-    Collector = 12,
     Type = 13,
     TaggedHeapHandle = 14,
     HostValueCallable = 15,
@@ -211,10 +210,14 @@ pub struct BamlApiV1 {
     /// an empty error is rejected as a bridge failure. Unknown or cancelled
     /// call IDs are ignored after a diagnostic.
     pub complete_host_call: BamlCompleteHostCallFn,
-    /// Clone an owned engine handle into `out_key`.
+    /// Take one more ownership of an engine handle, writing the key to release
+    /// it through into `out_key`.
     ///
-    /// On `BAML_CFFI_STATUS_OK`, the host owns the new key and must release it
-    /// exactly once with `handle_release`. `out_key` must be writable.
+    /// On `BAML_CFFI_STATUS_OK` the host owns one more release of that key and
+    /// must perform it exactly once with `handle_release`. `out_key` is a
+    /// fresh key for identity-free handles (media, function refs) and the
+    /// SAME key for an engine-heap handle (one key per heap object), so a
+    /// host must not assume the two keys differ. `out_key` must be writable.
     pub handle_clone: BamlHandleCloneFn,
     /// Release one owned engine handle key. Host-value keys are instead
     /// released in response to the host-release callback.
@@ -445,7 +448,6 @@ mod tests {
                 BamlHandleType::AdtMediaGeneric,
             ),
             (BamlCffiHandleType::PromptAst, BamlHandleType::AdtPromptAst),
-            (BamlCffiHandleType::Collector, BamlHandleType::AdtCollector),
             (BamlCffiHandleType::Type, BamlHandleType::AdtType),
             (
                 BamlCffiHandleType::TaggedHeapHandle,

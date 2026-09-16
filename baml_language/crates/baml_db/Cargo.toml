@@ -34,10 +34,13 @@ baml_type = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
 ignore = { workspace = true }
+indexmap = { workspace = true }
 rayon = { workspace = true }
 salsa = { workspace = true }
+serde = { workspace = true }
 text-size = { workspace = true }
 thiserror = { workspace = true }
+toml = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

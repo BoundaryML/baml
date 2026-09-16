@@ -52,9 +52,9 @@ fn compile_source(
     mode: BenchMode,
 ) -> (ProjectDatabase, BexEngine, tempfile::TempDir) {
     let mut db = ProjectDatabase::new();
-    db.workspace(Path::new("."));
+    let package = db.workspace(Path::new("."));
     db.file("bench.baml", source);
-    let bytecode = generate_project_bytecode(&db).expect("benchmark compilation failed");
+    let bytecode = generate_project_bytecode(&db, package).expect("benchmark compilation failed");
     let store = tempfile::Builder::new()
         .prefix("baml-profiling-overhead-bench-")
         .tempdir()

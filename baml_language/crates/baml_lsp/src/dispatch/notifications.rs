@@ -279,26 +279,25 @@ pub(super) fn did_close(
 
 impl GlobalState {
     /// Drop a document's overlay. The text stays until the disk reload
-    /// posted here reconciles it (`SetDisk`/`RemoveFile`); a provisional
-    /// root losing its last document is removed instead — it existed only
-    /// for that document. Closing an untracked path is a no-op.
+    /// posted here reconciles it (`SetDisk`/`RemoveFile`), unless the root
+    /// itself goes: a root nothing retains once this document closes (see
+    /// [`GlobalState::root_is_retained`]) is removed with it — a provisional
+    /// root always, a discovered project once its folder was withdrawn.
+    /// Closing an untracked path is a no-op.
     pub fn close_document(&mut self, path: &Path) {
         if self.open_document(path).is_none() {
             return;
         }
-        let provisional_root = self
+        let unretained_root = self
             .roots()
             .root_for_path(path)
-            .filter(|entry| self.is_provisional_root(&entry.path))
-            .map(|entry| entry.path.clone())
-            .filter(|root| {
-                self.open_documents_under(root)
-                    .all(|(open, _)| open == path)
-            });
+            .filter(|entry| entry.kind == SourceRootKind::Workspace)
+            .filter(|entry| !self.root_is_retained(&entry.path, Some(path)))
+            .map(|entry| entry.path.clone());
         let mut batch = vec![SourceMutation::CloseDocument {
             path: path.to_path_buf(),
         }];
-        match provisional_root {
+        match unretained_root {
             Some(root) => {
                 batch.push(SourceMutation::RemoveRoot { path: root });
                 let applied = self.apply(batch);
@@ -379,9 +378,10 @@ pub(super) fn did_change_watched_files(
     Ok(())
 }
 
-/// Added folders are discovered; removed folders drop the workspace roots
-/// under them that no other session's folder still covers and that have no
-/// open documents.
+/// Added folders are discovered; withdrawn folders drop the workspace roots
+/// under them that nothing retains any more ([`GlobalState::root_is_retained`]):
+/// no host or session folder still covers them and no document under them
+/// is open — an open document keeps its project until it closes.
 #[expect(
     clippy::needless_pass_by_value,
     reason = "uniform dispatch-table signature"
@@ -418,14 +418,7 @@ pub(super) fn did_change_workspace_folders(
         .roots()
         .workspace_roots()
         .filter(|entry| removed.iter().any(|folder| entry.path.starts_with(folder)))
-        .filter(|entry| {
-            !state.sessions().any(|(_, s)| {
-                s.workspace_folders
-                    .iter()
-                    .any(|folder| entry.path.starts_with(folder))
-            })
-        })
-        .filter(|entry| state.open_documents_under(&entry.path).next().is_none())
+        .filter(|entry| !state.root_is_retained(&entry.path, None))
         .map(|entry| entry.path.clone())
         .collect();
     let applied = state.apply(

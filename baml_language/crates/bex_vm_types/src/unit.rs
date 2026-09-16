@@ -238,6 +238,26 @@ pub struct CompilationUnit {
     /// folded into `Program`, carries no absolute paths (design §9 R7).
     pub callable_throws_fragment: Vec<u8>,
 
+    /// Last-segment names of every item this unit's compiled code statically
+    /// resolved — functions (including interface-machinery bodies, which have
+    /// no runtime name), `let` globals, classes, and enums. Codegen records
+    /// each name AT the site that resolves it to a baked operand, and the
+    /// record travels with the artifact; it is never reconstructed from the
+    /// compiled operands afterwards, because a reconstruction joins the
+    /// operands against the runtime name maps and severs silently whenever a
+    /// name class leaves them (interface bodies did exactly that). Sorted and
+    /// deduplicated, so identical compiles stay byte-identical. Consumed by
+    /// the CLI's incremental dirty partition as its reverse-dependency edges.
+    pub referenced_names: Vec<String>,
+    /// Whether any compiled code in this unit bakes a type's *layout* through
+    /// an operand that carries no recoverable type identity — a positional
+    /// field offset, an enum discriminant, a jump table, a dispatch slot, or
+    /// a type operand (the classification lives in
+    /// [`crate::relink::visit_index_operands_ref`]). The dirty partition
+    /// pairs this with its layout sentinel so any type-layout change
+    /// re-lowers the unit.
+    pub bakes_type_layout: bool,
+
     /// The whole-*group* `$init` / `$init_test` tail (design §9 R2), carried on
     /// one unit of the group that produces it (empty on every other unit). The
     /// tail cannot be a per-file product — `$init` topo-sorts a package's `let`s

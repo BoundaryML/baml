@@ -676,7 +676,6 @@ fn convert_object(
                 variant_name: variant_def.name.clone(),
             })
         }
-        Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
         // Only the described type crosses the boundary (BEP-066 H-4), and it
         // crosses onto the sys-op lane's head: identity plus the declaration's
         // own name, with no pointer to go stale if the collector runs while the

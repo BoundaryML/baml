@@ -30,10 +30,15 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/java
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 
+# Generate each fixture's baml_sdk/, tests/ and Gradle files first: nothing
+# else produces them, and every Gradle invocation below builds against them.
+echo "==> sdk_test_codegen java (generate fixture SDKs)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- java)
+
 # Shared Gradle home under target/ so dependency, wrapper, and
 # provisioned-JDK caches land in one place rather than in ~/.gradle.
-# Keep in sync with CACHE_SUBDIR / CACHE_ENV_VAR in
-# harness_setup/src/java.rs.
+# Keep in sync with CACHE_SUBDIR / CACHE_ENV_VAR in the java test_suite!
+# macro (sdk_tests/harness_runner/src/lib.rs).
 export GRADLE_USER_HOME="$WORKSPACE_ROOT/target/gradle-home"
 mkdir -p "$GRADLE_USER_HOME"
 
@@ -63,7 +68,7 @@ fi
 # Per-run breadcrumb for the `setup_guard::ran` test. See the
 # "setup.sh guard" section of ../../DEVELOPMENT.md for the format and
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/java.rs.
+# codegen/src/java.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_JAVA_SETUP=1" >> "$NEXTEST_ENV"
 fi

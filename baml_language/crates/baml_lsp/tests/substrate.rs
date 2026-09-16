@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use baml_base::{Name, SourceRootKind};
+use baml_base::SourceRootKind;
 use baml_lsp::{
     LspError, OwnerEvent,
     executor::{Executors, ThreadPool, spawn_read},
@@ -20,7 +20,7 @@ fn workspace(state: &mut GlobalState, root: &str, files: &[(&str, &str)]) {
     let applied = state.apply(vec![SourceMutation::UpsertRoot {
         spec: RootSpec {
             path: PathBuf::from(root),
-            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
+            self_name: None,
             kind: SourceRootKind::Workspace,
         },
         files: files

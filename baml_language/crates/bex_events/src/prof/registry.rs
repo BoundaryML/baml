@@ -18,14 +18,14 @@
 use std::ptr::null_mut;
 
 use crate::prof::{
-    ring::{Ring, RingCtx, RingHandle, RingState},
+    ring::{OSThreadMarkerRing, OSThreadMarkerRingHandle, RingCtx, RingState},
     sync::{AtomicPtr, Ordering},
 };
 
 struct RegNode {
-    /// Conceptually `&'static Ring`; kept raw so tests can reclaim with full
+    /// Conceptually `&'static OSThreadMarkerRing`; kept raw so tests can reclaim with full
     /// provenance. Production never frees it (invariant 7).
-    ring: *mut Ring,
+    ring: *mut OSThreadMarkerRing,
     next: AtomicPtr<RegNode>,
 }
 
@@ -65,27 +65,27 @@ impl Registry {
         seg_bytes: usize,
         freelist_cap: usize,
         engine_id: u64,
-    ) -> Option<RingHandle> {
+    ) -> Option<OSThreadMarkerRingHandle> {
         let mut node = self.head.load(Ordering::Acquire);
         while !node.is_null() {
             let n = unsafe { &*node };
             let ring = unsafe { &*n.ring };
             if ring.try_claim(engine_id) {
                 // SAFETY: the CAS made this thread the unique producer.
-                return Some(unsafe { RingHandle::new(ring) });
+                return Some(unsafe { OSThreadMarkerRingHandle::new(ring) });
             }
             node = n.next.load(Ordering::Acquire);
         }
         // Keep the raw pointer (not a ref-derived copy) in the node so the
         // test-only Registry::drop deallocates with original provenance.
-        let ring_ptr = Ring::alloc(ctx, seg_bytes, freelist_cap, engine_id)?;
+        let ring_ptr = OSThreadMarkerRing::alloc(ctx, seg_bytes, freelist_cap, engine_id)?;
         self.push(ring_ptr);
         // SAFETY: a freshly allocated ring is Active and owned by its
         // creating thread.
-        Some(unsafe { RingHandle::new(&*ring_ptr) })
+        Some(unsafe { OSThreadMarkerRingHandle::new(&*ring_ptr) })
     }
 
-    fn push(&self, ring: *mut Ring) {
+    fn push(&self, ring: *mut OSThreadMarkerRing) {
         let node = Box::into_raw(Box::new(RegNode {
             ring,
             next: AtomicPtr::new(null_mut()),
@@ -106,7 +106,7 @@ impl Registry {
 
     /// Walks every registered ring (any thread; Acquire loads publish the
     /// nodes and rings).
-    pub(crate) fn for_each(&self, mut f: impl FnMut(&'static Ring)) {
+    pub(crate) fn for_each(&self, mut f: impl FnMut(&'static OSThreadMarkerRing)) {
         let mut node = self.head.load(Ordering::Acquire);
         while !node.is_null() {
             let n = unsafe { &*node };
@@ -119,13 +119,16 @@ impl Registry {
     /// rings to empty and pool them; skip `Pooled` rings. Returns whether any
     /// ring yielded bytes.
     ///
-    /// `sink` may call [`Ring::engine_id`] on the ring it is handed: the
+    /// `sink` may call [`OSThreadMarkerRing::engine_id`] on the ring it is handed: the
     /// bytes in hand are proof of drain progress, which is that method's
     /// safety contract.
     ///
     /// # Safety
     /// Caller is the process's single consumer thread.
-    pub(crate) unsafe fn sweep(&self, sink: &mut impl FnMut(&'static Ring, &[u8])) -> bool {
+    pub(crate) unsafe fn sweep(
+        &self,
+        sink: &mut impl FnMut(&'static OSThreadMarkerRing, &[u8]),
+    ) -> bool {
         let mut progress = false;
         self.for_each(|ring| match ring.state() {
             RingState::Active => {
@@ -178,7 +181,7 @@ mod global {
     use super::Registry;
     use crate::prof::{
         backend::{MeasuredLayouts, ProfilerMemoryGovernor, ProfilerSizingPolicy},
-        ring::{Ring, RingCtx, RingHandle},
+        ring::{OSThreadMarkerRing, OSThreadMarkerRingHandle, RingCtx},
     };
 
     static REGISTRY: Registry = Registry::new();
@@ -238,7 +241,7 @@ mod global {
 
     /// One entry per engine this thread has produced for. The `Drop` is the
     /// D5b orphan trigger, run by the TLS destructor on thread death.
-    struct ThreadRings(RefCell<SmallVec<[(u64, &'static Ring); 2]>>);
+    struct ThreadRings(RefCell<SmallVec<[(u64, &'static OSThreadMarkerRing); 2]>>);
 
     impl Drop for ThreadRings {
         fn drop(&mut self) {
@@ -260,13 +263,13 @@ mod global {
     /// Must run on a live thread (not from TLS destructors): the returned
     /// handle's ring is orphaned by *this thread's* TLS cleanup, which is
     /// what guarantees its events eventually reach the consumer.
-    pub fn ring_for_engine(engine_id: u64) -> Option<RingHandle> {
+    pub fn ring_for_engine(engine_id: u64) -> Option<OSThreadMarkerRingHandle> {
         THREAD_RINGS.with(|tr| {
             let mut entries = tr.0.borrow_mut();
             if let Some((_, ring)) = entries.iter().find(|(id, _)| *id == engine_id) {
                 // SAFETY: this thread claimed the ring when it inserted the
                 // entry, and only this thread's death (TLS drop) releases it.
-                return Some(unsafe { RingHandle::new(ring) });
+                return Some(unsafe { OSThreadMarkerRingHandle::new(ring) });
             }
             let config = transport_config();
             // Pin the clock anchor (source detection + zero point — cheap,

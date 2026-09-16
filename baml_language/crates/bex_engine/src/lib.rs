@@ -68,6 +68,7 @@
 
 #![allow(unsafe_code)]
 
+mod bex_work;
 mod conversion;
 mod function_call_context;
 mod future;
@@ -147,6 +148,14 @@ struct RuntimeSchemaOverlay {
     /// Owning-package roots, viewed by display name — a name boundary for the
     /// same reason as the landing handles; see `class_handles_by_name`.
     named_owners: indexmap::IndexMap<String, bex_external_types::Handle>,
+}
+
+// Release collector arbitration even when a caller drops the checking future.
+struct GcCheckGuard<'a>(&'a AtomicBool);
+impl Drop for GcCheckGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 /// Sets the VM park request flag for the lifetime of a pending GC park request.
@@ -302,7 +311,7 @@ pub(crate) enum ThreadOutcome {
 }
 
 /// How a spawned child settled its future — drives the profiling
-/// `EndThread` status (children settle as `Ok(SettledChild)` even when
+/// `BexThreadEnd` status (children settle as `Ok(SettledChild)` even when
 /// cancelled or errored, so the kind must travel in the outcome).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChildSettleKind {
@@ -349,11 +358,11 @@ impl Drop for ThreadBoundaryLeaseGuard {
 /// task future is dropped before its event loop takes over (abnormal host
 /// teardown — e.g. dropping the runtime while the task is queued on a
 /// `TaskGroup` ticket or parked on the heap permit). By that point the
-/// Spawn arm has emitted `StartThread` and `set_entry_point` the entry
+/// Spawn arm has emitted `BexThreadStart` and `set_entry_point` the entry
 /// `CallFunction`; nothing else would close them. Armed at the top of the
 /// task body; also the closer for the queued-then-cancelled early return;
 /// defused once `run_thread_event_loop` is entered (its wrapper owns
-/// `EndThread` on every return path from there). Emits via the TLS ring
+/// `BexThreadEnd` on every return path from there). Emits via the TLS ring
 /// lookup, so dropping from any thread is sound. Drops *after* the loop
 /// has started (mid-await teardown) are out of scope — the artifact is
 /// torn-tail territory there anyway.
@@ -374,7 +383,7 @@ impl SpawnProfCloser {
 
 impl Drop for SpawnProfCloser {
     fn drop(&mut self) {
-        use bex_events::prof::record::{FunctionEndStatus, RawRecord, ThreadEndStatus};
+        use bex_events::prof::record::{FunctionEndStatus, Marker, ThreadEndStatus};
         if !self.armed || !self.engine.profiler_session.is_on() {
             return;
         }
@@ -387,7 +396,7 @@ impl Drop for SpawnProfCloser {
             let ts_ticks = bex_events::prof::clock::now_ticks();
             let committed = match self.awaited {
                 Some((await_ns, await_count)) => {
-                    self.engine.prof_emit(&RawRecord::EndFunctionAwaited {
+                    self.engine.prof_emit(&Marker::FunctionExitAwaited {
                         status: FunctionEndStatus::Cancelled,
                         thread_id,
                         call_id: self.entry_call_id,
@@ -396,7 +405,7 @@ impl Drop for SpawnProfCloser {
                         await_count,
                     })
                 }
-                None => self.engine.prof_emit(&RawRecord::EndFunction {
+                None => self.engine.prof_emit(&Marker::FunctionExit {
                     // Dropped-before-run is a cancellation, not a failure.
                     status: FunctionEndStatus::Cancelled,
                     thread_id,
@@ -408,7 +417,7 @@ impl Drop for SpawnProfCloser {
                 self.engine.prof_record_transport_loss(boundary_handle);
             }
         }
-        if !self.engine.prof_emit(&RawRecord::EndThread {
+        if !self.engine.prof_emit(&Marker::BexThreadEnd {
             status: ThreadEndStatus::Cancelled,
             thread_id,
             ts_ticks: bex_events::prof::clock::now_ticks(),
@@ -663,9 +672,47 @@ struct ActiveCall {
     pending: bool,
 }
 
-struct ActiveCallGuard {
+/// Owns root-call registration and its work guard through completion or cancellation.
+struct RootCallWork {
+    work_guard: bex_work::BexWorkGuard,
     engine: Arc<BexEngine>,
     call_id: CallId,
+}
+
+/// Owns a producer future and its work guard, including time spent queued.
+/// Keep the future first so its captures are dropped before the work guard.
+struct SpawnedWork<F> {
+    future: F,
+    work_guard: bex_work::BexWorkGuard,
+}
+
+impl<F: std::future::Future> SpawnedWork<F> {
+    fn new(work_guard: bex_work::BexWorkGuard, future: F) -> Self {
+        Self { future, work_guard }
+    }
+
+    async fn run(self) -> F::Output {
+        let result = self.future.await;
+        drop(self.work_guard);
+        result
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn spawn(self)
+    where
+        F: Send + 'static,
+        F::Output: Send + 'static,
+    {
+        tokio::spawn(self.run());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn spawn(self)
+    where
+        F: std::future::Future<Output = ()> + 'static,
+    {
+        wasm_bindgen_futures::spawn_local(self.run());
+    }
 }
 
 struct ShutdownGuard {
@@ -681,6 +728,7 @@ impl ShutdownGuard {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = EngineLifecycle::Closed;
         self.completed = true;
+        self.engine.bex_work.close();
         self.engine.lifecycle_changed.notify_waiters();
     }
 }
@@ -697,13 +745,14 @@ impl Drop for ShutdownGuard {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if *lifecycle == EngineLifecycle::Closing {
             *lifecycle = EngineLifecycle::Running;
+            self.engine.bex_work.resume();
         }
         drop(lifecycle);
         self.engine.lifecycle_changed.notify_waiters();
     }
 }
 
-impl ActiveCallGuard {
+impl RootCallWork {
     /// Atomically reserve `call_id` in `engine.active_calls` and return a
     /// guard that will release the slot on drop. Returns
     /// [`EngineError::DuplicateCallId`] if the id is already in flight.
@@ -740,9 +789,19 @@ impl ActiveCallGuard {
                 cancel
             }
         };
+        let work_guard = engine.bex_work.register_work();
         drop(map);
         drop(lifecycle);
-        Ok((Self { engine, call_id }, cancel))
+        #[cfg(not(target_arch = "wasm32"))]
+        engine.ensure_idle_gc_worker();
+        Ok((
+            Self {
+                work_guard,
+                engine,
+                call_id,
+            },
+            cancel,
+        ))
     }
 
     fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
@@ -774,7 +833,7 @@ impl ActiveCallGuard {
     }
 }
 
-impl Drop for ActiveCallGuard {
+impl Drop for RootCallWork {
     fn drop(&mut self) {
         // `unwrap_or_else(into_inner)` so a poisoned mutex during unwind
         // doesn't double-panic.
@@ -1090,6 +1149,7 @@ pub struct BexEngine {
     active_calls: Mutex<HashMap<CallId, ActiveCall>>,
     lifecycle: Mutex<EngineLifecycle>,
     lifecycle_changed: tokio::sync::Notify,
+    bex_work: Arc<bex_work::BexWork>,
     shutdown_required: AtomicBool,
 
     futures: FutureManager,
@@ -1137,6 +1197,7 @@ impl Drop for BexEngine {
     /// candidate) drops quietly: it was never registered, so it must not
     /// emit a close notification.
     fn drop(&mut self) {
+        self.bex_work.close();
         let rooted = self
             .rooted_unhandled_spawn_errors
             .get_mut()
@@ -2262,6 +2323,7 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
+        let bex_work = bex_work::BexWork::new(&heap);
         let heap_permit_manager = Arc::new(HeapPermitManager::new());
         // We just created the permit manager so `new_permit` will not block:
         // the only synchronization inside is the `holders` mutex which is
@@ -2272,10 +2334,9 @@ impl BexEngine {
         // If `new_permit` ever takes a real lock or schedules async work,
         // this assumption breaks and the constructor would deadlock — at
         // which point we'd have to make `BexEngine::new` async (TODO).
-        let futures_permit = futures::executor::block_on(
-            heap_permit_manager
-                .new_permit(FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)))),
-        );
+        let futures_permit = futures::executor::block_on(heap_permit_manager.new_permit(
+            FutureManagerInner::new(Tlab::new_empty(Arc::clone(&heap)), Arc::clone(&bex_work)),
+        ));
 
         // Register the frozen globals pool as its own permit holder so the
         // GC traces and forwards `Value::object(HeapPtr)` entries (e.g.
@@ -2353,6 +2414,7 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             lifecycle: Mutex::new(EngineLifecycle::Running),
             lifecycle_changed: tokio::sync::Notify::new(),
+            bex_work,
             shutdown_required: AtomicBool::new(false),
             futures: FutureManager::new(futures_permit),
             rooted_unhandled_spawn_errors: Mutex::new(VecDeque::new()),
@@ -2448,7 +2510,7 @@ impl BexEngine {
     /// engine arms run after `.await`s, where the task may have migrated
     /// OS threads (the VM snapshot is only valid within one exec resume).
     #[allow(unsafe_code)]
-    fn prof_emit(&self, rec: &bex_events::prof::record::RawRecord<'_>) -> bool {
+    fn prof_emit(&self, rec: &bex_events::prof::record::Marker<'_>) -> bool {
         if !self.profiler_session.is_on() {
             return true;
         }
@@ -2487,7 +2549,7 @@ impl BexEngine {
     fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
         vm.prof_ring = if self.profiler_session.is_on() && !vm.prof_suppressed {
             bex_events::prof::ring_for_engine(self.engine_id.0)
-                .map(bex_events::prof::RingHandle::ring)
+                .map(bex_events::prof::OSThreadMarkerRingHandle::ring)
         } else {
             None
         };
@@ -2516,11 +2578,11 @@ impl BexEngine {
         call_id: u64,
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
-        use bex_events::prof::record::RawRecord;
+        use bex_events::prof::record::Marker;
         let ts_ticks = bex_events::prof::clock::now_ticks();
         let thread_id = BexThreadId(vm.prof_thread_id);
         let committed = match vm.prof_take_await(call_id) {
-            Some((await_ns, await_count)) => self.prof_emit(&RawRecord::EndFunctionAwaited {
+            Some((await_ns, await_count)) => self.prof_emit(&Marker::FunctionExitAwaited {
                 status,
                 thread_id,
                 call_id: BexCallId(call_id),
@@ -2528,7 +2590,7 @@ impl BexEngine {
                 await_ns,
                 await_count,
             }),
-            None => self.prof_emit(&RawRecord::EndFunction {
+            None => self.prof_emit(&Marker::FunctionExit {
                 status,
                 thread_id,
                 call_id: BexCallId(call_id),
@@ -3009,6 +3071,7 @@ impl BexEngine {
                 match *lifecycle {
                     EngineLifecycle::Running => {
                         *lifecycle = EngineLifecycle::Closing;
+                        self.bex_work.suspend();
                         return Some(ShutdownGuard {
                             engine: Arc::clone(self),
                             completed: false,
@@ -3206,8 +3269,11 @@ impl BexEngine {
             on_leaks(&[]);
         }
 
-        self.collect_garbage(bex_heap::CollectionLevel::Major).await;
+        self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
+            .await;
         shutdown.complete();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.bex_work.join_worker().await;
     }
 
     fn enqueue_unhandled_spawn_errors(
@@ -3341,11 +3407,34 @@ impl BexEngine {
         self: &Arc<Self>,
         level: bex_heap::CollectionLevel,
     ) -> bex_heap::GcStats {
+        self.collect_garbage_with_reason(level, "explicit").await
+    }
+
+    async fn collect_garbage_with_reason(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+        reason: &'static str,
+    ) -> bex_heap::GcStats {
+        let cycle = bex_heap::GcCycleProfiler::start();
         #[cfg(not(target_arch = "wasm32"))]
         let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
-        let mut heap_guard = self.heap_permit_manager.request_park().await;
+        let heap_guard = self.heap_permit_manager.request_park().await;
         #[cfg(not(target_arch = "wasm32"))]
         drop(park_request_guard);
+
+        self.collect_garbage_parked(level, reason, heap_guard, cycle)
+            .await
+    }
+
+    async fn collect_garbage_parked(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+        reason: &'static str,
+        mut heap_guard: HeapGuard<'_>,
+        mut cycle: bex_heap::GcCycleProfiler,
+    ) -> bex_heap::GcStats {
+        let cleanup_version = self.bex_work.cleanup_version();
+        cycle.parked();
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
@@ -3359,9 +3448,13 @@ impl BexEngine {
             heap_guard.num_permits(),
         );
 
+        cycle.roots_scanned();
+
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
-        let (stats, _remapped_roots, forwarding) =
+        let (mut stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+
+        cycle.heap_done();
 
         // Bug H, check 1 (heap_debug only): every pointer the GC was told
         // about (`all_roots`) must end up in the forwarding map. If a
@@ -3430,7 +3523,11 @@ impl BexEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .extend(unhandled_spawn_errors);
 
+        if level == bex_heap::CollectionLevel::Major {
+            self.bex_work.collected(cleanup_version);
+        }
         drop(heap_guard);
+        cycle.released();
 
         // Flush deferred host-value releases now that the stop-the-world window
         // has closed. Collecting a dead `Object::HostClosure` runs
@@ -3455,6 +3552,7 @@ impl BexEngine {
         // moving them mid-drain.
         self.drain_finalizers().await;
 
+        cycle.finish(&mut stats, reason, &self.heap);
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,
@@ -3560,8 +3658,7 @@ impl BexEngine {
         // target it. The RAII guard removes the entry on drop (including
         // panic unwind). Insertion and guard construction are atomic, so a
         // panic here cannot leak registry entries.
-        let (_call_guard, cancel) =
-            ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
+        let (call_work, cancel) = RootCallWork::register(Arc::clone(self), host_call_id, cancel)?;
 
         // Fail fast if already cancelled — guarantees pre-cancelled IDs
         // always produce a `baml.panics.Cancelled` panic regardless of
@@ -3569,6 +3666,7 @@ impl BexEngine {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+        Box::pin(self.collect_before_call(&call_work.work_guard)).await;
 
         let (function_index, kind) = self.lookup_function(function_name)?;
         if matches!(kind, bex_vm_types::FunctionKind::NativeUnresolved) {
@@ -3976,14 +4074,14 @@ impl BexEngine {
         // `$id` works with profiling off, and the ids it exposes are the
         // VM-minted ids the event stream records.
         vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
-        // No ring snapshot and no StartThread here: the permit acquisition
+        // No ring snapshot and no BexThreadStart here: the permit acquisition
         // below awaits (the snapshot would go stale across an OS-thread
         // migration), and early-error returns between here and the run loop
-        // would leak a StartThread with no EndThread. Both happen at
-        // guaranteed-balanced points instead: the StartThread in
+        // would leak a BexThreadStart with no BexThreadEnd. Both happen at
+        // guaranteed-balanced points instead: the BexThreadStart in
         // run_entry_point right before set_entry_point (§7 decision 7 —
         // straight-line into run_thread_event_loop, whose every exit path
-        // emits the EndThread), and the snapshot at the same spot plus each
+        // emits the BexThreadEnd), and the snapshot at the same spot plus each
         // loop-head resume.
         let root_thread = BexThread::new_root(vm, cancel);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
@@ -4092,16 +4190,16 @@ impl BexEngine {
         // D5a: the entry-frame CallFunction below pushes into the snapshot;
         // take it on THIS thread, after the last await before the push.
         self.prof_refresh_vm_ring(&mut thread.vm);
-        // §7 decision 7: the root StartThread is emitted before the entry
+        // §7 decision 7: the root BexThreadStart is emitted before the entry
         // frame's CallFunction so that every thread's first record is its
-        // StartThread — a uniform invariant for renderers (children get
+        // BexThreadStart — a uniform invariant for renderers (children get
         // theirs at the Spawn arm, before their entry push). BALANCE: the
-        // matching EndThread is emitted by run_thread_event_loop on every
+        // matching BexThreadEnd is emitted by run_thread_event_loop on every
         // exit path; no early return / `?` may be introduced between this
         // emission and the run_thread_event_loop call below, or an error
-        // path would leak an unclosed StartThread.
+        // path would leak an unclosed BexThreadStart.
         if thread.vm.prof_ring.is_some() {
-            let committed = self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+            let committed = self.prof_emit(&bex_events::prof::record::Marker::BexThreadStart {
                 flags: 0,
                 thread_id: BexThreadId(thread.vm.prof_thread_id),
                 parent_thread_id: BexThreadId(0), // engine-root thread
@@ -4196,7 +4294,7 @@ impl BexEngine {
         // GC never ran during the call.
         bex_external_types::host_value::host_release_dispatch::drain();
 
-        // active_calls cleanup is done by ActiveCallGuard on drop.
+        // active_calls cleanup is done by RootCallWork on drop.
         //
         // Keep genuine engine errors intact. Cancellation is surfaced as a
         // `baml.panics.Cancelled` panic — either raised by the VM's `Await`
@@ -4312,11 +4410,11 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
-        let (_call_guard, cancel) =
-            ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
+        let (call_work, cancel) = RootCallWork::register(Arc::clone(self), host_call_id, cancel)?;
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
+        Box::pin(self.collect_before_call(&call_work.work_guard)).await;
         let mut thread = self.new_root_thread(cancel.clone()).await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
@@ -4696,7 +4794,7 @@ impl BexEngine {
     /// cancellation check point. If the ID is not active yet, reserve it with
     /// an already-cancelled token so the later call starts cancelled.
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
-        ActiveCallGuard::reserve_cancelled(self, call_id);
+        RootCallWork::reserve_cancelled(self, call_id);
         Ok(())
     }
 
@@ -5080,9 +5178,8 @@ impl BexEngine {
     /// Run GC if conditions are met (called at safepoints),
     /// or yield if another thread is running GC.
     ///
-    /// Uses the adaptive `should_collect()` policy to choose the appropriate
-    /// collection level (Minor or Major) based on live object counts and
-    /// allocation pressure.
+    /// Allocation spending requests a full collection. Other VMs cooperate
+    /// with both automatic and explicit collections through permit renewal.
     async fn gc_safepoint<T: RootHaver>(
         self: &Arc<Self>,
         mut permit: ActiveHeapPermit<T>,
@@ -5092,14 +5189,17 @@ impl BexEngine {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if i_am_checking {
+            let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
             if let Some(level) = self.heap.should_collect() {
                 let inactive = permit.release();
-                self.collect_garbage(level).await;
+                self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
             }
-            self.checking_gc.store(false, Ordering::Release);
-            permit
+            drop(checking);
+            // An explicit collector can request parking even if our policy is
+            // not due. Renew so that it can acquire this permit too.
+            permit.renew().await
         } else {
             // Another thread is checking; park if they've requested it.
             permit.renew().await
@@ -5117,10 +5217,10 @@ impl BexEngine {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if i_am_checking {
+            let _checking = GcCheckGuard(&self.checking_gc);
             if let Some(level) = self.heap.should_collect() {
-                self.collect_garbage(level).await;
+                self.collect_garbage_with_reason(level, "automatic").await;
             }
-            self.checking_gc.store(false, Ordering::Release);
         }
         // If we are not the checker, the actual checker (some other VM) is
         // either already waiting in `request_park` or about to. Our caller
@@ -5720,6 +5820,9 @@ impl BexEngine {
         call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
+        // Count the producer until its task exits, even if its future was
+        // cancelled or removed earlier. Created before the task is scheduled.
+        let work_guard = self.bex_work.register_work();
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
         // token. Firing the user token cancels the child; the watcher
@@ -5785,7 +5888,7 @@ impl BexEngine {
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
         // refresh re-snapshots on the child task's own thread later. The
-        // StartThread (with the spawn edge) was already emitted into the
+        // BexThreadStart (with the spawn edge) was already emitted into the
         // ring at the Spawn arm.
         self.prof_refresh_vm_ring(&mut child_vm);
         child_vm.set_entry_point(closure, &[]);
@@ -5806,9 +5909,9 @@ impl BexEngine {
             attr: baml_type::TyAttr::default(),
         };
         let task = async move {
-            // Declared first so it drops last: if this future is dropped at
+            // Outlives the execution locals (but not SpawnedWork): if dropped at
             // any await below (before the event loop takes over), the closer
-            // emits the child's EndFunction/EndThread (follow-up 11).
+            // emits the child's EndFunction/BexThreadEnd (follow-up 11).
             let mut prof_closer = SpawnProfCloser {
                 engine: Arc::clone(&engine),
                 prof_thread_id,
@@ -5849,7 +5952,7 @@ impl BexEngine {
                             );
                         }
                         // The armed `prof_closer` emits the profiling
-                        // closes (EndFunction{Cancelled} + EndThread{
+                        // closes (EndFunction{Cancelled} + BexThreadEnd{
                         // Cancelled}) when it drops at this return — the
                         // event loop that would otherwise close them never
                         // runs for a queued-then-cancelled spawn.
@@ -5870,7 +5973,7 @@ impl BexEngine {
             }
             // The entry call's id was minted by set_entry_point on the
             // spawning thread; its CallFunction is already in the ring.
-            // EndThread (ring) is emitted by the run_thread_event_loop
+            // BexThreadEnd (ring) is emitted by the run_thread_event_loop
             // wrapper on every exit path from here on.
             prof_closer.defuse();
             match engine
@@ -5889,7 +5992,7 @@ impl BexEngine {
             {
                 Ok(ThreadOutcome::SettledChild(_)) => {}
                 // The abnormal arms close any spans the event loop left open
-                // before the thread ends — the ring EndThread (emitted by the
+                // before the thread ends — the ring BexThreadEnd (emitted by the
                 // run_thread_event_loop wrapper) must never strand open spans.
                 Ok(ThreadOutcome::RootValue(_)) => {
                     tracing::error!(
@@ -5928,16 +6031,13 @@ impl BexEngine {
                 }
             }
         };
-        #[cfg(not(target_arch = "wasm32"))]
-        tokio::spawn(task);
-        #[cfg(target_arch = "wasm32")]
-        wasm_bindgen_futures::spawn_local(task);
+        SpawnedWork::new(work_guard, task).spawn();
 
         Ok(())
     }
 
     /// Runs a thread's event loop (see [`Self::run_thread_event_loop_inner`])
-    /// and closes its profiling lifecycle: one `EndThread` per `StartThread`,
+    /// and closes its profiling lifecycle: one `BexThreadEnd` per `BexThreadStart`,
     /// on every exit path (the inner loop has many early returns; thread
     /// join at shutdown makes the final commits visible to the consumer per
     /// plan §1).
@@ -5960,10 +6060,10 @@ impl BexEngine {
         let profile_thread = thread.vm.prof_ring.is_some();
         let prof_thread_id = thread.vm.prof_thread_id;
         let prof_boundary_handle = thread.vm.prof_boundary_handle;
-        // StartThread was already emitted before this function: roots in
+        // BexThreadStart was already emitted before this function: roots in
         // run_entry_point (right before `set_entry_point`, §7 decision 7 —
-        // StartThread-first is a wire invariant), children at the Spawn
-        // arm. This wrapper owns the matching EndThread on every exit path;
+        // BexThreadStart-first is a wire invariant), children at the Spawn
+        // arm. This wrapper owns the matching BexThreadEnd on every exit path;
         // queued-then-cancelled spawns (which never reach this loop) close
         // their lifecycle in spawn_thread_inner's task body.
         let result = self
@@ -5998,7 +6098,7 @@ impl BexEngine {
                 }
                 Err(_) => bex_events::prof::record::ThreadEndStatus::Errored,
             };
-            let committed = self.prof_emit(&bex_events::prof::record::RawRecord::EndThread {
+            let committed = self.prof_emit(&bex_events::prof::record::Marker::BexThreadEnd {
                 status,
                 thread_id: BexThreadId(prof_thread_id),
                 ts_ticks: bex_events::prof::clock::now_ticks(),
@@ -6122,7 +6222,7 @@ impl BexEngine {
                         self.capture_root_value(&thread, capture, value);
                     }
 
-                    let (return_value, _event_result) = if !copy_objects {
+                    let return_value = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
                             // SAFETY: the active thread holds the heap permit
                             // through `thread.proof()`.
@@ -6136,19 +6236,15 @@ impl BexEngine {
                             // (e.g. Union wrapping) is preserved; the bare
                             // unboxing fast-path stripped that.
                             if matches!(unsafe { ptr.get() }, Object::Float(_)) {
-                                let external = self.convert_vm_value_to_external_with_type(
+                                self.convert_vm_value_to_external_with_type(
                                     value,
                                     &return_type,
                                     &thread.vm,
                                     thread.proof(),
-                                )?;
-                                (external.clone(), external)
+                                )?
                             } else {
                                 let handle = self.heap.create_handle(ptr);
-                                (
-                                    BexExternalValue::Handle(handle),
-                                    self.vm_value_to_owned(thread.proof(), value),
-                                )
+                                BexExternalValue::Handle(handle)
                             }
                         } else {
                             let external = self.convert_vm_value_to_external_with_type(
@@ -6157,11 +6253,10 @@ impl BexEngine {
                                 &thread.vm,
                                 thread.proof(),
                             )?;
-                            let external = crate::conversion::coerce_return_to_declared_type(
+                            crate::conversion::coerce_return_to_declared_type(
                                 external,
                                 &return_type,
-                            )?;
-                            (external.clone(), external)
+                            )?
                         }
                     } else {
                         let external = self.convert_vm_value_to_external_with_type(
@@ -6170,11 +6265,7 @@ impl BexEngine {
                             &thread.vm,
                             thread.proof(),
                         )?;
-                        let external = crate::conversion::coerce_return_to_declared_type(
-                            external,
-                            &return_type,
-                        )?;
-                        (external.clone(), external)
+                        crate::conversion::coerce_return_to_declared_type(external, &return_type)?
                     };
 
                     return Ok(ThreadOutcome::RootValue(return_value));
@@ -6621,7 +6712,7 @@ impl BexEngine {
                     if child_profile_active {
                         let name = spawn_name.as_deref().unwrap_or("");
                         let committed = self.prof_emit(
-                            &bex_events::prof::record::RawRecord::StartThreadSpawn {
+                            &bex_events::prof::record::Marker::BexThreadStartSpawned {
                                 flags: 0,
                                 thread_id: BexThreadId(child_prof_thread_id),
                                 parent_thread_id: BexThreadId(thread.vm.prof_thread_id),
@@ -6673,6 +6764,17 @@ impl BexEngine {
                         future_ptr
                     };
                     thread.vm.stack.push(Value::object(future_ptr));
+
+                    // Spawn setup can yield to Tokio while retaining the
+                    // parent's heap permit. Cooperate only after the child
+                    // is registered and its future is rooted on our stack;
+                    // collection can now move both VMs' reachable objects.
+                    let gc_requested = self.heap.should_gc();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let gc_requested = gc_requested || self.park_requested.load(Ordering::Relaxed);
+                    if gc_requested {
+                        thread = self.gc_safepoint(thread).await;
+                    }
                 }
 
                 VmExecState::Await(future_id) => {
@@ -6994,7 +7096,6 @@ impl BexEngine {
 
     fn runtime_type_mount(
         vm: &BexVm,
-        alias: &str,
         export_name: &str,
         ptr: bex_vm_types::HeapPtr,
     ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
@@ -7003,11 +7104,12 @@ impl BexEngine {
                 message: format!("with_types entry `{export_name}` is not a type"),
             });
         };
-        // In the consumer compile world, a runtime declaration is spelled
-        // `alias.<item name>`: the mount surface is the only channel that
-        // names it there, whatever its home world called it. Compiled
-        // declarations from another dependency keep their qualified names;
-        // declarations local to this mounted package relocate to its alias.
+        // On the mount's wire a declaration local to the mounted package is
+        // `Local` — the consumer compile world resolves `Local` to the root
+        // it mounts this package as, under whichever aliases reach it — and a
+        // compiled declaration from another dependency keeps its qualified
+        // name; a runtime-created declaration has no name of its own beyond
+        // its item name, so it is local to the mount surface that carries it.
         let wire_head =
             |head: &bex_vm_types::TypeHead| -> Result<baml_type::TypeName, EngineError> {
                 if !head.is_resolved() {
@@ -7023,15 +7125,7 @@ impl BexEngine {
                                 "mounted type `{export_name}` names an unnameable compiled head"
                             ),
                         })?;
-                    return Ok(if name.is_local() {
-                        baml_type::QualifiedTypeName::new(
-                            baml_type::Name::new(alias),
-                            name.namespace().clone(),
-                            name.name().clone(),
-                        )
-                    } else {
-                        name
-                    });
+                    return Ok(name);
                 }
                 let item = match vm.get_object(head.ptr()) {
                     Object::Class(class) => class.name.item_name().clone(),
@@ -7046,13 +7140,9 @@ impl BexEngine {
                         });
                     }
                 };
-                Ok(baml_type::QualifiedTypeName::new(
-                    baml_type::Name::new(alias),
-                    Vec::new(),
-                    item,
-                ))
+                Ok(baml_type::QualifiedTypeName::local(item))
             };
-        let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty, EngineError> {
+        let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
             let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head| wire_head(head))?;
             Ok(baml_type::Ty::from(&mapped))
         };
@@ -7310,11 +7400,12 @@ impl BexEngine {
             let types = package
                 .mounted_types
                 .iter()
-                .map(|(name, ptr)| Self::runtime_type_mount(vm, alias.as_str(), name, *ptr))
+                .map(|(name, ptr)| Self::runtime_type_mount(vm, name, *ptr))
                 .collect::<Result<Vec<_>, _>>()?;
             packages.insert(
                 alias.to_string(),
                 bex_vm_types::RuntimePackageMount {
+                    identity: bex_vm_types::RuntimePackageIdentity::of(package_ptr),
                     interface_blob: package.interface_blob.clone(),
                     types,
                 },
@@ -7433,12 +7524,13 @@ impl BexEngine {
             let types = package
                 .mounted_types
                 .iter()
-                .map(|(name, ptr)| Self::runtime_type_mount(vm, alias.as_str(), name, *ptr))
+                .map(|(name, ptr)| Self::runtime_type_mount(vm, name, *ptr))
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| invalid(error.to_string()))?;
             packages.insert(
                 alias,
                 bex_vm_types::RuntimePackageMount {
+                    identity: bex_vm_types::RuntimePackageIdentity::of(ptr),
                     interface_blob: package.interface_blob.clone(),
                     types,
                 },
@@ -7468,26 +7560,151 @@ impl BexEngine {
         fn string(value: impl Into<String>) -> BexExternalValue {
             BexExternalValue::String(value.into().into())
         }
-        fn diagnostic(value: bex_vm_types::RuntimeCompileDiagnostic) -> BexExternalValue {
-            let span =
-                value
-                    .span
-                    .map_or(BexExternalValue::Null, |span| BexExternalValue::Instance {
-                        class_name: "reflect.Span".to_string(),
+        fn span(value: bex_vm_types::RuntimeSourceSpan) -> BexExternalValue {
+            BexExternalValue::Instance {
+                class_name: "reflect.Span".to_string(),
+                type_args: Vec::new(),
+                fields: indexmap::indexmap! {
+                    "file".to_string() => string(value.file),
+                    "start".to_string() => BexExternalValue::Int(i64::try_from(value.start).expect("source offsets fit BAML int")),
+                    "end".to_string() => BexExternalValue::Int(i64::try_from(value.end).expect("source offsets fit BAML int")),
+                },
+            }
+        }
+        fn highlights(values: Vec<bex_vm_types::RuntimeDiagnosticHighlight>) -> BexExternalValue {
+            let items = values
+                .into_iter()
+                .map(|value| {
+                    let kind = match value.kind {
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierType => {
+                            "identifier.type"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierFunction => {
+                            "identifier.function"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierField => {
+                            "identifier.field"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierVariable => {
+                            "identifier.variable"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierEnumVariant => {
+                            "identifier.enum_variant"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierAttribute => {
+                            "identifier.attribute"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::TypeExpression => {
+                            "type_expression"
+                        }
+                        bex_vm_types::RuntimeDiagnosticHighlightKind::Code => "code",
+                    };
+                    BexExternalValue::Instance {
+                        class_name: "reflect.DiagnosticHighlight".to_string(),
                         type_args: Vec::new(),
                         fields: indexmap::indexmap! {
-                            "file".to_string() => string(span.file),
-                            "start".to_string() => BexExternalValue::Int(i64::try_from(span.start).expect("source offsets fit BAML int")),
-                            "end".to_string() => BexExternalValue::Int(i64::try_from(span.end).expect("source offsets fit BAML int")),
+                            "start".to_string() => BexExternalValue::Int(i64::from(value.start)),
+                            "end".to_string() => BexExternalValue::Int(i64::from(value.end)),
+                            "kind".to_string() => string(kind),
                         },
-                    });
+                    }
+                })
+                .collect();
+            BexExternalValue::Array {
+                element_type: baml_type::RuntimeTy::unknown(),
+                items,
+            }
+        }
+        fn diagnostic(value: bex_vm_types::RuntimeCompileDiagnostic) -> BexExternalValue {
+            let span_value = value.span.map_or(BexExternalValue::Null, span);
+            let severity = match value.severity {
+                bex_vm_types::RuntimeDiagnosticSeverity::Error => "error",
+                bex_vm_types::RuntimeDiagnosticSeverity::Warning => "warning",
+                bex_vm_types::RuntimeDiagnosticSeverity::Info => "info",
+            };
+            let (phase, headline, primary_label, message_highlights, annotations, related_info) =
+                value.details.map_or_else(
+                    || {
+                        (
+                            BexExternalValue::Null,
+                            string(value.message.clone()),
+                            BexExternalValue::Null,
+                            highlights(Vec::new()),
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: Vec::new(),
+                            },
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: Vec::new(),
+                            },
+                        )
+                    },
+                    |details| {
+                        let phase = match details.phase {
+                            bex_vm_types::RuntimeDiagnosticPhase::Parse => "parse",
+                            bex_vm_types::RuntimeDiagnosticPhase::Hir => "hir",
+                            bex_vm_types::RuntimeDiagnosticPhase::Validation => "validation",
+                            bex_vm_types::RuntimeDiagnosticPhase::Type => "type",
+                        };
+                        let annotations = details
+                            .annotations
+                            .into_iter()
+                            .map(|annotation| BexExternalValue::Instance {
+                                class_name: "reflect.DiagnosticAnnotation".to_string(),
+                                type_args: Vec::new(),
+                                fields: indexmap::indexmap! {
+                                    "span".to_string() => span(annotation.span),
+                                    "message".to_string() => annotation.message.map_or(BexExternalValue::Null, string),
+                                    "message_highlights".to_string() => highlights(annotation.message_highlights),
+                                    "is_primary".to_string() => BexExternalValue::Bool(annotation.is_primary),
+                                },
+                            })
+                            .collect();
+                        let related_info = details
+                            .related_info
+                            .into_iter()
+                            .map(|related| BexExternalValue::Instance {
+                                class_name: "reflect.DiagnosticRelatedInfo".to_string(),
+                                type_args: Vec::new(),
+                                fields: indexmap::indexmap! {
+                                    "span".to_string() => span(related.span),
+                                    "message".to_string() => string(related.message),
+                                    "message_highlights".to_string() => highlights(related.message_highlights),
+                                    "file_path".to_string() => related.file_path.map_or(BexExternalValue::Null, string),
+                                },
+                            })
+                            .collect();
+                        (
+                            string(phase),
+                            string(details.headline),
+                            details.primary_label.map_or(BexExternalValue::Null, string),
+                            highlights(details.message_highlights),
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: annotations,
+                            },
+                            BexExternalValue::Array {
+                                element_type: baml_type::RuntimeTy::unknown(),
+                                items: related_info,
+                            },
+                        )
+                    },
+                );
             BexExternalValue::Instance {
                 class_name: "reflect.Diagnostic".to_string(),
                 type_args: Vec::new(),
                 fields: indexmap::indexmap! {
                     "code".to_string() => string(value.code),
                     "message".to_string() => string(value.message),
-                    "span".to_string() => span,
+                    "span".to_string() => span_value,
+                    "severity".to_string() => string(severity),
+                    "phase".to_string() => phase,
+                    "headline".to_string() => headline,
+                    "primary_label".to_string() => primary_label,
+                    "message_highlights".to_string() => message_highlights,
+                    "annotations".to_string() => annotations,
+                    "related_info".to_string() => related_info,
                 },
             }
         }
@@ -7651,6 +7868,62 @@ mod concurrent_tests {
         );
 
         drop(active_permit);
+    }
+
+    #[tokio::test]
+    async fn cancelling_automatic_collection_releases_checker_ownership() {
+        use std::{
+            sync::{Arc, atomic::Ordering},
+            time::Duration,
+        };
+
+        use sys_native::SysOpsExt;
+
+        use super::BexEngine;
+
+        let engine = Arc::new(
+            BexEngine::new(
+                baml_db::testing::compile_source("function Main() -> int { 1 }"),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+            )
+            .unwrap(),
+        );
+        let active = engine
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        // Keep a permit active so automatic GC waits after claiming the checker.
+        let mut tlab = bex_heap::Tlab::new_empty(engine.heap.clone());
+        while !engine.heap.should_gc() {
+            tlab.alloc_string("inline");
+        }
+        drop(tlab);
+        let checking_engine = engine.clone();
+        let task = tokio::spawn(async move {
+            checking_engine.maybe_collect_garbage().await;
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !engine.checking_gc.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!task.is_finished());
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(!engine.checking_gc.load(Ordering::Acquire));
+        assert!(engine.heap.should_gc());
+        drop(active);
+        tokio::time::timeout(Duration::from_secs(5), engine.maybe_collect_garbage())
+            .await
+            .unwrap();
+        assert!(!engine.heap.should_gc());
+        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+        engine.shutdown().await;
     }
 
     /// Test that demonstrates concurrent `call_function` is safe.

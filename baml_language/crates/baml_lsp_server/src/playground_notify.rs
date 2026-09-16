@@ -106,13 +106,29 @@ pub struct ProjectUpdate {
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
+/// One project the playground can be pointed at.
+///
+/// `path` is the project's identity everywhere else in this protocol: it is
+/// what `UpdateProject` and `OpenPlayground` name. `name` is what the package
+/// calls itself in `[package].name`, omitted entirely when it declares no
+/// name, which is most projects. A reader showing a project to a person uses
+/// the name when there is one and falls back to the directory, never to the
+/// unnamed default, which is the same string for every unnamed project.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectEntry {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 // ── Notifications ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
-    ListProjects { projects: Vec<String> },
+    ListProjects { projects: Vec<ProjectEntry> },
     #[serde(rename_all = "camelCase")]
     UpdateProject {
         project: String,
@@ -158,7 +174,7 @@ pub struct TestExpandError {
 
 // ── Projection from analysis facts ───────────────────────────────────────────
 
-/// Build the project's playground surface from a database snapshot.
+/// Build the playground surface of `package` from a database snapshot.
 ///
 /// `is_bex_current`/`generation` come from the engine runtime, and
 /// `diagnostics` from the LSP diagnostics candidate — both read on the owner
@@ -166,11 +182,12 @@ pub struct TestExpandError {
 /// two revisions' facts.
 pub fn build_project_update(
     db: &baml_db::ProjectDatabase,
+    package: baml_db::SourceRoot,
     is_bex_current: bool,
     generation: u64,
     diagnostics: Vec<ProjectDiagnostic>,
 ) -> ProjectUpdate {
-    let listing = baml_ide::list_functions_with_metadata(db);
+    let listing = baml_ide::list_functions_with_metadata(db, package);
 
     let functions = listing
         .functions

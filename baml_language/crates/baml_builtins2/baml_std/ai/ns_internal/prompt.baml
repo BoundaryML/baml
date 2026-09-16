@@ -22,6 +22,13 @@ function validate_output_type(
                         code: "E0159",
                         span: null,
                         message: message,
+                        severity: "error",
+                        phase: null,
+                        headline: message,
+                        primary_label: null,
+                        message_highlights: [],
+                        annotations: [],
+                        related_info: [],
                     }],
                 }
             }

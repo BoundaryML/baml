@@ -67,6 +67,16 @@ pub(crate) struct RuleMethodImpl<'r> {
 pub(crate) struct ImplResolver<'vm> {
     vm: &'vm BexVm,
     root_package: Option<bex_vm_types::HeapPtr>,
+    /// A value-owned dynamic world is not always the whole lexical world: a
+    /// runtime package may legally declare a local interface impl for a class
+    /// imported from one of its dependencies. Dispatch on that foreign class
+    /// must therefore search both the receiver owner's graph and the calling
+    /// package's graph. Explicit `for_package` reflection keeps this empty so
+    /// inspecting one package cannot accidentally see the caller's impls.
+    additional_package: Option<bex_vm_types::HeapPtr>,
+    /// Rules a registration proposes but has not published. They take part
+    /// in every lookup this resolver makes and are visible nowhere else.
+    staged_rules: &'vm [RuntimeImplRule],
 }
 
 impl<'vm> ImplResolver<'vm> {
@@ -74,6 +84,49 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: None,
+            additional_package: None,
+            staged_rules: &[],
+        }
+    }
+
+    /// Resolve in the world a registration would create, without publishing
+    /// it: `rules` join the candidates of every lookup, including the nested
+    /// obligations a blanket rule's bounds raise. That is what lets a batch be
+    /// judged as a whole — a `Gate` witness in the batch activates
+    /// `implements<T extends Gate> Pick for T` for the receiver, and a `Pick`
+    /// witness in the same batch is then an overlap.
+    pub(crate) fn with_staged_rules(self, rules: &'vm [RuntimeImplRule]) -> Self {
+        Self {
+            staged_rules: rules,
+            ..self
+        }
+    }
+
+    /// Coherence for one `concrete: I<args>` goal: exactly one rule in this
+    /// resolver's world (staged rules included) applies. Associated bindings
+    /// are outputs of a match, so two rows differing only there still overlap.
+    pub(crate) fn check_sole_implementation(
+        self,
+        concrete: &RealizedTy,
+        interface: bex_vm_types::HeapPtr,
+        args: &[RealizedTy],
+    ) -> Result<(), String> {
+        let bex_vm_types::Object::Interface(declaration) = self.vm.get_object(interface) else {
+            return Err("registration target is not an interface".into());
+        };
+        let head = TypeHead::new(interface, declaration.type_tag);
+        let applicable = self
+            .rules_for(head)
+            .iter()
+            .filter(|rule| self.requested_rule_args(rule, concrete, args).is_some())
+            .count();
+        if applicable == 1 {
+            Ok(())
+        } else {
+            Err(format!(
+                "overlapping implementations of `{}` for `{concrete}`",
+                declaration.name.display_name()
+            ))
         }
     }
 
@@ -84,17 +137,27 @@ impl<'vm> ImplResolver<'vm> {
         Self {
             vm,
             root_package: Some(package),
+            additional_package: None,
+            staged_rules: &[],
         }
     }
 
-    /// Resolve in the dynamic world that owns `value`, falling back to the
-    /// lexical frame's world for static values and primitives.
+    /// Resolve in every dynamic world relevant to a call on `value`: its
+    /// owning package (where runtime-created witnesses live) plus the lexical
+    /// frame's package (which may own an orphan-legal impl for an imported
+    /// receiver). Static values and primitives need only the lexical world.
     pub(crate) fn for_value(vm: &'vm BexVm, value: bex_vm_types::Value) -> Self {
         let package = vm.value_runtime_package(value);
         if package.is_null() {
             Self::new(vm)
         } else {
-            Self::for_package(vm, package)
+            let lexical = vm.current_runtime_package();
+            Self {
+                vm,
+                root_package: Some(package),
+                additional_package: (!lexical.is_null() && lexical != package).then_some(lexical),
+                staged_rules: &[],
+            }
         }
     }
 
@@ -122,6 +185,7 @@ impl<'vm> ImplResolver<'vm> {
             self.root_package
                 .unwrap_or_else(|| self.vm.current_runtime_package()),
         ];
+        packages.extend(self.additional_package);
         let mut seen = std::collections::HashSet::new();
         while let Some(package_ptr) = packages.pop() {
             if package_ptr.is_null() || !seen.insert(package_ptr) {
@@ -137,8 +201,15 @@ impl<'vm> ImplResolver<'vm> {
                 packages.extend(runtime.dependencies.iter().copied());
             }
         }
+        // A rule can be reachable both through the static index and through
+        // a package that owns it (a witnessed runtime class's private owner
+        // is also the world its instances resolve in). Each rule is one
+        // candidate, so a coherence count over the candidates is exact.
+        let mut seen_rules = std::collections::HashSet::new();
         let mut rules = pointers
             .into_iter()
+            .chain(self.vm.dynamic_dispatch.rules_of(iface_ptr))
+            .filter(|rule_ptr| seen_rules.insert(*rule_ptr))
             .filter_map(|rule_ptr| {
                 self.vm
                     .get_object(rule_ptr)
@@ -147,16 +218,10 @@ impl<'vm> ImplResolver<'vm> {
             })
             .collect::<Vec<_>>();
         rules.extend(
-            self.vm
-                .dynamic_dispatch
-                .rules_of(iface_ptr)
-                .into_iter()
-                .filter_map(|rule_ptr| {
-                    self.vm
-                        .get_object(rule_ptr)
-                        .as_impl_rule()
-                        .map(RuntimeImplRuleCandidate::Borrowed)
-                }),
+            self.staged_rules
+                .iter()
+                .filter(|rule| rule.interface_head == iface_ptr)
+                .map(RuntimeImplRuleCandidate::Borrowed),
         );
         rules
     }
@@ -270,7 +335,7 @@ impl<'vm> ImplResolver<'vm> {
         concrete_ty: &RealizedTy,
         iface_args: &[RealizedTy],
     ) -> Option<Vec<RealizedTy>> {
-        let type_args = self.rule_applies(rule, concrete_ty, &mut Vec::new())?;
+        let type_args = self.rule_applies(rule, concrete_ty, iface_args, &mut Vec::new())?;
         // Select on the interface's input args only (associated types are outputs).
         let rule_args: Vec<RealizedTy> = rule
             .interface_args
@@ -292,40 +357,70 @@ impl<'vm> ImplResolver<'vm> {
     /// spelled over the rule's own templates (`for_ty_pattern` ++
     /// `interface_args`) so it realizes against the match exactly like a
     /// provided row's frame (see the frame law on
-    /// [`MethodImpl`](bex_vm_types::types::MethodImpl)). `None` means the
-    /// interface has no such method, or the method is required and unprovided
-    /// — unreachable for accepted programs.
+    /// [`MethodImpl`](bex_vm_types::types::MethodImpl)).
+    ///
+    /// TOTAL for an accepted program. The compiler checks every virtual call
+    /// against the interface's declaration and proves every required method
+    /// provided, so each way this can fail to name a callee is an invariant
+    /// break and an `Err`, distinguished by kind: the rule's head is not an
+    /// interface ([`VmInternalError::ImplRuleHeadNotInterface`]), the
+    /// interface declares no such method
+    /// ([`VmInternalError::UndeclaredInterfaceMethod`]), a required method is
+    /// unprovided ([`VmInternalError::UnprovidedRequiredMethod`]), or a
+    /// declared default was never bound
+    /// ([`VmInternalError::UnboundInterfaceDefault`]). There is deliberately
+    /// no "not found" answer: collapsing these into one let the shim lanes
+    /// render structurally over a broken image. A reflective probe ("does
+    /// this impl have `m`?") must consult the interface's declaration first
+    /// and only then resolve here.
     pub(crate) fn rule_method_impl<'r>(
         self,
         rule: &'r RuntimeImplRule,
         method: &str,
-    ) -> Option<RuleMethodImpl<'r>> {
-        use bex_vm_types::types::MethodImpl;
+    ) -> Result<RuleMethodImpl<'r>, VmInternalError> {
+        use bex_vm_types::types::{MethodImpl, ObjectType};
         if let Some(provided) = rule.methods.get(method) {
-            return Some(RuleMethodImpl {
+            return Ok(RuleMethodImpl {
                 method: Cow::Borrowed(provided),
                 is_default: false,
             });
         }
-        let bex_vm_types::Object::Interface(iface) = self.vm.get_object(rule.interface_head) else {
-            return None;
+        let head_object = self.vm.get_object(rule.interface_head);
+        let bex_vm_types::Object::Interface(iface) = head_object else {
+            return Err(VmInternalError::ImplRuleHeadNotInterface {
+                found: ObjectType::of(head_object),
+                method: method.to_string(),
+            });
         };
-        let method_def = iface.methods.iter().find(|m| m.name.as_str() == method)?;
-        // A wire-declared default must have been bound to its pointer at
-        // load/graft; a null alongside `default: Some(..)` is a binding bug,
-        // not an absent default.
-        debug_assert!(
-            method_def.default.is_none() || !method_def.default_fn.is_null(),
-            "interface default for `{method}` declared but unbound"
-        );
+        let interface = || iface.name.render_dotted(false);
+        let Some(method_def) = iface.methods.iter().find(|m| m.name.as_str() == method) else {
+            return Err(VmInternalError::UndeclaredInterfaceMethod {
+                interface: interface(),
+                method: method.to_string(),
+            });
+        };
         let default_fn = method_def.default_fn;
         if default_fn.is_null() {
-            return None;
+            return Err(match method_def.default {
+                // A wire-declared default must have been bound to its pointer
+                // at load/graft; a null alongside `default: Some(..)` is a
+                // binding bug, not an absent default.
+                Some(_) => VmInternalError::UnboundInterfaceDefault {
+                    interface: interface(),
+                    method: method.to_string(),
+                },
+                // No default and no provided row: the compiler rejects such
+                // an impl, so this rule table is corrupt or stale.
+                None => VmInternalError::UnprovidedRequiredMethod {
+                    interface: interface(),
+                    method: method.to_string(),
+                },
+            });
         }
         let mut frame = Vec::with_capacity(1 + rule.interface_args.len());
         frame.push(rule.for_ty_pattern.clone());
         frame.extend(rule.interface_args.iter().cloned());
-        Some(RuleMethodImpl {
+        Ok(RuleMethodImpl {
             method: Cow::Owned(MethodImpl {
                 fqn: default_fn,
                 frame,
@@ -426,7 +521,7 @@ impl<'vm> ImplResolver<'vm> {
         // mutably inside the predicate, so the candidates are collected first.
         let candidates = self.rules_for(iface);
         let proven = candidates.into_iter().any(|rule| {
-            self.rule_applies(&rule, concrete_ty, stack)
+            self.rule_applies(&rule, concrete_ty, requested_args, stack)
                 .is_some_and(|bindings| {
                     self.interface_request_matches(
                         &rule,
@@ -440,12 +535,15 @@ impl<'vm> ImplResolver<'vm> {
         proven
     }
 
-    /// Match a rule's `for_ty_pattern` against `concrete_ty`, then discharge its
-    /// bounds. On success returns the bound generic args in de Bruijn order.
+    /// Match a rule's `for_ty_pattern` against `concrete_ty`, bind whatever
+    /// generics that leaves open from the request's interface args, then
+    /// discharge the rule's bounds. On success returns the bound generic args
+    /// in de Bruijn order.
     fn rule_applies(
         self,
         rule: &RuntimeImplRule,
         concrete_ty: &RealizedTy,
+        requested_args: &[RealizedTy],
         stack: &mut Vec<Obligation>,
     ) -> Option<Vec<RealizedTy>> {
         let base = concrete_base(concrete_ty);
@@ -454,8 +552,20 @@ impl<'vm> ImplResolver<'vm> {
         if !self.match_template(&rule.for_ty_pattern, concrete_ty, &mut bindings) {
             return None;
         }
-        // The for-type pattern must constrain every generic param — a param the
-        // pattern never mentions could not be inferred from the receiver.
+        // A generic the for-type pattern never mentions is bound from the
+        // interface arguments instead (`implements<T, E> Modifier<T, E> for
+        // Limit`): unify the rule's interface args with the requested ones,
+        // into the same bindings. A slot that stays open cannot be inferred
+        // from this request, so the rule does not apply. A fully constrained
+        // rule takes the identical path it always has: this unification only
+        // runs when the pattern left something open, and an empty request (a
+        // non-generic interface) has nothing to bind.
+        if bindings.iter().any(Option::is_none)
+            && !requested_args.is_empty()
+            && !self.all_match(&rule.interface_args, requested_args, &mut bindings)
+        {
+            return None;
+        }
         let type_args: Vec<RealizedTy> = bindings.into_iter().collect::<Option<_>>()?;
 
         // Bounds as nested obligations (rustc winnowing): every interface in a param's

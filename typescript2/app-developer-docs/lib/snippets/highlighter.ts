@@ -7,7 +7,7 @@ import {
 
 function createDocsHighlighter() {
   return createHighlighter({
-    langs: [bamlGrammar, 'toml'],
+    langs: [bamlGrammar, 'toml', 'typescript', 'rust'],
     themes: ['github-light', 'github-dark'],
   });
 }
@@ -19,15 +19,17 @@ function getHighlighter(): ReturnType<typeof createDocsHighlighter> {
   return highlighterPromise;
 }
 
-function registeredLanguage(language: 'baml' | 'toml'): BundledLanguage {
-  if (language === 'toml') return language;
+function registeredLanguage(
+  language: 'baml' | 'toml' | 'typescript' | 'rust',
+): BundledLanguage {
+  if (language !== 'baml') return language;
   // SAFETY: createDocsHighlighter registers the canonical custom grammar named baml.
   return language as BundledLanguage;
 }
 
 export async function highlightCode(
   code: string,
-  language: 'baml' | 'toml',
+  language: 'baml' | 'toml' | 'typescript' | 'rust',
 ): Promise<{ dark: ThemedToken[][]; light: ThemedToken[][] }> {
   const highlighter = await getHighlighter();
   const registered = registeredLanguage(language);

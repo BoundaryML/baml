@@ -410,6 +410,130 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 // model switch inside one provider counts as a different client, exactly like
 // pi's provider+api+model comparison.
 
+// ---------------------------------------------------------------------------
+// Content blocks on the wire. Every turn a client lowers — a rendered prompt
+// message, a journal user turn, a tool result, a model turn — is a list of
+// `root.content.Block`, so each client has ONE lowering path per block
+// kind and declares, beside it, what it does with each kind at each position:
+//
+//   Accept   lower natively at that position;
+//   Degrade  keep the text in place and move the media into one `user` turn
+//            after the run of tool results it came from (`degrade_tool_media`
+//            below) — lowering stays pure, the journal keeps the original
+//            event;
+//   Reject   a typed client error before any request is sent.
+
+/// A rendered prompt message's parts as content blocks: a `string` part is
+/// `Text`, a media part is `Media` with null provenance. The rendered prompt
+/// then lowers through the same path as the journal's turns.
+function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
+    let out: root.content.Block[] = [];
+    for (let part in message.parts) {
+        match (part) {
+            let text: string => {
+                out.push(root.content.Text { text: text });
+                null
+            },
+            let media: root.MediaPart => {
+                out.push(
+                    root.content.Media { media: media, provider_id: null, revised_prompt: null },
+                );
+                null
+            },
+        };
+    }
+    out
+}
+
+/// The name of the tool a journal call id belongs to: the `ToolUse` block in
+/// the assistant turn that issued it. Null for an id no assistant turn issued.
+function tool_name(j: root.Journal, id: string) -> string? {
+    for (let event in j.entries()) {
+        if let assistant: root.events.AssistantMessage = event {
+            for (let block in assistant.content) {
+                if let use: root.content.ToolUse = block {
+                    if (use.id == id) {
+                        return use.name;
+                    }
+                }
+            }
+        }
+    }
+    null
+}
+
+/// Degrade, as a journal rewrite. A client that carries only some media
+/// kinds inside a tool result (`carries`, by `kind()`) lowers the copy of `j`
+/// this returns: every other media block has left its result and, behind a
+/// one-line note naming the tool, forms ONE `user` turn after the LAST result
+/// of the same assistant turn. The results of one turn stay contiguous (Chat
+/// Completions, Converse and Responses all reject a `user` message between
+/// two of them), `Text` stays where it was, and a result left with no text
+/// keeps the `[audio]`-style placeholder so no client sends an empty result.
+/// Lowering stays pure: the caller's journal is untouched and the trace still
+/// shows the original events.
+function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal {
+    let out: root.events.Event[] = [];
+    // moved out of the current run of tool results, each behind its note
+    let attached: root.content.Block[] = [];
+    for (let event in j.entries()) {
+        match (event) {
+            let completed: root.events.ToolCompleted => {
+                let inline: root.content.Block[] = [];
+                let moved: root.content.Block[] = [];
+                for (let block in completed.content) {
+                    match (block) {
+                        let text: root.content.Text => {
+                            inline.push(text);
+                            null
+                        },
+                        let media: root.content.Media => {
+                            if (carries.includes(media.kind())) {
+                                inline.push(media);
+                            } else {
+                                moved.push(media);
+                            }
+                            null
+                        },
+                    };
+                }
+                if (moved.length() > 0) {
+                    if (inline.length() == 0) {
+                        inline.push(root.content.Text { text: root.content.text(moved) });
+                    }
+                    let tool = tool_name(j, completed.id) ?? completed.id;
+                    attached.push(
+                        root.content.Text {
+                            text: "attached from the result of tool `" + tool + "`",
+                        },
+                    );
+                    for (let block in moved) {
+                        attached.push(block);
+                    }
+                }
+                out.push(root.events.ToolCompleted { id: completed.id, content: inline });
+                null
+            },
+            let failed: root.events.ToolFailed => {
+                out.push(failed);
+                null
+            },
+            _ => {
+                if (attached.length() > 0) {
+                    out.push(root.events.UserMessage { content: attached, metadata: {} });
+                    attached = [];
+                }
+                out.push(event);
+                null
+            },
+        };
+    }
+    if (attached.length() > 0) {
+        out.push(root.events.UserMessage { content: attached, metadata: {} });
+    }
+    root.Journal { log: out }
+}
+
 /// Make one run's journal safe to replay to `client_id`, and return the
 /// sanitized copy. Every client should lower
 /// `ai.wire.sanitize_for_client(input.journal, self.id())` instead of

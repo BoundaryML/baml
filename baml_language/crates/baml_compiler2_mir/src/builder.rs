@@ -102,6 +102,40 @@ impl<'db> MirBuilder<'db> {
         id
     }
 
+    /// Declare a local a closure captures, and give it its cell.
+    ///
+    /// A non-parameter local is celled right here, in the current block: a
+    /// cell is created where its binding is created, so a declaration that
+    /// runs once per loop iteration hands each iteration's closures their own
+    /// cell. Emit the initializing store after this, never before. A
+    /// parameter (`_1..=_n`) is celled by the frame preamble instead, since the
+    /// caller has already written its value into the slot.
+    pub(crate) fn declare_captured_local(
+        &mut self,
+        name: Option<Name>,
+        ty: RuntimeTy,
+        span: Option<Span>,
+    ) -> Local {
+        let local = Local(self.locals.len());
+        self.locals.push(LocalDecl {
+            name,
+            ty,
+            span,
+            scope_span: None,
+            is_captured: true,
+        });
+        if local.0 > self.arity {
+            self.push_statement(
+                StatementKind::FreshCell {
+                    local,
+                    carry_value: false,
+                },
+                None,
+            );
+        }
+        local
+    }
+
     /// Allocate a temporary (unnamed local).
     pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
         self.declare_local(None, ty, None)
@@ -120,12 +154,14 @@ impl<'db> MirBuilder<'db> {
         self.locals[local.0].ty.clone()
     }
 
-    /// Get a mutable reference to a local declaration.
-    ///
-    /// Used by Phase 4 to set `is_captured = true` after lowering the function body
-    /// but before calling `build()`.
-    pub(crate) fn local_decl_mut(&mut self, local: Local) -> &mut LocalDecl {
-        &mut self.locals[local.0]
+    /// The declaration of a local.
+    pub(crate) fn local_decl(&self, local: Local) -> &LocalDecl {
+        &self.locals[local.0]
+    }
+
+    /// Refine a local's declared type once TIR has a more specific one.
+    pub(crate) fn set_local_ty(&mut self, local: Local, ty: RuntimeTy) {
+        self.locals[local.0].ty = ty;
     }
 
     // ========================================================================
@@ -229,9 +265,20 @@ impl<'db> MirBuilder<'db> {
         self.push_statement(StatementKind::Drop(place), None);
     }
 
-    /// Emit a fresh-cell statement for a loop variable.
-    pub(crate) fn fresh_cell(&mut self, local: Local) {
-        self.push_statement(StatementKind::FreshCell(local), None);
+    /// Give a captured local a new cell holding its current value, so the
+    /// closures that captured the old cell stop sharing it with what follows.
+    pub(crate) fn recell_with_current_value(&mut self, local: Local) {
+        debug_assert!(
+            self.locals[local.0].is_captured,
+            "recell of {local}, which no closure captures"
+        );
+        self.push_statement(
+            StatementKind::FreshCell {
+                local,
+                carry_value: true,
+            },
+            None,
+        );
     }
 
     /// Emit a nop statement.
@@ -386,46 +433,35 @@ impl<'db> MirBuilder<'db> {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
-        self.call_with_runtime_type_check(
-            callee,
-            args,
-            ntypeargs,
-            false,
-            runtime_id,
-            destination,
-            target,
-            unwind,
-        );
-    }
-
-    /// Emit a call whose explicit type arguments may require the M-5/M-6
-    /// runtime gate.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn call_with_runtime_type_check(
-        &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
-        ntypeargs: usize,
-        runtime_type_check: bool,
-        runtime_id: Option<Operand<'db>>,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
         );
         self.set_terminator(Terminator::Call {
+            argument_layout: None,
             callee,
             args,
             ntypeargs,
-            runtime_type_check,
             runtime_id,
             destination,
             target,
             unwind,
         });
+    }
+
+    /// Attach the checked argument layout to the call terminator just emitted.
+    pub(crate) fn set_call_layout(&mut self, layout: Option<baml_type::CallLayout>) {
+        match &mut self.current_block_mut().terminator {
+            Some(
+                Terminator::Call {
+                    argument_layout, ..
+                }
+                | Terminator::VirtualCall {
+                    argument_layout, ..
+                },
+            ) => *argument_layout = layout,
+            _ => unreachable!("call layout requires a call terminator"),
+        }
     }
 
     /// Emit an open-world virtual interface-method call. The implementation is
@@ -469,34 +505,6 @@ impl<'db> MirBuilder<'db> {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
-        self.virtual_call_with_runtime_type_check(
-            iface,
-            method,
-            args,
-            ntypeargs,
-            false,
-            runtime_id,
-            destination,
-            target,
-            unwind,
-        );
-    }
-
-    /// Emit a virtual call whose explicit type arguments may require the
-    /// M-5/M-6 runtime gate.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn virtual_call_with_runtime_type_check(
-        &mut self,
-        iface: baml_type::TyTemplateInterface,
-        method: String,
-        args: Vec<Operand<'db>>,
-        ntypeargs: usize,
-        runtime_type_check: bool,
-        runtime_id: Option<Operand<'db>>,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "VirtualCall destination must be a local place"
@@ -506,11 +514,11 @@ impl<'db> MirBuilder<'db> {
             "VirtualCall must carry at least the receiver value argument"
         );
         self.set_terminator(Terminator::VirtualCall {
+            argument_layout: None,
             iface,
             method,
             args,
             ntypeargs,
-            runtime_type_check,
             runtime_id,
             destination,
             target,

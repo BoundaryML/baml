@@ -41,7 +41,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use crate::{Freshness, FunctionParamMode, Name, TyAttr, TypeName};
+use crate::{DeclName, Freshness, FunctionParamMode, Name, TyAttr};
 
 // -- Flags --------------------------------------------------------------------
 
@@ -244,7 +244,7 @@ impl InferInterface {
     /// order-insensitivity invariant (and `Interface::new`'s signature —
     /// slices sort in place, no `Vec` needed).
     pub fn new(
-        name: TypeName,
+        name: DeclName,
         generics: Box<[Ty]>,
         mut associated_types: Box<[(Name, Ty)]>,
     ) -> InferInterface {
@@ -990,7 +990,7 @@ mod tests {
         use crate::Ty as P;
         let a = TyAttr::default;
         let int = || P::Int { attr: a() };
-        let name = || TypeName::local(Name::new("Foo"));
+        let name = || crate::test_roots::local(Name::new("Foo"));
         vec![
             P::Int { attr: a() },
             P::Bigint { attr: a() },

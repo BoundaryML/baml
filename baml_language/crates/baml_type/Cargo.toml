@@ -10,3 +10,6 @@ baml_type_macros = { workspace = true }
 bitflags = { workspace = true }
 borsh = { workspace = true }
 rustc-hash = { workspace = true }
+
+[dev-dependencies]
+salsa = { workspace = true }

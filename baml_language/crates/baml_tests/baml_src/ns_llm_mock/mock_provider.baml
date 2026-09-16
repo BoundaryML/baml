@@ -430,3 +430,63 @@ function mock_sse_events_roundtrip() -> string {
 test "mock_sse_events_roundtrip" {
     assert.equal(mock_sse_events_roundtrip(), "event: a\ndata: 1 / event: b\ndata: 2")
 }
+
+// ─── shared journal fixture: media in tool results and user turns ────────────
+
+/// The seed for every client's Accept / Degrade / Reject test: one assistant
+/// turn issuing two tool calls, a text-only result for the first (`call_text`,
+/// tool `lookup`), a result carrying text plus `media` for the second
+/// (`call_media`, tool `capture`), then a user turn carrying text plus the
+/// same `media`. Each client test asserts where the media landed on the wire
+/// and that the text-only result kept its plain-string shape.
+function media_journal(client_id: string, media: image | audio | video | pdf) -> ai.Journal {
+    let args: map<string, unknown> = {};
+    ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.ToolUse { id: "call_text", name: "lookup", args: args },
+                    ai.content.ToolUse { id: "call_media", name: "capture", args: args },
+                ],
+                client_id: client_id,
+            },
+            ai.events.ToolCompleted.new("call_text", "sunny in SF"),
+            ai.events.ToolCompleted.of("call_media", ["captured:", media]),
+            ai.events.UserMessage.of(["Screenshot after the tool ran:", media]),
+        ],
+    }
+}
+
+/// Two results for one assistant turn where the media-only result comes
+/// FIRST: a Degrade must still keep both results contiguous and attach the
+/// media after the second one, and the media-only result must not lower to an
+/// empty tool result.
+function parallel_media_journal(client_id: string, media: image | audio | video | pdf) -> ai.Journal {
+    let args: map<string, unknown> = {};
+    ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.ToolUse { id: "call_media", name: "capture", args: args },
+                    ai.content.ToolUse { id: "call_text", name: "lookup", args: args },
+                ],
+                client_id: client_id,
+            },
+            ai.events.ToolCompleted.of("call_media", [media]),
+            ai.events.ToolCompleted.new("call_text", "sunny in SF"),
+        ],
+    }
+}
+
+/// The one-line note a Degrade moves media behind.
+function degrade_note(tool: string) -> string {
+    "attached from the result of tool `" + tool + "`"
+}
+
+function media_png() -> image {
+    baml.media.Image.from_base64("SGVsbG8=", "image/png")
+}
+
+function media_mp3() -> audio {
+    baml.media.Audio.from_base64("QUJD", "audio/mp3")
+}

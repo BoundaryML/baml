@@ -1,0 +1,56 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0147
+
+  × type inference failed; write the type explicitly
+    ╭─[scoped_type_binding_forms.baml:12:22]
+ 12 │     type T = Wrapper<_>
+    ·                      ─
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:20:24]
+ 20 │     type T = unreflect(x)
+    ·                        ┬
+    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `unknown`
+    ╰────
+
+  [hir] E0106
+
+  × `@alias` is only allowed on class fields and enum variants; remove it here
+    ╭─[scoped_type_binding_forms.baml:38:27]
+ 38 │     type T = unreflect(t) @alias("x")
+    ·                           ─────┬─────
+    ·                                ╰── field attribute here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[scoped_type_binding_forms.baml:46:22]
+ 46 │     type T = Wrapper<unreflect(t)>
+    ·                      ──────┬─────
+    ·                            ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
+    ╰────
+
+  [hir] E0168
+
+  × this runtime type must be given a name before it can be used here
+    ╭─[scoped_type_binding_forms.baml:47:15]
+ 47 │     type U = (unreflect(t))
+    ·               ──────┬─────
+    ·                     ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:54:24]
+ 54 │     type T = unreflect(t)
+    ·                        ┬
+    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `reflect.Type | null`
+    ╰────

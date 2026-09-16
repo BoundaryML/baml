@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use baml_db::{ProjectDatabase, baml_compiler2_hir};
+use baml_db::{ProjectDatabase, SourceRoot, baml_compiler2_hir};
 use baml_ide::{ResolvedTarget, SymbolDescription, describe};
 use clap::Args;
 
@@ -96,12 +96,18 @@ pub struct DescribeArgs {
     pub export: bool,
 }
 
-/// Find FQNs across the user and builtin packages that are fuzzy-similar to `name`.
+/// Find FQNs across the packages `viewer` can name — its own and the ones it
+/// reaches by name — that are fuzzy-similar to `name`.
 ///
 /// Used to power "did you mean?" hints when a path doesn't resolve. Returns up
 /// to `limit` candidates sorted by Jaro-Winkler similarity (descending).
-pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<String> {
-    suggest_similar_kinded(db, name, limit)
+pub fn suggest_similar(
+    db: &ProjectDatabase,
+    viewer: SourceRoot,
+    name: &str,
+    limit: usize,
+) -> Vec<String> {
+    suggest_similar_kinded(db, viewer, name, limit)
         .into_iter()
         .map(|(path, _)| path)
         .collect()
@@ -111,21 +117,27 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
 /// (`None` for namespace/package paths) so callers can color the leaf by kind.
 pub fn suggest_similar_kinded(
     db: &ProjectDatabase,
+    viewer: SourceRoot,
     name: &str,
     limit: usize,
 ) -> Vec<(String, Option<baml_ide::DefinitionKind>)> {
-    use baml_compiler2_hir::package::{PackageId, package_items};
+    use baml_compiler2_hir::package::package_items;
 
     type Kind = Option<baml_ide::DefinitionKind>;
     let mut all_paths: Vec<(String, Kind)> = Vec::new();
 
-    // User package: items (kinded) + namespace dotted paths (no kind).
-    let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-    for entry in baml_ide::list_package_items(db, user_pkg) {
+    // A suggestion is a suggestion, so the stdlib's internal helpers stay
+    // out of it — unless the name that failed to resolve reached for one,
+    // which is exactly when suggesting its neighbours helps.
+    let internals = baml_ide::Internals::for_query(name);
+
+    // The viewer's own package: items (kinded) + namespace dotted paths (no
+    // kind).
+    for entry in baml_ide::list_package_items(db, viewer, internals) {
         all_paths.push((entry.fqn(), Some(entry.kind)));
     }
-    let user_pkg_items = package_items(db, user_pkg);
-    for ns_path in user_pkg_items.namespaces.keys() {
+    let own_items = package_items(db, viewer);
+    for ns_path in own_items.namespaces.keys() {
         if !ns_path.is_empty() {
             all_paths.push((
                 ns_path
@@ -138,11 +150,12 @@ pub fn suggest_similar_kinded(
         }
     }
 
-    // Builtin packages: bare package name + item paths + namespaces.
-    for pkg_name in baml_ide::non_workspace_package_names(db) {
+    // Every package the viewer reaches by name: the name itself + item paths
+    // + namespaces.
+    for dependency in viewer.dependencies(db) {
+        let (pkg_name, pkg) = (&dependency.name, dependency.root);
         all_paths.push((pkg_name.as_str().to_string(), None));
-        let pkg = PackageId::new(db, pkg_name.clone());
-        for entry in baml_ide::list_package_items(db, pkg) {
+        for entry in baml_ide::list_package_items(db, pkg, internals) {
             all_paths.push((entry.fqn(), Some(entry.kind)));
         }
         let pkg_info = package_items(db, pkg);
@@ -193,8 +206,8 @@ pub fn suggest_similar_kinded(
 }
 
 /// Print a "Did you mean?" hint for `name` to stderr if any similar paths exist.
-fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
-    let suggestions = suggest_similar_kinded(db, name, 5);
+fn print_did_you_mean(db: &ProjectDatabase, viewer: SourceRoot, name: &str) {
+    let suggestions = suggest_similar_kinded(db, viewer, name, 5);
     if !suggestions.is_empty() {
         eprintln!();
         eprintln!("did you mean:");
@@ -207,19 +220,24 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
     }
 }
 
-/// Dispatch a name string to a `ResolvedTarget`.
+/// Dispatch a name string to a `ResolvedTarget`, resolving from `viewer` —
+/// the user's package.
 ///
-/// Handles the package-name prefix routing (user vs. builtin packages) and
-/// delegates within-package path resolution to `baml_ide::resolve_target`.
+/// Handles the package-name prefix routing (the viewer's own package vs. the
+/// packages it reaches by name) and delegates within-package path resolution
+/// to `baml_ide::resolve_target`.
 ///
-/// - Empty string → `Package(user)`
+/// - Empty string → `Package(viewer)`
 /// - `"baml"` → `Package(baml)`
 /// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
-/// - `"foo.bar.Baz"` → `resolve_target(user_pkg, "foo.bar.Baz")` → `Item`
-pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTarget<'db>> {
+/// - `"foo.bar.Baz"` → `resolve_target(viewer, "foo.bar.Baz")` → `Item`
+pub fn dispatch<'db>(
+    db: &'db ProjectDatabase,
+    viewer: SourceRoot,
+    name: &str,
+) -> Option<ResolvedTarget<'db>> {
     if name.is_empty() {
-        let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-        return Some(ResolvedTarget::Package(user_pkg));
+        return Some(ResolvedTarget::Package(viewer));
     }
 
     // Lowercase primitive/keyword aliases resolve to their builtin `baml`
@@ -237,18 +255,18 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
         return Some(ResolvedTarget::Keyword(name.to_string()));
     }
 
-    // Force user-package resolution with `root.` prefix.
+    // Force own-package resolution with the `root.` prefix.
     if let Some(rest) = name.strip_prefix("root.") {
-        let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-        return baml_ide::resolve_target(db, user_pkg, rest);
+        return baml_ide::resolve_target(db, viewer, rest);
     }
 
     let (first, rest) = name.split_once('.').unwrap_or((name, ""));
 
-    // Builtin package shadows user namespace with same name.
-    let builtin_packages = baml_ide::non_workspace_package_names(db);
-    if builtin_packages.iter().any(|pkg| pkg.as_str() == first) {
-        let pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new(first));
+    // A package the viewer reaches by name shadows a namespace of its own
+    // spelled the same.
+    if let Some(pkg) =
+        baml_compiler2_hir::package::dependency_named(db, viewer, &baml_db::Name::new(first))
+    {
         return if rest.is_empty() {
             Some(ResolvedTarget::Package(pkg))
         } else {
@@ -256,9 +274,8 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
         };
     }
 
-    // User package.
-    let user_pkg = baml_compiler2_hir::package::sole_workspace_package(db);
-    if let Some(target) = baml_ide::resolve_target(db, user_pkg, name) {
+    // The viewer's own package.
+    if let Some(target) = baml_ide::resolve_target(db, viewer, name) {
         return Some(target);
     }
 
@@ -277,7 +294,7 @@ fn resolve_unqualified_builtin_member<'db>(
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
     let (class_name, _) = name.split_once('.')?;
-    let baml_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("baml"));
+    let baml_pkg = baml_compiler2_hir::package::lang_roots(db).get(baml_db::LangPackage::Baml)?;
     let baml_items = baml_compiler2_hir::package::package_items(db, baml_pkg);
     let root_ns: Vec<baml_db::Name> = Vec::new();
     let class_name = baml_db::Name::new(class_name);
@@ -302,7 +319,7 @@ impl DescribeArgs {
         // the whole-package aggregates, which otherwise derive serially.
         let _ = session.warm_prep_seeds_only();
         session.prime();
-        let (db, from) = (session.db, session.resolved.root);
+        let (db, package, from) = (session.db, session.package, session.resolved.root);
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {
@@ -312,16 +329,25 @@ impl DescribeArgs {
         }
 
         let name = self.name.as_deref().unwrap_or("");
+        // A listing is a menu of a package or namespace, so the stdlib's
+        // internal helpers stay out of it — by the same rule every other
+        // surface uses: what the reader wrote decides.
+        let listed_internals = baml_ide::Internals::for_query(name);
 
         // ── --search: names and docstrings, rather than name resolution ─────
         if self.search {
-            let mut packages = vec![baml_compiler2_hir::package::sole_workspace_package(&db)];
-            packages.extend(
-                baml_ide::non_workspace_package_names(&db)
-                    .into_iter()
-                    .map(|pkg| baml_compiler2_hir::package::PackageId::new(&db, pkg)),
-            );
-            let hits = baml_ide::search_ranked(&db, &packages, name, usize::from(self.limit));
+            // The user's package and every package it reaches by name — the
+            // ones a hit's path can address.
+            let packages: Vec<SourceRoot> = std::iter::once(package)
+                .chain(
+                    package
+                        .dependencies(&db)
+                        .iter()
+                        .map(|dependency| dependency.root),
+                )
+                .collect();
+            let hits =
+                baml_ide::search_ranked(&db, package, &packages, name, usize::from(self.limit));
             if self.json {
                 println!(
                     "{}",
@@ -336,7 +362,7 @@ impl DescribeArgs {
                 // for `iterate` matches no docstring, because they all say
                 // "iterator", but it is close enough to a name to be offered.
                 println!("no symbol matches: {name}");
-                print_did_you_mean(&db, name);
+                print_did_you_mean(&db, package, name);
             } else {
                 for hit in &hits {
                     let summary = hit
@@ -352,13 +378,13 @@ impl DescribeArgs {
 
         // ── --export: the whole-package surface document ────────────────────
         if self.export {
-            let Some(ResolvedTarget::Package(package)) = dispatch(&db, name) else {
+            let Some(ResolvedTarget::Package(exported)) = dispatch(&db, package, name) else {
                 eprintln!(
                     "error: `--export` takes a package name (`baml`, `user`, …), got `{name}`"
                 );
                 return Ok(crate::ExitCode::Other);
             };
-            let export = baml_ide::export_package(&db, package);
+            let export = baml_ide::export_package(&db, exported);
             println!(
                 "{}",
                 serde_json::to_string_pretty(&export)
@@ -367,7 +393,7 @@ impl DescribeArgs {
             return Ok(crate::ExitCode::Success);
         }
 
-        let target = dispatch(&db, name);
+        let target = dispatch(&db, package, name);
 
         match target {
             Some(ResolvedTarget::Keyword(ref kw)) => {
@@ -384,7 +410,7 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Package(pkg)) => {
-                let entries = baml_ide::list_package_items(&db, pkg);
+                let entries = baml_ide::list_package_items(&db, pkg, listed_internals);
                 if entries.is_empty() {
                     eprintln!("no symbols found");
                     return Ok(crate::ExitCode::Other);
@@ -399,25 +425,28 @@ impl DescribeArgs {
                     render_listing(&entries, &from);
                 }
                 // Check for name collision: does the user also have an item
-                // matching the package name? Only hint when the resolved package
-                // is a builtin (i.e., the bare name matches a non-user package).
+                // matching the package name? Only hint when the bare name named
+                // a package the user's package reaches, not a user item.
                 let pkg_name = name.split('.').next().unwrap_or(name);
-                let builtin_names = baml_ide::non_workspace_package_names(&db);
-                if builtin_names.iter().any(|pkg| pkg.as_str() == pkg_name) {
-                    let user_pkg = baml_compiler2_hir::package::sole_workspace_package(&db);
-                    if baml_ide::resolve_target(&db, user_pkg, pkg_name).is_some() {
-                        eprintln!();
-                        eprintln!(
-                            "note: your project also defines `{pkg_name}`. \
-                             Use `baml describe root.{pkg_name}` to see your definition."
-                        );
-                    }
+                let names_dependency = baml_compiler2_hir::package::dependency_named(
+                    &db,
+                    package,
+                    &baml_db::Name::new(pkg_name),
+                )
+                .is_some();
+                if names_dependency && baml_ide::resolve_target(&db, package, pkg_name).is_some() {
+                    eprintln!();
+                    eprintln!(
+                        "note: your project also defines `{pkg_name}`. \
+                         Use `baml describe root.{pkg_name}` to see your definition."
+                    );
                 }
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Namespace { package, ns_path }) => {
                 let entries =
-                    baml_ide::list_namespace_items(&db, package, &ns_path).unwrap_or_default();
+                    baml_ide::list_namespace_items(&db, package, &ns_path, listed_internals)
+                        .unwrap_or_default();
                 if entries.is_empty() {
                     eprintln!("no symbols found in namespace");
                     return Ok(crate::ExitCode::Other);
@@ -435,9 +464,9 @@ impl DescribeArgs {
             }
             Some(ResolvedTarget::Item(def)) => {
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let Some(desc) = describe::describe_by_definition(&db, &files, def) else {
+                let Some(desc) = describe::describe_by_definition(&db, package, &files, def) else {
                     eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
+                    print_did_you_mean(&db, package, name);
                     return Ok(crate::ExitCode::Other);
                 };
                 self.emit_description(&db, &desc, &from)?;
@@ -448,15 +477,28 @@ impl DescribeArgs {
                 member_name,
             }) => {
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let Some(desc) =
-                    describe::describe_item_member(&db, &files, parent, member_name.as_str())
-                else {
-                    eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
-                    return Ok(crate::ExitCode::Other);
-                };
-                self.emit_description(&db, &desc, &from)?;
-                Ok(crate::ExitCode::Success)
+                let descs = describe::describe_item_member(
+                    &db,
+                    package,
+                    &files,
+                    parent,
+                    member_name.as_str(),
+                );
+                match descs.as_slice() {
+                    [] => {
+                        eprintln!("no symbol found: {name}");
+                        print_did_you_mean(&db, package, name);
+                        Ok(crate::ExitCode::Other)
+                    }
+                    [desc] => {
+                        self.emit_description(&db, desc, &from)?;
+                        Ok(crate::ExitCode::Success)
+                    }
+                    // Several impls of the class provide a method of this
+                    // name; each description carries its block's head, so
+                    // show them all, exactly like an ambiguous bare name.
+                    _ => self.emit_descriptions(&db, &descs, &from),
+                }
             }
             None => {
                 // Exact-name fallback: an unqualified name may live in any
@@ -464,37 +506,48 @@ impl DescribeArgs {
                 // `shapes/`), or be a local (parameter, let binding). Scan
                 // the compiler-visible files and show every match.
                 let files = baml_compiler2_hir::compiler2_all_files(&db);
-                let matches = describe::describe(&db, &files, name);
+                let matches = describe::describe(&db, package, &files, name);
 
                 if matches.is_empty() {
                     eprintln!("no symbol found: {name}");
-                    print_did_you_mean(&db, name);
+                    print_did_you_mean(&db, package, name);
                     return Ok(crate::ExitCode::Other);
                 }
 
-                if self.json {
-                    let documents: Vec<serde_json::Value> = matches
-                        .iter()
-                        .map(|desc| description_to_json(&db, desc, self.budget, &from))
-                        .collect();
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&documents)
-                            .context("failed to serialize output as JSON")?
-                    );
-                    return Ok(crate::ExitCode::Success);
-                }
-
-                for (i, desc) in matches.iter().enumerate() {
-                    if i > 0 {
-                        println!();
-                    }
-                    render_description(&db, desc, self.budget, &from);
-                }
-
-                Ok(crate::ExitCode::Success)
+                self.emit_descriptions(&db, &matches, &from)
             }
         }
+    }
+
+    /// Print several descriptions in the selected output mode: one JSON
+    /// array, or the rendered descriptions separated by blank lines.
+    fn emit_descriptions(
+        &self,
+        db: &ProjectDatabase,
+        descs: &[SymbolDescription],
+        project_root: &std::path::Path,
+    ) -> Result<crate::ExitCode> {
+        if self.json {
+            let documents: Vec<serde_json::Value> = descs
+                .iter()
+                .map(|desc| description_to_json(db, desc, self.budget, project_root))
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&documents)
+                    .context("failed to serialize output as JSON")?
+            );
+            return Ok(crate::ExitCode::Success);
+        }
+
+        for (i, desc) in descs.iter().enumerate() {
+            if i > 0 {
+                println!();
+            }
+            render_description(db, desc, self.budget, project_root);
+        }
+
+        Ok(crate::ExitCode::Success)
     }
 
     /// Print one description in the selected output mode.
@@ -623,6 +676,19 @@ pub fn write_description(
         .canonical_fqn()
         .map(|f| format!("  ({})", painter.fqn(f, definition_kind)))
         .unwrap_or_default();
+    // An impl-tier method names the block it belongs to — the one thing that
+    // tells `Duration.mul` for `Multiply<int>` from the one for
+    // `Multiply<bigint>`.
+    let implements_part = desc
+        .kind
+        .implements()
+        .map(|head| {
+            format!(
+                "  ({})",
+                painter.fqn(&format!("implements {head}"), definition_kind)
+            )
+        })
+        .unwrap_or_default();
     let name_display = painter.fqn(&desc.name, definition_kind);
     let loc = painter.location(
         &file_path,
@@ -632,7 +698,7 @@ pub fn write_description(
 
     writeln!(
         w,
-        "{} {name_display}{fqn_part}  {loc}",
+        "{} {name_display}{fqn_part}{implements_part}  {loc}",
         painter.keyword(kind_str)
     )?;
 
@@ -742,8 +808,8 @@ pub fn write_description(
     let mut render_budget =
         RenderBudget::new(budget.saturating_sub(lines_used), full_output_budget);
 
-    // ── Methods (classes) ────────────────────────────────────────────────────
-    if let baml_ide::SymbolKind::Class {
+    // ── Methods (concrete types) ─────────────────────────────────────────────
+    if let baml_ide::SymbolKind::ConcreteType {
         instance_methods,
         static_methods,
         ..
@@ -821,27 +887,64 @@ pub fn write_description(
     // ── Implementations ──────────────────────────────────────────────────────
     // Interfaces: the impl blocks whose head names this interface — the "who
     // implements it" list, separate from references (which no longer repeat
-    // the head mentions these rows own).
-    if let Some((_, implementations)) = interface.filter(|(_, imps)| !imps.is_empty()) {
+    // the head mentions these rows own). Concrete types: every impl that
+    // applies to the type — of the type first, then the blanket/pattern
+    // impls it falls under (rustdoc parity) — each with the methods it
+    // provides listed under it, since those belong to that instantiation and
+    // target; a dependency's precompiled impl has no site.
+    let implementations = kind_implementations(&desc.kind);
+    if !implementations.is_empty() {
         writeln!(w)?;
         writeln!(w, "implementations ({}):", implementations.len())?;
         render_budget.consume(SECTION_HEADER_COST);
         let mut elided = 0usize;
         for imp in implementations {
             if !render_budget.can_start_atomic() {
-                elided += 1;
+                elided += impl_row_cost(imp);
                 continue;
             }
-            let imp_abs = imp.file.path(db);
-            let imp_path = relative_path(&imp_abs, project_root);
-            let imp_line = line_number_at_offset(imp.file.text(db), imp.span.start().into());
-            let loc = painter.location(
-                &imp_abs,
-                &imp_path.display().to_string(),
-                &imp_line.to_string(),
-            );
-            writeln!(w, "  {}  {loc}", styled_declaration(&painter, &imp.display))?;
+            let display = styled_declaration(&painter, &imp.display);
+            match &imp.location {
+                Some(location) => {
+                    let imp_abs = location.file.path(db);
+                    let imp_path = relative_path(&imp_abs, project_root);
+                    let imp_line =
+                        line_number_at_offset(location.file.text(db), location.span.start().into());
+                    let loc = painter.location(
+                        &imp_abs,
+                        &imp_path.display().to_string(),
+                        &imp_line.to_string(),
+                    );
+                    writeln!(w, "  {display}  {loc}")?;
+                }
+                None => writeln!(w, "  {display}")?,
+            }
             render_budget.consume(LIST_ENTRY_COST);
+            // What the impl binds and provides, as its block spells them.
+            let bindings =
+                imp.associated_types
+                    .iter()
+                    .map(|(name, ty)| format!("type {name} = {ty}"))
+                    .chain(imp.field_links.iter().map(|(iface_field, class_field)| {
+                        format!("{iface_field} as {class_field}")
+                    }));
+            for binding in bindings {
+                if !render_budget.can_start_atomic() {
+                    elided += LIST_ENTRY_COST;
+                    continue;
+                }
+                writeln!(w, "    {}", styled_declaration(&painter, &binding))?;
+                render_budget.consume(LIST_ENTRY_COST);
+            }
+            for m in &imp.methods {
+                let unit_cost = method_line_cost(m);
+                if !render_budget.can_start_atomic() {
+                    elided += unit_cost;
+                    continue;
+                }
+                write_method_row(w, db, &painter, project_root, "    ", m)?;
+                render_budget.consume(unit_cost);
+            }
         }
         write_elision_marker(w, elided, render_budget.full_output)?;
     }
@@ -957,7 +1060,7 @@ fn interface_higher_section_cost(
         cost += SECTION_HEADER_COST + desc.dependencies.len() * LIST_ENTRY_COST;
     }
     if !implementations.is_empty() {
-        cost += SECTION_HEADER_COST + implementations.len() * LIST_ENTRY_COST;
+        cost += SECTION_HEADER_COST + implementations.iter().map(impl_row_cost).sum::<usize>();
     }
     cost
 }
@@ -1237,7 +1340,7 @@ fn minimum_full_output_budget(
         required.add_required(ITEM_HEADER_COST.saturating_add(body_line_count));
     }
 
-    if let baml_ide::SymbolKind::Class {
+    if let baml_ide::SymbolKind::ConcreteType {
         instance_methods,
         static_methods,
         ..
@@ -1258,14 +1361,17 @@ fn minimum_full_output_budget(
         }
     }
 
-    if let baml_ide::SymbolKind::Interface {
-        implementations, ..
-    } = &desc.kind
-        && !implementations.is_empty()
-    {
+    let implementations = kind_implementations(&desc.kind);
+    if !implementations.is_empty() {
         required.add_soft_overhead(SECTION_HEADER_COST);
-        for _ in implementations {
+        for imp in implementations {
             required.add_atomic(LIST_ENTRY_COST);
+            for _ in 0..imp.associated_types.len() + imp.field_links.len() {
+                required.add_atomic(LIST_ENTRY_COST);
+            }
+            for method in &imp.methods {
+                required.add_atomic(method_line_cost(method));
+            }
         }
     }
 
@@ -1275,6 +1381,22 @@ fn minimum_full_output_budget(
     }
 
     required.minimum
+}
+
+/// The implementations a described symbol lists: an interface's implementors,
+/// a class's applicable impls; empty for every other kind.
+fn kind_implementations(kind: &baml_ide::SymbolKind) -> &[baml_ide::ImplRow] {
+    match kind {
+        baml_ide::SymbolKind::Interface {
+            implementations, ..
+        }
+        | baml_ide::SymbolKind::ConcreteType {
+            implementations, ..
+        } => implementations,
+        baml_ide::SymbolKind::Item { .. }
+        | baml_ide::SymbolKind::Member { .. }
+        | baml_ide::SymbolKind::Local { .. } => &[],
+    }
 }
 
 fn add_method_budget(required: &mut BudgetRequirement, methods: &[describe::MethodRef]) {
@@ -1288,6 +1410,14 @@ fn add_method_budget(required: &mut BudgetRequirement, methods: &[describe::Meth
 
 fn method_line_cost(method: &describe::MethodRef) -> usize {
     1 + usize::from(method.docstring.is_some())
+}
+
+/// The lines an impl row renders: its header, its bindings (associated
+/// types, field links), and every method under it.
+fn impl_row_cost(imp: &describe::ImplRow) -> usize {
+    LIST_ENTRY_COST
+        + (imp.associated_types.len() + imp.field_links.len()) * LIST_ENTRY_COST
+        + imp.methods.iter().map(method_line_cost).sum::<usize>()
 }
 
 /// Write the soft-budget elision marker for `elided` hidden lines (no-op when
@@ -1352,7 +1482,9 @@ pub(crate) fn definition_line_range(
     )
 }
 
-/// Render a `methods:` / `static_methods:` section.
+/// Render a `methods:` / `static_methods:` section — a type's INHERENT
+/// methods (impl-provided methods sit under their impl in the
+/// implementations section, rustdoc's shape).
 ///
 /// Each method shows its first-line docstring (when present) followed by its
 /// canonical signature and full definition line range. The section consumes
@@ -1382,27 +1514,49 @@ fn write_method_section(
             elided_lines += unit_cost;
             continue;
         }
-        if let Some(doc) = &m.docstring {
-            // `fragment` renders `///` lines as comments (and self-gates on color).
-            let doc_line = painter.fragment(&format!("/// {doc}"));
-            writeln!(w, "  {doc_line}")?;
-        }
-        let text = m.file.text(db);
-        let (start, end) =
-            definition_line_range(text, m.item_range.start().into(), m.item_range.end().into());
-        let m_abs = m.file.path(db);
-        let m_path = relative_path(&m_abs, project_root);
-        let loc = painter.location(
-            &m_abs,
-            &m_path.display().to_string(),
-            &format!("{start}-{end}"),
-        );
-        let sig = styled_declaration(painter, &m.signature);
-        writeln!(w, "  {sig}  {loc}")?;
+        write_method_row(w, db, painter, project_root, "  ", m)?;
         budget.consume(unit_cost);
     }
     write_elision_marker(w, elided_lines, budget.full_output)?;
     Ok(())
+}
+
+/// One method's lines at `indent`: its first-line docstring (when present),
+/// then its canonical signature and definition line range — no range for a
+/// dependency's precompiled impl method, which has no source here.
+fn write_method_row(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    painter: &crate::paint::Painter,
+    project_root: &std::path::Path,
+    indent: &str,
+    m: &describe::MethodRef,
+) -> std::io::Result<()> {
+    if let Some(doc) = &m.docstring {
+        // `fragment` renders `///` lines as comments (and self-gates on color).
+        let doc_line = painter.fragment(&format!("/// {doc}"));
+        writeln!(w, "{indent}{doc_line}")?;
+    }
+    let sig = styled_declaration(painter, &m.signature);
+    match &m.location {
+        Some(location) => {
+            let text = location.file.text(db);
+            let (start, end) = definition_line_range(
+                text,
+                location.item_range.start().into(),
+                location.item_range.end().into(),
+            );
+            let m_abs = location.file.path(db);
+            let m_path = relative_path(&m_abs, project_root);
+            let loc = painter.location(
+                &m_abs,
+                &m_path.display().to_string(),
+                &format!("{start}-{end}"),
+            );
+            writeln!(w, "{indent}{sig}  {loc}")
+        }
+        None => writeln!(w, "{indent}{sig}"),
+    }
 }
 
 /// Render a flat listing of entries to stdout.
@@ -1613,15 +1767,24 @@ fn method_json(
     methods
         .iter()
         .map(|method| {
-            let path = relative_path(&method.file.path(db), project_root);
-            let text = method.file.text(db);
+            // `null` location fields: a dependency's precompiled impl method
+            // has no source in this database.
+            let site = method.location.as_ref().map(|location| {
+                let path = relative_path(&location.file.path(db), project_root);
+                let text = location.file.text(db);
+                (
+                    path.to_string_lossy().into_owned(),
+                    line_number_at_offset(text, location.item_range.start().into()),
+                    line_number_at_offset(text, location.item_range.end().into()),
+                )
+            });
             serde_json::json!({
                 "name": method.name,
                 "signature": method.signature,
                 "docstring": method.docstring,
-                "file": path.to_string_lossy(),
-                "line_start": line_number_at_offset(text, method.item_range.start().into()),
-                "line_end": line_number_at_offset(text, method.item_range.end().into()),
+                "file": site.as_ref().map(|(path, _, _)| path.clone()),
+                "line_start": site.as_ref().map(|(_, start, _)| *start),
+                "line_end": site.as_ref().map(|(_, _, end)| *end),
             })
         })
         .collect()
@@ -1639,22 +1802,18 @@ fn description_to_json(
     // don't carry it), so consumers never branch on absence.
     let (instance_methods, static_methods): (&[baml_ide::MethodRef], &[baml_ide::MethodRef]) =
         match &desc.kind {
-            baml_ide::SymbolKind::Class {
+            baml_ide::SymbolKind::ConcreteType {
                 instance_methods,
                 static_methods,
                 ..
             } => (instance_methods, static_methods),
             _ => (&[], &[]),
         };
-    let (interface_members, implementations): (&[baml_ide::InterfaceMember], &[baml_ide::ImplRow]) =
-        match &desc.kind {
-            baml_ide::SymbolKind::Interface {
-                members,
-                implementations,
-                ..
-            } => (members, implementations),
-            _ => (&[], &[]),
-        };
+    let interface_members: &[baml_ide::InterfaceMember] = match &desc.kind {
+        baml_ide::SymbolKind::Interface { members, .. } => members,
+        _ => &[],
+    };
+    let implementations = kind_implementations(&desc.kind);
     serde_json::json!({
         "name": desc.name,
         "kind": desc.kind.definition_kind().as_str(),
@@ -1698,13 +1857,28 @@ fn description_to_json(
             })
         }).collect::<Vec<_>>(),
         "implementations": implementations.iter().map(|imp| {
-            let path = relative_path(&imp.file.path(db), project_root);
+            // `null` site fields: a dependency's precompiled impl.
+            let site = imp.location.as_ref().map(|location| {
+                let path = relative_path(&location.file.path(db), project_root);
+                (
+                    path.to_string_lossy().into_owned(),
+                    line_number_at_offset(location.file.text(db), location.span.start().into()),
+                )
+            });
             serde_json::json!({
                 "display": imp.display,
-                "file": path.to_string_lossy(),
-                "line": line_number_at_offset(imp.file.text(db), imp.span.start().into()),
+                "file": site.as_ref().map(|(path, _)| path.clone()),
+                "line": site.as_ref().map(|(_, line)| *line),
+                "associated_types": imp.associated_types.iter().map(|(name, ty)| {
+                    serde_json::json!({ "name": name, "type": ty })
+                }).collect::<Vec<_>>(),
+                "field_links": imp.field_links.iter().map(|(iface_field, class_field)| {
+                    serde_json::json!({ "interface_field": iface_field, "class_field": class_field })
+                }).collect::<Vec<_>>(),
+                "methods": method_json(db, project_root, &imp.methods),
             })
         }).collect::<Vec<_>>(),
+        "implements": desc.kind.implements(),
         "container": desc.kind.container().map(|container| {
             let path = relative_path(&container.file.path(db), project_root);
             serde_json::json!({
