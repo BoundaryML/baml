@@ -149,7 +149,7 @@ function handle_issue(
             write_outcome(sb, outcome(sb, "hard", null, started, null, null, doc));
             tell_thread(
                 thread,
-                ":memo: this needs a larger change; the investigation plan is ready for the shepherd.",
+                ":memo: gauged Hard: the design doc is written for the shepherd, no code was changed",
             );
             return with_design_doc(issue, doc);
         };
