@@ -369,6 +369,76 @@ fn an_impl_row_claiming_another_slot_or_class_is_refused_before_installation() {
     );
 }
 
+#[test]
+fn duplicate_impl_rows_are_refused_before_installation() {
+    let duplicated = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter()
+            .find(|row| row.interface.name.name().as_str() == "Parent")
+            .expect("Entry implements Parent")
+            .clone();
+        interface.impls.push(row);
+    });
+    assert_eq!(
+        mount_refusal(duplicated),
+        "the interface exports two impl rows for `implement app.Parent for app.Entry`"
+    );
+}
+
+/// The exporter does not judge coherence: a package whose two impls share one
+/// identity is rejected by ITS compile (E0132), and if its interface is
+/// exported anyway the mount refuses it — the served impl index never sees a
+/// duplicate, so it cannot wedge on one.
+#[test]
+fn an_incoherent_package_export_is_refused_rather_than_served() {
+    const INCOHERENT: &str = r#"
+interface Marker {
+    function mark(self) -> int throws never
+}
+
+class Entry {
+    value int
+
+    implements Marker {
+        function mark(self) -> int throws never {
+            self.value
+        }
+    }
+}
+
+implement Marker for Entry {
+    function mark(self) -> int throws never {
+        0
+    }
+}
+"#;
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-incoherent"));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", INCOHERENT);
+    let codes: Vec<String> = collect_diagnostics(&db)
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.code().to_string())
+        .collect();
+    assert_eq!(
+        codes,
+        ["E0132"],
+        "the duplicate impl is condemned at its own compile"
+    );
+
+    let blob = baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &export_interface(&db, app_root(&db)),
+    )
+    .expect("package interface serializes");
+    assert_eq!(
+        mount_refusal(blob),
+        "the interface exports two impl rows for `implement app.Marker for app.Entry`"
+    );
+}
+
 /// A faithful export always re-imports: the validator that refuses forged
 /// rows never refuses a compiler-built blob, for the fixture, the mounted
 /// copy of it, and every stdlib package.

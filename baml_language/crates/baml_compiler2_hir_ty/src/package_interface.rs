@@ -567,6 +567,10 @@ pub enum ImportError {
     /// An impl claims to be declared in the body of a class this package
     /// does not export.
     DanglingImplOrigin { interface: String, class: String },
+    /// Two impl rows have one identity — the degenerate overlap coherence
+    /// rejects at the source compile, so the blob is not the export of a
+    /// checked package; served, the identity would name no single row.
+    DuplicateImpl { identity: String },
 }
 
 impl std::fmt::Display for ImportError {
@@ -594,6 +598,9 @@ impl std::fmt::Display for ImportError {
                 f,
                 "the {kind} row `{key}` declares {params} generic parameter(s) but {bound_lists} bound list(s)"
             ),
+            Self::DuplicateImpl { identity } => {
+                write!(f, "the interface exports two impl rows for {identity}")
+            }
             Self::DanglingImplOrigin { interface, class } => write!(
                 f,
                 "an impl of `{interface}` claims the body of `{class}`, which this package does not export as a class"
@@ -763,6 +770,7 @@ fn validate_row_identities(
             }
         }
     }
+    let mut impl_identities = FxHashSet::default();
     for exported in &interface.impls {
         let slot_owner = &exported.interface.name;
         if exported.generic_params.len() != exported.param_bounds.len() {
@@ -789,6 +797,14 @@ fn validate_row_identities(
             return Err(ImportError::DanglingImplOrigin {
                 interface: spell(slot_owner),
                 class: spell(class_qtn),
+            });
+        }
+        // The bound-list pairing above is what `exported_impl_facts` — and so
+        // the identity — presumes; it is checked first for that reason.
+        let identity = crate::extern_loc::exported_impl_identity(exported);
+        if !impl_identities.insert(identity.clone()) {
+            return Err(ImportError::DuplicateImpl {
+                identity: crate::extern_loc::spell_impl_identity(&identity, &viewpoint),
             });
         }
     }
@@ -1500,7 +1516,11 @@ fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
 
 /// Lower the package's implementation registry into a canonical, loc-free
 /// export. Malformed headers have no `ImplFacts` row and are skipped; their
-/// source diagnostics remain owned by the declaration checker.
+/// source diagnostics remain owned by the declaration checker. Coherence is
+/// not judged here either: every resolved row is exported, and a blob built
+/// from an incoherent package is refused where it is mounted
+/// ([`ImportError::DuplicateImpl`]) rather than quietly thinned to a
+/// coherent subset here.
 fn exported_impls(
     db: &dyn baml_compiler2_ppir::Db,
     pkg_id: baml_base::SourceRoot,

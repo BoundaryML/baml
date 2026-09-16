@@ -561,21 +561,30 @@ fn spell_impl(
     package: SourceRoot,
     identity: &ImplIdentity,
 ) -> String {
-    let viewpoint = Viewpoint::canonical(db);
     format!(
-        "`implement {} for {}` in package `{}`",
-        identity.interface.spell(&viewpoint),
-        identity.for_ty_pattern.to_plain().spell(&viewpoint),
+        "{} in package `{}`",
+        spell_impl_identity(identity, &Viewpoint::canonical(db)),
         baml_compiler2_hir::package::spelling(db).of(package),
+    )
+}
+
+/// `` `implement I for T` `` — an impl identity by its heads, for messages.
+pub(crate) fn spell_impl_identity(identity: &ImplIdentity, viewpoint: &Viewpoint) -> String {
+    format!(
+        "`implement {} for {}`",
+        identity.interface.spell(viewpoint),
+        identity.for_ty_pattern.to_plain().spell(viewpoint),
     )
 }
 
 /// Every impl row the package exports, by identity.
 ///
 /// Two rows with one identity overlap trivially, and coherence rejects that
-/// at the source compile — a valid artifact never carries it — so the
-/// collision is reported as the invalid artifact it is rather than resolved
-/// by position.
+/// at the source compile, so a faithful export never carries it;
+/// [`crate::package_interface::import_interface`] refuses a blob that does
+/// (`ImportError::DuplicateImpl`) before it can be mounted. Every package
+/// this index is built for is a mounted one, so the collision is an
+/// invariant here, not an outcome.
 #[salsa::tracked(returns(ref))]
 pub fn package_impl_index(
     db: &dyn baml_compiler2_ppir::Db,
@@ -584,11 +593,13 @@ pub fn package_impl_index(
     let mut index = FxHashMap::default();
     for (row, exported) in package_interface(db, package).impls.iter().enumerate() {
         let row = u32::try_from(row).expect("impl row count fits in u32");
-        if let Some(earlier) = index.insert(exported_impl_identity(exported), row) {
-            panic!(
-                "package `{}`'s interface exports two impl rows with one identity (rows {earlier} \
-                 and {row}); it violates coherence and cannot be served",
+        let identity = exported_impl_identity(exported);
+        if let Some(earlier) = index.insert(identity.clone(), row) {
+            unreachable!(
+                "package `{}` was mounted with two impl rows of one identity ({}; rows {earlier} \
+                 and {row}), which `import_interface` refuses",
                 baml_compiler2_hir::package::spelling(db).of(package),
+                spell_impl_identity(&identity, &Viewpoint::canonical(db)),
             );
         }
     }
