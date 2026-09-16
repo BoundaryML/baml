@@ -58,6 +58,8 @@ pub struct QuerySessionBuilder {
     capabilities: CapabilityRegistry,
     resolver: Arc<dyn ValueResolver>,
     factory: Arc<dyn RelationProviderFactory>,
+    planner: Option<Arc<dyn datafusion::execution::context::QueryPlanner + Send + Sync>>,
+    adapter: Option<Arc<dyn PlanAdapter>>,
 }
 
 impl QuerySessionBuilder {
@@ -78,6 +80,8 @@ impl QuerySessionBuilder {
             capabilities: CapabilityRegistry::new(),
             resolver,
             factory,
+            planner: None,
+            adapter: None,
         }
     }
 
@@ -96,6 +100,23 @@ impl QuerySessionBuilder {
     #[must_use]
     pub fn with_capabilities(mut self, capabilities: CapabilityRegistry) -> Self {
         self.capabilities = capabilities;
+        self
+    }
+
+    /// Install a backend physical planner without bypassing language validation.
+    #[must_use]
+    pub fn with_query_planner(
+        mut self,
+        planner: Arc<dyn datafusion::execution::context::QueryPlanner + Send + Sync>,
+    ) -> Self {
+        self.planner = Some(planner);
+        self
+    }
+
+    /// Adapt validated language expressions for backend execution.
+    #[must_use]
+    pub fn with_plan_adapter(mut self, adapter: Arc<dyn PlanAdapter>) -> Self {
+        self.adapter = Some(adapter);
         self
     }
 
@@ -121,8 +142,16 @@ impl QuerySessionBuilder {
         let state = SessionStateBuilder::new()
             .with_default_features()
             .with_config(config)
-            .with_expr_planners(expr_planners)
-            .build();
+            .with_expr_planners(expr_planners);
+        let state = match &self.adapter {
+            Some(adapter) => adapter.configure(state).map_err(|e| internal(&e))?,
+            None => state,
+        };
+        let state = match self.planner {
+            Some(planner) => state.with_query_planner(planner),
+            None => state,
+        }
+        .build();
         let ctx = SessionContext::new_with_state(state);
         for udf in functions.all() {
             ctx.register_udf(udf.as_ref().clone());
@@ -173,6 +202,7 @@ impl QuerySessionBuilder {
             capabilities: self.capabilities,
             tracker,
             functions,
+            adapter: self.adapter,
         })
     }
 }
@@ -350,6 +380,7 @@ pub struct QuerySession {
     capabilities: CapabilityRegistry,
     tracker: Arc<BudgetTracker>,
     functions: Arc<ValueFunctions>,
+    adapter: Option<Arc<dyn PlanAdapter>>,
 }
 
 impl QuerySession {
@@ -402,6 +433,10 @@ impl QuerySession {
             .map_err(|e| self.plan_error(e))?;
         self.check_capabilities(&plan)?;
         self.check_value_authorization(&plan)?;
+        let plan = match &self.adapter {
+            Some(adapter) => adapter.adapt(plan).await.map_err(|e| self.plan_error(e))?,
+            None => plan,
+        };
         self.tracker.checkpoint()?;
         let dataframe = self
             .ctx
@@ -694,4 +729,17 @@ impl QueryExecution {
     pub fn terminal_error(&self) -> Option<&QueryError> {
         self.terminal.as_ref()
     }
+}
+
+/// Optional backend adaptation after the mandatory language and authorization gates.
+#[async_trait]
+pub trait PlanAdapter: Send + Sync {
+    /// Configure backend execution resources; language planners and validation remain installed.
+    fn configure(
+        &self,
+        state: SessionStateBuilder,
+    ) -> datafusion::common::Result<SessionStateBuilder> {
+        Ok(state)
+    }
+    async fn adapt(&self, plan: LogicalPlan) -> datafusion::common::Result<LogicalPlan>;
 }

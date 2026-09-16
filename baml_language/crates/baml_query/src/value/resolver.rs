@@ -35,6 +35,13 @@ pub struct DecodeCaps {
 /// across one Arrow batch (§5.5); the result vector matches `handles`
 /// index-for-index.
 pub trait ValueResolver: Send + Sync {
+    /// Resolve a scalar already present in a trusted provider's Arrow batch.
+    /// Storage scanning accounts for its I/O and buffer memory. Returning None
+    /// retains normal evidence hydration and its query-global budget.
+    fn resolve_materialized(&self, _handle: &[u8], _caps: DecodeCaps) -> Option<Resolved> {
+        None
+    }
+
     /// Interpret a batch of provider-private handles. `results.len() ==
     /// handles.len()`, position-matched.
     fn resolve_many(&self, handles: &[&[u8]], caps: DecodeCaps) -> Vec<Resolved>;
@@ -122,6 +129,10 @@ impl HydrationContext {
             let cache = self.lock_cache();
             for handle in handles.iter().flatten() {
                 if local.contains_key(*handle) {
+                    continue;
+                }
+                if let Some(value) = self.resolver.resolve_materialized(handle, self.caps()) {
+                    local.insert(*handle, value);
                     continue;
                 }
                 if let Some(hit) = cache.map.get(*handle) {
