@@ -267,8 +267,7 @@ function put(
     | baml.errors.Timeout
     | baml.json.ParseError
     | baml.json.DecodeError
-    | baml.errors.InvalidArgument
-{
+    | baml.errors.InvalidArgument {
     let args = [
         "-p",
         "--model",

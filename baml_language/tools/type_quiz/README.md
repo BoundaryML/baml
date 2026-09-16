@@ -364,9 +364,10 @@ keeps its number once it has one.
 
 1. **FIXED on canary.** No longer reproduces as of the September 2026 canary
    merge; the closure capture and memory-effect rework in #4891 is the likely
-   cause. Three workarounds still cite this entry — `main.baml`, and two in
-   `ns_engine/sample.baml` — and are no longer forced, though they are still
-   correct. **Emit panic on an interface method call on a captured existential
+   cause. `ns_engine/sample.baml` still reaches an item's `generate` and
+   `foil` through free functions, which this forced and no longer does: they
+   stayed because they are the surface the composition root and the
+   conformance suite are written against, and `sample.baml` says so. **Emit panic on an interface method call on a captured existential
    inside a closure.** `crates/baml_compiler2_emit/src/emit.rs:2025` panicked
    with
    `undefined function: user.Item.id` for
@@ -417,15 +418,25 @@ keeps its number once it has one.
    throws never` prints as `(int, int) -> int throws never`: names and the
    optional marker are dropped, so the printed spelling denotes a different
    function type than the value describes.
-9. **A closure reads the wrong slot when a method call's receiver reads a
-   captured local that an earlier closure call assigned.** With `items: Sc[]`,
+9. **A method call whose receiver reads a captured local that an earlier
+   closure call assigned takes the compiler down.** With `items: Sc[]`,
    `let top = items.reduce((acc, s) -> { if (s.score > acc) { s.score } else { acc } }, items[0].score);`
-   followed by `items.map((s) -> { (s.score - top).exp() })` fails at run time
-   with `VM internal error: type error: expected map, got float`, the closure
-   parameter having been read from the captured float's slot. Copying `top`
-   into a fresh local first does not help; the same code with `top` a literal
-   works, and so does the free-function spelling `baml.Float.exp(s.score - top)`,
-   which `pick` in `ns_engine/sample.baml` uses.
+   followed by `items.map((s) -> { (s.score - top).exp() })`, `baml check`
+   panics: `internal error: entered unreachable code: `Error` is not a valid
+   `RuntimeTy`: an error-recovery type reached runtime lowering`
+   (`crates/baml_type/src/runtime_ty.rs:278`). No diagnostic is printed, so
+   there is no span and nothing to act on; something types as an error and is
+   then lowered anyway.
+
+   It got worse in the September 2026 canary merge rather than better. Before
+   it, the same code compiled and failed at run time with `VM internal error:
+   type error: expected map, got float`, the closure parameter having been
+   read from the captured float's slot. Either side of the change, dropping
+   the method call is fine (`s.score - top` alone checks), copying `top` into
+   a fresh local does not help, the same code with `top` a literal works, and
+   so does the free-function spelling `baml.Float.exp(s.score - top)`, which
+   `pick` in `ns_engine/sample.baml` and `hundredths` in the conformance
+   suite both use. Those workarounds are still load-bearing.
 10. **A local inferred from a `match` with a `.map` arm is typed wrongly, and
    a method call on it fails at run time.** With `type Either = Wrapped |
    string`,

@@ -405,8 +405,6 @@ function put_at(
     root.engine.put(
         candidate,
         () -> {
-            // Through the free function: an interface method on a value the
-            // closure captured dies at emit time (README, compiler issue 1).
             root.engine.foil_of(found, state)
         },
         knobs,

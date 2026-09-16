@@ -291,13 +291,13 @@ type Status = Verified | CompilerDiverges | SpecOnly;
 /// A generator of cases. Implementations live in the bank.
 interface Item {
     /// Unique across the bank; keys seeds, reports, and the learner profile.
-    function id(self) -> string throws never
+    function id(self) -> string throws never;
 
-    function status(self) -> Status throws never
+    function status(self) -> Status throws never;
 
     /// The case for `seed`, or `null` when the derivation ends without a
     /// known judgment. Must be a pure function of `seed`.
-    function generate(self, seed: Seed) -> Candidate? throws never
+    function generate(self, seed: Seed) -> Candidate? throws never;
 
     /// The foil of the case for `seed`, or `null` when this item has none to
     /// offer there. A pure function of `seed`, as `generate` is.
@@ -306,5 +306,5 @@ interface Item {
     /// because a foil is a second whole program and most of them would never
     /// be seen: a sitting draws candidates by the handful and puts one, and
     /// puts that one as a choice only sometimes.
-    function foil(self, seed: Seed) -> Foil? throws never
+    function foil(self, seed: Seed) -> Foil? throws never;
 }

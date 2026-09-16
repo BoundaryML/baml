@@ -81,10 +81,14 @@ function streams(seed: Seed, count: int) -> Seed[] throws never {
         .value
 }
 
-/// `item.generate(seed)` behind a function, so a closure can call it: the
-/// emitter panics on an interface method called on a captured value inside a
-/// closure (README, compiler issue 1), and a call through a function does
-/// not capture.
+/// `item.generate(seed)` as a free function, which is how everything outside
+/// the engine draws a case: the bank's items are reached as `Item`, and a
+/// free function is callable where a method is not.
+///
+/// It was written this way because the emitter could not call an interface
+/// method on a value a closure had captured (README, compiler issue 1). That
+/// is fixed, and this stays because it is now the surface the composition
+/// root and the conformance suite are written against.
 function generate(item: Item, seed: Seed) -> Candidate? throws never {
     item.generate(seed)
 }
@@ -300,9 +304,8 @@ function turn(
     }
 }
 
-/// `item`'s foil at `seed`. Through a function for the same reason as
-/// `generate`: an interface method on a captured existential dies at emit
-/// time (README, compiler issue 1).
+/// `item`'s foil at `seed`, a free function for the same reason as
+/// `generate`, and like it no longer forced by the emitter.
 function foil_of(item: Item, seed: Seed) -> Foil? throws never {
     item.foil(seed)
 }
