@@ -141,10 +141,21 @@ def notify(
         from oncall.slack import post as slack_post
         from oncall.slack import schedule as slack_schedule
 
-        for message in msgs:
-            slack_post(wc, message.channel, message.text, blocks=message.blocks)
+        thread_ts_by_rotation = {
+            message.rotation: slack_post(
+                wc, message.channel, message.text, blocks=message.blocks
+            )
+            for message in msgs
+        }
         for post_at, message in reminders:
-            slack_schedule(wc, message.channel, message.text, post_at, blocks=message.blocks)
+            slack_schedule(
+                wc,
+                message.channel,
+                message.text,
+                post_at,
+                blocks=message.blocks,
+                thread_ts=thread_ts_by_rotation[message.rotation],
+            )
         console.print(
             f"[green]posted {len(msgs)} message(s), scheduled {len(reminders)} reminder(s)[/]"
         )
