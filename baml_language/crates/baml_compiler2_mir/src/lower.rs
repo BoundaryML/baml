@@ -1110,66 +1110,76 @@ use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 /// link symbols, `Function.name`, display metadata, and the incremental
 /// edge grain.
 pub fn definition_link_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
+    let pkg_info = file_package(db, def.file(db));
+    link_name(
+        spelling(db).of(pkg_info.root),
+        &pkg_info.namespace_path,
+        &[&definition_short_name(db, def)],
+    )
+}
+
+/// The owner-qualified tail of a declaration's link name — everything after
+/// the package and namespace segments: `f` for a free function, `Class.m`
+/// for a class-inherent method, `Interface.m` for an interface's default
+/// body, `<(target as iface)>.m` for an impl-provided one, and the bare name
+/// for every other item. This is the ONE spelling of a declaration's tail:
+/// [`definition_link_name`] prefixes it, and a nested synthetic function
+/// (`<lambda(owner, i)>`) names its owner by it, so the two cannot drift.
+pub(crate) fn definition_short_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
     use baml_compiler2_ppir::item_data::{
         MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
         type_alias_data,
     };
-    let pkg_info = file_package(db, def.file(db));
 
-    let name: Name = match def {
-        Definition::Function(loc) => function_data(db, loc).name.clone(),
-        Definition::Class(loc) => class_data(db, loc).name.clone(),
-        Definition::Enum(loc) => enum_data(db, loc).name.clone(),
-        Definition::Interface(loc) => interface_data(db, loc).name.clone(),
-        Definition::TypeAlias(loc) => type_alias_data(db, loc).name.clone(),
-        Definition::Let(loc) => let_data(db, loc).name.clone(),
+    let name: &Name = match def {
+        Definition::Function(loc) => &function_data(db, loc).name,
+        Definition::Class(loc) => &class_data(db, loc).name,
+        Definition::Enum(loc) => &enum_data(db, loc).name,
+        Definition::Interface(loc) => &interface_data(db, loc).name,
+        Definition::TypeAlias(loc) => &type_alias_data(db, loc).name,
+        Definition::Let(loc) => &let_data(db, loc).name,
     };
 
     // A method's name is qualified by its owner so it gets a distinct global
     // slot instead of colliding with a same-named free function.
-    if let Definition::Function(func_loc) = def {
-        match method_owner(db, func_loc) {
-            Some(MethodOwner::Class(class_loc)) => {
-                return class_method_link_name(db, class_loc, func_loc);
-            }
-            Some(MethodOwner::Interface(iface_loc)) => {
-                // NOTE: a REQUIRED method has a valid NAME (change-propagation
-                // and display renderers spell every declaration through
-                // here) but resolves to no slot or object — only
-                // default-BODIED methods are compiled. Callee positions gate
-                // on `function_has_body` before naming one (the `default.`
-                // bypass and default-adoption do); emit's slot resolution
-                // panics loudly on any that slips through.
-                return link_name(
-                    spelling(db).of(pkg_info.root),
-                    &pkg_info.namespace_path,
-                    &[interface_data(db, iface_loc).name.as_str(), name.as_str()],
-                );
-            }
-            Some(MethodOwner::Impl(impl_loc)) => {
-                // The identity is the DECLARATION (an opaque session id);
-                // only the DISPLAY segment is synthesized (the lambda
-                // convention), spelled with the language's own qualification
-                // syntax: `<(target as iface)>` — both halves canonically
-                // resolved and fully qualified; generic and interface
-                // arguments appear in the spelling, associated-type pins do
-                // NOT (members of the impl, outputs of the match); the
-                // impl's own type variables render as frame indices (`#0`).
-                return link_name(
-                    spelling(db).of(pkg_info.root),
-                    &pkg_info.namespace_path,
-                    &[&impl_display_segment(db, impl_loc), name.as_str()],
-                );
-            }
-            None => {}
+    let Definition::Function(func_loc) = def else {
+        return name.as_str().to_string();
+    };
+    match method_owner(db, func_loc) {
+        Some(MethodOwner::Class(class_loc)) => {
+            format!(
+                "{}.{}",
+                class_data(db, class_loc).name.as_str(),
+                name.as_str()
+            )
         }
+        Some(MethodOwner::Interface(iface_loc)) => {
+            // NOTE: a REQUIRED method has a valid NAME (change-propagation
+            // and display renderers spell every declaration through
+            // here) but resolves to no slot or object — only
+            // default-BODIED methods are compiled. Callee positions gate
+            // on `function_has_body` before naming one (the `default.`
+            // bypass and default-adoption do); emit's slot resolution
+            // panics loudly on any that slips through.
+            format!(
+                "{}.{}",
+                interface_data(db, iface_loc).name.as_str(),
+                name.as_str()
+            )
+        }
+        Some(MethodOwner::Impl(impl_loc)) => {
+            // The identity is the DECLARATION (an opaque session id);
+            // only the DISPLAY segment is synthesized (the lambda
+            // convention), spelled with the language's own qualification
+            // syntax: `<(target as iface)>` — both halves canonically
+            // resolved and fully qualified; generic and interface
+            // arguments appear in the spelling, associated-type pins do
+            // NOT (members of the impl, outputs of the match); the
+            // impl's own type variables render as frame indices (`#0`).
+            format!("{}.{}", impl_display_segment(db, impl_loc), name.as_str())
+        }
+        None => name.as_str().to_string(),
     }
-
-    link_name(
-        spelling(db).of(pkg_info.root),
-        &pkg_info.namespace_path,
-        &[name.as_str()],
-    )
 }
 
 /// `package.ns….tail…` — the one dotted spelling every link name uses.
@@ -1312,8 +1322,10 @@ pub fn native_key_for<'db>(
     let pkg_info = file_package(db, func_loc.file(db));
     let name = function_data(db, func_loc).name.clone();
     let item = match method_owner(db, func_loc) {
-        Some(MethodOwner::Class(class_loc)) => {
-            return class_method_link_name(db, class_loc, func_loc);
+        // A class-inherent method has no written-form target to key on: its
+        // key is its link name.
+        Some(MethodOwner::Class(_)) => {
+            return definition_link_name(db, Definition::Function(func_loc));
         }
         Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
         Some(MethodOwner::Impl(impl_loc)) => {
@@ -1373,26 +1385,6 @@ pub fn function_is_interface_body<'db>(
         Some(MethodOwner::Interface(_) | MethodOwner::Impl(_)) => true,
         Some(MethodOwner::Class(_)) | None => false,
     }
-}
-
-/// `pkg.ns.Class.method` for a class-inherent method. Class-inherent only:
-/// an implements-block method is Impl-owned and reaches its
-/// `<(target as iface)>` spelling via [`definition_link_name`].
-fn class_method_link_name<'db>(
-    db: &'db dyn crate::Db,
-    class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
-    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> String {
-    use baml_compiler2_ppir::item_data::{class_data, function_data};
-    let pkg_info = file_package(db, class_loc.file(db));
-    link_name(
-        spelling(db).of(pkg_info.root),
-        &pkg_info.namespace_path,
-        &[
-            class_data(db, class_loc).name.as_str(),
-            function_data(db, func_loc).name.as_str(),
-        ],
-    )
 }
 
 /// The callable a member resolution links as, wherever it is declared —
@@ -1909,6 +1901,30 @@ fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> P
 
 type PatMetadataKey = (MetadataScope, AstPatId);
 
+/// Ordinals of the synthetic functions lowered under one top-level body,
+/// per [`SyntheticKind`]: the `i` in `<lambda(owner, i)>`. Counted across the
+/// whole body — a lambda nested in a lambda takes the next ordinal, not a
+/// fresh count — so every synthetic function of a body has a distinct
+/// identity.
+#[derive(Default)]
+struct SyntheticOrdinals {
+    lambda: usize,
+    tagged: usize,
+}
+
+impl SyntheticOrdinals {
+    /// Claim the next ordinal for a synthetic function of `kind`.
+    fn next(&mut self, kind: SyntheticKind) -> usize {
+        let counter = match kind {
+            SyntheticKind::Lambda => &mut self.lambda,
+            SyntheticKind::Tagged => &mut self.tagged,
+        };
+        let ordinal = *counter;
+        *counter += 1;
+        ordinal
+    }
+}
+
 struct LoweringContext<'db> {
     db: &'db dyn crate::Db,
     builder: MirBuilder<'db>,
@@ -2029,8 +2045,9 @@ struct LoweringContext<'db> {
     /// defers.
     defer_stack: Vec<AstExprId>,
 
-    // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
-    synthetic_name_counts: HashMap<String, usize>,
+    /// Ordinals of the synthetic functions lowered so far under the
+    /// top-level body — see [`SyntheticOrdinals`].
+    synthetic_ordinals: SyntheticOrdinals,
 
     // Lambda functions lowered during body traversal.
     // Collected here and moved into MirFunction.lambdas at the end of lowering.
@@ -2632,7 +2649,6 @@ impl<'db> LoweringContext<'db> {
         let file = func_loc.file(db);
 
         let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
-        let index = file_semantic_index(db, file);
         // The scope this function opened, from the recorded item↔scope index.
         // Exact — no span match, so companion functions and synthesized `0..0`
         // functions (which the old scan special-cased) resolve correctly.
@@ -2679,31 +2695,9 @@ impl<'db> LoweringContext<'db> {
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
         let arity = sig.params.len();
 
-        // Detect if this function is a class method by checking the parent scope.
-        // If so, qualify the function name as "ClassName.MethodName".
-        let func_scope = &index.scopes[func_scope_id.index() as usize];
-        let func_name = if let Some(parent_idx) = func_scope.parent {
-            let parent = &index.scopes[parent_idx.index() as usize];
-            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
-                if let Some(ref class_name) = parent.name {
-                    Name::new(format!(
-                        "{}.{}",
-                        class_name.as_str(),
-                        func_data.name.as_str()
-                    ))
-                } else {
-                    func_data.name.clone()
-                }
-            } else {
-                func_data.name.clone()
-            }
-        } else {
-            func_data.name.clone()
-        };
-
         LoweringContext {
             db,
-            builder: MirBuilder::new(FunctionOwner::Function(func_loc), func_name, arity),
+            builder: MirBuilder::new(FunctionOwner::Function(func_loc), arity),
             binding_locals: HashMap::new(),
             self_binding: None,
             loop_context: None,
@@ -2739,7 +2733,7 @@ impl<'db> LoweringContext<'db> {
             package: pkg_id,
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
-            synthetic_name_counts: HashMap::new(),
+            synthetic_ordinals: SyntheticOrdinals::default(),
             chain_null_exits: Vec::new(),
             opt,
         }
@@ -2783,7 +2777,7 @@ impl<'db> LoweringContext<'db> {
 
         LoweringContext {
             db,
-            builder: MirBuilder::new(FunctionOwner::Let(let_loc), let_name.clone(), 0),
+            builder: MirBuilder::new(FunctionOwner::Let(let_loc), 0),
             binding_locals: HashMap::new(),
             self_binding: None,
             loop_context: None,
@@ -2813,7 +2807,7 @@ impl<'db> LoweringContext<'db> {
             package: pkg_id,
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
-            synthetic_name_counts: HashMap::new(),
+            synthetic_ordinals: SyntheticOrdinals::default(),
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
             scoped_type_binding_params: Vec::new(),
@@ -3206,7 +3200,7 @@ impl<'db> LoweringContext<'db> {
                     self.binding_locals
                         .contains_key(&BindingId::local(scope_id, binding_idx)),
                     "lowering {} gave no local to `{}` (registered by {:?} in scope {scope_id:?})",
-                    self.builder.name(),
+                    self.builder.owner().short_name(self.db),
                     binding.name,
                     binding.site,
                 );
@@ -3217,7 +3211,7 @@ impl<'db> LoweringContext<'db> {
                         self.binding_locals
                             .contains_key(&BindingId::parameter(scope_id, *param_idx)),
                         "lowering {} gave no local to parameter `{name}`",
-                        self.builder.name(),
+                        self.builder.owner().short_name(self.db),
                     );
                 }
             }
@@ -5128,7 +5122,7 @@ impl<'db> LoweringContext<'db> {
         self.verify_bindings_recorded(self.current_scope, None);
 
         // Take the builder out of self to call `build()` which consumes it
-        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
         optimize::optimize_function(self.db, &mut mir, self.opt);
@@ -5252,7 +5246,7 @@ impl<'db> LoweringContext<'db> {
         self.verify_bindings_recorded(self.current_scope, None);
 
         // Take the builder out and build the MirFunctionBody
-        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut body = builder.build_body();
         optimize::optimize_function_body(self.db, &mut body, self.opt);
@@ -5275,19 +5269,10 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         dest: Place,
     ) {
-        // Generate a unique synthetic name for this lambda.
-        let parent_name = self.builder.name().to_string();
-        let lambda_count = self
-            .synthetic_name_counts
-            .entry("__lambda".to_string())
-            .or_insert(0);
-        let lambda_idx_name = *lambda_count;
-        *lambda_count += 1;
-        let lambda_name = format!("<lambda({parent_name}, {lambda_idx_name})>");
         let lambda_identity = MirFunctionId::Synthetic {
             parent: Box::new(self.builder.owner().clone()),
             kind: SyntheticKind::Lambda,
-            ordinal: lambda_idx_name,
+            ordinal: self.synthetic_ordinals.next(SyntheticKind::Lambda),
         };
 
         // Find the lambda's FileScopeId from the HIR index.
@@ -5343,7 +5328,6 @@ impl<'db> LoweringContext<'db> {
             &mut self.builder,
             MirBuilder::new(
                 FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
-                Name::new(&lambda_name),
                 0,
             ),
         );
@@ -5360,8 +5344,8 @@ impl<'db> LoweringContext<'db> {
         // exactly the enclosing one and nothing is appended for the body. The
         // save/restore stays because the body may itself contain lambdas.
         let saved_lambda_generic_params = self.lambda_generic_params.clone();
-        // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
-        // keeps incrementing across the whole function for uniqueness.
+        // NOTE: synthetic_ordinals is intentionally NOT saved — its counters
+        // keep incrementing across the whole function for uniqueness.
         //
         // pending_lambdas IS saved so each lambda collects only its own direct
         // children. The lambda body's nested lambdas are collected separately
@@ -5384,7 +5368,6 @@ impl<'db> LoweringContext<'db> {
         let arity = func_def.params.len();
         self.builder = MirBuilder::new(
             FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
-            Name::new(&lambda_name),
             arity,
         );
 
@@ -5475,7 +5458,7 @@ impl<'db> LoweringContext<'db> {
         // entering this lambda).
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
 
-        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
         optimize::optimize_function(self.db, &mut lambda_mir, self.opt);
@@ -5825,21 +5808,10 @@ impl<'db> LoweringContext<'db> {
         closure_ty: RuntimeTy,
         static_layout: Option<(Vec<String>, Vec<AstExprId>)>,
     ) -> Operand<'db> {
-        let parent_name = self.builder.name().to_string();
-        let idx = {
-            let c = self
-                .synthetic_name_counts
-                .entry("__tagged".to_string())
-                .or_insert(0);
-            let i = *c;
-            *c += 1;
-            i
-        };
-        let lambda_name = format!("<tagged({parent_name}, {idx})>");
         let lambda_identity = MirFunctionId::Synthetic {
             parent: Box::new(self.builder.owner().clone()),
             kind: SyntheticKind::Tagged,
-            ordinal: idx,
+            ordinal: self.synthetic_ordinals.next(SyntheticKind::Tagged),
         };
 
         // Find the HIR Lambda scope registered for this tagged template (its
@@ -5888,7 +5860,6 @@ impl<'db> LoweringContext<'db> {
             &mut self.builder,
             MirBuilder::new(
                 FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
-                Name::new(&lambda_name),
                 0,
             ),
         );
@@ -5920,7 +5891,6 @@ impl<'db> LoweringContext<'db> {
         let arity = body_params.len();
         self.builder = MirBuilder::new(
             FunctionOwner::Synthetic(Box::new(lambda_identity.clone())),
-            Name::new(&lambda_name),
             arity,
         );
 
@@ -6055,7 +6025,7 @@ impl<'db> LoweringContext<'db> {
         self.verify_bindings_recorded(lambda_scope_id, skipped_desugar);
 
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
-        let dummy = MirBuilder::new(self.builder.owner().clone(), Name::new("_dummy"), 0);
+        let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
         optimize::optimize_function(self.db, &mut lambda_mir, self.opt);

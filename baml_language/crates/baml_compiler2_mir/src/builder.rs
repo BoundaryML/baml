@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```ignore
-//! let mut builder = MirBuilder::new(Name::new("my_function"), 1);
+//! let mut builder = MirBuilder::new(FunctionOwner::Function(func_loc), 1);
 //!
 //! // Declare return place and parameter
 //! let ret = builder.declare_local(Some("_return".into()), RuntimeTy::Int, None);
@@ -36,11 +36,10 @@ use crate::{
 
 /// Builder for constructing MIR functions.
 pub(crate) struct MirBuilder<'db> {
-    /// Whose body this builder lowers; the built function's identity.
-    owner: FunctionOwner<'db>,
-    /// The unqualified display spelling nested synthetic functions name this
+    /// Whose body this builder lowers; the built function's identity, and
+    /// the only thing a nested synthetic function or a diagnostic names this
     /// body by.
-    name: Name,
+    owner: FunctionOwner<'db>,
     arity: usize,
     blocks: Vec<BasicBlock<'db>>,
     locals: Vec<LocalDecl>,
@@ -56,10 +55,9 @@ pub(crate) struct MirBuilder<'db> {
 #[allow(dead_code)]
 impl<'db> MirBuilder<'db> {
     /// Create a new MIR builder for a function.
-    pub(crate) fn new(owner: FunctionOwner<'db>, name: Name, arity: usize) -> Self {
+    pub(crate) fn new(owner: FunctionOwner<'db>, arity: usize) -> Self {
         Self {
             owner,
-            name,
             arity,
             blocks: Vec::new(),
             locals: Vec::new(),
@@ -68,11 +66,6 @@ impl<'db> MirBuilder<'db> {
             current_source_span: None,
             catch_regions: Vec::new(),
         }
-    }
-
-    /// Return the function name.
-    pub(crate) fn name(&self) -> &Name {
-        &self.name
     }
 
     pub(crate) fn owner(&self) -> &FunctionOwner<'db> {

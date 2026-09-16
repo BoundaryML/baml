@@ -1294,11 +1294,16 @@ impl MirFunctionId<'_> {
         }
     }
 
-    /// The unqualified spelling a nested synthetic function names its owner
-    /// by: `f`, `Class.method`, or the owner's own synthetic spelling.
+    /// The spelling a nested synthetic function names its owner by: the
+    /// declaration's link-name tail ([`crate::lower::definition_short_name`]
+    /// — `f`, `Class.m`, `Interface.m`, `<(target as iface)>.m`), or the
+    /// owner's own synthetic spelling.
     pub fn short_name(&self, db: &dyn crate::Db) -> String {
         match self {
-            MirFunctionId::Declared(func) => declared_short_name(db, *func),
+            MirFunctionId::Declared(func) => crate::lower::definition_short_name(
+                db,
+                baml_compiler2_hir::contributions::Definition::Function(*func),
+            ),
             MirFunctionId::Synthetic {
                 parent,
                 kind,
@@ -1332,14 +1337,17 @@ impl MirFunctionId<'_> {
 }
 
 impl<'db> FunctionOwner<'db> {
-    /// The unqualified spelling a synthetic function names this owner by.
+    /// The spelling a synthetic function names this owner by — see
+    /// [`MirFunctionId::short_name`].
     pub fn short_name(&self, db: &dyn crate::Db) -> String {
+        use baml_compiler2_hir::contributions::Definition;
         match self {
-            FunctionOwner::Function(func) => declared_short_name(db, *func),
-            FunctionOwner::Let(binding) => baml_compiler2_ppir::item_data::let_data(db, *binding)
-                .name
-                .as_str()
-                .to_string(),
+            FunctionOwner::Function(func) => {
+                crate::lower::definition_short_name(db, Definition::Function(*func))
+            }
+            FunctionOwner::Let(binding) => {
+                crate::lower::definition_short_name(db, Definition::Let(*binding))
+            }
             FunctionOwner::Synthetic(id) => id.short_name(db),
         }
     }
@@ -1354,22 +1362,6 @@ impl<'db> FunctionOwner<'db> {
                 unreachable!("a top-level let initializer is lowered as a body, never built")
             }
         }
-    }
-}
-
-/// `Class.method` for a class-inherent method, the bare name otherwise —
-/// the spelling nested synthetic functions name their owner by.
-fn declared_short_name(
-    db: &dyn crate::Db,
-    func: baml_compiler2_hir::loc::FunctionLoc<'_>,
-) -> String {
-    use baml_compiler2_ppir::item_data::{MethodOwner, class_data, function_data, method_owner};
-    let name = &function_data(db, func).name;
-    match method_owner(db, func) {
-        Some(MethodOwner::Class(class)) => {
-            format!("{}.{}", class_data(db, class).name.as_str(), name.as_str())
-        }
-        Some(MethodOwner::Interface(_) | MethodOwner::Impl(_)) | None => name.as_str().to_string(),
     }
 }
 
