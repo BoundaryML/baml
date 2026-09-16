@@ -113,7 +113,14 @@ applied in the Supabase dashboard and is not in the repo (the `intuitions`
 table, the `issues.kind` column and the `triage_cases` metric table were
 added the same way; keep their statements with the other schema notes).
 
+## Deploy
 
+`tools/atb2/deploy` is the runner: a Fly app (`atb2-runner`), one machine
+and one process, `runner_loop`, which serves `@bammy babysit <PR>` requests
+from the store in the background and runs `run_pipeline` every five minutes.
+One machine on purpose: a Fly volume attaches to one machine, and both loops
+share the cached clone and cargo target on it. A panic ends the process and
+Fly restarts it; every stage is idempotent against the store.
 
 At boot the entrypoint builds the latest nightly's `baml-cli` on the volume
 before any secret is loaded, in an explicit environment, and rebuilds
@@ -124,14 +131,22 @@ carries cargo, gh, node and the Claude Code CLI; the volume at `/data` holds
 the cached canary clone, the cargo target and the run dirs, and the first
 boot builds canary's `baml-cli` there.
 
-See [MILESTONES.md](MILESTONES.md) for the workflow, quantitative goals, acceptance
-criteria and known rollout prerequisites. The old approval flow is retired.
+The image starts a root bootstrap that prepares volume permissions, then runs
+compiler builds as `builder` (UID 1001) with a private home and cache under
+`/data/bootstrap`. `/data/home` is mode 0700 and owned by `atb2` (UID 1000),
+so build scripts cannot read the persistent Claude login. The builder receives
+an allowlisted environment and no capabilities. Bootstrap copies the binary
+using unprivileged readers/writers, fetches Infisical secrets as root, then
+executes the privilege drop with a fresh, allowlisted environment. The machine
+token never reaches the runtime process. The runtime has its own
+Cargo cache under `/data/cargo`. Each user has a private Rustup installation
+seeded from the image, so canary's required toolchains and components can be
+installed independently. Shared tools and application files remain root-owned
+and are not writable by either user.
 
-This issue-MVP layer ingests GitHub issues, CLI/PostHog feedback and signed Slack
-mentions. It filters vague reports, verifies repros, deduplicates, organizes,
-creates small draft fixes or larger investigation plans, and notifies shepherds.
-PR monitoring is delivered by its own dependent stack. Shirts and scratch tasks
-are not part of these milestone stacks.
+The allowed runtime variables are listed in `deploy/launch-runtime.py`.
+New runtime settings must be added there. Exported values are treated as
+literal strings, with shell parameter expansion disabled.
 
 Existing volumes keep their login and runtime state. The first boot after
 this change builds a fresh compiler in the isolated cache, even if the old
@@ -160,19 +175,17 @@ in the private run directory with its phase and exit code, never raw Git output
 or credentials. A failed push is not automatically retried: verify the remote
 head and permission settings before requesting a new attempt.
 
-The existing app is `atb2-runner`, volume `atb2_data`. Build with
-`docker build -f tools/atb2/deploy/Dockerfile tools/atb2` from the repository root.
-Deployment uses `fly deploy tools/atb2 --config deploy/fly.toml`; never deploy an
-unreviewed layer just to test a PR description. Canary changes deploy through
-`.github/workflows/atb2-deploy.yml` when the app-scoped Fly token is configured.
+Set `ATB2_CANARY_REV` to a commit SHA to pin the runner's compiler. If the
+cached executable's recorded revision matches that pin, startup skips the
+GitHub fetch and can proceed while GitHub is unavailable. Unpinned boots
+and missing or mismatched cached builds still require a successful fetch.
+The offline startup regression tests run with
+`python3 tools/atb2/deploy/test_entrypoint.py`.
 
-Infisical supplies `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_KEY`,
-`ATB2_GITHUB_TOKEN`, Slack bot/signing credentials, PostHog credentials,
-`ATB2_SHEPHERDS` (GitHub login:Slack member ID pairs), and `ATB2_UI_URL`.
-`ATB2_ISSUE_CC` optionally adds a Slack member mention. Use a member ID, not a DM
-channel ID. Issues go to the configured ATB channel. The default live channel is
-set in `deploy/fly.toml`. Subscribe the app to `app_mention` and `reaction_added`
-at `https://atb2-runner.fly.dev/slack/events` and invite it to that channel.
+`.github/workflows/atb2-deploy.yml` redeploys it on every push to `canary`
+that touches `tools/atb2`; it holds one secret, `FLY_API_TOKEN`, and skips
+itself until that exists. The site (`typescript2/app-feedback`) deploys
+through the Vercel GitHub app once its project is linked.
 
 The runner's secrets come from Infisical at start: the image carries the
 Infisical CLI. Configure the existing machine identity's `INFISICAL_CLIENT_ID`
@@ -210,14 +223,13 @@ fly volumes create atb2_data --size 80 --region sjc -a atb2-runner     # once
 fly deploy tools/atb2 --config deploy/fly.toml
 ```
 
-Only deploy the website to Vercel project `app-feedback`. Public pages use the
-Supabase anonymous key. GitHub sign-in and private transcript access additionally
-need `ATB2_GITHUB_CLIENT_ID`, `ATB2_GITHUB_CLIENT_SECRET`, `ATB2_UI_SESSION_SECRET`
-and `ATB2_UI_RUNNER_SECRET`, with that last secret shared with the runner.
-Do not assume a GitHub-linked Vercel project has canary as its production branch.
-Verify that configuration before claiming automatic production deployments.
+## Tests
 
-### Verification
+```sh
+tools/atb2/run_tests.sh wire       # store, slack, intake, pipeline: token-free
+tools/atb2/run_tests.sh pr         # handle_issue, merge_issue token-free, then the agent evals
+baml-cli test                      # everything token-free, no secrets needed
+```
 
 ## Eval rows vs real rows
 
