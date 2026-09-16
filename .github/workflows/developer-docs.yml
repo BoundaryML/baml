@@ -38,7 +38,7 @@ jobs:
       should-run: ${{ steps.changes.outputs.should-run }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -98,7 +98,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup Node.js and pnpm
@@ -138,7 +138,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup Node.js and pnpm
@@ -166,7 +166,7 @@ jobs:
       RUSTUP_MAX_RETRIES: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust toolchain
@@ -243,7 +243,7 @@ jobs:
           --health-retries 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup Node.js and pnpm
@@ -267,7 +267,7 @@ jobs:
       VERCEL_ENV: preview
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Setup Node.js and pnpm
