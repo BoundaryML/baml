@@ -2,9 +2,10 @@
 
 Exercises inferred-generic-call frame seeding (a `LoadType` + wider `Call`
 per iteration): `gapply<T>`'s `T` is inferred at every call site, so the caller
-seeds `frame.type_args = [int]` each time. Guards the cost of `CallPlan.type_args`
-threading against regressions; the rest of the compute suite is monomorphic and
-cannot see it.
+seeds `frame.type_args = [int, never]` each time. The two lanes are the inferred
+value type and the function's `never` error type. Guards the cost of
+`CallPlan.type_args` threading against regressions; the rest of the compute suite
+is monomorphic and cannot see it.
 
 ## BAML
 ```baml
