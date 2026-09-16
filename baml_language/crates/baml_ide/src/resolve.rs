@@ -1461,7 +1461,7 @@ pub(crate) fn member_resolution_target<'db>(
                             method_index,
                         });
                     }
-                    let default = extern_interface_method(db, row.head, method)?;
+                    let default = extern_interface_method(db, interface.head(db), method)?;
                     Some(SymbolTarget::Method {
                         func: DeclRef::External(default),
                     })

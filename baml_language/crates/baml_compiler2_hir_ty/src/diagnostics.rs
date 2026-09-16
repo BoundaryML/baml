@@ -199,6 +199,9 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
+    /// A constructor head that is an alias of a type no object literal can
+    /// construct (anything but a class).
+    CannotConstructAlias { name: Name, denotes: baml_type::Ty },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -1111,6 +1114,11 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
+                TirTypeError::CannotConstructAlias { name, denotes } => write!(
+                    f,
+                    "cannot construct `{name}`: it is an alias of `{}`, not a class",
+                    denotes.spell(vp)
+                ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =
                         baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(

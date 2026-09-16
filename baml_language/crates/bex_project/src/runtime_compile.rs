@@ -824,38 +824,32 @@ fn enrich_runtime_mount(
     }
     for mount in package.types.drain(..) {
         let root_ty = baml_type::Ty::from(&mount.ty);
-        // The export-name row: an additional spelling of the root declaration
-        // (or, for a structural type, an alias row of its own). It carries the
-        // same qtn as the item row, so both spellings lower to one identity.
-        let exported = match &mount.ty {
+        // The export name is one more spelling of the mounted type, never a
+        // second identity. A nominal root's identity is its item row (the row
+        // the consumer's stub declares), so an export name of its own is a
+        // transparent alias of that row — the same alias row a structural
+        // root gets — and an export name equal to the item name is the item
+        // row itself.
+        let root_item = match &mount.ty {
             baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
-                minted_rows.get(qtn.name()).cloned()
+                if !minted_rows.contains_key(qtn.name()) {
+                    return Err(RuntimeCompileDiagnostic {
+                        code: "E_RUNTIME_INTERFACE".to_string(),
+                        message: format!(
+                            "runtime type `{}` has no structural definition",
+                            mount.export_name
+                        ),
+                        severity: RuntimeDiagnosticSeverity::Error,
+                        span: None,
+                    });
+                }
+                Some(qtn.name())
             }
-            _ => Some(ExportedType::TypeAlias {
-                qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
-                resolved: root_ty.clone(),
-            }),
-        }
-        .ok_or_else(|| RuntimeCompileDiagnostic {
-            code: "E_RUNTIME_INTERFACE".to_string(),
-            message: format!(
-                "runtime type `{}` has no structural definition",
-                mount.export_name
-            ),
-            severity: RuntimeDiagnosticSeverity::Error,
-            span: None,
-        })?;
-        // When the export name is the root declaration's own item name, the
-        // item row already spells it with the same identity.
-        let export_is_root_item = matches!(
-            &mount.ty,
-            baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _)
-                if qtn.name() == &mount.export_name
-        );
-        let root_types = interface.types.entry(Vec::new()).or_default();
-        match root_types.get(&mount.export_name) {
-            Some(_) if export_is_root_item => {}
-            Some(_) => {
+            _ => None,
+        };
+        if root_item != Some(&mount.export_name) {
+            let root_types = interface.types.entry(Vec::new()).or_default();
+            if root_types.contains_key(&mount.export_name) {
                 return Err(RuntimeCompileDiagnostic {
                     code: "E0011".to_string(),
                     message: format!("duplicate exported type name `{}`", mount.export_name),
@@ -863,69 +857,14 @@ fn enrich_runtime_mount(
                     span: None,
                 });
             }
-            None => {
-                match &exported {
-                    ExportedType::Class { qtn, fields, .. }
-                        if source_identifier(&mount.export_name)
-                            && fields.iter().all(|(name, ..)| source_identifier(name)) =>
-                    {
-                        let mut source = String::new();
-                        write_docstring(
-                            &mut source,
-                            minted_docs
-                                .get(qtn.name())
-                                .and_then(|docs| docs.declaration.as_deref()),
-                            "",
-                        );
-                        writeln!(&mut source, "class {} {{", mount.export_name)
-                            .expect("writing to String is infallible");
-                        for (field, ty, attrs) in fields {
-                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
-                            let ty = if viewpoint.hides_type(ty) {
-                                "unknown".to_string()
-                            } else {
-                                ty.to_string()
-                            };
-                            writeln!(&mut source, "  {field} {ty}")
-                                .expect("writing to String is infallible");
-                        }
-                        source.push_str("}\n");
-                        stubs.push((Vec::new(), mount.export_name.clone(), source));
-                    }
-                    ExportedType::Enum { qtn, variants }
-                        if source_identifier(&mount.export_name)
-                            && variants.iter().all(source_identifier) =>
-                    {
-                        let mut source = String::new();
-                        let docs = minted_docs.get(qtn.name());
-                        write_docstring(
-                            &mut source,
-                            docs.and_then(|docs| docs.declaration.as_deref()),
-                            "",
-                        );
-                        writeln!(&mut source, "enum {} {{", mount.export_name)
-                            .expect("writing to String is infallible");
-                        for variant in variants {
-                            write_docstring(
-                                &mut source,
-                                docs.and_then(|docs| docs.members.get(variant))
-                                    .and_then(|docs| docs.as_deref()),
-                                "  ",
-                            );
-                            writeln!(&mut source, "  {variant}")
-                                .expect("writing to String is infallible");
-                        }
-                        source.push_str("}\n");
-                        stubs.push((Vec::new(), mount.export_name.clone(), source));
-                    }
-                    ExportedType::Class { .. }
-                    | ExportedType::Enum { .. }
-                    | ExportedType::Interface { .. }
-                    | ExportedType::TypeAlias { .. } => {}
-                }
-                interface.namespaces.insert(Vec::new());
-                root_types.insert(mount.export_name.clone(), exported);
-            }
+            interface.namespaces.insert(Vec::new());
+            root_types.insert(
+                mount.export_name.clone(),
+                ExportedType::TypeAlias {
+                    qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
+                    resolved: root_ty.clone(),
+                },
+            );
         }
 
         for (witness, field_links) in mount.witnesses {
@@ -2893,8 +2832,9 @@ mod tests {
             ],
         };
 
-        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
-            .expect("runtime mount enriches");
+        let (interface_blob, stubs) =
+            enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
+                .expect("runtime mount enriches");
         let sources = stubs
             .into_iter()
             .map(|(_, _, source)| source)
@@ -2905,16 +2845,41 @@ mod tests {
                 && source.contains("  /// Runtime field docs\n  value string")
         }));
         assert!(sources.iter().any(|source| {
-            source.starts_with("/// Runtime class docs\nclass ClassAlias {")
-                && source.contains("  /// Runtime field docs\n  value string")
-        }));
-        assert!(sources.iter().any(|source| {
             source.starts_with("/// Runtime enum docs\nenum RuntimeState {")
                 && source.contains("  /// Runtime variant docs\n  READY")
         }));
-        assert!(sources.iter().any(|source| {
-            source.starts_with("/// Runtime enum docs\nenum StateAlias {")
-                && source.contains("  /// Runtime variant docs\n  READY")
+        // An export name is a spelling of the item row, not a second
+        // declaration: it gets an alias row and no stub of its own.
+        assert!(!sources.iter().any(|source| {
+            source.contains("class ClassAlias") || source.contains("enum StateAlias")
         }));
+        let enriched = baml_artifact::decode::<PackageInterface<TypeName>>(
+            baml_artifact::ArtifactKind::PackageInterface,
+            &interface_blob,
+        )
+        .expect("enriched interface decodes");
+        let root_types = &enriched.types[&Vec::new()];
+        assert!(matches!(
+            &root_types[&Name::new("ClassAlias")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                resolved: baml_type::Ty::Class(qtn, ..),
+                ..
+            } if qtn.name().as_str() == "RuntimeClass"
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("StateAlias")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                resolved: baml_type::Ty::Enum(qtn, ..),
+                ..
+            } if qtn.name().as_str() == "RuntimeState"
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("RuntimeClass")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::Class { .. }
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("RuntimeState")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::Enum { .. }
+        ));
     }
 }

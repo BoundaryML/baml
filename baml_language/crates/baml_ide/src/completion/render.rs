@@ -32,9 +32,7 @@ pub(super) fn member(
     form: MemberForm,
 ) -> (Option<String>, Option<String>) {
     use baml_compiler2_hir::loc::DeclRef;
-    use baml_compiler2_hir_ty::extern_loc::{
-        extern_class_row, extern_enum_row, extern_function_row,
-    };
+    use baml_compiler2_hir_ty::extern_loc::{extern_class_row, extern_function_row};
 
     let style = match form {
         MemberForm::Instance => info::instance_completion_sig_style(),
@@ -70,16 +68,7 @@ pub(super) fn member(
         MemberDecl::EnumVariant {
             enum_loc: DeclRef::External(enum_loc),
             ..
-        } => (
-            Some(
-                extern_enum_row(db, *enum_loc)
-                    .head
-                    .name()
-                    .as_str()
-                    .to_string(),
-            ),
-            None,
-        ),
+        } => (Some(enum_loc.head(db).name().as_str().to_string()), None),
         MemberDecl::ClassField {
             class: DeclRef::Source(class),
             index,

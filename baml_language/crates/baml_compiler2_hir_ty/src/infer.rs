@@ -774,6 +774,16 @@ struct ThrowsContract {
     at: ExprId,
 }
 
+/// Why a written constructor head yields no class to construct.
+enum ConstructorMiss {
+    /// The head resolves to nothing, or to an item that is neither a class
+    /// nor an alias: reported as an unresolved constructor type.
+    Unresolved,
+    /// The head is an alias of a type no object literal can construct:
+    /// already reported precisely.
+    Reported,
+}
+
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
 /// types interned (still var-carrying until finish); finalized into the
 /// shared vocabulary with PLAIN types at writeback. Short-lived and
@@ -1006,6 +1016,20 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
         suggestions: Box<[baml_type::Name]>,
+    },
+    /// A constructor head that is an alias of a type no object literal can
+    /// construct.
+    AliasNotConstructible {
+        expr: ExprId,
+        name: baml_type::Name,
+        denotes: baml_type::Ty,
+    },
+    /// Type arguments written on an alias, which takes none: the class's
+    /// come from the alias's definition.
+    AliasTakesNoTypeArgs {
+        expr: ExprId,
+        name: baml_type::Name,
+        got: usize,
     },
     /// A positional argument after a named one.
     PositionalAfterNamed {
@@ -8650,9 +8674,12 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Object-constructor typing: resolve the class, instantiate its
-    /// generics (explicit args or fresh vars - `Box<_> { .. }` holes are
-    /// vars too), check each written field against its substituted type.
+    /// Object-constructor typing: resolve the written head to the class it
+    /// denotes, instantiate that class's generics (explicit args or fresh
+    /// vars - `Box<_> { .. }` holes are vars too - or the arguments an alias
+    /// pins), check each written field against its substituted type. A
+    /// written head is legal wherever the type it denotes would be, so an
+    /// alias of a class constructs that class.
     fn infer_object(
         &mut self,
         body: &ExprBody,
@@ -8661,66 +8688,169 @@ impl<'db> InferenceContext<'db> {
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
+        let (class, pinned) = match self.constructor_head(object, type_name) {
+            Ok(head) => head,
+            Err(miss) => {
+                // A WRITTEN constructor head that denotes no class reports as
+                // an unresolved type with near-match suggestions
+                // (`ValidationIssu { .. }` suggests the class), unless the
+                // head itself was already reported.
+                let segments: Vec<baml_type::Name> = type_name
+                    .0
+                    .iter()
+                    .map(|segment| baml_type::Name::new(segment.as_str()))
+                    .collect();
+                if matches!(miss, ConstructorMiss::Unresolved) && !segments.is_empty() {
+                    self.pending_diags.push(PendingDiag::UnresolvedCtor {
+                        expr: object,
+                        name: baml_type::Name::new(
+                            segments
+                                .iter()
+                                .map(smol_str::SmolStr::as_str)
+                                .collect::<Vec<_>>()
+                                .join("."),
+                        ),
+                        suggestions: self.lower.type_suggestions(&segments),
+                    });
+                }
+                for field in fields {
+                    self.infer_expr(body, field.value, &Expectation::None);
+                }
+                for spread in spreads {
+                    self.infer_expr(body, spread.expr, &Expectation::None);
+                }
+                return Ty::error();
+            }
+        };
+        match class {
+            DeclRef::Source(class) => {
+                self.infer_source_object(body, object, type_name, class, pinned, fields, spreads)
+            }
+            DeclRef::External(class) => {
+                self.infer_exported_object(body, object, class, pinned, fields, spreads)
+            }
+        }
+    }
+
+    /// The class a written constructor head denotes, wherever it is
+    /// declared, with the instantiation an alias pins (`None` when the head
+    /// names the class itself and the arguments are the object's own). A
+    /// scoped type parameter shadows every item and denotes no class; an
+    /// alias of anything but a class denotes none either.
+    fn constructor_head(
+        &mut self,
+        object: ExprId,
+        type_name: &baml_base::TypePath,
+    ) -> Result<(ClassRef<'db>, Option<Vec<Ty>>), ConstructorMiss> {
+        use baml_compiler2_hir::contributions::Definition;
+
+        use crate::{lower::ResolvedTypeDefinition, package_interface::ExportedType};
+
         if type_name
             .0
             .first()
-            .is_none_or(|name| self.scoped_type_param(name).is_none())
-            && let Some(exported) = self.lower.resolve_exported_type_definition(&type_name.0)
-            && let crate::package_interface::ExportedType::Class {
-                qtn,
-                fields: exported_fields,
-                generic_params,
-                generic_param_bounds,
-                ..
-            } = exported.as_ref()
+            .is_some_and(|name| self.scoped_type_param(name).is_some())
         {
-            return self.infer_exported_object(
-                body,
-                object,
-                qtn.clone(),
-                exported_fields,
-                generic_params,
-                generic_param_bounds,
-                fields,
-                spreads,
-            );
+            return Err(ConstructorMiss::Unresolved);
         }
-        let definition = type_name
-            .0
-            .first()
-            .is_none_or(|name| self.scoped_type_param(name).is_none())
-            .then(|| self.lower.resolve_type_definition(&type_name.0))
-            .flatten();
-        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
-            // A WRITTEN constructor head that resolves nowhere reports
-            // as an unresolved type with near-match suggestions
-            // (`ValidationIssu { .. }` suggests the class).
-            let segments: Vec<baml_type::Name> = type_name
-                .0
-                .iter()
-                .map(|segment| baml_type::Name::new(segment.as_str()))
-                .collect();
-            if !segments.is_empty() {
-                self.pending_diags.push(PendingDiag::UnresolvedCtor {
-                    expr: object,
-                    name: baml_type::Name::new(
-                        segments
-                            .iter()
-                            .map(smol_str::SmolStr::as_str)
-                            .collect::<Vec<_>>()
-                            .join("."),
-                    ),
-                    suggestions: self.lower.type_suggestions(&segments),
-                });
+        let db = self.db;
+        let alias_value = match self.lower.resolve_type(&type_name.0) {
+            None => return Err(ConstructorMiss::Unresolved),
+            Some(ResolvedTypeDefinition::Source(Definition::Class(class))) => {
+                return Ok((DeclRef::Source(class), None));
             }
-            for field in fields {
-                self.infer_expr(body, field.value, &Expectation::None);
+            Some(ResolvedTypeDefinition::Source(Definition::TypeAlias(alias))) => {
+                crate::lower::type_alias_value(db, alias)
             }
-            for spread in spreads {
-                self.infer_expr(body, spread.expr, &Expectation::None);
-            }
-            return Ty::error();
+            Some(ResolvedTypeDefinition::Source(_)) => return Err(ConstructorMiss::Unresolved),
+            Some(ResolvedTypeDefinition::Exported(exported)) => match exported.as_ref() {
+                ExportedType::Class { qtn, .. } => {
+                    return mounted_class_loc(db, qtn)
+                        .map(|class| (DeclRef::External(class), None))
+                        .ok_or(ConstructorMiss::Unresolved);
+                }
+                ExportedType::TypeAlias { resolved, .. } => resolved.clone(),
+                ExportedType::Enum { .. } | ExportedType::Interface { .. } => {
+                    return Err(ConstructorMiss::Unresolved);
+                }
+            },
         };
+        let short = baml_type::Name::new(
+            type_name
+                .0
+                .last()
+                .expect("type paths are never empty")
+                .as_str(),
+        );
+        // An alias takes no arguments of its own: written ones are an arity
+        // error, and the class's come from the alias's definition.
+        let written = self
+            .type_refs
+            .expr_type_args
+            .get(&object)
+            .map_or(0, |args| args.len());
+        if written > 0 {
+            self.pending_diags.push(PendingDiag::AliasTakesNoTypeArgs {
+                expr: object,
+                name: short.clone(),
+                got: written,
+            });
+        }
+        let Some((head, args)) = self.class_denoted_by(alias_value.clone()) else {
+            self.pending_diags.push(PendingDiag::AliasNotConstructible {
+                expr: object,
+                name: short,
+                denotes: alias_value,
+            });
+            return Err(ConstructorMiss::Reported);
+        };
+        let pinned = Some(args.iter().map(crate::impls::interned_ty).collect());
+        match crate::facts::definition_of(db, &head) {
+            Some(Definition::Class(class)) => Ok((DeclRef::Source(class), pinned)),
+            Some(_) => Err(ConstructorMiss::Unresolved),
+            None => mounted_class_loc(db, &head)
+                .map(|class| (DeclRef::External(class), pinned))
+                .ok_or(ConstructorMiss::Unresolved),
+        }
+    }
+
+    /// The class `ty` denotes once aliases are expanded: a class itself, or
+    /// an alias chain ending in one. A chain that revisits an alias is a
+    /// declaration cycle (rejected at its declaration) and denotes no class.
+    fn class_denoted_by(
+        &self,
+        mut ty: baml_type::Ty,
+    ) -> Option<(baml_type::DeclName, Vec<baml_type::Ty>)> {
+        let mut visited: Vec<baml_type::DeclName> = Vec::new();
+        loop {
+            match ty {
+                baml_type::Ty::Class(head, args, _) => return Some((head, args.to_vec())),
+                baml_type::Ty::TypeAlias(name, _) => {
+                    if visited.contains(&name) {
+                        return None;
+                    }
+                    ty = crate::facts::uncached_alias_def(self.db, &name)?;
+                    visited.push(name);
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    /// A source class under construction: at `pinned` arguments when the
+    /// head was an alias (the object is then the class the alias denotes),
+    /// else at the object's own written or inferred ones.
+    #[expect(clippy::too_many_arguments)]
+    fn infer_source_object(
+        &mut self,
+        body: &ExprBody,
+        object: ExprId,
+        type_name: &baml_base::TypePath,
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        pinned: Option<Vec<Ty>>,
+        fields: &[ObjectExprField],
+        spreads: &[baml_compiler2_ast::SpreadField],
+    ) -> Ty {
         let db = self.db;
         let class_name = crate::lower::class_qualified_name(db, class);
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
@@ -8758,8 +8888,11 @@ impl<'db> InferenceContext<'db> {
             .generic_params
             .len();
         let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
-        let instantiation = self.instantiation_args(object, &generic_names, None);
-        let mut instantiation = instantiation;
+        let through_alias = pinned.is_some();
+        let mut instantiation = match pinned {
+            Some(pinned) => pinned,
+            None => self.instantiation_args(object, &generic_names, None),
+        };
         instantiation.truncate(generic_count);
         while instantiation.len() < generic_count {
             instantiation.push(self.table.new_var_ty());
@@ -8848,12 +8981,20 @@ impl<'db> InferenceContext<'db> {
             fields,
             !spreads.is_empty(),
         );
-        let short = type_name.0.last().expect("type paths are never empty");
-        let object_ty = Ty::intern(InferTy::Class(
+        // The object's head: the written spelling (a `$stream` companion
+        // re-qualifies under its own name), or through an alias the class
+        // the alias denotes.
+        let object_head = if through_alias {
+            class_name.clone()
+        } else {
+            let short = type_name.0.last().expect("type paths are never empty");
             self.lower.qualify_definition(
                 baml_compiler2_hir::contributions::Definition::Class(class),
                 short,
-            ),
+            )
+        };
+        let object_ty = Ty::intern(InferTy::Class(
+            object_head,
             instantiation.into(),
             TyAttr::default(),
         ));
@@ -8867,22 +9008,24 @@ impl<'db> InferenceContext<'db> {
         object_ty
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// A served class under construction: at `pinned` arguments when the
+    /// head was an alias, else at the object's own written or inferred
+    /// ones.
     fn infer_exported_object(
         &mut self,
         body: &ExprBody,
         object: ExprId,
-        class_name: baml_type::DeclName,
-        exported_fields: &[(
-            baml_type::Name,
-            baml_type::Ty,
-            crate::package_interface::ExportedFieldAttrs,
-        )],
-        generic_params: &[baml_type::ParamTy],
-        generic_param_bounds: &[Vec<baml_type::Interface>],
+        class: crate::extern_loc::ExternClassLoc<'db>,
+        pinned: Option<Vec<Ty>>,
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
+        let db = self.db;
+        let row = crate::extern_loc::extern_class_row(db, class);
+        let class_name = class.head(db).clone();
+        let exported_fields = row.fields;
+        let generic_params = row.generic_params;
+        let generic_param_bounds = row.generic_param_bounds;
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -8914,7 +9057,10 @@ impl<'db> InferenceContext<'db> {
                 });
             return Ty::error();
         }
-        let mut instantiation = self.instantiation_args(object, generic_params, None);
+        let mut instantiation = match pinned {
+            Some(pinned) => pinned,
+            None => self.instantiation_args(object, generic_params, None),
+        };
         instantiation.truncate(generic_params.len());
         while instantiation.len() < generic_params.len() {
             instantiation.push(self.table.new_var_ty());
@@ -11070,6 +11216,19 @@ impl<'db> InferenceContext<'db> {
                     } => (
                         crate::diagnostics::removed_reflect_spelling(&name)
                             .unwrap_or(TirTypeError::UnresolvedType { name, suggestions }),
+                        expr,
+                    ),
+                    PendingDiag::AliasNotConstructible {
+                        expr,
+                        name,
+                        denotes,
+                    } => (TirTypeError::CannotConstructAlias { name, denotes }, expr),
+                    PendingDiag::AliasTakesNoTypeArgs { expr, name, got } => (
+                        TirTypeError::WrongNumberOfTypeArgs {
+                            type_name: name,
+                            expected: 0,
+                            got,
+                        },
                         expr,
                     ),
                     PendingDiag::PositionalAfterNamed { expr } => {

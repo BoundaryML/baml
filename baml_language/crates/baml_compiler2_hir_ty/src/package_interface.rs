@@ -28,6 +28,7 @@ use crate::{
     callable::{ExternalCallTarget, ExternalLinkability},
     extern_loc::{ExternFunctionLoc, extern_function_named},
     lower::qualify_def,
+    render::{Spell, Viewpoint},
 };
 
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
@@ -538,34 +539,207 @@ impl<N: Head> PackageInterface<N> {
     }
 }
 
-/// A wire head an importing root cannot reach: the explicit
-/// unspellable-from-here outcome of [`import_interface`].
+/// Why [`import_interface`] refused a wire interface: it is not a faithful
+/// export of the root it is being mounted as. Every spelling is canonical.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnresolvedHead(pub TypeName);
+pub enum ImportError {
+    /// A wire head the importing root cannot reach: the explicit
+    /// unspellable-from-here outcome.
+    UnresolvedHead(TypeName),
+    /// A row claims an identity other than the key it is exported under
+    /// (a type row's `qtn`, a callable row's `target`), so a consumer
+    /// minting from the key and one reading the row would disagree about
+    /// what the row names.
+    RowIdentity {
+        kind: &'static str,
+        key: String,
+        claimed: String,
+    },
+    /// Two rows of one family share a key, so the key names no single row.
+    DuplicateRow { kind: &'static str, key: String },
+    /// An impl claims to be declared in the body of a class this package
+    /// does not export.
+    DanglingImplOrigin { interface: String, class: String },
+}
 
-impl std::fmt::Display for UnresolvedHead {
+impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "the interface names `{}`, whose package this package cannot reach",
-            self.0
-        )
+        match self {
+            Self::UnresolvedHead(name) => write!(
+                f,
+                "the interface names `{name}`, whose package this package cannot reach"
+            ),
+            Self::RowIdentity { kind, key, claimed } => {
+                write!(
+                    f,
+                    "the {kind} row exported as `{key}` claims to be `{claimed}`"
+                )
+            }
+            Self::DuplicateRow { kind, key } => {
+                write!(f, "the interface exports two {kind} rows as `{key}`")
+            }
+            Self::DanglingImplOrigin { interface, class } => write!(
+                f,
+                "an impl of `{interface}` claims the body of `{class}`, which this package does not export as a class"
+            ),
+        }
     }
 }
 
 /// A wire interface as seen from `root`: the artifact's own declarations
-/// are `root`'s, its dependencies resolve through `root`'s edges.
+/// are `root`'s, its dependencies resolve through `root`'s edges, and every
+/// row is the row its key says it is ([`validate_row_identities`]).
 pub fn import_interface(
     db: &dyn baml_compiler2_ppir::Db,
     root: baml_base::SourceRoot,
     wire: &PackageInterface<TypeName>,
-) -> Result<PackageInterface, UnresolvedHead> {
+) -> Result<PackageInterface, ImportError> {
     let spelling = baml_compiler2_hir::package::spelling(db);
-    wire.try_map_heads(&mut |name| {
+    let interface = wire.try_map_heads(&mut |name| {
         spelling
             .resolve(db, root, name)
-            .ok_or_else(|| UnresolvedHead(name.clone()))
-    })
+            .ok_or_else(|| ImportError::UnresolvedHead(name.clone()))
+    })?;
+    validate_row_identities(db, root, &interface)?;
+    Ok(interface)
+}
+
+/// Every row's claimed identity must be the key it is exported under: a
+/// type row's `qtn`; a callable row's `target` (a free function's item, a
+/// class method's class, an interface method's interface, an impl-provided
+/// method's slot on the impl's own interface); an in-body impl's class. One
+/// key names one row. Export builds key and claim from one definition, so a
+/// faithful blob always passes; a blob that disagrees is refused at the
+/// mount boundary, and after import the key and the row are one fact that
+/// a consumer may read from either side.
+fn validate_row_identities(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: baml_base::SourceRoot,
+    interface: &PackageInterface,
+) -> Result<(), ImportError> {
+    let viewpoint = Viewpoint::canonical(db);
+    let spell = |head: &DeclName| head.spell(&viewpoint);
+    let spell_target = |target: &ExternalCallTarget| match target {
+        ExternalCallTarget::Free { function } => spell(function),
+        ExternalCallTarget::Method { class, name } => format!("{}.{}", spell(class), name.as_str()),
+        ExternalCallTarget::Interface { interface, method } => {
+            format!("{}.{}", spell(interface), method.as_str())
+        }
+    };
+    // The callable rows of one owner, each against the target its key gives
+    // it; two rows of one owner may not share a name.
+    let check_callables = |kind: &'static str,
+                           rows: &mut dyn Iterator<Item = &ExportedFunction>,
+                           expected: &dyn Fn(&Name) -> ExternalCallTarget|
+     -> Result<(), ImportError> {
+        let mut seen = FxHashSet::default();
+        for row in rows {
+            let expected = expected(&row.name);
+            if row.target != expected {
+                return Err(ImportError::RowIdentity {
+                    kind,
+                    key: spell_target(&expected),
+                    claimed: spell_target(&row.target),
+                });
+            }
+            if !seen.insert(&row.name) {
+                return Err(ImportError::DuplicateRow {
+                    kind,
+                    key: spell_target(&expected),
+                });
+            }
+        }
+        Ok(())
+    };
+    for (namespace, types) in &interface.types {
+        for (name, row) in types {
+            let key = DeclName::in_root(root, namespace.clone(), name.clone());
+            let (kind, claimed) = match row {
+                ExportedType::Class { qtn, .. } => ("class", qtn),
+                ExportedType::Enum { qtn, .. } => ("enum", qtn),
+                ExportedType::TypeAlias { qtn, .. } => ("type alias", qtn),
+                ExportedType::Interface { qtn, .. } => ("interface", qtn),
+            };
+            if *claimed != key {
+                return Err(ImportError::RowIdentity {
+                    kind,
+                    key: spell(&key),
+                    claimed: spell(claimed),
+                });
+            }
+            match row {
+                ExportedType::Class { methods, .. } => {
+                    check_callables("class method", &mut methods.iter(), &|name| {
+                        ExternalCallTarget::Method {
+                            class: key.clone(),
+                            name: name.clone(),
+                        }
+                    })?;
+                }
+                ExportedType::Interface {
+                    required_methods,
+                    default_methods,
+                    ..
+                } => {
+                    check_callables(
+                        "interface method",
+                        &mut required_methods.iter().chain(default_methods),
+                        &|name| ExternalCallTarget::Interface {
+                            interface: key.clone(),
+                            method: name.clone(),
+                        },
+                    )?;
+                }
+                ExportedType::Enum { .. } | ExportedType::TypeAlias { .. } => {}
+            }
+        }
+    }
+    for (namespace, functions) in &interface.functions {
+        for (name, row) in functions {
+            let key = DeclName::in_root(root, namespace.clone(), name.clone());
+            if row.name != *name {
+                return Err(ImportError::RowIdentity {
+                    kind: "function",
+                    key: spell(&key),
+                    claimed: spell(&DeclName::in_root(
+                        root,
+                        namespace.clone(),
+                        row.name.clone(),
+                    )),
+                });
+            }
+            let expected = ExternalCallTarget::Free { function: key };
+            if row.target != expected {
+                return Err(ImportError::RowIdentity {
+                    kind: "function",
+                    key: spell_target(&expected),
+                    claimed: spell_target(&row.target),
+                });
+            }
+        }
+    }
+    for exported in &interface.impls {
+        let slot_owner = &exported.interface.name;
+        check_callables("impl method", &mut exported.methods.iter(), &|name| {
+            ExternalCallTarget::Interface {
+                interface: slot_owner.clone(),
+                method: name.clone(),
+            }
+        })?;
+        if let ExportedImplOrigin::InBodyClass { class_qtn } = &exported.origin
+            && !(class_qtn.root() == root
+                && matches!(
+                    interface.lookup_type(class_qtn.namespace(), class_qtn.name()),
+                    Some(ExportedType::Class { .. })
+                ))
+        {
+            return Err(ImportError::DanglingImplOrigin {
+                interface: spell(slot_owner),
+                class: spell(class_qtn),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// `root`'s interface spelled for the wire: every head by its root's
@@ -1162,10 +1336,23 @@ pub fn package_interface(
         && let Some(name) = pkg_id.self_name(db)
         && let Some(seeds) = db.seeded_stdlib_interface()
         && let Some(bytes) = seeds.by_package(db).get(name.as_str())
-        && let Ok(wire) = borsh::from_slice::<PackageInterface<TypeName>>(bytes)
-        && let Ok(iface) = import_interface(db, pkg_id, &wire)
     {
-        return iface;
+        // The seed is keyed by this compiler's fingerprint, so a blob that
+        // does not decode or is not a faithful export is a compiler bug,
+        // never a stale cache: fail loud rather than silently deriving the
+        // package from source.
+        let wire = borsh::from_slice::<PackageInterface<TypeName>>(bytes).unwrap_or_else(|error| {
+            panic!(
+                "seeded interface for stdlib package `{}` does not decode: {error}",
+                name.as_str()
+            )
+        });
+        return import_interface(db, pkg_id, &wire).unwrap_or_else(|error| {
+            panic!(
+                "seeded interface for stdlib package `{}` is not a faithful export of its root: {error}",
+                name.as_str()
+            )
+        });
     }
 
     // A package served from its interface has no source rows. Its serialized

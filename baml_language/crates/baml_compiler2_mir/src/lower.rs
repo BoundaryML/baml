@@ -8,8 +8,8 @@ use baml_compiler2_hir_ty::{
         lang_function,
     },
     extern_loc::{
-        EnumRef, ExternFunctionLoc, FunctionRef, InterfaceRef, extern_enum_row,
-        extern_function_row, extern_interface_method, mounted_enum_loc,
+        EnumRef, ExternFunctionLoc, FunctionRef, InterfaceRef, extern_function_row,
+        extern_interface_method, mounted_enum_loc,
     },
     package_interface::ExportedFunction,
 };
@@ -1440,7 +1440,7 @@ pub fn enum_link_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> St
     match enum_ref {
         DeclRef::Source(enum_loc) => definition_link_name(db, Definition::Enum(enum_loc)),
         DeclRef::External(enum_loc) => {
-            let head = extern_enum_row(db, enum_loc).head;
+            let head = enum_loc.head(db);
             link_name(
                 spelling(db).of(head.root()),
                 head.namespace(),
@@ -11910,7 +11910,7 @@ impl<'db> LoweringContext<'db> {
             DeclRef::External(interface) => {
                 let row =
                     baml_compiler2_hir_ty::extern_loc::extern_interface_row(self.db, interface);
-                let method = extern_interface_method(self.db, row.head, method)?;
+                let method = extern_interface_method(self.db, interface.head(self.db), method)?;
                 let interface_generics = row.generic_params.len();
                 let own_start = 1 + interface_generics;
                 let frame_len = own_start

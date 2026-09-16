@@ -40,7 +40,7 @@ use baml_type::{
 use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone)]
-enum ResolvedTypeDefinition<'db> {
+pub(crate) enum ResolvedTypeDefinition<'db> {
     Source(Definition<'db>),
     Exported(Box<crate::package_interface::ExportedType>),
 }
@@ -1377,7 +1377,7 @@ impl<'db> LowerCtx<'db> {
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
     /// current package (no outward walk); (2) `root.`-absolute or
     /// package-prefixed; (3) the `$stream` companion fallback.
-    fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
+    pub(crate) fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
         let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
 
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {

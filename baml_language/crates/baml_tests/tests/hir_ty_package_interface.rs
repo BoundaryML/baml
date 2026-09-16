@@ -14,14 +14,16 @@ use baml_compiler2_hir_ty::{
     },
     impls::{ResolvedImplFacts, impl_facts, package_impl_locs},
     package_interface::{
-        ExportedFunction, ExportedImpl, ExportedType, ResolvedValue, export_interface,
-        exported_takes_self, package_interface, package_resolution_context,
-        reduce_ground_projections,
+        ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType, PackageInterface,
+        ResolvedValue, export_interface, exported_takes_self, import_interface, package_interface,
+        package_resolution_context, reduce_ground_projections,
     },
 };
-use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
+use baml_db::{
+    ProjectDatabase, SourceRootError, collect_diagnostics, testing::assert_no_diagnostic_errors,
+};
 use baml_tests::engine::TestDbExt;
-use baml_type::{DeclName, ParamTy};
+use baml_type::{DeclName, ParamTy, TypeName};
 
 const LIBRARY: &str = r#"
 interface Parent {
@@ -146,6 +148,208 @@ fn mounted_interface_skew_is_rejected_before_installation() {
             baml_artifact::FORMAT_VERSION,
         )
     );
+}
+
+/// The library's wire interface with `forge` applied, encoded.
+fn forged_library_blob(forge: impl FnOnce(&mut PackageInterface<TypeName>)) -> Vec<u8> {
+    let db = library_db();
+    assert_no_diagnostic_errors(&db);
+    let mut interface = export_interface(&db, app_root(&db));
+    forge(&mut interface);
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+        .expect("package interface serializes")
+}
+
+/// The message mounting `blob` as `app` is refused with.
+fn mount_refusal(blob: Vec<u8>) -> String {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-forged"));
+    match db.try_mount("app", blob) {
+        Err(SourceRootError::InvalidInterface { message }) => message,
+        other => {
+            panic!("a row claiming an identity other than its key must be refused, got {other:?}")
+        }
+    }
+}
+
+fn wire_name(package: &str, namespace: &[&str], name: &str) -> TypeName {
+    TypeName::new(
+        Name::new(package),
+        namespace
+            .iter()
+            .map(|segment| Name::new(*segment))
+            .collect(),
+        Name::new(name),
+    )
+}
+
+fn type_row_mut<'a>(
+    interface: &'a mut PackageInterface<TypeName>,
+    name: &str,
+) -> &'a mut ExportedType<TypeName> {
+    interface
+        .types
+        .get_mut(&Vec::new())
+        .and_then(|types| types.get_mut(&Name::new(name)))
+        .expect("the library exports the row")
+}
+
+#[test]
+fn a_type_row_claiming_another_identity_is_refused_before_installation() {
+    let class = forged_library_blob(|interface| {
+        let ExportedType::Class { qtn, .. } = type_row_mut(interface, "Box") else {
+            unreachable!("Box is a class")
+        };
+        *qtn = wire_name("baml", &[], "String");
+    });
+    assert_eq!(
+        mount_refusal(class),
+        "the class row exported as `app.Box` claims to be `baml.String`"
+    );
+
+    let enum_row = forged_library_blob(|interface| {
+        let ExportedType::Enum { qtn, .. } = type_row_mut(interface, "Status") else {
+            unreachable!("Status is an enum")
+        };
+        *qtn = wire_name("app", &[], "Colour");
+    });
+    assert_eq!(
+        mount_refusal(enum_row),
+        "the enum row exported as `app.Status` claims to be `app.Colour`"
+    );
+
+    let interface_row = forged_library_blob(|interface| {
+        let ExportedType::Interface { qtn, .. } = type_row_mut(interface, "View") else {
+            unreachable!("View is an interface")
+        };
+        *qtn = wire_name("baml", &[], "ToString");
+    });
+    assert_eq!(
+        mount_refusal(interface_row),
+        "the interface row exported as `app.View` claims to be `baml.ToString`"
+    );
+
+    let alias = forged_library_blob(|interface| {
+        let ExportedType::TypeAlias { qtn, .. } = type_row_mut(interface, "Score") else {
+            unreachable!("Score is an alias")
+        };
+        *qtn = wire_name("app", &["deep"], "Score");
+    });
+    assert_eq!(
+        mount_refusal(alias),
+        "the type alias row exported as `app.Score` claims to be `app.deep.Score`"
+    );
+}
+
+#[test]
+fn a_callable_row_claiming_another_address_is_refused_before_installation() {
+    let free = forged_library_blob(|interface| {
+        let row = interface
+            .functions
+            .get_mut(&Vec::new())
+            .and_then(|functions| functions.get_mut(&Name::new("choose")))
+            .expect("choose is exported");
+        row.target = ExternalCallTarget::Free {
+            function: wire_name("app", &[], "elsewhere"),
+        };
+    });
+    assert_eq!(
+        mount_refusal(free),
+        "the function row exported as `app.choose` claims to be `app.elsewhere`"
+    );
+
+    let method = forged_library_blob(|interface| {
+        let ExportedType::Class { methods, .. } = type_row_mut(interface, "Box") else {
+            unreachable!("Box is a class")
+        };
+        methods[0].target = ExternalCallTarget::Method {
+            class: wire_name("app", &[], "Entry"),
+            name: Name::new("get_value"),
+        };
+    });
+    assert_eq!(
+        mount_refusal(method),
+        "the class method row exported as `app.Box.get_value` claims to be `app.Entry.get_value`"
+    );
+
+    let slot = forged_library_blob(|interface| {
+        let ExportedType::Interface {
+            required_methods, ..
+        } = type_row_mut(interface, "View")
+        else {
+            unreachable!("View is an interface")
+        };
+        required_methods[0].target = ExternalCallTarget::Interface {
+            interface: wire_name("baml", &[], "ToString"),
+            method: Name::new("get"),
+        };
+    });
+    assert_eq!(
+        mount_refusal(slot),
+        "the interface method row exported as `app.View.get` claims to be `baml.ToString.get`"
+    );
+
+    let duplicate = forged_library_blob(|interface| {
+        let ExportedType::Class { methods, .. } = type_row_mut(interface, "Box") else {
+            unreachable!("Box is a class")
+        };
+        let twin = methods[0].clone();
+        methods.push(twin);
+    });
+    assert_eq!(
+        mount_refusal(duplicate),
+        "the interface exports two class method rows as `app.Box.get_value`"
+    );
+}
+
+#[test]
+fn an_impl_row_claiming_another_slot_or_class_is_refused_before_installation() {
+    let provided = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter_mut()
+            .find(|row| !row.methods.is_empty())
+            .expect("Entry's View impl provides `get`");
+        row.methods[0].target = ExternalCallTarget::Interface {
+            interface: wire_name("app", &[], "Parent"),
+            method: Name::new("get"),
+        };
+    });
+    assert_eq!(
+        mount_refusal(provided),
+        "the impl method row exported as `app.View.get` claims to be `app.Parent.get`"
+    );
+
+    let origin = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter_mut()
+            .find(|row| row.interface.name.name().as_str() == "View")
+            .expect("Entry implements View in its body");
+        assert!(matches!(row.origin, ExportedImplOrigin::InBodyClass { .. }));
+        row.origin = ExportedImplOrigin::InBodyClass {
+            class_qtn: wire_name("app", &[], "Nope"),
+        };
+    });
+    assert_eq!(
+        mount_refusal(origin),
+        "an impl of `app.View` claims the body of `app.Nope`, which this package does not export as a class"
+    );
+}
+
+/// A faithful export always re-imports: the validator that refuses forged
+/// rows never refuses a compiler-built blob, for the fixture, the mounted
+/// copy of it, and every stdlib package.
+#[test]
+fn every_compiler_built_interface_reimports_as_a_faithful_export() {
+    let db = mounted_consumer();
+    let mut checked = 0;
+    for root in db.source_roots() {
+        let wire = export_interface(&db, root);
+        import_interface(&db, root, &wire).unwrap_or_else(|error| panic!("{error}"));
+        checked += 1;
+    }
+    assert!(checked > 2, "the stdlib packages round-trip too: {checked}");
 }
 
 #[test]

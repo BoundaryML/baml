@@ -613,10 +613,11 @@ impl ProjectDatabase {
         table.set_roots(self).to(roots);
         Arc::make_mut(&mut self.roots_by_path).insert(path, root);
 
-        // A served-from-interface root's blob must resolve from the root it
-        // now is: every head it spells names the root itself or a package
-        // reached by one of its edges. A blob that names anything else is
-        // not mountable here, and the root does not stay.
+        // A served-from-interface root's blob must be a faithful export of
+        // the root it now is: every head it spells names the root itself or
+        // a package reached by one of its edges, and every row is the row
+        // its key exports it as (`import_interface`). A blob that fails
+        // either is not mountable here, and the root does not stay.
         if let Some(wire) = wire_interface
             && let Err(error) =
                 baml_compiler2_hir_ty::package_interface::import_interface(self, root, &wire)

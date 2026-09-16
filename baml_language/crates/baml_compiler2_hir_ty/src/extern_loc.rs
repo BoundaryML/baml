@@ -99,27 +99,28 @@ impl std::fmt::Debug for ExternInterfaceLoc<'_> {
     }
 }
 
-/// An exported class row, borrowed whole from the package interface.
+/// An exported class row, borrowed whole from the package interface. A row
+/// is data only: its identity is the loc it was read through, never a field
+/// the blob controls.
 #[derive(Clone, Copy)]
 pub struct ClassRow<'db> {
-    pub head: &'db DeclName,
     pub fields: &'db [(Name, baml_type::Ty, ExportedFieldAttrs)],
     pub methods: &'db [ExportedFunction],
     pub generic_params: &'db [ParamTy],
     pub generic_param_bounds: &'db [Vec<baml_type::Interface>],
 }
 
-/// An exported enum row, borrowed whole from the package interface.
+/// An exported enum row, borrowed whole from the package interface. Data
+/// only, as [`ClassRow`].
 #[derive(Clone, Copy)]
 pub struct EnumRow<'db> {
-    pub head: &'db DeclName,
     pub variants: &'db [Name],
 }
 
 /// An exported interface row, borrowed whole from the package interface.
+/// Data only, as [`ClassRow`].
 #[derive(Clone, Copy)]
 pub struct InterfaceRow<'db> {
-    pub head: &'db DeclName,
     pub self_param: &'db ParamTy,
     pub generic_params: &'db [ParamTy],
     pub param_bounds: &'db [Vec<baml_type::Interface>],
@@ -145,13 +146,12 @@ pub fn extern_class_row<'db>(
     let head = class.head(db);
     match type_row_at(db, head) {
         Some(ExportedType::Class {
-            qtn,
+            qtn: _,
             fields,
             methods,
             generic_params,
             generic_param_bounds,
         }) => ClassRow {
-            head: qtn,
             fields,
             methods,
             generic_params,
@@ -168,10 +168,7 @@ pub fn extern_enum_row<'db>(
 ) -> EnumRow<'db> {
     let head = enum_loc.head(db);
     match type_row_at(db, head) {
-        Some(ExportedType::Enum { qtn, variants }) => EnumRow {
-            head: qtn,
-            variants,
-        },
+        Some(ExportedType::Enum { qtn: _, variants }) => EnumRow { variants },
         _ => no_type_row(db, "enum", head),
     }
 }
@@ -184,7 +181,7 @@ pub fn extern_interface_row<'db>(
     let head = interface.head(db);
     match type_row_at(db, head) {
         Some(ExportedType::Interface {
-            qtn,
+            qtn: _,
             self_param,
             generic_params,
             param_bounds,
@@ -194,7 +191,6 @@ pub fn extern_interface_row<'db>(
             required_methods,
             default_methods,
         }) => InterfaceRow {
-            head: qtn,
             self_param,
             generic_params,
             param_bounds,

@@ -1240,7 +1240,7 @@ pub fn member_candidates<'db>(
             );
         }
         for exported in row.methods {
-            let method = crate::extern_loc::extern_class_method(db, row.head, &exported.name)
+            let method = crate::extern_loc::extern_class_method(db, class.head(db), &exported.name)
                 .unwrap_or_else(|| unreachable!("a method row of the class mints"));
             push_candidate(
                 &mut out,
@@ -1476,7 +1476,7 @@ fn interface_member_rows<'db>(
             ));
         }
         for exported in row.required_methods.iter().chain(row.default_methods) {
-            let method = extern_interface_method(db, row.head, &exported.name)
+            let method = extern_interface_method(db, interface.head(db), &exported.name)
                 .unwrap_or_else(|| unreachable!("a row of the interface mints"));
             if existential && callable_breaks_one_self(db, DeclRef::External(method)) {
                 continue;

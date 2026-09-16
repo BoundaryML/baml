@@ -613,7 +613,7 @@ fn target_type_info(
                 name: name.as_str().to_string(),
                 ty: render::display_ty_canonical_for_file(db, reader, ty),
                 is_let: false,
-                owner: Some(render::canonical_path(db, row.head)),
+                owner: Some(render::canonical_path(db, class.head(db))),
             })
         }
         SymbolTarget::Variant {
@@ -622,9 +622,10 @@ fn target_type_info(
         } => {
             let row = extern_enum_row(db, enum_loc);
             let variant = row.variants.get(variant_index)?;
+            let head = enum_loc.head(db);
             Some(TypeInfo::Symbol {
-                declaration: format!("{}: {}", variant.as_str(), row.head.name().as_str()),
-                owner: Some(render::canonical_path(db, row.head)),
+                declaration: format!("{}: {}", variant.as_str(), head.name().as_str()),
+                owner: Some(render::canonical_path(db, head)),
                 docstring: None,
             })
         }
@@ -651,7 +652,7 @@ fn target_type_info(
             let method = row.required_methods.get(method_index)?;
             Some(TypeInfo::Symbol {
                 declaration: FnSigParts::of_exported(method).render(db, reader, hover_sig_style()),
-                owner: Some(render::canonical_path(db, row.head)),
+                owner: Some(render::canonical_path(db, iface.head(db))),
                 docstring: None,
             })
         }
@@ -665,7 +666,7 @@ fn target_type_info(
                 name: name.as_str().to_string(),
                 ty: render::display_ty_canonical_for_file(db, reader, ty),
                 is_let: false,
-                owner: Some(render::canonical_path(db, row.head)),
+                owner: Some(render::canonical_path(db, iface.head(db))),
             })
         }
     }

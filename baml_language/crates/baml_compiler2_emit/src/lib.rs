@@ -3855,13 +3855,14 @@ fn seed_served_rows<'db>(
                 rows.push((loc, row));
             }
         }
-        for types in interface.types.values() {
-            for ty in types.values() {
-                let ExportedType::Class { qtn, methods, .. } = ty else {
+        for (namespace, types) in &interface.types {
+            for (name, ty) in types {
+                let ExportedType::Class { methods, .. } = ty else {
                     continue;
                 };
+                let class = baml_type::DeclName::in_root(root, namespace.clone(), name.clone());
                 for row in methods {
-                    let loc = extern_class_method(db, qtn, &row.name).unwrap_or_else(|| {
+                    let loc = extern_class_method(db, &class, &row.name).unwrap_or_else(|| {
                         unreachable!("the row was enumerated from this interface")
                     });
                     rows.push((loc, row));

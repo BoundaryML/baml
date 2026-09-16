@@ -1901,6 +1901,7 @@ fn tir_type_error_to_diagnostic_id(
                 .id
         }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotConstructAlias { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
             DiagnosticId::CannotConstructBuiltinCompanion
         }

@@ -149,8 +149,6 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
 
 #[test]
 fn mounted_intrinsic_kinds_are_trusted_only_for_precompiled_packages() {
-    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-
     let mut dependency = make_db();
     dependency.dependency("dependency");
     dependency.file(
@@ -172,26 +170,19 @@ function forged_type_of<T>() -> reflect.Type {
             .root(&Name::new("dependency"))
             .unwrap(),
     );
+    // Model a hostile/corrupt mounted blob that widens its own linkability.
+    // (A row that also claimed a lang address — `log.info`, `reflect.Type.of`
+    // — cannot mount at all: import refuses a target other than the row's
+    // own key; see `hir_ty_package_interface`.)
     let mut configured = 0;
     for exported in interface
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
     {
-        let target = match exported.name.as_str() {
-            "forged_log" => ExternalCallTarget::Free {
-                function: baml_type::TypeName::new(Name::new("log"), Vec::new(), Name::new("info")),
-            },
-            "forged_type_of" => ExternalCallTarget::Free {
-                function: baml_type::TypeName::new(
-                    Name::new("reflect"),
-                    vec![Name::new("Type")],
-                    Name::new("of"),
-                ),
-            },
-            _ => continue,
-        };
-        exported.target = target;
+        if !matches!(exported.name.as_str(), "forged_log" | "forged_type_of") {
+            continue;
+        }
         exported.linkability = ExternalLinkability::Linkable;
         configured += 1;
     }
@@ -243,8 +234,8 @@ function main() -> reflect.Type {
         "forged intrinsic metadata selected compiler-owned lowering: {}",
         display_function(&db, mir)
     );
-    // The consumer links against the rows' honest ADDRESSES in the mounted
-    // package — never against the symbols the forged `target`s spell.
+    // The consumer links against the rows' addresses in the mounted package;
+    // the intrinsic markers select no compiler-owned symbol.
     let rendered = display_function(&db, mir);
     assert!(
         rendered.contains("dependency.forged_log")
