@@ -396,6 +396,24 @@ function wait_poll() -> null {
 
 /// After a push: waits until the PR's head moved off `old_head`, then one
 /// more poll so the new head's check runs are registered.
+function wait_for_new_head(pr: string, old_head: string, started: baml.time.Instant) -> null {
+    while (true) {
+        wait_poll();
+        let head = pr_snapshot(pr)?.head ?? old_head;
+        if (head != old_head) {
+            return wait_poll();
+        };
+        if (elapsed_s(started) >= max_wait_s()) {
+            log.warn({ "pr": pr, "warning": "head did not move after the push" });
+            return null;
+        };
+    }
+    null
+}
+
+// ==================== Config ====================
+
+/// Seconds between polls while checks are running.
 function poll_s() -> int {
     int.parse(baml.env.get("ATB2_POLL_S") ?? "120") catch (_) {
         _ => 120,
