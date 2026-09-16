@@ -41,6 +41,21 @@ class HarnessTest(unittest.TestCase):
             result = load.wait_until_ready('http://target/', 'http://target/gc', stop)
         self.assertTrue(result['ok'])
 
+    def test_gc_summary_reports_achieved_frequency_and_durations(self):
+        results = [
+            {'ok': True, 'duration_ms': 10},
+            {'ok': False, 'duration_ms': 40},
+            {'ok': True, 'duration_ms': 20},
+        ]
+        summary = load.gc_summary(results, skipped=2, frequency_hz=10, elapsed_seconds=2)
+        self.assertEqual(summary['configured_frequency_hz'], 10)
+        self.assertEqual(summary['attempted'], 3)
+        self.assertEqual(summary['successful'], 2)
+        self.assertEqual(summary['failed'], 1)
+        self.assertEqual(summary['skipped_ticks'], 2)
+        self.assertEqual(summary['achieved_frequency_hz'], 1)
+        self.assertEqual(summary['duration_ms_median'], 20)
+
     def test_binary_search_midpoint_respects_resolution(self):
         self.assertEqual(midpoint(5000, 10000, 100), 7500)
         self.assertEqual(midpoint(5000, 7500, 100), 6200)

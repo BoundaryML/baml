@@ -13,6 +13,20 @@ function checkedRate(value, label) {
   return value;
 }
 
+function checkedNumberList(value, label, minimum, maximum, allowZero = false) {
+  if (!Array.isArray(value) || value.length === 0) throw new Error(`${label} must be a non-empty array`);
+  const values = value.map((item, index) => {
+    if (typeof item !== 'number' || !Number.isFinite(item) || item < minimum || item > maximum || (!allowZero && item === 0)) {
+      throw new Error(`${label}[${index}] must be a finite number from ${minimum}..${maximum}`);
+    }
+    return item;
+  });
+  if (new Set(values).size !== values.length || values.some((item, index) => index > 0 && item <= values[index - 1])) {
+    throw new Error(`${label} must be strictly increasing with no duplicates`);
+  }
+  return values;
+}
+
 function cellValue(configured, cell, label) {
   if (Number.isInteger(configured)) return configured;
   if (configured && typeof configured === 'object') {
@@ -23,11 +37,22 @@ function cellValue(configured, cell, label) {
 }
 
 function normalizeProfile(profile, cell) {
-  if (!profile || !['ramp', 'sustain', 'binary'].includes(profile.mode)) throw new Error('Profile mode must be ramp, sustain, or binary');
+  if (!profile || !['ramp', 'sustain', 'binary', 'gc-grid'].includes(profile.mode)) throw new Error('Profile mode must be ramp, sustain, binary, or gc-grid');
   if (profile.on_seconds !== 4 || profile.off_seconds !== 1) throw new Error('The load duty cycle must be 4 seconds on and 1 second off');
   if (profile.explicit_gc !== undefined && typeof profile.explicit_gc !== 'boolean') throw new Error('explicit_gc must be a boolean');
   const explicitGc = profile.explicit_gc === true;
   if (explicitGc && profile.mode !== 'binary') throw new Error('explicit_gc is currently supported only in binary mode');
+  if (profile.mode === 'gc-grid') {
+    const rates = checkedNumberList(profile.rates_rps, 'rates_rps', 1, 50000).map((rate, index) => checkedRate(rate, `rates_rps[${index}]`));
+    const gcFrequencies = checkedNumberList(profile.gc_frequencies_hz, 'gc_frequencies_hz', 0, 10, true);
+    const seconds = profile.seconds_per_cell;
+    const connections = profile.connections;
+    const timeout = profile.request_timeout_ms;
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 3600 || seconds % 5 !== 0) throw new Error('seconds_per_cell must be a positive multiple of five up to 3600');
+    if (!Number.isInteger(connections) || connections < 1 || connections > 10000) throw new Error('connections must be 1..10000');
+    if (!Number.isInteger(timeout) || timeout < 100 || timeout >= 1000) throw new Error('request_timeout_ms must fit inside the one-second off-window');
+    return { mode: 'gc-grid', start: rates[0], increase: 0, every: seconds, maximum: rates.at(-1), rates, gcFrequencies, seconds, connections, timeout, on: 4, off: 1, explicitGc: false };
+  }
   if (profile.mode === 'ramp') {
     const start = checkedRate(cellValue(profile.start_rate_per_target, cell, 'start_rate_per_target'), `start_rate_per_target for ${cell.name}`);
     const increase = cellValue(profile.increase_rate_per_target, cell, 'increase_rate_per_target');
@@ -112,7 +137,7 @@ class BenchmarkStack extends cdk.Stack {
     validateRun(id, images, profile);
     if (![0, 1].includes(appCount) || ![0, 1].includes(loadCount)) throw new Error('Counts must be 0 or 1');
     if (targetCell && !cells().some(cell => cell.name === targetCell)) throw new Error(`Unknown target cell: ${targetCell}`);
-    if (profile.explicit_gc && !['baml-only-arm64', 'baml-only-x64'].includes(targetCell)) throw new Error('explicit_gc requires one baml-only targetCell');
+    if ((profile.explicit_gc || profile.mode === 'gc-grid') && !['baml-only-arm64', 'baml-only-x64'].includes(targetCell)) throw new Error('explicit GC experiments require one baml-only targetCell');
     if (localLoadCidr && !/^([0-9]{1,3}\.){3}[0-9]{1,3}\/32$/.test(localLoadCidr)) throw new Error('localLoadCidr must be an IPv4 /32');
     if (localLoadCidr && (!targetCell || loadCount !== 0)) throw new Error('localLoadCidr requires one targetCell and loadCount=0');
     const run = id;
@@ -182,6 +207,10 @@ class BenchmarkStack extends cdk.Stack {
           RATE_STEP_PER_TARGET: String(load.increase), RATE_STEP_SECONDS: String(load.every), MAX_RATE_PER_TARGET: String(load.maximum),
           ON_SECONDS: String(load.on), OFF_SECONDS: String(load.off), LOAD_MODE: load.mode, TARGET_URL: `http://${name}.${run}.hello.internal:8080/` };
         if (load.explicitGc) env.EXPLICIT_GC_URL = `http://${name}.${run}.hello.internal:8080/gc`;
+        if (load.mode === 'gc-grid') Object.assign(env, { EXPLICIT_GC_URL: `http://${name}.${run}.hello.internal:8080/gc`,
+          GC_GRID_RATES_JSON: JSON.stringify(load.rates), GC_GRID_FREQUENCIES_JSON: JSON.stringify(load.gcFrequencies),
+          GC_GRID_SECONDS_PER_CELL: String(load.seconds), VEGETA_CONNECTIONS: String(load.connections),
+          REQUEST_TIMEOUT_MS: String(load.timeout) });
         if (load.mode === 'binary') Object.assign(env, { SEARCH_LOWER_RPS: String(load.lower), SEARCH_UPPER_RPS: String(load.upper),
           SEARCH_RESOLUTION_RPS: String(load.resolution), SEARCH_SECONDS_PER_CANDIDATE: String(load.seconds),
           VEGETA_CONNECTIONS: String(load.connections), REQUEST_TIMEOUT_MS: String(load.timeout) });

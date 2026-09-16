@@ -103,6 +103,20 @@ python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-vpc-node-bin
 
 Set `"explicit_gc": true` on a binary profile to run an opt-in BAML-only experiment in which every cycle is four seconds of load, a successful `GET /gc`, and then one second idle. The generator waits for a successful hello-world probe and GC before every candidate, which prevents an OOM at a failing candidate from contaminating the next candidate while ECS replaces the task. A failed GC request fails the candidate immediately. GC duration is additional to the four-second active and one-second idle windows, so use the emitted `ExplicitGcDurationMs` metric when converting the configured active-window RPS into wall-clock average throughput.
 
+## Sweep request rate against forced-GC frequency
+
+The `gc-grid` profile mode tests an ordered matrix of active-window RPS targets and periodic forced-GC frequencies against one BAML-only cell. Every healthy matrix cell runs for `seconds_per_cell`, using the same 4-seconds-on/1-second-off request duty cycle as the ramp. The periodic GC scheduler operates independently across active and idle windows, never overlaps GC calls, and records skipped ticks when a collection takes longer than the configured interval. A configured frequency is therefore a target; `gc_grid_cell_finished.explicit_gc.achieved_frequency_hz` is the measured successful frequency.
+
+Each cell first waits for an exact hello-world response, performs one cleanup GC that is excluded from the configured frequency, and idles for one second. This resets collectible state without changing the immutable application image. If ECS replaces an OOM-killed task, the next cell waits for the replacement and repeats the same preparation. The included profile covers a no-periodic-GC baseline plus 0.1–10 GC/s and 200–5,000 active-window RPS, with 60 seconds per healthy cell.
+
+```sh
+python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-baml-gc-grid-01 --images artifacts/BUILD/images.json --profile profiles/gc-grid-baml-only-arm64.json --target-cell baml-only-arm64
+
+python3 scripts/render_gc_grid.py --aws-profile "$AWS_PROFILE" --name hello-baml-gc-grid-01 --output-dir OUTPUT_DIRECTORY
+```
+
+The renderer downloads retained `gc_grid_cell_finished` records and ECS task-stop events, writes the joined JSON and a flat CSV, and produces a throughput heatmap. Numeric cells are achieved HTTP 200 responses per active second. A cell is labeled `OOM` only when its time window contains an ECS application stop with exit code 137 or an out-of-memory reason; other incomplete cells are labeled `FAIL`.
+
 ## Confirm sustained rates
 
 A sustain profile accepts one rate for all cells or overrides keyed by implementation or full `implementation-architecture` cell name. Full-cell keys take precedence over implementation keys. This permits all ten coarse bounds to be tested together without changing workload images or resource allocations.

@@ -1,0 +1,11 @@
+{
+  "name": "gc-grid-baml-only-arm64",
+  "mode": "gc-grid",
+  "rates_rps": [200, 500, 1000, 2000, 3000, 4000, 5000],
+  "gc_frequencies_hz": [0, 0.1, 0.2, 0.5, 1, 2, 5, 10],
+  "seconds_per_cell": 60,
+  "connections": 1000,
+  "request_timeout_ms": 800,
+  "on_seconds": 4,
+  "off_seconds": 1
+}

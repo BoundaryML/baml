@@ -104,6 +104,26 @@ test('explicit GC profile passes a GC endpoint to the load task', () => {
   assert.throws(() => new BenchmarkStack(f.app, 'bad-node-gc', { ...f, images, profile: binary, targetCell: 'node-only-arm64' }));
   assert.throws(() => new BenchmarkStack(f.app, 'bad-matrix-gc', { ...f, images, profile: binary }));
 });
+test('GC grid profile passes the matrix and GC endpoint to one BAML-only load task', () => {
+  const grid = { mode: 'gc-grid', rates_rps: [200, 500, 1000, 2000, 3000, 4000, 5000],
+    gc_frequencies_hz: [0, 0.1, 0.2, 0.5, 1, 2, 5, 10], seconds_per_cell: 60, connections: 1000,
+    request_timeout_ms: 800, on_seconds: 4, off_seconds: 1 };
+  const normalized = normalizeProfile(grid, { name: 'baml-only-arm64', variant: 'baml-only' });
+  assert.deepEqual(normalized.rates, grid.rates_rps);
+  assert.deepEqual(normalized.gcFrequencies, grid.gc_frequencies_hz);
+  const f = fixtures();
+  const r = resources(new BenchmarkStack(f.app, 'baml-gc-grid', { ...f, images, profile: grid, targetCell: 'baml-only-arm64' }));
+  const environment = r.BamlOnlyArm64LoadTask.Properties.ContainerDefinitions[0].Environment;
+  const value = name => environment.find(item => item.Name === name)?.Value;
+  assert.equal(value('LOAD_MODE'), 'gc-grid');
+  assert.equal(value('GC_GRID_RATES_JSON'), JSON.stringify(grid.rates_rps));
+  assert.equal(value('GC_GRID_FREQUENCIES_JSON'), JSON.stringify(grid.gc_frequencies_hz));
+  assert.equal(value('GC_GRID_SECONDS_PER_CELL'), '60');
+  assert.equal(value('EXPLICIT_GC_URL'), 'http://baml-only-arm64.baml-gc-grid.hello.internal:8080/gc');
+  assert.throws(() => normalizeProfile({ ...grid, gc_frequencies_hz: [0, 1, 1] }, { name: 'baml-only-arm64', variant: 'baml-only' }));
+  assert.throws(() => new BenchmarkStack(f.app, 'bad-node-grid', { ...f, images, profile: grid, targetCell: 'node-only-arm64' }));
+  assert.throws(() => new BenchmarkStack(f.app, 'bad-matrix-grid', { ...f, images, profile: grid }));
+});
 test('comparison dashboard keeps twenty series and valid unique metric ids', () => {
   for (const widget of dashboard(['steady-ten', 'steady-hundred'], 'us-east-1').widgets) {
     const metrics = widget.properties.metrics;
