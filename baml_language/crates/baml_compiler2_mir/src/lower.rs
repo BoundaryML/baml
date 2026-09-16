@@ -10706,6 +10706,14 @@ impl<'db> LoweringContext<'db> {
         type_args: &[AstTypeExpr],
         dest: Place,
     ) {
+        // An interface item — a virtual slot, or a matched impl's method —
+        // has no global of its own to pool: its turbofish value is the
+        // type-keyed callable the bare reference is, with the written
+        // arguments in the plan keyed at this expression.
+        if let Some(callee) = self.unbound_interface_item_callee(base) {
+            self.lower_type_keyed_item_reference(expr_id, &callee, dest);
+            return;
+        }
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
             // A value base (a local/captured generic function value):
             // there is no function global to pool, so specialize the *runtime
@@ -10756,10 +10764,32 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Resolve a `GenericApply` base to the underlying function (a free
-    /// function or a static/interface method), wherever it is declared.
-    /// `None` for bound methods, lambdas, or anything that is not a function
-    /// path.
+    /// The callee of `base` when it is an UNBOUND interface item — the
+    /// type-rooted spellings `I.m`, `C.m`, `(C as I).m` — wherever the
+    /// interface is declared.
+    fn unbound_interface_item_callee(&self, base: AstExprId) -> Option<MethodCallee<'db>> {
+        use crate::inference_provider::MemberResolution;
+        let key = self.expr_metadata_key(base);
+        let resolution = self
+            .tir_path_final_resolution(key)
+            .or_else(|| self.tir_resolution(key))?;
+        match resolution {
+            MemberResolution::Method {
+                callee: callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
+                receiver: Receiver::Unbound,
+            } => Some(callee.clone()),
+            MemberResolution::Method { .. }
+            | MemberResolution::Free { .. }
+            | MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => None,
+        }
+    }
+
+    /// Resolve a `GenericApply` base to the underlying function with a
+    /// global of its own (a free function or a class-inherent static),
+    /// wherever it is declared. `None` for bound methods, lambdas, interface
+    /// items, or anything that is not a function path.
     fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<FunctionRef<'db>> {
         use crate::inference_provider::MemberResolution;
         let is_fn = |r: &MemberResolution<'_>| {
@@ -10769,10 +10799,6 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::Method {
                         callee: MethodCallee::Inherent(_),
                         receiver: Receiver::Unbound,
-                    }
-                    | MemberResolution::Method {
-                        callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
-                        ..
                     }
             )
         };

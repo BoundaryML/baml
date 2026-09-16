@@ -6604,7 +6604,7 @@ impl<'db> InferenceContext<'db> {
     /// resolved through the same static-class correspondence written
     /// `string.from(..)` calls use, its `T` pinned to the receiver.
     fn string_from_callee(&mut self, target: Ty) -> Option<Ty> {
-        if let Some((class, _)) =
+        if let Some((DeclRef::Source(class), _)) =
             self.static_class_for(std::slice::from_ref(&baml_type::Name::new("string")))
         {
             let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
@@ -7114,7 +7114,7 @@ impl<'db> InferenceContext<'db> {
     /// the UFCS shape `Type.method(recv, ..)` already uses.
     fn item_projection_value(
         &mut self,
-        interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        interface: InterfaceRef<'db>,
         written: Option<&WrittenQualifier<'_>>,
         member: &baml_type::Name,
         own: OwnArgs,
@@ -7123,9 +7123,49 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<Ty> {
         let qself = written.map(|written| &written.qself);
         let realized = written.map(|written| written.realized);
-        let method = self.interface_method_loc(interface, member)?;
-        let signature = function_signature(self.db, method);
-        let Some((self_param, after_self)) = signature.generic_params.split_first() else {
+        // The interface's own declaration of `member` (required and default
+        // alike), its frame, the interface's declared generic count, and the
+        // interface's head, wherever the interface is declared. The frame is
+        // `[Self] ++ interface generics ++ the method's own generics`
+        // (`lower::interface_frame`) in both lanes: an exported row's own
+        // generics keep their frame indices and its owner frame is the
+        // interface's (`extern_owner_generics`).
+        let (method, frame, pinned, iface_qtn): (
+            FunctionRef<'db>,
+            std::borrow::Cow<'db, [baml_type::ParamTy]>,
+            usize,
+            baml_type::DeclName,
+        ) = match interface {
+            DeclRef::Source(interface) => {
+                let method = self.interface_method_loc(interface, member)?;
+                (
+                    DeclRef::Source(method),
+                    std::borrow::Cow::Borrowed(
+                        function_signature(self.db, method)
+                            .generic_params
+                            .as_slice(),
+                    ),
+                    baml_compiler2_ppir::item_data::interface_data(self.db, interface)
+                        .generic_params
+                        .len(),
+                    crate::interfaces::interface_loc_qtn(self.db, interface).unwrap_or_else(|| {
+                        unreachable!("a resolved interface item has a source QTN")
+                    }),
+                )
+            }
+            DeclRef::External(interface) => {
+                let method = extern_interface_method(self.db, interface.head(self.db), member)?;
+                (
+                    DeclRef::External(method),
+                    callable_generic_frame(self.db, DeclRef::External(method)).params,
+                    crate::extern_loc::extern_interface_row(self.db, interface)
+                        .generic_params
+                        .len(),
+                    interface.head(self.db).clone(),
+                )
+            }
+        };
+        let Some((self_param, after_self)) = frame.split_first() else {
             unreachable!("an interface method's generic frame always opens with `Self`")
         };
         debug_assert_eq!(
@@ -7134,19 +7174,14 @@ impl<'db> InferenceContext<'db> {
             "interface method frame must open with the `Self` slot"
         );
 
-        // The frame is `[Self] ++ interface generics ++ the method's own
-        // generics` (`lower::interface_frame`). A written qualifier realizes
-        // the generics group and it is PINNED from it: `Conv<int>` and
-        // `Conv<string>` are different interfaces a type may implement both
-        // of, so leaving their slots to inference would let two calls in one
-        // body unify against the same hole. Associated types are not slots -
-        // signature references to them are projections over `Self`, reduced
-        // once `Self` is known.
-        let interface_data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
-        let pinned = interface_data.generic_params.len();
-        // `lower::function_generic_frame` builds an interface method's frame
-        // from this same `interface_data`, appending the method's own generics
-        // after the two groups, so the frame is always at least this long.
+        // A written qualifier realizes the interface generics group and it
+        // is PINNED from it: `Conv<int>` and `Conv<string>` are different
+        // interfaces a type may implement both of, so leaving their slots to
+        // inference would let two calls in one body unify against the same
+        // hole. Associated types are not slots - signature references to
+        // them are projections over `Self`, reduced once `Self` is known.
+        // The frame appends the method's own generics after the two groups,
+        // so it is always at least this long.
         debug_assert!(
             pinned <= after_self.len(),
             "interface method frame is shorter than the interface it was built from"
@@ -7156,7 +7191,7 @@ impl<'db> InferenceContext<'db> {
         // the tests if it is ever load-bearing.
         let (frame_params, own_params) = after_self.split_at(pinned.min(after_self.len()));
 
-        let mut instantiation = Vec::with_capacity(signature.generic_params.len());
+        let mut instantiation = Vec::with_capacity(frame.len());
         let self_slot = match qself {
             Some(written) => written.clone(),
             None => self.fresh_generic_arg(self_param),
@@ -7170,13 +7205,9 @@ impl<'db> InferenceContext<'db> {
         // value to consult, and an erased type names no single impl).
         // An UNRESOLVED `Self` is a hard error: rustc's E0790, whose fix is
         // the fully-qualified spelling.
-        let takes_self = signature
-            .params
-            .first()
-            .is_some_and(|param| param.name.as_str() == "self");
+        let takes_self = crate::callable::callable_takes_self(self.db, method);
         let iface_ref = InferInterface::new(
-            crate::interfaces::interface_loc_qtn(self.db, interface)
-                .unwrap_or_else(|| unreachable!("a resolved interface item has a source QTN")),
+            iface_qtn,
             // The WRITTEN arguments: `Conv<int>` and `Conv<string>` are
             // different interfaces, so a message naming a bare `Conv` would
             // not say which one the reference meant. Empty for the inferred
@@ -7275,7 +7306,7 @@ impl<'db> InferenceContext<'db> {
                 plan.own_offset = 0;
             }
         }
-        self.register_callable_bounds(DeclRef::Source(method), &instantiation, anchor);
+        self.register_callable_bounds(method, &instantiation, anchor);
         if let Some(record_at) = record_at {
             // The slot is what is statically known - interface plus member -
             // recorded for default and required methods alike, and UNBOUND:
@@ -7288,7 +7319,7 @@ impl<'db> InferenceContext<'db> {
                 record_at,
                 MemberResolution::Method {
                     callee: MethodCallee::Virtual {
-                        interface: DeclRef::Source(interface),
+                        interface,
                         method: member.clone(),
                     },
                     receiver: Receiver::Unbound,
@@ -7297,7 +7328,7 @@ impl<'db> InferenceContext<'db> {
         }
         Some(instantiate_callable_signature(
             self.db,
-            DeclRef::Source(method),
+            method,
             &instantiation,
         ))
     }
@@ -7427,16 +7458,14 @@ impl<'db> InferenceContext<'db> {
             | crate::interfaces::Determination::Poisoned => return Ty::error(),
         };
 
-        // A MOUNTED interface has no source method item to instantiate, the
-        // same limit the `Interface.item` spelling has; and determination
-        // proved the member exists in the VALUE namespace, so a miss below it
-        // is a FIELD, which has no static spelling - reading one needs a
-        // receiver to read it from.
-        let Some(interface_loc) = self.interface_loc_for(&qualifier.name) else {
+        // Determination proved the member exists in the VALUE namespace, so
+        // a miss below it is a FIELD, which has no static spelling - reading
+        // one needs a receiver to read it from.
+        let Some(interface) = self.interface_ref_for(&qualifier.name) else {
             return unresolved_member(self);
         };
         self.item_projection_value(
-            interface_loc,
+            interface,
             Some(&WrittenQualifier {
                 qself,
                 realized: &realized,
@@ -7449,14 +7478,14 @@ impl<'db> InferenceContext<'db> {
         .unwrap_or_else(|| unresolved_member(self))
     }
 
-    /// The source `InterfaceLoc` a qualified type name denotes, if any.
-    fn interface_loc_for(
-        &self,
-        qtn: &baml_type::DeclName,
-    ) -> Option<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+    /// The interface a qualified type name denotes, wherever it is declared.
+    fn interface_ref_for(&self, qtn: &baml_type::DeclName) -> Option<InterfaceRef<'db>> {
         match self.facts.definition_of(qtn) {
-            Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => Some(loc),
-            _ => None,
+            Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => {
+                Some(DeclRef::Source(loc))
+            }
+            Some(_) => None,
+            None => crate::extern_loc::mounted_interface_loc(self.db, qtn).map(DeclRef::External),
         }
     }
 
@@ -7591,57 +7620,9 @@ impl<'db> InferenceContext<'db> {
                 &instantiation,
             ));
         }
-        // An implements-block method is not a class-inherent export. Resolve
-        // mounted UFCS (`app.Widget.describe(widget)`) through the same impl
-        // registry as a bound member, but retain `self` in the callable type.
-        if let Some(exported) = self.lower.resolve_exported_type_definition(prefix)
-            && let crate::package_interface::ExportedType::Class {
-                qtn,
-                generic_params,
-                ..
-            } = exported.as_ref()
-        {
-            let class_args: Vec<Ty> = generic_params
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect();
-            let receiver = Ty::intern(InferTy::Class(
-                qtn.clone(),
-                class_args.into(),
-                TyAttr::default(),
-            ));
-            if let crate::method_resolution::InterfaceMemberLookup::Found(interface_member) =
-                crate::method_resolution::lookup_interface_member(
-                    self.db,
-                    self.viewer(),
-                    &self.facts,
-                    &receiver,
-                    member,
-                )
-                && interface_member.is_method
-            {
-                // Type-qualified: `self`, when the method takes one, is the
-                // written first argument.
-                let resolution =
-                    self.declarer_resolution(&interface_member.declarer, member, Receiver::Unbound);
-                let fn_ty = match own {
-                    OwnArgs::Call(call) => {
-                        self.interface_member_callee(interface_member, call, false)
-                            .0
-                    }
-                    OwnArgs::Fresh => self.interface_member_unbound_value(interface_member),
-                };
-                if let Some(record_at) = record_at
-                    && let Some(resolution) = resolution
-                {
-                    self.write_member_resolution(record_at, resolution);
-                }
-                return Some(fn_ty);
-            }
-        }
-        // TIER: a type-qualified implements-block member on a SOURCE class -
-        // the bare spelling of the `(C as I).item` projection with the
-        // interface INFERRED.
+        // TIER: a type-qualified implements-block member on a class, wherever
+        // it is declared - the bare spelling of the `(C as I).item` projection
+        // with the interface INFERRED.
         self.class_impl_static_value(prefix, member, own, anchor, record_at)
     }
 
@@ -7671,7 +7652,7 @@ impl<'db> InferenceContext<'db> {
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
         let (class, pinned) = self.static_class_for(prefix)?;
-        let frame = crate::lower::class_generic_frame(self.db, class);
+        let frame = self.class_ref_generic_frame(class);
         // The class arguments and whether the call's written type-arg channel
         // was consumed for them (the hoisted-receiver-args spelling).
         let (args, channel_consumed) = match pinned {
@@ -7705,11 +7686,7 @@ impl<'db> InferenceContext<'db> {
                 (args, true)
             }
         };
-        let qself = crate::lower::class_ty(
-            self.lang(),
-            crate::lower::class_qualified_name(self.db, class),
-            args,
-        );
+        let qself = crate::lower::class_ty(self.lang(), self.class_ref_name(class), args);
         if qself.has_infer() || qself.has_error() {
             return None;
         }
@@ -7754,7 +7731,7 @@ impl<'db> InferenceContext<'db> {
             | crate::interfaces::Determination::InvalidBase
             | crate::interfaces::Determination::Poisoned => return None,
         };
-        let interface_loc = self.interface_loc_for(&realized.name)?;
+        let interface = self.interface_ref_for(&realized.name)?;
         // A consumed channel holds the CLASS args, so the member's own
         // generics (if any) instantiate fresh instead of re-reading it.
         let own = if channel_consumed {
@@ -7763,7 +7740,7 @@ impl<'db> InferenceContext<'db> {
             own
         };
         self.item_projection_value(
-            interface_loc,
+            interface,
             Some(&WrittenQualifier {
                 qself,
                 realized: &realized,
@@ -7783,7 +7760,9 @@ impl<'db> InferenceContext<'db> {
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        let (class, pinned) = self.static_class_for(prefix)?;
+        let (DeclRef::Source(class), pinned) = self.static_class_for(prefix)? else {
+            return None;
+        };
         let method = baml_compiler2_ppir::item_data::class_data(self.db, class)
             .methods
             .iter()
@@ -7933,13 +7912,9 @@ impl<'db> InferenceContext<'db> {
             crate::impls::interned_ty(&crate::lower::reject_holes(&written))
         } else if let (OwnArgs::Call(call), Some((class, _))) = (own, self.static_class_for(prefix))
         {
-            let frame = crate::lower::class_generic_frame(self.db, class);
+            let frame = self.class_ref_generic_frame(class);
             let args = self.instantiation_args(call, &frame, None);
-            crate::lower::class_ty(
-                self.lang(),
-                crate::lower::class_qualified_name(self.db, class),
-                args,
-            )
+            crate::lower::class_ty(self.lang(), self.class_ref_name(class), args)
         } else {
             return None;
         };
@@ -7998,20 +7973,53 @@ impl<'db> InferenceContext<'db> {
     fn static_class_for(
         &self,
         prefix: &[baml_type::Name],
-    ) -> Option<(baml_compiler2_hir::loc::ClassLoc<'db>, Option<Vec<Ty>>)> {
+    ) -> Option<(ClassRef<'db>, Option<Vec<Ty>>)> {
         use baml_compiler2_hir::contributions::Definition;
+
+        use crate::{lower::ResolvedTypeDefinition, package_interface::ExportedType};
+
         if prefix
             .first()
             .is_some_and(|name| self.scoped_type_param(name).is_some())
         {
             return None;
         }
-        if let Some(Definition::Class(class)) = self.lower.resolve_type_definition(prefix) {
-            return Some((class, None));
+        match self.lower.resolve_type(prefix) {
+            Some(ResolvedTypeDefinition::Source(Definition::Class(class))) => {
+                return Some((DeclRef::Source(class), None));
+            }
+            Some(ResolvedTypeDefinition::Exported(exported)) => {
+                if let ExportedType::Class { qtn, .. } = exported.as_ref()
+                    && let Some(class) = mounted_class_loc(self.db, qtn)
+                {
+                    return Some((DeclRef::External(class), None));
+                }
+            }
+            Some(ResolvedTypeDefinition::Source(_)) | None => {}
         }
         let ty = self.static_qualifier_ty(prefix)?;
-        crate::method_resolution::receiver_class(&self.facts, &ty, 8)
-            .map(|(class, args)| (class, Some(args)))
+        if let Some((class, args)) = crate::method_resolution::receiver_class(&self.facts, &ty, 8) {
+            return Some((DeclRef::Source(class), Some(args)));
+        }
+        let (qtn, args) = crate::method_resolution::external_class_for_type(&self.facts, &ty, 8)?;
+        let class = mounted_class_loc(self.db, &qtn)?;
+        Some((DeclRef::External(class), Some(args)))
+    }
+
+    /// A class's generic frame, wherever it is declared.
+    fn class_ref_generic_frame(&self, class: ClassRef<'db>) -> Vec<baml_type::ParamTy> {
+        match class {
+            DeclRef::Source(class) => crate::lower::class_generic_frame(self.db, class),
+            DeclRef::External(class) => extern_class_row(self.db, class).generic_params.to_vec(),
+        }
+    }
+
+    /// A class's head, wherever it is declared.
+    fn class_ref_name(&self, class: ClassRef<'db>) -> baml_type::DeclName {
+        match class {
+            DeclRef::Source(class) => crate::lower::class_qualified_name(self.db, class),
+            DeclRef::External(class) => class.head(self.db).clone(),
+        }
     }
 
     /// Anything else a static qualifier can denote: a primitive or media
@@ -8039,37 +8047,39 @@ impl<'db> InferenceContext<'db> {
 
     /// The method a TYPE-QUALIFIED interface path names
     /// (`IqDescribable.describe` - Rust's `Trait::method`, r-a's
-    /// value-namespace trait path). Interface methods are ordinary
-    /// items since the uniform restructure, so the ordinary signature
-    /// road serves: `Self` instantiates fresh and its implements-bound
-    /// rides along through `function_generic_bounds`, solved by the
-    /// call's arguments.
+    /// value-namespace trait path), wherever the interface is declared.
+    /// Interface methods are ordinary items since the uniform restructure,
+    /// so the ordinary signature road serves: `Self` instantiates fresh and
+    /// its implements-bound rides along through the callable's frame,
+    /// solved by the call's arguments.
     fn interface_static_method(
         &self,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
-    ) -> Option<(
-        baml_compiler2_hir::loc::InterfaceLoc<'db>,
-        baml_compiler2_hir::loc::FunctionLoc<'db>,
-    )> {
+    ) -> Option<(InterfaceRef<'db>, FunctionRef<'db>)> {
+        use crate::lower::ResolvedTypeDefinition;
+
         if prefix
             .first()
             .is_some_and(|name| self.scoped_type_param(name).is_some())
         {
             return None;
         }
-        let Some(Definition::Interface(interface)) = self.lower.resolve_type_definition(prefix)
-        else {
-            return None;
-        };
-        baml_compiler2_ppir::item_data::interface_data(self.db, interface)
-            .methods
-            .iter()
-            .copied()
-            .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(self.db, method).name == *member
-            })
-            .map(|method| (interface, method))
+        match self.lower.resolve_type(prefix)? {
+            ResolvedTypeDefinition::Source(Definition::Interface(interface)) => {
+                let method = self.interface_method_loc(interface, member)?;
+                Some((DeclRef::Source(interface), DeclRef::Source(method)))
+            }
+            ResolvedTypeDefinition::Source(_) => None,
+            ResolvedTypeDefinition::Exported(exported) => match exported.as_ref() {
+                crate::package_interface::ExportedType::Interface { qtn, .. } => {
+                    let interface = crate::extern_loc::mounted_interface_loc(self.db, qtn)?;
+                    let method = extern_interface_method(self.db, interface.head(self.db), member)?;
+                    Some((DeclRef::External(interface), DeclRef::External(method)))
+                }
+                _ => None,
+            },
+        }
     }
 
     /// Lambda typing (rust-analyzer's `deduce_closure_signature` shape).
@@ -8367,7 +8377,7 @@ impl<'db> InferenceContext<'db> {
         // existential for virtual dispatch, and class/interface args were
         // judged at the receiver's own annotation.
         let frame = callable_generic_frame(self.db, callable);
-        for (param, param_bounds) in frame.params.iter().zip(&frame.bounds) {
+        for (param, param_bounds) in frame.params.iter().zip(frame.bounds.iter()) {
             let Some(arg) = instantiation.get(param.index() as usize) else {
                 continue;
             };
@@ -9801,27 +9811,6 @@ impl<'db> InferenceContext<'db> {
         // Same rule as the call road: a `self`-less method binds nothing.
         if interface_member.is_method && self.interface_member_takes_self(&interface_member) {
             return bind_receiver(interface_member.ty);
-        }
-        interface_member.ty
-    }
-
-    /// UFCS/value form of an interface-provided method. Unlike ordinary
-    /// member values this preserves the explicit `self` parameter.
-    fn interface_member_unbound_value(
-        &mut self,
-        interface_member: crate::method_resolution::InterfaceMember<'db>,
-    ) -> Ty {
-        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
-            interface_member.pending_own
-        {
-            let own: Vec<Ty> = callable_signature(self.db, callable)
-                .generic_params
-                .iter()
-                .map(|param| self.fresh_generic_arg(param))
-                .collect();
-            let mut instantiation = prefix;
-            instantiation.extend(own);
-            return instantiate_callable_signature(self.db, callable, &instantiation);
         }
         interface_member.ty
     }

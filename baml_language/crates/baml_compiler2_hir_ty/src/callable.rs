@@ -6,6 +6,8 @@
 //! crate's first tracked query - the S3 incremental work generalizes the
 //! pattern to `infer_body` itself.
 
+use std::borrow::Cow;
+
 use baml_base::Name;
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_type::{DeclName, ParamTy};
@@ -438,12 +440,14 @@ pub fn callable_user_generic_params(
 }
 
 /// A callable's full generic frame: the owner's prefix, then its own
-/// parameters, with the declared bound conjunction of every slot.
+/// parameters, with the declared bound conjunction of every slot. Borrowed
+/// from the declaration's own storage whenever one side of the frame is
+/// empty and the other is held whole there; built only for a concatenation.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CallableFrame {
-    pub params: Vec<ParamTy>,
+pub struct CallableFrame<'db> {
+    pub params: Cow<'db, [ParamTy]>,
     /// Per frame slot, that parameter's declared bounds (empty when none).
-    pub bounds: Vec<Vec<baml_type::Interface>>,
+    pub bounds: Cow<'db, [Vec<baml_type::Interface>]>,
     /// The first slot the CALL SITE supplies (turbofish or inferred). Slots
     /// before it belong to the receiver: `Self` legitimately binds an
     /// existential for virtual dispatch, and class/interface args were
@@ -462,10 +466,10 @@ pub struct CallableFrame {
 /// The difference only feeds the concreteness rule on effect slots, which
 /// no bound constrains; preserved verbatim rather than unified here, so the
 /// unification is its own reviewable change.
-pub fn callable_generic_frame(
-    db: &dyn baml_compiler2_ppir::Db,
-    callable: FunctionRef<'_>,
-) -> CallableFrame {
+pub fn callable_generic_frame<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'db>,
+) -> CallableFrame<'db> {
     match callable {
         DeclRef::Source(function) => {
             let params = crate::lower::function_generic_frame(db, function);
@@ -478,22 +482,32 @@ pub fn callable_generic_frame(
                 .len();
             CallableFrame {
                 own_start: params.len().saturating_sub(own),
-                params,
-                bounds,
+                params: Cow::Owned(params),
+                bounds: Cow::Owned(bounds),
             }
         }
         DeclRef::External(function) => {
             let (owner_params, owner_bounds) = extern_owner_generics(db, function);
             let row = extern_function_row(db, function);
-            let mut params = owner_params.to_vec();
-            params.extend(row.generic_params.iter().cloned());
-            let mut bounds = owner_bounds.to_vec();
-            bounds.extend(row.generic_param_bounds.iter().cloned());
             CallableFrame {
-                params,
-                bounds,
                 own_start: owner_params.len(),
+                params: concat_frame(owner_params, &row.generic_params),
+                bounds: concat_frame(owner_bounds, &row.generic_param_bounds),
             }
+        }
+    }
+}
+
+/// `owner ++ own`, borrowing whichever side is the whole frame; a copy is
+/// made only when both contribute.
+fn concat_frame<'db, T: Clone>(owner: Cow<'db, [T]>, own: &'db [T]) -> Cow<'db, [T]> {
+    match (owner.is_empty(), own.is_empty()) {
+        (_, true) => owner,
+        (true, false) => Cow::Borrowed(own),
+        (false, false) => {
+            let mut frame = owner.into_owned();
+            frame.extend(own.iter().cloned());
+            Cow::Owned(frame)
         }
     }
 }

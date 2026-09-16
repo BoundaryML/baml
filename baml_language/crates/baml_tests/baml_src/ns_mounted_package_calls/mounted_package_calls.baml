@@ -23,6 +23,32 @@ function mpc_library() -> reflect.Package {
                     function make(x: int) -> Self throws never
                 }
 
+                interface Measured {
+                    function measure(self) -> int throws never
+                }
+
+                interface Sizing {
+                    function tag_as<T>(self, tag: T) -> string throws never
+                    function of<T extends Measured>(self, item: T) -> int throws never
+                }
+
+                interface Greeter {
+                    function greet(self) -> string throws never
+                    function greet_twice(self) -> string throws never {
+                        self.greet() + self.greet()
+                    }
+                }
+
+                class Pebble {
+                    weight int
+
+                    implements Measured {
+                        function measure(self) -> int throws never {
+                            self.weight
+                        }
+                    }
+                }
+
                 class Widget {
                     x int
                     label string
@@ -40,6 +66,25 @@ function mpc_library() -> reflect.Package {
                     implements Makeable {
                         function make(x: int) -> Widget throws never {
                             Widget { x: x, label: "made" }
+                        }
+                    }
+
+                    implements Sizing {
+                        function tag_as<T>(self, tag: T) -> string throws never {
+                            if reflect.Type.of<T>() == reflect.Type.of<int>() {
+                                self.label + ":int"
+                            } else {
+                                self.label + ":other"
+                            }
+                        }
+                        function of<T extends Measured>(self, item: T) -> int throws never {
+                            self.x + item.measure()
+                        }
+                    }
+
+                    implements Greeter {
+                        function greet(self) -> string throws never {
+                            "hi " + self.label
                         }
                     }
                 }
@@ -253,4 +298,53 @@ test "mounted impl statics and method values take the source roads" {
     assert.equal(static_call(), 3);
     let value_reference = consumer.get_function<() -> string>("root.value_reference") ?? throw "missing root.value_reference";
     assert.equal(value_reference(), "v")
+}
+
+// Type-rooted references to a mounted class's impl-provided methods take the
+// source lane's projection tier: a generic method as a value carries its
+// frame (annotated and turbofish alike), a bounded one registers its bound,
+// and the interface-qualified and written-qualifier spellings against a
+// mounted interface resolve — its default method included.
+test "mounted impl methods as values and through qualified spellings" {
+    let app = mpc_library();
+    let consumer = reflect.Package.compile(
+        {
+            "main.baml": `
+                function annotated_value() -> string throws never {
+                    let f: (app.Widget, int) -> string throws never = app.Widget.tag_as;
+                    f(app.Widget { x: 1, label: "w" }, 7)
+                }
+
+                function turbofish_value() -> string throws never {
+                    let f = app.Widget.tag_as<string>;
+                    f(app.Widget { x: 2, label: "t" }, "eight")
+                }
+
+                function bounded_value() -> int throws never {
+                    let f: (app.Widget, app.Pebble) -> int throws never = app.Widget.of;
+                    f(app.Widget { x: 40, label: "b" }, app.Pebble { weight: 2 })
+                }
+
+                function interface_qualified_call() -> string throws never {
+                    app.Greeter.greet(app.Widget { x: 1, label: "q" })
+                }
+
+                function written_qualifier_default() -> string throws never {
+                    (app.Widget as app.Greeter).greet_twice(app.Widget { x: 1, label: "d" })
+                }
+            `,
+        },
+        packages = { "app": app },
+    );
+    assert.equal(consumer.diagnostics().length(), 0);
+    let annotated_value = consumer.get_function<() -> string>("root.annotated_value") ?? throw "missing root.annotated_value";
+    assert.equal(annotated_value(), "w:int");
+    let turbofish_value = consumer.get_function<() -> string>("root.turbofish_value") ?? throw "missing root.turbofish_value";
+    assert.equal(turbofish_value(), "t:other");
+    let bounded_value = consumer.get_function<() -> int>("root.bounded_value") ?? throw "missing root.bounded_value";
+    assert.equal(bounded_value(), 42);
+    let interface_qualified_call = consumer.get_function<() -> string>("root.interface_qualified_call") ?? throw "missing root.interface_qualified_call";
+    assert.equal(interface_qualified_call(), "hi q");
+    let written_qualifier_default = consumer.get_function<() -> string>("root.written_qualifier_default") ?? throw "missing root.written_qualifier_default";
+    assert.equal(written_qualifier_default(), "hi dhi d")
 }

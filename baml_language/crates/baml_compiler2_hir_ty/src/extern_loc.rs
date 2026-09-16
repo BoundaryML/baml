@@ -24,6 +24,8 @@
 //! too (the incomplete-impl recovery road reads a source interface's
 //! bodyless default through this lane).
 
+use std::borrow::Cow;
+
 use baml_base::{Name, SourceRoot};
 use baml_compiler2_hir::loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc};
 use baml_type::{
@@ -654,18 +656,17 @@ pub fn extern_signature_ty<'db>(
 // rather than several queries that could drift. The one derived read follows.
 
 /// The generic frame the row's owner contributes ahead of the row's own
-/// parameters: the CLASS row's frame for a class method, EMPTY for a free
-/// function, an interface method, and an impl-provided row.
-///
-/// This reproduces what every production site passes today — the three
-/// class-owned sites hand over the class frame, every interface-owned site
-/// passes nothing — so interface-frame bounds (`[Self, iface params..]`)
-/// are still never registered for a mounted interface method. Whether they
-/// should be is the effect/frame work's question (B-1715), not this lane's.
+/// parameters, with each slot's declared bounds: the CLASS row's frame for
+/// a class method, borrowed from the row; `[Self] ++ the interface's
+/// generics` for an interface method, `Self` bounded by the interface at its
+/// own parameters — the source frame (`lower::interface_scope_bounds`),
+/// which an exported row's own generics index into, built here since no
+/// row holds it whole; EMPTY for a free function and for an impl-provided
+/// row, whose frame is the matched impl's, realized by the caller.
 pub fn extern_owner_generics<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: ExternFunctionLoc<'db>,
-) -> (&'db [ParamTy], &'db [Vec<baml_type::Interface>]) {
+) -> (Cow<'db, [ParamTy]>, Cow<'db, [Vec<baml_type::Interface>]>) {
     match function.addr(db) {
         ExternRowAddr::Declared(ExternalCallTarget::Method { class, .. }) => {
             match type_row_at(db, class) {
@@ -673,7 +674,10 @@ pub fn extern_owner_generics<'db>(
                     generic_params,
                     generic_param_bounds,
                     ..
-                }) => (generic_params, generic_param_bounds),
+                }) => (
+                    Cow::Borrowed(generic_params.as_slice()),
+                    Cow::Borrowed(generic_param_bounds.as_slice()),
+                ),
                 _ => panic!(
                     "internal error: the class row of {} is gone from the interface that minted \
                      the method row",
@@ -681,10 +685,43 @@ pub fn extern_owner_generics<'db>(
                 ),
             }
         }
-        ExternRowAddr::Declared(
-            ExternalCallTarget::Free { .. } | ExternalCallTarget::Interface { .. },
-        )
-        | ExternRowAddr::ImplProvided { .. } => (&[], &[]),
+        ExternRowAddr::Declared(ExternalCallTarget::Interface { interface, .. }) => {
+            match type_row_at(db, interface) {
+                Some(ExportedType::Interface {
+                    self_param,
+                    generic_params,
+                    param_bounds,
+                    ..
+                }) => {
+                    let args: Box<[baml_type::Ty]> = generic_params
+                        .iter()
+                        .map(|param| {
+                            baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default())
+                        })
+                        .collect();
+                    let mut params = Vec::with_capacity(1 + generic_params.len());
+                    params.push(self_param.clone());
+                    params.extend(generic_params.iter().cloned());
+                    let mut bounds = Vec::with_capacity(params.len());
+                    // `Self`'s self-bound carries no pins, as in source: a
+                    // `Self.Member` projection reduces through the resolver.
+                    bounds.push(vec![baml_type::Interface::new(
+                        interface.clone(),
+                        args,
+                        Box::new([]),
+                    )]);
+                    bounds.extend(param_bounds.iter().cloned());
+                    (Cow::Owned(params), Cow::Owned(bounds))
+                }
+                _ => panic!(
+                    "internal error: the interface row of {} is gone from the interface that \
+                     minted the method row",
+                    spell_addr(db, function.addr(db))
+                ),
+            }
+        }
+        ExternRowAddr::Declared(ExternalCallTarget::Free { .. })
+        | ExternRowAddr::ImplProvided { .. } => (Cow::Borrowed(&[]), Cow::Borrowed(&[])),
     }
 }
 
