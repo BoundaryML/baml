@@ -1,6 +1,17 @@
 """Merge retained GC-grid evidence sources."""
 
 
+def resolve_display_rates(data, requested):
+    available = {int(rate) for rate in data['metadata']['rates_rps']}
+    if requested is None:
+        return sorted(available)
+    rates = list(dict.fromkeys(int(rate) for rate in requested))
+    unknown = [rate for rate in rates if rate not in available]
+    if unknown:
+        raise ValueError(f'Display rates are absent from the source: {unknown}')
+    return rates
+
+
 def merge_data(base, current):
     cells = {(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in base['cells']}
     cells.update({(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in current['cells']})

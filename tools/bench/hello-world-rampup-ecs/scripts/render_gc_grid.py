@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
 
-from gc_grid_data import merge_data
+from gc_grid_data import merge_data, resolve_display_rates
 
 
 def aws_json(profile, region, *args):
@@ -158,8 +158,8 @@ def contrasting_color(rgba):
     return '#111827' if luminance > 0.61 else 'white'
 
 
-def render(data, output):
-    rates = [int(rate) for rate in data['metadata']['rates_rps']]
+def render(data, output, display_rates=None):
+    rates = resolve_display_rates(data, display_rates)
     frequencies = [float(value) for value in data['metadata']['gc_frequencies_hz']]
     cells = {(float(cell['gc_frequency_hz']), int(cell['rate'])): cell for cell in data['cells']}
     cmap = matplotlib.colormaps['YlGnBu']
@@ -258,6 +258,8 @@ def main():
                         help='Merge a prior source before the current run; repeat in oldest-to-newest order')
     parser.add_argument('--live', action='store_true', help='Skip per-cycle records for fast in-progress heatmap refreshes')
     parser.add_argument('--incremental-source', type=Path, help='Merge only events newer than this prior rendered source')
+    parser.add_argument('--display-rates', type=int, nargs='+',
+                        help='Render only these RPS columns while preserving every cell in JSON and CSV outputs')
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     if args.incremental_source:
@@ -276,7 +278,7 @@ def main():
         data = merge_data(base, data)
     (args.output_dir / 'gc-grid-source.json').write_text(json.dumps(data, indent=2) + '\n')
     write_csv(data, args.output_dir / 'gc-grid-results.csv')
-    render(data, args.output_dir / 'baml-throughput-vs-gc-frequency.png')
+    render(data, args.output_dir / 'baml-throughput-vs-gc-frequency.png', args.display_rates)
     print(json.dumps({'cells': len(data['cells']), 'missing_cells': data['metadata']['missing_cells'],
                       'output_dir': str(args.output_dir)}, indent=2))
 
