@@ -47,8 +47,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/" className="text-foreground">
                 Issues
               </Link>
+              <Link href="/intuition">Intuition</Link>
+              <Link href="/runs">Runs</Link>
               <Link href="/agents">Agents</Link>
               <Link href="/api/auth/github">Sign in</Link>
+              <span className="cursor-default">Evals</span>
+              <span className="text-xs border rounded px-1.5 py-0.5">mock</span>
             </nav>
           </div>
         </header>

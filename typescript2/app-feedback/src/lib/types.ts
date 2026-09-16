@@ -31,6 +31,8 @@ export type Expectation =
   | { check: "requires_inspection"; instructions: string };
 
 export interface Repro {
+  /** Why this command and expectation; written by the authoring model. */
+  rationale?: string | null;
   observed?: string | null;
   verified_version?: string | null;
   source_files?: Record<string, string> | null;
@@ -46,6 +48,24 @@ export interface Comment {
   author: string;
   body: string;
   at: string;
+  /** "github" (synced from the reported issue), "website", "slack"; undefined on old rows. */
+  source?: "github" | "website" | "slack" | null;
+  /** Permalink to the original comment, when synced. */
+  url?: string | null;
+}
+
+/** A cross-issue finding written by run_intuition (tools/atb2/baml_src/intuition.baml). */
+export interface Intuition {
+  id: string;
+  title: string;
+  kind: "Pattern" | "SharedCause" | "Hotspot" | "Process";
+  insight: string;
+  evidence: string;
+  issue_ids: string[];
+  subsystem: Subsystem;
+  confidence: "low" | "medium" | "high";
+  suggested_action: string;
+  generated_at: string;
 }
 
 export interface GateStep {
@@ -76,8 +96,12 @@ export interface HandleOutcome {
   running?: "design" | "fix" | "gate" | "pr";
 }
 
+export type IssueKind = "bug" | "feature";
+
 export interface Issue {
   id: string;
+  /** A bug, or a feature request whose `resolution_plan` is the proposed feature. */
+  kind: IssueKind;
   title: string;
   description: string;
   shepherd: string | null;

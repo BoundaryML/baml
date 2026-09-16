@@ -48,6 +48,7 @@ export function ReproCard({ repro, comparison = false }: { repro: Repro; compari
         {repro.verified_version && <span> · BAML {repro.verified_version}</span>}
       </div>
       {repro.setup && <p className="px-3 pb-2 text-sm">Setup: {repro.setup}</p>}
+      {repro.rationale && <p className="px-3 pb-2 text-sm text-muted-foreground">Why this repro: {repro.rationale}</p>}
       <Files files={source ?? repro.files} />
       <Output title={source ? "Compiler output (stdout / stderr)" : "Actual output (stdout / stderr)"}
         output={source ? repro.source_observed : repro.observed} />

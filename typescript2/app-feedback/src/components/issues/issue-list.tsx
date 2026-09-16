@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Difficulty, Issue, StatusState, Subsystem } from "@/lib/types";
 import { progress, relativeTime, stageInfo } from "@/lib/pipeline";
-import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
+import { DifficultyBadge, KindBadge, StatusBadge, SubsystemBadge } from "./issue-status";
 import { PipelineStrip } from "./pipeline-strip";
 import { StatTiles } from "./stat-tiles";
 
@@ -66,6 +66,7 @@ function IssueRow({ issue, now }: { issue: Issue; now: number }) {
           <span className="font-medium truncate">{issue.title}</span>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {issue.kind === "feature" && <KindBadge kind="feature" />}
           <SubsystemBadge subsystem={issue.subsystem} />
           <DifficultyBadge difficulty={issue.difficulty} />
           {issue.dataset === "eval" && <EvalBadge />}
@@ -101,6 +102,7 @@ function BoardCard({ issue }: { issue: Issue }) {
     >
       <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
         {issue.id}
+        {issue.kind === "feature" && <KindBadge kind="feature" />}
         {issue.dataset === "eval" && <EvalBadge />}
       </div>
       <div className="mt-0.5 text-sm font-medium leading-snug line-clamp-2">{issue.title}</div>
@@ -136,6 +138,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           !q ||
           i.title.toLowerCase().includes(q) ||
           i.id.toLowerCase().includes(q) ||
+          (i.kind === "feature" && "feature request".includes(q)) ||
           (i.shepherd ?? "").toLowerCase().includes(q),
       )
       .sort((a, b) =>

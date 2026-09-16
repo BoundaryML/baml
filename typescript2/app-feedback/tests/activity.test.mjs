@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { activityText, eventProposalPath } from "../src/lib/activity.ts";
+import { activityText, decisionOf, eventProposalPath, fieldReasons, humanizeKind } from "../src/lib/activity.ts";
 
 test("issue and PR lifecycle render without exposing arbitrary payloads", () => {
   for (const kind of ["cancelled", "issue_created", "approved", "fix_started", "pr_opened", "babysit_started", "babysit_proposed", "babysit_approved", "babysit_pushing", "babysit_round", "babysit_result", "unknown"]) {
@@ -29,4 +29,21 @@ test("pipeline timeline distinguishes stages and confirmed Slack delivery", () =
     expect(activityText({kind, payload:{source:"Github"}})).toContain(expected);
   }
   expect(activityText({kind:"issue_created",payload:{}})).not.toContain("approval");
+});
+
+test("a decision renders as its step, and its fields are recoverable", () => {
+  const gauged = { kind: "gauged", payload: { step: "Gauge difficulty", decision: "Hard: the cause is unknown", reason: "Two subsystems.", evidence: { unknowns: ["x"] } } };
+  expect(activityText({ kind: "decision", payload: { step: "Assign a shepherd" } })).toBe("Assign a shepherd");
+  expect(decisionOf(gauged)?.step).toBe("Gauge difficulty");
+  expect(decisionOf({ payload: { step: "x", decision: "" } })).toBeNull();
+  const reasons = fieldReasons([gauged, { kind: "decision", payload: { step: "Assign a shepherd", decision: "@a", reason: "routed" } }]);
+  expect(reasons.difficulty?.decision).toContain("Hard");
+  expect(reasons.shepherd?.decision).toBe("@a");
+  expect(humanizeKind("babysit_round")).toBe("Babysit round");
+  expect(activityText({ kind: "some_new_kind", payload: {} })).toBe("Some new kind recorded.");
+});
+
+test("synced GitHub comments name a valid login only", () => {
+  expect(activityText({ kind: "comment_synced", payload: { author: "octo-cat" } })).toContain("@octo-cat");
+  expect(activityText({ kind: "comment_synced", payload: { author: "<script>" } })).not.toContain("<");
 });

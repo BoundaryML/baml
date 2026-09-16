@@ -20,7 +20,7 @@ const greenGate = (crates: string[]): GateResult => ({
   ],
 });
 
-export const ISSUES: Issue[] = [
+const RAW: Array<Omit<Issue, "kind"> & { kind?: Issue["kind"] }> = [
   {
     id: "GH-4587",
     title: "`throws` clause with an unresolved type panics the compiler (index out of bounds)",
@@ -395,6 +395,8 @@ export const ISSUES: Issue[] = [
     updated_at: "2026-08-30T03:40:00Z",
   },
 ];
+
+export const ISSUES: Issue[] = RAW.map((issue) => ({ ...issue, kind: issue.kind ?? "bug" }));
 
 export function findIssue(id: string): Issue | undefined {
   return ISSUES.find((i) => i.id === id);

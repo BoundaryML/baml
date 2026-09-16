@@ -13,7 +13,7 @@
 
 import { validProposalId } from "./proposals";
 import { ISSUES, findIssue } from "./mock-data";
-import type { Comment, HandleOutcome, Issue } from "./types";
+import type { Comment, HandleOutcome, Intuition, Issue } from "./types";
 
 const URL = process.env.FEEDBACK_SUPABASE_URL?.replace(/\/$/, "");
 const KEY = process.env.FEEDBACK_SUPABASE_ANON_KEY;
@@ -52,6 +52,7 @@ async function rest<T>(path: string): Promise<T> {
 /** A row of the `issues_with_outcome` view: an issues row plus its latest run. */
 interface IssueRow {
   id: string;
+  kind?: string | null;
   title: string;
   description: string;
   shepherd: string | null;
@@ -60,7 +61,7 @@ interface IssueRow {
   version: string;
   feedback_ids: string[];
   status: Issue["status"];
-  comments: Array<{ author: string; body: string; at?: string }>;
+  comments: Array<{ author: string; body: string; at?: string; source?: Comment["source"]; url?: string | null }>;
   resolution_plan: string | null;
   difficulty: Issue["difficulty"];
   design_doc: string | null;
@@ -91,9 +92,12 @@ function issueOf(row: IssueRow): Issue {
     author: c.author,
     body: c.body,
     at: c.at ?? row.updated_at,
+    source: c.source ?? null,
+    url: typeof c.url === "string" && /^https:\/\/github\.com\/BoundaryML\/baml\/issues\/[1-9][0-9]*#issuecomment-[0-9]+$/.test(c.url) ? c.url : null,
   }));
   return {
     id: row.id,
+    kind: row.kind === "feature" ? "feature" : "bug",
     title: row.title,
     description: row.description,
     shepherd: row.shepherd,
@@ -173,4 +177,80 @@ export async function loadProposalEvents(id: string, dataset: "live" | "eval" = 
   return rest<IssueEvent[]>(
     `events?select=id,kind,payload,slack_ts,created_at&payload->>proposal_id=eq.${encodeURIComponent(id)}&dataset=eq.${dataset}&order=created_at,id&limit=100`,
   );
+}
+
+/** Other issues filed from the same reports (a split bug + feature request, or a
+ * report merged into several tickets). Cancelled rows are excluded. */
+export async function loadSiblingIssues(issue: Pick<Issue, "id" | "feedback_ids">): Promise<Issue[]> {
+  const ids = issue.feedback_ids.filter((id) => /^[A-Za-z0-9_-]+$/.test(id)).slice(0, 20);
+  if (dataSource === "mock" || !ids.length) return [];
+  const seen = new Map<string, Issue>();
+  for (const id of ids) {
+    // feedback_ids is a Postgres array on the live table and JSON on older rows: try both shapes.
+    for (const filter of [`feedback_ids=cs.${encodeURIComponent(`{${id}}`)}`, `feedback_ids=cs.${encodeURIComponent(JSON.stringify([id]))}`]) {
+      try {
+        const rows = await rest<IssueRow[]>(`issues_with_outcome?${COLUMNS}&status->>state=neq.cancelled&${filter}&limit=20`);
+        for (const row of rows) if (row.id !== issue.id) seen.set(row.id, issueOf(row));
+        break;
+      } catch { /* try the other shape */ }
+    }
+  }
+  return [...seen.values()];
+}
+
+const INTUITION_COLUMNS = "select=id,title,kind,insight,evidence,issue_ids,subsystem,confidence,suggested_action,generated_at";
+
+function intuitionOf(row: Intuition): Intuition {
+  return { ...row, issue_ids: Array.isArray(row.issue_ids) ? row.issue_ids.filter((id) => typeof id === "string") : [] };
+}
+
+/** The current set of cross-issue intuitions, strongest first. Empty until the
+ * `intuitions` table exists (deploy/sql/intuitions.sql) or the pass has run. */
+export async function loadIntuitions(dataset: "live" | "eval" = "live"): Promise<Intuition[]> {
+  if (dataSource === "mock") return [];
+  try {
+    const rows = await rest<Intuition[]>(`intuitions?${INTUITION_COLUMNS}&dataset=eq.${dataset}&active=is.true&order=generated_at.desc,confidence.desc`);
+    const rank = { high: 0, medium: 1, low: 2 };
+    return rows.map(intuitionOf).sort((a, b) => rank[a.confidence] - rank[b.confidence]);
+  } catch {
+    return [];
+  }
+}
+
+/** The active intuitions that cite one issue. */
+export async function loadIssueIntuitions(id: string, dataset: "live" | "eval" = "live"): Promise<Intuition[]> {
+  if (dataSource === "mock" || !/^[A-Za-z0-9_-]+$/.test(id)) return [];
+  try {
+    const rows = await rest<Intuition[]>(`intuitions?${INTUITION_COLUMNS}&dataset=eq.${dataset}&active=is.true&issue_ids=cs.${encodeURIComponent(JSON.stringify([id]))}&order=generated_at.desc`);
+    return rows.map(intuitionOf);
+  } catch {
+    return [];
+  }
+}
+
+/** A report as the public view exposes it: no reporter identity. */
+export interface PublicFeedback {
+  id: string;
+  title: string;
+  body: string;
+  source: string;
+  toolchain: string | null;
+  received_at: string;
+  issue_ids: string[];
+  dataset: "live" | "eval";
+}
+
+export async function loadFeedback(id: string): Promise<PublicFeedback | undefined> {
+  if (dataSource === "mock" || !/^[A-Za-z0-9_-]{1,120}$/.test(id)) return undefined;
+  const rows = await rest<PublicFeedback[]>(`feedback_public?select=id,title,body,source,toolchain,received_at,issue_ids,dataset&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const row = rows[0];
+  return row ? { ...row, issue_ids: Array.isArray(row.issue_ids) ? row.issue_ids.filter((x) => typeof x === "string") : [], dataset: row.dataset ?? "live" } : undefined;
+}
+
+/** Issues by id, for a report's page. */
+export async function loadIssuesById(ids: string[]): Promise<Issue[]> {
+  const valid = ids.filter((id) => /^[A-Za-z0-9_-]{1,120}$/.test(id)).slice(0, 20);
+  if (dataSource === "mock" || !valid.length) return [];
+  const rows = await rest<IssueRow[]>(`issues_with_outcome?${COLUMNS}&id=in.(${valid.map(encodeURIComponent).join(",")})`);
+  return rows.map(issueOf);
 }
