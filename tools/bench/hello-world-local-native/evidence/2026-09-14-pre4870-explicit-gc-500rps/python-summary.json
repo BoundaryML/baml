@@ -1,0 +1,476 @@
+{
+  "source_revision": "9f8ec6f68dd26348e499eacd2e81cf2902892bb1",
+  "source_dirty": false,
+  "target": "python-baml",
+  "elapsed_seconds": 302.0713605,
+  "cycles": 10,
+  "scheduled_load_seconds": 281.058259501,
+  "status_counts": {
+    "200": 140530
+  },
+  "requests": 140530,
+  "delivered_rps_during_load": 500.00309633134975,
+  "alive_at_last_sample": true,
+  "checkpoints": [
+    {
+      "cycle": 1,
+      "elapsed_seconds": 30.210831084000002,
+      "gc_elapsed_seconds": 0.015722624999998658,
+      "python_objects_collected": 132,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 111.21875,
+      "rss_immediate_after_mib": 111.3125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 111.390625
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 111.390625
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 111.390625
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 111.390625
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": 0.09375,
+      "rss_final_delta_mib": 0.171875,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 2,
+      "elapsed_seconds": 62.301591208999994,
+      "gc_elapsed_seconds": 0.01650295799999668,
+      "python_objects_collected": 72,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 113.734375,
+      "rss_immediate_after_mib": 112.03125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 112.109375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 112.109375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 112.109375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 112.109375
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.703125,
+      "rss_final_delta_mib": -1.625,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 3,
+      "elapsed_seconds": 94.375003917,
+      "gc_elapsed_seconds": 0.01989291700000706,
+      "python_objects_collected": 146,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 114.859375,
+      "rss_immediate_after_mib": 113.09375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 112.84375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 112.84375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 112.84375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 112.84375
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.765625,
+      "rss_final_delta_mib": -2.015625,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 4,
+      "elapsed_seconds": 126.46665583400001,
+      "gc_elapsed_seconds": 0.014024042000002623,
+      "python_objects_collected": 106,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 115.109375,
+      "rss_immediate_after_mib": 113.21875,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 113.21875
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 113.21875
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 113.21875
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 113.21875
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.890625,
+      "rss_final_delta_mib": -1.890625,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 5,
+      "elapsed_seconds": 158.5581325,
+      "gc_elapsed_seconds": 0.017808959000007007,
+      "python_objects_collected": 98,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 116.046875,
+      "rss_immediate_after_mib": 114.21875,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 114.0625
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 114.0625
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 114.0625
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 114.0625
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.828125,
+      "rss_final_delta_mib": -1.984375,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 6,
+      "elapsed_seconds": 190.635136625,
+      "gc_elapsed_seconds": 0.015923250000014377,
+      "python_objects_collected": 210,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 115.921875,
+      "rss_immediate_after_mib": 114.359375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 114.125
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 114.125
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 114.125
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 114.125
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.5625,
+      "rss_final_delta_mib": -1.796875,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 7,
+      "elapsed_seconds": 222.731160792,
+      "gc_elapsed_seconds": 0.01578887499999837,
+      "python_objects_collected": 276,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 117.359375,
+      "rss_immediate_after_mib": 116.203125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 116.28125
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 116.28125
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 116.28125
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 116.28125
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.15625,
+      "rss_final_delta_mib": -1.078125,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 8,
+      "elapsed_seconds": 254.80252379200002,
+      "gc_elapsed_seconds": 0.01408887499999878,
+      "python_objects_collected": 178,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 118.0,
+      "rss_immediate_after_mib": 117.078125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 116.890625
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 116.890625
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 116.890625
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 116.890625
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -0.921875,
+      "rss_final_delta_mib": -1.109375,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 9,
+      "elapsed_seconds": 286.897715709,
+      "gc_elapsed_seconds": 0.014180207999970662,
+      "python_objects_collected": 141,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 118.6875,
+      "rss_immediate_after_mib": 117.484375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 117.484375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 117.484375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 117.484375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 117.484375
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -1.203125,
+      "rss_final_delta_mib": -1.203125,
+      "runtime_objects_change": 1
+    },
+    {
+      "cycle": 10,
+      "elapsed_seconds": 300.055551042,
+      "gc_elapsed_seconds": 0.014411332999998194,
+      "python_objects_collected": 100,
+      "heap": {
+        "before": {
+          "total_objects": 4850,
+          "compile_time_objects": 4850,
+          "runtime_objects": 0,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        "after": {
+          "total_objects": 4851,
+          "compile_time_objects": 4850,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 117.484375,
+      "rss_immediate_after_mib": 116.96875,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 116.96875
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 116.96875
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 116.96875
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 116.96875
+        }
+      ],
+      "runtime_objects_collected": 0,
+      "rss_immediate_delta_mib": -0.515625,
+      "rss_final_delta_mib": -0.515625,
+      "runtime_objects_change": 1
+    }
+  ]
+}

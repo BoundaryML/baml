@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+scrape_configs:
+  - job_name: vegeta
+    static_configs:
+      - targets: [load-node-baseline:9090]
+        labels:
+          experiment: node-baseline
+      - targets: [load-node-baml:9090]
+        labels:
+          experiment: node-baml
+      - targets: [load-python-baseline:9090]
+        labels:
+          experiment: python-baseline
+      - targets: [load-python-baml:9090]
+        labels:
+          experiment: python-baml
+      - targets: [load-baml-debian:9090]
+        labels:
+          experiment: baml-debian
+  - job_name: container-metrics
+    static_configs:
+      - targets: [container-metrics:9090]
+  - job_name: runtime
+    static_configs:
+      - targets: [node-baseline:9091]
+        labels:
+          experiment: node-baseline
+      - targets: [node-baml:9091]
+        labels:
+          experiment: node-baml
+      - targets: [python-baseline:9091]
+        labels:
+          experiment: python-baseline
+      - targets: [python-baml:9091]
+        labels:
+          experiment: python-baml
+      - targets: [baml-debian:9091]
+        labels:
+          experiment: baml-debian

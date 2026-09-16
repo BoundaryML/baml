@@ -1,0 +1,28 @@
+{
+  "name": "ramp-node-continuation",
+  "mode": "ramp",
+  "start_rate_per_target": {
+    "python-only": 100,
+    "python-baml": 100,
+    "node-only": 4000,
+    "node-baml": 100,
+    "baml-only": 100
+  },
+  "increase_rate_per_target": {
+    "python-only": 0,
+    "python-baml": 0,
+    "node-only": 100,
+    "node-baml": 0,
+    "baml-only": 0
+  },
+  "increase_every_seconds": 30,
+  "maximum_rate_per_target": {
+    "python-only": 100,
+    "python-baml": 100,
+    "node-only": 25000,
+    "node-baml": 100,
+    "baml-only": 100
+  },
+  "on_seconds": 4,
+  "off_seconds": 1
+}

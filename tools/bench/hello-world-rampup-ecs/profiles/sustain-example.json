@@ -1,0 +1,13 @@
+{
+  "name": "sustain-example",
+  "mode": "sustain",
+  "rate_per_target": {
+    "python-only": 100,
+    "python-baml": 100,
+    "node-only": 100,
+    "node-baml": 100,
+    "baml-only": 100
+  },
+  "on_seconds": 4,
+  "off_seconds": 1
+}

@@ -1,0 +1,4 @@
+fastapi==0.116.1
+uvicorn==0.35.0
+baml-bridge==0.18.1.dev2026090800
+pydantic==2.11.9

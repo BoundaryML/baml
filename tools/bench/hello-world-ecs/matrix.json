@@ -1,0 +1,26 @@
+{
+  "launch_type": "EC2",
+  "task_cpu": 1024,
+  "task_memory_mib": 1024,
+  "rate_per_target": 100,
+  "variants": [
+    "python-only",
+    "python-baml",
+    "node-only",
+    "node-baml",
+    "baml-only"
+  ],
+  "architectures": {
+    "arm64": {
+      "docker": "arm64",
+      "ecs": "ARM64",
+      "instance_type": "c7g.medium"
+    },
+    "x64": {
+      "docker": "amd64",
+      "ecs": "X86_64",
+      "instance_type": "c7a.medium"
+    }
+  },
+  "load_instance_type": "c7i.xlarge"
+}

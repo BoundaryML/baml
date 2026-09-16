@@ -1,0 +1,65 @@
+{
+  "source_revision": "bc7d504ba456fdb7888d0b3c00a5fade0403941d",
+  "source_dirty": false,
+  "rate_per_target": 300,
+  "elapsed_seconds": 300.04953379200003,
+  "interrupted": false,
+  "variants": {
+    "node-baseline": {
+      "rss_first_mib": 53.59375,
+      "rss_last_mib": 110.765625,
+      "rss_slope_mib_per_minute_after_60s": 0.9323356876859704,
+      "status_counts": {
+        "0": 1.0,
+        "200": 89979.0
+      },
+      "delivered_rps": 299.88381872433047,
+      "alive_at_last_sample": true,
+      "exact_probe_at_last_sample": true
+    },
+    "node-baml": {
+      "rss_first_mib": 129.734375,
+      "rss_last_mib": 178.71875,
+      "rss_slope_mib_per_minute_after_60s": 1.0062057059040297,
+      "status_counts": {
+        "200": 89980.0
+      },
+      "delivered_rps": 299.88381872433047,
+      "alive_at_last_sample": true,
+      "exact_probe_at_last_sample": true
+    },
+    "python-baseline": {
+      "rss_first_mib": 32.21875,
+      "rss_last_mib": 33.15625,
+      "rss_slope_mib_per_minute_after_60s": 0.00549941801750104,
+      "status_counts": {
+        "200": 89980.0
+      },
+      "delivered_rps": 299.88381872433047,
+      "alive_at_last_sample": true,
+      "exact_probe_at_last_sample": true
+    },
+    "python-baml": {
+      "rss_first_mib": 98.4375,
+      "rss_last_mib": 102.71875,
+      "rss_slope_mib_per_minute_after_60s": 0.20429631443277996,
+      "status_counts": {
+        "200": 89981.0
+      },
+      "delivered_rps": 299.88715150737914,
+      "alive_at_last_sample": true,
+      "exact_probe_at_last_sample": true
+    },
+    "baml-only": {
+      "rss_first_mib": 36.765625,
+      "rss_last_mib": 50.328125,
+      "rss_slope_mib_per_minute_after_60s": 0.3988824864804916,
+      "status_counts": {
+        "200": 89981.0
+      },
+      "delivered_rps": 299.88715150737914,
+      "alive_at_last_sample": true,
+      "exact_probe_at_last_sample": true
+    }
+  }
+}

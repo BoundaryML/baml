@@ -1,0 +1,134 @@
+{
+  "source_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "source_dirty": false,
+  "rate_per_target": 100,
+  "duration_seconds": 300,
+  "cycled_profile": {
+    "on_seconds": 30,
+    "off_seconds": 1,
+    "cycles_started": 10,
+    "scheduled_on_seconds": 290.55446704099995
+  },
+  "method": "Compare median RSS in minutes 2-3 with median RSS in minutes 4-5 and divide the change by two minutes. This limits warmup bias and the effect of individual allocator releases.",
+  "runs": {
+    "cycled": {
+      "variants": {
+        "node-baseline": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 99.9765625,
+            "minutes_4_to_5": 98.9765625
+          },
+          "median_change_mib_per_minute": -0.5,
+          "rss_slope_mib_per_minute_after_60s": -1.1395043707187775,
+          "status_counts": {
+            "200": 29056
+          }
+        },
+        "node-baml": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 164.3203125,
+            "minutes_4_to_5": 166.375
+          },
+          "median_change_mib_per_minute": 1.02734375,
+          "rss_slope_mib_per_minute_after_60s": 2.75804019037953,
+          "status_counts": {
+            "200": 29054
+          }
+        },
+        "python-baseline": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 33.234375,
+            "minutes_4_to_5": 33.28125
+          },
+          "median_change_mib_per_minute": 0.0234375,
+          "rss_slope_mib_per_minute_after_60s": 0.022836915339355127,
+          "status_counts": {
+            "200": 29047
+          }
+        },
+        "python-baml": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 78.953125,
+            "minutes_4_to_5": 79.234375
+          },
+          "median_change_mib_per_minute": 0.140625,
+          "rss_slope_mib_per_minute_after_60s": 0.15206259489447788,
+          "status_counts": {
+            "200": 29039
+          }
+        },
+        "baml-only": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 90.7890625,
+            "minutes_4_to_5": 96.5625
+          },
+          "median_change_mib_per_minute": 2.88671875,
+          "rss_slope_mib_per_minute_after_60s": 5.559213510355327,
+          "status_counts": {
+            "200": 29031
+          }
+        }
+      }
+    },
+    "continuous": {
+      "variants": {
+        "node-baseline": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 93.0703125,
+            "minutes_4_to_5": 95.3515625
+          },
+          "median_change_mib_per_minute": 1.140625,
+          "rss_slope_mib_per_minute_after_60s": 0.5184704617155845,
+          "status_counts": {
+            "200": 30000.0
+          }
+        },
+        "node-baml": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 176.3046875,
+            "minutes_4_to_5": 186.1875
+          },
+          "median_change_mib_per_minute": 4.94140625,
+          "rss_slope_mib_per_minute_after_60s": 3.6380754153610284,
+          "status_counts": {
+            "200": 30000.0
+          }
+        },
+        "python-baseline": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 33.390625,
+            "minutes_4_to_5": 33.421875
+          },
+          "median_change_mib_per_minute": 0.015625,
+          "rss_slope_mib_per_minute_after_60s": 0.016464237130439267,
+          "status_counts": {
+            "200": 30000.0
+          }
+        },
+        "python-baml": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 88.1328125,
+            "minutes_4_to_5": 98.78125
+          },
+          "median_change_mib_per_minute": 5.32421875,
+          "rss_slope_mib_per_minute_after_60s": 5.225247567583264,
+          "status_counts": {
+            "200": 30000.0
+          }
+        },
+        "baml-only": {
+          "median_rss_mib": {
+            "minutes_2_to_3": 89.921875,
+            "minutes_4_to_5": 94.25
+          },
+          "median_change_mib_per_minute": 2.1640625,
+          "rss_slope_mib_per_minute_after_60s": 4.30821386518264,
+          "status_counts": {
+            "200": 30000.0
+          }
+        }
+      }
+    }
+  },
+  "conclusion": "The regular one-second quiet window eliminates the persistent Python bridge growth and substantially suppresses Node bridge growth over five minutes on the pre-4870 build. This does not exclude a slower leak over longer durations."
+}

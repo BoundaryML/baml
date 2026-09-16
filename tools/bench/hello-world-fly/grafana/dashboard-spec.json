@@ -1,0 +1,268 @@
+{
+  "url": "https://fly-metrics.net/d/baml-hw-0910-matrix/baml-hello-world-c2b7-seven-vm-comparison?orgId=721257",
+  "uid": "baml-hw-0910-matrix",
+  "organization": "Boundary",
+  "orgId": 721257,
+  "title": "BAML hello world \u00b7 Six VM comparison",
+  "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus_on_fly"
+  },
+  "layout": {
+    "rows": 7,
+    "columns": 4,
+    "panels": 28,
+    "width_per_panel": 6,
+    "height_per_panel": 9,
+    "comparison_height": 11
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now",
+    "timezone": "browser",
+    "refresh": "30s",
+    "shared_crosshair": true
+  },
+  "metrics": [
+    {
+      "title": "HTTP Status Codes",
+      "source_panel_id": 3,
+      "unit": "short",
+      "queries": [
+        "sum(increase(fly_app_http_responses_count{app=\"APP\",instance=\"VM\"})) by (status) > 0"
+      ]
+    },
+    {
+      "title": "HTTP Response Times",
+      "source_panel_id": 13,
+      "unit": "s",
+      "queries": [
+        "sum(increase(fly_app_http_response_time_seconds_sum{app=\"APP\",instance=\"VM\"}))/sum(increase(fly_app_http_response_time_seconds_count{app=\"APP\",instance=\"VM\"}))",
+        "histogram_quantiles(\"p\", 0.5, 0.9, 0.99, sum(increase(fly_app_http_response_time_seconds_bucket{app=\"APP\",instance=\"VM\"}))by(le))"
+      ]
+    },
+    {
+      "title": "Firecracker Load Average",
+      "source_panel_id": 9,
+      "unit": "percentunit",
+      "queries": [
+        "sum(fly_instance_load_average{app=\"APP\",instance=\"VM\",minutes=\"5\"})by(instance, region) / sum(count(fly_instance_cpu{app=\"APP\",instance=\"VM\",mode=\"idle\"})without(cpu))by(instance, region)"
+      ]
+    },
+    {
+      "title": "Memory (scope differs by runtime)",
+      "source_panel_id": 11,
+      "unit": "bytes",
+      "maximum": 1073741824,
+      "queries": [
+        "mode(fly_instance_memory_mem_total{app=\"APP\",instance=\"VM\"})",
+        "fly_instance_memory_mem_total{app=\"APP\",instance=\"VM\"} - fly_instance_memory_mem_available{app=\"APP\",instance=\"VM\"}"
+      ],
+      "note": "Node/Python panels override the VM memory queries with process/runtime gauges. Pure BAML retains VM total minus available. See memory_panels."
+    }
+  ],
+  "vms": [
+    {
+      "app": "baml-hw-0910-node-baseline",
+      "instance": "e8204d2b305308",
+      "label": "Node 20 / Express"
+    },
+    {
+      "app": "baml-hw-0910-node-baml",
+      "instance": "080d69da292738",
+      "label": "Node 20 / Express + BAML"
+    },
+    {
+      "app": "baml-hw-0910-python-baseline",
+      "instance": "2862642f434d18",
+      "label": "Python 3.10 / Starlette"
+    },
+    {
+      "app": "baml-hw-0910-python-baml",
+      "instance": "86599efe755658",
+      "label": "Python 3.10 / Starlette + BAML"
+    },
+    {
+      "app": "baml-hw-0910-baml-debian",
+      "instance": "8654d96a7056e8",
+      "label": "Pure BAML / Debian 12 \u00b7 telemetry off"
+    },
+    {
+      "app": "baml-hw-0910-baml-debian-telemetry",
+      "instance": "83e131f7dde018",
+      "label": "Pure BAML / Debian 12 \u00b7 telemetry on"
+    }
+  ],
+  "saved_version": 6,
+  "memory_panels": [
+    {
+      "id": 4,
+      "title": "Process RSS & Node heap",
+      "app": "baml-hw-0910-node-baseline",
+      "unit": "bytes",
+      "min": 0,
+      "max": "auto",
+      "stacking": "none",
+      "queries": [
+        {
+          "expr": "process_resident_memory_bytes{app=\"baml-hw-0910-node-baseline\",instance=\"e8204d2b305308\"}",
+          "legend": "Process RSS"
+        },
+        {
+          "expr": "nodejs_heap_size_used_bytes{app=\"baml-hw-0910-node-baseline\",instance=\"e8204d2b305308\"}",
+          "legend": "V8 heap used"
+        },
+        {
+          "expr": "nodejs_heap_size_total_bytes{app=\"baml-hw-0910-node-baseline\",instance=\"e8204d2b305308\"}",
+          "legend": "V8 heap allocated"
+        },
+        {
+          "expr": "nodejs_external_memory_bytes{app=\"baml-hw-0910-node-baseline\",instance=\"e8204d2b305308\"}",
+          "legend": "V8 external"
+        },
+        {
+          "expr": "nodejs_arraybuffer_memory_bytes{app=\"baml-hw-0910-node-baseline\",instance=\"e8204d2b305308\"}",
+          "legend": "ArrayBuffers (within external)"
+        }
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#5794F2"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Process RSS & Node heap",
+      "app": "baml-hw-0910-node-baml",
+      "unit": "bytes",
+      "min": 0,
+      "max": "auto",
+      "stacking": "none",
+      "queries": [
+        {
+          "expr": "process_resident_memory_bytes{app=\"baml-hw-0910-node-baml\",instance=\"080d69da292738\"}",
+          "legend": "Process RSS"
+        },
+        {
+          "expr": "nodejs_heap_size_used_bytes{app=\"baml-hw-0910-node-baml\",instance=\"080d69da292738\"}",
+          "legend": "V8 heap used"
+        },
+        {
+          "expr": "nodejs_heap_size_total_bytes{app=\"baml-hw-0910-node-baml\",instance=\"080d69da292738\"}",
+          "legend": "V8 heap allocated"
+        },
+        {
+          "expr": "nodejs_external_memory_bytes{app=\"baml-hw-0910-node-baml\",instance=\"080d69da292738\"}",
+          "legend": "V8 external"
+        },
+        {
+          "expr": "nodejs_arraybuffer_memory_bytes{app=\"baml-hw-0910-node-baml\",instance=\"080d69da292738\"}",
+          "legend": "ArrayBuffers (within external)"
+        }
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#73BF69"
+      }
+    },
+    {
+      "id": 12,
+      "title": "Process RSS & Python allocations",
+      "app": "baml-hw-0910-python-baseline",
+      "unit": "bytes",
+      "min": 0,
+      "max": "auto",
+      "stacking": "none",
+      "queries": [
+        {
+          "expr": "process_resident_memory_bytes{app=\"baml-hw-0910-python-baseline\",instance=\"2862642f434d18\"}",
+          "legend": "Process RSS"
+        },
+        {
+          "expr": "python_traced_memory_current_bytes{app=\"baml-hw-0910-python-baseline\",instance=\"2862642f434d18\"}",
+          "legend": "Python traced allocations"
+        },
+        {
+          "expr": "python_traced_memory_peak_bytes{app=\"baml-hw-0910-python-baseline\",instance=\"2862642f434d18\"}",
+          "legend": "Python traced peak"
+        },
+        {
+          "expr": "python_tracemalloc_overhead_bytes{app=\"baml-hw-0910-python-baseline\",instance=\"2862642f434d18\"}",
+          "legend": "Tracing overhead"
+        }
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#FF9830"
+      }
+    },
+    {
+      "id": 16,
+      "title": "Process RSS & Python allocations",
+      "app": "baml-hw-0910-python-baml",
+      "unit": "bytes",
+      "min": 0,
+      "max": "auto",
+      "stacking": "none",
+      "queries": [
+        {
+          "expr": "process_resident_memory_bytes{app=\"baml-hw-0910-python-baml\",instance=\"86599efe755658\"}",
+          "legend": "Process RSS"
+        },
+        {
+          "expr": "python_traced_memory_current_bytes{app=\"baml-hw-0910-python-baml\",instance=\"86599efe755658\"}",
+          "legend": "Python traced allocations"
+        },
+        {
+          "expr": "python_traced_memory_peak_bytes{app=\"baml-hw-0910-python-baml\",instance=\"86599efe755658\"}",
+          "legend": "Python traced peak"
+        },
+        {
+          "expr": "python_tracemalloc_overhead_bytes{app=\"baml-hw-0910-python-baml\",instance=\"86599efe755658\"}",
+          "legend": "Tracing overhead"
+        }
+      ],
+      "primary_series_color": {
+        "legend": "Process RSS",
+        "color": "#B877D9"
+      }
+    },
+    {
+      "id": 24,
+      "title": "VM memory used (total \u2212 available)",
+      "app": "baml-hw-0910-baml-debian",
+      "queries": [
+        "mode(fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian\",instance=\"8654d96a7056e8\"})",
+        "fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian\",instance=\"8654d96a7056e8\"} - fly_instance_memory_mem_available{app=\"baml-hw-0910-baml-debian\",instance=\"8654d96a7056e8\"}"
+      ],
+      "max": 1073741824,
+      "primary_series_color": {
+        "legend": "Used",
+        "color": "#F2495C"
+      }
+    },
+    {
+      "id": 32,
+      "title": "VM memory used (total \u2212 available)",
+      "app": "baml-hw-0910-baml-debian-telemetry",
+      "queries": [
+        "mode(fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian-telemetry\",instance=\"83e131f7dde018\"})",
+        "fly_instance_memory_mem_total{app=\"baml-hw-0910-baml-debian-telemetry\",instance=\"83e131f7dde018\"} - fly_instance_memory_mem_available{app=\"baml-hw-0910-baml-debian-telemetry\",instance=\"83e131f7dde018\"}"
+      ],
+      "max": 1073741824,
+      "primary_series_color": {
+        "legend": "Used",
+        "color": "#F2CC0C"
+      }
+    }
+  ],
+  "comparison_panels_file": "comparison-panels.json",
+  "variant_colors": {
+    "node-baseline": "#5794F2",
+    "node-baml": "#73BF69",
+    "python-baseline": "#FF9830",
+    "python-baml": "#B877D9",
+    "baml-debian": "#F2495C",
+    "baml-debian-telemetry": "#F2CC0C"
+  }
+}

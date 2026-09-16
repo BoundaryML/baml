@@ -1,0 +1,4 @@
+starlette==0.47.3
+uvicorn==0.35.0
+anyio==4.14.2
+typing-extensions==4.15.0

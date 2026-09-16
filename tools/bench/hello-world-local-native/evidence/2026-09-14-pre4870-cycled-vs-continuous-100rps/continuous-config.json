@@ -1,0 +1,20 @@
+{
+  "rate_per_target": 100,
+  "aggregate_rate": 500,
+  "duration_seconds": 300.0,
+  "interval_seconds": 5.0,
+  "ports": {
+    "node-baseline": 8501,
+    "node-baml": 8502,
+    "python-baseline": 8503,
+    "python-baml": 8504,
+    "baml-only": 8505
+  },
+  "metrics_ports": {
+    "node-baseline": 8611,
+    "node-baml": 8612,
+    "python-baseline": 8613,
+    "python-baml": 8614,
+    "baml-only": 8615
+  }
+}

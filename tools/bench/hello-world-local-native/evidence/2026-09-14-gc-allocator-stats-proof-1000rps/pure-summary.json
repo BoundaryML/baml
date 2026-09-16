@@ -1,0 +1,460 @@
+{
+  "source_revision": "d8017dfbbce98707991ca7cc34a77d9298cdfb39",
+  "source_dirty": false,
+  "target": "baml-only",
+  "elapsed_seconds": 60.470666125,
+  "cycles": 6,
+  "scheduled_load_seconds": 53.996815875,
+  "status_counts": {
+    "200": 54000
+  },
+  "requests": 54000,
+  "delivered_rps_during_load": 1000.0589687548868,
+  "alive_at_last_sample": true,
+  "checkpoints": [
+    {
+      "cycle": 1,
+      "elapsed_seconds": 9.143465249999998,
+      "gc_elapsed_seconds": 0.0063908329999993185,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 294027,
+          "compile_time_objects": 4907,
+          "runtime_objects": 289120,
+          "active_handles": 4,
+          "tlab_chunks": 9035,
+          "reserved_slots": 289120,
+          "gen0_slots": 289120,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 290816,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 171617,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 19136512,
+          "permit_holder_slots": 9010,
+          "allocator_blocks_in_use": 336856,
+          "allocator_bytes_in_use": 66095968,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 96468992
+        },
+        "after": {
+          "total_objects": 4922,
+          "compile_time_objects": 4907,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 128925,
+          "allocator_bytes_in_use": 19994224,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 96468992
+        }
+      },
+      "rss_before_mib": 82.390625,
+      "rss_immediate_after_mib": 82.78125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 82.78125
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 82.78125
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 82.796875
+        }
+      ],
+      "runtime_objects_change": -289105,
+      "runtime_objects_collected": 289105,
+      "rss_immediate_delta_mib": 0.390625,
+      "rss_final_delta_mib": 0.40625
+    },
+    {
+      "cycle": 2,
+      "elapsed_seconds": 19.186843917,
+      "gc_elapsed_seconds": 0.005014125000002423,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 295482,
+          "compile_time_objects": 4907,
+          "runtime_objects": 290575,
+          "active_handles": 4,
+          "tlab_chunks": 9080,
+          "reserved_slots": 290560,
+          "gen0_slots": 290560,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 290816,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 172440,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 19398656,
+          "permit_holder_slots": 9014,
+          "allocator_blocks_in_use": 338106,
+          "allocator_bytes_in_use": 66503104,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 104857600
+        },
+        "after": {
+          "total_objects": 4922,
+          "compile_time_objects": 4907,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 128956,
+          "allocator_bytes_in_use": 19996208,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 104857600
+        }
+      },
+      "rss_before_mib": 89.71875,
+      "rss_immediate_after_mib": 90.046875,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 90.046875
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 90.046875
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 90.046875
+        }
+      ],
+      "runtime_objects_change": -290560,
+      "runtime_objects_collected": 290560,
+      "rss_immediate_delta_mib": 0.328125,
+      "rss_final_delta_mib": 0.328125
+    },
+    {
+      "cycle": 3,
+      "elapsed_seconds": 29.250128417,
+      "gc_elapsed_seconds": 0.004847833000003021,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 295482,
+          "compile_time_objects": 4907,
+          "runtime_objects": 290575,
+          "active_handles": 4,
+          "tlab_chunks": 9080,
+          "reserved_slots": 290560,
+          "gen0_slots": 290560,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 290816,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 172440,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 19398656,
+          "permit_holder_slots": 9014,
+          "allocator_blocks_in_use": 338122,
+          "allocator_bytes_in_use": 66504064,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 109051904
+        },
+        "after": {
+          "total_objects": 4922,
+          "compile_time_objects": 4907,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 128971,
+          "allocator_bytes_in_use": 19997104,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 109051904
+        }
+      },
+      "rss_before_mib": 92.609375,
+      "rss_immediate_after_mib": 92.90625,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 92.90625
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 92.90625
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 92.90625
+        }
+      ],
+      "runtime_objects_change": -290560,
+      "runtime_objects_collected": 290560,
+      "rss_immediate_delta_mib": 0.296875,
+      "rss_final_delta_mib": 0.296875
+    },
+    {
+      "cycle": 4,
+      "elapsed_seconds": 39.318742084,
+      "gc_elapsed_seconds": 0.004729000000004646,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 295482,
+          "compile_time_objects": 4907,
+          "runtime_objects": 290575,
+          "active_handles": 4,
+          "tlab_chunks": 9080,
+          "reserved_slots": 290560,
+          "gen0_slots": 290560,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 290816,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 172440,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 19398656,
+          "permit_holder_slots": 9014,
+          "allocator_blocks_in_use": 338130,
+          "allocator_bytes_in_use": 66504576,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 109051904
+        },
+        "after": {
+          "total_objects": 4922,
+          "compile_time_objects": 4907,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 128979,
+          "allocator_bytes_in_use": 19997616,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 109051904
+        }
+      },
+      "rss_before_mib": 96.109375,
+      "rss_immediate_after_mib": 96.109375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 96.109375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 96.109375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 96.109375
+        }
+      ],
+      "runtime_objects_change": -290560,
+      "runtime_objects_collected": 290560,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0
+    },
+    {
+      "cycle": 5,
+      "elapsed_seconds": 49.372686917,
+      "gc_elapsed_seconds": 0.008627708000005896,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 295482,
+          "compile_time_objects": 4907,
+          "runtime_objects": 290575,
+          "active_handles": 4,
+          "tlab_chunks": 9080,
+          "reserved_slots": 290560,
+          "gen0_slots": 290560,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 290816,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 172440,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 19398656,
+          "permit_holder_slots": 9014,
+          "allocator_blocks_in_use": 338130,
+          "allocator_bytes_in_use": 66504576,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 113246208
+        },
+        "after": {
+          "total_objects": 4922,
+          "compile_time_objects": 4907,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 128979,
+          "allocator_bytes_in_use": 19997616,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 113246208
+        }
+      },
+      "rss_before_mib": 99.15625,
+      "rss_immediate_after_mib": 99.15625,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 99.15625
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 99.15625
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 99.15625
+        }
+      ],
+      "runtime_objects_change": -290560,
+      "runtime_objects_collected": 290560,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0
+    },
+    {
+      "cycle": 6,
+      "elapsed_seconds": 59.447644542,
+      "gc_elapsed_seconds": 0.005902583999997546,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 295482,
+          "compile_time_objects": 4907,
+          "runtime_objects": 290575,
+          "active_handles": 4,
+          "tlab_chunks": 9080,
+          "reserved_slots": 290560,
+          "gen0_slots": 290560,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 290816,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 172440,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 19398656,
+          "permit_holder_slots": 9014,
+          "allocator_blocks_in_use": 338130,
+          "allocator_bytes_in_use": 66504576,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 113246208
+        },
+        "after": {
+          "total_objects": 4922,
+          "compile_time_objects": 4907,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 128979,
+          "allocator_bytes_in_use": 19997616,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 113246208
+        }
+      },
+      "rss_before_mib": 99.90625,
+      "rss_immediate_after_mib": 99.921875,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 99.921875
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 99.921875
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 99.921875
+        }
+      ],
+      "runtime_objects_change": -290560,
+      "runtime_objects_collected": 290560,
+      "rss_immediate_delta_mib": 0.015625,
+      "rss_final_delta_mib": 0.015625
+    }
+  ]
+}

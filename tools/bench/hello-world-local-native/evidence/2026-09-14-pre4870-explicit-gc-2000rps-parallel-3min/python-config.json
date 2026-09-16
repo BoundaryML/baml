@@ -1,0 +1,9 @@
+{
+  "rate": 2000,
+  "duration_seconds": 180.0,
+  "load_seconds": 3.0,
+  "post_gc_seconds": 1.0,
+  "interval_seconds": 1.0,
+  "target": "python-baml",
+  "port": 8504
+}

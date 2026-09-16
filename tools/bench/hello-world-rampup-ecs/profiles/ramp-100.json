@@ -1,0 +1,10 @@
+{
+  "name": "ramp-100",
+  "mode": "ramp",
+  "start_rate_per_target": 100,
+  "increase_rate_per_target": 100,
+  "increase_every_seconds": 30,
+  "maximum_rate_per_target": 25000,
+  "on_seconds": 4,
+  "off_seconds": 1
+}

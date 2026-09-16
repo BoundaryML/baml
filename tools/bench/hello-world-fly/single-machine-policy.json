@@ -1,0 +1,16 @@
+{
+  "maximum_machines_per_app": 1,
+  "autoscaler_enabled": false,
+  "autostop": "off",
+  "proxy_autostart_existing_machine": true,
+  "measured_restart_policy": {
+    "policy": "on-failure",
+    "max_retries": 10
+  },
+  "deploy_flags": [
+    "--ha=false",
+    "--strategy",
+    "immediate"
+  ],
+  "load_machine_update_only": "8ee335b73679e8"
+}

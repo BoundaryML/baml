@@ -1,0 +1,13 @@
+{
+  "rate": 1000,
+  "duration_seconds": 20,
+  "load_seconds": 2.5,
+  "idle_seconds": 0.5,
+  "interval_seconds": 0.5,
+  "final_quiescence_seconds": 3,
+  "workload": "python-baml-allocation-attribution",
+  "tracemalloc_frames": 10,
+  "malloc_stack_logging": false,
+  "split_baml_and_python_gc_each_idle_cycle": true,
+  "port": 8504
+}

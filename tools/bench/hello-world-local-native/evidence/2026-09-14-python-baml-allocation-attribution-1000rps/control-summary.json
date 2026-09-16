@@ -1,0 +1,748 @@
+{
+  "source_revision": "2de6a0567f1c11bb2bb71aeaf8757ed59b0f36ff",
+  "source_dirty": false,
+  "elapsed_seconds": 29.624361999999998,
+  "scheduled_duration_seconds": 20,
+  "scheduled_load_seconds": 17.0,
+  "cycles": 7,
+  "requests": 17000,
+  "status_counts": {
+    "200": 17000
+  },
+  "delivered_rps_during_load": 1000.0,
+  "initial_gc": {
+    "baml_elapsed_seconds": 0.002549916999999957,
+    "python_elapsed_seconds": 0.006017541999999931,
+    "python": {
+      "python_collected": 15,
+      "python_allocated_blocks_before": 176880,
+      "python_allocated_blocks_after": 176522
+    },
+    "baml_heap": {
+      "before": {
+        "total_objects": 4926,
+        "compile_time_objects": 4894,
+        "runtime_objects": 32,
+        "active_handles": 0,
+        "tlab_chunks": 1,
+        "reserved_slots": 32,
+        "gen0_slots": 32,
+        "gen1_slots": 0,
+        "gen2_slots": 0,
+        "gen0_capacity_slots": 4096,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 0,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 7,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 786432,
+        "permit_holder_slots": 6,
+        "allocator_blocks_in_use": 773408,
+        "allocator_bytes_in_use": 73675200,
+        "allocator_bytes_high_water": 88124816,
+        "allocator_bytes_reserved": 131072000
+      },
+      "after": {
+        "total_objects": 4895,
+        "compile_time_objects": 4894,
+        "runtime_objects": 1,
+        "active_handles": 0,
+        "tlab_chunks": 0,
+        "reserved_slots": 0,
+        "gen0_slots": 0,
+        "gen1_slots": 0,
+        "gen2_slots": 1,
+        "gen0_capacity_slots": 0,
+        "gen1_capacity_slots": 0,
+        "gen2_capacity_slots": 4096,
+        "scratch_capacity_slots": 0,
+        "allocations_since_gc": 0,
+        "object_slot_bytes": 64,
+        "tracked_slot_capacity_bytes": 786432,
+        "permit_holder_slots": 4,
+        "allocator_blocks_in_use": 773416,
+        "allocator_bytes_in_use": 73608832,
+        "allocator_bytes_high_water": 88190864,
+        "allocator_bytes_reserved": 131072000
+      }
+    }
+  },
+  "baseline_snapshot": {
+    "path": "baseline.tracemalloc",
+    "traced_blocks": 165337
+  },
+  "final_snapshot": {
+    "path": "final.tracemalloc",
+    "traced_blocks": 165823
+  },
+  "counter_deltas": {
+    "allocator_blocks_in_use": {
+      "before": 773235,
+      "after": 963557,
+      "change": 190322,
+      "change_per_request": 11.195411764705883
+    },
+    "allocator_bytes_in_use": {
+      "before": 73548912,
+      "after": 76645216,
+      "change": 3096304,
+      "change_per_request": 182.1355294117647
+    },
+    "allocator_bytes_reserved": {
+      "before": 131072000,
+      "after": 182452224,
+      "change": 51380224,
+      "change_per_request": 3022.3661176470587
+    },
+    "python_allocated_blocks": {
+      "before": 176626,
+      "after": 177171,
+      "change": 545,
+      "change_per_request": 0.032058823529411765
+    },
+    "python_tracemalloc_current_bytes": {
+      "before": 23043688,
+      "after": 23131471,
+      "change": 87783,
+      "change_per_request": 5.163705882352941
+    },
+    "python_tracemalloc_overhead_bytes": {
+      "before": 18530992,
+      "after": 18560592,
+      "change": 29600,
+      "change_per_request": 1.7411764705882353
+    },
+    "rust_alloc_calls_total": {
+      "before": 173060,
+      "after": 1358872,
+      "change": 1185812,
+      "change_per_request": 69.75364705882353
+    },
+    "rust_realloc_calls_total": {
+      "before": 6785,
+      "after": 24779,
+      "change": 17994,
+      "change_per_request": 1.058470588235294
+    },
+    "rust_dealloc_calls_total": {
+      "before": 44710,
+      "after": 1230420,
+      "change": 1185710,
+      "change_per_request": 69.74764705882353
+    },
+    "rust_allocated_bytes_total": {
+      "before": 31485155,
+      "after": 534952487,
+      "change": 503467332,
+      "change_per_request": 29615.725411764706
+    },
+    "rust_deallocated_bytes_total": {
+      "before": 13778488,
+      "after": 517107576,
+      "change": 503329088,
+      "change_per_request": 29607.593411764705
+    },
+    "rust_live_blocks": {
+      "before": 128350,
+      "after": 128452,
+      "change": 102,
+      "change_per_request": 0.006
+    },
+    "rust_live_bytes": {
+      "before": 17706667,
+      "after": 17844911,
+      "change": 138244,
+      "change_per_request": 8.132
+    },
+    "rust_live_blocks_le_16": {
+      "before": 52357,
+      "after": 52371,
+      "change": 14,
+      "change_per_request": 0.0008235294117647059
+    },
+    "rust_live_blocks_17_32": {
+      "before": 26918,
+      "after": 26918,
+      "change": 0,
+      "change_per_request": 0.0
+    },
+    "rust_live_blocks_33_64": {
+      "before": 16680,
+      "after": 16753,
+      "change": 73,
+      "change_per_request": 0.004294117647058823
+    },
+    "bex_str_flat_nodes_live": {
+      "before": 45,
+      "after": 45,
+      "change": 0,
+      "change_per_request": 0.0
+    },
+    "bex_str_flat_nodes_created_total": {
+      "before": 358,
+      "after": 2563,
+      "change": 2205,
+      "change_per_request": 0.12970588235294117
+    },
+    "bex_str_flat_nodes_dropped_total": {
+      "before": 313,
+      "after": 2518,
+      "change": 2205,
+      "change_per_request": 0.12970588235294117
+    },
+    "bex_str_flat_payloads_live": {
+      "before": 45,
+      "after": 45,
+      "change": 0,
+      "change_per_request": 0.0
+    },
+    "bex_str_flat_payload_bytes_live": {
+      "before": 4786,
+      "after": 4786,
+      "change": 0,
+      "change_per_request": 0.0
+    },
+    "bex_str_concat_nodes_live": {
+      "before": 0,
+      "after": 0,
+      "change": 0,
+      "change_per_request": 0.0
+    },
+    "bex_str_concat_nodes_created_total": {
+      "before": 157,
+      "after": 1263,
+      "change": 1106,
+      "change_per_request": 0.06505882352941177
+    },
+    "bex_str_concat_nodes_dropped_total": {
+      "before": 157,
+      "after": 1263,
+      "change": 1106,
+      "change_per_request": 0.06505882352941177
+    },
+    "pyo3_live_handles": {
+      "before": 0,
+      "after": 0,
+      "change": 0,
+      "change_per_request": 0.0
+    }
+  },
+  "tracemalloc": {
+    "before_traced_blocks": 165337,
+    "after_traced_blocks": 165823,
+    "traced_blocks_change": 486
+  },
+  "checkpoints": [
+    {
+      "cycle": 1,
+      "baml_gc_elapsed_seconds": 0.0037905409999998696,
+      "python_gc_elapsed_seconds": 0.006258874999999442,
+      "python_gc": {
+        "python_collected": 97,
+        "python_allocated_blocks_before": 183763,
+        "python_allocated_blocks_after": 177054
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 84894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 80000,
+          "active_handles": 0,
+          "tlab_chunks": 2500,
+          "reserved_slots": 80000,
+          "gen0_slots": 80000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 81920,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 17500,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 5767168,
+          "permit_holder_slots": 5004,
+          "allocator_blocks_in_use": 830774,
+          "allocator_bytes_in_use": 85335792,
+          "allocator_bytes_high_water": 121742960,
+          "allocator_bytes_reserved": 174063616
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 803269,
+          "allocator_bytes_in_use": 75969696,
+          "allocator_bytes_high_water": 122982608,
+          "allocator_bytes_reserved": 174063616
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 6,
+        "after_baml_gc": 7,
+        "after_python_gc": 8,
+        "idle_floor": 9
+      }
+    },
+    {
+      "cycle": 2,
+      "baml_gc_elapsed_seconds": 0.004657708999999954,
+      "python_gc_elapsed_seconds": 0.00757362499999914,
+      "python_gc": {
+        "python_collected": 122,
+        "python_allocated_blocks_before": 177633,
+        "python_allocated_blocks_after": 176842
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 84894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 80000,
+          "active_handles": 0,
+          "tlab_chunks": 2500,
+          "reserved_slots": 80000,
+          "gen0_slots": 80000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 81920,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 17500,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 5767168,
+          "permit_holder_slots": 5004,
+          "allocator_blocks_in_use": 858768,
+          "allocator_bytes_in_use": 85338176,
+          "allocator_bytes_high_water": 126516480,
+          "allocator_bytes_reserved": 174063616
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 831262,
+          "allocator_bytes_in_use": 75949952,
+          "allocator_bytes_high_water": 126883584,
+          "allocator_bytes_reserved": 174063616
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 15,
+        "after_baml_gc": 16,
+        "after_python_gc": 17,
+        "idle_floor": 18
+      }
+    },
+    {
+      "cycle": 3,
+      "baml_gc_elapsed_seconds": 0.0036566659999994755,
+      "python_gc_elapsed_seconds": 0.005924750000000145,
+      "python_gc": {
+        "python_collected": 193,
+        "python_allocated_blocks_before": 178271,
+        "python_allocated_blocks_after": 176868
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 84894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 80000,
+          "active_handles": 0,
+          "tlab_chunks": 2500,
+          "reserved_slots": 80000,
+          "gen0_slots": 80000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 81920,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 17500,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 5767168,
+          "permit_holder_slots": 5004,
+          "allocator_blocks_in_use": 887690,
+          "allocator_bytes_in_use": 86370496,
+          "allocator_bytes_high_water": 129078320,
+          "allocator_bytes_reserved": 182452224
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 860183,
+          "allocator_bytes_in_use": 76971968,
+          "allocator_bytes_high_water": 129078320,
+          "allocator_bytes_reserved": 182452224
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 24,
+        "after_baml_gc": 25,
+        "after_python_gc": 26,
+        "idle_floor": 27
+      }
+    },
+    {
+      "cycle": 4,
+      "baml_gc_elapsed_seconds": 0.004037708000000251,
+      "python_gc_elapsed_seconds": 0.005856292000000707,
+      "python_gc": {
+        "python_collected": 103,
+        "python_allocated_blocks_before": 177716,
+        "python_allocated_blocks_after": 176937
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 84894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 80000,
+          "active_handles": 0,
+          "tlab_chunks": 2500,
+          "reserved_slots": 80000,
+          "gen0_slots": 80000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 81920,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 17500,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 5767168,
+          "permit_holder_slots": 5004,
+          "allocator_blocks_in_use": 914213,
+          "allocator_bytes_in_use": 86284592,
+          "allocator_bytes_high_water": 129079616,
+          "allocator_bytes_reserved": 182452224
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 886704,
+          "allocator_bytes_in_use": 76863712,
+          "allocator_bytes_high_water": 129106752,
+          "allocator_bytes_reserved": 182452224
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 33,
+        "after_baml_gc": 34,
+        "after_python_gc": 35,
+        "idle_floor": 36
+      }
+    },
+    {
+      "cycle": 5,
+      "baml_gc_elapsed_seconds": 0.0037105420000003164,
+      "python_gc_elapsed_seconds": 0.006710874999999561,
+      "python_gc": {
+        "python_collected": 122,
+        "python_allocated_blocks_before": 177694,
+        "python_allocated_blocks_after": 176954
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 84894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 80000,
+          "active_handles": 0,
+          "tlab_chunks": 2500,
+          "reserved_slots": 80000,
+          "gen0_slots": 80000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 81920,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 17500,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 5767168,
+          "permit_holder_slots": 5004,
+          "allocator_blocks_in_use": 942203,
+          "allocator_bytes_in_use": 86276128,
+          "allocator_bytes_high_water": 129106752,
+          "allocator_bytes_reserved": 182452224
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 914697,
+          "allocator_bytes_in_use": 76844416,
+          "allocator_bytes_high_water": 129106752,
+          "allocator_bytes_reserved": 182452224
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 42,
+        "after_baml_gc": 43,
+        "after_python_gc": 44,
+        "idle_floor": 45
+      }
+    },
+    {
+      "cycle": 6,
+      "baml_gc_elapsed_seconds": 0.003911250000001587,
+      "python_gc_elapsed_seconds": 0.005980167000000591,
+      "python_gc": {
+        "python_collected": 122,
+        "python_allocated_blocks_before": 177760,
+        "python_allocated_blocks_after": 177169
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 84894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 80000,
+          "active_handles": 0,
+          "tlab_chunks": 2500,
+          "reserved_slots": 80000,
+          "gen0_slots": 80000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 81920,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 17500,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 5767168,
+          "permit_holder_slots": 5004,
+          "allocator_blocks_in_use": 970151,
+          "allocator_bytes_in_use": 86267840,
+          "allocator_bytes_high_water": 129119056,
+          "allocator_bytes_reserved": 182452224
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 942643,
+          "allocator_bytes_in_use": 76901568,
+          "allocator_bytes_high_water": 129381200,
+          "allocator_bytes_reserved": 182452224
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 51,
+        "after_baml_gc": 52,
+        "after_python_gc": 53,
+        "idle_floor": 54
+      }
+    },
+    {
+      "cycle": 7,
+      "baml_gc_elapsed_seconds": 0.003465165999998021,
+      "python_gc_elapsed_seconds": 0.0060565419999996095,
+      "python_gc": {
+        "python_collected": 115,
+        "python_allocated_blocks_before": 177758,
+        "python_allocated_blocks_after": 176959
+      },
+      "baml_heap": {
+        "before": {
+          "total_objects": 68894,
+          "compile_time_objects": 4894,
+          "runtime_objects": 64000,
+          "active_handles": 0,
+          "tlab_chunks": 2000,
+          "reserved_slots": 64000,
+          "gen0_slots": 64000,
+          "gen1_slots": 0,
+          "gen2_slots": 0,
+          "gen0_capacity_slots": 65536,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 0,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 14000,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 4718592,
+          "permit_holder_slots": 4004,
+          "allocator_blocks_in_use": 986658,
+          "allocator_bytes_in_use": 84447584,
+          "allocator_bytes_high_water": 129381200,
+          "allocator_bytes_reserved": 182452224
+        },
+        "after": {
+          "total_objects": 4895,
+          "compile_time_objects": 4894,
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 1,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 4,
+          "allocator_blocks_in_use": 964652,
+          "allocator_bytes_in_use": 76871328,
+          "allocator_bytes_high_water": 129708880,
+          "allocator_bytes_reserved": 182452224
+        }
+      },
+      "sample_indices": {
+        "before_baml_gc": 59,
+        "after_baml_gc": 60,
+        "after_python_gc": 61,
+        "idle_floor": 62
+      }
+    }
+  ],
+  "external_captures": [
+    {
+      "command": [
+        "heap",
+        "-zones",
+        "-showSizes",
+        "-sortBySize",
+        "51180"
+      ],
+      "output": "heap-baseline.txt",
+      "returncode": 0,
+      "elapsed_seconds": 1.7606916249999998
+    },
+    {
+      "command": [
+        "vmmap",
+        "-summary",
+        "51180"
+      ],
+      "output": "vmmap-baseline.txt",
+      "returncode": 0,
+      "elapsed_seconds": 0.747682583
+    },
+    {
+      "command": [
+        "heap",
+        "-zones",
+        "-showSizes",
+        "-sortBySize",
+        "51180"
+      ],
+      "output": "heap-final.txt",
+      "returncode": 0,
+      "elapsed_seconds": 1.6977928749999975
+    },
+    {
+      "command": [
+        "vmmap",
+        "-summary",
+        "51180"
+      ],
+      "output": "vmmap-final.txt",
+      "returncode": 0,
+      "elapsed_seconds": 0.7753907089999998
+    },
+    {
+      "command": [
+        "malloc_history",
+        "51180",
+        "-callTree",
+        "-invert",
+        "-ignoreThreads"
+      ],
+      "output": "malloc-history-final.txt",
+      "returncode": 249,
+      "elapsed_seconds": 0.11735712500000162
+    }
+  ],
+  "alive_at_last_sample": true,
+  "process_deltas": {
+    "rss_bytes": 58785792,
+    "native_threads": 14
+  }
+}

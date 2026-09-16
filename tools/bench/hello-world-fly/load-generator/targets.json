@@ -1,0 +1,8 @@
+{
+  "node-baseline": "https://baml-hw-0910-node-baseline.fly.dev/",
+  "node-baml": "https://baml-hw-0910-node-baml.fly.dev/",
+  "python-baseline": "https://baml-hw-0910-python-baseline.fly.dev/",
+  "python-baml": "https://baml-hw-0910-python-baml.fly.dev/",
+  "baml-debian": "https://baml-hw-0910-baml-debian.fly.dev/",
+  "baml-debian-telemetry": "https://baml-hw-0910-baml-debian-telemetry.fly.dev/"
+}

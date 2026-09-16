@@ -1,0 +1,248 @@
+{
+  "tested_base_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "diagnostic_revision": "9f8ec6f68dd26348e499eacd2e81cf2902892bb1",
+  "collector_changes_from_tested_base": false,
+  "profile": {
+    "rate_rps": 2000,
+    "loaded_seconds_per_cycle": 3,
+    "post_gc_observation_seconds": 1,
+    "wall_duration_seconds": 60,
+    "cycles": 15
+  },
+  "methodology": {
+    "pure": "Pause the client, invoke BAML major GC, then sample process RSS through one idle second.",
+    "python": "Pause the client, invoke BAML major GC in the bridge runtime, invoke CPython generation-2 GC, then sample process RSS through one idle second."
+  },
+  "runs": {
+    "pure": {
+      "requests": 89900,
+      "status_counts": {
+        "200": 89900
+      },
+      "delivered_rps_during_load": 2000.112846544788,
+      "alive_at_last_sample": true,
+      "post_gc_rss_mib": [
+        66.1875,
+        69.28125,
+        69.59375,
+        70.09375,
+        70.484375,
+        71.546875,
+        77.5625,
+        78.3125,
+        78.3125,
+        78.3125,
+        78.3125,
+        78.3125,
+        78.3125,
+        78.3125,
+        78.3125
+      ],
+      "post_gc_slope_all_mib_per_minute": 13.351159205794492,
+      "post_gc_change_all_mib": 12.125,
+      "post_gc_slope_checkpoints_8_15_mib_per_minute": 0.0,
+      "post_gc_change_checkpoints_8_15_mib": 0.0,
+      "heap_after": [
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      ]
+    },
+    "python": {
+      "requests": 89988,
+      "status_counts": {
+        "200": 89988
+      },
+      "delivered_rps_during_load": 2000.1114729416597,
+      "alive_at_last_sample": true,
+      "post_gc_rss_mib": [
+        96.890625,
+        100.0625,
+        101.84375,
+        102.375,
+        102.4375,
+        104.03125,
+        105.796875,
+        105.84375,
+        106.265625,
+        106.75,
+        107.921875,
+        108.140625,
+        109.703125,
+        109.703125,
+        109.78125
+      ],
+      "post_gc_slope_all_mib_per_minute": 12.274297974380465,
+      "post_gc_change_all_mib": 12.890625,
+      "post_gc_slope_checkpoints_8_15_mib_per_minute": 9.464620622710175,
+      "post_gc_change_checkpoints_8_15_mib": 3.9375,
+      "heap_after": [
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      ],
+      "python_objects_collected": [
+        69,
+        201,
+        187,
+        201,
+        194,
+        161,
+        201,
+        201,
+        208,
+        194,
+        329,
+        355,
+        187,
+        246,
+        390
+      ]
+    }
+  },
+  "interpretation": "At 2,000 RPS, pure BAML reached a 78.3125 MiB post-GC allocator high-water mark at checkpoint 8 and remained exactly flat through checkpoint 15 while every major GC returned the managed heap to 15 runtime objects. Python BAML rose from 96.890625 to 109.78125 MiB post-GC; checkpoints 8-15 added 3.9375 MiB and fit 9.465 MiB/min despite BAML major GC and CPython generation-2 GC. Its final three checkpoints changed only 0.078125 MiB, so the one-minute run cannot determine whether Python is beginning to plateau or will resume growing."
+}

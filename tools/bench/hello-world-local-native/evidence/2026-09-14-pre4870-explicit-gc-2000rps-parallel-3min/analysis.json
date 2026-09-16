@@ -1,0 +1,230 @@
+{
+  "tested_base_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "diagnostic_revision": "9f8ec6f68dd26348e499eacd2e81cf2902892bb1",
+  "collector_changes_from_tested_base": false,
+  "profile": {
+    "rate_rps_per_target": 2000,
+    "aggregate_loaded_rps": 4000,
+    "loaded_seconds_per_cycle": 3,
+    "post_gc_observation_seconds": 1,
+    "wall_duration_seconds": 180,
+    "targets_started_in_parallel": true,
+    "cycles": 45
+  },
+  "runs": {
+    "pure": {
+      "requests": 266769,
+      "status_counts": {
+        "200": 266769
+      },
+      "delivered_rps_during_load": 2000.1210846218885,
+      "alive_at_last_sample": true,
+      "post_gc_rss_mib": [
+        66.5625,
+        76.390625,
+        80.390625,
+        81.90625,
+        82.171875,
+        84.734375,
+        84.734375,
+        85.078125,
+        85.078125,
+        85.078125,
+        85.078125,
+        85.15625,
+        85.171875,
+        85.1875,
+        85.21875,
+        85.21875,
+        85.21875,
+        85.21875,
+        85.21875,
+        85.21875,
+        85.21875,
+        85.234375,
+        85.234375,
+        85.234375,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.25,
+        85.265625,
+        85.265625
+      ],
+      "windows": {
+        "from_0_seconds": {
+          "samples": 45,
+          "first_rss_mib": 66.5625,
+          "last_rss_mib": 85.265625,
+          "change_mib": 18.703125,
+          "slope_mib_per_minute": 1.646489711813321
+        },
+        "from_30_seconds": {
+          "samples": 38,
+          "first_rss_mib": 85.078125,
+          "last_rss_mib": 85.265625,
+          "change_mib": 0.1875,
+          "slope_mib_per_minute": 0.056642666794133587
+        },
+        "from_60_seconds": {
+          "samples": 30,
+          "first_rss_mib": 85.21875,
+          "last_rss_mib": 85.265625,
+          "change_mib": 0.046875,
+          "slope_mib_per_minute": 0.020036450778969365
+        },
+        "from_90_seconds": {
+          "samples": 23,
+          "first_rss_mib": 85.234375,
+          "last_rss_mib": 85.265625,
+          "change_mib": 0.03125,
+          "slope_mib_per_minute": 0.009579533076324935
+        },
+        "from_120_seconds": {
+          "samples": 16,
+          "first_rss_mib": 85.25,
+          "last_rss_mib": 85.265625,
+          "change_mib": 0.015625,
+          "slope_mib_per_minute": 0.00943876955119138
+        },
+        "from_150_seconds": {
+          "samples": 8,
+          "first_rss_mib": 85.25,
+          "last_rss_mib": 85.265625,
+          "change_mib": 0.015625,
+          "slope_mib_per_minute": 0.03348258795952037
+        }
+      },
+      "heap_after_unique": [
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      ]
+    },
+    "python": {
+      "requests": 267280,
+      "status_counts": {
+        "200": 267280
+      },
+      "delivered_rps_during_load": 2000.1359190986886,
+      "alive_at_last_sample": true,
+      "post_gc_rss_mib": [
+        84.640625,
+        87.78125,
+        89.15625,
+        89.53125,
+        90.484375,
+        90.875,
+        90.21875,
+        90.328125,
+        90.375,
+        90.4375,
+        90.921875,
+        91.03125,
+        91.796875,
+        91.65625,
+        91.765625,
+        91.765625,
+        91.890625,
+        92.65625,
+        92.671875,
+        92.875,
+        93.765625,
+        93.578125,
+        93.859375,
+        93.859375,
+        94.140625,
+        94.15625,
+        94.15625,
+        94.21875,
+        94.21875,
+        94.21875,
+        94.703125,
+        94.703125,
+        94.703125,
+        94.703125,
+        94.703125,
+        94.703125,
+        94.703125,
+        95.71875,
+        95.3125,
+        95.453125,
+        95.5625,
+        95.5625,
+        95.5625,
+        95.609375,
+        95.609375
+      ],
+      "windows": {
+        "from_0_seconds": {
+          "samples": 45,
+          "first_rss_mib": 84.640625,
+          "last_rss_mib": 95.609375,
+          "change_mib": 10.96875,
+          "slope_mib_per_minute": 2.5593071228806163
+        },
+        "from_30_seconds": {
+          "samples": 38,
+          "first_rss_mib": 90.328125,
+          "last_rss_mib": 95.609375,
+          "change_mib": 5.28125,
+          "slope_mib_per_minute": 2.160772880782906
+        },
+        "from_60_seconds": {
+          "samples": 30,
+          "first_rss_mib": 91.765625,
+          "last_rss_mib": 95.609375,
+          "change_mib": 3.84375,
+          "slope_mib_per_minute": 1.7385758366923487
+        },
+        "from_90_seconds": {
+          "samples": 23,
+          "first_rss_mib": 93.859375,
+          "last_rss_mib": 95.609375,
+          "change_mib": 1.75,
+          "slope_mib_per_minute": 1.3135107708109
+        },
+        "from_120_seconds": {
+          "samples": 16,
+          "first_rss_mib": 94.21875,
+          "last_rss_mib": 95.609375,
+          "change_mib": 1.390625,
+          "slope_mib_per_minute": 1.3703765822197722
+        },
+        "from_150_seconds": {
+          "samples": 8,
+          "first_rss_mib": 95.71875,
+          "last_rss_mib": 95.609375,
+          "change_mib": -0.109375,
+          "slope_mib_per_minute": 0.1872525988868216
+        }
+      },
+      "heap_after_unique": [
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      ],
+      "python_objects_collected_total": 9581
+    }
+  },
+  "interpretation": "With both targets running concurrently at 2,000 RPS each, pure BAML reached its allocator plateau within the first minute: its post-GC RSS changed 0.047 MiB from 60 seconds to the end and fit 0.020 MiB/min. Python BAML continued upward but decelerated: its fitted post-GC slope fell from 2.161 MiB/min after 30 seconds to 1.739 after 60 seconds, 1.314 after 90 seconds, and 0.187 over the final 30 seconds. Python ended at 95.609 MiB after reaching 95.719 MiB, so this run does not show unbounded linear growth; it is consistent with a slower, stepwise allocator or cache plateau. A longer run or allocation tracing is required to distinguish that from a slow leak."
+}

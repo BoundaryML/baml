@@ -1,0 +1,31 @@
+{
+  "source": "/Users/sam/baml-worktrees/baml/pure-baml-gc-diagnostic/baml_language",
+  "revision": "2de6a0567f1c11bb2bb71aeaf8757ed59b0f36ff",
+  "source_dirty": false,
+  "source_status": "",
+  "source_snapshot": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "Python 3.10.0",
+  "node": "v20.14.0",
+  "node_binary": "/Users/sam/.local/share/mise/installs/node/20/bin/node",
+  "vegeta": "12.13.0",
+  "explicit_gc_diagnostic": true,
+  "allocation_profiling": true,
+  "artifacts": {
+    "toolchain/baml-cli": "711a0460abd5df48c26735d1f4c1b8f70d0389176b99c42c450163c47ec31edf",
+    "toolchain/baml-pack-host": "efb405e625db4a3e03a8df151e0c70be27149cfb929f23d2ff9d2857cf926e48",
+    "wheels/baml_bridge-0.19.0-cp310-abi3-macosx_11_0_arm64.whl": "9e5cb8edc2f9605f4c130966369544ad282515d79fb2f94f218d288d9672c493",
+    "node-bridge/dist/baml_node.darwin-arm64.node": "d4ae87ef0a0c3749cc92fb30d78b1cbdb391ed2f5e7a303c17f702d923c21c27",
+    "apps/baml-only/hello": "7d1097889127db9828671e963852f27746ff62cd4701becda4f3405cbc77065c",
+    "tools/vegeta": "15d6cd01fc412e70a11243006de4e5fd68d505a13848ae3312d83d49b64fd087",
+    "apps/baml-only-explicit-gc/hello": "f8523b400f565d49dbda7079de4e525f0ae4c175cc5e100d7c5e209455eaba13",
+    "apps/baml-only-response-allocation/hello": "324a315b0494ebc59c81d131d3d5e3daf86918d2503b38df2a845c85138cfef3",
+    "apps/python-baml-explicit-gc/server.py": "d9e0186c61eb6eb040a6a98c8c8a363adc1a92a2ac9ff352627ee617adfb0fed",
+    "apps/python-baml-explicit-gc/baml_sdk/_inlinedbaml.py": "48b1d87fcbb26c7fb25988c7b3472a40241d678f33267c660fed3e65b5abae66",
+    "apps/python-baml-response-allocation/server.py": "d9e0186c61eb6eb040a6a98c8c8a363adc1a92a2ac9ff352627ee617adfb0fed",
+    "apps/python-baml-response-allocation/baml_sdk/_inlinedbaml.py": "84abb895a5223cf10917a173b7ea17ed041897a574d52d42615997a22565c502",
+    "apps/python-baml-allocation-attribution/server.py": "674f28b5508f4376e9a5a159e045a213262ef5dbb6bb3ac4583ba9da4b3de42d",
+    "apps/python-baml-allocation-attribution/baml_sdk/_inlinedbaml.py": "d879b2451e79c7238650d31a9ae04ac515c9086bbabee4adce1eb3005e444d24"
+  }
+}

@@ -1,0 +1,466 @@
+{
+  "source_revision": "9f8ec6f68dd26348e499eacd2e81cf2902892bb1",
+  "source_dirty": false,
+  "target": "baml-only",
+  "elapsed_seconds": 302.07830995800003,
+  "cycles": 10,
+  "scheduled_load_seconds": 281.18891578999995,
+  "status_counts": {
+    "200": 140597
+  },
+  "requests": 140597,
+  "delivered_rps_during_load": 500.0090405590593,
+  "alive_at_last_sample": true,
+  "checkpoints": [
+    {
+      "cycle": 1,
+      "elapsed_seconds": 30.17073375,
+      "gc_elapsed_seconds": 0.009583375000001837,
+      "heap": {
+        "before": {
+          "total_objects": 146313,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141445,
+          "active_handles": 4,
+          "tlab_chunks": 4420
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 89.15625,
+      "rss_immediate_after_mib": 89.375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 89.375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 89.375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 89.375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 89.375
+        }
+      ],
+      "runtime_objects_collected": 141430,
+      "rss_immediate_delta_mib": 0.21875,
+      "rss_final_delta_mib": 0.21875,
+      "runtime_objects_change": -141430
+    },
+    {
+      "cycle": 2,
+      "elapsed_seconds": 62.243240041,
+      "gc_elapsed_seconds": 0.006921042000001876,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 89.375,
+      "rss_immediate_after_mib": 89.375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 89.375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 89.375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 89.375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 89.375
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 3,
+      "elapsed_seconds": 94.312280208,
+      "gc_elapsed_seconds": 0.0028140410000077054,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 102.28125,
+      "rss_immediate_after_mib": 102.28125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 102.28125
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 102.28125
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 102.28125
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 102.28125
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 4,
+      "elapsed_seconds": 126.347322875,
+      "gc_elapsed_seconds": 0.0027547500000082437,
+      "heap": {
+        "before": {
+          "total_objects": 146377,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141509,
+          "active_handles": 4,
+          "tlab_chunks": 4422
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.546875,
+      "rss_immediate_after_mib": 104.5625,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.5625
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.5625
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.5625
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.5625
+        }
+      ],
+      "runtime_objects_collected": 141494,
+      "rss_immediate_delta_mib": 0.015625,
+      "rss_final_delta_mib": 0.015625,
+      "runtime_objects_change": -141494
+    },
+    {
+      "cycle": 5,
+      "elapsed_seconds": 158.442526875,
+      "gc_elapsed_seconds": 0.008793750000023692,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.578125,
+      "rss_immediate_after_mib": 104.578125,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.578125
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.578125
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.578125
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.578125
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 6,
+      "elapsed_seconds": 190.528431083,
+      "gc_elapsed_seconds": 0.006903291999975636,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.59375,
+      "rss_immediate_after_mib": 104.59375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.59375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.59375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.59375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.59375
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 7,
+      "elapsed_seconds": 222.61391216599998,
+      "gc_elapsed_seconds": 0.008627625000002581,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.59375,
+      "rss_immediate_after_mib": 104.59375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.59375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.59375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.59375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.59375
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 8,
+      "elapsed_seconds": 254.70942666599998,
+      "gc_elapsed_seconds": 0.007992625000014186,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.609375,
+      "rss_immediate_after_mib": 104.609375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.609375
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 9,
+      "elapsed_seconds": 286.78352445800004,
+      "gc_elapsed_seconds": 0.0030293749999827924,
+      "heap": {
+        "before": {
+          "total_objects": 146409,
+          "compile_time_objects": 4868,
+          "runtime_objects": 141541,
+          "active_handles": 4,
+          "tlab_chunks": 4423
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.609375,
+      "rss_immediate_after_mib": 104.609375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.609375
+        }
+      ],
+      "runtime_objects_collected": 141526,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -141526
+    },
+    {
+      "cycle": 10,
+      "elapsed_seconds": 300.05710295800003,
+      "gc_elapsed_seconds": 0.009679957999992439,
+      "heap": {
+        "before": {
+          "total_objects": 184115,
+          "compile_time_objects": 4868,
+          "runtime_objects": 179247,
+          "active_handles": 4,
+          "tlab_chunks": 5601
+        },
+        "after": {
+          "total_objects": 4883,
+          "compile_time_objects": 4868,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      },
+      "rss_before_mib": 104.609375,
+      "rss_immediate_after_mib": 104.609375,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 104.609375
+        },
+        {
+          "delay_seconds": 2.0,
+          "rss_mib": 104.609375
+        }
+      ],
+      "runtime_objects_collected": 179232,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0,
+      "runtime_objects_change": -179232
+    }
+  ]
+}

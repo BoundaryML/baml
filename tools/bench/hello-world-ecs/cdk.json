@@ -1,0 +1,7 @@
+{
+  "app": "node infra/app.js",
+  "context": {
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

@@ -1,0 +1,490 @@
+Process:         python3.10 [50348]
+Path:            /Users/USER/*/python3.10
+Load Address:    0x1047a0000
+Identifier:      python3.10
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  Python [50344]
+Target Type:     live task
+
+Date/Time:       2026-09-14 23:36:26.955 -0700
+Launch Time:     2026-09-14 23:36:22.030 -0700
+OS Version:      macOS 26.6.2 (25G83)
+Report Version:  7
+Analysis Tool:   /usr/bin/heap
+
+Physical footprint:         164.4M
+Physical footprint (peak):  191.5M
+Idle exit:                  untracked
+----
+
+Process 50348: 3 zones
+Zone DefaultMallocZone_0x1047c0000: Overall size: 9216KB; 658 nodes malloced for 64KB (0% of capacity)
+Zone MallocStackLoggingLiteZone_0x10480c000: Overall size: 1759248KB; 767802 nodes malloced for 79602KB (4% of capacity)
+Zone MallocStackLoggingLiteZone_Wrapper_0x104808000: Overall size: 0KB
+All zones: 768460 nodes malloced - 79665KB
+
+Zone DefaultMallocZone_0x1047c0000: 658 nodes - Sizes: 3.5KB[1] 1.5KB[1] 1KB[1] 528[1] 512[1] 256[1] 240[1] 192[3] 176[14] 160[32] 144[73] 128[152] 112[71] 96[3] 80[4] 64[10] 48[25] 32[260] 16[4] 
+
+Zone MallocStackLoggingLiteZone_0x10480c000: 767802 nodes - Sizes: 4128KB[2] 2816KB[1] 928KB[1] 608KB[1] 544KB[1] 192KB[1] 160KB[1] 128KB[3] 96KB[5] 64KB[12] 21.5KB[3] 21KB[1] 18.5KB[4] 18KB[2] 17KB[1] 16.5KB[24] 16KB[1] 12KB[1] 11.5KB[1] 11KB[5] 10.5KB[1] 9.5KB[20] 9KB[1] 8.5KB[90] 8KB[52] 7.5KB[5] 7KB[6] 6.5KB[5] 6KB[24] 5.5KB[14] 5KB[62] 4.5KB[36] 4KB[67] 3.5KB[82] 3KB[216] 2.5KB[489] 2KB[369] 1.5KB[1729] 1KB[21] 1008[40] 992[1601] 976[129] 960[1540] 944[37] 928[41] 912[56] 896[41] 880[68] 864[22] 848[106] 832[30] 816[59] 800[29] 784[77] 768[47] 752[238] 736[260] 720[715] 704[39] 688[98] 672[60] 656[155] 640[81] 624[74] 608[111] 592[1023] 576[133] 560[171] 544[132] 528[268] 512[98] 496[142] 480[147] 464[175] 448[82] 432[96] 416[106] 400[244] 384[1841] 368[439] 352[74] 336[332] 320[165] 304[219] 288[984] 272[4321] 256[2167] 240[456] 224[210] 208[849] 192[717] 176[458] 160[418] 144[157321] 128[1672] 112[1060] 96[1228] 80[6507] 64[6892] 48[328955] 32[198186] 16[40400] 
+
+Zone MallocStackLoggingLiteZone_Wrapper_0x104808000: 0 nodes
+
+All zones: 768460 nodes malloced - Sizes: 4128KB[2] 2816KB[1] 928KB[1] 608KB[1] 544KB[1] 192KB[1] 160KB[1] 128KB[3] 96KB[5] 64KB[12] 21.5KB[3] 21KB[1] 18.5KB[4] 18KB[2] 17KB[1] 16.5KB[24] 16KB[1] 12KB[1] 11.5KB[1] 11KB[5] 10.5KB[1] 9.5KB[20] 9KB[1] 8.5KB[90] 8KB[52] 7.5KB[5] 7KB[6] 6.5KB[5] 6KB[24] 5.5KB[14] 5KB[62] 4.5KB[36] 4KB[67] 3.5KB[83] 3KB[216] 2.5KB[489] 2KB[369] 1.5KB[1730] 1KB[22] 1008[40] 992[1601] 976[129] 960[1540] 944[37] 928[41] 912[56] 896[41] 880[68] 864[22] 848[106] 832[30] 816[59] 800[29] 784[77] 768[47] 752[238] 736[260] 720[715] 704[39] 688[98] 672[60] 656[155] 640[81] 624[74] 608[111] 592[1023] 576[133] 560[171] 544[132] 528[269] 512[99] 496[142] 480[147] 464[175] 448[82] 432[96] 416[106] 400[244] 384[1841] 368[439] 352[74] 336[332] 320[165] 304[219] 288[984] 272[4321] 256[2168] 240[457] 224[210] 208[849] 192[720] 176[472] 160[450] 144[157394] 128[1824] 112[1131] 96[1231] 80[6511] 64[6902] 48[328980] 32[198446] 16[40404] 
+
+Found:  172 ObjC classes  48 Swift classes  66 CFTypes
+Derived 75 type names for non-objects from allocation backtraces
+
+-----------------------------------------------------------------------
+Zone DefaultMallocZone_0x1047c0000: 658 nodes (64592 bytes)
+
+   COUNT      BYTES       AVG   CLASS_NAME                                        TYPE    BINARY
+   =====      =====       ===   ==========                                        ====    ======
+       4        192      48.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       2        128      64.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       1         96      96.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      70       7840     112.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+     148      18944     128.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      71      10224     144.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      32       5120     160.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+      14       2464     176.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       3        576     192.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+     250       8000      32.0   Class.data (class_rw_t)                           C       libobjc.A.dylib
+       1         16      16.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+      10        320      32.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       2         96      48.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       5        320      64.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       1         80      80.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       1        144     144.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       1        512     512.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       1        528     528.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       1       1024    1024.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       1       1536    1536.0   non-object in zone DefaultMallocZone_0x1047c0000          <unknown>
+       3         48      16.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       1         48      48.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       1         64      64.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       1       3584    3584.0   xpc_string_t (Storage)                            C       libxpc.dylib
+       3        240      80.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        112     112.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       3        384     128.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        144     144.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        240     240.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        256     256.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+      11        528      48.0   Class.data.extended (class_rw_ext_t)              C       libobjc.A.dylib
+       6        288      48.0   xpc_string_t                                      ObjC    libxpc.dylib
+       2        192      96.0   xpc_dictionary_t                                  ObjC    libxpc.dylib
+       1        128     128.0   dispatch_queue_t (serial)                         ObjC    libdispatch.dylib
+       1         64      64.0   xpc_array_t (Storage)                             C       libxpc.dylib
+       1         64      64.0   xpc_pipe_t                                        ObjC    libxpc.dylib
+       1         48      48.0   xpc_array_t                                       ObjC    libxpc.dylib
+
+-----------------------------------------------------------------------
+Zone MallocStackLoggingLiteZone_0x10480c000: 767802 nodes (81512032 bytes)
+
+   COUNT      BYTES       AVG   CLASS_NAME                                        TYPE    BINARY
+   =====      =====       ===   ==========                                        ====    ======
+  160344    5131008      32.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+  160345    7696560      48.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+      14        896      64.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+      45       3600      80.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+     100       9600      96.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+      74       8288     112.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+     236      30208     128.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+   71028   10228032     144.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+       1    4227072  4227072.0   malloc in tracemalloc_alloc_gil                   C       libpython3.10.dylib
+   40083     641328      16.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+   32720    1047040      32.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+   11945     573360      48.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    6753     432192      64.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    6221     497680      80.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    1070     102720      96.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     932     104384     112.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    1196     153088     128.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    6823     982512     144.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     398      63680     160.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     448      78848     176.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     710     136320     192.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     843     175344     208.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     209      46816     224.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     453     108720     240.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    2083     533248     256.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    4302    1170144     272.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     975     280800     288.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     219      66576     304.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     164      52480     320.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     329     110544     336.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      72      25344     352.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     432     158976     368.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    1840     706560     384.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     243      97200     400.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     106      44096     416.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      96      41472     432.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      82      36736     448.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     167      77488     464.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     146      70080     480.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     140      69440     496.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      19       9728     512.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     208     109824     528.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      23      12512     544.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      91      50960     560.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      54      31104     576.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     151      89392     592.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      69      41952     608.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      41      25584     624.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       9       5760     640.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     128      83968     656.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       6       4032     672.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      62      42656     688.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       6       4224     704.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     691     497520     720.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     226     166336     736.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     217     163184     752.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      31      23808     768.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      51      39984     784.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       7       5600     800.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      37      30192     816.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      13      10816     832.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      73      61904     848.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       5       4320     864.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      40      35200     880.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      21      18816     896.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      41      37392     912.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      21      19488     928.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      18      16992     944.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       3       2880     960.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      48      46848     976.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    1531    1518752     992.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      29      29232    1008.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      10      10240    1024.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+    1024    1572864    1536.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     282     577536    2048.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     222     568320    2560.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+     179     549888    3072.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      69     247296    3584.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      63     258048    4096.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      27     124416    4608.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      11      56320    5120.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       4      22528    5632.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      23     141312    6144.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       3      19968    6656.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       5      35840    7168.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       5      38400    7680.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      52     425984    8192.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      82     713728    8704.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       4      38912    9728.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1      10752   10752.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1      11776   11776.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1      12288   12288.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1      16384   16384.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+      24     405504   16896.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1      17408   17408.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1      21504   21504.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       4     262144   65536.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       3     294912   98304.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1     131072  131072.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1     163840  163840.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1     196608  196608.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1     557056  557056.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+       1     950272  950272.0   non-object from baml_py.abi3.so                   C       baml_py.abi3.so
+  156366    7505568      48.0   malloc in _Py_hashtable_set                       C       libpython3.10.dylib
+       1       8704    8704.0   malloc in _Py_hashtable_set                       C       libpython3.10.dylib
+       1    4227072  4227072.0   malloc in _Py_hashtable_set                       C       libpython3.10.dylib
+       4        128      32.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+       6        288      48.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+      10        640      64.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+      27       2160      80.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+      28       2688      96.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+      38       4256     112.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+     166      21248     128.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+   77146   11109024     144.0   malloc in _PyTraceMalloc_NewReference             C       libpython3.10.dylib
+      27        432      16.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      49      25872     528.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      95      51680     544.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      74      41440     560.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      64      36864     576.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+     869     514448     592.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      41      24928     608.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      31      19344     624.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      72      46080     640.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      26      17056     656.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      30      20160     672.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      33      22704     688.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      26      18304     704.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      22      15840     720.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      33      24288     736.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      17      12784     752.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      14      10752     768.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      23      18032     784.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      20      16000     800.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      20      16320     816.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      17      14144     832.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      28      23744     848.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      16      13824     864.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      15      13200     880.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      20      17920     896.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      15      13680     912.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      18      16704     928.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      18      16992     944.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+    1537    1475520     960.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      78      76128     976.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      70      69440     992.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      11      11088    1008.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      11      11264    1024.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+     645     990720    1536.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      77     157696    2048.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+     248     634880    2560.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      25      76800    3072.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       5      17920    3584.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       4      16384    4096.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       4      18432    4608.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      48     245760    5120.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       3      16896    5632.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       1       6144    6144.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       2      13312    6656.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       6      52224    8704.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+      16     155648    9728.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       4      75776   18944.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       7     458752   65536.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       2     196608   98304.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       1     622592  622592.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       1    2883584  2883584.0   malloc in _PyObject_Malloc                        C       libpython3.10.dylib
+    4757     152224      32.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+       2         96      48.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+       2        160      80.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+       2        192      96.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+       1        112     112.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+       8       1024     128.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+    2293     330192     144.0   malloc in tracemalloc_add_trace                   C       libpython3.10.dylib
+       7       4928     704.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       6       9216    1536.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       3       6144    2048.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       6      18432    3072.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       1       4608    4608.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       6      33792    5632.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       1       7168    7168.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       5      56320   11264.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       3      66048   22016.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+       1      65536   65536.0   malloc in _upb_Arena_SlowMalloc_dont_copy_me__upb_internal_use_only  C       _message.abi3.so
+     284       4544      16.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+     200       6400      32.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      62       2976      48.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      61       3904      64.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      14       1120      80.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       2        192      96.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      22       2816     128.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       7       1008     144.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      17       2720     160.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       8       1408     176.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       2        384     192.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1        208     208.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      83      21248     256.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       8       2176     272.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1        336     336.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1        480     480.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1        496     496.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      79      40448     512.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       2       1056     528.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1        656     656.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      13      11440     880.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       2       1952     976.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+      20      30720    1536.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       3       6144    2048.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       9      23040    2560.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       5      15360    3072.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       5      17920    3584.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       2       9216    4608.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1       5120    5120.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1       5632    5632.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1       9216    9216.0   non-object from _pydantic_core.cpython-310-darwin.so  C       _pydantic_core.cpython-310-darwin.so
+       1       3584    3584.0   calloc in _Read_RuneMagi                          C       libsystem_c.dylib
+       1     131072  131072.0   calloc in _Read_RuneMagi                          C       libsystem_c.dylib
+       1     131072  131072.0   calloc in PyInterpreterState_New                  C       libpython3.10.dylib
+       1         48      48.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        544     544.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       6       3456     576.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        608     608.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        624     624.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+      16      10752     672.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        720     720.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       3       2256     752.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        768     768.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        784     784.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        800     800.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        816     816.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       4       3392     848.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        864     864.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       2       1856     928.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1        944     944.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+      11      16896    1536.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       4       8192    2048.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       8      20480    2560.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1       3072    3072.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       2       7168    3584.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       2      10240    5120.0   realloc in tracemalloc_raw_realloc                C       libpython3.10.dylib
+       1         16      16.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       4       2112     528.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+      13       7072     544.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       6       3360     560.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       7       4032     576.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       3       1776     592.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       1        624     624.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       8       5376     672.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       3       2064     688.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       1        720     720.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       1        736     736.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       1        752     752.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       1        768     768.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       2       1568     784.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+       1        848     848.0   malloc in _PyObject_Realloc                       C       libpython3.10.dylib
+      16      24576    1536.0   malloc in dyld::ThreadLocalVariables::instantiateVariable(dyld::ThreadLocalVariables::Thunk const&)  C++     libdyld.dylib
+       1      18432   18432.0   calloc in gmt_init                                C       libsystem_c.dylib
+       1      18432   18432.0   calloc in tzsetwall_basic                         C       libsystem_c.dylib
+       2       5120    2560.0   calloc in _PyObject_Malloc                        C       libpython3.10.dylib
+       1       8704    8704.0   calloc in _PyObject_Malloc                        C       libpython3.10.dylib
+     121       9680      80.0   pthread_mutex_t                                   C       libpthread.dylib
+     178       8544      48.0   Class.data (class_rw_t)                           C       libobjc.A.dylib
+       1         16      16.0   calloc in nw::object::class_def::register_method_def(nw::object::class_def::method_def const&, void (nw::object::*)())  C++     Network
+       1       4608    4608.0   calloc in nw::object::class_def::register_method_def(nw::object::class_def::method_def const&, void (nw::object::*)())  C++     Network
+       1         16      16.0   calloc in nw::object::class_def::setup(std::deque<void (nw::object::*)(), nw::c_allocator<void (nw::object::*)()>>&)  C++     Network
+       1       4608    4608.0   calloc in nw::object::class_def::setup(std::deque<void (nw::object::*)(), nw::c_allocator<void (nw::object::*)()>>&)  C++     Network
+      39       3120      80.0   memalign in id2data(objc_object*, SyncKind, usage)  C       libobjc.A.dylib
+      24       3072     128.0   calloc in tracemalloc_raw_alloc                   C       libpython3.10.dylib
+       2       3072    1536.0   Class.data.methods.lists (method_list_t)          C       libobjc.A.dylib
+       2        576     288.0   malloc in pathconfig_set_from_config              C       libpython3.10.dylib
+       2        928     464.0   malloc in pathconfig_set_from_config              C       libpython3.10.dylib
+       1       1536    1536.0   malloc in pathconfig_set_from_config              C       libpython3.10.dylib
+      16        768      48.0   calloc in cache_t::insert(objc_selector*, void (*)(), objc_object*)  C++     libobjc.A.dylib
+       3        240      80.0   calloc in cache_t::insert(objc_selector*, void (*)(), objc_object*)  C++     libobjc.A.dylib
+       2        288     144.0   calloc in cache_t::insert(objc_selector*, void (*)(), objc_object*)  C++     libobjc.A.dylib
+       1        272     272.0   calloc in cache_t::insert(objc_selector*, void (*)(), objc_object*)  C++     libobjc.A.dylib
+       2       1056     528.0   calloc in cache_t::insert(objc_selector*, void (*)(), objc_object*)  C++     libobjc.A.dylib
+       7       2576     368.0   malloc in _upb_Arena_InitSlow                     C       _message.abi3.so
+       9        432      48.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1         80      80.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1        144     144.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1        272     272.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       1       1536    1536.0   Class.methodCache._buckets (bucket_t)             C       libobjc.A.dylib
+       6        192      32.0   malloc in _PyWideStringList_Copy                  C       libpython3.10.dylib
+      11        528      48.0   malloc in _PyWideStringList_Copy                  C       libpython3.10.dylib
+       4        256      64.0   malloc in _PyWideStringList_Copy                  C       libpython3.10.dylib
+       5        400      80.0   malloc in _PyWideStringList_Copy                  C       libpython3.10.dylib
+       2        928     464.0   malloc in _PyWideStringList_Copy                  C       libpython3.10.dylib
+      16       2304     144.0   malloc in dyld::ThreadLocalVariables::addTermFunc(void (*)(void*), void*)  C++     libdyld.dylib
+       4       1152     288.0   malloc in _PyConfig_InitPathConfig                C       libpython3.10.dylib
+       2        928     464.0   malloc in _PyConfig_InitPathConfig                C       libpython3.10.dylib
+      24       1536      64.0   CFData                                            ObjC    CoreFoundation
+       2        416     208.0   CFData                                            ObjC    CoreFoundation
+      59       1888      32.0   malloc in OBJ_NAME_add                            C       libpython3.10.dylib
+      59       1888      32.0   malloc in OPENSSL_LH_insert                       C       libpython3.10.dylib
+      21       1680      80.0   Class.data.readonly (class_ro_t)                  C       libobjc.A.dylib
+      17       1632      96.0   dispatch_semaphore_t                              ObjC    libdispatch.dylib
+       1         32      32.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        112     112.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        128     128.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        144     144.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        160     160.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        192     192.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        320     320.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1        496     496.0   Class.data.methods (method_array_t)               C       libobjc.A.dylib
+       1       1536    1536.0   calloc in __CFTSDGetTable                         C       CoreFoundation
+       1       1536    1536.0   malloc in atexit_register                         C       libsystem_c.dylib
+       1       1536    1536.0   malloc in cache_t::collect_free(bucket_t*, unsigned int)  C++     libobjc.A.dylib
+       2        576     288.0   ColorSyncProfile                                  CFType  ColorSync
+       1        528     528.0   ColorSyncProfile                                  CFType  ColorSync
+       2        704     352.0   malloc in PyWideStringList_Insert                 C       libpython3.10.dylib
+       1        400     400.0   malloc in PyWideStringList_Insert                 C       libpython3.10.dylib
+      24        768      32.0   malloc in tracemalloc_raw_alloc                   C       libpython3.10.dylib
+       2        288     144.0   malloc in tracemalloc_raw_alloc                   C       libpython3.10.dylib
+       1        976     976.0   realloc in _PyUnicodeWriter_Finish                C       libpython3.10.dylib
+       1        336     336.0   CFDictionary (Key Storage)                        C       CoreFoundation
+       1        576     576.0   CFDictionary (Key Storage)                        C       CoreFoundation
+       1        336     336.0   CFDictionary (Value Storage)                      C       CoreFoundation
+       1        576     576.0   CFDictionary (Value Storage)                      C       CoreFoundation
+      13        832      64.0   Class.data.extended (class_rw_ext_t)              C       libobjc.A.dylib
+       3        816     272.0   calloc in os_set_32_ptr_init                      C       libsystem_collections.dylib
+       1        816     816.0   calloc in _PyObject_Calloc                        C       libpython3.10.dylib
+       1        800     800.0   malloc in __CGColorSpaceCreateWithName_block_invoke  C       CoreGraphics
+       6        768     128.0   calloc in PyThread_allocate_lock                  C       libpython3.10.dylib
+       1         32      32.0   malloc in _PyConfig_Copy                          C       libpython3.10.dylib
+       2         96      48.0   malloc in _PyConfig_Copy                          C       libpython3.10.dylib
+       2        160      80.0   malloc in _PyConfig_Copy                          C       libpython3.10.dylib
+       1        464     464.0   malloc in _PyConfig_Copy                          C       libpython3.10.dylib
+       1        208     208.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       1        224     224.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       1        240     240.0   xpc_dictionary_t (Storage)                        C       libxpc.dylib
+       2        256     128.0   NSMutableDictionary (Storage)                     C       CoreFoundation
+       1        384     384.0   NSMutableDictionary (Storage)                     C       CoreFoundation
+       2        256     128.0   calloc in color_space_state_create_icc_with_profile  C       CoreGraphics
+       2        320     160.0   calloc in color_space_state_create_icc_with_profile  C       CoreGraphics
+       2        544     272.0   calloc in os_set_64_ptr_init                      C       libsystem_collections.dylib
+       2        544     272.0   calloc in os_set_str_ptr_init                     C       libsystem_collections.dylib
+       4        384      96.0   malloc in _Py_hashtable_new_full                  C       libpython3.10.dylib
+       1        144     144.0   malloc in _Py_hashtable_new_full                  C       libpython3.10.dylib
+       1        528     528.0   calloc in os_map_64_init                          C       libsystem_collections.dylib
+       1        528     528.0   malloc in _CFRuntimeRegisterClass                 C       CoreFoundation
+       2        224     112.0   CGColor                                           CFType  CoreGraphics
+       2        256     128.0   CGColor                                           CFType  CoreGraphics
+       1        464     464.0   malloc in __ColorSyncProfileCreateWithName_block_invoke  C       ColorSync
+       3        192      64.0   non-object from libsystem_notify.dylib            C       libsystem_notify.dylib
+       2        256     128.0   non-object from libsystem_notify.dylib            C       libsystem_notify.dylib
+       4        448     112.0   CGColorSpace                                      CFType  CoreGraphics
+       2        416     208.0   pthread_rwlock_t                                  C       libpthread.dylib
+       2        384     192.0   Swift._ContiguousArrayStorage<Swift.String>       Swift   libswiftCore.dylib
+       1        128     128.0   malloc in upb_DefPool_New                         C       _message.abi3.so
+       1        256     256.0   malloc in upb_DefPool_New                         C       _message.abi3.so
+       1        128     128.0   malloc in cacheCanonicalSpecializedMetadata(swift::TargetTypeContextDescriptor<swift::InProcess> const*, long*)::$_0::__invoke(void*)  C++     libswiftCore.dylib
+       1        240     240.0   malloc in cacheCanonicalSpecializedMetadata(swift::TargetTypeContextDescriptor<swift::InProcess> const*, long*)::$_0::__invoke(void*)  C++     libswiftCore.dylib
+       2        352     176.0   Swift.StringStorage                               Swift   libswiftCore.dylib
+       2         96      48.0   malloc in swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::getOrInsertExternallyLocked<swift::MetadataCacheKey, std::pair<swift::GenericCacheEntry*, bool> swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)::'lambda'(swift::HashMapElementWrapper<swift::GenericCacheEntry>*, bool)>(swift::MetadataCacheKey, std::pair<swift::GenericCacheEntry*, bool> swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)::'lambda'(swift::HashMapElementWrapper<swift::GenericCacheEntry>*, bool) const&)  C++     libswiftCore.dylib
+       1        240     240.0   malloc in swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::getOrInsertExternallyLocked<swift::MetadataCacheKey, std::pair<swift::GenericCacheEntry*, bool> swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)::'lambda'(swift::HashMapElementWrapper<swift::GenericCacheEntry>*, bool)>(swift::MetadataCacheKey, std::pair<swift::GenericCacheEntry*, bool> swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)::'lambda'(swift::HashMapElementWrapper<swift::GenericCacheEntry>*, bool) const&)  C++     libswiftCore.dylib
+       3        336     112.0   xpc_dictionary_t                                  ObjC    libxpc.dylib
+       1        288     288.0   malloc in new_threadstate                         C       libpython3.10.dylib
+       1        272     272.0   malloc in __CFBasicHashGetPtrIndex_block_invoke   C       CoreFoundation
+       1        272     272.0   realloc in OPENSSL_LH_insert                      C       libpython3.10.dylib
+       4        256      64.0   _NSStateMarker                                    ObjC    AppKit
+       5        240      48.0   NSMutableDictionary                               ObjC    CoreFoundation
+       2        224     112.0   NSURL                                             ObjC    CoreFoundation
+       2        224     112.0   malloc in __CGTypeRegisterInternal                C       CoreGraphics
+       1         96      96.0   CFString                                          ObjC    CoreFoundation
+       1        112     112.0   CFString                                          ObjC    CoreFoundation
+       3        192      64.0   Swift._ContiguousArrayStorage<Swift.UInt8>        Swift   libswiftCore.dylib
+       1        192     192.0   _NSThreadData                                     ObjC    Foundation
+       1        192     192.0   malloc in CRYPTO_zalloc                           C       libpython3.10.dylib
+       2         96      48.0   calloc in swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::resize(swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::IndexStorage, unsigned char, swift::HashMapElementWrapper<swift::GenericCacheEntry>*)  C++     libswiftCore.dylib
+       1         80      80.0   calloc in swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::resize(swift::ConcurrentReadableHashMap<swift::HashMapElementWrapper<swift::GenericCacheEntry>, swift::Mutex>::IndexStorage, unsigned char, swift::HashMapElementWrapper<swift::GenericCacheEntry>*)  C++     libswiftCore.dylib
+       2        160      80.0   CFDictionary                                      ObjC    CoreFoundation
+       1        144     144.0   malloc in tracemalloc_start                       C       libpython3.10.dylib
+       1         32      32.0   malloc in google::protobuf::internal::OnShutdownRun(void (*)(void const*), void const*)  C++     MLAssetIO
+       1         96      96.0   malloc in google::protobuf::internal::OnShutdownRun(void (*)(void const*), void const*)  C++     MLAssetIO
+       1         32      32.0   malloc in google::protobuf::internal::OnShutdownRun(void (*)(void const*), void const*)  C++     CoreML
+       1         96      96.0   malloc in google::protobuf::internal::OnShutdownRun(void (*)(void const*), void const*)  C++     CoreML
+       1        128     128.0   calloc in color_space_state_create_device_gray    C       CoreGraphics
+       1        128     128.0   calloc in color_space_state_create_device_rgb     C       CoreGraphics
+       1        128     128.0   malloc in _CFProcessPath                          C       CoreFoundation
+       1         32      32.0   malloc in color_space_state_create_icc_with_profile  C       CoreGraphics
+       1         64      64.0   malloc in color_space_state_create_icc_with_profile  C       CoreGraphics
+       1         96      96.0   Foundation.LockedState<Foundation._NSSwiftProcessInfo.State>.(_Buffer in $18d0253a4)<>  Swift   Foundation
+       1         96      96.0   calloc in dyld::ThreadLocalVariables::instantiateVariable(dyld::ThreadLocalVariables::Thunk const&)  C++     libdyld.dylib
+       1         80      80.0   _NSMainThread                                     ObjC    Foundation
+       1         80      80.0   _NSSwiftProcessInfo                               Swift   Foundation
+       1         80      80.0   calloc in fetch_cache(bool)                       C       libobjc.A.dylib
+       2         64      32.0   malloc in config_get_codec_name                   C       libpython3.10.dylib
+       1         64      64.0   Foundation.LockedState<Foundation._ProcessInfo.State>.(_Buffer in $18d0253a4)<>  Swift   Foundation
+       1         64      64.0   Swift._ContiguousArrayStorage<Swift.Array<Swift.UInt8>>  Swift   libswiftCore.dylib
+       1         16      16.0   malloc in _PyUnicode_InitEncodings                C       libpython3.10.dylib
+       1         32      32.0   malloc in _PyUnicode_InitEncodings                C       libpython3.10.dylib
+       1         16      16.0   realloc in _Py_EncodeUTF8Ex                       C       libpython3.10.dylib
+       1         32      32.0   realloc in _Py_EncodeUTF8Ex                       C       libpython3.10.dylib
+       1         48      48.0   Foundation.LockedState<Swift.Optional<Swift.String>>.(_Buffer in $18d0253a4)<>  Swift   Foundation
+       1         48      48.0   _ProcessInfo                                      Swift   Foundation
+       1         48      48.0   malloc in notify_monitor_file                     C       libsystem_notify.dylib
+       1         32      32.0   malloc in CGPropertiesCreate                      C       CoreGraphics
+       1         32      32.0   malloc in swift_getForeignTypeMetadata            C       libswiftCore.dylib
+       1         32      32.0   malloc in upb_GeneratedRegistry_Load              C       _message.abi3.so
+       1         32      32.0   realloc in PyWideStringList_Insert                C       libpython3.10.dylib
+       1         16      16.0   malloc in look_up_class                           C       libobjc.A.dylib
+
+-----------------------------------------------------------------------
+Zone MallocStackLoggingLiteZone_Wrapper_0x104808000: 0 nodes (0 bytes)
+

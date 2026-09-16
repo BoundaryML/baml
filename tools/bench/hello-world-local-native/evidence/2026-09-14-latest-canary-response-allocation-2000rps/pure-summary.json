@@ -1,0 +1,90 @@
+{
+  "source_revision": "540971880764f64a21d23c68703902719efe7c7a",
+  "source_dirty": false,
+  "target": "baml-only",
+  "elapsed_seconds": 61.039813375,
+  "cycles": 1,
+  "scheduled_load_seconds": 59.999781167,
+  "status_counts": {
+    "200": 120000
+  },
+  "requests": 120000,
+  "delivered_rps_during_load": 2000.0072944599378,
+  "alive_at_last_sample": true,
+  "checkpoints": [
+    {
+      "cycle": 1,
+      "elapsed_seconds": 60.032348083,
+      "gc_elapsed_seconds": 0.004280958000002499,
+      "python_objects_collected": null,
+      "heap": {
+        "before": {
+          "total_objects": 190616,
+          "compile_time_objects": 4915,
+          "runtime_objects": 185701,
+          "active_handles": 4,
+          "tlab_chunks": 5803,
+          "reserved_slots": 185696,
+          "gen0_slots": 185696,
+          "gen1_slots": 0,
+          "gen2_slots": 5,
+          "gen0_capacity_slots": 188416,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 150675,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 12845056,
+          "permit_holder_slots": 5786,
+          "allocator_blocks_in_use": 315066,
+          "allocator_bytes_in_use": 54245616,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 155189248
+        },
+        "after": {
+          "total_objects": 4930,
+          "compile_time_objects": 4915,
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0,
+          "reserved_slots": 0,
+          "gen0_slots": 0,
+          "gen1_slots": 0,
+          "gen2_slots": 15,
+          "gen0_capacity_slots": 0,
+          "gen1_capacity_slots": 0,
+          "gen2_capacity_slots": 4096,
+          "scratch_capacity_slots": 0,
+          "allocations_since_gc": 0,
+          "object_slot_bytes": 64,
+          "tracked_slot_capacity_bytes": 786432,
+          "permit_holder_slots": 5,
+          "allocator_blocks_in_use": 129490,
+          "allocator_bytes_in_use": 20108224,
+          "allocator_bytes_high_water": 0,
+          "allocator_bytes_reserved": 155189248
+        }
+      },
+      "rss_before_mib": 141.546875,
+      "rss_immediate_after_mib": 141.546875,
+      "rss_delayed": [
+        {
+          "delay_seconds": 0.1,
+          "rss_mib": 141.546875
+        },
+        {
+          "delay_seconds": 0.5,
+          "rss_mib": 141.546875
+        },
+        {
+          "delay_seconds": 1.0,
+          "rss_mib": 141.546875
+        }
+      ],
+      "runtime_objects_change": -185686,
+      "runtime_objects_collected": 185686,
+      "rss_immediate_delta_mib": 0.0,
+      "rss_final_delta_mib": 0.0
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "experiment": {
+    "date": "2026-09-14",
+    "profile": "continuous load for 60 seconds followed by one explicit full-GC checkpoint",
+    "rate_per_target": 2000,
+    "aggregate_rate": 4000,
+    "targets_run_in_parallel": [
+      "baml-only",
+      "python-baml"
+    ],
+    "workload_change": "hello_world creates and discards baml.http.Response.new(200, {}, empty_bytes) before returning hello world",
+    "diagnostic_source_revision": "540971880764f64a21d23c68703902719efe7c7a",
+    "diagnostic_source_dirty": false,
+    "canary_base_revision": "e01f4e1a0ec0996b274ae68f15e5ffdefb977005",
+    "baseline_evidence": "../2026-09-14-latest-canary-sustained-2000rps"
+  },
+  "pure_baml": {
+    "requests": 120000,
+    "status_counts": {
+      "200": 120000
+    },
+    "delivered_rps": 2000.0072944599378,
+    "sampled_automatic_gc_count": 7,
+    "sampled_automatic_gc_times_seconds": [
+      9.008,
+      17.012,
+      25.011,
+      33.009,
+      41.009,
+      49.016,
+      58.011
+    ],
+    "loaded_minute": {
+      "rss_initial_mib": 37.21875,
+      "rss_final_sample_mib": 141.546875,
+      "rss_peak_mib": 141.546875,
+      "rss_linear_slope_mib_per_minute": 51.49243911715477,
+      "allocator_live_initial_mib": 18.916305541992188,
+      "allocator_live_final_sample_mib": 41.023956298828125,
+      "allocator_live_peak_mib": 110.13076782226562,
+      "allocator_reserved_initial_mib": 44.0,
+      "allocator_reserved_final_mib": 148.0,
+      "allocator_reserved_peak_mib": 148.0,
+      "runtime_objects_peak": 516869,
+      "permit_holder_slots_peak": 16100,
+      "allocator_blocks_in_use_peak": 646431
+    },
+    "final_explicit_gc": {
+      "gc_elapsed_seconds": 0.004280958000002499,
+      "rss_before_mib": 141.546875,
+      "rss_after_one_second_mib": 141.546875,
+      "runtime_objects_before": 185701,
+      "runtime_objects_after": 15,
+      "permit_holder_slots_before": 5786,
+      "permit_holder_slots_after": 5,
+      "allocator_live_before_mib": 51.73265075683594,
+      "allocator_live_after_mib": 19.17669677734375,
+      "allocator_reserved_before_mib": 148.0,
+      "allocator_reserved_after_mib": 148.0,
+      "allocator_blocks_before": 315066,
+      "allocator_blocks_after": 129490
+    }
+  },
+  "python_baml": {
+    "requests": 120000,
+    "status_counts": {
+      "200": 120000
+    },
+    "delivered_rps": 2000.0050666795023,
+    "sampled_automatic_gc_count": 7,
+    "sampled_automatic_gc_times_seconds": [
+      9.01,
+      17.01,
+      25.008,
+      33.008,
+      41.011,
+      50.014,
+      58.009
+    ],
+    "loaded_minute": {
+      "rss_initial_mib": 98.15625,
+      "rss_final_sample_mib": 161.6875,
+      "rss_peak_mib": 162.859375,
+      "rss_linear_slope_mib_per_minute": 38.530099009201614,
+      "allocator_live_initial_mib": 32.38348388671875,
+      "allocator_live_final_sample_mib": 45.38487243652344,
+      "allocator_live_peak_mib": 89.44792175292969,
+      "allocator_reserved_initial_mib": 116.0,
+      "allocator_reserved_final_mib": 158.0,
+      "allocator_reserved_peak_mib": 161.0,
+      "runtime_objects_peak": 519392,
+      "permit_holder_slots_peak": 32418,
+      "allocator_blocks_in_use_peak": 1686770,
+      "sampled_post_automatic_gc_rss_first_mib": 138.921875,
+      "sampled_post_automatic_gc_rss_last_mib": 161.6875,
+      "sampled_post_automatic_gc_live_range_mib": [
+        33.61109924316406,
+        39.62535095214844
+      ],
+      "sampled_automatic_gc_rss_drop_range_mib": [
+        1.171875,
+        6.5
+      ]
+    },
+    "final_explicit_gc": {
+      "gc_elapsed_seconds": 0.017068749999999966,
+      "python_objects_collected": 921,
+      "rss_before_mib": 161.6875,
+      "rss_after_one_second_mib": 152.0625,
+      "runtime_objects_before": 177824,
+      "runtime_objects_after": 1,
+      "permit_holder_slots_before": 11100,
+      "permit_holder_slots_after": 4,
+      "allocator_live_before_mib": 52.49627685546875,
+      "allocator_live_after_mib": 32.83070373535156,
+      "allocator_reserved_before_mib": 158.0,
+      "allocator_reserved_after_mib": 158.0,
+      "allocator_blocks_before": 1641330,
+      "allocator_blocks_after": 1579734
+    }
+  },
+  "python_baseline_comparison": {
+    "sampled_automatic_gc_count": {
+      "baseline": 0,
+      "response_allocation": 7
+    },
+    "loaded_rss_peak_mib": {
+      "baseline": 202.359375,
+      "response_allocation": 162.859375,
+      "change_mib": -39.5
+    },
+    "loaded_rss_linear_slope_mib_per_minute": {
+      "baseline": 103.77418345053465,
+      "response_allocation": 38.530099009201614
+    },
+    "loaded_allocator_live_peak_mib": {
+      "baseline": 135.63084411621094,
+      "response_allocation": 89.44792175292969,
+      "change_mib": -46.18292236328125
+    },
+    "loaded_allocator_reserved_peak_mib": {
+      "baseline": 234.0,
+      "response_allocation": 161.0,
+      "change_mib": -73.0
+    },
+    "loaded_permit_holder_slots_peak": {
+      "baseline": 236124,
+      "response_allocation": 32418,
+      "change": -203706
+    },
+    "final_explicit_gc_rss_after_one_second_mib": {
+      "baseline": 144.921875,
+      "response_allocation": 152.0625,
+      "change_mib": 7.140625
+    },
+    "final_explicit_gc_allocator_live_after_mib": {
+      "baseline": 36.63383483886719,
+      "response_allocation": 32.83070373535156,
+      "change_mib": -3.803131103515625
+    },
+    "final_explicit_gc_allocator_blocks_after": {
+      "baseline": 1458138,
+      "response_allocation": 1579734,
+      "change": 121596
+    }
+  },
+  "interpretation": "The discarded baml.http.Response allocation confirms the collection-trigger hypothesis. It creates enough BAML heap-slot pressure for Python+BAML to run seven automatic collections during the loaded minute, matching pure BAML's cadence. Those collections repeatedly collapse the BAML object heap and weak permit registry, reducing Python's loaded RSS peak by 39.5 MiB, allocator-live peak by 46.18 MiB, and reserved-capacity peak by 73 MiB relative to the otherwise identical baseline. This is an effective mitigation for collection starvation, but it does not eliminate the process-retention signal. Python's sampled post-automatic-GC RSS floor rose from 138.92 to 161.69 MiB across the seven cycles, malloc blocks still accumulated at nearly the baseline rate, and the final post-GC RSS floor was 7.14 MiB higher than baseline even though malloc-live bytes were 3.80 MiB lower. Triggering BAML GC bounds live BAML objects and permits; it does not establish that Python allocator or process memory is bounded."
+}

@@ -1,0 +1,183 @@
+{
+  "tested_base_revision": "42365a45f9d7a3750ed72bd338006d369f6c0e41",
+  "diagnostic_revision": "9f8ec6f68dd26348e499eacd2e81cf2902892bb1",
+  "collector_changes_from_tested_base": false,
+  "profile": {
+    "rate_rps": 500,
+    "loaded_seconds_per_cycle": 30,
+    "post_gc_observation_seconds": 2,
+    "wall_duration_seconds": 300
+  },
+  "methodology": {
+    "pure": "Pause the client, invoke BAML major GC, then sample process RSS through two idle seconds.",
+    "python": "Pause the client, invoke BAML major GC in the bridge runtime, invoke CPython generation-2 GC, then sample process RSS through two idle seconds.",
+    "python_heap_counter_note": "The diagnostic function enters after each scalar hello-world call has ended. Zero runtime objects before GC means no managed BAML request objects survive between bridge calls; the one object after GC is allocated while formatting the diagnostic response."
+  },
+  "runs": {
+    "pure": {
+      "requests": 140597,
+      "status_counts": {
+        "200": 140597
+      },
+      "delivered_rps_during_load": 500.0090405590593,
+      "alive_at_last_sample": true,
+      "post_gc_rss_mib": [
+        89.375,
+        89.375,
+        102.28125,
+        104.5625,
+        104.578125,
+        104.59375,
+        104.59375,
+        104.609375,
+        104.609375,
+        104.609375
+      ],
+      "post_gc_slope_all_mib_per_minute": 3.034945331924051,
+      "post_gc_change_all_mib": 15.234375,
+      "post_gc_slope_checkpoints_4_10_mib_per_minute": 0.015818148903433787,
+      "post_gc_change_checkpoints_4_10_mib": 0.046875,
+      "heap_after": [
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 15,
+          "active_handles": 4,
+          "tlab_chunks": 0
+        }
+      ]
+    },
+    "python": {
+      "requests": 140530,
+      "status_counts": {
+        "200": 140530
+      },
+      "delivered_rps_during_load": 500.00309633134975,
+      "alive_at_last_sample": true,
+      "post_gc_rss_mib": [
+        111.390625,
+        112.109375,
+        112.84375,
+        113.21875,
+        114.0625,
+        114.125,
+        116.28125,
+        116.890625,
+        117.484375,
+        116.96875
+      ],
+      "post_gc_slope_all_mib_per_minute": 1.3806395439488257,
+      "post_gc_change_all_mib": 5.578125,
+      "post_gc_slope_checkpoints_4_10_mib_per_minute": 1.5134296544621195,
+      "post_gc_change_checkpoints_4_10_mib": 3.75,
+      "heap_after": [
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        },
+        {
+          "runtime_objects": 1,
+          "active_handles": 0,
+          "tlab_chunks": 0
+        }
+      ],
+      "python_objects_collected": [
+        132,
+        72,
+        146,
+        106,
+        98,
+        210,
+        276,
+        178,
+        141,
+        100
+      ]
+    }
+  },
+  "interpretation": "Pure BAML expanded its allocator high-water mark during warmup but reached a clear plateau: checkpoints 4-10 changed only 0.047 MiB and fit 0.016 MiB/min while the managed heap returned to 15 runtime objects every time. Python BAML retained an upward post-GC trend despite both BAML major GC and CPython generation-2 GC: checkpoints 1-10 rose 5.578 MiB and fit 1.381 MiB/min. Its BAML managed heap had no cross-request live set at collection time, and CPython collected objects every cycle, so the retained Python-process RSS is outside the measured BAML heap. The five-minute run cannot by itself distinguish a native leak from allocator or runtime caches that plateau later."
+}

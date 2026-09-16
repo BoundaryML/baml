@@ -1,0 +1,11 @@
+{
+  "base_images": {
+    "node": "node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293",
+    "python": "python:3.10-slim@sha256:fd76ade0c607f27677bc04be3c60749f400eedc941d9e72967e19a4cedff80c2",
+    "debian": "debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171",
+    "amazonlinux": "amazonlinux:2023@sha256:181f98c48832fe926f8ca3b6ffeafcce128e96e77b93d08fbe9a9bc9403ce284"
+  },
+  "baml_version": "0.18.1-nightly.20260908.a",
+  "python_bridge_version": "0.18.1.dev2026090800",
+  "vegeta_version": "12.13.0"
+}

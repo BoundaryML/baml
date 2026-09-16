@@ -1,0 +1,11 @@
+*
+!Dockerfile
+!install-baml.sh
+!package.json
+!package-lock.json
+!server.*
+!requirements.txt
+!baml.toml
+!baml_src/
+!baml_src/**
+!tsconfig.json

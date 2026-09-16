@@ -1,0 +1,1020 @@
+{
+  "checked_utc": "2026-09-10T22:55:26.194923+00:00",
+  "apps": {
+    "baml-hw-0910-node-baseline": [
+      {
+        "id": "e8204d2b305308",
+        "name": "aged-hill-2678",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-node-baseline",
+          "tag": "deployment-01M26NZMXVCTV0DA0XSZ3GCYPY",
+          "digest": "sha256:7320819590964110fe38f1dc4fafecf07ed95ce02dd97b67e7dd22b2b5c834fb"
+        },
+        "instance_id": "01M26P0AQCRY4YPQ78AA6BBYDB",
+        "private_ip": "fdaa:9:11b0:a7b:84c:ee37:e73a:2",
+        "created_at": "2026-09-10T20:43:47Z",
+        "updated_at": "2026-09-10T22:11:29Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "871e45f00d0dd8",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_ljg928d0xk57z43o",
+            "fly_release_version": "2"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "metrics": {
+            "port": 9091,
+            "path": "/metrics"
+          },
+          "image": "registry.fly.io/baml-hw-0910-node-baseline:deployment-01M26NZMXVCTV0DA0XSZ3GCYPY",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789078289179
+          },
+          {
+            "type": "launch",
+            "status": "created",
+            "source": "user",
+            "timestamp": 1789078285150
+          },
+          {
+            "type": "launch",
+            "status": "pending",
+            "source": "flyd",
+            "timestamp": 1789078285037
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "passing",
+            "output": "hello world",
+            "updated_at": "2026-09-10T22:11:32.781Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-node-baml": [
+      {
+        "id": "080d69da292738",
+        "name": "late-firefly-4749",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-node-baml",
+          "tag": "deployment-01M26P0FD858NDVF37YYPY8ASM",
+          "digest": "sha256:cea1ad2de3840c7a631423ba23adcd7fc6019ca5ea02ac8ff3a70803788b6386"
+        },
+        "instance_id": "01M26P0MD8JV2Y2BY4ZCCTPMS3",
+        "private_ip": "fdaa:9:11b0:a7b:84a:fda2:d016:2",
+        "created_at": "2026-09-10T20:44:32Z",
+        "updated_at": "2026-09-10T22:11:39Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "871e45f00d0dd8",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_ljg928d0xe87z43o",
+            "fly_release_version": "3"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "metrics": {
+            "port": 9091,
+            "path": "/metrics"
+          },
+          "image": "registry.fly.io/baml-hw-0910-node-baml:deployment-01M26P0FD858NDVF37YYPY8ASM",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789078299034
+          },
+          {
+            "type": "launch",
+            "status": "created",
+            "source": "user",
+            "timestamp": 1789078295066
+          },
+          {
+            "type": "launch",
+            "status": "pending",
+            "source": "flyd",
+            "timestamp": 1789078294952
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "passing",
+            "output": "hello world",
+            "updated_at": "2026-09-10T22:11:45.294Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-python-baseline": [
+      {
+        "id": "2862642f434d18",
+        "name": "withered-fog-7987",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-python-baseline",
+          "tag": "deployment-01M26P0RY6GASW357DAH7GBBJ5",
+          "digest": "sha256:84f81399f74389d24e20c8641d3b9f23623b085c074591860d533018284b89a3"
+        },
+        "instance_id": "01M26P1B98QZJRGHYTX3DZAXCP",
+        "private_ip": "fdaa:9:11b0:a7b:84a:ee56:a9c7:2",
+        "created_at": "2026-09-10T20:46:41Z",
+        "updated_at": "2026-09-10T22:12:03Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad",
+            "PYTHONTRACEMALLOC": "1"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "871e45f00d0dd8",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_k96wz9rklw31znl0",
+            "fly_release_version": "2"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "metrics": {
+            "port": 9091,
+            "path": "/metrics"
+          },
+          "image": "registry.fly.io/baml-hw-0910-python-baseline:deployment-01M26P0RY6GASW357DAH7GBBJ5",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789078323447
+          },
+          {
+            "type": "launch",
+            "status": "created",
+            "source": "user",
+            "timestamp": 1789078318439
+          },
+          {
+            "type": "launch",
+            "status": "pending",
+            "source": "flyd",
+            "timestamp": 1789078318377
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "passing",
+            "output": "hello world",
+            "updated_at": "2026-09-10T22:54:10.474Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-python-baml": [
+      {
+        "id": "86599efe755658",
+        "name": "frosty-haze-1981",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-python-baml",
+          "tag": "deployment-01M26P1G14ZB00X11XCBZYSC8W",
+          "digest": "sha256:ca14ae52a71636f9078581a1095bbb67c699bcc63885c0b5f4bf90c283b9d084"
+        },
+        "instance_id": "01M26P2JBYN2QVD7BG0YWMVGTV",
+        "private_ip": "fdaa:9:11b0:a7b:1d9:483e:f583:2",
+        "created_at": "2026-09-10T20:47:55Z",
+        "updated_at": "2026-09-10T22:12:44Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad",
+            "PYTHONTRACEMALLOC": "1"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "871e45f00d0dd8",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_mr7g2md031d32wj0",
+            "fly_release_version": "2"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "metrics": {
+            "port": 9091,
+            "path": "/metrics"
+          },
+          "image": "registry.fly.io/baml-hw-0910-python-baml:deployment-01M26P1G14ZB00X11XCBZYSC8W",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789078364279
+          },
+          {
+            "type": "launch",
+            "status": "created",
+            "source": "user",
+            "timestamp": 1789078358534
+          },
+          {
+            "type": "launch",
+            "status": "pending",
+            "source": "flyd",
+            "timestamp": 1789078358399
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "passing",
+            "output": "hello world",
+            "updated_at": "2026-09-10T22:55:11.131Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-baml-al2023": [
+      {
+        "id": "7844543c0011d8",
+        "name": "late-sound-5426",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-baml-al2023",
+          "tag": "deployment-01M26H7SWC25YBGDMKC4JME24R",
+          "digest": "sha256:1a1810be40a0390b7945466305b2bb302b50ebd4447a7dbca470119f1cd1af25"
+        },
+        "instance_id": "01M26H91885Q6QVGAMHRK75XCN",
+        "private_ip": "fdaa:9:11b0:a7b:722:ffb8:e525:2",
+        "created_at": "2026-09-10T20:48:47Z",
+        "updated_at": "2026-09-10T22:48:32Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "867356aee3e728",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_xmlp2jq01qw9yo47",
+            "fly_release_version": "1"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "image": "registry.fly.io/baml-hw-0910-baml-al2023:deployment-01M26H7SWC25YBGDMKC4JME24R",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789080512471
+          },
+          {
+            "type": "restart",
+            "status": "starting",
+            "source": "flyd",
+            "timestamp": 1789080511240
+          },
+          {
+            "type": "exit",
+            "status": "stopped",
+            "request": {
+              "exit_event": {
+                "exit_code": 137,
+                "guest_signal": -1,
+                "oom_killed": true,
+                "restarting": true,
+                "signal": -1,
+                "exited_at": "2026-09-10T22:48:30.624Z"
+              },
+              "restart_count": 3
+            },
+            "source": "flyd",
+            "timestamp": 1789080510891
+          },
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789080351381
+          },
+          {
+            "type": "restart",
+            "status": "starting",
+            "source": "flyd",
+            "timestamp": 1789080349957
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "critical",
+            "output": "context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+            "updated_at": "2026-09-10T22:50:37.716Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-baml-debian": [
+      {
+        "id": "8654d96a7056e8",
+        "name": "aged-dew-1597",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-baml-debian",
+          "tag": "deployment-01M26H9GTNYMCCQW4SPEDYZWD9",
+          "digest": "sha256:930fda29a1d61e13c8748bfebbabcda5a5c0eab7cab669825f151dea26f4d301"
+        },
+        "instance_id": "01M26H9ZHB26QFARNYW2TQRG1V",
+        "private_ip": "fdaa:9:11b0:a7b:1fb:35b3:5840:2",
+        "created_at": "2026-09-10T20:49:18Z",
+        "updated_at": "2026-09-10T22:54:22Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "867356aee3e728",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_95o6zrgolgev2g08",
+            "fly_release_version": "1"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "image": "registry.fly.io/baml-hw-0910-baml-debian:deployment-01M26H9GTNYMCCQW4SPEDYZWD9",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789080862910
+          },
+          {
+            "type": "restart",
+            "status": "starting",
+            "source": "flyd",
+            "timestamp": 1789080861611
+          },
+          {
+            "type": "exit",
+            "status": "stopped",
+            "request": {
+              "exit_event": {
+                "exit_code": 137,
+                "guest_signal": -1,
+                "oom_killed": true,
+                "restarting": true,
+                "signal": -1,
+                "exited_at": "2026-09-10T22:54:20.954Z"
+              },
+              "restart_count": 7
+            },
+            "source": "flyd",
+            "timestamp": 1789080861226
+          },
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789080595434
+          },
+          {
+            "type": "restart",
+            "status": "starting",
+            "source": "flyd",
+            "timestamp": 1789080594264
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "passing",
+            "output": "hello world",
+            "updated_at": "2026-09-10T22:54:23.106Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-baml-alpine": [
+      {
+        "id": "82d1e69c0d1608",
+        "name": "winter-wave-2766",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-baml-alpine",
+          "tag": "deployment-01M26HAECTXKTXCM8YA4DB8WX5",
+          "digest": "sha256:2f91fa2346eeabedbb27d6dcc402716acc1da757a9a8023e1632dde0786ced89"
+        },
+        "instance_id": "01M26HAY3QKC5N3RT242TTDCYK",
+        "private_ip": "fdaa:9:11b0:a7b:200:8de4:7884:2",
+        "created_at": "2026-09-10T20:49:49Z",
+        "updated_at": "2026-09-10T22:52:01Z",
+        "config": {
+          "env": {
+            "BAML_LOG": "off",
+            "BAML_PROFILE": "0",
+            "BAML_TELEMETRY_DISABLED": "1",
+            "FLY_PROCESS_GROUP": "app",
+            "PORT": "8080",
+            "PRIMARY_REGION": "iad"
+          },
+          "init": {},
+          "guest": {
+            "cpu_kind": "shared",
+            "cpus": 1,
+            "memory_mb": 1024
+          },
+          "metadata": {
+            "fly_builder_id": "867356aee3e728",
+            "fly_flyctl_version": "0.4.100",
+            "fly_platform_version": "v2",
+            "fly_process_group": "app",
+            "fly_release_id": "rel_g1m8yolwr56nyq4d",
+            "fly_release_version": "1"
+          },
+          "services": [
+            {
+              "protocol": "tcp",
+              "internal_port": 8080,
+              "autostop": false,
+              "autostart": true,
+              "min_machines_running": 1,
+              "ports": [
+                {
+                  "port": 80,
+                  "handlers": [
+                    "http"
+                  ],
+                  "force_https": true
+                },
+                {
+                  "port": 443,
+                  "handlers": [
+                    "http",
+                    "tls"
+                  ]
+                }
+              ],
+              "checks": [
+                {
+                  "type": "http",
+                  "interval": "30s",
+                  "timeout": "5s",
+                  "grace_period": "20s",
+                  "method": "GET",
+                  "path": "/"
+                }
+              ],
+              "concurrency": {
+                "type": "requests",
+                "hard_limit": 1000,
+                "soft_limit": 800
+              },
+              "force_instance_key": null
+            }
+          ],
+          "image": "registry.fly.io/baml-hw-0910-baml-alpine:deployment-01M26HAECTXKTXCM8YA4DB8WX5",
+          "restart": {
+            "policy": "on-failure",
+            "max_retries": 10
+          },
+          "stop_config": {
+            "timeout": "10s",
+            "signal": "SIGTERM"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789080721589
+          },
+          {
+            "type": "restart",
+            "status": "starting",
+            "source": "flyd",
+            "timestamp": 1789080720340
+          },
+          {
+            "type": "exit",
+            "status": "stopped",
+            "request": {
+              "exit_event": {
+                "exit_code": 137,
+                "guest_signal": -1,
+                "oom_killed": true,
+                "restarting": true,
+                "signal": -1,
+                "exited_at": "2026-09-10T22:51:59.896Z"
+              },
+              "restart_count": 3
+            },
+            "source": "flyd",
+            "timestamp": 1789080720073
+          },
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789080563586
+          },
+          {
+            "type": "restart",
+            "status": "starting",
+            "source": "flyd",
+            "timestamp": 1789080562322
+          }
+        ],
+        "checks": [
+          {
+            "name": "servicecheck-00-http-8080",
+            "status": "passing",
+            "output": "hello world",
+            "updated_at": "2026-09-10T22:55:14.685Z"
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ],
+    "baml-hw-0910-load": [
+      {
+        "id": "8ee335b73679e8",
+        "name": "hello-world-load-1",
+        "state": "started",
+        "region": "iad",
+        "image_ref": {
+          "registry": "registry.fly.io",
+          "repository": "baml-hw-0910-load",
+          "tag": "deployment-01M26KC1M3RJW1271MR1ZVHT3E",
+          "digest": "sha256:f8105e76e8f87d50bb90c769f8bb32b7b51a7216be7b19978aadba77d2c5155f"
+        },
+        "instance_id": "01M26KDQMKBDMZBZFATPRJEPN6",
+        "private_ip": "fdaa:9:11b0:a7b:888:aeee:af78:2",
+        "created_at": "2026-09-10T20:52:33Z",
+        "updated_at": "2026-09-10T21:26:23Z",
+        "config": {
+          "env": {
+            "DURATION_SECONDS": "0"
+          },
+          "init": {
+            "cmd": [
+              "off"
+            ]
+          },
+          "guest": {
+            "cpu_kind": "performance",
+            "cpus": 8,
+            "memory_mb": 16384
+          },
+          "image": "registry.fly.io/baml-hw-0910-load:deployment-01M26KC1M3RJW1271MR1ZVHT3E",
+          "restart": {
+            "policy": "always"
+          },
+          "dns": {},
+          "rootfs": {
+            "persist": "always"
+          }
+        },
+        "events": [
+          {
+            "type": "start",
+            "status": "started",
+            "request": {},
+            "source": "flyd",
+            "timestamp": 1789075583755
+          },
+          {
+            "type": "launch",
+            "status": "created",
+            "source": "user",
+            "timestamp": 1789075578667
+          },
+          {
+            "type": "launch",
+            "status": "pending",
+            "source": "flyd",
+            "timestamp": 1789075578515
+          }
+        ],
+        "host_status": "ok",
+        "cordoned": false
+      }
+    ]
+  }
+}

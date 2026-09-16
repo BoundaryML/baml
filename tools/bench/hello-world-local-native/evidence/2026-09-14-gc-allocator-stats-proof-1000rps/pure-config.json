@@ -1,0 +1,9 @@
+{
+  "rate": 1000,
+  "duration_seconds": 60.0,
+  "load_seconds": 9.0,
+  "post_gc_seconds": 1.0,
+  "interval_seconds": 3.0,
+  "target": "baml-only",
+  "port": 8505
+}
