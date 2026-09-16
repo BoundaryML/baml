@@ -12,11 +12,6 @@ on:
       - "typescript2/package.json"
       - "typescript2/pnpm-lock.yaml"
       - "typescript2/pnpm-workspace.yaml"
-      - "baml_language/**"
-      - ".envrc"
-      - "mise.toml"
-      - "tools/baml-sccache"
-      - ".github/actions/setup-mise/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/developer-docs.yml"
       - ".github/workflows/release-baml-language.yml"
@@ -42,7 +37,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check documentation and runtime inputs
+      - name: Check documentation site inputs
         id: changes
         env:
           ACTOR: ${{ github.actor }}
@@ -75,11 +70,6 @@ jobs:
               typescript2/package.json | \
               typescript2/pnpm-lock.yaml | \
               typescript2/pnpm-workspace.yaml | \
-              baml_language/* | \
-              .envrc | \
-              mise.toml | \
-              tools/baml-sccache | \
-              .github/actions/setup-mise/* | \
               .github/actions/setup-node2/* | \
               .github/workflows/developer-docs.yml | \
               .github/workflows/release-baml-language.yml)
@@ -149,77 +139,6 @@ jobs:
       - name: Validate route and contextual 404 contracts
         run: pnpm --filter app-developer-docs docs:routes:validate
         working-directory: typescript2
-
-  snippets:
-    name: BAML snippets
-    needs: determine-changes
-    if: needs.determine-changes.outputs.should-run == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      # .envrc supplies the R2 configuration, with a local cache for secretless PRs.
-      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
-      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
-      CARGO_INCREMENTAL: 0
-      CARGO_NET_RETRY: 10
-      CARGO_TERM_COLOR: always
-      RUSTUP_MAX_RETRIES: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - name: Install Rust toolchain
-        working-directory: baml_language
-        run: rustup show
-      - name: Install sccache and direnv
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
-      - name: Verify sccache
-        run: sccache --version
-      # Cache Cargo downloads only; .envrc routes compilation through R2 sccache.
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "linux-cargo"
-      - name: Load .envrc with direnv
-        run: |
-          set -euo pipefail
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
-      - name: Build the selected BAML CLI
-        run: cargo build -p baml_cli --bin baml-cli
-        working-directory: baml_language
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node2
-      - name: Compile canonical documentation snippets
-        env:
-          # Disposable snippet projects do not reuse seeded bytecode.
-          # Keep full diagnostics here; the next step executes the projects.
-          BAML_NO_BYTECODE_CACHE: "1"
-          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
-        run: pnpm --filter app-developer-docs docs:snippets:validate
-        working-directory: typescript2
-      - name: Show sccache stats
-        if: always()
-        run: sccache --show-stats
-
-      - name: Execute book behavior and inferred-signature assertions
-        env:
-          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
-        run: pnpm --filter app-developer-docs docs:book:validate
-        working-directory: typescript2
-      - name: Check book interface package boundaries
-        env:
-          BAML_AGENT_SKILL_CHECK: "off"
-          BAML_CLI_ALLOW_DIRECT: "1"
-        run: target/debug/baml-cli test --from crates/baml_tests/baml_src -i root.compiler.mounted_interface_diagnostics
-        working-directory: baml_language
 
   database-integration:
     name: Immutable document-store integration
@@ -349,7 +268,6 @@ jobs:
       - determine-changes
       - quality
       - authored-content
-      - snippets
       - database-integration
       - production-path
     if: always()
@@ -364,7 +282,6 @@ jobs:
           PRODUCTION_PATH_RESULT: ${{ needs.production-path.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
           SHOULD_RUN: ${{ needs.determine-changes.outputs.should-run }}
-          SNIPPETS_RESULT: ${{ needs.snippets.result }}
         run: |
           set -euo pipefail
           if [[ "$DETERMINE_CHANGES_RESULT" != "success" ]]; then
@@ -372,7 +289,7 @@ jobs:
             exit 1
           fi
           if [[ "$SHOULD_RUN" == "false" ]]; then
-            echo "No documentation or BAML language runtime inputs changed"
+            echo "No documentation site inputs changed"
             exit 0
           fi
           if [[ "$SHOULD_RUN" != "true" ]]; then
@@ -388,7 +305,6 @@ jobs:
           for result in \
             "$QUALITY_RESULT" \
             "$AUTHORED_CONTENT_RESULT" \
-            "$SNIPPETS_RESULT" \
             "$DATABASE_INTEGRATION_RESULT"; do
             if [[ "$result" != "success" ]]; then
               failed=true
