@@ -35,44 +35,13 @@ pub enum OptLevel {
 // Function
 // ============================================================================
 
-/// A catch region recorded during MIR lowering.
-///
-/// Describes the try-body entry block and the handler block for a `catch`
-/// expression. The emitter uses this to build the bytecode exception table.
-#[derive(Debug, Clone)]
-pub struct CatchRegion {
-    /// First block of the try body.
-    pub body_entry: BlockId,
-    /// Handler block that receives the exception.
-    pub handler: BlockId,
-    /// Every block the protected body lowers into: `body_entry` plus the
-    /// blocks created while lowering the protected code (which includes any
-    /// nested construct's blocks — a throw in a nested handler's arm correctly
-    /// routes to THIS region's handler when no closer one covers it).
-    ///
-    /// The emitter builds the exception table from these blocks' exact PC
-    /// ranges. Coverage therefore does not depend on block layout: a
-    /// `[body_entry_pc, handler_pc)` span only works if every protected block
-    /// is laid out before the handler, and reverse-postorder layout does not
-    /// guarantee that — a direct `throw` block is a CFG leaf that sinks to the
-    /// end of the function, and a call-free block that can panic (division,
-    /// indexing) has no unwind edge to anchor it either. Both escaped their
-    /// handler when a throwing call elsewhere in the block pulled the handler
-    /// to a mid-function PC.
-    pub body_blocks: Vec<BlockId>,
-    /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
-    /// throw whose PC lies in any of these blocks is "during handling of"
-    /// `error_local`, so that error's `baml.errors.Context` becomes the new error's
-    /// cause. Captured as the blocks created while lowering the arms (plus the
-    /// handler block itself); empty means "never chains" (e.g. a defer pad).
-    /// Layout can fragment these across non-contiguous PCs, so the emitter must
-    /// take their union rather than a single `[handler, join)` span.
-    pub handler_body: Vec<BlockId>,
-    /// Frame-local slot for the caught error value.
+/// What the VM lands in a handler block with: the frame slots it writes the
+/// caught error and, for a `catch (e, ctx)` or a `defer` landing pad, its
+/// `baml.errors.Context` into before jumping to the block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Landing {
     pub error_local: Local,
-    /// Frame-local slot for the stack trace value, if the catch clause
-    /// has a second binding: `catch (e, st) { ... }`
-    pub stack_trace_local: Option<Local>,
+    pub context_local: Option<Local>,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
@@ -88,9 +57,6 @@ pub struct MirFunctionBody<'db> {
     pub entry: BlockId,
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
-    /// Catch regions mapping try-body extents to handler blocks.
-    /// Populated during catch lowering; used by the emitter to build exception tables.
-    pub catch_regions: Vec<CatchRegion>,
 }
 
 impl<'db> MirFunctionBody<'db> {
@@ -104,13 +70,23 @@ impl<'db> MirFunctionBody<'db> {
         &self.locals[id.0]
     }
 
-    /// Iterate `(handler_block, error_local)` pairs derived from catch regions.
-    ///
-    /// Yields one entry per handler.
-    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
-        self.catch_regions
+    /// The handler blocks — those some block unwinds to — with what the VM
+    /// lands in each with.
+    pub fn handlers(&self) -> impl Iterator<Item = (BlockId, Landing)> + '_ {
+        self.blocks
             .iter()
-            .map(|r| (r.handler, r.error_local))
+            .filter_map(|block| block.landing.map(|landing| (block.id, landing)))
+    }
+
+    /// Whether `block` is a handler block.
+    pub fn is_handler(&self, block: BlockId) -> bool {
+        self.blocks[block.0].landing.is_some()
+    }
+
+    /// Iterate `(handler_block, error_local)` pairs, one per handler.
+    pub fn unwind_error_locals(&self) -> impl Iterator<Item = (BlockId, Local)> + '_ {
+        self.handlers()
+            .map(|(handler, landing)| (handler, landing.error_local))
     }
 }
 
@@ -296,6 +272,20 @@ pub struct BasicBlock<'db> {
     pub span: Option<Span>,
     /// Source span for the terminator.
     pub terminator_span: Option<Span>,
+    /// The handler a throw or panic raised anywhere in this block unwinds to
+    /// — the lexically enclosing `catch` handler or `defer` landing pad — or
+    /// `None` to leave the frame. Fixed when the block is created, so a block
+    /// is always a maximal run of code under one handler, and the emitter
+    /// derives the exception table from it. A terminator that carries its own
+    /// `unwind` edge agrees with it by construction.
+    pub unwind: Option<BlockId>,
+    /// The innermost handler whose body this block is lexically part of: a
+    /// throw here is "during handling of" that handler's error and chains
+    /// onto its context (BEP-042 cause chain). A handler block is part of its
+    /// own body.
+    pub handling: Option<BlockId>,
+    /// Set on a handler block: what the VM lands here with.
+    pub landing: Option<Landing>,
 }
 
 impl BasicBlock<'_> {
@@ -307,6 +297,9 @@ impl BasicBlock<'_> {
             terminator: None,
             span: None,
             terminator_span: None,
+            unwind: None,
+            handling: None,
+            landing: None,
         }
     }
 

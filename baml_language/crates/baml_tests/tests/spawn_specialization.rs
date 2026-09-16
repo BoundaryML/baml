@@ -192,9 +192,9 @@ async fn captured_bigint_arithmetic_uses_generic_binop() {
 
     insta::assert_snapshot!(output.bytecode, @"
     function main() -> bigint {
-        load_var ?1
+        load_const null
         make_cell
-        store_var ?1
+        store_var value
         load_const 10n
         store_deref ?1
         load_var value

@@ -115,7 +115,6 @@ mod tests {
     #[test]
     fn verifier_allows_exhaustive_switch_with_unreachable_default() {
         let mut body = MirFunctionBody {
-            catch_regions: vec![],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -129,6 +128,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -136,6 +138,9 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -143,6 +148,9 @@ mod tests {
                     terminator: Some(Terminator::Unreachable),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             entry: BlockId(0),
@@ -161,7 +169,6 @@ mod tests {
     #[should_panic(expected = "exhaustive switch")]
     fn verifier_rejects_exhaustive_switch_with_reachable_default() {
         let mut body = MirFunctionBody {
-            catch_regions: vec![],
             blocks: vec![
                 BasicBlock {
                     id: BlockId(0),
@@ -175,6 +182,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -182,6 +192,9 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -189,6 +202,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             entry: BlockId(0),

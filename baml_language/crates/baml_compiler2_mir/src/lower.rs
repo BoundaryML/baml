@@ -11,8 +11,8 @@ use crate::{
     CellId,
     builder::MirBuilder,
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
-        ItemRef, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
+        AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, ItemRef,
+        Landing, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionKind,
         Operand, Place, Rvalue, StatementKind, Terminator,
     },
     optimize,
@@ -51,10 +51,17 @@ struct LoopContext {
     defer_depth: usize,
 }
 
+/// A `defer` body armed in the scope being lowered (BEP-042), with the
+/// handler in force where it was armed. Every copy of the body — the inline
+/// replays at the non-throwing exits and the landing pad — unwinds to that
+/// handler: the pad of the defer armed before it, or the enclosing `catch`.
+/// Never to its own pad, and never to the pad of a defer armed after it.
 #[derive(Clone, Copy)]
-struct CatchContext {
-    unwind_target: BlockId,
-    error_local: Local,
+struct ArmedDefer {
+    /// The body, an inline `Expr::Block`.
+    body: AstExprId,
+    /// `MirBuilder::unwind()` at arming.
+    unwind: Option<BlockId>,
 }
 
 // ─── Type conversion: TIR RuntimeTy → baml_type::RuntimeTy ────────────────────────────────
@@ -471,7 +478,7 @@ fn lower_tir_template(
         } => {
             // Always a projection template, never a frame slot: associated
             // types are not frame slots, so a `Self.X` here has no slot to
-            // reference. (A name-based `slot_by_name(member)` shortcut lived
+            // reference. (A name-based slot shortcut for `member` lived
             // here from the slotted era; after de-slotting it could only ever
             // match a GENERIC that happens to share the member's name —
             // `function pick<Item>(...) -> Self.Item` — silently substituting
@@ -675,6 +682,15 @@ impl RuntimeLowering<'_> {
     }
 }
 
+/// Whether `param` is a synthetic effect parameter, which has no frame slot
+/// by ABI and is erased wherever a template needs a slot. Synthetic effect
+/// parameters are still told apart by their name, so a block-scoped
+/// `type __effect_param_0 = …` — a user binding that always has a slot — is
+/// excluded by its identity, not its spelling.
+fn is_slotless_effect_param(param: &ParamTy) -> bool {
+    !param.is_scoped() && baml_type::is_synthetic_effect_param(param.name())
+}
+
 /// Convert a `Tir2Ty` to `TyTemplate`, mapping each type variable to its
 /// canonical runtime frame index.
 pub fn tir2_to_template(
@@ -682,9 +698,7 @@ pub fn tir2_to_template(
     resolved: &RuntimeLowering<'_>,
     generic_params: &[ParamTy],
 ) -> TyTemplate {
-    let ty = baml_type_runtime::erase_typevars_matching(ty, &|param| {
-        baml_type::is_synthetic_effect_param(param.name())
-    });
+    let ty = baml_type_runtime::erase_typevars_matching(ty, &is_slotless_effect_param);
     let generic_layout = RuntimeGenericLayout::new(generic_params);
     lower_tir_template(&ty, resolved, &generic_layout, TemplateMode::Value)
         .unwrap_or_else(|| unreachable!("value template lowering is infallible"))
@@ -1914,7 +1928,6 @@ struct LoweringContext<'db> {
     /// roots, which HIR does not resolve.
     self_binding: Option<BindingId>,
     loop_context: Option<LoopContext>,
-    catch_context: Option<CatchContext>,
     catch_rethrow_locals: Vec<Local>,
     exit_block: BlockId,
 
@@ -2015,13 +2028,12 @@ struct LoweringContext<'db> {
     /// `dispatch_target_for_concrete`.
     interface_method_names: &'db FxHashSet<Name>,
 
-    /// Stack of pending `defer` block bodies (BEP-042), parallel to
-    /// lexical scopes. Each entry is the `AstExprId` of a defer body
-    /// (an inline `Expr::Block`). Pushed by `lower_stmt`; replayed (LIFO,
-    /// re-lowered inline) at every scope exit by `replay_defers_to_depth`.
-    /// Swapped at lambda boundaries so a lambda body never replays the parent's
-    /// defers.
-    defer_stack: Vec<AstExprId>,
+    /// Stack of armed `defer` bodies (BEP-042), parallel to lexical scopes.
+    /// Pushed by `lower_scoped_block` as each `defer` statement is reached;
+    /// replayed (LIFO, re-lowered inline) at every non-throwing scope exit by
+    /// `replay_defers_to_depth`. Swapped at lambda boundaries so a lambda body
+    /// never replays the parent's defers.
+    defer_stack: Vec<ArmedDefer>,
 
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
@@ -2628,7 +2640,6 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             self_binding: None,
             loop_context: None,
-            catch_context: None,
             catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
             tables,
@@ -2712,7 +2723,6 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             self_binding: None,
             loop_context: None,
-            catch_context: None,
             catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
             tables,
@@ -3056,36 +3066,41 @@ impl<'db> LoweringContext<'db> {
         idx
     }
 
-    /// Re-lower the `defer` block bodies registered at `[defer_depth..]` of
+    /// Re-lower the `defer` bodies armed at `[defer_depth..]` of
     /// `defer_stack`, in reverse declaration order (LIFO) — BEP-042.
     ///
     /// Each body is re-lowered INLINE (block-duplication) into a throwaway Void
     /// temp so it reads the live enclosing locals at THIS exit point, per the
-    /// BEP's "final value" rule. Called at every scope exit. It does not truncate
-    /// the stack; the owning `lower_scoped_block` truncates, while divergent callers leave it
-    /// (a dead block follows). If a replayed body diverges (e.g. `throw`), the
-    /// remaining defers are emitted on the resulting dead block and eliminated.
+    /// BEP's "final value" rule. Called at every non-throwing scope exit
+    /// (fall-through, `return`, `break`, `continue`). It does not truncate the
+    /// stack; the owning `lower_scoped_block` truncates, while divergent
+    /// callers leave it (a dead block follows). If a replayed body diverges
+    /// (e.g. `throw`), the remaining defers are emitted on the resulting dead
+    /// block and eliminated.
+    ///
+    /// A body is lowered unwinding to the handler in force where its defer was
+    /// armed (`ArmedDefer`): the pad of the defer armed before it, or the
+    /// enclosing `catch` — never its own pad, nor those of the defers armed
+    /// after it, which have already run here. So a throw out of a replayed
+    /// body runs the remaining (earlier-armed) defers once each, through
+    /// their pads, and never re-runs the body itself.
     fn replay_defers_to_depth(&mut self, defer_depth: usize) {
-        let defers: Vec<AstExprId> = self.defer_stack[defer_depth..].to_vec();
+        let defers: Vec<ArmedDefer> = self.defer_stack[defer_depth..].to_vec();
         if defers.is_empty() {
             return;
         }
-        // Inline replay (the non-throwing exits) runs the defers OUTSIDE their
-        // own scope's unwind pads: a defer that throws here must not be routed
-        // back into the pad that would replay it again (double-run / loop).
-        // Clearing the catch context makes such a throw propagate outward
-        // (replace-semantics; no cause chain in this pass). Restored after.
-        let saved_catch = self.catch_context.take();
-        for body in defers.into_iter().rev() {
+        let exit_unwind = self.builder.unwind();
+        for armed in defers.into_iter().rev() {
             if self.builder.is_current_terminated() {
                 break;
             }
+            self.builder.transition_unwind(armed.unwind);
             let tmp = self.builder.temp(RuntimeTy::Void {
                 attr: TyAttr::default(),
             });
-            self.lower_expr(body, Place::local(tmp));
+            self.lower_expr(armed.body, Place::local(tmp));
         }
-        self.catch_context = saved_catch;
+        self.builder.transition_unwind(exit_unwind);
     }
 
     /// Every binding HIR registered in the scopes this body lowers has a
@@ -3298,7 +3313,7 @@ impl<'db> LoweringContext<'db> {
             // diagnostic; delete this arm once lowering of diagnosed bodies
             // is guarded upstream, so the guard can do its job.
             Tir2Ty::Error { attr } => Tir2Ty::Unknown { attr },
-            Tir2Ty::TypeVar(param, attr) if baml_type::is_synthetic_effect_param(param.name()) => {
+            Tir2Ty::TypeVar(param, attr) if is_slotless_effect_param(&param) => {
                 Tir2Ty::Unknown { attr }
             }
             Tir2Ty::Literal(lit, _freshness, attr) => {
@@ -3955,7 +3970,6 @@ impl<'db> LoweringContext<'db> {
     ) {
         let argument_layout = self.call_argument_layout(expr_id, arg_operands.len());
         let target = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
         match dest {
             Place::Local(_) => {
@@ -3966,7 +3980,6 @@ impl<'db> LoweringContext<'db> {
                     runtime_id_operand,
                     dest.clone(),
                     target,
-                    unwind,
                 );
                 self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
@@ -3981,7 +3994,6 @@ impl<'db> LoweringContext<'db> {
                     runtime_id_operand,
                     Place::local(tmp),
                     target,
-                    unwind,
                 );
                 self.builder.set_call_layout(argument_layout);
                 self.builder.set_current_block(target);
@@ -4498,11 +4510,11 @@ impl<'db> LoweringContext<'db> {
         Box::new(crate::ir::SpawnFutureTy { returns, throws })
     }
 
-    fn object_class_type_arg_templates(
-        &mut self,
-        expr_id: AstExprId,
-        explicit_type_args: &[AstTypeExpr],
-    ) -> Vec<TyTemplate> {
+    /// The type-argument templates of an object literal: its written type
+    /// args as TIR resolved them (the call plan keyed at the expression), or,
+    /// for `Box { … }`, the class type TIR inferred for it. Never re-lowered
+    /// from syntax — see `check_type_of_intrinsic`.
+    fn object_class_type_arg_templates(&mut self, expr_id: AstExprId) -> Vec<TyTemplate> {
         if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
             && !plan.slots.is_empty()
         {
@@ -4513,31 +4525,7 @@ impl<'db> LoweringContext<'db> {
                 .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
                 .collect();
         }
-        // Empty (`Box { … }`) or unlowerable (`Box<_> { … }` — a compile error
-        // whose arg lowers to an error sentinel) type args: use the class type
-        // TIR inferred/solved for this expression rather than re-lowering the
-        // raw args, which cannot cross the runtime boundary.
-        let generic_params = self.enclosing_generic_params();
-        let has_hole = explicit_type_args
-            .iter()
-            .any(|arg| self.type_arg_is_infer_hole(arg, &generic_params));
-        if explicit_type_args.is_empty() || has_hole {
-            self.class_type_arg_templates(expr_id)
-        } else {
-            self.generic_apply_type_arg_templates(explicit_type_args)
-        }
-    }
-
-    /// Whether a written type argument lowers to a type that cannot cross the
-    /// runtime boundary — a `_` wildcard (a hard error lowering to `Ty::Error`)
-    /// or any other error-recovery sentinel, at any depth. A bare frame
-    /// type-arg reference (`T`) and any concrete type return `false`.
-    fn type_arg_is_infer_hole(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> bool {
-        if Self::direct_frame_type_arg_template(type_arg, generic_params).is_some() {
-            return false;
-        }
-        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
-        baml_type::lower_to_runtime(&tir_ty, self.resolved_aliases).is_err()
+        self.class_type_arg_templates(expr_id)
     }
 
     /// Get the `baml_type::RuntimeTy` for a pattern binding
@@ -5052,7 +5040,6 @@ impl<'db> LoweringContext<'db> {
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
-        let saved_catch_context = self.catch_context.take();
         // BEP-042: a lambda body is its own cleanup region — reset the defer
         // stack so it never replays the parent's defers, restore it after.
         let saved_defer_stack = std::mem::take(&mut self.defer_stack);
@@ -5217,7 +5204,6 @@ impl<'db> LoweringContext<'db> {
         self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
-        self.catch_context = saved_catch_context;
         self.defer_stack = saved_defer_stack;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
@@ -5456,19 +5442,17 @@ impl<'db> LoweringContext<'db> {
 
         // ── Emit `tag(closure)` → dest. The result is the template's value. ──
         let callee = Operand::Constant(Constant::Function(tag_item_ref));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         match &dest {
             Place::Local(_) => {
-                self.builder
-                    .call(callee, vec![closure_op], dest, target, unwind);
+                self.builder.call(callee, vec![closure_op], dest, target);
                 self.builder.set_current_block(target);
             }
             _ => {
                 let ty = self.expr_ty(expr_id);
                 let tmp = self.builder.temp(ty);
                 self.builder
-                    .call(callee, vec![closure_op], Place::local(tmp), target, unwind);
+                    .call(callee, vec![closure_op], Place::local(tmp), target);
                 self.builder.set_current_block(target);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
@@ -5578,7 +5562,6 @@ impl<'db> LoweringContext<'db> {
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
-        let saved_catch_context = self.catch_context.take();
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
@@ -5752,7 +5735,6 @@ impl<'db> LoweringContext<'db> {
         self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
-        self.catch_context = saved_catch_context;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
         self.capture_indices = saved_capture_indices;
@@ -5827,21 +5809,18 @@ impl<'db> LoweringContext<'db> {
     ) {
         let type_binding_scope_start = self.scoped_type_binding_params.len();
         let defer_depth = self.defer_stack.len();
+        let incoming_unwind = self.builder.unwind();
 
         // BEP-042 Stage 2: a defer must also run when an exception propagates
-        // out of a *call* inside the block. Each defer splits the block and
-        // opens a catch-all unwind region whose landing pad replays that defer
-        // then cascades to the next-outer pad / enclosing handler. The
-        // exception table routes a throw to the innermost region reached so far
-        // (see `try_unwind_exception`), so only the defers armed before the
-        // throw run. (Non-throwing exits — normal fall-through, return,
-        // break/continue — run defers via the inline `replay_defers_to_depth`
-        // path instead.)
-        let block_incoming_catch = self.catch_context;
-        // (landing-pad block, defer body, context to cascade to after replay,
-        // catch-region index — to fill in the pad's handler_body once its body
-        // is lowered below)
-        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>, usize)> = Vec::new();
+        // out of a *call* inside the block. Each defer makes the rest of the
+        // block unwind to a landing pad that replays that defer, then
+        // cascades to the next-outer pad / enclosing handler; a throw thus
+        // runs exactly the defers armed before it. The non-throwing exits —
+        // fall-through, return, break/continue — run the defers inline via
+        // `replay_defers_to_depth`, each unwinding to the handler in force
+        // where it was armed, so those copies never reach their own pad.
+        // (landing-pad block, the defer)
+        let mut defer_pads: Vec<(BlockId, ArmedDefer)> = Vec::new();
         let mut shared_error: Option<Local> = None;
         // BEP-042 cause chain: a throw inside a defer pad — a sibling defer that
         // throws while the scope is already unwinding — is "during handling of"
@@ -5858,9 +5837,6 @@ impl<'db> LoweringContext<'db> {
             };
             match defer_body {
                 Some(body) => {
-                    // Register for inline replay on the non-throwing exits.
-                    self.defer_stack.push(body);
-                    // Open the unwind region protecting the rest of the block.
                     let error_local = *shared_error.get_or_insert_with(|| {
                         self.builder.declare_local(
                             None,
@@ -5879,34 +5855,25 @@ impl<'db> LoweringContext<'db> {
                             None,
                         )
                     });
-                    let pad = self.builder.create_block();
-                    // Split into a fresh block so the region covers only the
-                    // code AFTER this defer (a throw before it must not run it).
-                    let region_start = self.builder.create_block();
-                    if !self.builder.is_current_terminated() {
-                        self.builder.goto(region_start);
-                    }
-                    self.builder.set_current_block(region_start);
-                    let region_idx = self.builder.catch_regions.len();
-                    self.builder.catch_regions.push(CatchRegion {
-                        body_entry: region_start,
-                        handler: pad,
-                        // handler_body and body_blocks are filled in once the
-                        // pad bodies are lowered (below). `stack_trace_local`
-                        // holds the in-flight error's baml.errors.Context so a sibling
-                        // defer that throws while unwinding chains onto it
-                        // (BEP-042 cause chain).
-                        handler_body: Vec::new(),
-                        body_blocks: Vec::new(),
+                    // The pad unwinds to the handler in force here — the
+                    // previous pad or the enclosing catch — never to itself.
+                    // `ctx_local` receives the in-flight error's
+                    // baml.errors.Context so a sibling defer that throws while
+                    // unwinding chains onto it (BEP-042 cause chain).
+                    let pad = self.builder.create_handler_block(Landing {
                         error_local,
-                        stack_trace_local: Some(ctx_local),
+                        context_local: Some(ctx_local),
                     });
-                    let route_ctx = self.catch_context;
-                    defer_pads.push((pad, body, route_ctx, region_idx));
-                    self.catch_context = Some(CatchContext {
-                        unwind_target: pad,
-                        error_local,
-                    });
+                    let armed = ArmedDefer {
+                        body,
+                        unwind: self.builder.unwind(),
+                    };
+                    // Only the code AFTER this defer unwinds to its pad: a
+                    // throw before it must not run it.
+                    self.builder.transition_unwind(Some(pad));
+                    // Registered for inline replay on the non-throwing exits.
+                    self.defer_stack.push(armed);
+                    defer_pads.push((pad, armed));
                 }
                 None => {
                     self.lower_stmt(stmt_id);
@@ -5934,82 +5901,46 @@ impl<'db> LoweringContext<'db> {
             self.replay_defers_to_depth(defer_depth);
         }
 
+        // What follows the block unwinds past its defers again.
+        self.builder.transition_unwind(incoming_unwind);
+
         // Emit the landing pads out of line (reached via the exception table).
-        // Reverse order so the innermost (last-declared) pad is laid out first.
-        if !defer_pads.is_empty() {
-            // Each defer region protects the block-index window from its
-            // `region_start` up to here — the statements after the defer, the
-            // tail expr, and the inline defer replay, plus everything nested
-            // within them. The pad bodies lowered below are appended to the
-            // OUTER siblings' regions afterwards.
-            let pads_lo = self.builder.num_blocks();
-            let continuation = self.builder.current_block();
-            for &(pad, body, route_ctx, region_idx) in defer_pads.iter().rev() {
-                self.builder.set_current_block(pad);
-                // Lower the defer body under the ENCLOSING context, not this
-                // pad's `route_ctx`. A throw/call inside the body is routed to
-                // the next-outer pad by the exception table (its region covers
-                // the body). Using `route_ctx` here would instead give the
-                // body's calls an unwind edge to the sibling pad, pulling that
-                // pad early in RPO so its region no longer covers the body's
-                // (later-laid-out) throw block — and the throw would escape,
-                // skipping the remaining defers. The explicit cascade below
-                // handles a defer body that completes normally.
-                self.catch_context = block_incoming_catch;
-                let tmp = self.builder.temp(RuntimeTy::Void {
-                    attr: TyAttr::default(),
-                });
-                // The pad body IS this defer's handler body: a throw inside it
-                // is "during handling of" the in-flight error. Capture every
-                // block the body lowers into (the pad plus any it creates) so
-                // the cause pre-walk covers them all.
-                let pad_body_lo = self.builder.num_blocks();
-                self.lower_expr(body, Place::local(tmp));
-                if !self.builder.is_current_terminated() {
-                    let error =
-                        shared_error.expect("a defer pad implies a shared error local exists");
-                    match route_ctx {
-                        Some(outer) => {
-                            if outer.error_local != error {
-                                self.builder.assign(
-                                    Place::local(outer.error_local),
-                                    Rvalue::Use(Operand::Copy(Place::Local(error))),
-                                );
-                            }
-                            self.builder.goto(outer.unwind_target);
+        // Reverse order so the innermost (last-armed) pad is laid out first.
+        for &(pad, armed) in defer_pads.iter().rev() {
+            // The pad body unwinds to the handler in force where its defer
+            // was armed (see `replay_defers_to_depth`) and is its own handler
+            // body: a throw inside it is "during handling of" the in-flight
+            // error.
+            let out_of_line = self.builder.begin_out_of_line(pad, armed.unwind, Some(pad));
+            let tmp = self.builder.temp(RuntimeTy::Void {
+                attr: TyAttr::default(),
+            });
+            self.lower_expr(armed.body, Place::local(tmp));
+            // A body that completes normally cascades explicitly.
+            if !self.builder.is_current_terminated() {
+                let error = shared_error.expect("a defer pad implies a shared error local exists");
+                match armed.unwind {
+                    Some(outer) => {
+                        let outer_error = self.builder.landing(outer).error_local;
+                        if outer_error != error {
+                            self.builder.assign(
+                                Place::local(outer_error),
+                                Rvalue::Use(Operand::Copy(Place::Local(error))),
+                            );
                         }
-                        None => {
-                            // Re-raise the in-flight error unchanged: a rethrow,
-                            // not a fresh throw, so the cause pre-walk does not
-                            // chain it onto its own context (a self-link).
-                            self.builder.rethrow(Operand::Copy(Place::Local(error)));
-                        }
+                        self.builder.goto(outer);
+                    }
+                    None => {
+                        // Re-raise the in-flight error unchanged: a rethrow,
+                        // not a fresh throw, so the cause pre-walk does not
+                        // chain it onto its own context (a self-link).
+                        self.builder.rethrow(Operand::Copy(Place::Local(error)));
                     }
                 }
-                self.builder.catch_regions[region_idx].handler_body = std::iter::once(pad)
-                    .chain((pad_body_lo..self.builder.num_blocks()).map(BlockId))
-                    .collect();
             }
-            // Each region protects its window of the block body, plus the pad
-            // bodies of the LATER-armed (inner) defers: an error unwinding
-            // through pad N whose defer body itself throws must cascade to pad
-            // N-1, so pad N's blocks belong to every outer sibling's region
-            // (the innermost covering region wins at runtime). A pad is never
-            // protected by its own region.
-            for (pos, &(_, _, _, region_idx)) in defer_pads.iter().enumerate() {
-                let window_lo = self.builder.catch_regions[region_idx].body_entry.0;
-                let mut protected: Vec<BlockId> = (window_lo..pads_lo).map(BlockId).collect();
-                for &(_, _, _, inner_region_idx) in &defer_pads[pos + 1..] {
-                    protected.extend_from_slice(
-                        &self.builder.catch_regions[inner_region_idx].handler_body,
-                    );
-                }
-                self.builder.catch_regions[region_idx].body_blocks = protected;
-            }
-            self.builder.set_current_block(continuation);
+            self.builder.end_out_of_line(out_of_line);
         }
 
-        self.catch_context = block_incoming_catch;
         self.defer_stack.truncate(defer_depth);
         self.scoped_type_binding_params
             .truncate(type_binding_scope_start);
@@ -6121,12 +6052,11 @@ impl<'db> LoweringContext<'db> {
 
             AstExpr::Object {
                 type_name,
-                type_args,
                 fields,
                 spreads,
                 ..
             } => {
-                self.lower_object(expr_id, &type_name, &type_args, &fields, &spreads, dest);
+                self.lower_object(expr_id, &type_name, &fields, &spreads, dest);
             }
 
             AstExpr::MemberAccess { base, member } => {
@@ -6165,8 +6095,8 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            AstExpr::GenericApply { base, type_args } => {
-                self.lower_generic_apply(expr_id, base, &type_args, dest);
+            AstExpr::GenericApply { base, .. } => {
+                self.lower_generic_apply(expr_id, base, dest);
             }
 
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -6238,16 +6168,15 @@ impl<'db> LoweringContext<'db> {
             AstExpr::Throw { value } => {
                 let val_op = self.lower_throw_operand(value);
                 // Route every throw through the exception funnel (like
-                // `AstStmt::Throw`) rather than a static jump to
-                // `catch_context.unwind_target`. The funnel computes the
-                // BEP-042 cause chain (`find_cause_context`) and materializes
-                // the destination handler's `baml.errors.Context`; a static goto
-                // bypasses both, so a `throw` in expression position inside a
-                // `defer` region (or a `catch` arm/base) would drop its cause
-                // and leave a bound `ctx` unmaterialized (B-611). The exception
-                // table routes the throw to the same innermost handler the
-                // static jump targeted — its region covers this PC — so control
-                // flow is unchanged.
+                // `AstStmt::Throw`) rather than a static jump to the block's
+                // handler. The funnel computes the BEP-042 cause chain
+                // (`find_cause_context`) and materializes the destination
+                // handler's `baml.errors.Context`; a static goto bypasses
+                // both, so a `throw` in expression position under a `defer`
+                // (or in a `catch` arm/base) would drop its cause and leave a
+                // bound `ctx` unmaterialized (B-611). The exception table
+                // routes the throw to the same handler the static jump would
+                // target — the block's `unwind` — so control flow is unchanged.
                 if self.operand_is_marked_rethrow(&val_op) {
                     self.builder.rethrow(val_op);
                 } else {
@@ -6261,8 +6190,8 @@ impl<'db> LoweringContext<'db> {
             AstExpr::Return { value } => {
                 // A `return` expression (e.g. a braceless `catch`/`match` arm
                 // value, `_ => return 0`) transfers control to the enclosing
-                // function's exit. Unlike `throw`, it is NOT routed through
-                // `catch_context` — it returns from the function rather than
+                // function's exit. Unlike `throw`, it does NOT unwind to the
+                // block's handler — it returns from the function rather than
                 // being handled by the surrounding `catch`. This mirrors
                 // `AstStmt::Return`; `dest` is never written because we diverge.
                 let ret = Local(0); // _0 is always the return place
@@ -6395,7 +6324,6 @@ impl<'db> LoweringContext<'db> {
                     ],
                 },
             );
-            let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
             let mut cur = params_local;
             for &with_id in with_exprs {
                 let transformer_op = self.lower_to_operand(with_id);
@@ -6408,7 +6336,6 @@ impl<'db> LoweringContext<'db> {
                     vec![Operand::Copy(Place::Local(cur))],
                     Place::Local(next),
                     resume,
-                    unwind,
                 );
                 self.builder
                     .set_call_layout(Some(baml_type::CallLayout::positional(1)));
@@ -6466,9 +6393,8 @@ impl<'db> LoweringContext<'db> {
         };
 
         let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder
-            .await_(future_place, await_dest.clone(), resume, unwind);
+            .await_(future_place, await_dest.clone(), resume);
         self.builder.set_current_block(resume);
 
         if let Some(projection) = projection_dest {
@@ -7481,7 +7407,6 @@ impl<'db> LoweringContext<'db> {
             namespace: vec![Name::new("ops")],
             name: Name::new(driver),
         }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let needs_temp = !matches!(dest, Place::Local(_));
         let call_dest = if needs_temp {
             Place::local(self.builder.temp(result_ty))
@@ -7489,8 +7414,7 @@ impl<'db> LoweringContext<'db> {
             dest.clone()
         };
         let resume = self.builder.create_block();
-        self.builder
-            .call(callee, args, call_dest.clone(), resume, unwind);
+        self.builder.call(callee, args, call_dest.clone(), resume);
         self.builder.set_current_block(resume);
         if needs_temp {
             self.builder
@@ -7705,7 +7629,6 @@ impl<'db> LoweringContext<'db> {
         let bool_ty = RuntimeTy::Bool {
             attr: TyAttr::default(),
         };
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.emit_virtual_call_with_operands(
             iface,
             method,
@@ -7714,7 +7637,6 @@ impl<'db> LoweringContext<'db> {
             /* argument_layout */ None,
             /* runtime_id */ None,
             bool_ty,
-            unwind,
             dest,
         );
     }
@@ -8389,19 +8311,12 @@ impl<'db> LoweringContext<'db> {
             name: Name::new("from"),
         }));
         // `string.from` is `throws never`; the unwind target is harmless/unused.
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         // The call destination must be a `Place::Local`; route projection/capture
         // dests through a temp + assign-through (mirrors the normal call path).
         if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
             self.builder.set_current_block(target);
         } else {
             let call_ty = self.expr_ty(expr_id);
@@ -8412,7 +8327,6 @@ impl<'db> LoweringContext<'db> {
                 ntypeargs,
                 Place::local(tmp),
                 target,
-                unwind,
             );
             self.builder.set_current_block(target);
             self.builder
@@ -8536,17 +8450,10 @@ impl<'db> LoweringContext<'db> {
             namespace: vec![Name::new("json")],
             name: Name::new("from"),
         }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
             self.builder.set_current_block(target);
         } else {
             let call_ty = self.expr_ty(expr_id);
@@ -8557,7 +8464,6 @@ impl<'db> LoweringContext<'db> {
                 ntypeargs,
                 Place::local(tmp),
                 target,
-                unwind,
             );
             self.builder.set_current_block(target);
             self.builder
@@ -8657,17 +8563,10 @@ impl<'db> LoweringContext<'db> {
             namespace: vec![Name::new("json")],
             name: Name::new("to"),
         }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let target = self.builder.create_block();
         if let Place::Local(_) = dest {
-            self.builder.call_with_type_args(
-                callee_op,
-                all_args,
-                ntypeargs,
-                dest.clone(),
-                target,
-                unwind,
-            );
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest.clone(), target);
             self.builder.set_current_block(target);
         } else {
             let call_ty = self.expr_ty(expr_id);
@@ -8678,7 +8577,6 @@ impl<'db> LoweringContext<'db> {
                 ntypeargs,
                 Place::local(tmp),
                 target,
-                unwind,
             );
             self.builder.set_current_block(target);
             self.builder
@@ -8991,7 +8889,6 @@ impl<'db> LoweringContext<'db> {
                 all_args.extend(self.lower_call_arg_operands(expr_id, args));
                 let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
                 let target = self.builder.create_block();
-                let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
                 self.builder.call_with_type_args_and_runtime_id(
                     callee_op,
                     all_args,
@@ -8999,7 +8896,6 @@ impl<'db> LoweringContext<'db> {
                     runtime_id_operand,
                     dest,
                     target,
-                    unwind,
                 );
                 self.builder.set_current_block(target);
                 return;
@@ -9461,7 +9357,6 @@ impl<'db> LoweringContext<'db> {
         };
 
         let target = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         // Check if callee is `reflect.Type.of<T>()` — a value-producing intrinsic.
         // Unlike void intrinsics (log.*), this emits an assignment
@@ -9663,7 +9558,7 @@ impl<'db> LoweringContext<'db> {
             match &dest {
                 Place::Local(l) => {
                     self.builder
-                        .await_any(futures_operand, Place::Local(*l), target, unwind);
+                        .await_any(futures_operand, Place::Local(*l), target);
                 }
                 _ => {
                     // Projection/capture destination: await into a temp, then
@@ -9671,7 +9566,7 @@ impl<'db> LoweringContext<'db> {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
                     self.builder
-                        .await_any(futures_operand, Place::local(tmp), target, unwind);
+                        .await_any(futures_operand, Place::local(tmp), target);
                     self.builder.set_current_block(target);
                     let after = self.builder.create_block();
                     self.builder
@@ -9724,7 +9619,6 @@ impl<'db> LoweringContext<'db> {
                 runtime_id_operand,
                 Place::Local(dest_local),
                 target,
-                unwind,
             );
             if !matches!(dest, Place::Local(_)) {
                 self.builder.set_current_block(target);
@@ -9749,7 +9643,6 @@ impl<'db> LoweringContext<'db> {
                         runtime_id_operand,
                         dest,
                         target,
-                        unwind,
                     );
                     self.builder.set_call_layout(argument_layout);
                 }
@@ -9764,7 +9657,6 @@ impl<'db> LoweringContext<'db> {
                         runtime_id_operand,
                         Place::local(tmp),
                         target,
-                        unwind,
                     );
                     self.builder.set_call_layout(argument_layout);
                     self.builder.set_current_block(target);
@@ -10121,19 +10013,13 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.6: reflect.Type.of intrinsic ─────────────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
-    /// Detect a `reflect.Type.of<T>()` call and, if found, resolve the type
-    /// argument and return the corresponding `TyTemplate`.
+    /// Detect a `reflect.Type.of<T>()` call and, if found, return the
+    /// `TyTemplate` of its written type argument: a realized type as a
+    /// constant, a frame type variable as a `TypeArgRef`.
     ///
-    /// Returns `Some(template)` when:
-    /// - The callee is the `reflect.Type.of` `$compiler_intrinsic`.
-    /// - The call carries exactly one type argument.
-    /// - The type argument resolves to a concrete `RuntimeTy` (no `TypeVar` leaves).
-    ///
-    /// Returns `None` when the callee is not `type_of` **or** when the type
-    /// argument contains a `TypeVar` (generic-parameter reference).  The latter
-    /// case is deferred to template lowering, which produces
-    /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
-    /// `LoadType` instruction.
+    /// Returns `None` when the callee is not `reflect.Type.of`, or when the
+    /// call writes no type argument — then the ordinary call path seeds the
+    /// callee frame from the inferred instantiation.
     fn check_type_of_intrinsic(
         &mut self,
         callee: AstExprId,
@@ -10215,87 +10101,27 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        // ── 2. Extract the single type argument ─────────────────────────────
-        let type_args = if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
-            type_args.clone()
-        } else {
+        // ── 2. The written type argument, as TIR resolved it ────────────────
+        // Read from the call plan, never re-resolved from syntax: TIR bound
+        // the written `T` at its lexical position to a `ParamTy` carrying its
+        // identity, so a `defer` body replayed under a shadowing
+        // `type T = …` still names the parameter written at the defer site.
+        let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] else {
             return None;
         };
-        let type_arg = type_args.into_iter().next()?;
-
-        // Include the enclosing class + function generic params so that `T`
-        // in `reflect.Type.of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
-        // than an unresolved-type error — both for free generic functions and
-        // for methods on generic classes.  The order (class params first,
-        // then function params) mirrors TIR's `enclosing_class_generic_params
-        // ++ user_generic_params` convention used in `callable.rs`.
+        if type_args.is_empty() {
+            return None;
+        }
+        let key = self.expr_metadata_key(call_expr_id);
+        let emission_ty = self
+            .tir_call_plan(key)
+            .and_then(|plan| plan.slots.first())
+            .map(|slot| slot.emission_ty.clone())
+            .unwrap_or_else(|| {
+                unreachable!("TIR records a call plan for a call with a written type argument")
+            });
         let generic_params = self.enclosing_generic_params();
-
-        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
-        let template = self.type_expr_to_template(&type_arg, &generic_params);
-        Some(template)
-    }
-
-    fn type_expr_to_template(
-        &self,
-        type_arg: &AstTypeExpr,
-        generic_params: &[ParamTy],
-    ) -> TyTemplate {
-        // `Self.Item` in a default-method body is a projection over the `Self`
-        // slot, not a frame slot of its own — it lowers through the ordinary
-        // road below (the frame-slot fast path only matches bare params).
-        if let Some(template) = Self::direct_frame_type_arg_template(type_arg, generic_params) {
-            return template;
-        }
-        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
-        self.ty_to_template(&tir_ty, generic_params)
-    }
-
-    /// Lower a written type-argument expression to its `Tir2Ty`, resolving names
-    /// against the canonical (PPIR-merged) package items and with the enclosing
-    /// generic params in scope (so `T` becomes `Tir2Ty::TypeVar("T")`). A `_`
-    /// wildcard is a hard error at lowering (`CannotInferType`) and comes back
-    /// as `Tir2Ty::Error`, so it never reaches runtime conversion.
-    fn lower_type_arg_to_tir(&self, type_arg: &AstTypeExpr, generic_params: &[ParamTy]) -> Tir2Ty {
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = pkg_info.root;
-        // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
-        // args synthesized by PPIR companions reference `*$stream` classes
-        // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
-        // the PPIR-expanded item universe. Resolving against HIR's original
-        // items lowered them to `Unknown` → `Void` and broke `_ParseCache._new`
-        // at runtime.
-        let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
-        lower_expr_in_scope(
-            self.db,
-            type_arg,
-            pkg_items,
-            &pkg_info.namespace_path,
-            generic_params,
-            &self.enclosing_generic_param_bounds(),
-            self.body_self_tir_ty(),
-        )
-    }
-
-    fn direct_frame_type_arg_template(
-        type_arg: &AstTypeExpr,
-        generic_params: &[ParamTy],
-    ) -> Option<TyTemplate> {
-        let AstTypeExprKind::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } = &type_arg.kind
-        else {
-            return None;
-        };
-        if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
-            return None;
-        }
-        RuntimeGenericLayout::new(generic_params)
-            .slot_by_name(&segments[0])
-            .map(TyTemplate::TypeArgRef)
+        Some(self.ty_to_template(&emission_ty, &generic_params))
     }
 
     /// [`Self::ty_to_template`] for a type read back from inference rather
@@ -10527,21 +10353,14 @@ impl<'db> LoweringContext<'db> {
     /// `frame.type_args` when called). Otherwise fall back to lowering the base
     /// value with type args erased — for exotic bases (bound methods, lambdas)
     /// or param-dependent args (`foo<T>` inside a generic function).
-    fn lower_generic_apply(
-        &mut self,
-        expr_id: AstExprId,
-        base: AstExprId,
-        type_args: &[AstTypeExpr],
-        dest: Place,
-    ) {
+    fn lower_generic_apply(&mut self, expr_id: AstExprId, base: AstExprId, dest: Place) {
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
             // Non-`ItemRef` base (a local/captured generic function value):
             // there is no function global to pool, so specialize the *runtime
             // value* — evaluate it and wrap it in a closure carrying the
             // (frame-resolved) type args — instead of silently erasing them.
             let value = self.lower_to_operand(base);
-            let type_arg_templates =
-                self.planned_generic_apply_type_arg_templates(expr_id, type_args);
+            let type_arg_templates = self.planned_generic_apply_type_arg_templates(expr_id);
             self.builder.assign(
                 dest,
                 Rvalue::MakeGenericFunctionFromValue {
@@ -10551,7 +10370,7 @@ impl<'db> LoweringContext<'db> {
             );
             return;
         };
-        let templates = self.planned_generic_apply_type_arg_templates(expr_id, type_args);
+        let templates = self.planned_generic_apply_type_arg_templates(expr_id);
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
             // (pointer-stable identity). Each template is fully concrete, so it
@@ -10642,33 +10461,22 @@ impl<'db> LoweringContext<'db> {
         None
     }
 
-    /// Resolve `GenericApply` AST type args to `TyTemplate`s. A template is
-    /// `is_fully_concrete()` unless the arg references an enclosing generic
-    /// param (then it carries a `TypeArgRef`, resolved at runtime).
-    fn generic_apply_type_arg_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
+    /// The `TyTemplate`s of a `GenericApply`'s written type args, as TIR
+    /// resolved them (its call plan keyed at the apply expression). A
+    /// template is `is_fully_concrete()` unless the arg names an enclosing
+    /// type variable — then it carries a `TypeArgRef`, resolved at runtime.
+    fn planned_generic_apply_type_arg_templates(&mut self, expr_id: AstExprId) -> Vec<TyTemplate> {
+        let plan = self
+            .tir_call_plan(self.expr_metadata_key(expr_id))
+            .cloned()
+            .unwrap_or_else(|| {
+                unreachable!("TIR records a call plan for a generic apply's written type arguments")
+            });
         let generic_params = self.enclosing_generic_params();
-        type_args
+        plan.slots
             .iter()
-            .map(|type_arg| self.type_expr_to_template(type_arg, &generic_params))
+            .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
             .collect()
-    }
-
-    fn planned_generic_apply_type_arg_templates(
-        &mut self,
-        expr_id: AstExprId,
-        type_args: &[AstTypeExpr],
-    ) -> Vec<TyTemplate> {
-        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
-            && !plan.slots.is_empty()
-        {
-            let generic_params = self.enclosing_generic_params();
-            return plan
-                .slots
-                .iter()
-                .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
-                .collect();
-        }
-        self.generic_apply_type_arg_templates(type_args)
     }
 }
 
@@ -10699,13 +10507,8 @@ impl<'db> LoweringContext<'db> {
             attr: TyAttr::default(),
         });
         let unreachable_block = self.builder.create_block();
-        self.builder.call(
-            callee,
-            vec![msg],
-            Place::local(temp),
-            unreachable_block,
-            None,
-        );
+        self.builder
+            .call(callee, vec![msg], Place::local(temp), unreachable_block);
         self.builder.set_current_block(unreachable_block);
         self.builder.unreachable();
         // Start a new block for any code after this (dead code)
@@ -10720,8 +10523,7 @@ impl<'db> LoweringContext<'db> {
             name: Name::new("current"),
         }));
         let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        self.builder.call(callee, Vec::new(), dest, resume, unwind);
+        self.builder.call(callee, Vec::new(), dest, resume);
         self.builder.set_current_block(resume);
     }
 
@@ -10736,9 +10538,8 @@ impl<'db> LoweringContext<'db> {
             attr: TyAttr::default(),
         });
         let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder
-            .call(callee, vec![arg], Place::local(dest), resume, unwind);
+            .call(callee, vec![arg], Place::local(dest), resume);
         self.builder.set_current_block(resume);
     }
 
@@ -10910,12 +10711,11 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         type_name: &TypePath,
-        type_args: &[AstTypeExpr],
         fields: &[baml_compiler2_ast::ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
     ) {
-        let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
+        let type_arg_templates = self.object_class_type_arg_templates(expr_id);
         // Prefer the explicitly written type name. If absent (e.g., when the
         // type is a qualified path like `baml.errors.Io`), fall back to
         // the TIR-inferred type to get the short class name.
@@ -11702,7 +11502,6 @@ impl<'db> LoweringContext<'db> {
             &self.runtime(),
             &generic_params,
         );
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
         let result_ty = self.expr_ty(expr_id);
         let argument_layout = self.call_argument_layout(expr_id, all_args.len() - ntypeargs);
@@ -11714,7 +11513,6 @@ impl<'db> LoweringContext<'db> {
             argument_layout,
             runtime_id_operand,
             result_ty,
-            unwind,
             dest.clone(),
         );
         true
@@ -11752,7 +11550,6 @@ impl<'db> LoweringContext<'db> {
         argument_layout: Option<baml_type::CallLayout>,
         runtime_id: Option<Operand<'db>>,
         result_ty: RuntimeTy,
-        unwind: Option<BlockId>,
         dest: Place,
     ) {
         let resume = self.builder.create_block();
@@ -11771,7 +11568,6 @@ impl<'db> LoweringContext<'db> {
             runtime_id,
             call_dest.clone(),
             resume,
-            unwind,
         );
         self.builder.set_call_layout(argument_layout);
         self.builder.set_current_block(resume);
@@ -12810,10 +12606,10 @@ impl LoweringContext<'_> {
 
             AstStmt::Throw { value } => {
                 let val_op = self.lower_throw_operand(value);
-                // Defers run via the block's unwind landing pads: the throw's PC is inside the
-                // enclosing defer region(s), so the exception table routes it to
-                // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
-                // replay here — that would double-run the defers.
+                // Defers run via the landing pads: the block unwinds to the
+                // innermost armed defer's pad, so the exception table routes
+                // the throw there (BEP-042 Stage 2). We do NOT inline-replay
+                // here — that would double-run the defers.
                 if self.operand_is_marked_rethrow(&val_op) {
                     self.builder.rethrow(val_op);
                 } else {
@@ -12847,12 +12643,14 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
-            AstStmt::Defer { body } => {
-                // BEP-042: register the defer body. It emits NO code here; it is
-                // replayed (re-lowered inline, LIFO) at every exit of the
-                // enclosing scope by `replay_defers_to_depth`, and popped when
-                // the enclosing `lower_scoped_block` truncates `defer_stack`.
-                self.defer_stack.push(body);
+            AstStmt::Defer { .. } => {
+                // A defer is armed by `lower_scoped_block`, which intercepts
+                // it before this dispatch to open its landing-pad region; the
+                // only other statement lowered here is a C-style `for` step,
+                // which the parser never produces as a `defer`.
+                unreachable!(
+                    "a `defer` statement is armed by `lower_scoped_block`, not lowered here"
+                )
             }
 
             AstStmt::Assign { target, value } => {
@@ -12896,13 +12694,8 @@ impl LoweringContext<'_> {
                     attr: TyAttr::default(),
                 });
                 let unreachable_block = self.builder.create_block();
-                self.builder.call(
-                    callee,
-                    vec![msg],
-                    Place::local(temp),
-                    unreachable_block,
-                    None,
-                );
+                self.builder
+                    .call(callee, vec![msg], Place::local(temp), unreachable_block);
                 self.builder.set_current_block(unreachable_block);
                 self.builder.unreachable();
                 let dead = self.builder.create_block();
@@ -14524,7 +14317,6 @@ impl<'db> LoweringContext<'db> {
             end
         };
         let target = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder.call(
             Operand::Constant(Constant::Function(ItemRef::Method {
                 package: Name::new("baml"),
@@ -14539,7 +14331,6 @@ impl<'db> LoweringContext<'db> {
             ],
             Place::local(rest_local),
             target,
-            unwind,
         );
         self.builder.set_current_block(target);
         rest_local
@@ -15457,7 +15248,6 @@ impl LoweringContext<'_> {
         }
 
         let bb_join = self.builder.create_block();
-        let bb_handler = self.builder.create_block();
 
         // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
         // shows up in bytecode instead of an anonymous `_N` temp. Only do this
@@ -15496,6 +15286,14 @@ impl LoweringContext<'_> {
                 )
             });
 
+        // The handler block: the VM lands in it with the error (and context)
+        // locals. Created under the outer handler, like `bb_join`, so neither
+        // is protected by this catch.
+        let bb_handler = self.builder.create_handler_block(Landing {
+            error_local,
+            context_local: stack_trace_local,
+        });
+
         let clause_bindings: Vec<ClauseBindings> = clauses
             .iter()
             .map(|clause| {
@@ -15527,43 +15325,15 @@ impl LoweringContext<'_> {
             .iter()
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
 
-        // Record the catch region (always one handler, one exception table entry).
-        // `handler_body` is filled in after the arms are lowered (below): the
-        // blocks created while lowering the arms ARE the handler body, and they
-        // can be laid out non-contiguously, so `[handler, join)` is not enough.
-        let body_entry = self.builder.current_block();
-        let catch_region_idx = self.builder.catch_regions.len();
-        self.builder.catch_regions.push(CatchRegion {
-            body_entry,
-            handler: bb_handler,
-            handler_body: vec![bb_handler],
-            // Filled in after the try body is lowered (below).
-            body_blocks: Vec::new(),
-            error_local,
-            stack_trace_local,
-        });
-
-        let prev_catch = self.catch_context.take();
-        self.catch_context = Some(CatchContext {
-            unwind_target: bb_handler,
-            error_local,
-        });
-
-        // Lower the try body. Block IDs are dense, so the index window around
-        // the lowering captures exactly the blocks the protected body created
-        // (`bb_join`/`bb_handler` predate the window and stay out). `body_entry`
-        // itself is included for parity with the old `[body_entry_pc, ...)`
-        // range — it can hold instructions from before the catch expression.
-        let body_blocks_lo = self.builder.num_blocks();
+        // The try body unwinds to `bb_handler`; what follows the catch
+        // expression unwinds to the outer handler again.
+        let outer_unwind = self.builder.unwind();
+        self.builder.transition_unwind(Some(bb_handler));
         self.lower_expr(base, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
-        self.builder.catch_regions[catch_region_idx].body_blocks = std::iter::once(body_entry)
-            .chain((body_blocks_lo..self.builder.num_blocks()).map(BlockId))
-            .collect();
-
-        self.catch_context = prev_catch;
+        self.builder.transition_unwind(outer_unwind);
 
         // Before the wildcard arm (if any), insert a throw_if_panic guard to
         // prevent the wildcard from swallowing panics the programmer didn't
@@ -15577,10 +15347,12 @@ impl LoweringContext<'_> {
             .iter()
             .map(|(arm, _, _)| (arm.pattern, arm.body, None))
             .collect();
-        // Everything created from here until the join belongs to the handler
-        // body (the arms), captured into the catch region for the cause chain.
-        let arm_blocks_lo = self.builder.num_blocks();
-        self.builder.set_current_block(bb_handler);
+        // The arms are lowered out of line in `bb_handler`, unwinding to the
+        // outer handler, as this catch's handler body: a throw in an arm is
+        // "during handling of" the caught error (the cause chain).
+        let arms_out_of_line =
+            self.builder
+                .begin_out_of_line(bb_handler, outer_unwind, Some(bb_handler));
         let switch_rethrow_mark = self.catch_rethrow_locals.len();
         if let [clause] = clause_bindings.as_slice() {
             let error_copy = install_clause_bindings(self, error_local, stack_trace_local, clause);
@@ -15601,9 +15373,7 @@ impl LoweringContext<'_> {
             );
         self.catch_rethrow_locals.truncate(switch_rethrow_mark);
         if lowered_as_switch {
-            self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
-                .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
-                .collect();
+            self.builder.end_out_of_line(arms_out_of_line);
             self.builder.set_current_block(bb_join);
             return;
         }
@@ -15666,9 +15436,7 @@ impl LoweringContext<'_> {
             }
         }
 
-        self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
-            .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
-            .collect();
+        self.builder.end_out_of_line(arms_out_of_line);
         self.builder.set_current_block(bb_join);
     }
 }
@@ -15795,6 +15563,9 @@ fn lower_function_impl<'db>(
                     terminator: Some(Terminator::Unreachable),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 }],
                 entry: BlockId(0),
                 locals: (0..=arity)
@@ -15808,7 +15579,6 @@ fn lower_function_impl<'db>(
                         scope_span: None,
                     })
                     .collect(),
-                catch_regions: vec![],
             }),
             lambdas: vec![],
             signature: None,

@@ -950,7 +950,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.patch_jumps();
         self.patch_jump_tables();
 
-        // 4. Build exception table from MIR catch regions
+        // 4. Build exception table from the blocks' handler edges
         self.build_exception_table(mir);
 
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
@@ -2680,120 +2680,114 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    /// Build the bytecode exception table from MIR catch regions.
+    /// Build the bytecode exception table from the blocks' handler edges.
     ///
-    /// Each `CatchRegion` contributes the exact PC ranges of its protected
-    /// `body_blocks` (coalesced where the layout made them contiguous), NOT a
-    /// single `[body_entry_pc, handler_pc)` span. A span-based table is only
-    /// correct if the layout places every protected block before the handler
-    /// and every unprotected block outside the span — reverse-postorder
-    /// guarantees neither (a direct-throw block is a CFG leaf that sinks past
-    /// the handler; a panic-capable call-free block has no unwind edge to
-    /// anchor it), and both escaped their `catch` before this was made exact.
+    /// Every block names the handler a throw or panic inside it unwinds to
+    /// (`BasicBlock::unwind`), so each block contributes one entry over its
+    /// exact PC range (adjacent ranges to the same handler are coalesced).
+    /// Coverage therefore does not depend on layout: a direct-throw block
+    /// that sinks past its handler, or a call-free panic-capable block with
+    /// no unwind edge to anchor it, is covered by its own range. Entries
+    /// never overlap — a block has one handler — so the VM's innermost-entry
+    /// selection has exactly one candidate at any PC.
     ///
-    /// Nested regions overlap: the protected PC set of an inner region is a
-    /// subset of every enclosing region's (inner windows nest inside outer
-    /// windows at lowering). The VM picks the innermost covering entry —
-    /// largest `start_pc`, then smallest `end_pc`, then latest table order —
-    /// which subset-nesting makes unambiguous: the inner region's coalesced
-    /// range around any PC is contained in the outer's, and for byte-identical
-    /// ranges the stable sort below preserves `catch_regions` creation order
-    /// (always outer before inner), so the last matching entry is the inner
-    /// handler.
+    /// `BasicBlock::handling` gives one `HandlerContextEntry` per block the
+    /// same way, for the BEP-042 cause chain: a throw there is "during
+    /// handling of" the error whose context lives in that handler's landing.
     fn build_exception_table(&mut self, mir: &MirFunctionBody<'ctx>) {
         use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
-        for region in &mir.catch_regions {
-            let handler = self.analysis.resolve_jump_target(region.handler);
-
-            let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
-                unreachable!(
-                    "exception table: handler block {handler:?} has no PC address — \
-                     catch region was emitted but its handler block was dropped"
-                )
-            });
-            // If the error local was optimized away (e.g. an inline
-            // `throw X catch ...` that the MIR lowers as a direct jump),
-            // the catch region doesn't need a VM-level exception table entry.
-            let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
-                log::debug!(
-                    "exception table: error local {:?} has no slot (optimized away)",
-                    region.error_local,
-                );
+        // (start, end, handler) per emitted, non-empty block.
+        let mut protected: Vec<(usize, usize, BlockId)> = Vec::new();
+        let mut handling: Vec<(usize, usize, BlockId)> = Vec::new();
+        for block in &mir.blocks {
+            let (Some(&start), Some(&end)) = (
+                self.block_addresses.get(&block.id),
+                self.block_end_addresses.get(&block.id),
+            ) else {
+                continue; // block dropped by layout / DCE
+            };
+            if start >= end {
+                continue; // empty block — nothing to cover
+            }
+            if let Some(handler) = block.unwind {
+                protected.push((start, end, handler));
+            }
+            if let Some(handler) = block.handling {
+                handling.push((start, end, handler));
+            }
+        }
+        protected.sort_unstable_by_key(|&(start, end, _)| (start, end));
+        let mut coalesced: Vec<(usize, usize, BlockId)> = Vec::new();
+        for (start, end, handler) in protected {
+            match coalesced.last_mut() {
+                Some(last) if last.2 == handler && start <= last.1 => last.1 = last.1.max(end),
+                _ => coalesced.push((start, end, handler)),
+            }
+        }
+        for (start_pc, end_pc, handler) in coalesced {
+            let Some((handler_pc, error_slot, stack_trace_slot)) = self.landing_slots(mir, handler)
+            else {
                 continue;
             };
-
-            let stack_trace_slot = region
-                .stack_trace_local
-                .and_then(|local| self.local_slots.get(&local).copied())
-                .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
-
-            // BEP-042 cause chain: a throw inside the handler body is "during
-            // handling of" this catch's error. The handler body is the union of
-            // the arm blocks (or defer-pad body blocks) captured at lowering;
-            // the layout can fragment them across non-contiguous PCs. Emit one
-            // `HandlerContextEntry` per block so the coverage is exact — a
-            // single `[handler_pc, max_end)` span would over-cover the gaps
-            // between fragments and mis-chain a throw laid out there. An empty
-            // or fully-dropped body contributes no entries and never chains.
-            for &block in &region.handler_body {
-                let (Some(&block_start), Some(&block_end)) = (
-                    self.block_addresses.get(&block),
-                    self.block_end_addresses.get(&block),
-                ) else {
-                    continue; // block dropped by layout / DCE
-                };
-                if block_start >= block_end {
-                    continue; // empty block — nothing to cover
-                }
-                self.bytecode
-                    .handler_context_table
-                    .push(HandlerContextEntry {
-                        start_pc: block_start,
-                        end_pc: block_end,
-                        handler_pc,
-                        stack_trace_slot,
-                    });
-            }
-
-            // Exact protected coverage: one PC range per protected block,
-            // merged where the layout put member blocks back-to-back. Blocks
-            // dropped by layout/DCE have no addresses and nothing to protect;
-            // gaps between member fragments (e.g. an interleaved handler or
-            // post-join block) stay uncovered by construction.
-            let mut ranges: Vec<(usize, usize)> = region
-                .body_blocks
-                .iter()
-                .filter_map(|&block| {
-                    let &block_start = self.block_addresses.get(&block)?;
-                    let &block_end = self.block_end_addresses.get(&block)?;
-                    (block_start < block_end).then_some((block_start, block_end))
-                })
-                .collect();
-            ranges.sort_unstable();
-            let mut coalesced: Vec<(usize, usize)> = Vec::new();
-            for (start, end) in ranges {
-                match coalesced.last_mut() {
-                    Some(last) if start <= last.1 => last.1 = last.1.max(end),
-                    _ => coalesced.push((start, end)),
-                }
-            }
-            for (start_pc, end_pc) in coalesced {
-                self.bytecode.exception_table.push(ExceptionTableEntry {
+            self.bytecode.exception_table.push(ExceptionTableEntry {
+                start_pc,
+                end_pc,
+                handler_pc,
+                error_slot,
+                stack_trace_slot,
+            });
+        }
+        for (start_pc, end_pc, handler) in handling {
+            let Some((handler_pc, _, stack_trace_slot)) = self.landing_slots(mir, handler) else {
+                continue;
+            };
+            self.bytecode
+                .handler_context_table
+                .push(HandlerContextEntry {
                     start_pc,
                     end_pc,
                     handler_pc,
-                    error_slot,
                     stack_trace_slot,
                 });
-            }
         }
-
-        // Stable sort by start_pc: the VM selects the innermost covering entry
-        // by (largest start_pc, smallest end_pc, latest table order); stability
-        // keeps outer-before-inner creation order for byte-identical ranges so
-        // "latest" resolves to the inner handler (see the function doc).
         self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    }
+
+    /// Where the VM lands for `handler`: its PC and the slots of its error
+    /// and context locals. `None` when the error local was optimized away
+    /// (an inline `throw X catch …` the MIR lowers as a direct jump needs no
+    /// VM-level entry).
+    fn landing_slots(
+        &self,
+        mir: &MirFunctionBody<'ctx>,
+        handler: BlockId,
+    ) -> Option<(usize, usize, usize)> {
+        use bex_vm_types::bytecode::ExceptionTableEntry;
+
+        let landing = mir
+            .block(handler)
+            .landing
+            .unwrap_or_else(|| unreachable!("{handler:?} is not a handler block"));
+        let resolved = self.analysis.resolve_jump_target(handler);
+        let &handler_pc = self.block_addresses.get(&resolved).unwrap_or_else(|| {
+            unreachable!(
+                "exception table: handler block {handler:?} has no PC address — \
+                 a block unwinds to it but it was dropped"
+            )
+        });
+        let Some(&error_slot) = self.local_slots.get(&landing.error_local) else {
+            log::debug!(
+                "exception table: error local {:?} has no slot (optimized away)",
+                landing.error_local,
+            );
+            return None;
+        };
+        let stack_trace_slot = landing
+            .context_local
+            .and_then(|local| self.local_slots.get(&local).copied())
+            .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
+        Some((handler_pc, error_slot, stack_trace_slot))
     }
 
     // ========================================================================
@@ -3898,7 +3892,6 @@ mod tests {
             blocks: vec![entry, then_block, unreachable_else, return_block],
             entry: BlockId(0),
             locals: vec![local(RuntimeTy::int()), local(RuntimeTy::bool())],
-            catch_regions: Vec::new(),
         };
 
         let globals = HashMap::new();

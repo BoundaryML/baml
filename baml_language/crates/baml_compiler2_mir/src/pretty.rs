@@ -140,7 +140,21 @@ fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> f
 }
 
 fn write_block(f: &mut impl Write, block: &BasicBlock<'_>) -> fmt::Result {
-    writeln!(f, "    {}: {{", block.id)?;
+    write!(f, "    {}", block.id)?;
+    if let Some(landing) = block.landing {
+        write!(f, " [landing {}", landing.error_local)?;
+        if let Some(context) = landing.context_local {
+            write!(f, ", {context}")?;
+        }
+        write!(f, "]")?;
+    }
+    if let Some(unwind) = block.unwind {
+        write!(f, " [unwind {unwind}]")?;
+    }
+    if let Some(handling) = block.handling {
+        write!(f, " [handling {handling}]")?;
+    }
+    writeln!(f, ": {{")?;
 
     for stmt in &block.statements {
         write!(f, "        ")?;

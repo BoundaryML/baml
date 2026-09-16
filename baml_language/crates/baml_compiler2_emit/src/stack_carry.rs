@@ -270,7 +270,7 @@ fn is_stack_carry_use_safe(
 
     let single_entry = |from, to| {
         to != body.entry
-            && !body.catch_regions.iter().any(|region| region.handler == to)
+            && !body.is_handler(to)
             && predecessors
                 .get(&to)
                 .is_some_and(|preds| preds.as_slice() == [from])
@@ -1735,10 +1735,12 @@ mod tests {
                 terminator: Some(Terminator::Return),
                 span: None,
                 terminator_span: None,
+                unwind: None,
+                handling: None,
+                landing: None,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
-            catch_regions: vec![],
         }
     }
 

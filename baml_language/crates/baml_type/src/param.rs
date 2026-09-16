@@ -95,13 +95,6 @@ impl RuntimeGenericLayout {
             .map(Self::slot_index)
     }
 
-    pub fn slot_by_name(&self, name: &Name) -> Option<u32> {
-        self.params
-            .iter()
-            .rposition(|param| param.name() == name)
-            .map(Self::slot_index)
-    }
-
     pub fn slots(&self) -> impl Iterator<Item = u32> + '_ {
         (0..self.params.len()).map(Self::slot_index)
     }
@@ -122,7 +115,8 @@ mod tests {
         let layout = RuntimeGenericLayout::new(&[outer.clone(), inner.clone()]);
 
         assert_ne!(outer, inner);
-        assert_eq!(layout.slot_by_name(&Name::new("E")), Some(1));
+        assert_eq!(layout.slot(&outer), Some(0));
+        assert_eq!(layout.slot(&inner), Some(1));
     }
 
     #[test]

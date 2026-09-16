@@ -30,7 +30,7 @@ use baml_base::{Name, Span};
 use baml_type::{RuntimeTy, TyTemplate};
 
 use crate::{
-    BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
+    BasicBlock, BlockId, Constant, ItemRef, Landing, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator,
 };
 
@@ -44,8 +44,26 @@ pub(crate) struct MirBuilder<'db> {
     span: Option<Span>,
     /// Current source span for tagging statements/terminators.
     pub(crate) current_source_span: Option<Span>,
-    /// Catch regions recorded during lowering for exception table construction.
-    pub(crate) catch_regions: Vec<CatchRegion>,
+    /// The handler a throw or panic at the current lowering position unwinds
+    /// to: the innermost enclosing `catch` handler or `defer` landing pad.
+    /// Every block is stamped with it at creation (`BasicBlock::unwind`), and
+    /// changing it moves lowering to a fresh block (`transition_unwind`), so
+    /// a block is always a maximal run of code under one handler. Every
+    /// append checks that the current block was created under the value in
+    /// force, so code can never land in a block whose handler differs from
+    /// the position it was lowered at.
+    current_unwind: Option<BlockId>,
+    /// The innermost handler whose body is being lowered
+    /// (`BasicBlock::handling`), stamped the same way.
+    current_handling: Option<BlockId>,
+}
+
+/// Where lowering was before it moved out of line to fill a handler block;
+/// [`MirBuilder::end_out_of_line`] returns there.
+pub(crate) struct OutOfLine {
+    block: BlockId,
+    unwind: Option<BlockId>,
+    handling: Option<BlockId>,
 }
 
 // Some builder utilities are not yet used but will be needed as MIR 2 matures.
@@ -61,7 +79,8 @@ impl<'db> MirBuilder<'db> {
             current_block: None,
             span: None,
             current_source_span: None,
-            catch_regions: Vec::new(),
+            current_unwind: None,
+            current_handling: None,
         }
     }
 
@@ -168,10 +187,14 @@ impl<'db> MirBuilder<'db> {
     // Block Management
     // ========================================================================
 
-    /// Create a new basic block and return its ID.
+    /// Create a new basic block and return its ID. It unwinds to the handler
+    /// in force here and belongs to the handler body being lowered.
     pub(crate) fn create_block(&mut self) -> BlockId {
         let id = BlockId(self.blocks.len());
-        self.blocks.push(BasicBlock::new(id));
+        let mut block = BasicBlock::new(id);
+        block.unwind = self.current_unwind;
+        block.handling = self.current_handling;
+        self.blocks.push(block);
         id
     }
 
@@ -210,12 +233,128 @@ impl<'db> MirBuilder<'db> {
     }
 
     // ========================================================================
+    // Handlers
+    // ========================================================================
+
+    /// The handler the current lowering position unwinds to.
+    pub(crate) fn unwind(&self) -> Option<BlockId> {
+        self.current_unwind
+    }
+
+    /// Create a handler block: the VM lands in it with `landing`, and it is
+    /// the first block of its own handler body. It unwinds to the handler in
+    /// force where it is created — never to itself.
+    pub(crate) fn create_handler_block(&mut self, landing: Landing) -> BlockId {
+        let id = self.create_block();
+        let block = &mut self.blocks[id.0];
+        block.landing = Some(landing);
+        block.handling = Some(id);
+        id
+    }
+
+    /// What the VM lands in `handler` with.
+    pub(crate) fn landing(&self, handler: BlockId) -> Landing {
+        self.blocks[handler.0]
+            .landing
+            .unwrap_or_else(|| unreachable!("{handler:?} is not a handler block"))
+    }
+
+    /// Lower what follows with `unwind` as its handler. Live code needs a
+    /// block created under the new handler, so the current block (created
+    /// under the old one) is left with a `goto` to a fresh block, which
+    /// becomes current. A current block that is still empty simply takes the
+    /// new handler: everything lowered into it will run under it. A
+    /// terminated current block needs nothing, the caller moves away from
+    /// it. A `catch` opens with its handler over the try body and closes with
+    /// the outer value; a `defer` opens with its pad over the rest of the
+    /// block; an inline replay retreats to the value its defer was armed
+    /// under and comes back.
+    pub(crate) fn transition_unwind(&mut self, unwind: Option<BlockId>) {
+        if self.current_unwind == unwind {
+            return;
+        }
+        if let Some(handler) = unwind {
+            assert!(
+                self.blocks[handler.0].landing.is_some(),
+                "{handler:?} is not a handler block: nothing can unwind to it"
+            );
+        }
+        if self.is_current_terminated() {
+            self.current_unwind = unwind;
+            return;
+        }
+        let current = self.current_block();
+        if self.blocks[current.0].statements.is_empty() {
+            self.blocks[current.0].unwind = unwind;
+            self.current_unwind = unwind;
+            return;
+        }
+        // The goto belongs to the block it leaves, under the old handler.
+        let fresh = BlockId(self.blocks.len());
+        self.set_terminator(Terminator::Goto { target: fresh });
+        self.current_unwind = unwind;
+        let created = self.create_block();
+        debug_assert_eq!(created, fresh);
+        self.current_block = Some(fresh);
+    }
+
+    /// Fill `block` (a handler created earlier) with `unwind` as its handler
+    /// and `handling` as the handler body it is part of, leaving the current
+    /// block where it is; the returned token brings lowering back to it.
+    pub(crate) fn begin_out_of_line(
+        &mut self,
+        block: BlockId,
+        unwind: Option<BlockId>,
+        handling: Option<BlockId>,
+    ) -> OutOfLine {
+        let out_of_line = OutOfLine {
+            block: self.current_block(),
+            unwind: self.current_unwind,
+            handling: self.current_handling,
+        };
+        self.current_block = Some(block);
+        self.current_unwind = unwind;
+        self.current_handling = handling;
+        out_of_line
+    }
+
+    /// Return from [`Self::begin_out_of_line`].
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the token is consumed so lowering cannot return to the same place twice"
+    )]
+    pub(crate) fn end_out_of_line(&mut self, out_of_line: OutOfLine) {
+        self.current_block = Some(out_of_line.block);
+        self.current_unwind = out_of_line.unwind;
+        self.current_handling = out_of_line.handling;
+    }
+
+    // ========================================================================
     // Statement Emission
     // ========================================================================
 
     fn current_block_mut(&mut self) -> &mut BasicBlock<'db> {
+        self.check_current_protection();
         let id = self.current_block.expect("no current block set");
         &mut self.blocks[id.0]
+    }
+
+    /// The current block must have been created under the handler in force:
+    /// a block's handler is fixed at creation, so lowering code into it from
+    /// a position with a different handler would give that code the wrong
+    /// one.
+    fn check_current_protection(&self) {
+        let id = self.current_block.expect("no current block set");
+        let block = &self.blocks[id.0];
+        assert!(
+            block.unwind == self.current_unwind && block.handling == self.current_handling,
+            "{id:?} was created unwinding to {:?} (handling {:?}) but code is being lowered \
+             into it unwinding to {:?} (handling {:?})",
+            block.unwind,
+            block.handling,
+            self.current_unwind,
+            self.current_handling,
+        );
     }
 
     /// Push a statement to the current block.
@@ -392,9 +531,8 @@ impl<'db> MirBuilder<'db> {
         args: Vec<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
-        self.call_with_type_args(callee, args, 0, destination, target, unwind);
+        self.call_with_type_args(callee, args, 0, destination, target);
     }
 
     /// Emit a function call with an explicit type-argument count.
@@ -408,21 +546,11 @@ impl<'db> MirBuilder<'db> {
         ntypeargs: usize,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
-        self.call_with_type_args_and_runtime_id(
-            callee,
-            args,
-            ntypeargs,
-            None,
-            destination,
-            target,
-            unwind,
-        );
+        self.call_with_type_args_and_runtime_id(callee, args, ntypeargs, None, destination, target);
     }
 
     /// Emit a function call with an optional hidden runtime-id operand.
-    #[expect(clippy::too_many_arguments)]
     pub(crate) fn call_with_type_args_and_runtime_id(
         &mut self,
         callee: Operand<'db>,
@@ -431,7 +559,6 @@ impl<'db> MirBuilder<'db> {
         runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
@@ -445,7 +572,7 @@ impl<'db> MirBuilder<'db> {
             runtime_id,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
@@ -468,7 +595,6 @@ impl<'db> MirBuilder<'db> {
     /// resolved at runtime from the receiver's concrete type (the first `args`
     /// entry) against `iface`. Used for statically-undetermined receivers
     /// (bounded type-var / interface-existential / `Self` in a default body).
-    #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
         iface: baml_type::TyTemplateInterface,
@@ -477,7 +603,6 @@ impl<'db> MirBuilder<'db> {
         ntypeargs: usize,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         self.virtual_call_with_runtime_id(
             iface,
@@ -487,7 +612,6 @@ impl<'db> MirBuilder<'db> {
             None,
             destination,
             target,
-            unwind,
         );
     }
 
@@ -503,7 +627,6 @@ impl<'db> MirBuilder<'db> {
         runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
@@ -522,7 +645,7 @@ impl<'db> MirBuilder<'db> {
             runtime_id,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
@@ -556,9 +679,8 @@ impl<'db> MirBuilder<'db> {
         args: Vec<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
-        self.sys_op_with_runtime_id(callee, args, None, destination, target, unwind);
+        self.sys_op_with_runtime_id(callee, args, None, destination, target);
     }
 
     /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
@@ -569,7 +691,6 @@ impl<'db> MirBuilder<'db> {
         runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
-        unwind: Option<BlockId>,
     ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
@@ -581,18 +702,12 @@ impl<'db> MirBuilder<'db> {
             runtime_id,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
     /// Emit an await.
-    pub(crate) fn await_(
-        &mut self,
-        future: Place,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
+    pub(crate) fn await_(&mut self, future: Place, destination: Place, target: BlockId) {
         debug_assert!(
             matches!(future, Place::Local(_)),
             "Await future place must be local"
@@ -605,19 +720,13 @@ impl<'db> MirBuilder<'db> {
             future,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
     /// BEP-034: emit an `await_any` terminator — suspend until the first of
     /// the `futures` array settles and bind its `int` index into `destination`.
-    pub(crate) fn await_any(
-        &mut self,
-        futures: Operand<'db>,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
+    pub(crate) fn await_any(&mut self, futures: Operand<'db>, destination: Place, target: BlockId) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "AwaitAny destination must be a local place"
@@ -626,7 +735,7 @@ impl<'db> MirBuilder<'db> {
             futures,
             destination,
             target,
-            unwind,
+            unwind: self.current_unwind,
         });
     }
 
@@ -699,6 +808,7 @@ impl<'db> MirBuilder<'db> {
     /// it with the real fully-qualified reference after calling `build()`.
     pub(crate) fn build(self) -> MirFunction<'db> {
         assert!(!self.blocks.is_empty(), "function has no blocks");
+        self.assert_regions_closed();
 
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
@@ -716,7 +826,6 @@ impl<'db> MirBuilder<'db> {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                catch_regions: self.catch_regions.clone(),
             }),
             lambdas: vec![],
             signature: None,
@@ -729,6 +838,7 @@ impl<'db> MirBuilder<'db> {
     /// `arity` and `item_ref` context externally.
     pub(crate) fn build_body(self) -> MirFunctionBody<'db> {
         assert!(!self.blocks.is_empty(), "let body has no blocks");
+        self.assert_regions_closed();
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
         }
@@ -736,8 +846,16 @@ impl<'db> MirBuilder<'db> {
             blocks: self.blocks,
             entry: BlockId(0),
             locals: self.locals,
-            catch_regions: self.catch_regions,
         }
+    }
+
+    fn assert_regions_closed(&self) {
+        assert!(
+            self.current_unwind.is_none() && self.current_handling.is_none(),
+            "a handler ({:?}, handling {:?}) is still in force at build",
+            self.current_unwind,
+            self.current_handling,
+        );
     }
 
     /// Build without checking termination (for incremental construction).
@@ -757,7 +875,6 @@ impl<'db> MirBuilder<'db> {
                 blocks: self.blocks,
                 entry: BlockId(0),
                 locals: self.locals,
-                catch_regions: self.catch_regions.clone(),
             }),
             lambdas: vec![],
             signature: None,

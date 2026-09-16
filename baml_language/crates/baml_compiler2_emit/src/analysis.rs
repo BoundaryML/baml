@@ -256,23 +256,17 @@ fn build_predecessors(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockI
     build_predecessors_with(body, &|block| successors_of(body, block))
 }
 
-/// The catch handler(s) each protected block can land in.
+/// The catch handler each block can land in (`BasicBlock::unwind`).
 ///
 /// A throwing call reaches its handler through the terminator's `unwind`
 /// edge, but a call-free trap (division, indexing) reaches it through the
 /// exception table with no CFG edge at all. Any walk that must see every
 /// path a value can take from a definition to a use has to add these edges.
 fn catch_handlers_of(body: &MirFunctionBody<'_>) -> HashMap<BlockId, Vec<BlockId>> {
-    let mut handlers_of: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
-    for region in &body.catch_regions {
-        for &protected in &region.body_blocks {
-            handlers_of
-                .entry(protected)
-                .or_default()
-                .push(region.handler);
-        }
-    }
-    handlers_of
+    body.blocks
+        .iter()
+        .filter_map(|block| block.unwind.map(|handler| (block.id, vec![handler])))
+        .collect()
 }
 
 /// The terminator successors of `block` plus the handlers a trap inside it
@@ -296,9 +290,8 @@ fn successors_with_handlers(
 struct TrapCfg {
     handlers_of: HashMap<BlockId, Vec<BlockId>>,
     predecessors: HashMap<BlockId, Vec<BlockId>>,
-    /// The catch regions each block's code is protected by, as sorted region
-    /// indices: two blocks with the same list unwind to the same handler.
-    regions_of: HashMap<BlockId, Vec<usize>>,
+    /// The handler each block unwinds to, by block index.
+    unwind_of: Vec<Option<BlockId>>,
 }
 
 impl TrapCfg {
@@ -307,23 +300,16 @@ impl TrapCfg {
         let predecessors = build_predecessors_with(body, &|block| {
             successors_with_handlers(body, &handlers_of, block)
         });
-        let mut regions_of: HashMap<BlockId, Vec<usize>> = HashMap::new();
-        for (index, region) in body.catch_regions.iter().enumerate() {
-            for &block in &region.body_blocks {
-                regions_of.entry(block).or_default().push(index);
-            }
-        }
         Self {
             handlers_of,
             predecessors,
-            regions_of,
+            unwind_of: body.blocks.iter().map(|block| block.unwind).collect(),
         }
     }
 
     /// Whether a trap in `a` and a trap in `b` reach the same handler.
     fn same_handler(&self, a: BlockId, b: BlockId) -> bool {
-        self.regions_of.get(&a).map_or(&[][..], Vec::as_slice)
-            == self.regions_of.get(&b).map_or(&[][..], Vec::as_slice)
+        self.unwind_of[a.0] == self.unwind_of[b.0]
     }
 
     fn successors(&self, body: &MirFunctionBody<'_>, block: BlockId) -> Vec<BlockId> {
@@ -402,13 +388,8 @@ fn compute_rpo_with(
     // edge) so they are emitted at all; they land after all entry-reachable
     // blocks in the reversed RPO.
     let mut handler_postorder = Vec::new();
-    for region in &body.catch_regions {
-        rpo_dfs(
-            successors,
-            region.handler,
-            &mut visited,
-            &mut handler_postorder,
-        );
+    for (handler, _) in body.handlers() {
+        rpo_dfs(successors, handler, &mut visited, &mut handler_postorder);
     }
     handler_postorder.append(&mut postorder);
 
@@ -740,12 +721,12 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
     // it from an *enclosing* handler — uses the static walk can't see. Mark it
     // used so it isn't classified Dead and always gets a slot, even when the
     // `ctx` binding looks statically dead.
-    for region in &body.catch_regions {
-        if let Some(ctx_local) = region.stack_trace_local
+    for (handler, landing) in body.handlers() {
+        if let Some(ctx_local) = landing.context_local
             && let Some(du) = def_use.get_mut(&ctx_local)
         {
             du.uses.push(UseLocation {
-                block: region.handler,
+                block: handler,
                 statement_ref: StatementRef::Terminator,
             });
         }
@@ -1674,7 +1655,7 @@ fn predecessors_cover_block(
     //
     // - `entry`, on every call of the function. A CFG predecessor set can look
     //   complete for it if the entry block is also a loop header.
-    // - a catch region's handler, when the VM unwinds into it. A call's
+    // - a handler block, when the VM unwinds into it. A call's
     //   `unwind` target is a `successors` edge, but a same-frame panic — an
     //   overflowing `add_int`, a division by zero — reaches the handler from
     //   the middle of a block, with no edge at all. `compute_rpo` has to seed
@@ -1684,12 +1665,7 @@ fn predecessors_cover_block(
     // Only the block being *covered* is refused. A handler that is itself a
     // predecessor stays fine: it reaches its successor over a real edge, having
     // pushed the value like any other predecessor.
-    if block == body.entry
-        || body
-            .catch_regions
-            .iter()
-            .any(|region| region.handler == block)
-    {
+    if block == body.entry || body.is_handler(block) {
         return false;
     }
 
@@ -2200,7 +2176,7 @@ fn is_call_like_result_local(local: Local, du: &LocalDefUse, body: &MirFunctionB
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, CatchRegion, CellId, Constant, LocalDecl, MirFunctionBody, Operand, Place,
+        BasicBlock, CellId, Constant, Landing, LocalDecl, MirFunctionBody, Operand, Place,
         Statement, Terminator,
     };
     use baml_type::{RuntimeTy, TyAttr};
@@ -2253,6 +2229,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -2272,11 +2251,13 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             entry: BlockId(0),
             locals: vec![],
-            catch_regions: vec![],
         };
         let du = LocalDefUse {
             def: Some(DefLocation {
@@ -2318,6 +2299,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -2343,11 +2327,13 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             entry: BlockId(0),
             locals: vec![],
-            catch_regions: vec![],
         };
         let du = LocalDefUse {
             def: Some(DefLocation {
@@ -2411,6 +2397,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -2424,6 +2413,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -2431,6 +2423,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(3) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(3),
@@ -2438,6 +2433,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(4) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 return_local_block(BlockId(4), destination),
             ],
@@ -2481,6 +2479,9 @@ mod tests {
             terminator: Some(Terminator::Return),
             span: None,
             terminator_span: None,
+            unwind: None,
+            handling: None,
+            landing: None,
         }
     }
 
@@ -2489,7 +2490,6 @@ mod tests {
             blocks,
             entry: BlockId(0),
             locals: vec![bool_local_decl(None), bool_local_decl(name)],
-            catch_regions: vec![],
         }
     }
 
@@ -2515,6 +2515,9 @@ mod tests {
             terminator: Some(terminator),
             span: None,
             terminator_span: None,
+            unwind: None,
+            handling: None,
+            landing: None,
         }
     }
 
@@ -2591,7 +2594,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![int_local_decl(None), int_local_decl(None)],
-            catch_regions: vec![],
         }
     }
 
@@ -2632,7 +2634,6 @@ mod tests {
                 int_local_decl(None),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         };
         assert_eq!(
             analyzed_classification(&body, Local(1)),
@@ -2662,7 +2663,6 @@ mod tests {
                 int_local_decl(None),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         };
         assert_eq!(
             analyzed_classification(&body, Local(1)),
@@ -2675,7 +2675,7 @@ mod tests {
     /// lands there through the exception table and the use runs afterwards.
     #[test]
     fn a_rebinding_in_a_trap_handler_keeps_the_descriptor_materialized() {
-        let body = MirFunctionBody {
+        let mut body = MirFunctionBody {
             blocks: vec![
                 block(0, vec![bind_type(0), load_type_slot(Local(1), 0)], goto(1)),
                 block(1, vec![], goto(2)),
@@ -2688,15 +2688,8 @@ mod tests {
                 int_local_decl(None),
                 int_local_decl(None),
             ],
-            catch_regions: vec![CatchRegion {
-                body_entry: BlockId(1),
-                handler: BlockId(3),
-                body_blocks: vec![BlockId(1)],
-                handler_body: vec![BlockId(3)],
-                error_local: Local(2),
-                stack_trace_local: None,
-            }],
         };
+        unwinds_to(&mut body, 1, 3, Local(2));
         assert_eq!(
             analyzed_classification(&body, Local(1)),
             LocalClassification::Real
@@ -2750,7 +2743,6 @@ mod tests {
                 captured_int_local_decl(Some("x")),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         }
     }
 
@@ -2797,7 +2789,6 @@ mod tests {
                 int_local_decl(None),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         };
         assert_eq!(
             analyzed_classification(&body, Local(1)),
@@ -2830,7 +2821,6 @@ mod tests {
             ],
             entry: BlockId(0),
             locals: vec![int_local_decl(None), int_local_decl(None)],
-            catch_regions: vec![],
         };
         assert_eq!(
             analyzed_classification(&body, Local(1)),
@@ -2858,7 +2848,6 @@ mod tests {
                 int_local_decl(None),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         };
         let classification =
             AnalysisResult::analyze(&body, 1, OptLevel::One).classifications[&Local(2)];
@@ -2896,7 +2885,6 @@ mod tests {
                 int_local_decl(Some("obj")),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         }
     }
 
@@ -2935,11 +2923,7 @@ mod tests {
             },
             span: None,
         };
-        let mut body_blocks = vec![BlockId(1)];
-        if use_protected {
-            body_blocks.push(BlockId(2));
-        }
-        MirFunctionBody {
+        let mut body = MirFunctionBody {
             blocks: vec![
                 block(0, vec![], goto(1)),
                 block(1, vec![divide], goto(2)),
@@ -2954,21 +2938,34 @@ mod tests {
                 int_local_decl(None),
                 int_local_decl(None),
             ],
-            catch_regions: vec![CatchRegion {
-                body_entry: BlockId(1),
-                handler: BlockId(3),
-                body_blocks,
-                handler_body: vec![BlockId(3)],
-                error_local: Local(4),
-                stack_trace_local: None,
-            }],
+        };
+        unwinds_to(&mut body, 1, 3, Local(4));
+        if use_protected {
+            body.blocks[2].unwind = Some(BlockId(3));
         }
+        body
+    }
+
+    /// Make `bb{handler}` a handler landing the error in `error_local`, and
+    /// `bb{protected}` unwind to it.
+    fn unwinds_to(
+        body: &mut MirFunctionBody<'_>,
+        protected: usize,
+        handler: usize,
+        error_local: Local,
+    ) {
+        body.blocks[handler].landing = Some(Landing {
+            error_local,
+            context_local: None,
+        });
+        body.blocks[handler].handling = Some(BlockId(handler));
+        body.blocks[protected].unwind = Some(BlockId(handler));
     }
 
     /// A trap is delivered to the handler of the block it happens in, so an
-    /// evaluation that can trap does not leave its catch region.
+    /// evaluation that can trap does not leave its handler.
     #[test]
-    fn a_trapping_evaluation_does_not_leave_its_catch_region() {
+    fn a_trapping_evaluation_does_not_leave_its_handler() {
         let body = trapping_read_across_regions(false);
         assert_eq!(
             analyzed_classification(&body, Local(1)),
@@ -2977,7 +2974,7 @@ mod tests {
     }
 
     #[test]
-    fn a_trapping_evaluation_sinks_within_its_catch_region() {
+    fn a_trapping_evaluation_sinks_within_its_handler() {
         let body = trapping_read_across_regions(true);
         assert_eq!(
             analyzed_classification(&body, Local(1)),
@@ -3077,6 +3074,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3090,6 +3090,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3097,6 +3100,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(3) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 return_local_block(BlockId(3), destination),
             ],
@@ -3128,6 +3134,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3141,6 +3150,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3148,6 +3160,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(4) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(3),
@@ -3155,6 +3170,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(4) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 return_local_block(BlockId(4), destination),
             ],
@@ -3186,6 +3204,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3193,6 +3214,9 @@ mod tests {
                     terminator: Some(rhs),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 return_local_block(BlockId(2), destination),
             ],
@@ -3343,6 +3367,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3350,6 +3377,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(0) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3357,6 +3387,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(0) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             Some("x"),
@@ -3377,14 +3410,7 @@ mod tests {
         // handler, so the region is the only reason the answer flips.
         assert!(is_stack_covered(&body, Local(1)));
 
-        body.catch_regions.push(CatchRegion {
-            body_entry: BlockId(0),
-            handler: BlockId(3),
-            body_blocks: vec![BlockId(0)],
-            handler_body: vec![BlockId(3)],
-            error_local: Local(0),
-            stack_trace_local: None,
-        });
+        unwinds_to(&mut body, 0, 3, Local(0));
 
         assert!(!is_stack_covered(&body, Local(1)));
     }
@@ -3406,6 +3432,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3413,6 +3442,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(3) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3420,6 +3452,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(3) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 return_local_block(BlockId(3), destination),
             ],
@@ -3464,6 +3499,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3480,6 +3518,9 @@ mod tests {
                     }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3487,6 +3528,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             entry: BlockId(0),
@@ -3495,7 +3539,6 @@ mod tests {
                 int_list_local_decl(Some("items")),
                 int_local_decl(Some("result")),
             ],
-            catch_regions: vec![],
         };
 
         let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
@@ -3527,6 +3570,9 @@ mod tests {
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3540,6 +3586,9 @@ mod tests {
                     terminator: Some(Terminator::Return),
                     span: None,
                     terminator_span: None,
+                    unwind: None,
+                    handling: None,
+                    landing: None,
                 },
             ],
             entry: BlockId(0),
@@ -3547,7 +3596,6 @@ mod tests {
                 int_list_local_decl(None),
                 int_list_local_decl(Some("items")),
             ],
-            catch_regions: vec![],
         };
 
         let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
@@ -3593,7 +3641,6 @@ mod tests {
                 int_local_decl(Some("n")),
                 int_local_decl(None),
             ],
-            catch_regions: vec![],
         }
     }
 

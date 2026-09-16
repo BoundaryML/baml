@@ -110,7 +110,7 @@ pub struct ClobberModel {
 impl ClobberModel {
     pub fn for_body(body: &MirFunctionBody<'_>) -> Self {
         Self {
-            registers_observed: !body.catch_regions.is_empty(),
+            registers_observed: body.handlers().next().is_some(),
         }
     }
 }
@@ -598,12 +598,10 @@ pub fn terminator_clobbers(model: ClobberModel, terminator: &Terminator<'_>) -> 
 /// receives its error (and context) bindings with no statement saying so.
 pub fn block_entry_clobbers(body: &MirFunctionBody<'_>, block: crate::BlockId) -> Resources {
     let mut out = Resources::default();
-    for region in &body.catch_regions {
-        if region.handler == block {
-            out.locals.insert(region.error_local);
-            if let Some(local) = region.stack_trace_local {
-                out.locals.insert(local);
-            }
+    if let Some(landing) = body.blocks[block.0].landing {
+        out.locals.insert(landing.error_local);
+        if let Some(local) = landing.context_local {
+            out.locals.insert(local);
         }
     }
     out
