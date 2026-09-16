@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect independent CI run snapshots and select a nightly release source."""
+"""Collect CI run data and select a nightly release source."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import datetime as dt
 import json
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 
 CI_WORKFLOW = "CI - BAML Language"
@@ -29,11 +28,6 @@ def command_json(command: list[str]) -> object:
     """Run a command and parse its stdout as JSON."""
     result = subprocess.run(command, check=True, text=True, capture_output=True)
     return json.loads(result.stdout)
-
-
-def write_json(path: Path, value: object) -> None:
-    """Write a stable, human-readable JSON snapshot."""
-    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
 def fetch_recent_runs(repo: str) -> list[dict]:
@@ -185,28 +179,17 @@ def select_candidate(
     )
 
 
-def read_optional_json(path: Path) -> Optional[object]:
-    """Read a JSON snapshot, returning None with a warning when unavailable."""
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        print(f"::warning::Could not read {path}: {exc}")
-        return None
-
-
 def select_with_fallback(
-    recent_path: Path, commits_path: Path, observed_at: dt.datetime
+    recent_runs: list[dict] | None,
+    commit_snapshot: dict,
+    observed_at: dt.datetime,
 ) -> tuple[str, int, str]:
-    """Prefer the recent-run snapshot, then try the per-commit snapshot."""
-    commit_snapshot = read_optional_json(commits_path)
-    if not isinstance(commit_snapshot, dict) or not isinstance(
-        commit_snapshot.get("commits"), list
-    ):
+    """Prefer the recent-run result, then try the per-commit result."""
+    if not isinstance(commit_snapshot.get("commits"), list):
         raise ValueError("per-commit fallback did not produce a valid canary git log")
     commits = commit_snapshot["commits"]
 
     failures = []
-    recent_runs = read_optional_json(recent_path)
     if isinstance(recent_runs, list):
         try:
             sha, run_id = select_candidate(
@@ -243,50 +226,45 @@ def select_with_fallback(
     raise ValueError("; ".join(failures))
 
 
+def collect_and_select(
+    repo: str, checkout: Path, observed_at: dt.datetime
+) -> tuple[str, int, str]:
+    """Always collect both run sources, then select with the primary first."""
+    recent_runs = None
+    try:
+        recent_runs = fetch_recent_runs(repo)
+        print(f"Fetched {len(recent_runs)} recent CI workflow runs.")
+    except (subprocess.CalledProcessError, ValueError) as exc:
+        print(f"::warning::Recent CI workflow run query failed: {exc}")
+
+    commit_snapshot = fetch_commit_runs(repo, checkout)
+    print(
+        f"Queried {len(commit_snapshot['commits'])} canary commits in parallel; "
+        f"found {len(commit_snapshot['runs'])} runs with "
+        f"{len(commit_snapshot['errors'])} query errors."
+    )
+    for error in commit_snapshot["errors"]:
+        print(f"::warning::Run query failed for {error['sha']}: {error['error']}")
+
+    return select_with_fallback(recent_runs, commit_snapshot, observed_at)
+
+
 def main() -> None:
-    """Run one collection or selection phase for the nightly workflow."""
+    """Collect both CI data sources and select the nightly source commit."""
     parser = argparse.ArgumentParser(description=__doc__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    recent = subparsers.add_parser("fetch-recent")
-    recent.add_argument("--repo", required=True)
-    recent.add_argument("--output", required=True, type=Path)
-
-    commits = subparsers.add_parser("fetch-commits")
-    commits.add_argument("--repo", required=True)
-    commits.add_argument("--checkout", required=True, type=Path)
-    commits.add_argument("--output", required=True, type=Path)
-
-    select = subparsers.add_parser("select")
-    select.add_argument("--recent", required=True, type=Path)
-    select.add_argument("--commits", required=True, type=Path)
-    select.add_argument("--observed-at", required=True, type=timestamp)
-    select.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--repo", required=True)
+    parser.add_argument("--checkout", required=True, type=Path)
+    parser.add_argument("--observed-at", required=True, type=timestamp)
+    parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
     try:
-        if args.command == "fetch-recent":
-            runs = fetch_recent_runs(args.repo)
-            write_json(args.output, runs)
-            print(f"Fetched {len(runs)} recent CI workflow runs.")
-        elif args.command == "fetch-commits":
-            snapshot = fetch_commit_runs(args.repo, args.checkout)
-            write_json(args.output, snapshot)
-            print(
-                f"Queried {len(snapshot['commits'])} canary commits in parallel; "
-                f"found {len(snapshot['runs'])} runs with {len(snapshot['errors'])} query errors."
-            )
-            for error in snapshot["errors"]:
-                print(
-                    f"::warning::Run query failed for {error['sha']}: {error['error']}"
-                )
-        else:
-            sha, run_id, source = select_with_fallback(
-                args.recent, args.commits, args.observed_at
-            )
-            with args.output.open("a", encoding="utf-8") as output:
-                output.write(f"sha={sha}\nrun_id={run_id}\n")
-            print(f"Newest green canary commit: {sha} (CI run {run_id}, via {source})")
+        sha, run_id, source = collect_and_select(
+            args.repo, args.checkout, args.observed_at
+        )
+        with args.output.open("a", encoding="utf-8") as output:
+            output.write(f"sha={sha}\nrun_id={run_id}\n")
+        print(f"Newest green canary commit: {sha} (CI run {run_id}, via {source})")
     except (subprocess.CalledProcessError, ValueError, KeyError, TypeError) as exc:
         message = str(exc).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
         print(f"::error::{message}")

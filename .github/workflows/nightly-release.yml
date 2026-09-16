@@ -103,36 +103,15 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: Query the 100 most recent CI workflow runs
-        id: recent-runs
-        if: ${{ steps.clock.outputs.proceed == 'true' }}
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          python3 nightly-dispatch-tools/tools/baml_nightly_select.py fetch-recent \
-            --repo "$GH_REPO" \
-            --output "$RUNNER_TEMP/recent-workflow-runs.json"
-
-      - name: Query CI runs for the 10 most recent canary commits
-        id: commit-runs
-        if: ${{ always() && steps.clock.outputs.proceed == 'true' }}
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          python3 nightly-dispatch-tools/tools/baml_nightly_select.py fetch-commits \
-            --repo "$GH_REPO" \
-            --checkout nightly-dispatch-tools \
-            --output "$RUNNER_TEMP/commit-workflow-runs.json"
-
       - name: Select the newest green canary commit
         id: select
-        if: ${{ always() && steps.clock.outputs.proceed == 'true' }}
+        if: ${{ steps.clock.outputs.proceed == 'true' }}
         run: |
           set -euo pipefail
           observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python3 nightly-dispatch-tools/tools/baml_nightly_select.py select \
-            --recent "$RUNNER_TEMP/recent-workflow-runs.json" \
-            --commits "$RUNNER_TEMP/commit-workflow-runs.json" \
+          python3 nightly-dispatch-tools/tools/baml_nightly_select.py \
+            --repo "$GH_REPO" \
+            --checkout nightly-dispatch-tools \
             --observed-at "$observed_at" \
             --output "$GITHUB_OUTPUT"
 
