@@ -2071,23 +2071,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = baml_compiler2_mir::enum_link_name(self.db, *enum_ref);
-                // Gracefully handle undefined enum references (e.g. cross-package
-                // references that aren't registered in this compilation context).
-                // Emit a Null constant so tests don't panic; runtime will fail
-                // if the code path is actually executed.
-                let enum_obj_idx = self.enum_object_indices.get(&enum_name_str).copied();
-                if enum_obj_idx.is_some() {
-                    self.references.record(&enum_name_str);
-                }
-                let Some(enum_obj_idx) = enum_obj_idx else {
-                    let idx = self.add_constant(ConstValue::Null);
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(
-                        inst,
-                        OperandMeta::Const(format!("undefined_enum::{enum_name_str}.{variant}")),
-                    );
-                    return;
-                };
+                // TIR admitted the enum and MIR resolved it to a declaration
+                // (`enum_ref_of`), so this compilation registered an object
+                // for it: a source enum — a mounted package's link stub
+                // included — in Pass 4, or a seeded pool object of the
+                // precompiled stdlib. A miss is an internal error, never a
+                // `Null` where a variant belongs.
+                let enum_obj_idx = *self.enum_object_indices.get(&enum_name_str).unwrap_or_else(
+                    || {
+                        panic!(
+                            "internal error: no enum object for `{enum_name_str}` (referenced as \
+                             `{enum_name_str}.{variant}`)"
+                        )
+                    },
+                );
+                self.references.record(&enum_name_str);
 
                 let variant_str = variant.to_string();
                 let variant_idx = *self
