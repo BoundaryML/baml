@@ -1,0 +1,13 @@
+{
+  "name": "binary-baml-only-arm64-gc-3800-3900-confirm",
+  "mode": "binary",
+  "lower_rate_per_target": 3800,
+  "upper_rate_per_target": 3900,
+  "resolution_rps": 100,
+  "seconds_per_candidate": 300,
+  "connections": 1000,
+  "request_timeout_ms": 800,
+  "on_seconds": 4,
+  "off_seconds": 1,
+  "explicit_gc": true
+}

@@ -67,9 +67,9 @@ test('profiles support fixed per-implementation rates and reject invalid duty cy
     increase_rate_per_target: { 'node-only': 100, 'python-only': 0, 'python-baml': 0, 'node-baml': 0, 'baml-only': 0 },
     maximum_rate_per_target: { 'node-only': 25000, 'python-only': 100, 'python-baml': 100, 'node-baml': 100, 'baml-only': 100 } };
   assert.deepEqual(normalizeProfile(continuation, { name: 'node-only-x64', variant: 'node-only' }),
-                   { mode: 'ramp', start: 4000, increase: 100, every: 30, maximum: 25000, on: 4, off: 1 });
+                   { mode: 'ramp', start: 4000, increase: 100, every: 30, maximum: 25000, on: 4, off: 1, explicitGc: false });
   assert.deepEqual(normalizeProfile(continuation, { name: 'python-only-x64', variant: 'python-only' }),
-                   { mode: 'ramp', start: 100, increase: 0, every: 30, maximum: 100, on: 4, off: 1 });
+                   { mode: 'ramp', start: 100, increase: 0, every: 30, maximum: 100, on: 4, off: 1, explicitGc: false });
   for (const rate of [0, -1, 1.5, true, 50001]) assert.throws(() => validateRun('run-one', images, { ...fixed, rate_per_target: rate }));
   assert.throws(() => validateRun('run-one', images, { ...ramp, on_seconds: 3 }));
   assert.throws(() => validateRun('run-one', images, { ...ramp, increase_every_seconds: 31 }));
@@ -82,7 +82,7 @@ test('binary profile validates and reaches the AWS load task', () => {
     seconds_per_candidate: 30, connections: 1000, request_timeout_ms: 800, on_seconds: 4, off_seconds: 1 };
   const normalized = normalizeProfile(binary, { name: 'node-only-arm64', variant: 'node-only' });
   assert.deepEqual(normalized, { mode: 'binary', start: 5000, increase: 0, every: 30, maximum: 10000, lower: 5000,
-    upper: 10000, resolution: 100, seconds: 30, connections: 1000, timeout: 800, on: 4, off: 1 });
+    upper: 10000, resolution: 100, seconds: 30, connections: 1000, timeout: 800, on: 4, off: 1, explicitGc: false });
   const f = fixtures();
   const r = resources(new BenchmarkStack(f.app, 'binary-node', { ...f, images, profile: binary, targetCell: 'node-only-arm64' }));
   const environment = r.NodeOnlyArm64LoadTask.Properties.ContainerDefinitions[0].Environment;
@@ -91,6 +91,18 @@ test('binary profile validates and reaches the AWS load task', () => {
   assert.equal(value('SEARCH_UPPER_RPS'), '10000');
   assert.equal(value('VEGETA_CONNECTIONS'), '1000');
   assert.throws(() => normalizeProfile({ ...binary, request_timeout_ms: 1000 }, { name: 'node-only-arm64', variant: 'node-only' }));
+});
+test('explicit GC profile passes a GC endpoint to the load task', () => {
+  const binary = { mode: 'binary', lower_rate_per_target: 1000, upper_rate_per_target: 10000, resolution_rps: 100,
+    seconds_per_candidate: 30, connections: 1000, request_timeout_ms: 800, on_seconds: 4, off_seconds: 1, explicit_gc: true };
+  const f = fixtures();
+  const r = resources(new BenchmarkStack(f.app, 'binary-baml-gc', { ...f, images, profile: binary, targetCell: 'baml-only-arm64' }));
+  const environment = r.BamlOnlyArm64LoadTask.Properties.ContainerDefinitions[0].Environment;
+  const value = name => environment.find(item => item.Name === name)?.Value;
+  assert.equal(value('EXPLICIT_GC_URL'), 'http://baml-only-arm64.binary-baml-gc.hello.internal:8080/gc');
+  assert.throws(() => normalizeProfile({ ...binary, explicit_gc: 'yes' }, { name: 'baml-only-arm64', variant: 'baml-only' }));
+  assert.throws(() => new BenchmarkStack(f.app, 'bad-node-gc', { ...f, images, profile: binary, targetCell: 'node-only-arm64' }));
+  assert.throws(() => new BenchmarkStack(f.app, 'bad-matrix-gc', { ...f, images, profile: binary }));
 });
 test('comparison dashboard keeps twenty series and valid unique metric ids', () => {
   for (const widget of dashboard(['steady-ten', 'steady-hundred'], 'us-east-1').widgets) {

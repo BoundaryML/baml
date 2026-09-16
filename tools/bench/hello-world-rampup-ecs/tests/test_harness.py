@@ -22,6 +22,25 @@ analyze = module('analyze', 'scripts/analyze.py')
 
 
 class HarnessTest(unittest.TestCase):
+    def test_explicit_gc_requires_ok_response(self):
+        response = unittest.mock.MagicMock()
+        response.status = 200
+        response.read.return_value = b'ok'
+        response.__enter__.return_value = response
+        with patch.object(load.urllib.request, 'urlopen', return_value=response):
+            result = load.request_explicit_gc('http://example.test/gc')
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['status'], 200)
+        self.assertIsNone(result['error'])
+
+    def test_ready_wait_requires_probe_and_gc(self):
+        stop = load.threading.Event()
+        with patch.object(load, 'probe_body', side_effect=[(False, False), (False, True)]), \
+             patch.object(load, 'request_explicit_gc', return_value={'ok': True, 'status': 200, 'duration_ms': 1, 'error': None}), \
+             patch.object(stop, 'wait', return_value=False):
+            result = load.wait_until_ready('http://target/', 'http://target/gc', stop)
+        self.assertTrue(result['ok'])
+
     def test_binary_search_midpoint_respects_resolution(self):
         self.assertEqual(midpoint(5000, 10000, 100), 7500)
         self.assertEqual(midpoint(5000, 7500, 100), 6200)

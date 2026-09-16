@@ -98,6 +98,47 @@ def probe_body(url):
         return False, False
 
 
+def request_explicit_gc(url):
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            body = response.read(32)
+            status = response.status
+        return {'ok': status == 200 and body == b'ok', 'status': status,
+                'duration_ms': (time.monotonic() - started) * 1000, 'error': None}
+    except OSError as error:
+        return {'ok': False, 'status': None, 'duration_ms': (time.monotonic() - started) * 1000,
+                'error': repr(error)}
+
+
+def finish_attack(attack, reporter, grace_seconds):
+    deadline = time.monotonic() + grace_seconds
+    forced_stop = False
+    for child in (attack, reporter):
+        try:
+            child.wait(timeout=max(0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            forced_stop = True
+            child.kill()
+            child.wait()
+    return forced_stop
+
+
+def wait_until_ready(url, gc_url, stop, timeout_seconds=300):
+    started = time.monotonic()
+    last_gc = None
+    while not stop.is_set() and time.monotonic() - started < timeout_seconds:
+        body_mismatch, probe_up = probe_body(url)
+        if probe_up and not body_mismatch:
+            last_gc = request_explicit_gc(gc_url)
+            if last_gc['ok']:
+                stop.wait(1)
+                return {'ok': True, 'duration_ms': (time.monotonic() - started) * 1000,
+                        'last_gc': last_gc}
+        stop.wait(2)
+    return {'ok': False, 'duration_ms': (time.monotonic() - started) * 1000, 'last_gc': last_gc}
+
+
 def run_binary_search(url, target_path, collector, stop, children, children_lock, on_seconds, off_seconds):
     lower = env_int('SEARCH_LOWER_RPS', '5000', 1, 50000)
     upper = env_int('SEARCH_UPPER_RPS', '10000', lower + 1, 50000)
@@ -105,6 +146,7 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
     seconds = env_int('SEARCH_SECONDS_PER_CANDIDATE', '30', 5, 3600)
     connections = env_int('VEGETA_CONNECTIONS', '1000', 1, 10000)
     timeout_ms = env_int('REQUEST_TIMEOUT_MS', '800', 100, 999)
+    explicit_gc_url = os.environ.get('EXPLICIT_GC_URL')
     if seconds % (on_seconds + off_seconds):
         raise ValueError('SEARCH_SECONDS_PER_CANDIDATE must be a multiple of the duty-cycle duration')
     cycles = seconds // (on_seconds + off_seconds)
@@ -112,6 +154,12 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
 
     def run_candidate(rate):
         records = []
+        if explicit_gc_url:
+            readiness = wait_until_ready(url, explicit_gc_url, stop)
+            print(json.dumps(dict(dimensions, event='binary_candidate_target_ready', rate=rate,
+                                  **readiness)), flush=True)
+            if not readiness['ok']:
+                raise RuntimeError(f'target did not recover before testing {rate} RPS')
         print(json.dumps(dict(dimensions, event='binary_candidate_started', rate=rate, cycles=cycles)), flush=True)
         for cycle in range(cycles):
             cycle_started = time.monotonic()
@@ -126,18 +174,12 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
             attack.stdout.close()
             with children_lock:
                 children[:] = [attack, reporter]
-            stop.wait(max(0, cycle_started + on_seconds + off_seconds - time.monotonic()))
-            forced_stop = False
-            for child in (attack, reporter):
-                if child.poll() is None:
-                    forced_stop = True
-                    child.kill()
-            for child in (attack, reporter):
-                try:
-                    child.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait()
+            if explicit_gc_url:
+                stop.wait(max(0, cycle_started + on_seconds - time.monotonic()))
+                forced_stop = finish_attack(attack, reporter, timeout_ms / 1000 + 2)
+            else:
+                stop.wait(max(0, cycle_started + on_seconds + off_seconds - time.monotonic()))
+                forced_stop = finish_attack(attack, reporter, 0)
             report_bytes = reporter.stdout.read()
             with children_lock:
                 children.clear()
@@ -147,6 +189,13 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
             except json.JSONDecodeError as error:
                 report = {}
                 report_error = repr(error)
+            gc_result = request_explicit_gc(explicit_gc_url) if explicit_gc_url else None
+            if gc_result:
+                print(json.dumps(dict(dimensions, event='explicit_gc_finished', rate=rate, cycle=cycle,
+                                      **gc_result)), flush=True)
+                collector.emit({'ExplicitGcUp': int(gc_result['ok']), 'ExplicitGcDurationMs': gc_result['duration_ms']},
+                               {'ExplicitGcUp': 'Count', 'ExplicitGcDurationMs': 'Milliseconds'})
+                stop.wait(off_seconds)
             body_mismatch, probe_up = probe_body(url)
             values = summarize_report(report, scheduled, body_mismatch)
             values.update(TargetRps=rate, RampStep=0, ProbeUp=int(probe_up), ForcedStop=int(forced_stop))
@@ -160,16 +209,20 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
                           http200=values['Http200'], success_ratio=values['Http200'] / scheduled,
                           scheduled_ratio=values['Requests'] / scheduled, forced_stop=forced_stop,
                           probe_up=probe_up, body_mismatch=body_mismatch, report_error=report_error,
+                          explicit_gc=gc_result,
                           vegeta_errors=report.get('errors', []))
             records.append(record)
             print(json.dumps(dict(dimensions, event='binary_cycle_finished', **record)), flush=True)
+            if explicit_gc_url and (not gc_result['ok'] or not probe_up or forced_stop):
+                break
         scheduled = sum(record['scheduled'] for record in records)
         requests = sum(record['requests'] for record in records)
         http200 = sum(record['http200'] for record in records)
-        passed = (requests / scheduled >= 0.99 and http200 / scheduled >= 0.99 and
+        passed = (len(records) == cycles and requests / scheduled >= 0.99 and http200 / scheduled >= 0.99 and
                   min(record['success_ratio'] for record in records) >= 0.95 and
-                  all(record['probe_up'] and not record['body_mismatch'] and not record['forced_stop'] for record in records))
-        summary = dict(rate=rate, cycles=cycles, passed=passed, scheduled=scheduled, requests=requests,
+                  all(record['probe_up'] and not record['body_mismatch'] and not record['forced_stop'] and
+                      (record['explicit_gc'] is None or record['explicit_gc']['ok']) for record in records))
+        summary = dict(rate=rate, cycles=len(records), planned_cycles=cycles, passed=passed, scheduled=scheduled, requests=requests,
                        http200=http200, scheduled_ratio=requests / scheduled, success_ratio=http200 / scheduled,
                        minimum_cycle_success_ratio=min(record['success_ratio'] for record in records))
         print(json.dumps(dict(dimensions, event='binary_candidate_finished', **summary)), flush=True)
@@ -177,7 +230,7 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
 
     print(json.dumps(dict(dimensions, event='binary_search_started', lower=lower, upper=upper,
                           resolution=resolution, seconds_per_candidate=seconds, connections=connections,
-                          request_timeout_ms=timeout_ms)), flush=True)
+                          request_timeout_ms=timeout_ms, explicit_gc_url=explicit_gc_url)), flush=True)
     upper_passed = run_candidate(upper)
     if upper_passed:
         result = dict(status='upper_bound_passed', highest_pass=upper, lowest_fail=None)

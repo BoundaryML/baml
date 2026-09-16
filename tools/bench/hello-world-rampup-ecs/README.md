@@ -101,6 +101,8 @@ Deploy only the desired application cell and its AWS load task. The generator em
 python3 scripts/run.py --aws-profile "$AWS_PROFILE" up --name hello-vpc-node-binary-01 --images artifacts/rampup-001/images.json --profile profiles/binary-node-only-arm64-5000-10000.json --target-cell node-only-arm64
 ```
 
+Set `"explicit_gc": true` on a binary profile to run an opt-in BAML-only experiment in which every cycle is four seconds of load, a successful `GET /gc`, and then one second idle. The generator waits for a successful hello-world probe and GC before every candidate, which prevents an OOM at a failing candidate from contaminating the next candidate while ECS replaces the task. A failed GC request fails the candidate immediately. GC duration is additional to the four-second active and one-second idle windows, so use the emitted `ExplicitGcDurationMs` metric when converting the configured active-window RPS into wall-clock average throughput.
+
 ## Confirm sustained rates
 
 A sustain profile accepts one rate for all cells or overrides keyed by implementation or full `implementation-architecture` cell name. Full-cell keys take precedence over implementation keys. This permits all ten coarse bounds to be tested together without changing workload images or resource allocations.

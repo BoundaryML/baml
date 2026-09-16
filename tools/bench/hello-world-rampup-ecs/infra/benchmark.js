@@ -25,6 +25,9 @@ function cellValue(configured, cell, label) {
 function normalizeProfile(profile, cell) {
   if (!profile || !['ramp', 'sustain', 'binary'].includes(profile.mode)) throw new Error('Profile mode must be ramp, sustain, or binary');
   if (profile.on_seconds !== 4 || profile.off_seconds !== 1) throw new Error('The load duty cycle must be 4 seconds on and 1 second off');
+  if (profile.explicit_gc !== undefined && typeof profile.explicit_gc !== 'boolean') throw new Error('explicit_gc must be a boolean');
+  const explicitGc = profile.explicit_gc === true;
+  if (explicitGc && profile.mode !== 'binary') throw new Error('explicit_gc is currently supported only in binary mode');
   if (profile.mode === 'ramp') {
     const start = checkedRate(cellValue(profile.start_rate_per_target, cell, 'start_rate_per_target'), `start_rate_per_target for ${cell.name}`);
     const increase = cellValue(profile.increase_rate_per_target, cell, 'increase_rate_per_target');
@@ -33,7 +36,7 @@ function normalizeProfile(profile, cell) {
     const maximum = checkedRate(cellValue(profile.maximum_rate_per_target, cell, 'maximum_rate_per_target'), `maximum_rate_per_target for ${cell.name}`);
     if (!Number.isInteger(every) || every < 5 || every % 5 !== 0) throw new Error('increase_every_seconds must be a positive multiple of the 5-second duty cycle');
     if (maximum < start) throw new Error('maximum_rate_per_target must be at least start_rate_per_target');
-    return { mode: 'ramp', start, increase, every, maximum, on: 4, off: 1 };
+    return { mode: 'ramp', start, increase, every, maximum, on: 4, off: 1, explicitGc };
   }
   if (profile.mode === 'binary') {
     const lower = checkedRate(cellValue(profile.lower_rate_per_target, cell, 'lower_rate_per_target'), `lower_rate_per_target for ${cell.name}`);
@@ -47,11 +50,11 @@ function normalizeProfile(profile, cell) {
     if (!Number.isInteger(seconds) || seconds < 5 || seconds % 5 !== 0) throw new Error('seconds_per_candidate must be a positive multiple of five');
     if (!Number.isInteger(connections) || connections < 1 || connections > 10000) throw new Error('connections must be 1..10000');
     if (!Number.isInteger(timeout) || timeout < 100 || timeout >= 1000) throw new Error('request_timeout_ms must fit inside the one-second off-window');
-    return { mode: 'binary', start: lower, increase: 0, every: seconds, maximum: upper, lower, upper, resolution, seconds, connections, timeout, on: 4, off: 1 };
+    return { mode: 'binary', start: lower, increase: 0, every: seconds, maximum: upper, lower, upper, resolution, seconds, connections, timeout, on: 4, off: 1, explicitGc };
   }
   const rate = cellValue(profile.rate_per_target, cell, 'rate_per_target');
   checkedRate(rate, `rate_per_target for ${cell.name}`);
-  return { mode: 'sustain', start: rate, increase: 0, every: 30, maximum: rate, on: 4, off: 1 };
+  return { mode: 'sustain', start: rate, increase: 0, every: 30, maximum: rate, on: 4, off: 1, explicitGc };
 }
 
 function validateRun(name, images, profile) {
@@ -109,6 +112,7 @@ class BenchmarkStack extends cdk.Stack {
     validateRun(id, images, profile);
     if (![0, 1].includes(appCount) || ![0, 1].includes(loadCount)) throw new Error('Counts must be 0 or 1');
     if (targetCell && !cells().some(cell => cell.name === targetCell)) throw new Error(`Unknown target cell: ${targetCell}`);
+    if (profile.explicit_gc && !['baml-only-arm64', 'baml-only-x64'].includes(targetCell)) throw new Error('explicit_gc requires one baml-only targetCell');
     if (localLoadCidr && !/^([0-9]{1,3}\.){3}[0-9]{1,3}\/32$/.test(localLoadCidr)) throw new Error('localLoadCidr must be an IPv4 /32');
     if (localLoadCidr && (!targetCell || loadCount !== 0)) throw new Error('localLoadCidr requires one targetCell and loadCount=0');
     const run = id;
@@ -177,6 +181,7 @@ class BenchmarkStack extends cdk.Stack {
         const env = { RunName: run, Variant: variant, Architecture: arch, START_RATE_PER_TARGET: String(load.start),
           RATE_STEP_PER_TARGET: String(load.increase), RATE_STEP_SECONDS: String(load.every), MAX_RATE_PER_TARGET: String(load.maximum),
           ON_SECONDS: String(load.on), OFF_SECONDS: String(load.off), LOAD_MODE: load.mode, TARGET_URL: `http://${name}.${run}.hello.internal:8080/` };
+        if (load.explicitGc) env.EXPLICIT_GC_URL = `http://${name}.${run}.hello.internal:8080/gc`;
         if (load.mode === 'binary') Object.assign(env, { SEARCH_LOWER_RPS: String(load.lower), SEARCH_UPPER_RPS: String(load.upper),
           SEARCH_RESOLUTION_RPS: String(load.resolution), SEARCH_SECONDS_PER_CANDIDATE: String(load.seconds),
           VEGETA_CONNECTIONS: String(load.connections), REQUEST_TIMEOUT_MS: String(load.timeout) });
