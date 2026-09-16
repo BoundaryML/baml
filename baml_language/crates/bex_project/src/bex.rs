@@ -58,6 +58,10 @@ pub trait Bex: Send + Sync {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
+    /// Wait for in-flight calls and spawned futures to settle without
+    /// closing admission (see `BexEngine::wait_until_idle`).
+    async fn wait_until_idle(self: Arc<Self>);
+
     async fn shutdown(self: Arc<Self>);
 
     /// Run-vocabulary alias for host-call cancellation. The parameter is still
@@ -177,6 +181,10 @@ impl Bex for BexEngine {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
         BexEngine::set_unhandled_spawn_error_handler(self, handler);
+    }
+
+    async fn wait_until_idle(self: Arc<Self>) {
+        BexEngine::wait_until_idle(&self).await;
     }
 
     async fn shutdown(self: Arc<Self>) {

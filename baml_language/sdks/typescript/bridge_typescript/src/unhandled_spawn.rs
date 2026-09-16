@@ -8,7 +8,12 @@ use napi::{
 use napi_derive::napi;
 
 type CallbackArgs = FnArgs<(Buffer, bool)>;
-type Callback = ThreadsafeFunction<CallbackArgs, (), CallbackArgs, Status, false, true, 1024>;
+
+/// Weak (does not pin the libuv loop) and unbounded: `deliver` runs on an
+/// engine thread that may be inside a `callFunctionSync` `block_on` — where
+/// the JS thread is parked and can never drain a full queue — so the call
+/// must be `NonBlocking` and the queue must never be full.
+type Callback = ThreadsafeFunction<CallbackArgs, (), CallbackArgs, Status, false, true>;
 
 static CALLBACK: OnceLock<Arc<Callback>> = OnceLock::new();
 
@@ -20,7 +25,6 @@ pub fn register_unhandled_spawn_error_callback(
         .build_threadsafe_function()
         .callee_handled::<false>()
         .weak::<true>()
-        .max_queue_size::<1024>()
         .build()?;
     if CALLBACK.set(Arc::new(tsfn)).is_ok() {
         bridge_cffi::register_unhandled_spawn_error_callback(deliver);
@@ -38,8 +42,12 @@ extern "C" fn deliver(content: *const i8, length: usize, cancelled: i32) {
         // SAFETY: bridge_cffi keeps the borrowed callback buffer valid until return.
         unsafe { std::slice::from_raw_parts(content.cast(), length) }.to_vec()
     };
-    let _ = callback.call(
+    let status = callback.call(
         FnArgs::from((Buffer::from(bytes), cancelled != 0)),
-        ThreadsafeFunctionCallMode::Blocking,
+        ThreadsafeFunctionCallMode::NonBlocking,
     );
+    // `Closing` is env teardown: the report would have nowhere to go anyway.
+    if status != Status::Ok && status != Status::Closing {
+        log::warn!("unhandled-spawn error delivery to Node failed with status {status:?}");
+    }
 }

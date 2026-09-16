@@ -3050,6 +3050,46 @@ impl BexEngine {
         }
     }
 
+    /// Wait until no call is active and no spawned future is pending,
+    /// without closing admission: a host uses this before its automatic
+    /// process teardown so work that is already running (including a host
+    /// callback that re-enters the engine) can still finish, while new calls
+    /// remain allowed. If a shutdown is in progress, waits for it to complete
+    /// instead. This is an observation, not a barrier — work started after it
+    /// returns is not prohibited.
+    pub async fn wait_until_idle(self: &Arc<Self>) {
+        loop {
+            let notified = self.lifecycle_changed.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            let lifecycle = *self
+                .lifecycle
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match lifecycle {
+                EngineLifecycle::Closed => return,
+                EngineLifecycle::Closing => {
+                    notified.await;
+                    continue;
+                }
+                EngineLifecycle::Running => {}
+            }
+            self.wait_for_active_calls().await;
+            let handles = self
+                .futures
+                .pending_join_handles(&self.heap_permit_manager)
+                .await;
+            if handles.is_empty() {
+                return;
+            }
+            // A settled future may have spawned more, or its awaiter may have
+            // started a new call: re-check from the top.
+            for handle in handles {
+                let _ = handle.wait().await;
+            }
+        }
+    }
+
     /// Wait for spawned work to settle, then run the final GC sweep that
     /// surfaces unreachable unobserved errors.
     pub async fn shutdown(self: &Arc<Self>) {

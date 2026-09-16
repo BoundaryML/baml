@@ -430,12 +430,11 @@ function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, 
  * Release tradeoff: a callable that encodes successfully is registered in the
  * host-value table and is normally released only when the engine GCs the
  * `HostClosure` it allocated and fires the C release callback (a GC-timed
- * release, drained by the engine after collection).
- * Because the Node tsfn is built with `weak::<false>` it keeps a strong libuv
- * ref, so a *leaked* registry entry can also keep the Node process from
- * exiting — which is exactly why the encode-error rollback below matters: if a
- * later kwarg fails, the engine never sees (and so never releases) the keys we
- * already registered, so we release them here.
+ * release, drained by the engine after collection). A *leaked* registry entry
+ * pins the user's callable for the life of the process — which is why the
+ * encode-error rollback below matters: if a later kwarg fails, the engine
+ * never sees (and so never releases) the keys we already registered, so we
+ * release them here.
  */
 export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer {
     const callId = options.callId;
@@ -853,16 +852,17 @@ function unwrapUnionVariant(
     return h;
 }
 
+/**
+ * Decode the value carried by an `error`/`panic` envelope. A failure while
+ * decoding it (a generated class whose constructor throws, an unmapped
+ * handle, ...) is the caller's real error and propagates; hiding it behind a
+ * `BamlError` with `value: undefined` would strip the only diagnostic.
+ */
 function decodeThrown(
     holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
 ): { value: unknown; className: string | undefined; message: string } {
     const className = unwrapUnionVariant(holder)?.classValue?.name ?? undefined;
-    let value: unknown;
-    try {
-        value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
-    } catch {
-        value = undefined;
-    }
+    const value: unknown = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
     let message = '';
     if (value != null && typeof value === 'object' && 'message' in (value as object)) {
         const m = (value as Record<string, unknown>).message;

@@ -7,5 +7,7 @@
  */
 import type { BamlPanic } from './errors.js';
 export declare const supportsSyncStreamPulls = true;
+/** Test-only diagnostics (e.g. `_hostValueCount`) are opt-in per process. */
+export declare function diagnosticsEnabled(): boolean;
 export declare function handleExitPanic(code: number, _fallbackPanic: BamlPanic): never;
 //# sourceMappingURL=platform.d.ts.map

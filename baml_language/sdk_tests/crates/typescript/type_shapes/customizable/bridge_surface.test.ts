@@ -29,6 +29,7 @@ const packageRootExports = [
   "Timing",
   "UNSET",
   "Usage",
+  "_hostValueCount",
   "_seedFunctionRefHandle",
   "_seedGenericMediaHandle",
   "callFunction",

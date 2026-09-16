@@ -423,7 +423,7 @@ export class BamlRuntime {
 }
 
 let runtime: BamlRuntime | undefined;
-let hostRelease: ((key: HandleKey) => void) | undefined;
+let hostRelease: ((keys: HandleKey[]) => void) | undefined;
 
 export function getRuntime(): BamlRuntime {
   if (!runtime) throw new BamlClientError("BAML runtime has not been initialized");
@@ -442,15 +442,17 @@ export function getVersion(): string { return getWasmVersion(); }
 export function getToolchainVersion(): string { return getWasmToolchainVersion(); }
 export function getBridgeRuntimeVersion(): string { return getWasmBridgeRuntimeVersion(); }
 export function mintHostValueKey(): HandleKey { return keyFromBigint(mintWebHostValueKey()); }
-export function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void {
+// The shared registry takes released keys in batches (the Node bridge
+// coalesces engine releases); the Wasm core releases one key at a time.
+export function registerHostValueReleaseCallback(callback: (keys: HandleKey[]) => void): void {
   hostRelease = callback;
-  registerWebHostValueReleaseCallback((key: bigint) => hostRelease?.(keyFromBigint(key)));
+  registerWebHostValueReleaseCallback((key: bigint) => hostRelease?.([keyFromBigint(key)]));
 }
 export function registerHostCallable(callback: (callId: number, args: Uint8Array) => void): HandleKey { return keyFromBigint(registerWebHostCallable(callback)); }
 export function releaseHostCallable(key: HandleKey): void {
   const value = BigInt.asUintN(64, BigInt(key.high) << 32n | BigInt.asUintN(32, BigInt(key.low)));
   releaseWebHostCallable(value);
-  hostRelease?.(key);
+  hostRelease?.([key]);
 }
 export function completeHostCall(callId: number, isError: number, content: Uint8Array): void { completeWebHostCall(callId, isError, content); }
 export function _seedFunctionRefHandle(globalIndex: number): [HandleKey, number] {

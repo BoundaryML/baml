@@ -195,6 +195,16 @@ export declare function _seedFunctionRefHandle(globalIndex: number): [HandleKey,
 /** Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`. */
 export declare function _seedGenericMediaHandle(): [HandleKey, number]
 
+/**
+ * Resolve once the process-global runtime has no active call and no pending
+ * spawned future, without closing it. The SDK's `beforeExit` hook awaits
+ * this before `shutdownRuntime`: registered host callables no longer pin the
+ * event loop (their tsfns are weak), so this pending promise is what keeps
+ * Node alive while real BAML work — including a host callback that re-enters
+ * the engine — is still in flight. A never-initialized runtime is idle.
+ */
+export declare function _waitForRuntimeIdle(): Promise<void>
+
 export declare function cancelFunctionCall(callId: string): boolean
 
 /**
@@ -274,32 +284,23 @@ export declare function newFunctionCall(): string
 export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer) => void): HandleKey
 
 /**
- * Install the TS-side release callback. First-call-wins; subsequent
+ * Install the TS-side batch release callback. First-call-wins; subsequent
  * calls are a no-op (matching the bridge_cffi dispatch-registration
- * semantics). The callback fires for *every* `HostValueArc` release —
- * for callable keys it's a TS-side no-op (`Map.delete(key)` on an absent
- * key), so Rust doesn't need to distinguish kinds here.
+ * semantics). The callback receives every released key — for callable keys
+ * it's a TS-side no-op (`Map.delete` on an absent key), so Rust doesn't need
+ * to distinguish kinds here — and must be idempotent, since a batch whose
+ * delivery threw is handed over again on the next wakeup.
  *
- * The tsfn is built with `weak::<true>()` (i.e. `napi_unref_threadsafe_
- * function`). Holding it strong would pin the libuv loop for the
- * lifetime of the process (the tsfn is parked in a `OnceLock` and never
- * dropped), preventing the Node process from exiting even after all
- * host work is done. Weak is correct here: the callback is a *release*
- * notification — purely informational from the engine's side. Pending
- * notifications that never deliver because the loop has already exited
- * are harmless; the engine has already dropped its `Arc<HostValueArc>`,
- * and the TS-side map entry would be torn down with the process
- * anyway.
- *
- * Note this is the inverse of `register_host_callable`'s dispatch tsfn,
- * which is `weak::<false>()` — that one pins the loop because a hung
- * host callback awaiting completion *must* keep the loop alive so the
- * JS callback can actually run.
+ * The wakeup tsfn is weak (`napi_unref_threadsafe_function`): it is parked
+ * in a `OnceLock` for the life of the process, and holding it strong would
+ * keep Node from exiting after all host work is done. A release is purely
+ * informational from the engine's side, so a wakeup that never delivers
+ * because the loop already exited is harmless.
  *
  * Exposed to JS as `registerHostValueReleaseCallback(cb)`. Must be called
  * exactly once at SDK module init, before any host call is dispatched.
  */
-export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
+export declare function registerHostValueReleaseCallback(callback: (keys: Array<HandleKey>) => void): void
 
 export declare function registerUnhandledSpawnErrorCallback(callback: (errorBytes: Buffer, cancelled: boolean) => void): void
 
@@ -311,9 +312,8 @@ export declare function registerUnhandledSpawnErrorCallback(callback: (errorByte
  * registers a callable for an early kwarg and then fails to encode a later
  * kwarg, the `CallFunctionArgs` is never sent, so the engine never decodes
  * (and so never releases) that key. Without this, the registry entry — and
- * its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
- * would leak for the life of the process. The encoder calls this for every
- * key it registered during a failed encode.
+ * the user's callable it pins — would leak for the life of the process. The
+ * encoder calls this for every key it registered during a failed encode.
  */
 export declare function releaseHostCallable(key: HandleKey): void
 
