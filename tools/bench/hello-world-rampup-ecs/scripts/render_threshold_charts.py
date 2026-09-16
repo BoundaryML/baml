@@ -141,7 +141,9 @@ def style():
 def value_label(value, unit):
     if unit == 'RPS':
         return f'{value:,.0f}'
-    return f'{value:.1f}%'
+    if unit == 'CPU':
+        return f'{value:.2f}'
+    return f'{value:.2f} GiB'
 
 
 def chart_values(data):
@@ -154,21 +156,18 @@ def chart_values(data):
             phase = benchmark[phase_name]
             result[name][phase_name] = {
                 'rps': phase['successful_active_rps'],
-                'cpu': phase['cpu_utilization_percent']['Maximum'],
-                'memory': phase['memory_utilization_percent']['Maximum'],
+                'cpu': phase['cpu_utilization_percent']['Maximum'] / 100 * data['metadata']['task_cpu_vcpu'],
+                'memory': phase['memory_utilization_percent']['Maximum'] / 100 * data['metadata']['task_memory_gib'],
             }
     return result
 
 
 def shared_axis_limits(values):
-    maxima = {
-        metric: max(values[name][phase][metric] for name in values for phase in ('pre', 'post'))
-        for metric in ('rps', 'cpu', 'memory')
-    }
+    maximum_rps = max(values[name][phase]['rps'] for name in values for phase in ('pre', 'post'))
     return {
-        'rps': max(500, math.ceil(maxima['rps'] * 1.12 / 500) * 500),
-        'cpu': max(10, math.ceil(maxima['cpu'] * 1.12 / 10) * 10),
-        'memory': max(10, math.ceil(maxima['memory'] * 1.12 / 10) * 10),
+        'rps': max(500, math.ceil(maximum_rps * 1.12 / 500) * 500),
+        'cpu': 1.0,
+        'memory': 1.0,
     }
 
 
@@ -181,8 +180,11 @@ def two_bar_chart(path, title, ylabel, values, labels, note, unit, ylim):
     ax.spines[['top', 'right']].set_visible(False)
     ax.grid(axis='x', visible=False)
     for bar, value in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width() / 2, value + ylim * 0.018,
-                value_label(value, unit), ha='center', va='bottom', fontweight='bold')
+        near_ceiling = value > ylim * 0.88
+        label_y = value - ylim * 0.025 if near_ceiling else value + ylim * 0.018
+        ax.text(bar.get_x() + bar.get_width() / 2, label_y, value_label(value, unit),
+                ha='center', va='top' if near_ceiling else 'bottom',
+                color='white' if near_ceiling else '#111111', fontweight='bold')
     fig.text(0.5, 0.015, note, ha='center', va='bottom', fontsize=8.5, color='#555555')
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(path, dpi=200, bbox_inches='tight')
@@ -195,21 +197,21 @@ def render_individual(data, values, limits, output_dir):
         name = item['name']
         benchmark = data['benchmarks'][name]
         pre, post = benchmark['pre'], benchmark['post']
-        phase_labels = [f"Pre\n{pre['configured_active_rps']:,} target", f"Post\n{post['configured_active_rps']:,} target"]
+        phase_labels = [f"{pre['configured_active_rps']:,} RPS\ntarget", f"{post['configured_active_rps']:,} RPS\ntarget"]
         rps_path = output_dir / f'{name}-rps.png'
         two_bar_chart(rps_path, f"{benchmark['label']} — successful RPS", 'HTTP 200 / active second',
                       [values[name]['pre']['rps'], values[name]['post']['rps']], phase_labels,
-                      f"Aggregate across six 4-second active cycles · completion: {pre['completion_ratio']:.2%} pre, {post['completion_ratio']:.2%} post", 'RPS', limits['rps'])
+                      f"Aggregate across six 4-second active cycles · completion: {pre['configured_active_rps']:,} RPS {pre['completion_ratio']:.2%}, {post['configured_active_rps']:,} RPS {post['completion_ratio']:.2%}", 'RPS', limits['rps'])
         paths.append(rps_path)
         cpu_path = output_dir / f'{name}-cpu.png'
-        two_bar_chart(cpu_path, f"{benchmark['label']} — CPU at threshold", 'Task CPU utilization (%)',
+        two_bar_chart(cpu_path, f"{benchmark['label']} — CPU at threshold", 'CPU',
                       [values[name]['pre']['cpu'], values[name]['post']['cpu']], phase_labels,
-                      'Maximum of nearest 60-second AWS/ECS sample; 1-vCPU task allocation', '%', limits['cpu'])
+                      'Maximum of nearest 60-second AWS/ECS sample; 1.0 is the full task allocation', 'CPU', limits['cpu'])
         paths.append(cpu_path)
         memory_path = output_dir / f'{name}-memory.png'
-        two_bar_chart(memory_path, f"{benchmark['label']} — memory at threshold", 'Container memory utilization (%)',
+        two_bar_chart(memory_path, f"{benchmark['label']} — memory at threshold", 'Memory (GiB)',
                       [values[name]['pre']['memory'], values[name]['post']['memory']], phase_labels,
-                      'Maximum of nearest 60-second AWS/ECS sample; 1-GiB container limit', '%', limits['memory'])
+                      'Maximum of nearest 60-second AWS/ECS sample; 1-GiB container limit', 'GiB', limits['memory'])
         paths.append(memory_path)
     return paths
 
@@ -259,13 +261,14 @@ def render_contact_sheet(overview, chart_paths, output_dir):
     return path
 
 
-def write_index(data, chart_paths, overview, contact_sheet, output_dir):
-    lines = ['# Hello-world ARM64 threshold charts', '', 'Source: retained CloudWatch Logs and AWS/ECS metrics from the 2026-09-15 ramp and in-VPC binary-search runs.', '', 'The source hosts were c7g.medium, while each measured ECS task had a hard 1-vCPU and 1-GiB allocation. These are not t4g.micro measurements.', '', f'![Overview]({overview.name})', '', f'![All threshold charts]({contact_sheet.name})', '']
-    lines += ['## Selected CloudWatch values', '', '| Benchmark | Pre target RPS | Post target RPS | Pre successful RPS | Post successful RPS | Pre CPU max | Post CPU max | Pre memory max | Post memory max |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+def write_index(data, values, chart_paths, overview, contact_sheet, output_dir):
+    lines = ['# Hello-world ARM64 threshold charts', '', 'Source: retained passing/failing threshold events from CloudWatch Logs and AWS/ECS metrics from the 2026-09-15 ramp and in-VPC binary-search runs.', '', 'The source hosts were c7g.medium, while each measured ECS task had a hard 1-vCPU and 1-GiB allocation. These are not t4g.micro measurements.', '', f'![Overview]({overview.name})', '', f'![All threshold charts]({contact_sheet.name})', '']
+    lines += ['## Selected CloudWatch values', '', '| Benchmark | Passing target RPS | Failing target RPS | Passing successful RPS | Failing successful RPS | Passing CPU max (vCPU) | Failing CPU max (vCPU) | Passing memory max (GiB) | Failing memory max (GiB) |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     for benchmark in BENCHMARKS:
-        value = data['benchmarks'][benchmark['name']]
+        name = benchmark['name']
+        value = data['benchmarks'][name]
         pre, post = value['pre'], value['post']
-        lines.append(f"| {value['label']} | {pre['configured_active_rps']:,} | {post['configured_active_rps']:,} | {pre['successful_active_rps']:,.1f} | {post['successful_active_rps']:,.1f} | {pre['cpu_utilization_percent']['Maximum']:.1f}% | {post['cpu_utilization_percent']['Maximum']:.1f}% | {pre['memory_utilization_percent']['Maximum']:.1f}% | {post['memory_utilization_percent']['Maximum']:.1f}% |")
+        lines.append(f"| {value['label']} | {pre['configured_active_rps']:,} | {post['configured_active_rps']:,} | {pre['successful_active_rps']:,.1f} | {post['successful_active_rps']:,.1f} | {values[name]['pre']['cpu']:.2f} | {values[name]['post']['cpu']:.2f} | {values[name]['pre']['memory']:.2f} | {values[name]['post']['memory']:.2f} |")
     lines += ['', 'The post-threshold memory drops for BAML-only and Node+BAML reflect OOM task replacement near the selected 60-second sample; they do not indicate successful memory recovery within one uninterrupted task.', '']
     for benchmark in BENCHMARKS:
         name = benchmark['name']
@@ -295,7 +298,7 @@ def main():
     chart_paths = render_individual(data, values, limits, args.output_dir)
     overview = render_overview(data, limits, args.output_dir)
     contact_sheet = render_contact_sheet(overview, chart_paths, args.output_dir)
-    write_index(data, chart_paths, overview, contact_sheet, args.output_dir)
+    write_index(data, values, chart_paths, overview, contact_sheet, args.output_dir)
     print(json.dumps({'data': str(data_path), 'charts': [str(path) for path in chart_paths],
                       'overview': str(overview), 'contact_sheet': str(contact_sheet)}, indent=2))
 
