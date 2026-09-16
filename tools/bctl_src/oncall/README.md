@@ -22,7 +22,7 @@ The file has three types of data:
 	- runs on every change to `schedule.oncall`
 - `bctl oncall notify [--post-to-slack]`
 	- post to `#general` with a message about who's oncall for the upcoming shift, who was last oncall, and upcoming oncalls, asking the incoming oncaller to use their agent to prepare the next release, prepare the changelog, and thank external contributors after the changelog is out
-	- schedules Slack reminders to put the release out at 9am and 12pm Pacific on the shift's first day
+	- schedules Slack reminders to put the release out at the next 9am and 12pm Pacific (i.e. Friday morning when run Thursday afternoon)
 	- runs weekly Thursday 4pm Pacific, including daylight saving changes
 - `bctl oncall fill-schedule [--post-to-slack]`
 	- append weekly shifts to `schedule.oncall`, assigning in a round-robin pattern

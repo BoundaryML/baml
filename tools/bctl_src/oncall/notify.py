@@ -11,7 +11,8 @@ from oncall.parser import ScheduleFile, ShiftLine
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
-# Pacific times on the shift's first day at which release reminders are sent.
+# Release reminders are scheduled for the next occurrence of each of these
+# Pacific times after the handoff runs (Thursday 4pm -> Friday 9am and 12pm).
 REMINDER_TIMES = (datetime.time(9, 0), datetime.time(12, 0))
 
 
@@ -140,11 +141,12 @@ def compose_handoff(
 
 def compose_reminders(
     sched: ScheduleFile,
-    today: datetime.date,
+    now: datetime.datetime,
     wc,
 ) -> list[tuple[datetime.datetime, HandoffMessage]]:
-    """Return (post_at, message) release reminders for the shift's first day."""
-    shift = _handoff_shift(sched, today)
+    """Return (post_at, message) release reminders at the next REMINDER_TIMES after `now`."""
+    now = now.astimezone(PACIFIC)
+    shift = _handoff_shift(sched, now.date())
     if shift is None:
         raise RuntimeError("no schedule line starts on or after today")
 
@@ -155,7 +157,9 @@ def compose_reminders(
             {"type": "section", "text": {"type": "mrkdwn", "text": text}}
         ]
         for t in REMINDER_TIMES:
-            post_at = datetime.datetime.combine(shift.date, t, tzinfo=PACIFIC)
+            post_at = datetime.datetime.combine(now.date(), t, tzinfo=PACIFIC)
+            if post_at <= now:
+                post_at += datetime.timedelta(days=1)
             reminders.append(
                 (post_at, HandoffMessage(sched.slack_config.notification_channel, text, blocks))
             )
