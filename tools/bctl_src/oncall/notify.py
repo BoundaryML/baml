@@ -18,6 +18,7 @@ REMINDER_TIMES = (datetime.time(9, 0), datetime.time(12, 0))
 
 @dataclass(frozen=True)
 class HandoffMessage:
+    rotation: str
     channel: str
     text: str
     blocks: list[dict[str, Any]]
@@ -135,7 +136,12 @@ def compose_handoff(
         body = "\n\n".join(sections + context)
 
         msgs.append(
-            HandoffMessage(sched.slack_config.notification_channel, body, blocks)
+            HandoffMessage(
+                rotation=rot,
+                channel=sched.slack_config.notification_channel,
+                text=body,
+                blocks=blocks,
+            )
         )
     return msgs
 
@@ -162,6 +168,14 @@ def compose_reminders(
             if post_at <= now:
                 post_at += datetime.timedelta(days=1)
             reminders.append(
-                (post_at, HandoffMessage(sched.slack_config.notification_channel, text, blocks))
+                (
+                    post_at,
+                    HandoffMessage(
+                        rotation=rot,
+                        channel=sched.slack_config.notification_channel,
+                        text=text,
+                        blocks=blocks,
+                    ),
+                )
             )
     return reminders
