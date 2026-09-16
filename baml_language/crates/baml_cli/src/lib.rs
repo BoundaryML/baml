@@ -202,6 +202,34 @@ fn set_exit_handlers() {
     });
 }
 
+/// Wait for profiler durability before exiting the CLI.
+/// A slow filesystem must not turn a successful function into an empty profile.
+pub fn flush_profiler() -> bool {
+    let timeout_ms = match std::env::var("BAML_PROFILE_FLUSH_TIMEOUT_MS") {
+        Ok(value) => match value.parse::<u64>() {
+            Ok(ms) if (1..=900_000).contains(&ms) => ms,
+            _ => {
+                reporter::print_error(format_args!(
+                    "BAML_PROFILE_FLUSH_TIMEOUT_MS must be 1–900000"
+                ));
+                return false;
+            }
+        },
+        Err(std::env::VarError::NotPresent) => 60_000,
+        Err(_) => {
+            reporter::print_error(format_args!("invalid BAML_PROFILE_FLUSH_TIMEOUT_MS"));
+            return false;
+        }
+    };
+    let complete = bex_events::prof::flush_and_join(std::time::Duration::from_millis(timeout_ms));
+    if !complete {
+        reporter::print_error(format_args!(
+            "profiler flush exceeded {timeout_ms} ms; the profile is incomplete"
+        ));
+    }
+    complete
+}
+
 #[cfg(test)]
 mod exit_code_tests {
     use super::*;
