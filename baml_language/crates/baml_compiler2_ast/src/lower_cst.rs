@@ -1960,8 +1960,7 @@ fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
 /// rather than its `FileId`: a `FileId` is a load-order index that shifts
 /// whenever an earlier file is added (e.g. a new stdlib file), which would
 /// churn every snapshot referencing the name. The path is stable across
-/// compilations. When no path is available (e.g. PPIR, which processes files
-/// individually), uses plain `"$init_test"`.
+/// compilations. When no path is available, uses plain `"$init_test"`.
 fn synthesize_init_test_function(
     registrations: &[TestRegistrationItem],
     file_path: Option<&std::path::Path>,

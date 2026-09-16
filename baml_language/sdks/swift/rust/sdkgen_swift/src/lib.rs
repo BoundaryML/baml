@@ -100,13 +100,7 @@ fn to_source_code_with_optional_metadata(
         if fqn == AI_STREAM_STREAM {
             continue;
         }
-        let mut ns = translate_ty::namespace_for(key);
-        if key.is_stream() && matches!(symbol, Symbol::Function(_)) {
-            // Only `$stream` CLASSES route under stream_types;
-            // `$stream` FUNCTION companions sit beside their parent
-            // (Python's routing rule, mirrored).
-            ns.remove(0);
-        }
+        let ns = translate_ty::namespace_for(key);
         let rendered = match symbol {
             Symbol::Function(function) => {
                 let binding_name = &free_callable_names[&fqn];
@@ -151,9 +145,6 @@ fn to_source_code_with_optional_metadata(
             }
         };
         let Some(rendered) = rendered else { continue };
-        // Sort key uses the RAW name: bare_name() strips `$stream`, so
-        // a base function and its `$stream` companion would collide in
-        // the decl map and silently overwrite each other.
         let bare = key.name().as_str().to_string();
         namespaces
             .entry(ns)
@@ -230,7 +221,6 @@ fn to_source_code_with_optional_metadata(
 /// Fixpoint over named types: start assuming every candidate class /
 /// alias is supported, then repeatedly drop any whose definition uses
 /// an unsupported type, until stable. Enums are always supported.
-/// Generic and `$stream` classes are excluded up front (later phases).
 fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     let mut supported_classes: BTreeSet<String> = BTreeSet::new();
     let mut supported_aliases: BTreeSet<String> = BTreeSet::new();
@@ -463,12 +453,8 @@ fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
         if !matches!(symbol, Symbol::Function(_)) {
             continue;
         }
-        let mut namespace = translate_ty::namespace_for(name);
-        if name.is_stream() {
-            namespace.remove(0);
-        }
         scopes
-            .entry(namespace)
+            .entry(translate_ty::namespace_for(name))
             .or_default()
             .push((name.to_string(), name.name().as_str().to_string()));
     }
@@ -650,7 +636,7 @@ fn render_root(root_decls: &BTreeMap<String, String>) -> String {
          \t\t)\n\
          \t\treturn true\n\
          \t}}()\n",
-        version = baml_version::CANONICAL_VERSION
+        version = baml_version::CANONICAL_VERSION,
     );
     for rendered in root_decls.values() {
         out.push('\n');

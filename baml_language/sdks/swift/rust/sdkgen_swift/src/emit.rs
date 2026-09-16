@@ -43,14 +43,12 @@ pub(crate) fn render_type_alias(
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    // `@stream` companion aliases strip the suffix like companion
-    // classes do (they route under stream_types, so no collision).
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     Some(format!("public typealias {name} = {target}\n"))
 }
 
 pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
     let doc = enum_
         .docstring
@@ -106,9 +104,7 @@ pub(crate) fn render_class(
     fields: &[RenderedField],
     methods: &[String],
 ) -> String {
-    // `@stream` companion classes strip the suffix (they route under
-    // the stream_types namespace, so no collision with the base type).
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
     let doc = class
         .docstring
@@ -541,7 +537,7 @@ pub(crate) fn render_recursive_union_alias(
     arms: &[Ty],
     ctx: &TranslateCtx,
 ) -> Option<String> {
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let arm_tys: Vec<String> = {
         let mut tys = Vec::new();
         for arm in arms {
@@ -660,8 +656,9 @@ pub(crate) fn render_recursive_union_alias(
 /// Unqualified leaf names of a throws contract, for doc rendering.
 fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
     match ty {
-        Ty::Class(name, _) => vec![format!("`{}`", name.bare_name())],
-        Ty::Enum(name) | Ty::TypeAlias(name) => vec![format!("`{}`", name.bare_name())],
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+            vec![format!("`{}`", name.name())]
+        }
         Ty::Union(members) => members.iter().flat_map(thrown_leaf_names).collect(),
         _ => Vec::new(),
     }

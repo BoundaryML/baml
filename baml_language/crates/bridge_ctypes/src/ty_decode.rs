@@ -78,7 +78,7 @@ pub fn proto_ty_def_to_portable(
     Ok(PortableTypeDef {
         root: match definition.root.as_ref() {
             Some(root) => proto_ty_to_runtime_ty(root)?,
-            None => RuntimeTy::unknown()
+            None => RuntimeTy::unknown(),
         },
         classes: definition
             .classes
@@ -94,16 +94,16 @@ pub fn proto_ty_def_to_portable(
                                 name: field.name.clone(),
                                 ty: match field.ty.as_ref() {
                                     Some(ty) => proto_ty_to_runtime_ty(ty)?,
-                                    None => RuntimeTy::unknown()
+                                    None => RuntimeTy::unknown(),
                                 },
                                 metadata: metadata(field.metadata.as_ref()),
-                                skip: field.skip
+                                skip: field.skip,
                             })
                         })
                         .collect::<Result<Vec<_>, CtypesError>>()?,
                     metadata: metadata(class.metadata.as_ref()),
                     generic_param_count: usize::try_from(class.generic_param_count)
-                        .unwrap_or(usize::MAX)
+                        .unwrap_or(usize::MAX),
                 })
             })
             .collect::<Result<Vec<_>, CtypesError>>()?,
@@ -118,10 +118,10 @@ pub fn proto_ty_def_to_portable(
                     .map(|variant| PortableEnumVariantDef {
                         name: variant.name.clone(),
                         metadata: metadata(variant.metadata.as_ref()),
-                        skip: variant.skip
+                        skip: variant.skip,
                     })
                     .collect(),
-                metadata: metadata(enm.metadata.as_ref())
+                metadata: metadata(enm.metadata.as_ref()),
             })
             .collect(),
         witnesses: definition
@@ -153,11 +153,11 @@ pub fn proto_ty_def_to_portable(
                                     binding.ty.as_ref().ok_or_else(|| {
                                         CtypesError::InternalError(
                                             "host type definition witness associated type is missing its type"
-                                                .to_string()
+                                                .to_string(),
                                         )
                                     })?,
-                                    "associated type"
-                                )?
+                                    "associated type",
+                                )?,
                             ))
                         })
                         .collect::<Result<Vec<_>, CtypesError>>()?,
@@ -167,13 +167,13 @@ pub fn proto_ty_def_to_portable(
                         .map(|link| {
                             (
                                 Name::new(&link.interface_field),
-                                Name::new(&link.class_field)
+                                Name::new(&link.class_field),
                             )
                         })
-                        .collect()
+                        .collect(),
                 })
             })
-            .collect::<Result<Vec<_>, CtypesError>>()?
+            .collect::<Result<Vec<_>, CtypesError>>()?,
     })
 }
 
@@ -271,7 +271,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                     _ => {
                         return Err(CtypesError::InternalError(
                             "AssociatedTypeProjection.interface did not decode to an interface type"
-                                .to_string()
+                                .to_string(),
                         ));
                     }
                 }

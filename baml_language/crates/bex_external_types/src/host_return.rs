@@ -432,9 +432,9 @@ mod tests {
                 &BexExternalValue::Instance {
                     class_name: "JsonLooking".to_string(),
                     type_args: vec![],
-                    fields: IndexMap::new()
+                    fields: IndexMap::new(),
                 },
-                &json_ty()
+                &json_ty(),
             )
             .is_err()
         );
@@ -627,9 +627,9 @@ mod tests {
             validate_host_return(
                 &BexExternalValue::Array {
                     element_type: int_ty(),
-                    items: vec![BexExternalValue::Int(1), BexExternalValue::Int(2)]
+                    items: vec![BexExternalValue::Int(1), BexExternalValue::Int(2)],
                 },
-                &list_int
+                &list_int,
             )
             .is_ok()
         );
@@ -637,9 +637,9 @@ mod tests {
             validate_host_return(
                 &BexExternalValue::Array {
                     element_type: int_ty(),
-                    items: vec![BexExternalValue::String("x".into())]
+                    items: vec![BexExternalValue::String("x".into())],
                 },
-                &list_int
+                &list_int,
             )
             .is_err()
         );
@@ -655,9 +655,9 @@ mod tests {
                 &BexExternalValue::Map {
                     key_type: RuntimeTy::string(),
                     value_type: int_ty(),
-                    entries: ok_entries
+                    entries: ok_entries,
                 },
-                &map_int
+                &map_int,
             )
             .is_ok()
         );
@@ -668,9 +668,9 @@ mod tests {
                 &BexExternalValue::Map {
                     key_type: RuntimeTy::string(),
                     value_type: int_ty(),
-                    entries: bad_entries
+                    entries: bad_entries,
                 },
-                &map_int
+                &map_int,
             )
             .is_err()
         );
@@ -679,7 +679,7 @@ mod tests {
     #[test]
     fn enum_identity_is_enforced() {
         let status = RuntimeTy::Enum(TypeName::local(Name::new("Status")));
-        assert!(validate_host_return(&BexExternalValue::variant("Status", "Ok"), &status).is_ok());
+        assert!(validate_host_return(&BexExternalValue::variant("Status", "Ok"), &status,).is_ok());
         // Wrong enum name → reject.
         assert!(validate_host_return(&BexExternalValue::variant("Color", "Red"), &status).is_err());
         // A non-variant value → reject.
@@ -694,9 +694,9 @@ mod tests {
                 &BexExternalValue::Instance {
                     class_name: "User".to_string(),
                     type_args: vec![],
-                    fields: IndexMap::new()
+                    fields: IndexMap::new(),
                 },
-                &user
+                &user,
             )
             .is_ok()
         );
@@ -706,9 +706,9 @@ mod tests {
                 &BexExternalValue::Instance {
                     class_name: "Other".to_string(),
                     type_args: vec![],
-                    fields: IndexMap::new()
+                    fields: IndexMap::new(),
                 },
-                &user
+                &user,
             )
             .is_err()
         );
@@ -719,9 +719,9 @@ mod tests {
                 &BexExternalValue::Map {
                     key_type: RuntimeTy::string(),
                     value_type: RuntimeTy::unknown(),
-                    entries: IndexMap::new()
+                    entries: IndexMap::new(),
                 },
-                &user
+                &user,
             )
             .is_err()
         );
@@ -742,7 +742,7 @@ mod tests {
         assert!(
             validate_host_return(
                 &BexExternalValue::typed(anonymous_payload.clone(), user.clone()),
-                &user
+                &user,
             )
             .is_ok()
         );

@@ -1069,7 +1069,7 @@ pub(crate) fn mounted_interface_instantiation(
             "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
-            generic_params.len()
+            generic_params.len(),
         );
         return None;
     }

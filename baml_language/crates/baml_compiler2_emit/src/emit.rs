@@ -219,7 +219,7 @@ fn find_perfect_hash(keys: &[(i64, usize)]) -> Option<PerfectHashResult> {
                     let mut entries = vec![
                         MatchHashEntry {
                             expected_tag: i64::MIN, // sentinel for empty slots
-                            dense_index: 0
+                            dense_index: 0,
                         };
                         table_size
                     ];
@@ -2732,7 +2732,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             PendingJumpTarget::Trap => self.trap_pc.unwrap_or_else(|| {
                 panic!("missing trap PC for dead-unreachable jump target")
-            })
+            }),
         }
     }
 
@@ -2834,7 +2834,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
                 log::debug!(
                     "exception table: error local {:?} has no slot (optimized away)",
-                    region.error_local
+                    region.error_local,
                 );
                 continue;
             };

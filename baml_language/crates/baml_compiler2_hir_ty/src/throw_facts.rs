@@ -54,7 +54,7 @@ unsafe impl salsa::Update for FileThrowFacts {
 /// package-level defaults handled by the interface machinery, not solver
 /// nodes).
 ///
-/// This is the expensive half of throw inference (PPIR bodies + signature
+/// This is the expensive half of throw inference (HIR bodies + signature
 /// lowering), isolated per file so it can be (a) memoized at file
 /// granularity and (b) seeded from a previous compile: when the database
 /// carries [`baml_compiler2_hir::inputs::SeededThrowFacts`] for this file, the seeds are
@@ -646,7 +646,7 @@ mod tests {
                 .filter(|node| **node == BodyNode::Expr(binding_throw))
                 .count(),
             1,
-            "the binding operand must participate exactly once"
+            "the binding operand must participate exactly once",
         );
     }
 }

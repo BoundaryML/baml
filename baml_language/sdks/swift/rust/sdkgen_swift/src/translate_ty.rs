@@ -40,15 +40,9 @@ impl TranslateCtx {
 
 /// Swift namespace segments for a symbol, mirroring Python's routing:
 /// pkg `user` → the namespace path as-is; pkg `baml` (stdlib) → under
-/// `baml`; any other package → under `vendor.<pkg>`. PPIR `$stream`
-/// partial classes route under a `stream_types` prefix (Python's
-/// `baml_sdk.stream_types.<ns>`) — the suffix strips from the type
-/// name, so `Resume$stream` is `Baml.stream_types.lorem.Resume`.
+/// `baml`; any other package → under `vendor.<pkg>`.
 pub(crate) fn namespace_for(name: &Name) -> Vec<String> {
     let mut ns: Vec<String> = Vec::new();
-    if name.is_stream() {
-        ns.push("stream_types".to_string());
-    }
     match name.package().as_str() {
         "user" => {}
         "baml" => ns.push("baml".to_string()),
@@ -71,7 +65,7 @@ pub(crate) fn swift_type_path(name: &Name) -> String {
         out.push_str(&crate::escape_ident(&seg));
     }
     out.push('.');
-    out.push_str(&crate::escape_ident(name.bare_name()));
+    out.push_str(&crate::escape_ident(name.name().as_str()));
     out
 }
 
@@ -129,8 +123,8 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         Ty::Union(members) => translate_union(members, ctx),
         Ty::Class(name, args) => {
             // `ai.FunctionSpec<Final>` is a live runtime capability, never a
-            // generated value-model class. The PPIR partial type belongs to
-            // the separate `ai.stream.Stream<Partial, Final>` projection.
+            // generated value-model class. Streaming belongs to the separate
+            // `ai.stream.Stream<Partial, Final>` projection.
             if name.to_string() == AI_FUNCTION_SPEC {
                 if args.len() != 1 {
                     return None;

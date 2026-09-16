@@ -29,8 +29,6 @@ mod phase6;
 mod phase7;
 #[cfg(test)]
 mod phase8_exceptions;
-#[cfg(test)]
-mod stream_expansion;
 
 #[cfg(test)]
 pub(crate) mod support {
@@ -980,7 +978,6 @@ pub(crate) mod support {
     }
 
     /// Render a file's TIR output in the same format as the onion skin tool.
-    /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
         let mut output = String::new();
@@ -1331,9 +1328,8 @@ pub(crate) mod support {
         output
     }
 
-    /// Render a file's PPIR (canonical, post-expansion item tree) as readable
-    /// text — includes the synthesized `*$stream` companions.
-    pub fn render_ppir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
+    /// Render a file's canonical item tree as readable text.
+    pub fn render_hir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
@@ -1359,16 +1355,6 @@ pub(crate) mod support {
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            fn is_local_type_path(
-                first: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> bool {
-                local_type_names.contains(first)
-                    || first
-                        .strip_suffix("$stream")
-                        .is_some_and(|base| local_type_names.contains(base))
-            }
-
             match &ty.kind {
                 baml_compiler2_ast::TypeExprKind::Path {
                     segments,
@@ -1382,7 +1368,7 @@ pub(crate) mod support {
                         .collect::<Vec<_>>()
                         .join(".");
                     let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    let mut rendered = if is_local_type_path(first, local_type_names) {
+                    let mut rendered = if local_type_names.contains(first) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
@@ -1517,16 +1503,6 @@ pub(crate) mod support {
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
             use baml_compiler2_hir::type_ref::TypeRefKind as K;
-            fn is_local_type_path(
-                first: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> bool {
-                local_type_names.contains(first)
-                    || first
-                        .strip_suffix("$stream")
-                        .is_some_and(|base| local_type_names.contains(base))
-            }
-
             match &store[id].kind {
                 K::Path {
                     segments,
@@ -1539,7 +1515,7 @@ pub(crate) mod support {
                         .collect::<Vec<_>>()
                         .join(".");
                     let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    let mut rendered = if is_local_type_path(first, local_type_names) {
+                    let mut rendered = if local_type_names.contains(first) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
@@ -1834,7 +1810,7 @@ pub(crate) mod support {
                 Expr::Is { scrutinee, pattern } => format!(
                     "{} is {}",
                     expr_desc_hir(*scrutinee, body, prefix, local_type_names),
-                    pat_desc_hir(*pattern, body, prefix, local_type_names)
+                    pat_desc_hir(*pattern, body, prefix, local_type_names),
                 ),
                 Expr::Catch { base, clauses } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);

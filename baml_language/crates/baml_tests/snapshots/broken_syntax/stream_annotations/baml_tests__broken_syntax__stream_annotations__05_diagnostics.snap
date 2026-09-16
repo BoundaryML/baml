@@ -41,6 +41,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0010
 
   × unexpected token
+    ╭─[main.baml:24:55]
+ 24 │     certifications Education[] @stream.type(Education[])
+    ·                                                       ┬
+    ·                                                       ╰── expected `Unexpected token in class body`, found `']'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
     ╭─[main.baml:24:56]
  24 │     certifications Education[] @stream.type(Education[])
     ·                                                        ┬

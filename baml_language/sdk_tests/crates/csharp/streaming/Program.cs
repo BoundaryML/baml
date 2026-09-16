@@ -125,7 +125,7 @@ Require(
     "FunctionSpec.build_request did not preserve the reusable prompt media");
 
 int requestsBefore = ReplayRequestCount();
-BamlStream<string?, string> finalOnly = Functions.DeterministicStream("final-only");
+BamlStream<string, string> finalOnly = Functions.DeterministicStream("final-only");
 Require(
     ReplayRequestCount() == requestsBefore,
     "generated FunctionStream eagerly dispatched its native factory");
@@ -143,7 +143,7 @@ Require(
     "streamed request did not carry the request-time resolved api key");
 
 int requestsBeforeEarly = ReplayRequestCount();
-BamlStream<string?, string> early = Functions.DeterministicStream("dispose-early");
+BamlStream<string, string> early = Functions.DeterministicStream("dispose-early");
 Require(
     ReplayRequestCount() == requestsBeforeEarly,
     "second generated FunctionStream was not cold");
@@ -160,23 +160,18 @@ Require(
     "early stream disposal changed its cancellation origin");
 
 int requestsBeforePartials = ReplayRequestCount();
-BamlStream<string?, string> stream = Functions.DeterministicStream("ordered-partials");
+BamlStream<string, string> stream = Functions.DeterministicStream("ordered-partials");
 Require(
     ReplayRequestCount() == requestsBeforePartials,
     "partial-consuming generated FunctionStream was not cold");
 
 var partials = new List<string>();
-await using (IAsyncEnumerator<string?> enumerator =
+await using (IAsyncEnumerator<string> enumerator =
     stream.GetAsyncEnumerator(timeout.Token))
 {
     while (await enumerator.MoveNextAsync().ConfigureAwait(false))
     {
-        string? partial = enumerator.Current;
-        if (partial is null)
-        {
-            continue;
-        }
-
+        string partial = enumerator.Current;
         if (partials.Count != 0)
         {
             Require(
@@ -205,23 +200,20 @@ Require(
 
 AssertGeneratedStructuredPropertyShapes();
 int requestsBeforeStructured = ReplayRequestCount();
-BamlStream<StreamEnvelopeStream?, StreamEnvelope> structured =
+BamlStream<StreamEnvelope, StreamEnvelope> structured =
     Functions.StructuredStream("stream-attributes");
 Require(
     ReplayRequestCount() == requestsBeforeStructured,
     "structured generated FunctionStream was not cold");
 
-var structuredPartials = new List<StreamEnvelopeStream>();
-await foreach (StreamEnvelopeStream? partial in
+var structuredPartials = new List<StreamEnvelope>();
+await foreach (StreamEnvelope partial in
     structured.WithCancellation(timeout.Token).ConfigureAwait(false))
 {
-    if (partial is not null)
+    structuredPartials.Add(partial);
+    if (structuredPartials.Count <= 2)
     {
-        structuredPartials.Add(partial);
-        if (structuredPartials.Count <= 2)
-        {
-            PublishReplayProgress(".structured-partials", structuredPartials.Count);
-        }
+        PublishReplayProgress(".structured-partials", structuredPartials.Count);
     }
 }
 
@@ -229,8 +221,7 @@ StreamEnvelope structuredFinal = await structured.GetFinalResponseAsync(timeout.
     .ConfigureAwait(false);
 string structuredTransitions = string.Join(
     ", ",
-    structuredPartials.Select(partial =>
-        $"state={partial.State ?? "<null>"}:done={partial.Done ?? "<null>"}"));
+    structuredPartials.Select(partial => $"state={partial.State}:done={partial.Done}"));
 Require(
     structuredFinal.Defaulted == "default"
         && structuredFinal.Done == "final"
@@ -240,24 +231,13 @@ Require(
     "structured native stream final result changed");
 Require(
     structuredPartials.Count >= 2
-        && structuredPartials[0].Done == "fin"
-        && structuredPartials[^1].Done == "final",
-    $"structured replay did not expose all stream-attribute transitions: {structuredTransitions}");
-Require(
-    structuredPartials.All(partial =>
-        partial.Required == "must"
-        && partial.DoneRequired == "sealed"
-        && partial.State == "progress"
-        && partial.Defaulted == "default"
-        && (partial.Done is null
-            || "final".StartsWith(partial.Done, StringComparison.Ordinal))),
-    "structured partial field values did not follow their generated shapes");
-Require(
-    structuredPartials.Any(partial => partial.Done == "fin"),
-    "@stream.done did not expose its incomplete value");
-Require(
-    structuredPartials.Any(partial => partial.Done == "final"),
-    "@stream.done did not appear after its value completed");
+        && structuredPartials.All(partial =>
+            structuredFinal.Required.StartsWith(partial.Required, StringComparison.Ordinal)
+            && structuredFinal.DoneRequired.StartsWith(partial.DoneRequired, StringComparison.Ordinal)
+            && structuredFinal.Defaulted.StartsWith(partial.Defaulted, StringComparison.Ordinal)
+            && structuredFinal.State.StartsWith(partial.State, StringComparison.Ordinal)
+            && structuredFinal.Done.StartsWith(partial.Done, StringComparison.Ordinal)),
+    $"structured partials were not prefixes of the final result: {structuredTransitions}");
 Require(
     ReplayRequestCount() == requestsBeforeStructured + 1,
     "structured native stream dispatched the wrong request count");
@@ -328,43 +308,9 @@ static void Require(bool condition, string message)
 static void AssertGeneratedStructuredPropertyShapes()
 {
     var nullability = new NullabilityInfoContext();
-    PropertyInfo PartialProperty(string name) =>
-        typeof(StreamEnvelopeStream).GetProperty(name)
-            ?? throw new InvalidOperationException($"generated partial omitted {name}");
     PropertyInfo FinalProperty(string name) =>
         typeof(StreamEnvelope).GetProperty(name)
             ?? throw new InvalidOperationException($"generated final omitted {name}");
-
-    PropertyInfo defaulted = PartialProperty(nameof(StreamEnvelopeStream.Defaulted));
-    PropertyInfo done = PartialProperty(nameof(StreamEnvelopeStream.Done));
-    PropertyInfo doneRequired = PartialProperty(nameof(StreamEnvelopeStream.DoneRequired));
-    PropertyInfo required = PartialProperty(nameof(StreamEnvelopeStream.Required));
-    PropertyInfo state = PartialProperty(nameof(StreamEnvelopeStream.State));
-    Require(
-        defaulted.PropertyType == typeof(string)
-            && nullability.Create(defaulted).ReadState == NullabilityState.Nullable
-            && !defaulted.IsDefined(typeof(RequiredMemberAttribute)),
-        "default partial property shape changed");
-    Require(
-        done.PropertyType == typeof(string)
-            && nullability.Create(done).ReadState == NullabilityState.Nullable
-            && !done.IsDefined(typeof(RequiredMemberAttribute)),
-        "@stream.done partial property shape changed");
-    Require(
-        doneRequired.PropertyType == typeof(string)
-            && nullability.Create(doneRequired).ReadState == NullabilityState.Nullable
-            && !doneRequired.IsDefined(typeof(RequiredMemberAttribute)),
-        "@stream.done partial property shape changed");
-    Require(
-        required.PropertyType == typeof(string)
-            && nullability.Create(required).ReadState == NullabilityState.Nullable
-            && !required.IsDefined(typeof(RequiredMemberAttribute)),
-        "ordinary required-field partial property shape changed");
-    Require(
-        state.PropertyType == typeof(string)
-            && nullability.Create(state).ReadState == NullabilityState.Nullable
-            && !state.IsDefined(typeof(RequiredMemberAttribute)),
-        "ordinary state partial property shape changed");
 
     foreach (string name in new[]
     {

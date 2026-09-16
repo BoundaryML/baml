@@ -301,11 +301,11 @@ mod schema {
                 SapTy::Literal(lit, _) => Ok(Self::literal_schema(lit)),
                 SapTy::List(inner) => Ok(json!({
                     "type": "array",
-                    "items": self.ty_schema(inner)?
+                    "items": self.ty_schema(inner)?,
                 })),
                 SapTy::Map { value, .. } => Ok(json!({
                     "type": "object",
-                    "additionalProperties": self.ty_schema(value)?
+                    "additionalProperties": self.ty_schema(value)?,
                 })),
                 SapTy::Union(members) => self.union_schema(members),
                 SapTy::Enum(name) => Self::enum_schema(name, self.ctx),
@@ -439,7 +439,7 @@ mod schema {
             Ok(json!({
                 "type": "object",
                 "properties": properties,
-                "required": required
+                "required": required,
             }))
         }
     }
@@ -2926,7 +2926,7 @@ mod tests {
                 fn_name: SysOp::BamlFsOpen,
                 payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
                     VmPanic::HostUnavailable { .. }
-                ))
+                )),
             }))
         ));
 
@@ -2938,7 +2938,7 @@ mod tests {
                 fn_name: SysOp::BamlSysShell,
                 payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
                     VmPanic::HostUnavailable { .. }
-                ))
+                )),
             }))
         ));
     }

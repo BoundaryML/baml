@@ -1513,7 +1513,7 @@ fn enforce_host_throw_contract(
             message: format!(
                 "host callable's declared throws contract (`{contract}`) names a \
                  declaration this engine cannot resolve, so the thrown value cannot \
-                 be checked against it"
+                 be checked against it",
             ),
             class_name: host_class,
             language: host_language,
@@ -1541,7 +1541,7 @@ fn enforce_host_throw_contract(
     let panic = bex_vm::errors::VmPanic::HostContractViolation {
         message: format!(
             "host callable threw a value of type `{runtime_ty_str}` that is not in its \
-             declared throws contract (`{contract}`)"
+             declared throws contract (`{contract}`)",
         ),
         class_name: host_class,
         language: host_language,
@@ -3430,7 +3430,7 @@ impl BexEngine {
             "GC: {} total roots from {} handles and {} parked heap permits",
             all_roots.len(),
             self.heap.stats().active_handles,
-            heap_guard.num_permits()
+            heap_guard.num_permits(),
         );
 
         cycle.roots_scanned();
@@ -6411,7 +6411,7 @@ impl BexEngine {
                             let outcome = tokio::select! {
                                 biased;
                                 () = cancel.cancelled() => SysOpOutcome::Cancelled,
-                                r = fut                  => SysOpOutcome::Result(r)
+                                r = fut                  => SysOpOutcome::Result(r),
                             };
                             thread = inactive.acquire().await;
                             if let Some((call_id, start_ticks)) = prof_await {
@@ -6815,7 +6815,7 @@ impl BexEngine {
                     let outcome = tokio::select! {
                         biased;
                         () = cancel.cancelled() => AwaitOutcome::Cancelled,
-                        r = future              => AwaitOutcome::Done(r)
+                        r = future              => AwaitOutcome::Done(r),
                     };
                     thread = inactive.acquire().await;
                     if let Some((call_id, start_ticks)) = prof_await {
@@ -6908,7 +6908,7 @@ impl BexEngine {
                         tokio::select! {
                             biased;
                             () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
-                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r)
+                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
                         }
                     };
                     thread = inactive.acquire().await;
@@ -7198,7 +7198,7 @@ impl BexEngine {
                             return Err(EngineError::TypeMismatch {
                                 message: format!(
                                     "mounted type `{export_name}` has an invalid witness rule"
-                                )
+                                ),
                             });
                         };
                         let Object::Interface(interface) = vm.get_object(rule.interface_head)
@@ -7206,19 +7206,19 @@ impl BexEngine {
                             return Err(EngineError::TypeMismatch {
                                 message: format!(
                                     "mounted type `{export_name}` has an invalid witness interface"
-                                )
+                                ),
                             });
                         };
                         if interface.fields.len() != rule.field_links.len() {
                             return Err(EngineError::TypeMismatch {
                                 message: format!(
                                     "mounted type `{export_name}` has an incomplete witness field map"
-                                )
+                                ),
                             });
                         }
                         let interface_head = bex_vm_types::TypeHead::new(
                             rule.interface_head,
-                            interface.type_tag
+                            interface.type_tag,
                         );
                         let interface_name = wire_head(&interface_head)?;
                         let interface_args = rule
@@ -7229,7 +7229,7 @@ impl BexEngine {
                                     EngineError::TypeMismatch {
                                         message: format!(
                                             "mounted type `{export_name}` has an unrealized witness argument: {error}"
-                                        )
+                                        ),
                                     }
                                 })?;
                                 let ty = bex_vm_types::RuntimeTy::from(ty);
@@ -7244,7 +7244,7 @@ impl BexEngine {
                                     EngineError::TypeMismatch {
                                         message: format!(
                                             "mounted type `{export_name}` has an unrealized witness associated type: {error}"
-                                        )
+                                        ),
                                     }
                                 })?;
                                 let ty = bex_vm_types::RuntimeTy::from(ty);
@@ -7260,12 +7260,12 @@ impl BexEngine {
                                     EngineError::TypeMismatch {
                                         message: format!(
                                             "mounted type `{export_name}` has an out-of-range witness field link"
-                                        )
+                                        ),
                                     }
                                 })?;
                                 Ok((
                                     field.name.clone(),
-                                    baml_type::Name::new(&class_field.name)
+                                    baml_type::Name::new(&class_field.name),
                                 ))
                             })
                             .collect::<Result<Vec<_>, EngineError>>()?;
@@ -7273,9 +7273,9 @@ impl BexEngine {
                             baml_type::Interface::new(
                                 interface_name,
                                 interface_args.into(),
-                                associated_types.into()
+                                associated_types.into(),
                             ),
-                            field_links
+                            field_links,
                         ))
                     })
                     .collect::<Result<Vec<_>, EngineError>>()?
@@ -7461,8 +7461,8 @@ impl BexEngine {
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
                         "message".to_string() => BexExternalValue::String(
-                            "a Session permits only one active eval".into()
-                        )
+                            "a Session permits only one active eval".into(),
+                        ),
                     },
                 },
             ));
@@ -7542,7 +7542,7 @@ impl BexEngine {
                 fields: indexmap::indexmap! {
                     "file".to_string() => string(value.file),
                     "start".to_string() => BexExternalValue::Int(i64::try_from(value.start).expect("source offsets fit BAML int")),
-                    "end".to_string() => BexExternalValue::Int(i64::try_from(value.end).expect("source offsets fit BAML int"))
+                    "end".to_string() => BexExternalValue::Int(i64::try_from(value.end).expect("source offsets fit BAML int")),
                 },
             }
         }
@@ -7580,7 +7580,7 @@ impl BexEngine {
                         fields: indexmap::indexmap! {
                             "start".to_string() => BexExternalValue::Int(i64::from(value.start)),
                             "end".to_string() => BexExternalValue::Int(i64::from(value.end)),
-                            "kind".to_string() => string(kind)
+                            "kind".to_string() => string(kind),
                         },
                     }
                 })
@@ -7607,12 +7607,12 @@ impl BexEngine {
                             highlights(Vec::new()),
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: Vec::new()
+                                items: Vec::new(),
                             },
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: Vec::new()
-                            }
+                                items: Vec::new(),
+                            },
                         )
                     },
                     |details| {
@@ -7620,7 +7620,7 @@ impl BexEngine {
                             bex_vm_types::RuntimeDiagnosticPhase::Parse => "parse",
                             bex_vm_types::RuntimeDiagnosticPhase::Hir => "hir",
                             bex_vm_types::RuntimeDiagnosticPhase::Validation => "validation",
-                            bex_vm_types::RuntimeDiagnosticPhase::Type => "type"
+                            bex_vm_types::RuntimeDiagnosticPhase::Type => "type",
                         };
                         let annotations = details
                             .annotations
@@ -7632,8 +7632,8 @@ impl BexEngine {
                                     "span".to_string() => span(annotation.span),
                                     "message".to_string() => annotation.message.map_or(BexExternalValue::Null, string),
                                     "message_highlights".to_string() => highlights(annotation.message_highlights),
-                                    "is_primary".to_string() => BexExternalValue::Bool(annotation.is_primary)
-                                }
+                                    "is_primary".to_string() => BexExternalValue::Bool(annotation.is_primary),
+                                },
                             })
                             .collect();
                         let related_info = details
@@ -7646,8 +7646,8 @@ impl BexEngine {
                                     "span".to_string() => span(related.span),
                                     "message".to_string() => string(related.message),
                                     "message_highlights".to_string() => highlights(related.message_highlights),
-                                    "file_path".to_string() => related.file_path.map_or(BexExternalValue::Null, string)
-                                }
+                                    "file_path".to_string() => related.file_path.map_or(BexExternalValue::Null, string),
+                                },
                             })
                             .collect();
                         (
@@ -7657,14 +7657,14 @@ impl BexEngine {
                             highlights(details.message_highlights),
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: annotations
+                                items: annotations,
                             },
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: related_info
-                            }
+                                items: related_info,
+                            },
                         )
-                    }
+                    },
                 );
             BexExternalValue::Instance {
                 class_name: "reflect.Diagnostic".to_string(),
@@ -7679,7 +7679,7 @@ impl BexEngine {
                     "primary_label".to_string() => primary_label,
                     "message_highlights".to_string() => message_highlights,
                     "annotations".to_string() => annotations,
-                    "related_info".to_string() => related_info
+                    "related_info".to_string() => related_info,
                 },
             }
         }
@@ -7703,7 +7703,7 @@ impl BexEngine {
                     class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(artifact))))
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(artifact)))),
                     },
                 }),
                 Err(diagnostics) => {
@@ -7726,8 +7726,8 @@ impl BexEngine {
                                 "message".to_string() => string(message),
                                 "diagnostics".to_string() => BexExternalValue::Array {
                                     element_type: baml_type::RuntimeTy::unknown(),
-                                    items
-                                }
+                                    items,
+                                },
                             },
                         },
                     ))

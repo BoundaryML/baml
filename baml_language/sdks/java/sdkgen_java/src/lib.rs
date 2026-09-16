@@ -113,7 +113,7 @@ fn to_source_code_internal(
     // Only `PreserveCase` is wired up so far.
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
-        "sdkgen_java only supports naming_convention = PreserveCase (got {naming_convention})"
+        "sdkgen_java only supports naming_convention = PreserveCase (got {naming_convention})",
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
@@ -371,7 +371,7 @@ fn to_source_code_internal(
                 "        baml_bridge.TypeRegistry.registerUnionAlias({alias_fqn:?}, {union_binary:?}, new baml_bridge.BamlType[] {{{}}}, new java.lang.String[] {{{}}});\n",
                 tokens.join(", "),
                 records.join(", ")
-            ))
+            )),
         }
     }
     for (fqn, java_name, fields, descriptors) in &class_registry {
@@ -401,7 +401,7 @@ fn to_source_code_internal(
             "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
             &format!(
                 "            try (java.io.InputStream manifestIn = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.toml\")) {{\n                if (manifestIn == null) {{\n                    throw new IllegalStateException(\"baml_sdk/inlinedbaml.toml not found on the classpath\");\n                }}\n                String embeddedBamlToml = new String(manifestIn.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);\n                baml_bridge.BamlFfi.initFromBytecode(bytecode, embeddedBamlToml);\n            }}"
-            )
+            ),
         )
     } else {
         anchor_body
@@ -657,8 +657,7 @@ mod tests {
         }
     }
 
-    // Leaf-type constructors: the codegen `Ty` variants now carry a
-    // `TyAttr`, so these keep the fixture builders readable.
+    // Type constructors that keep the fixture builders readable.
     fn t_int() -> Ty {
         Ty::Int
     }
@@ -1628,16 +1627,6 @@ mod tests {
         let file = &out[&PathBuf::from("Foo.java")];
         assert!(file.contains("package baml_sdk;"));
         assert!(file.contains("public final class Foo {"));
-    }
-
-    #[test]
-    fn stream_class_emits_beside_base_with_suffix() {
-        let mut pool = SymbolPool::new();
-        let n = name("user", &["lorem"], "Resume$stream");
-        pool.insert(n.clone(), class_sym(&n, &[], 0));
-        let out = emit_sdk(&pool);
-        let file = &out[&PathBuf::from("lorem/Resume$stream.java")];
-        assert!(file.contains("public final class Resume$stream {"));
     }
 
     #[test]

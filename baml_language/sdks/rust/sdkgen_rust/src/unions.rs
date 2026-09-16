@@ -401,11 +401,7 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Bool => Some("Bool".to_string()),
         Ty::Uint8Array => Some("Uint8Array".to_string()),
         Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
-            let mut variant = name.bare_name().to_string();
-            if name.name().as_str().ends_with("$stream") {
-                variant.push_str("Stream");
-            }
-            Some(variant)
+            Some(name.name().to_string())
         }
         // A `TypeVar` arm's variant is named after the type parameter
         // (`T | string` → `TOrString { T(T), String(String) }`).

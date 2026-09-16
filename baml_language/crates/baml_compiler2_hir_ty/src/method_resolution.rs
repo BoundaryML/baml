@@ -10,8 +10,8 @@
 //! interface members - existential and rigid-bounded receivers through
 //! their bounds (I3), concrete receivers through the impls they match
 //! (I6, the rust-analyzer trait-impl candidate tier) - then fields.
-//! Not yet resolved here (later slices): union receivers, `$stream`
-//! companions, and free-impl method bodies as inference roots (their
+//! Not yet resolved here (later slices): union receivers and free-impl
+//! method bodies as inference roots (their
 //! member TYPES already resolve through the interface signature).
 
 use baml_compiler2_hir::{
@@ -1690,7 +1690,7 @@ pub(crate) fn interface_instantiation(
             "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
-            data.generic_params.len()
+            data.generic_params.len(),
         );
         return None;
     }

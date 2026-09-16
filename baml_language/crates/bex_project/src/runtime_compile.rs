@@ -2583,7 +2583,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                     format!(
                         "submission result has type `{}`, which is not a subtype of requested contract `{}`",
                         actual.render_with(&viewpoint),
-                        expected.render_with(&viewpoint)
+                        expected.render_with(&viewpoint),
                     ),
                 )]);
             }
@@ -2728,7 +2728,7 @@ mod tests {
             Some(RuntimeSourceSpan {
                 file: "primary.baml".to_string(),
                 start: 1,
-                end: 4
+                end: 4,
             })
         );
         let details = owned.details.expect("source diagnostics retain detail");

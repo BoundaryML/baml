@@ -167,8 +167,8 @@ fn emit_binding(
             (
                 "self",
                 ::std::option::Option::Some(
-                    ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(self)
-                )
+                    ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(self),
+                ),
             )
         });
     }
@@ -209,7 +209,7 @@ fn emit_binding(
             converts.push(quote! {
                 let #param = ::baml_bridge::host_value::callable_handle(
                     #param,
-                    &[#(#host_params),*]
+                    &[#(#host_params),*],
                 );
             });
             kwarg_entries.push(quote! {
@@ -247,8 +247,8 @@ fn emit_binding(
                 (
                     #arg_name,
                     ::std::option::Option::Some(
-                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param)
-                    )
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param),
+                    ),
                 )
             });
         }
@@ -272,7 +272,7 @@ fn emit_binding(
 
     let self_param = match receiver {
         Receiver::None => TokenStream::new(),
-        Receiver::RefSelf => quote! { &self },
+        Receiver::RefSelf => quote! { &self, },
     };
     let sync_name = idents::ident(binding_name);
     let async_name = format_ident!("{}_async", idents::dir_segment(binding_name));
@@ -331,7 +331,7 @@ fn emit_binding(
             quote! {
                 (
                     #param,
-                    <#ident as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()
+                    <#ident as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
                 )
             }
         });
@@ -347,8 +347,8 @@ fn emit_binding(
             #schema_method_name_attr
             pub fn #with_name #generics_decl (
                 #self_param
-                #(#params)*
-                options: ::baml_bridge::CallOptions
+                #(#params,)*
+                options: ::baml_bridge::CallOptions,
             ) -> #result_ty {
                 crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
                 #(#converts)*
@@ -364,8 +364,8 @@ fn emit_binding(
             #schema_method_name_attr
             pub async fn #with_async_name #generics_decl (
                 #self_param
-                #(#params)*
-                options: ::baml_bridge::CallOptions
+                #(#params,)*
+                options: ::baml_bridge::CallOptions,
             ) -> #result_ty {
                 crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
                 #(#converts)*
@@ -390,7 +390,7 @@ fn emit_binding(
             ::baml_bridge::runtime::invoke_sync(
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr
+                #type_args_expr,
             )
         }
 
@@ -403,7 +403,7 @@ fn emit_binding(
             ::baml_bridge::runtime::invoke(
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr
+                #type_args_expr,
             )
             .await
         }
@@ -417,7 +417,7 @@ fn emit_binding(
 /// (`::baml_bridge::HostCallback`), plus one [`HostParam`] descriptor per
 /// callable parameter that the dispatcher slots incoming BAML args against.
 struct CallableParts {
-    /// `(A1, A2, …)` — the closure's argument tuple (`(A)` for one arg,
+    /// `(A1, A2, …)` — the closure's argument tuple (`(A,)` for one arg,
     /// `()` for none).
     args_tuple: TokenStream,
     /// The closure's return type.
@@ -519,10 +519,10 @@ fn translate_callable(
         });
     }
     // A one-element tuple needs its trailing comma; the parenthesized form
-    // `(A)` is just `A`, not `(A)`.
+    // `(A)` is just `A`, not `(A,)`.
     let args_tuple = match arg_types.as_slice() {
         [] => quote! { () },
-        [one] => quote! { (#one) },
+        [one] => quote! { (#one,) },
         many => quote! { (#(#many),*) },
     };
     let ret_ty: &baml_codegen_types::Ty = ret;
@@ -599,7 +599,7 @@ fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
             Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
-                let n = name.bare_name().to_string();
+                let n = name.name().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }

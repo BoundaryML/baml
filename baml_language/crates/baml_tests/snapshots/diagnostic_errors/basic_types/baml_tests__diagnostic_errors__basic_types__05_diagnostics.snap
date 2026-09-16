@@ -13,6 +13,15 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
+  × unknown attribute `@stream.with_state`
+    ╭─[classes.baml:13:18]
+ 13 │     state string @stream.with_state
+    ·                  ─────────┬────────
+    ·                           ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
   × unknown attribute `@stream.not_null`
     ╭─[classes.baml:16:96]
  16 │     multiple string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null

@@ -678,7 +678,7 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
     assert_eq!(
         heap.gen2_dirty_card_count(),
         1,
-        "marking a Gen2 card should register exactly one dirty card"
+        "marking a Gen2 card should register exactly one dirty card",
     );
 
     // First minor GC — the dirty card is scanned but the Gen2 object has no
@@ -692,7 +692,7 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
     assert_eq!(
         heap.gen2_dirty_card_count(),
         1,
-        "Minor GC does not clear the Gen2 card table — the mark persists"
+        "Minor GC does not clear the Gen2 card table — the mark persists",
     );
 
     // Allocate a brand-new Gen0 object that nothing references.

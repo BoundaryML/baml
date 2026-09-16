@@ -5,18 +5,12 @@ expression: "render_labeled_cases(&[(\"type_alias_direct_self_reference\", \"typ
 === type_alias_direct_self_reference ===
 type user.A = user.A
   !! 0..10: recursive type alias cycle: A
-type user.A$stream = user.A$stream
-  !! 0..0: recursive type alias cycle: A$stream
 
 === type_alias_mutual_recursion ===
 type user.A = user.B
   !! 0..10: recursive type alias cycle: A
 type user.B = user.A
   !! 11..21: recursive type alias cycle: B
-type user.A$stream = user.B$stream
-  !! 0..0: recursive type alias cycle: A$stream
-type user.B$stream = user.A$stream
-  !! 0..0: recursive type alias cycle: B$stream
 
 === type_alias_indirect_cycle_three ===
 type user.A = user.B
@@ -25,9 +19,3 @@ type user.B = user.C
   !! 11..21: recursive type alias cycle: B
 type user.C = user.A
   !! 22..32: recursive type alias cycle: C
-type user.A$stream = user.B$stream
-  !! 0..0: recursive type alias cycle: A$stream
-type user.B$stream = user.C$stream
-  !! 0..0: recursive type alias cycle: B$stream
-type user.C$stream = user.A$stream
-  !! 0..0: recursive type alias cycle: C$stream

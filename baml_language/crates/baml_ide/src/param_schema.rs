@@ -496,7 +496,7 @@ mod tests {
                     { "name": "age",
                       "schema": { "type": "optional", "inner": { "type": "int" } } },
                     { "name": "nested", "schema": { "type": "ref", "name": "user.Nested" } },
-                ] }
+                ] },
             })
         );
     }
@@ -596,7 +596,7 @@ mod tests {
             json!({ "kind": "class", "fields": [
                 { "name": "value", "schema": { "type": "int" } },
                 { "name": "children", "schema": {
-                    "type": "list", "item": { "type": "ref", "name": "user.Tree" }
+                    "type": "list", "item": { "type": "ref", "name": "user.Tree" },
                 } },
             ] })
         );
@@ -718,7 +718,7 @@ mod tests {
             types_json(&listing),
             json!({
                 "user.A": { "kind": "alias", "schema": { "type": "ref", "name": "user.B" } },
-                "user.B": { "kind": "alias", "schema": { "type": "ref", "name": "user.A" } }
+                "user.B": { "kind": "alias", "schema": { "type": "ref", "name": "user.A" } },
             })
         );
     }
@@ -880,7 +880,7 @@ function plain(x: int) -> int { x }
         let listing = list_functions_with_metadata(&db, package);
         let actual = serde_json::json!({
             "params": params_json(&listing, "golden"),
-            "types": types_json(&listing)
+            "types": types_json(&listing),
         });
         let golden: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json"

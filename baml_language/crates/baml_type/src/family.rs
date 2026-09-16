@@ -86,13 +86,13 @@ ty_family! {
     satellite FunctionParamTy<N: Clone = TypeName> {
         pub name: Option<Name>,
         pub ty: Ty<N>,
-        pub mode: FunctionParamMode
+        pub mode: FunctionParamMode,
     } methods {
         pub fn required(name: Option<Name>, ty: Ty<N>) -> Self {
             Self {
                 name,
                 ty,
-                mode: FunctionParamMode::Required
+                mode: FunctionParamMode::Required,
             }
         }
 
@@ -100,7 +100,7 @@ ty_family! {
             Self {
                 name,
                 ty,
-                mode: FunctionParamMode::Optional
+                mode: FunctionParamMode::Optional,
             }
         }
 
@@ -129,7 +129,7 @@ ty_family! {
         /// `Item = int` in `Iterator<Item = int>`). Real constraints carried as
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
-        pub associated_types: Box<[(Name, Ty<N>)]>
+        pub associated_types: Box<[(Name, Ty<N>)]>,
     } methods {
         /// Build an interface constraint, sorting `associated_types` by name so the
         /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
@@ -141,13 +141,13 @@ ty_family! {
         pub fn new(
             name: N,
             generics: Box<[Ty<N>]>,
-            mut associated_types: Box<[(Name, Ty<N>)]>
+            mut associated_types: Box<[(Name, Ty<N>)]>,
         ) -> Self {
             associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
             Self {
                 name,
                 generics,
-                associated_types
+                associated_types,
             }
         }
 
@@ -164,7 +164,7 @@ ty_family! {
             Ty::Interface(
                 self.name.clone(),
                 self.generics.clone(),
-                self.associated_types.clone()
+                self.associated_types.clone(),
             )
         }
     }
@@ -215,7 +215,7 @@ ty_family! {
         #[axis(concrete)]
         Map {
             key: Box<Ty<N>>,
-            value: Box<Ty<N>>
+            value: Box<Ty<N>>,
         } = 14,
         #[axis(abstract)]
         Union(Box<[Ty<N>]>) = 15,
@@ -225,7 +225,7 @@ ty_family! {
         Function {
             params: Box<[FunctionParamTy<N>]>,
             ret: Box<Ty<N>>,
-            throws: Box<Ty<N>>
+            throws: Box<Ty<N>>,
         } = 16,
         /// A future handle — the result of `schedule_future` or `spawn`
         /// before `await`.
@@ -286,7 +286,7 @@ ty_family! {
             /// never lacks its qualifier. This is what lets a realized-base
             /// projection reduce to the impl's binding at substitution time.
             interface: Box<Interface<N>>,
-            member: Name
+            member: Name,
         } = 26,
         /// The top type - may have any concrete value.
         ///
@@ -354,8 +354,8 @@ ty_family! {
         /// unique so declaration order keeps `Ord` parity meaningful.
         #[axis(infer)]
         InferVar {
-            var: crate::interned::InferVar
-        } = 37
+            var: crate::interned::InferVar,
+        } = 37,
     }
 }
 

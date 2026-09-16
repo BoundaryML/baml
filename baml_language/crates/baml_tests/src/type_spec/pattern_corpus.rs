@@ -31,10 +31,6 @@ fn corpus_verdicts(relative_path: &str) -> String {
             continue;
         };
         let data = baml_compiler2_hir::item_data::function_data(&db, function);
-        // Synthetic $stream companions duplicate their originals.
-        if data.name.as_str().ends_with("$stream") {
-            continue;
-        }
         let Some(scope) = baml_compiler2_hir::body::body_scope(&db, owner) else {
             continue;
         };

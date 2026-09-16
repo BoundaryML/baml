@@ -64,11 +64,9 @@ Type-shape fixture paths (representative):
 baml_sdk/Baml.java                          # runtime anchor (typemap + bytecode init)
 baml_sdk/Fns.java                           # root-namespace free functions
 baml_sdk/Foo.java
-baml_sdk/Foo$stream.java                    # stream companion, in-package
 baml_sdk/inlinedbaml.b64                    # compiled bytecode, base64 resource
 baml_sdk/primitives/Fns.java
 baml_sdk/primitives/Primitives.java
-baml_sdk/primitives/Primitives$stream.java
 baml_sdk/enums/Sentiment.java
 baml_sdk/symbol_collisions/lorem/Ipsum.java
 baml_sdk/void$/Fns.java                      # `void` namespace, keyword-escaped
@@ -84,14 +82,6 @@ Function-call fixture paths follow the same pattern
 > exist by virtue of their directory, so a container namespace emits *nothing*.
 > Reason: Java has no module-object indirection to lazily populate.
 > `sdkgen_java/src/lib.rs:15-16`.
-
-> ⚠ **Deviation from Python:** `$stream` companions stay **in the base type's
-> package** with a `$stream`-suffixed name (`Foo$stream`, `primitives/Primitives$stream`),
-> because `$` is a legal Java identifier character. Python cannot use `$` in an
-> identifier, so it emits a **parallel `stream_types/<ns>` package** and routes
-> the `$stream` FQN there via the type map. Reason: keep the BAML name verbatim;
-> no parallel package tree. `sdkgen_java/src/routing.rs:19-23`. (See
-> *Stream Companion Types*.)
 
 > ⚠ **Deviation from Python:** Package/segment names that collide with Java
 > reserved words are escaped with a trailing `$` (`void` → `void$`), not left
@@ -506,8 +496,7 @@ reified receiver so the class type args can be recovered")` when
 
 > ⚠ **Deviation from Python:** A BAML method/factory whose name is a Java reserved
 > word is `$`-escaped (`new` → `new$`, and its async sibling `new$_async`).
-> Python only escapes `$` (e.g. `$stream` → base name); Java escapes the JLS
-> keyword set. `routing.rs:119-133`; real output `GenericBox.java:24-40`.
+> Python only has to avoid `$`; Java escapes the JLS keyword set. `routing.rs:119-133`; real output `GenericBox.java:24-40`.
 
 **Explicit type-argument bindings** (Python's `identity[int](5)` subscript and
 low-level `_types={T: int}` kwarg, plus the `class_type_params=[…]` /
@@ -636,7 +625,7 @@ capability). `baml_bridge/BamlStream.java` is a **real**
 ordinary `BamlFfi.callSync`/`callAsync`. Decode retains the tagged handle's
 concrete `ty.class_ty.name`; the wrapper derives `<FQN>.next` / `<FQN>.final`
 from that identity and passes `this` as the `self` receiver with a **`null`
-(wire-driven) descriptor**. Generated `$stream` companions return
+(wire-driven) descriptor**. Generated `_stream` bindings return
 `baml_bridge.BamlStream<TStream, TFinal>` directly. Exhaustion returns a
 runtime-owned `baml_sdk.ai.stream.Done` **value** (no `null`, no exception),
 registered in the typemap under `ai.stream.Done`. Decode maps
@@ -650,46 +639,6 @@ escape to `get_final`/`get_final_async` (Java reserved word; OWNER decision
 `llm_functions` fixture now exercises the deeper `$build_request` round-trip
 end-to-end on keyless replay (`TestStreamingE2e`, `llm_functions` 21/21), so it is
 no longer "codegen-only" — the runtime behavior is verified offline.
-
-## Stream Companion Types
-
-Java keeps the compiler-produced `$stream` companion as an **in-package class
-with the `$stream` name kept verbatim** — every optional-widened field boxes:
-
-```java
-// baml_sdk/primitives/Primitives$stream.java
-public final class Primitives$stream {
-    private final java.lang.Long int_field;       // int   → boxed Long   (partial ⇒ nullable)
-    private final java.lang.Double float_field;    // float → boxed Double
-    private final java.lang.String string_field;
-    private final java.lang.Boolean bool_field;
-    private final java.lang.Void null_field;
-    private final byte[] uint8array_field;
-    …
-}
-```
-
-The type map routes both the base and the companion FQN to their in-package Java
-classes (from `Baml.java`):
-
-```java
-registerClass("user.primitives.Primitives",        "baml_sdk.primitives.Primitives",        …);
-registerClass("user.primitives.Primitives$stream", "baml_sdk.primitives.Primitives$stream", …);
-```
-
-Generic and recursive companions follow the same in-package convention
-(`generics/WrapperMethods$stream.java`, `aliases/RecList$stream.java`). As in
-Python, codegen consumes the compiler-produced `$stream` class shape as a regular
-class; it does not derive a `Partial[T]` transformation at Java codegen time.
-
-> ⚠ **Deviation from Python:** Python puts companions in a **parallel
-> `stream_types/<ns>` package** and names the class the base name (because `$` is
-> not a Python identifier); the type map maps `…$stream` FQN → `stream_types`
-> module. Java keeps `<Name>$stream` **beside its base type** (no parallel tree).
-> `routing.rs:19-23,141-158` (routing ignores the `$stream` suffix). *Note (GAP B,
-> handoff):* the ported `TestStreams` tests were written to Python's
-> `stream_types.*` layout; DECIDED 2026-07-17 (Option B): tests were retargeted to
-> `$stream`, house-rule, vs move the emitter to parallel packages).
 
 ## Optional Function Arguments
 

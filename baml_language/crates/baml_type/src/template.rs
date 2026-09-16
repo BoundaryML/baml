@@ -1243,7 +1243,7 @@ mod tests {
         assert_eq!(
             proj.substitute_with_fuel(&[RealizedTy::unknown()], &CyclicCtx, 0),
             Err(SubstituteError::ProjectionFuelExhausted {
-                member: crate::Name::new("Item")
+                member: crate::Name::new("Item"),
             })
         );
     }

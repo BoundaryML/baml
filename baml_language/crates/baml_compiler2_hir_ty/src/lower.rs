@@ -2,13 +2,12 @@
 //! resolution - the rust-analyzer `TyLoweringContext` analog (S4).
 //!
 //! ONE syntax surface: everything lowers through span-free `TypeRef`s -
-//! signatures, fields, and aliases from ppir's per-item stores, body
-//! annotations from ppir's per-body stores (`body_type_refs`). This crate
+//! signatures, fields, and aliases from HIR's per-item stores, body
+//! annotations from HIR's per-body stores (`body_type_refs`). This crate
 //! never sees `ast::TypeExpr`. Name
 //! resolution mirrors TIR's `resolve_type_in` algorithm exactly - namespace-
-//! relative first, then `root.`-absolute, then package-prefixed, then the
-//! `$stream` companion fallback - against ppir's canonical `package_items`
-//! (which includes synthesized `*$stream` items).
+//! relative first, then `root.`-absolute, then package-prefixed - against
+//! HIR's canonical `package_items`.
 //!
 //! Semantics mirrored from TIR's `lower_type_expr` (reference, not a
 //! dependency): aliases stay NOMINAL at lowering (expansion is lazy and
@@ -1431,7 +1430,7 @@ impl<'db> LowerCtx<'db> {
                 }
             } else if let Some(package) = self.accessible_package(&segments[0]) {
                 // A source root served from a package interface may also carry
-                // link-only PPIR stubs so emit can allocate import slots. Those
+                // link-only HIR stubs so emit can allocate import slots. Those
                 // stubs are deliberately type-erased (notably generic function
                 // parameters become `unknown`) and must never win semantic
                 // resolution over the mounted interface row. Inference falls

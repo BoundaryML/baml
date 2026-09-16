@@ -217,8 +217,7 @@ type Loop = Loop[]
         );
 
         // A recursive alias stays nominal in its own value - no expansion at
-        // lowering time. (Synthetic `$stream` companions sort first in the
-        // enumeration, so select by name.)
+        // lowering time.
         let alias = baml_compiler2_hir::item_data::file_type_aliases(&db, file)
             .iter()
             .copied()

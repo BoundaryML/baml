@@ -734,7 +734,7 @@ impl BexEngine {
                     "Class '{}' has {} fields but instance has {} fields",
                     class.name,
                     class.fields.len(),
-                    instance.fields.len()
+                    instance.fields.len(),
                 );
 
                 // Read field types directly from the Class object on the heap
@@ -831,7 +831,7 @@ impl BexEngine {
                             "enum '{}' has {} variants but variant index is {}",
                             enm.name,
                             enm.variants.len(),
-                            variant.index
+                            variant.index,
                         ),
                     })?;
                 let enum_name = enm.name.to_string();
@@ -1837,7 +1837,7 @@ impl BexEngine {
                     peel_function_ty(ty).ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "host callable cannot be passed where the declared type \
-                             is `{ty}`; expected a function type or `$rust_type`"
+                             is `{ty}`; expected a function type or `$rust_type`",
                         ),
                     })?;
                 if arc.kind != HostValueKind::Callable {
@@ -1858,7 +1858,7 @@ impl BexEngine {
                         return Err(EngineError::TypeMismatch {
                             message: format!(
                                 "host callable cannot be passed where the declared type \
-                                 is `{other}`; expected a function type"
+                                 is `{other}`; expected a function type",
                             ),
                         });
                     }
@@ -1879,7 +1879,7 @@ impl BexEngine {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
                             "host callable cannot be bound: its return type `{ret}` contains an \
-                             unresolved position, so the host's returned value cannot be validated"
+                             unresolved position, so the host's returned value cannot be validated",
                         ),
                     });
                 }
@@ -3527,7 +3527,7 @@ pub(crate) fn check_generic_arg(
             } else {
                 Err(format!(
                     "has runtime type `{}`, which doesn't match the expected type `{expected}`",
-                    value.type_name()
+                    value.type_name(),
                 ))
             }
         }
@@ -3546,7 +3546,7 @@ pub(crate) fn check_generic_arg(
             bex_external_types::validate_host_return(value, expected).map_err(|_| {
                 format!(
                     "has type `{}`, which doesn't match the expected type `{expected}`",
-                    value.type_name()
+                    value.type_name(),
                 )
             })
         }
@@ -3649,7 +3649,7 @@ impl BexEngine {
                     Err(format!(
                         "host callable returned a value of type `{}` that does not match the \
                          declared return type `{expected}`",
-                        inner.type_name()
+                        inner.type_name(),
                     ))
                 }
             }
@@ -3672,7 +3672,7 @@ impl BexEngine {
                 }
                 other => Err(format!(
                     "host callable returned `{}` where a list was declared",
-                    other.type_name()
+                    other.type_name(),
                 )),
             },
 
@@ -3685,7 +3685,7 @@ impl BexEngine {
                 }
                 other => Err(format!(
                     "host callable returned `{}` where a map was declared",
-                    other.type_name()
+                    other.type_name(),
                 )),
             },
 
@@ -3703,7 +3703,7 @@ impl BexEngine {
                     if !type_name_matches_external_name(class_name, tn) {
                         return Err(format!(
                             "host callable returned an instance of `{class_name}` where class \
-                             `{tn}` was declared"
+                             `{tn}` was declared",
                         ));
                     }
                     let Some(class_ptr) = self
@@ -3747,7 +3747,7 @@ impl BexEngine {
                 }
                 other => Err(format!(
                     "host callable returned `{}` where class `{tn}` was declared",
-                    other.type_name()
+                    other.type_name(),
                 )),
             },
 
@@ -3762,7 +3762,7 @@ impl BexEngine {
                     if !type_name_matches_external_name(enum_name, tn) {
                         return Err(format!(
                             "host callable returned a variant of enum `{enum_name}` where enum \
-                             `{tn}` was declared"
+                             `{tn}` was declared",
                         ));
                     }
                     if let Some(enum_ptr) = self
@@ -3778,7 +3778,7 @@ impl BexEngine {
                             if !enum_obj.variants.iter().any(|v| &v.name == variant_name) {
                                 return Err(format!(
                                     "host callable returned unknown variant `{variant_name}` of \
-                                     enum `{enum_name}`"
+                                     enum `{enum_name}`",
                                 ));
                             }
                         }
@@ -3787,7 +3787,7 @@ impl BexEngine {
                 }
                 other => Err(format!(
                     "host callable returned `{}` where enum `{tn}` was declared",
-                    other.type_name()
+                    other.type_name(),
                 )),
             },
 
@@ -3799,13 +3799,13 @@ impl BexEngine {
                     if !type_name_matches_external_name(enum_name, tn) {
                         return Err(format!(
                             "host callable returned a variant of enum `{enum_name}` where enum \
-                             `{tn}` was declared"
+                             `{tn}` was declared",
                         ));
                     }
                     if variant_name != expected_variant.as_str() {
                         return Err(format!(
                             "host callable returned enum variant `{enum_name}.{variant_name}` \
-                             where `{tn}.{expected_variant}` was declared"
+                             where `{tn}.{expected_variant}` was declared",
                         ));
                     }
                     Ok(())
@@ -3813,7 +3813,7 @@ impl BexEngine {
                 other => Err(format!(
                     "host callable returned `{}` where enum variant \
                      `{tn}.{expected_variant}` was declared",
-                    other.type_name()
+                    other.type_name(),
                 )),
             },
 
@@ -4049,7 +4049,7 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::RustData(_)
                 | Object::Type(_) => None,
                 #[cfg(feature = "heap_debug")]
-                Object::Sentinel(_) => None
+                Object::Sentinel(_) => None,
             }
         }
     };
@@ -4495,7 +4495,7 @@ fn coerce_arg_to_declared_type_with_aliases(
     {
         return Err(EngineError::TypeMismatch {
             message: "inbound value_type must identify one exact selected type, not a root union or optional"
-                .to_string()
+                .to_string(),
         });
     }
 
@@ -5328,11 +5328,11 @@ mod union_container_selection_tests {
 
         assert_eq!(
             find_matching_union_member(dynamic_value, &members),
-            Some(&partial_arm)
+            Some(&partial_arm),
         );
         assert_eq!(
             find_matching_union_member(done_value, &members),
-            Some(&done_arm)
+            Some(&done_arm),
         );
     }
 
@@ -5713,7 +5713,7 @@ mod union_container_selection_tests {
             *value,
             BexExternalValue::Array {
                 ref element_type,
-                ref items
+                ref items,
             } if items.is_empty()
                 && runtime_ty_structurally_equal(element_type, &RuntimeTy::int())
         ));
@@ -5991,7 +5991,7 @@ mod union_container_selection_tests {
             &media_wrapper_ty(MediaKind::Image),
             &first,
             &aliases,
-            true
+            true,
         ));
     }
 
@@ -6502,7 +6502,7 @@ mod union_media_annotation_tests {
             &annotated,
             &declared,
             &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new()
+            &indexmap::IndexMap::new(),
         ));
 
         // control: a string-annotated payload still matches through the
@@ -6513,7 +6513,7 @@ mod union_media_annotation_tests {
             &annotated_string,
             &declared,
             &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new()
+            &indexmap::IndexMap::new(),
         ));
     }
 }

@@ -580,7 +580,7 @@ impl WitnessPat {
 }
 
 /// Render a missing-case witness for the E0062 message: class witnesses
-/// carry their field NAMES (declaration order via ppir), union members
+/// carry their field NAMES (declaration order via HIR), union members
 /// cascade so nested classes keep labels, everything else takes the
 /// standard `Display`.
 pub fn render_witness_pat(

@@ -882,7 +882,7 @@ impl ImplResolver<'_> {
         template.substitute(env, self.vm).unwrap_or_else(|e| {
             debug_assert!(
                 !matches!(e, baml_type::SubstituteError::TypeArgRefOutOfRange { .. }),
-                "impl rule template is malformed: {e}"
+                "impl rule template is malformed: {e}",
             );
             RealizedTy::unknown()
         })

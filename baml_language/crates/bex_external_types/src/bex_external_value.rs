@@ -596,7 +596,7 @@ impl BexExternalValue {
     /// `baml.errors.Io { message: "boom" }` rather than
     /// `Instance { class_name: "baml.errors.Io", type_args: [], fields: {..} }`,
     /// and a generic instance's `type_args` are omitted entirely instead of
-    /// dumping `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`.
+    /// dumping `Class(QualifiedTypeName { .. }, [])`.
     ///
     /// It is a pure structural pretty-printer, not the VM's `baml.ToString`
     /// dispatch: it runs without a live VM (e.g. after the VM has unwound on an
@@ -900,7 +900,7 @@ mod render_readable_tests {
     }
 
     /// A generic error instance carrying a `Class(..)` in its `type_args` — the
-    /// shape that used to dump `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`
+    /// shape that used to dump `Class(QualifiedTypeName { .. }, [])`
     /// under `Debug` — renders readably with the `type_args` omitted and no Rust
     /// internals leaked.
     #[test]
@@ -931,7 +931,7 @@ mod render_readable_tests {
             "unexpected render: {rendered}"
         );
         // The bug: `Debug` leaks Rust-internal shapes. The readable form must not.
-        for leak in ["Instance {", "QualifiedTypeName", "TyAttr", "Class("] {
+        for leak in ["Instance {", "QualifiedTypeName", "Class("] {
             assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
         }
     }

@@ -5,12 +5,12 @@
 pub(super) struct Example {
     pub path: &'static str,
     /// MIR: source-level names. Bytecode: fully qualified emitted names.
-    /// PPIR/formatter select the whole source file, so this is empty.
+    /// HIR/formatter select the whole source file, so this is empty.
     pub functions: &'static [&'static str],
     pub reason: &'static str,
 }
 
-pub(super) const PPIR: &[Example] = &[
+pub(super) const HIR: &[Example] = &[
     Example {
         path: "ns_fixtures/ns_namespaces_nested/main.baml",
         functions: &[],

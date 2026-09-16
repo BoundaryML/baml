@@ -118,9 +118,6 @@ fn class_field_access() {
         return x.name : string
       }
     }
-    class user.Foo$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -155,9 +152,6 @@ fn unresolved_field() {
       }
       !! 64..73: type `Foo` has no member `missing`
     }
-    class user.Foo$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -186,9 +180,6 @@ function f(data: Data) -> string {
       }
       !! 73..87: type `Data` has no member `inner`
     }
-    class user.Data$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -216,9 +207,6 @@ function f(s: Sentiment) -> string {
         return s.feelin : !error
       }
       !! 83..91: type `Sentiment` has no member `feelin`
-    }
-    class user.Sentiment$stream {
-      feeling: string | null
     }
     ");
 }
@@ -339,11 +327,6 @@ fn resolve_class_fields_query() {
       y: float
       label: string
     }
-    class user.Point$stream {
-      x: int | null
-      y: float | null
-      label: string | null
-    }
     ");
 }
 
@@ -351,10 +334,7 @@ fn resolve_class_fields_query() {
 fn resolve_type_alias_query() {
     let mut db = make_db();
     let file = db.file("test.baml", "type MyStr = string");
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.MyStr = string
-    type user.MyStr$stream = string
-    ");
+    insta::assert_snapshot!(render_tir(&db, file), @"type user.MyStr = string");
 }
 
 #[test]
@@ -368,9 +348,6 @@ fn class_field_bigint() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       x: bigint
-    }
-    class user.Foo$stream {
-      x: bigint | null
     }
     ");
 }

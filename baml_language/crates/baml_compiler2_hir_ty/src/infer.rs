@@ -1302,7 +1302,7 @@ fn infer_let_body_cycle_initial<'db>(
 }
 
 /// TRACKED (S2/S3): the crate's central query, per function. Inputs are
-/// span-free by construction - the ppir body, the item type refs, the
+/// span-free by construction - the HIR body, the item type refs, the
 /// body type refs, and the semantic index's structural joins (the
 /// lambda-scope map replaced the last span dependence) - and the
 /// PartialEq-driven `Update` gives downstream consumers early cutoff on
@@ -1359,7 +1359,7 @@ pub(crate) fn owner_declared_bounds<'db>(
 /// the S1 `BodyOwnerId` (rust-analyzer's `DefWithBodyId` shape). Lambdas
 /// are typed inside their owner's run; parameter defaults get their own
 /// inference root later. A plain dispatcher over the per-loc tracked
-/// queries (ppir's `body`/`body_scope` shape - `BodyOwnerId` is an
+/// queries (HIR's `body`/`body_scope` shape - `BodyOwnerId` is an
 /// ordinary enum, not a salsa struct).
 pub fn infer_body<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
@@ -1445,7 +1445,7 @@ fn infer_body_impl<'db>(
                         baml_compiler2_hir::item_data::method_interface_target(db, function)
                             .is_none(),
                         "interface targets are recorded on impl-block methods, which are \
-                         Impl-owned"
+                         Impl-owned",
                     );
                     None
                 }

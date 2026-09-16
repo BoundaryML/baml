@@ -1,8 +1,8 @@
 //! Playground control-flow graphs: build one function's (or test's) graph
-//! from its PPIR body and inline user-function callees rustdoc-style.
+//! from its HIR body and inline user-function callees rustdoc-style.
 //!
 //! Salvaged from the pre-rework `ProjectDatabase` methods; every `self`
-//! became `db: &dyn ppir::Db` plus the compiler-visible `files` slice the
+//! became `db: &dyn baml_compiler2_hir::Db` plus the compiler-visible `files` slice the
 //! old `file_map` walks iterated. Consumed by the playground host
 //! (`requestControlFlowGraph`, run-overlay pinning).
 

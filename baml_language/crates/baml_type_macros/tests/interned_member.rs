@@ -40,7 +40,7 @@ ty_family! {
 
     satellite Param<N: Clone = TestName> {
         pub name: Option<Name>,
-        pub ty: Ty<N>
+        pub ty: Ty<N>,
     } methods {
         pub fn of(name: Option<Name>, ty: Ty<N>) -> Self {
             Self { name, ty }
@@ -50,7 +50,7 @@ ty_family! {
     satellite Ref<N: Clone = TestName> {
         pub head: N,
         pub args: Box<[Ty<N>]>,
-        pub bindings: Box<[(Name, Ty<N>)]>
+        pub bindings: Box<[(Name, Ty<N>)]>,
     } methods {
         pub fn to_ty(&self) -> Ty<N> {
             // `Ref` after `Ty::` is the VARIANT (which shares the satellite's
@@ -74,17 +74,17 @@ ty_family! {
         #[axis(core)]
         Fun {
             params: Box<[Param<N>]>,
-            ret: Box<Ty<N>>
+            ret: Box<Ty<N>>,
         } = 4,
         #[axis(core)]
         Opt {
-            inner: Option<Box<Ty<N>>>
+            inner: Option<Box<Ty<N>>>,
         } = 5,
         #[axis(wide)]
         Proj {
             base: Box<Ty<N>>,
             iface: Box<Ref<N>>,
-            member: Name
+            member: Name,
         } = 6,
         #[axis(wide)]
         Pairs(Box<[(Name, Ty<N>)]>) = 7,
@@ -92,7 +92,7 @@ ty_family! {
         Hole = 8,
         #[axis(var)]
         Var {
-            var: u32
+            var: u32,
         } = 9,
         /// Attr-less leaf, exercising the accessor fallbacks.
         #[axis(var)]

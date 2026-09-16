@@ -1597,7 +1597,7 @@ test_deserializer!(
 //
 // We model `baml.json.json` via the same `JsonValue` recursive alias used in
 // `test_aliases.rs` (`int | float | bool | string | null | JsonValue[] | map<string,
-// JsonValue>`). The stream type produced by the PPIR sentinel in `expand.rs` is
+// JsonValue>`). The stream type modeled here is
 // `(JsonValue | null) @parse_without_null @in_progress(null)`, exactly mirroring
 // the BEP-006 primitive streaming pattern for `int | null @parse_without_null
 // @in_progress(null)` tested in Section 21.

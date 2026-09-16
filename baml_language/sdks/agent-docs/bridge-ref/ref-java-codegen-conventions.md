@@ -35,16 +35,15 @@ rules digest, not the rationale log).
   holder to `Fns$`. Holder name is on the cross-language sync agenda.)
 - **Async siblings**: every callable gets `<name>_async` returning
   `java.util.concurrent.CompletableFuture<T>`.
-- **Sync/async pairing, companions**: `$` is legal in Java
-  identifiers, so `$`-companions keep the BAML name verbatim:
-  `extract_resume$build_request`, `extract_resume$stream_async`. (Same
-  as TS; no `__` mangling.)
+- **Sync/async pairing, companions**: `@` is not legal in Java
+  identifiers, so `@`-companions project it to `_`:
+  `extract_resume_spec`, `extract_resume_stream_async`.
 - **Classes** **[decided]**: generated as `public final` immutable value
   classes with a canonical all-args constructor (field declaration order)
   and PreserveCase accessor methods (`p.int_field()`). `final` because the
   encoder keys its typemap on the *exact* runtime class — a user subclass
   would silently break inbound-encode (exact-class value semantics). Covers
-  plain value classes, generic classes, and `$stream` companions; sealed
+  plain value classes and generic classes; sealed
   union interfaces and their permitted records are the exception (records are
   already final). Value equality is deep: `equals`/`hashCode` are generated
   and handle `byte[]` fields via `Arrays.equals` (tests assert whole-object
@@ -230,20 +229,6 @@ rules digest, not the rationale log).
   the concrete stream class FQN. Decode retains that identity and derives
   `<FQN>.next` / `<FQN>.final`; encode clones the receiver key per the drain
   contract.
-- **`$stream` partial-model packaging** **[decided]** (owner, 2026-07-17;
-  `BamlStream` itself untouched — this is only where host-constructible
-  partial-model classes live): in-package `$`-preserved companions —
-  `<ns>.<Name>$stream` beside its base type, exactly as emitted and
-  registered today. This matches TS (`Resume$stream` beside `Resume`, no
-  `stream_types/` tree; the compiler no longer reserves `stream_types` —
-  ref-ts-type-mappings.md:8,51,61) and the "`$`-companions keep the BAML
-  name verbatim" house rule. Python's parallel `stream_types.*` package
-  is a workaround for `$` being illegal in Python identifiers and is NOT
-  mirrored; the ported stream tests retarget to the generated layout.
-  Independent open question flagged by the test authors: whether the
-  engine ACCEPTS a host-constructed partial through a
-  `$stream`-typed param — a red there is a bridge-surface limitation, not
-  a test bug.
 - **Native env hook** **[landed]**: the replay-harness (and the
   `$build_request` api-key) tests need the *engine's* view of the
   environment mutated at runtime (Python uses `os.environ`, which the

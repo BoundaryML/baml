@@ -1291,11 +1291,6 @@ mod tests {
             ));
         }
         symbols.push(class_sym(
-            "Image$stream",
-            name("baml", &["media"], "Image$stream"),
-            vec![],
-        ));
-        symbols.push(class_sym(
             "UserImage",
             name("user", &["media"], "UserImage"),
             vec![],
@@ -1311,7 +1306,6 @@ mod tests {
                 )));
                 assert!(ts.contains(&format!("export {{ {local_name} }};")));
             }
-            assert!(ts.contains("export class Image$stream {"));
             assert!(ts.contains("export class UserImage {"));
             assert!(!ts.contains("export type Image"));
         }

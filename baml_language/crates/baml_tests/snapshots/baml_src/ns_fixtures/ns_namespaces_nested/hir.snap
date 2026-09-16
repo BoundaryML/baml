@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== HIR ===
+class user.fixtures.namespaces_nested.AppConfig {
+  api_key: string
+}
+function user.fixtures.namespaces_nested.CallOpenAI(cfg: user.fixtures.namespaces_nested.AppConfig) -> root.fixtures.namespaces_nested.llm.openai.OpenAIResponse  [expr] {
+  {  } root.fixtures.namespaces_nested.llm.openai.OpenAIResponse { text: "response", model: "gpt-4" }
+}

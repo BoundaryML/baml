@@ -337,7 +337,7 @@ fn render_interface_tokens(
             projected.identifier(current_package),
             token.render_dotted(false),
             projected.identifier(current_package),
-            token.render_dotted(false)
+            token.render_dotted(false),
         );
     }
     out
@@ -403,7 +403,7 @@ func metadataInput(metadata Metadata) baml_go.Input {
 		"alias": baml_go.OptionalEncoder(baml_go.String)(metadata.Alias),
 		"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 		"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
-		"other": baml_go.Map(metadata.Other, baml_go.String)
+		"other": baml_go.Map(metadata.Other, baml_go.String),
 	})
 }
 
@@ -416,8 +416,8 @@ func withMetadataInput(metadata Metadata) baml_go.Input {
 			"alias": baml_go.OptionalEncoder(baml_go.String)(metadata.Alias),
 			"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 			"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
-			"other": baml_go.Map(metadata.Other, baml_go.String)
-		}
+			"other": baml_go.Map(metadata.Other, baml_go.String),
+		},
 	)
 }
 
@@ -437,7 +437,7 @@ func Class(ctx context.Context, name string, fields []Field) (Type, error) {
 	}
 	result, err := baml_go.Call(ctx, "reflect.class.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
-		"fields": baml_go.OrderedMap(rows)
+		"fields": baml_go.OrderedMap(rows),
 	})
 	if err != nil { return Type{}, err }
 	return result.Type()
@@ -450,12 +450,12 @@ func Enum(ctx context.Context, name string, values []EnumValue) (Type, error) {
 	for index, value := range values {
 		rows[index] = baml_go.Class("reflect.enum.Value", map[string]baml_go.Input{
 			"name": baml_go.String(value.Name),
-			"meta": metadataInput(value.Metadata)
+			"meta": metadataInput(value.Metadata),
 		})
 	}
 	result, err := baml_go.Call(ctx, "reflect.enum.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
-		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value })
+		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value }),
 	})
 	if err != nil { return Type{}, err }
 	return result.Type()
@@ -471,7 +471,7 @@ type Package struct {
 func CompilePackage(ctx context.Context, files map[string]string) (*Package, error) {
 	if err := bootstrap.Ensure(); err != nil { return nil, err }
 	result, err := baml_go.Call(ctx, "reflect.Package.compile", map[string]baml_go.Input{
-		"files": baml_go.Map(files, baml_go.String)
+		"files": baml_go.Map(files, baml_go.String),
 	})
 	if err != nil { return nil, err }
 	classValue, err := result.Class("reflect.Package")
@@ -485,7 +485,7 @@ func CompilePackage(ctx context.Context, files map[string]string) (*Package, err
 
 func (pkg *Package) input() baml_go.Input {
 	return baml_go.Class("reflect.Package", map[string]baml_go.Input{
-		"_inner": baml_go.OpaqueHandleInput(pkg.inner)
+		"_inner": baml_go.OpaqueHandleInput(pkg.inner),
 	})
 }
 
@@ -493,7 +493,7 @@ func (pkg *Package) GetClass(name string) (*Type, error) {
 	if pkg == nil { return nil, nil }
 	result, err := baml_go.Call(pkg.ctx, "reflect.Package.get_class", map[string]baml_go.Input{
 		"self": pkg.input(),
-		"name": baml_go.String(name)
+		"name": baml_go.String(name),
 	})
 	if err != nil { return nil, err }
 	isNull, err := result.IsNull()
@@ -1868,7 +1868,7 @@ fn render_functions(
                         .project(
                             &routed.fqn.member(parameter),
                             GoNameKind::HelperTypeParameter,
-                            GoVisibility::Exported
+                            GoVisibility::Exported,
                         )
                         .identifier(current_package)
                 )
@@ -1889,7 +1889,7 @@ fn render_functions(
                                 } else {
                                     GoNameKind::CallableTypeParameter
                                 },
-                                GoVisibility::Exported
+                                GoVisibility::Exported,
                             )
                             .identifier(current_package)
                     )
@@ -1915,7 +1915,7 @@ fn render_functions(
                         current_package,
                         names,
                         projection,
-                        type_var_scope
+                        type_var_scope,
                     )
                 )
             })
@@ -1974,7 +1974,7 @@ fn render_functions(
         if function.throws.is_some() || matches!(function.return_type, Ty::Never) {
             dynamic_notes.push(
                 "BAML failures are returned as Go errors containing the current runtime trace text; structured BAML error values are not exposed yet."
-                    .to_string()
+                    .to_string(),
             );
         }
         let docstring =
@@ -2020,7 +2020,7 @@ fn render_functions(
                     current_package,
                     names,
                     projection,
-                    type_var_scope
+                    type_var_scope,
                 )
             );
         }
@@ -2040,7 +2040,7 @@ fn render_functions(
                     current_package,
                     names,
                     projection,
-                    type_var_scope
+                    type_var_scope,
                 )
             );
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
@@ -2087,7 +2087,7 @@ fn render_functions(
                     input_expression(
                         &receiver_ty,
                         &receiver_parameter.to_string(),
-                        &codec_context
+                        &codec_context,
                     )
                 );
             }
@@ -2097,7 +2097,7 @@ fn render_functions(
                     out,
                     "\t\t{:?}: {},",
                     argument.go_name.wire().to_string(),
-                    input_expression(&argument.argument.ty, &argument_identifier, &codec_context)
+                    input_expression(&argument.argument.ty, &argument_identifier, &codec_context,)
                 );
             }
             if routed.receiver.is_some() || !required_arguments.is_empty() {
@@ -2172,7 +2172,7 @@ fn render_functions(
                         input_expression(
                             &receiver_ty,
                             &receiver_parameter.to_string(),
-                            &codec_context
+                            &codec_context,
                         )
                     );
                 }
@@ -2186,7 +2186,7 @@ fn render_functions(
                         input_expression(
                             &argument.argument.ty,
                             &argument_identifier,
-                            &codec_context
+                            &codec_context,
                         )
                     );
                 }
@@ -2234,7 +2234,7 @@ fn render_functions(
                     current_package,
                     names,
                     projection,
-                    type_var_scope
+                    type_var_scope,
                 )
             );
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
@@ -2244,7 +2244,7 @@ fn render_functions(
                 output_expression(
                     &function.return_type,
                     &result_local.to_string(),
-                    &codec_context
+                    &codec_context,
                 )
             );
         }
@@ -2286,7 +2286,7 @@ fn render_function_options(
                 context.current_package,
                 context.names,
                 context.projection,
-                context.type_vars
+                context.type_vars,
             )
         );
         let _ = writeln!(
@@ -2298,7 +2298,7 @@ fn render_function_options(
                 .expect("defaulted argument must have an option setter")
                 .wire()
                 .to_string(),
-            input_expression(&argument.argument.ty, &value_parameter.to_string(), context)
+            input_expression(&argument.argument.ty, &value_parameter.to_string(), context,)
         );
         out.push_str("}\n");
     }
@@ -2745,8 +2745,8 @@ fn render_projected_go_type(
                 current_baml_package,
                 current_package,
                 names,
-                type_vars
-            )
+                type_vars,
+            ),
         ),
         GoTy::Stream { partial, final_ } => format!(
             "{}.Stream[{}, {}]",
@@ -2756,15 +2756,15 @@ fn render_projected_go_type(
                 current_baml_package,
                 current_package,
                 names,
-                type_vars
+                type_vars,
             ),
             render_projected_go_type(
                 final_,
                 current_baml_package,
                 current_package,
                 names,
-                type_vars
-            )
+                type_vars,
+            ),
         ),
         GoTy::Literal(literal) => render_projected_go_type(
             &literal_surface(literal),
@@ -2795,7 +2795,7 @@ fn render_projected_go_type(
                             current_baml_package,
                             current_package,
                             names,
-                            type_vars
+                            type_vars,
                         ))
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -2894,7 +2894,7 @@ fn render_callback_go_type(
                 current_baml_package,
                 current_package,
                 names,
-                TypeVarScope::default()
+                TypeVarScope::default(),
             )
         ),
         (Some(ret), true) => format!(
@@ -2904,7 +2904,7 @@ fn render_callback_go_type(
                 current_baml_package,
                 current_package,
                 names,
-                TypeVarScope::default()
+                TypeVarScope::default(),
             ),
             GeneratorIdent::ErrorType
         ),
@@ -2926,7 +2926,7 @@ fn render_returned_callback_go_type(
             &format!("func({}.Context, ", GeneratorIdent::ContextPackage),
             1,
         )
-        .replace("Context )", "Context)")
+        .replace("Context, )", "Context)")
 }
 
 fn media_go_type(kind: MediaKind) -> &'static str {
@@ -2956,7 +2956,7 @@ fn input_expression(ty: &Ty, value: &str, context: &CodecRenderContext<'_, '_>) 
             context.current_package,
             context.names,
             context.codecs,
-            context.type_vars
+            context.type_vars,
         )
     )
 }
@@ -2986,7 +2986,7 @@ fn projected_input_encoder(
         GoTy::RustType => format!("{runtime}.RustTypeInput"),
         GoTy::FunctionSpec { .. } | GoTy::Stream { .. } => format!(
             "{runtime}.AnyEncoder[{}]",
-            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars)
+            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars,)
         ),
         GoTy::Literal(literal) => projected_input_encoder(
             &literal_surface(literal),
@@ -3003,7 +3003,7 @@ fn projected_input_encoder(
         GoTy::Class(name, _) if is_ai_prompt(name) => format!("{runtime}.PromptInput"),
         GoTy::Class(_, arguments) if !arguments.is_empty() => format!(
             "{runtime}.AnyEncoder[{}]",
-            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars)
+            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars,)
         ),
         GoTy::Class(name, _) => codecs.ident(name, ClassCodecDirection::Encode).to_string(),
         GoTy::Enum(name) | GoTy::EnumVariant(name, _) => codecs
@@ -3093,7 +3093,7 @@ fn output_expression(ty: &Ty, value: &str, context: &CodecRenderContext<'_, '_>)
             context.current_package,
             context.names,
             context.codecs,
-            context.type_vars
+            context.type_vars,
         )
     )
 }
@@ -3130,8 +3130,8 @@ fn projected_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
-            )
+                type_vars,
+            ),
         ),
         GoTy::Stream { partial, final_ } => format!(
             "{runtime}.DecodeStream({}, {})",
@@ -3141,7 +3141,7 @@ fn projected_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             ),
             projected_output_decoder(
                 final_,
@@ -3149,8 +3149,8 @@ fn projected_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
-            )
+                type_vars,
+            ),
         ),
         GoTy::Literal(literal) => projected_output_decoder(
             &literal_surface(literal),
@@ -3176,7 +3176,7 @@ fn projected_output_decoder(
                         current_baml_package,
                         current_package,
                         names,
-                        type_vars
+                        type_vars,
                     )
                 )
             }
@@ -3192,7 +3192,7 @@ fn projected_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             )
         ),
         GoTy::Map { value, .. } => format!(
@@ -3203,7 +3203,7 @@ fn projected_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             )
         ),
         GoTy::Optional(inner) if matches!(inner.as_ref(), GoTy::Bigint) => {
@@ -3217,7 +3217,7 @@ fn projected_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             )
         ),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => codecs
@@ -3252,7 +3252,7 @@ fn projected_generic_output_decoder(
                         current_baml_package,
                         current_package,
                         names,
-                        type_vars
+                        type_vars,
                     );
                     let descriptor = if projected_contains_type_var(member) {
                         format!("{runtime}.TypeOf[{go_type}]()")
@@ -3275,7 +3275,7 @@ fn projected_generic_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             )
         ),
         GoTy::Map { value, .. } => format!(
@@ -3286,7 +3286,7 @@ fn projected_generic_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             )
         ),
         GoTy::Optional(inner) if matches!(inner.as_ref(), GoTy::Bigint) => {
@@ -3300,7 +3300,7 @@ fn projected_generic_output_decoder(
                 current_package,
                 names,
                 codecs,
-                type_vars
+                type_vars,
             )
         ),
         _ => projected_output_decoder(
@@ -3355,7 +3355,7 @@ fn render_enum_codecs(
                         .project(
                             &enum_fqn.member(&variant.name),
                             GoNameKind::EnumVariant,
-                            GoVisibility::Exported
+                            GoVisibility::Exported,
                         )
                         .wire()
                         .to_string()
@@ -3464,7 +3464,7 @@ fn render_class_codecs(
                     out,
                     "\t\t{:?}: {},",
                     field.wire().to_string(),
-                    input_expression(&property.ty, &field_value, &codec_context)
+                    input_expression(&property.ty, &field_value, &codec_context,),
                 );
             }
             out.push('\t');
@@ -3506,7 +3506,7 @@ fn render_class_codecs(
                     &property.ty,
                     &class_value_local.to_string(),
                     &field.wire().to_string(),
-                    &codec_context
+                    &codec_context,
                 )
             );
             let _ = writeln!(out, "\tif {error_local} != nil {{");
@@ -4036,7 +4036,7 @@ fn render_callback_codecs(
                         current_package,
                         names,
                         codecs,
-                        TypeVarScope::default()
+                        TypeVarScope::default(),
                     )
                 );
             }
@@ -4055,7 +4055,7 @@ fn render_callback_codecs(
                         current_package,
                         names,
                         codecs,
-                        TypeVarScope::default()
+                        TypeVarScope::default(),
                     )
                 );
             }
@@ -4095,7 +4095,7 @@ fn render_callback_codecs(
                     package,
                     current_package,
                     names,
-                    TypeVarScope::default()
+                    TypeVarScope::default(),
                 )
             )
         }));
@@ -4126,7 +4126,7 @@ fn render_callback_codecs(
                         package,
                         current_package,
                         names,
-                        TypeVarScope::default()
+                        TypeVarScope::default(),
                     )
                 ),
                 (Some(ret), true) => format!(
@@ -4136,7 +4136,7 @@ fn render_callback_codecs(
                         package,
                         current_package,
                         names,
-                        TypeVarScope::default()
+                        TypeVarScope::default(),
                     )
                 ),
                 (None, false) => String::new(),
@@ -4155,7 +4155,7 @@ fn render_callback_codecs(
                     current_package,
                     names,
                     codecs,
-                    TypeVarScope::default()
+                    TypeVarScope::default(),
                 )
             );
         }
@@ -4260,12 +4260,12 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::RustType => format!("{runtime}.RustTypeBAMLType()"),
         GoTy::FunctionSpec { output } => format!(
             "{runtime}.ClassBAMLType(\"ai.FunctionSpec\", {})",
-            baml_type_descriptor(output, names)
+            baml_type_descriptor(output, names),
         ),
         GoTy::Stream { partial, final_ } => format!(
             "{runtime}.ClassBAMLType(\"ai.stream.Stream\", {}, {})",
             baml_type_descriptor(partial, names),
-            baml_type_descriptor(final_, names)
+            baml_type_descriptor(final_, names),
         ),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
@@ -4314,7 +4314,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
                 .project(
                     &BamlFqn::symbol(name),
                     GoNameKind::Enum,
-                    GoVisibility::Exported
+                    GoVisibility::Exported,
                 )
                 .wire()
                 .to_string()
@@ -4325,7 +4325,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
                 .project(
                     &BamlFqn::symbol(name),
                     GoNameKind::Enum,
-                    GoVisibility::Exported
+                    GoVisibility::Exported,
                 )
                 .wire()
                 .to_string(),
@@ -4413,7 +4413,7 @@ fn class_field_output_expression(
                 context.current_package,
                 context.names,
                 context.codecs,
-                context.type_vars
+                context.type_vars,
             )
         ),
     }
@@ -4545,7 +4545,7 @@ fn render_types(
                         .project(
                             &class_fqn.member(parameter),
                             GoNameKind::ClassTypeParameter,
-                            GoVisibility::Exported
+                            GoVisibility::Exported,
                         )
                         .identifier(context.current_package)
                 )
@@ -4757,7 +4757,7 @@ fn dynamic_union_doc_notes(
                         current_baml_package,
                         current_package,
                         names,
-                        type_vars
+                        type_vars,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -4772,11 +4772,11 @@ fn dynamic_union_doc_notes(
             let behavior = match context {
                 DynamicDocContext::Argument => "BAML validates this argument when the function is called and returns an error if the value is not assignable.",
                 DynamicDocContext::Return => "Returned values use the concrete candidate Go types; use a Go type switch to inspect them.",
-                DynamicDocContext::Representation => "Values in this position must use one of the listed Go shapes."
+                DynamicDocContext::Representation => "Values in this position must use one of the listed Go shapes.",
             };
             format!(
                 "{subject}{position} is represented dynamically as any. Known BAML candidates: {}. {behavior}",
-                candidates.join(" | ")
+                candidates.join(" | "),
             )
         })
         .collect()

@@ -1,6 +1,6 @@
 //! Conversion from the compiler2 HIR/TIR to `SymbolPool`.
 //!
-//! Walks each user-defined file via the `ppir` item-data firewall (enumeration
+//! Walks each user-defined file via the HIR item-data firewall (enumeration
 //! queries plus `*_data` lookups), resolves types via TIR, and populates a
 //! codegen-ready `SymbolPool` suitable for language-specific code generators
 //! such as `sdkgen_python_pydantic2`.
@@ -29,9 +29,9 @@ fn name_from_qtn(spelling: &Spelling, qtn: &DeclName) -> cg::Name {
 
 /// Is this lowered type function-shaped (directly or through union arms)?
 /// Used to keep the `injected` provenance mark off user parameters that merely
-/// reuse the `on_event` NAME on a `$`-suffixed function: the compiler-injected
-/// listener is always function-typed, so a `Foo$stream(on_event: string)`
-/// param stays a public user parameter.
+/// reuse the `on_event` NAME: the compiler-injected listener is always
+/// function-typed, so an `on_event: string` param stays a public user
+/// parameter.
 fn ty_is_function_shaped(ty: &cg::Ty) -> bool {
     match ty {
         cg::Ty::Function { .. } => true,
@@ -241,7 +241,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     baml_compiler2_hir::item_data::method_interface_target(db, method_loc)
                         .is_none(),
                     "interface targets are recorded on impl-block methods, which never appear \
-                     in `class.methods`"
+                     in `class.methods`",
                 );
 
                 if matches!(
@@ -806,20 +806,9 @@ mod tests {
             cg_name.namespace(),
             &vec![Name::new("foo")],
             "namespace_path mismatch: {:?}",
-            cg_name.namespace()
+            cg_name.namespace(),
         );
         assert_eq!(cg_name.name().as_str(), "Sentiment");
-        assert!(!cg_name.is_stream());
-    }
-
-    #[test]
-    fn test_name_from_qtn_stream_suffix() {
-        let mut db = ProjectDatabase::new();
-        let root = db.workspace(Path::new("/tmp/symbol_pool_qtn_stream"));
-        let qtn = DeclName::in_root(root, vec![], Name::new("Resume$stream"));
-        let cg_name = name_from_qtn(spelling(&db), &qtn);
-        assert!(cg_name.is_stream());
-        assert_eq!(cg_name.bare_name(), "Resume");
     }
 
     // ── Integration tests using ProjectDatabase ─────────────────────────────
@@ -836,7 +825,7 @@ mod tests {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction extract_resume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `extract resume from ${resume} ${ctx.output_format()}`\n}\n"
+            "class Resume { name string }\nfunction extract_resume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `extract resume from ${resume} ${ctx.output_format()}`\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
@@ -854,7 +843,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{expected} must be in the pool"));
             assert!(
                 matches!(pool.get(key), Some(cg::Symbol::Function(_))),
-                "{expected} must be a Function symbol"
+                "{expected} must be a Function symbol",
             );
         }
     }
@@ -992,16 +981,16 @@ class Extractor {
 
     #[test]
     fn test_user_on_event_params_are_never_marked_injected() {
-        // A user may declare into the `$` suffix namespace and may name a
-        // parameter `on_event`; only the compiler-injected listener (function
-        // typed, on an LLM function or real companion) carries provenance.
+        // A user may name a parameter `on_event`; only the compiler-injected
+        // listener (function typed, on an LLM function or real companion)
+        // carries provenance.
         let root = Path::new("/tmp/user_on_event_params");
         let mut db = ProjectDatabase::new();
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
             r##"
-function Notify$stream(on_event: string) -> string {
+function Notify(on_event: string) -> string {
   on_event
 }
 
@@ -1013,7 +1002,7 @@ function Watch(on_event: ((string) -> void throws never)? = null) -> string {
         );
 
         let pool = build_symbol_pool(&db);
-        for bare in ["Notify$stream", "Watch"] {
+        for bare in ["Notify", "Watch"] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
                 panic!("missing function {bare}");
@@ -1077,7 +1066,7 @@ function extract(client: string, text: string) -> string {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "/// A document with a title.\nclass Doc {\n  /// Title shown in lists.\n  title string\n}\n\n/// Sentiment labels.\nenum Sentiment {\n  /// Smiling face.\n  HAPPY\n  SAD\n}\n"
+            "/// A document with a title.\nclass Doc {\n  /// Title shown in lists.\n  title string\n}\n\n/// Sentiment labels.\nenum Sentiment {\n  /// Smiling face.\n  HAPPY\n  SAD\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
@@ -1092,7 +1081,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             doc.docstring.as_deref(),
             Some("A document with a title."),
-            "class /// must reach pool"
+            "class /// must reach pool",
         );
         let title = doc
             .properties
@@ -1102,7 +1091,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             title.docstring.as_deref(),
             Some("Title shown in lists."),
-            "field /// must reach pool"
+            "field /// must reach pool",
         );
 
         let enum_key = pool
@@ -1115,7 +1104,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             en.docstring.as_deref(),
             Some("Sentiment labels."),
-            "enum /// must reach pool"
+            "enum /// must reach pool",
         );
         let happy = en
             .variants
@@ -1125,7 +1114,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             happy.docstring.as_deref(),
             Some("Smiling face."),
-            "variant /// must reach pool"
+            "variant /// must reach pool",
         );
     }
 
@@ -1159,7 +1148,7 @@ function extract(client: string, text: string) -> string {
                 "}\n\n",
                 "function g() -> int {\n",
                 "  throw E1 { message: \"y\" }\n",
-                "}\n"
+                "}\n",
             ),
         );
 
@@ -1184,14 +1173,14 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             throws_names("f"),
             vec!["E1".to_string(), "E2".to_string()],
-            "declared union throws must reach pool in order"
+            "declared union throws must reach pool in order",
         );
         // No `throws` clause but a throwing body → the inferred contract still
         // surfaces E1.
         assert_eq!(
             throws_names("g"),
             vec!["E1".to_string()],
-            "inferred throws (no clause) must reach pool"
+            "inferred throws (no clause) must reach pool",
         );
     }
 
@@ -1272,7 +1261,7 @@ function extract(client: string, text: string) -> string {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "class Counter {\n  count int\n  function bump(self, by: int) -> int { self.count + by }\n  function zero() -> int { 0 }\n}\n"
+            "class Counter {\n  count int\n  function bump(self, by: int) -> int { self.count + by }\n  function zero() -> int { 0 }\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
@@ -1459,9 +1448,8 @@ class GenericMirror<T> {
             key.namespace(),
             &vec![Name::new("foo")],
             "namespace_path mismatch: {:?}",
-            key.namespace()
+            key.namespace(),
         );
-        assert!(!key.is_stream(), "Sentiment must not be marked as stream");
     }
 
     /// Pure-expression functions (no `llm` declarative meta) must reach the
@@ -1487,7 +1475,7 @@ class GenericMirror<T> {
             .expect("return_int must be in the pool");
         assert!(
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
-            "return_int must be a Function symbol"
+            "return_int must be a Function symbol",
         );
     }
 
@@ -1569,7 +1557,7 @@ function passthrough(x: Marker) -> Marker { x }
         for ty in [&function.arguments[0].ty, &function.return_type] {
             assert!(
                 matches!(ty, cg::Ty::Interface(name, generics, associated)
-                    if name.bare_name() == "Marker"
+                    if name.name().as_str() == "Marker"
                         && generics.is_empty()
                         && associated.is_empty()),
                 "interface identity should survive in shared codegen IR: {ty:?}"
@@ -1658,7 +1646,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
             property("mapped"),
             &cg::Ty::Map {
                 key: Box::new(cg::Ty::String),
-                value: Box::new(codegen_list(codegen_alias(text_chain)))
+                value: Box::new(codegen_list(codegen_alias(text_chain))),
             }
         );
 
@@ -1680,7 +1668,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         legal_db.workspace(legal_root);
         legal_db.file(
             legal_root.join("main.baml").as_path(),
-            "type Key = \"first\" | \"second\"\ntype KeyChain = Key\nclass Lookup { values map<KeyChain, int> }\n"
+            "type Key = \"first\" | \"second\"\ntype KeyChain = Key\nclass Lookup { values map<KeyChain, int> }\n",
         );
         let diagnostics = baml_db::collect_compiler2_diagnostics(&legal_db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");

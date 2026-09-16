@@ -1110,7 +1110,7 @@ mod tests {
             projection.project(&callable(
                 vec![callable_param(CodegenFunctionParamMode::Required, Ty::Int)],
                 Ty::String,
-                validation_error.clone()
+                validation_error.clone(),
             )),
             GoTy::Unsupported
         );
@@ -1118,7 +1118,7 @@ mod tests {
             projection.project(&callable(
                 vec![],
                 Ty::String,
-                union(vec![validation_error, host_callable_error()])
+                union(vec![validation_error, host_callable_error()]),
             )),
             GoTy::Function(key) if key.throws()
         ));

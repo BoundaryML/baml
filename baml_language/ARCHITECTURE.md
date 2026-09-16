@@ -12,9 +12,8 @@
 2. [The Cardinal Rule: Upstream Over Downstream](#the-cardinal-rule-upstream-over-downstream)
 3. [Layer-by-Layer Reference](#layer-by-layer-reference)
    - [Parser (Lexer + CST)](#parser-lexer--cst)
-   - [AST (Abstract Syntax Tree)](#ast-abstract-syntax-tree)
+not   - [AST (Abstract Syntax Tree)](#ast-abstract-syntax-tree)
    - [HIR (High-level Intermediate Representation)](#hir-high-level-intermediate-representation)
-   - [PPIR (Post-Process IR / Stream Type Expansion)](#ppir-post-process-ir--stream-type-expansion)
    - [TIR (Typed Intermediate Representation)](#tir-typed-intermediate-representation)
    - [MIR (Mid-level Intermediate Representation)](#mir-mid-level-intermediate-representation)
    - [Emit (Bytecode Generation)](#emit-bytecode-generation)
@@ -66,10 +65,6 @@ Source Text
     v
   HIR (names, scopes)
     |
-    |  ← expansion: synthesizes stream types, feeds back into HIR
-    v
-  PPIR (stream type expansion)
-    |
     |  ← query layer (no transformation)
     v
   TIR (types)
@@ -83,7 +78,7 @@ Source Text
   Emit (bytecode for BexVM)
 ```
 
-**Critical distinction:** The stages above the AST (Parser, CST→AST lowering) are about *producing* the AST. The stages below it (HIR, PPIR, TIR) are about *answering questions* about the AST. They do not produce new syntax trees. The MIR is the second transformation — it converts human-friendly BAML into a machine-friendly control flow graph. The Emit stage is the third transformation — it compiles MIR to bytecode.
+**Critical distinction:** The stages above the AST (Parser, CST→AST lowering) are about *producing* the AST. The stages below it (HIR, TIR) are about *answering questions* about the AST. They do not produce new syntax trees. The MIR is the second transformation — it converts human-friendly BAML into a machine-friendly control flow graph. The Emit stage is the third transformation — it compiles MIR to bytecode.
 
 This is fundamentally different from the compiler1 architecture, which was a strict linear pipeline where each layer copied and enriched the previous layer's data. In compiler2, each layer is a **query on top of the AST** (at least until MIR), which gives us Salsa-powered incremental compilation for free.
 
@@ -138,7 +133,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **Responsibility:** Desugaring. The AST takes the CST and produces a well-formed, semantically-oriented syntax tree. This is where most features live.
 
 **What lives here:**
-- **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`render_prompt`, `build_request`, `parse`).
+- **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`@spec`, `@render_prompt`, `@build_request`, `@parse`, `@stream`).
 - **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
 - **Lambda expression bodies** — A lambda's body is lowered into the enclosing function's arena and referenced by `ExprId`; the lambda gets its own scope, not its own arena.
 - **LLM function normalization** — There is no concept of "LLM function" downstream. LLM functions become regular functions with declarative metadata attached.
@@ -148,7 +143,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 **What does NOT live here:**
 - Anything that requires knowing the *name* of something (that's HIR).
 - Anything that requires knowing the *type* of something (that's TIR).
-- Anything that requires knowing whether something is a class, enum, or alias (that might be PPIR or TIR).
+- Anything that requires knowing whether something is a class, enum, or alias (that's TIR).
 
 **Key design principle:** One CST node can produce *multiple* AST nodes. For example, a single `client<llm> MyClient { ... }` definition produces two AST items: a `Let` and a `Function`. Conversely, some CST constructs collapse or transform substantially. The AST is the **final syntactic form** of the program.
 
@@ -169,7 +164,8 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 - **Shadowing rules** — The HIR decides where shadowing is allowed (e.g., a match arm variable may shadow a function parameter).
 - **Lambda capture analysis** — Which variables a lambda captures is determined here. You don't need to know the type to know *what* is captured, only what names are in scope.
 - **Package and namespace aggregation** — Cross-file symbol merging happens here.
-- **Item tree + type-reference arena** — A span-free `ItemTree` (items keyed by position-independent `LocalItemId`) with a parallel `ItemTreeSourceMap`, plus a flat span-free `TypeRef` arena that replaces inline `ast::TypeExpr`. `ItemTreeBuilder` constructs both together and records the item↔scope and method→owner indices. This is the substrate the PPIR firewall queries front (see [Salsa Early Cutoff](#salsa-early-cutoff-how-edits-stay-local)).
+- **Item tree + type-reference arena** — A span-free `ItemTree` (items keyed by position-independent `LocalItemId`) with a parallel `ItemTreeSourceMap`, plus a flat span-free `TypeRef` arena that replaces inline `ast::TypeExpr`. `ItemTreeBuilder` constructs both together and records the item↔scope and method→owner indices. This is the substrate the firewall queries front.
+- **The canonical item layer** — the per-item **firewall queries** (`item_data`: enumeration + `*_data` + `*_source_map`) that front the item tree. Downstream layers read items **only** through them: `file_item_tree` is `pub(crate)`, so no downstream crate can reach the raw tree (see [Salsa Early Cutoff](#salsa-early-cutoff-how-edits-stay-local)).
 
 **What does NOT live here:**
 - Node transformations. The HIR should NOT construct new AST nodes. If you find yourself doing that, the work belongs in the AST layer.
@@ -181,32 +177,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 - `file_semantic_index(db, file)` — Per-file scope tree with all bindings
 - `namespace_items(db, namespace_id)` — Items contributed to a namespace
 - `package_items(db, package_id)` — Package-level symbol table (merges all namespaces)
-
----
-
-### PPIR (Post-Process IR / Stream Type Expansion)
-
-**Crate:** `baml_compiler2_ppir`
-
-**Responsibility:** Stream type generation. This layer exists because streaming types require type-aware code generation that cannot be done in the AST layer but must happen before the TIR.
-
-**Why this must be its own layer:**
-- To decide how to expand a streaming type, you need to know whether a type expression refers to a class, an enum, a union, or a type alias. Different kinds produce different stream expansions.
-- You cannot answer those questions in the AST layer because the AST does not have name resolution.
-- You cannot defer this to the TIR because the TIR needs the stream types to already exist in order to type-check streaming code.
-- The PPIR does not perform the full type inference that the TIR does. It performs a narrow, purpose-specific form of type classification sufficient for stream expansion.
-
-**What lives here:**
-- Synthesis of `*$stream` variants for classes and type aliases
-- Stream expansion logic (`stream_expand`, `expand_partial`)
-- SAP (streaming attribute propagation) attributes
-- **The canonical item layer** — `ppir::file_item_tree` merges original items with the synthetic stream items, and the per-item **firewall queries** (`item_data`: enumeration + `*_data` + `*_source_map`) that front the item tree live here.
-
-**How it works:** The PPIR generates synthetic AST items (the stream variants) and re-runs the HIR builder over the *merged* list — originals first, then synthetics appended. The flow is HIR → PPIR → (re-run the HIR builder on merged items) → TIR. PPIR's tree is **canonical**, but it is an internal substrate: downstream layers read it **only through the firewall queries** in `item_data` (enumeration + `*_data` + `*_source_map`) — never `file_item_tree` directly, and never the HIR pre-expansion tree. A `ClassLoc`/`FunctionLoc` therefore unambiguously means a canonical item. (Originals keep identical `LocalItemId`s in the pre-expansion and canonical trees because they are allocated first, in the same order — which is what makes a HIR-derived `*Loc` safe to pass to a firewall query. This is enforced: `file_item_tree` is `pub(crate)` in both HIR and PPIR, so no downstream crate can reach the raw tree at all.)
-
-**Key Salsa queries:**
-- `ppir_expansion_items(db, file)` — Synthetic stream items per file
-- Firewall queries (`item_data`) — the consumer API over the canonical item tree: enumeration (`file_classes` / `file_functions` / …), lookup (`class_data` / `function_data` / …), and spans (`class_source_map` / …). `file_item_tree` itself is the internal substrate these are built on, not for direct downstream use.
+- Firewall queries (`item_data`) — enumeration (`file_classes` / `file_functions` / …), lookup (`class_data` / `function_data` / …), and spans (`class_source_map` / …)
 
 ---
 
@@ -298,16 +269,15 @@ The compiler2 uses the [Salsa](https://salsa-rs.github.io/salsa/) incremental co
 salsa::Database
   └─ baml_base                 (source roots: path, package, kind, files)
       └─ baml_compiler_parser::Db  (syntax_tree query)
-          └─ baml_compiler2_hir::Db  (file_semantic_index, namespace_items, package_items)
-              └─ baml_compiler2_ppir::Db  (ppir_expansion_items, canonical queries)
-                  └─ baml_compiler2_tir::Db  (infer_scope_types, resolve_name_at)
-                      └─ baml_compiler2_mir::Db
-                          └─ baml_compiler2_emit::Db
+          └─ baml_compiler2_hir::Db  (file_semantic_index, namespace_items, package_items, item_data)
+              └─ baml_compiler2_tir::Db  (infer_scope_types, resolve_name_at)
+                  └─ baml_compiler2_mir::Db
+                      └─ baml_compiler2_emit::Db
 ```
 
 The design goal: **before the AST, produce the AST. After the AST, answer questions about the AST.** The only layers that do production (create new data structures) are:
 1. Parser → CST
-2. CST → AST (including PPIR feeding synthetic items back)
+2. CST → AST (including companion synthesis)
 3. AST → MIR
 4. MIR → bytecode
 
@@ -392,21 +362,23 @@ Shadowing rules are scope-kind-dependent. For example, a match arm can shadow a 
 
 ### Companion Functions
 
-When the AST layer encounters an LLM function, it expands it into the original function plus up to three **companion functions**:
+When the AST layer encounters an LLM function, it expands it into the original function plus up to five **companion functions**:
 
 | Companion | Name Pattern | Parameters | Return Type | Purpose |
 |---|---|---|---|---|
-| `render_prompt` | `FuncName$render_prompt` | Same as parent | `baml.llm.PromptAst` | Renders the prompt AST |
-| `build_request` | `FuncName$build_request` | Same as parent | `baml.http.Request` | Builds the HTTP request |
-| `parse` | `FuncName$parse` | `json: string` | Same as parent | Parses the JSON response |
+| `spec` | `FuncName@spec` | Same as parent | `ai.FunctionSpec<Out>` | The bound, unrun spec |
+| `render_prompt` | `FuncName@render_prompt` | Same as parent | `ai.Prompt` | Renders the prompt |
+| `build_request` | `FuncName@build_request` | Parent's, plus its `client` override | `baml.http.Request` | Builds the provider request without sending it |
+| `parse` | `FuncName@parse` | `json: string` | Same as parent | Parses an existing reply |
+| `stream` | `FuncName@stream` | Parent's, with `client` narrowed to `ai.stream.StreamingClient?` | `ai.stream.Stream<Out, Out>` | One-turn streaming; not generated for functions that can hold tools |
 
 **Implementation** (`baml_compiler2_ast/src/companions.rs`):
 
-Companion expanders are pure functions of type `fn(&FunctionDef) -> Option<FunctionDef>`, stored in a const array `COMPANIONS`. Each expander inspects the function's `declarative_meta` — if it's an LLM function, it produces a companion; otherwise, it returns `None`.
+Companion expanders are pure functions that return `Option<FunctionDef>`, run by `expand_companions`. Each expander inspects the function's `declarative_meta` — if it's an LLM function, it produces a companion; otherwise, it returns `None`.
 
 Companion functions are **complete, self-contained AST items**. They flow through HIR → TIR → MIR → emit with zero special-casing. Downstream layers have no idea they were generated.
 
-**Implication for duplicate name detection:** If you have two LLM functions `Foo` and `Foo` (a duplicate), each produces four AST items (itself + three companions). All eight items will trigger duplicate-name errors in the HIR. To prevent cascading duplicate errors, the HIR must be aware that companion-derived errors should not produce additional diagnostics beyond the root duplicate.
+**Implication for duplicate name detection:** If you have two LLM functions `Foo` and `Foo` (a duplicate), each produces six AST items (itself + five companions). All twelve items will trigger duplicate-name errors in the HIR. To prevent cascading duplicate errors, the HIR must be aware that companion-derived errors should not produce additional diagnostics beyond the root duplicate.
 
 ### Client Desugaring
 
@@ -738,7 +710,7 @@ The Salsa query model has one critical optimization beyond basic memoization: **
 
 ### How it works in practice
 
-The item tree is produced by a single coarse query, `file_semantic_index`, marked `no_eq` — it always reports "changed", so its spans are always fresh but it provides no cutoff itself. In front of it sit fine-grained **firewall queries** (in `baml_compiler2_ppir::item_data`), one family per item kind:
+The item tree is produced by a single coarse query, `file_semantic_index`, marked `no_eq` — it always reports "changed", so its spans are always fresh but it provides no cutoff itself. In front of it sit fine-grained **firewall queries** (in `baml_compiler2_hir::item_data`), one family per item kind:
 
 - *Enumeration* — `file_classes(file)` / `file_functions(file)` / … return a `Vec` of interned `*Loc` handles (a `ClassLoc` carries its own file plus a position-independent `LocalItemId`).
 - *Lookup* — `class_data(ClassLoc)` / `function_data(FunctionLoc)` / … return **span-free** semantic data. Type references inside them are ids into a per-item `TypeRef` arena — a flat, span-free replacement for `ast::TypeExpr` — never `TextRange`s.
@@ -758,7 +730,7 @@ User adds `// comment` to `file_a.baml`. File B is untouched.
 4. `namespace_items(user_root)` re-runs and early-cuts when the name set is unchanged. (Exception: a file already holding a *duplicate-name* conflict currently carries a `name_span` in the conflict record, so a cosmetic edit there loses cutoff — a known gap being closed.)
 5. `file_semantic_index(file_b)` — NOT re-run (its input `file_b.text` is unchanged), so nothing about file B recomputes.
 
-**Status / caveat.** The **item layer** is fully behind the firewall: every consumer (TIR, MIR, emit, LSP, project, CLI, tests) reads items through the `item_data` queries, and the raw doors (`file_item_tree` in both HIR and PPIR) are `pub(crate)`. The remaining red edge is the **scope tree**: `infer_scope_types` (and the LSP scope walkers) still read the coarse `no_eq` `file_semantic_index` directly for scopes/bindings, and therefore re-run on *any* edit to their file today. Realizing end-to-end cutoff (a comment edit not re-running type inference) requires fronting the scope tree with the same kind of fine-grained queries (`scope_owner`/`function_scope` exist; the per-scope data queries do not yet). The incremental tests in `baml_tests` pin what actually holds today, and one of them (`comment_edit_does_not_reexecute_type_inference`) is deliberately `#[ignore]`d precisely because inference still reads the coarse index.
+**Status / caveat.** The **item layer** is fully behind the firewall: every consumer (TIR, MIR, emit, LSP, project, CLI, tests) reads items through the `item_data` queries, and the raw door (`file_item_tree`) is `pub(crate)`. The remaining red edge is the **scope tree**: `infer_scope_types` (and the LSP scope walkers) still read the coarse `no_eq` `file_semantic_index` directly for scopes/bindings, and therefore re-run on *any* edit to their file today. Realizing end-to-end cutoff (a comment edit not re-running type inference) requires fronting the scope tree with the same kind of fine-grained queries (`scope_owner`/`function_scope` exist; the per-scope data queries do not yet). The incremental tests in `baml_tests` pin what actually holds today, and one of them (`comment_edit_does_not_reexecute_type_inference`) is deliberately `#[ignore]`d precisely because inference still reads the coarse index.
 
 ---
 
@@ -831,9 +803,8 @@ When implementing a new feature, walk through these questions in order:
 2. **Does it introduce a new syntactic form that desugars to existing constructs?** → AST layer.
 3. **Does it need to know the name of something?** → It needs HIR, but the *implementation* might still live in the AST with the HIR providing the answer via queries.
 4. **Does it need to know the type of something?** → TIR.
-5. **Does it need to expand types before type-checking (e.g., stream types)?** → PPIR.
-6. **Does it change the control flow representation?** → MIR (with strong justification).
-7. **Does it change bytecode emission?** → Emit (very rare).
+5. **Does it change the control flow representation?** → MIR (with strong justification).
+6. **Does it change bytecode emission?** → Emit (very rare).
 
 **When in doubt:** put it in the AST layer. Most features live there. The AST is the workhorse of the compiler.
 
@@ -848,7 +819,6 @@ When implementing a new feature, walk through these questions in order:
 | Parser/CST | `baml_compiler_parser` | Yes (text → CST) | `syntax_tree` | Yes |
 | AST | `baml_compiler2_ast` | Yes (CST → AST) | No (pure function) | Yes |
 | HIR | `baml_compiler2_hir` | No | `file_semantic_index`, `namespace_items`, `package_items` | No |
-| PPIR | `baml_compiler2_ppir` | Yes (synthesizes stream types, feeds back to HIR) | `ppir_expansion_items` | Yes (synthetic stream items only) |
 | TIR | `baml_compiler2_tir` | No | `infer_scope_types`, `resolve_name_at` | No |
 | MIR | `baml_compiler2_mir` | Yes (AST → CFG) | `lower_function`, `lower_let_body` | Yes |
 | Emit | `baml_compiler2_emit` | Yes (MIR → bytecode) | `generate_project_bytecode` | Yes (bytecode) |

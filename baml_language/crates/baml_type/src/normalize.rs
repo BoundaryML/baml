@@ -354,18 +354,6 @@ pub trait TypeContext<H: Head = DeclName> {
     /// α-equivalent `A`/`B`). Canonical *identity* is the
     /// [`Self::equivalent`] judgment, never syntactic equality of rendered
     /// output.
-    ///
-    /// # Attributes are erased
-    ///
-    /// The returned `Ty` carries no SAP/streaming
-    /// annotations (`@stream.done`, `sap_in_progress`, …) are dropped, because they
-    /// are parsing metadata, not part of the set of values a type denotes (and so
-    /// must not affect [`Self::equivalent`]/[`Self::is_subtype`]). This makes the
-    /// output a canonical form for type *identity* (equality, display, debugging) —
-    /// **not** an attribute-preserving rewrite. Do not feed it into a position where
-    /// SAP annotations must survive (an LLM function's return type, a generated
-    /// stream companion); derive the canonical type from the original `Ty` there
-    /// instead.
     fn normalize(&self, ty: &Ty<H>) -> Ty<H>
     where
         Self: Sized,
@@ -906,7 +894,7 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Function {
                 params,
                 ret,
-                throws
+                throws,
             } => {
                 params.iter().all(|p| p.ty.is_ground()) && ret.is_ground() && throws.is_ground()
             }

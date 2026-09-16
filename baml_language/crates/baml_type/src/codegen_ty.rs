@@ -156,13 +156,13 @@ mod tests {
                         TypeName::local(Name::new("Box")),
                         Box::new([CodegenTy::List(Box::new(nullable.clone()))])
                     ),
-                    mode: FunctionParamMode::Required
+                    mode: FunctionParamMode::Required,
                 }]),
                 ret: Box::new(CodegenTy::Map {
                     key: Box::new(CodegenTy::String),
-                    value: Box::new(nullable.clone())
+                    value: Box::new(nullable.clone()),
                 }),
-                throws: Box::new(nullable)
+                throws: Box::new(nullable),
             }
         );
     }

@@ -1452,10 +1452,10 @@ implement app.Taggable for Mine {
     }
 
     #[test]
-    fn stream_companion_of_mounted_class_resolves_in_consumer_expansion() {
-        // Canonical PPIR `$stream` companions are exported as ordinary type
-        // rows. A consumer-side declarative LLM expansion can therefore name
-        // the mounted return type's companion with no dependency source.
+    fn llm_companions_of_mounted_return_type_resolve_in_consumer_expansion() {
+        // A consumer-side declarative LLM function's companions (`@spec`,
+        // `@stream`, ...) name the mounted return type, which must resolve
+        // with no dependency source.
         let db = consumer_db(
             lib_blob(),
             &[(

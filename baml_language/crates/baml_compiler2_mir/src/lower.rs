@@ -1158,7 +1158,7 @@ fn impl_display_segment<'db>(
     format!(
         "<({} as {})>",
         render_with_frame_indices(db, &target_ty, &impl_params),
-        render_with_frame_indices(db, &iface_ty, &impl_params)
+        render_with_frame_indices(db, &iface_ty, &impl_params),
     )
 }
 
@@ -1270,7 +1270,7 @@ pub fn native_key_for<'db>(
             };
             Name::new(format!(
                 "{}$for${for_display}",
-                block.type_refs.display(block.interface_target)
+                block.type_refs.display(block.interface_target),
             ))
         }
         None => {
@@ -3719,7 +3719,7 @@ impl<'db> LoweringContext<'db> {
                 "lowered a call whose {value_count} operand(s) do not match its {} \
                  checked parameter slot(s): this program reached MIR with a live \
                  arity error, so a caller lowered without checking first",
-                layout.len()
+                layout.len(),
             ),
         }
         Some(layout)
@@ -6269,7 +6269,7 @@ impl<'db> LoweringContext<'db> {
                                 // so this is unreachable in a compiling program.
                                 self.emit_panic_call(
                                     "internal compiler error: static method reached through a value receiver",
-                                    expr_id
+                                    expr_id,
                                 );
                                 return;
                             }
@@ -6316,7 +6316,7 @@ impl<'db> LoweringContext<'db> {
                             // so this is unreachable in a compiling program.
                             self.emit_panic_call(
                                 "internal compiler error: static method reached through a value receiver",
-                                expr_id
+                                expr_id,
                             );
                             return;
                         }
@@ -6474,7 +6474,7 @@ impl<'db> LoweringContext<'db> {
                         // generic null placeholder below.
                         self.emit_panic_call(
                             "internal compiler error: interface method reference has no resolvable frame",
-                            expr_id
+                            expr_id,
                         );
                         return;
                     }
@@ -6840,7 +6840,7 @@ impl<'db> LoweringContext<'db> {
                         "internal compiler error: MIR failed to resolve field access \
                          .{seg} against interface '{}': TIR recorded no virtual-field \
                          view for it",
-                        tn.name()
+                        tn.name(),
                     ),
                     expr_id,
                 );
@@ -8563,7 +8563,7 @@ impl<'db> LoweringContext<'db> {
             && external.takes_self
             && let Some(&receiver) = args.first()
             && self.try_lower_interface_ufcs_dispatch(
-                expr_id, receiver, method, args, runtime_id, &dest
+                expr_id, receiver, method, args, runtime_id, &dest,
             )
         {
             return;
@@ -8588,7 +8588,7 @@ impl<'db> LoweringContext<'db> {
                 &target.type_refs,
                 target.target,
                 pkg_items,
-                &current_pkg.namespace_path
+                &current_pkg.namespace_path,
             )
                 // The callee IS the interface's default body: reference it by
                 // its declaration (`ItemRef::InterfaceBody`), the only key a
@@ -9813,7 +9813,7 @@ impl<'db> LoweringContext<'db> {
                         if class.is_lang_root_type(
                             baml_compiler2_hir::package::lang_roots(self.db),
                             baml_base::LangPackage::Reflect,
-                            "Type"
+                            "Type",
                         ) && name.as_str() == "of"
                 )
         });
@@ -9915,7 +9915,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Lower a written type-argument expression to its `Tir2Ty`, resolving names
-    /// against the canonical (PPIR-merged) package items and with the enclosing
+    /// against the canonical package items and with the enclosing
     /// generic params in scope (so `T` becomes `Tir2Ty::TypeVar("T")`). A `_`
     /// wildcard is a hard error at lowering (`CannotInferType`) and comes back
     /// as `Tir2Ty::Error`, so it never reaches runtime conversion.
@@ -10785,7 +10785,7 @@ impl<'db> LoweringContext<'db> {
                         // so this is unreachable in a compiling program.
                         self.emit_panic_call(
                             "internal compiler error: static method reached through a value receiver",
-                            expr_id
+                            expr_id,
                         );
                         return;
                     }
@@ -10826,7 +10826,7 @@ impl<'db> LoweringContext<'db> {
                         // so this is unreachable in a compiling program.
                         self.emit_panic_call(
                             "internal compiler error: static method reached through a value receiver",
-                            expr_id
+                            expr_id,
                         );
                         return;
                     }
@@ -10980,7 +10980,7 @@ impl<'db> LoweringContext<'db> {
                          This class should be in class_fields but isn't.",
                         field_str,
                         tn.name(),
-                        tn.module_path()
+                        tn.module_path(),
                     ),
                     expr_id,
                 );
@@ -10996,7 +10996,7 @@ impl<'db> LoweringContext<'db> {
                         "internal compiler error: MIR failed to resolve field access \
                          .{field_str} against interface '{}': TIR recorded no \
                          virtual-field view for it",
-                        tn.name()
+                        tn.name(),
                     ),
                     expr_id,
                 );
@@ -12702,7 +12702,7 @@ impl LoweringContext<'_> {
                              This class should be in class_fields but isn't.",
                             member_name,
                             tn.name(),
-                            tn.module_path()
+                            tn.module_path(),
                         ),
                         base_id,
                     );

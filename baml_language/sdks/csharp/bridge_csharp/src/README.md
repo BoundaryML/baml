@@ -190,11 +190,6 @@ Canceling one final waiter does not cancel the shared operation. Disposing a
 running stream ends it with `BamlCancellationOrigin.StreamDisposed` and
 releases native state exactly once.
 
-Compiler semantic-partial annotations determine the generated partial class.
-Pending fields are nullable and not `required`, must-exist fields remain
-required, and `@stream.with_state` projects to `BamlStreamState<T>` with
-`Pending`, `Incomplete`, and `Complete` states.
-
 ## Media, dynamic values, and opaque resources
 
 `BamlImage`, `BamlAudio`, `BamlVideo`, and `BamlPdf` are immutable URL-or-bytes

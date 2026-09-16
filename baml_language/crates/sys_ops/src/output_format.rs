@@ -580,7 +580,7 @@ impl OutputFormatContent {
                     SapTy::TypeAlias(tn) => self
                         .recursive_type_aliases
                         .contains_key(tn.display_name().as_str()),
-                    _ => false
+                    _ => false,
                 };
                 let needs_multiline = !is_hoisted
                     && match inner.as_ref() {
@@ -606,7 +606,7 @@ impl OutputFormatContent {
                                     | SapTy::Null
                             )
                         }),
-                        _ => true
+                        _ => true,
                     };
 
                 if needs_multiline {
@@ -687,7 +687,7 @@ impl OutputFormatContent {
                         options,
                         hoisted_classes,
                         hoisted_enums,
-                        false
+                        false,
                     )?))
                 } else {
                     Ok(Some(class_instantiation_key(ty)))
@@ -1456,7 +1456,7 @@ mod tests {
             RenderError::RenderedEnumNameCollision {
                 rendered_name,
                 first,
-                second
+                second,
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
         ));
     }
@@ -1509,7 +1509,7 @@ mod tests {
             RenderError::RenderedEnumNameCollision {
                 rendered_name,
                 first,
-                second
+                second,
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
         ));
     }
@@ -1534,7 +1534,7 @@ mod tests {
             RenderError::RenderedClassNameCollision {
                 rendered_name,
                 first,
-                second
+                second,
             } if rendered_name == "SharedChoice" && first == "SharedChoice" && second == "Choice"
         ));
     }
@@ -1561,7 +1561,7 @@ mod tests {
             RenderError::RenderedTypeAliasNameCollision {
                 rendered_name,
                 first,
-                second
+                second,
             } if rendered_name == "SharedAlias" && first == "string" && second == "int"
         ));
     }
@@ -1839,7 +1839,7 @@ mod tests {
             Some(String::from(
                 r#"Answer in JSON using this schema:
 {
-  scores: { "<string>": int }
+  scores: { "<string>": int },
 }"#
             ))
         );
@@ -2266,7 +2266,7 @@ mod tests {
             RenderError::RenderedEnumNameCollision {
                 rendered_name,
                 first,
-                second
+                second,
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
         ));
     }
@@ -2289,7 +2289,7 @@ mod tests {
                 .unwrap_or_default();
             assert_eq!(
                 output,
-                format!("Answer in JSON using this schema:\n{rendered} or null")
+                format!("Answer in JSON using this schema:\n{rendered} or null"),
             );
         }
     }
@@ -2401,13 +2401,13 @@ mod tests {
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer in JSON using this schema:
 {
   head: Node or null,
-  len: int
+  len: int,
 }"#
             ))
         );
@@ -2426,15 +2426,15 @@ Answer in JSON using this schema:
             rendered,
             Some(String::from(
                 r#"A {
-  pointer: B
+  pointer: B,
 }
 
 B {
-  pointer: C
+  pointer: C,
 }
 
 C {
-  pointer: A or null
+  pointer: A or null,
 }
 
 Answer in JSON using this schema: A"#
@@ -2463,22 +2463,22 @@ Answer in JSON using this schema: A"#
             rendered,
             Some(String::from(
                 r#"A {
-  pointer: B
+  pointer: B,
 }
 
 B {
-  pointer: C
+  pointer: C,
 }
 
 C {
-  pointer: A or null
+  pointer: A or null,
 }
 
 Answer in JSON using this schema:
 {
   pointer: A,
   data: int,
-  field: bool
+  field: bool,
 }"#
             ))
         );
@@ -2515,23 +2515,23 @@ Answer in JSON using this schema:
   pointer: B,
   nested: {
     data: int,
-    field: bool
-  }
+    field: bool,
+  },
 }
 
 B {
-  pointer: C
+  pointer: C,
 }
 
 C {
-  pointer: A or null
+  pointer: A or null,
 }
 
 Answer in JSON using this schema:
 {
   pointer: A,
   data: int,
-  field: bool
+  field: bool,
 }"#
             ))
         );
@@ -2556,11 +2556,11 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Tree {
   data: int,
-  children: Forest
+  children: Forest,
 }
 
 Forest {
-  trees: Tree[]
+  trees: Tree[],
 }
 
 Answer in JSON using this schema: Tree"#
@@ -2615,12 +2615,12 @@ Answer in JSON using this schema: Tree"#
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Tree {
   data: int,
-  children: Tree[]
+  children: Tree[],
 }
 
 Answer in JSON using any of these schemas:
@@ -2659,19 +2659,19 @@ Node or Tree"#
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Tree {
   data: int,
-  children: Tree[]
+  children: Tree[],
 }
 
 Answer in JSON using this schema:
 {
   data_type: Node or Tree,
   len: int,
-  description: string
+  description: string,
 }"#
             ))
         );
@@ -2704,18 +2704,18 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Tree {
   data: int,
-  children: Tree[]
+  children: Tree[],
 }
 
 Answer in JSON using any of these schemas:
 Node or Tree or {
   data: int,
-  tag: string
+  tag: string,
 }"#
             ))
         );
@@ -2759,22 +2759,22 @@ Node or Tree or {
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Tree {
   data: int,
-  children: Tree[]
+  children: Tree[],
 }
 
 Answer in JSON using this schema:
 {
   data_type: Node or Tree or {
     data: int,
-    tag: string
+    tag: string,
   },
   len: int,
-  description: string
+  description: string,
 }"#
             ))
         );
@@ -2802,12 +2802,12 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Tree {
   data: int,
-  children: Tree[]
+  children: Tree[],
 }
 
 Answer in JSON using any of these schemas:
@@ -2849,19 +2849,19 @@ Node or int or string or Tree"#
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Tree {
   data: int,
-  children: Tree[]
+  children: Tree[],
 }
 
 Answer in JSON using this schema:
 {
   the_union: Node or int or string or Tree,
   data: int,
-  field: bool
+  field: bool,
 }"#
             ))
         );
@@ -2885,7 +2885,7 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer with a JSON Array using this schema:
@@ -2907,7 +2907,7 @@ Node[]"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: { "<string>": RecursiveMap }
+  data: { "<string>": RecursiveMap },
 }
 
 Answer in JSON using this schema: RecursiveMap"#
@@ -2933,12 +2933,12 @@ Answer in JSON using this schema: RecursiveMap"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: { "<string>": RecursiveMap }
+  data: { "<string>": RecursiveMap },
 }
 
 Answer in JSON using this schema:
 {
-  rec_map: RecursiveMap
+  rec_map: RecursiveMap,
 }"#
             ))
         );
@@ -2959,7 +2959,7 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer in JSON using this schema:
@@ -2987,12 +2987,12 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer in JSON using this schema:
 {
-  data: { "<string>": Node }
+  data: { "<string>": Node },
 }"#
             ))
         );
@@ -3017,12 +3017,12 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer in JSON using this schema:
 {
-  data: { "<string>": Node or null }
+  data: { "<string>": Node or null },
 }"#
             ))
         );
@@ -3050,13 +3050,13 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer in JSON using this schema:
 { "<string>": Node or int or {
   field: string,
-  data: int
+  data: int,
 } }"#
             ))
         );
@@ -3091,15 +3091,15 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null
+  next: Node or null,
 }
 
 Answer in JSON using this schema:
 {
   data: { "<string>": Node or int or {
     field: string,
-    data: int
-  } }
+    data: int,
+  } },
 }"#
             ))
         );
@@ -3134,22 +3134,22 @@ Answer in JSON using this schema:
             rendered,
             Some(String::from(
                 r#"interface A {
-  pointer: B
+  pointer: B,
 }
 
 interface B {
-  pointer: C
+  pointer: C,
 }
 
 interface C {
-  pointer: A or null
+  pointer: A or null,
 }
 
 Answer in JSON using this interface:
 {
   pointer: A,
   data: int,
-  field: bool
+  field: bool,
 }"#
             ))
         );
@@ -3179,11 +3179,11 @@ Answer in JSON using this interface:
             rendered,
             Some(String::from(
                 r#"A {
-  prop: int
+  prop: int,
 }
 
 B {
-  prop: string
+  prop: string,
 }
 
 Answer in JSON using this schema:
@@ -3191,8 +3191,8 @@ Answer in JSON using this schema:
   a: A,
   b: B,
   c: {
-    prop: float
-  }
+    prop: float,
+  },
 }"#
             ))
         );
@@ -3254,21 +3254,21 @@ Answer in JSON using this schema:
             rendered,
             Some(String::from(
                 r#"A {
-  prop: int
+  prop: int,
 }
 
 B {
-  prop: string
+  prop: string,
 }
 
 C {
-  prop: float
+  prop: float,
 }
 
 Ret {
   a: A,
   b: B,
-  c: C
+  c: C,
 }
 
 Answer in JSON using this schema: Ret"#
@@ -3895,7 +3895,7 @@ Answer in JSON using this schema: Ret"#
             RenderError::RenderedClassNameCollision {
                 rendered_name,
                 first,
-                second
+                second,
             } if rendered_name == "Container<int>"
                 && first == "Box<int>"
                 && second == "Crate<int>"
@@ -3975,7 +3975,7 @@ Answer in JSON using this schema: Ret"#
             rendered,
             Some(String::from(
                 r#"SelfReferential {
-  recursion: int or string or SelfReferential or null
+  recursion: int or string or SelfReferential or null,
 }
 
 Answer in JSON using this schema: SelfReferential"#
@@ -4181,7 +4181,7 @@ Answer in JSON using this type: A"#
             RenderError::NonRegularRecursiveGeneric {
                 class,
                 ancestor,
-                instantiation
+                instantiation,
             } if class == "Chain"
                 && ancestor == "Chain<int>"
                 && instantiation == "Chain<Chain<int>>"
@@ -4242,7 +4242,7 @@ Answer in JSON using this type: A"#
             RenderError::NonRegularRecursiveGeneric {
                 class,
                 ancestor,
-                instantiation
+                instantiation,
             } if class == "A" && ancestor == "A<int>" && instantiation == "A<A<int>>"
         ));
     }

@@ -696,7 +696,7 @@ impl BexHeap {
                             runtime
                                 .globals
                                 .iter()
-                                .filter_map(|slot| slot.load().as_object_ptr())
+                                .filter_map(|slot| slot.load().as_object_ptr()),
                         );
                     }
                 }
@@ -709,7 +709,7 @@ impl BexHeap {
                             .bytecode
                             .resolved_constants
                             .iter()
-                            .filter_map(Value::as_object_ptr)
+                            .filter_map(Value::as_object_ptr),
                     );
                 }
             }
@@ -760,7 +760,7 @@ impl BexHeap {
                         .methods
                         .iter()
                         .map(|method| method.default_fn)
-                        .filter(|ptr| !ptr.as_ptr().is_null())
+                        .filter(|ptr| !ptr.as_ptr().is_null()),
                 );
             }
             Object::TypeAlias(alias) => {
@@ -817,7 +817,7 @@ impl BexHeap {
                         "heap_debug: post-Major Gen2 object at runtime_idx={runtime_idx} \
                          (variant {:?}) holds a reference to {ref_ptr:?} in {generation:?} — \
                          a write barrier was missed when this reference was stored",
-                        bex_vm_types::ObjectType::of(obj)
+                        bex_vm_types::ObjectType::of(obj),
                     );
                 }
             }

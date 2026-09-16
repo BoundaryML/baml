@@ -46,8 +46,6 @@ pub(crate) enum Surface {
     /// it has exactly one inhabitant, `testing.$invoke_collector`, which is
     /// hand-written stdlib with `UserDefined` origin: the compiler's own
     /// provenance says it is ordinary, and only its spelling says otherwise.
-    /// `$`-named TYPES never arrive here at all; PPIR synthesizes them
-    /// instead of lowering them as items.
     Synthetic,
     /// Genuinely compiler-generated: the `@` companions (`summarize@spec`),
     /// which carry `FunctionOrigin::Companion`, so this one IS provenance.
@@ -75,11 +73,7 @@ pub(crate) fn surface_of(
     name: &Name,
     def: Definition<'_>,
 ) -> Surface {
-    // Read function metadata from the CANONICAL item layer, never through
-    // `Definition::is_language_internal`: that indexes HIR's PRE-expansion
-    // item tree, which holds no expansion-minted companion, and completion
-    // enumerates exactly those — indexing it with one panics rather than
-    // answering.
+    // Read function metadata through the item-data firewall.
     let metadata = match def {
         Definition::Function(func) => Some(function_data(db, func).metadata),
         Definition::Class(_)

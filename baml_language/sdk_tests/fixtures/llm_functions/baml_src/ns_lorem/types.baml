@@ -4,11 +4,7 @@ class Resume {
   email string?
 }
 
-// `StreamingDoc` exists to force an always-different `$stream` branch:
-// the optional `body` proxies a stream-state-altering field, so the
-// synthesized `StreamingDoc$stream` class differs from the source
-// class. Pins the `stream_types/lorem` leaf emission — the
-// conditional-emit rule guarantees this companion shows up.
+// The multi-field class return type for class-typed streaming coverage.
 class StreamingDoc {
   title string
   body string?
@@ -23,13 +19,13 @@ class Hs7Collision {
 }
 
 // Return shape for `stream_e2e_collect`: every value produced by
-// `stream.next()` (the `S` side of `Stream<T, S>` — `null | string` for
-// the `stream_e2e_extract$stream` instantiation) plus the single `T`
-// value from `stream.final()`. The class is concrete (no generics) so
-// the FFI boundary doesn't depend on the engine's `Stream<T, S>`
+// `stream.next()` (the partial side of `Stream<Partial, Final>` — `string`
+// for the `stream_e2e_extract@stream` instantiation) plus the single final
+// value from `stream.final()`. The class is concrete (no generics) so the
+// FFI boundary doesn't depend on the engine's `Stream<Partial, Final>`
 // type-var substitution.
 class StreamE2ECollectResult {
-  next_calls (null | string)[]
+  next_calls string[]
   final_call string
 }
 

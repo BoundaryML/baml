@@ -412,7 +412,7 @@ internal static class PrimitiveProtocol
             return BamlStreamPull<BamlGeneratedValue>.FromPartial(
                 Decode(
                     union.Value,
-                    $"$stream<{expectedPartialOption}>",
+                    $"stream partial<{expectedPartialOption}>",
                     ownership,
                     api,
                     budget,

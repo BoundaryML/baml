@@ -365,8 +365,7 @@ fn is_listed(
         // `$invoke_collector` is hand-written stdlib that resolves from
         // source, so an addressing view keeps it. The predicate this
         // replaced also asked whether the declaration was a function; that
-        // branch was vestigial, since a `$`-named TYPE never reaches a
-        // listing (PPIR synthesizes those rather than lowering them).
+        // branch was vestigial.
         Surface::Synthetic => true,
         // `Foo@spec` is written in real BAML source and resolves, so an
         // addressing view lists it.
@@ -622,9 +621,7 @@ test "identity" {
         assert!(resolve_target(&project.db, pkg_id, internal_name.as_str()).is_none());
     }
 
-    /// The AST-level LLM companions stay visible in listings. `@stream` is
-    /// synthesized in PPIR rather than lowered as an item, so it is
-    /// deliberately absent.
+    /// The AST-level LLM companions stay visible in listings.
     #[test]
     fn llm_companions_remain_visible_in_listing() {
         let mut builder = ProjectTest::builder();
@@ -655,6 +652,7 @@ function summarize_structured(input: string) -> Summary {
             "summarize@render_prompt",
             "summarize@build_request",
             "summarize@parse",
+            "summarize@stream",
         ] {
             assert!(
                 entries.iter().any(|entry| entry.item_name.as_str() == name),
@@ -669,14 +667,6 @@ function summarize_structured(input: string) -> Summary {
                 Some(ResolvedTarget::Item(_))
             ));
         }
-
-        assert!(
-            entries
-                .iter()
-                .all(|entry| entry.item_name.as_str() != "Summary$stream"),
-            "generated partial types must not appear in describe listings"
-        );
-        assert!(resolve_target(&project.db, pkg_id, "Summary$stream").is_none());
     }
 
     // ── Namespace listing ────────────────────────────────────────────────────

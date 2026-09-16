@@ -32,9 +32,8 @@ function ExtractResume(text: string) -> Resume {
   `
 }
 
-// Paired with `StreamingDoc` to exercise the always-different
-// `Class$stream` type-companion branch (previously covered by the standalone
-// `python_llm_functions` crate). The former `openai-responses` shorthand is
+// Paired with `StreamingDoc` to exercise class-typed streaming bindings
+// (previously covered by the standalone `python_llm_functions` crate). The former `openai-responses` shorthand is
 // gone (only openai | anthropic | google | claude-code prefixes remain).
 function StreamingExtract(text: string) -> StreamingDoc {
   client: "openai/gpt-4o-mini"
@@ -83,8 +82,8 @@ function stream_e2e_extract(text: string) -> string {
   `
 }
 
-// Class-typed streaming: the partial type is `StreamingDoc$stream` /
-// `Resume$stream` (multi-field T) rather than a bare scalar.
+// Class-typed streaming: the partial type is the multi-field class itself
+// rather than a bare scalar.
 function stream_e2e_extract_doc(text: string) -> StreamingDoc {
   client: StreamStub
   prompt: `
@@ -226,14 +225,11 @@ function stream_e2e_collect_doc(text: string) -> StreamingDoc {
 
 function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
   let s = stream_e2e_extract@stream(text);
-  let next_calls: (null | string)[] = [];
+  let next_calls: string[] = [];
   while (true) {
     match (s.next()) {
       ai.stream.Done => {
         break;
-      }
-      null => {
-        next_calls.push(null);
       }
       let item: string => {
         next_calls.push(item);

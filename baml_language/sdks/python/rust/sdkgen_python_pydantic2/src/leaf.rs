@@ -23,7 +23,7 @@ use crate::{
     },
     names::PythonNames,
     py_string,
-    routing::{LeafPath, route_class_ref},
+    routing::{LeafPath, route},
     translate_ty::{SelfRef, TranslateCtx, translate_ty},
 };
 
@@ -320,7 +320,7 @@ impl LeafBody {
     /// The relative-anchored form (`from .. import <segment>` rather
     /// than `from <root_dots> import <first_segment>`) navigates only
     /// through fully-initialized intermediates: an intra-subtree ref
-    /// like `stream_types/baml/llm` → `stream_types/baml/http` lands
+    /// like `baml/llm` → `baml/http` lands
     /// as `from .. import http`, avoiding the partial-attribute
     /// `AttributeError` that going through the SDK root would trigger
     /// during subpackage init.
@@ -514,7 +514,7 @@ impl RelImport {
             format!(
                 "{indent}from {dots}{path} import {anchor}\n",
                 path = self.from_path,
-                anchor = self.anchor
+                anchor = self.anchor,
             )
         }
     }
@@ -678,10 +678,7 @@ fn record_name_routing(
     out: &mut RootImportSets,
     names: Option<&PythonNames>,
 ) {
-    let routed = names.map_or_else(
-        || route_class_ref(name),
-        |names| names.route_class_ref(name),
-    );
+    let routed = names.map_or_else(|| route(name), |names| names.route(name));
     if routed == *current {
         return;
     }
@@ -692,7 +689,7 @@ fn record_name_routing(
         // here (current is also empty there, so `routed == *current`).
         if !current.segments.is_empty() {
             let projected = names.map_or_else(
-                || name.bare_name().to_string(),
+                || name.name().to_string(),
                 |names| names.symbol(name).into_owned(),
             );
             out.root_names.insert(projected.clone());
@@ -868,26 +865,12 @@ fn split_hoistable_aliases(
     (hoisted, trailing)
 }
 
-/// Whether `name` lands in a leaf under a different logical package than
-/// `leaf`. `stream_types` is a synthetic routing prefix, so compare the source
-/// package beneath it (`ai`, `baml`, ...) rather than treating every partial
-/// type as part of one giant package. The SDK root counts as nobody's outside.
+/// Whether `name` lands in a leaf under a different top-level package than
+/// `leaf`. The SDK root counts as nobody's outside.
 pub(crate) fn routes_outside_package(leaf: &LeafPath, name: &baml_codegen_types::Name) -> bool {
-    let routed = route_class_ref(name);
-    match (
-        logical_package_segment(&leaf.segments),
-        logical_package_segment(&routed.segments),
-    ) {
+    match (leaf.segments.first(), route(name).segments.first()) {
         (Some(current), Some(other)) => current != other,
         _ => false,
-    }
-}
-
-fn logical_package_segment(segments: &[String]) -> Option<&str> {
-    match segments {
-        [prefix, package, ..] if prefix == "stream_types" => Some(package),
-        [package, ..] => Some(package),
-        [] => None,
     }
 }
 
@@ -1140,7 +1123,7 @@ fn is_function_spec_reexport(s: &EmittedSymbol) -> bool {
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
-        populate_by_name=True
+        populate_by_name=True,
     )
 {%- for prop in properties %}
     {{ prop.name }}: {{ prop.ty_py }}{{ prop.default_expr }}
@@ -1323,7 +1306,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, names: Option<Rc<PythonName
                 // `baml.media.*` overrides in `baml_bridge/typemap.py`).
                 return format!(
                     "from {module} import {rust_name} as {py_name}\n",
-                    py_name = c.py_name
+                    py_name = c.py_name,
                 );
             }
             let properties = c
@@ -1458,7 +1441,7 @@ fn render_type_alias(
     if a.source.package().as_str() == "baml"
         && a.source.namespace().len() == 1
         && a.source.namespace()[0].as_str() == "json"
-        && a.source.bare_name() == "json"
+        && a.source.name().as_str() == "json"
     {
         let py_name = &a.py_name;
         return format!("{py_name}: typing.TypeAlias = typing.Any\n");
@@ -1545,7 +1528,7 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
     format!(
         "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {required_params}{optional_params}{param_aliases}{projection}{binding_metadata}{generic_kwargs})",
         name = f.py_name,
-        fqn = py_string(&f.baml_fqn)
+        fqn = py_string(&f.baml_fqn),
     )
 }
 
@@ -1579,7 +1562,7 @@ fn render_method_binding(
     let generic_kwargs = render_generic_kwargs(&m.wire_generic_params, class_type_params);
     let inner = format!(
         "_define_function({fqn}, {mode_str} {required_params}{optional_params}{param_aliases}{projection}{binding_metadata}{generic_kwargs})",
-        fqn = py_string(&m.baml_fqn)
+        fqn = py_string(&m.baml_fqn),
     );
     // `staticmethod(...)` wrap stops Python's descriptor protocol from
     // injecting the class as positional arg 0. Instance methods use
@@ -1630,7 +1613,7 @@ fn render_binding_metadata(name: &str, qualname: &str) -> String {
     format!(
         ", binding_name={}, binding_qualname={}, binding_module=__name__",
         py_string(name),
-        py_string(qualname)
+        py_string(qualname),
     )
 }
 
@@ -1810,7 +1793,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n"
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -2203,13 +2186,13 @@ fn render_symbol_pyi(
                 return format!(
                     "class {}(_BamlFunctionSpec[{params}], typing.Generic[{params}]): ...\n",
                     c.py_name,
-                    params = params
+                    params = params,
                 );
             }
             if let Some((module, rust_name)) = media_reexport_rust_name(c) {
                 return format!(
                     "from {module} import {rust_name} as {py_name}\n",
-                    py_name = c.py_name
+                    py_name = c.py_name,
                 );
             }
             let properties = c
@@ -2653,7 +2636,7 @@ pub(crate) fn render_leaf_body_pyi(
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n"
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 

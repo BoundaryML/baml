@@ -118,7 +118,7 @@ fn collect_file_diagnostics_parallel(
     }
 }
 
-/// Prime every compiler2 file's PPIR semantic index across worker threads.
+/// Prime every compiler2 file's HIR semantic index across worker threads.
 ///
 /// Whole-package aggregate queries (`package_items` / `namespace_items`)
 /// fold over **every** file's semantic index, and every file's check demands
@@ -555,14 +555,6 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
             }
         }
         // CLASS generic-bound diagnostics.
-        //
-        // BUG: an unresolved field type was reported twice — once at the
-        // field's type-ref span (from `class_lowering_diagnostics`) and once
-        // at an EMPTY range rendered as `1:1`. The suspected cause (a class's
-        // synthesized `$stream` companion re-lowering the same annotation at
-        // an empty declaration span) no longer exists, and `class Bad { x
-        // Undefined }` alone in a project now reports it once. Left recorded
-        // in case the empty-range report returns by another road.
         for &class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
             for (range, error) in
                 baml_compiler2_hir_ty::lower::class_lowering_diagnostics(db, class_loc)

@@ -187,9 +187,7 @@ fn collect_alias_refs_inner(ty: &RuntimeTy, out: &mut Vec<TypeName>) {
 // =========================================================================
 //
 // Grammar:
-//   type        := union_expr attrs?
-//   union_expr  := element ('|' element)*
-//   element     := postfix attrs?
+//   type        := postfix ('|' postfix)*
 //   postfix     := atom ('[]' | '?')*
 //   atom        := 'int' | 'float' | 'string' | 'bool' | 'null'
 //                | 'true' | 'false' | INT_LIT
@@ -197,10 +195,6 @@ fn collect_alias_refs_inner(ty: &RuntimeTy, out: &mut Vec<TypeName>) {
 //                | '$' IDENT          (type alias ref)
 //                | IDENT              (class name)
 //                | '(' type ')'
-//   attrs       := attr+
-//   attr        := '@sap.parse_without_null'
-//                | '@sap.pending_never'
-//                | '@sap.in_progress_never'
 
 struct Parser {
     chars: Vec<char>,
@@ -229,21 +223,6 @@ impl Parser {
         let c = self.chars[self.pos];
         self.pos += 1;
         c
-    }
-
-    fn remaining(&self) -> String {
-        self.chars[self.pos..].iter().collect()
-    }
-
-    fn starts_with(&self, s: &str) -> bool {
-        self.remaining().starts_with(s)
-    }
-
-    fn consume_str(&mut self, s: &str) {
-        for expected in s.chars() {
-            let actual = self.advance();
-            assert_eq!(actual, expected, "expected '{s}'");
-        }
     }
 
     fn read_word(&mut self) -> String {
@@ -275,22 +254,15 @@ impl Parser {
         s.parse().expect("expected integer literal")
     }
 
-    // type := union_expr attrs?
+    // type := postfix ('|' postfix)*
     fn parse_type(&mut self) -> RuntimeTy {
-        let ty = self.parse_union();
-        self.parse_attrs();
-        ty
-    }
-
-    // union_expr := element ('|' element)*
-    fn parse_union(&mut self) -> RuntimeTy {
-        let first = self.parse_element();
+        let first = self.parse_postfix();
         let mut members = vec![first];
         loop {
             self.skip_ws();
             if self.peek() == Some('|') {
                 self.advance();
-                members.push(self.parse_element());
+                members.push(self.parse_postfix());
             } else {
                 break;
             }
@@ -300,13 +272,6 @@ impl Parser {
         } else {
             RuntimeTy::Union(members.into())
         }
-    }
-
-    // element := postfix attrs?
-    fn parse_element(&mut self) -> RuntimeTy {
-        let ty = self.parse_postfix();
-        self.parse_attrs();
-        ty
     }
 
     // postfix := atom ('[]' | '?')*
@@ -380,25 +345,6 @@ impl Parser {
             other => panic!("unexpected {:?} at pos {} in type DSL", other, self.pos),
         }
     }
-
-    // attrs := attr*
-    fn parse_attrs(&mut self) {
-        loop {
-            self.skip_ws();
-            if !self.starts_with("@") {
-                break;
-            }
-            if self.starts_with("@sap.parse_without_null") {
-                self.consume_str("@sap.parse_without_null");
-            } else if self.starts_with("@sap.pending_never") {
-                self.consume_str("@sap.pending_never");
-            } else if self.starts_with("@sap.in_progress_never") {
-                self.consume_str("@sap.in_progress_never");
-            } else {
-                break;
-            }
-        }
-    }
 }
 
 fn parse_ty(s: &str) -> RuntimeTy {
@@ -408,7 +354,7 @@ fn parse_ty(s: &str) -> RuntimeTy {
     assert!(
         parser.pos == parser.chars.len(),
         "trailing characters in type DSL: {:?}",
-        &s[parser.pos..]
+        &s[parser.pos..],
     );
     ty
 }
@@ -431,7 +377,7 @@ fn simplify_sap_tests() {
         if actual != case.expected {
             failures.push(format!(
                 "  {}:\n    expected: {:#?}\n    actual:   {:#?}",
-                case.name, case.expected, actual
+                case.name, case.expected, actual,
             ));
         }
     }
@@ -440,7 +386,7 @@ fn simplify_sap_tests() {
         panic!(
             "\n{} simplify_sap test(s) failed:\n{}\n",
             failures.len(),
-            failures.join("\n\n")
+            failures.join("\n\n"),
         );
     }
 }

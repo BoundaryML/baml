@@ -342,7 +342,7 @@ fn to_source_code_internal(
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
         "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
-         (got {naming_convention})"
+         (got {naming_convention})",
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let names = Rc::new(PythonNames::build(pool));
@@ -350,12 +350,12 @@ fn to_source_code_internal(
     // Every symbol in the pool routes to exactly one leaf. Dedup via
     // `BTreeSet` so leaf and directory enumeration below is stable.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
-    for (key, symbol) in pool {
-        leaves.insert(names.route(key, symbol));
+    for key in pool.keys() {
+        leaves.insert(names.route(key));
     }
     let interface_tokens = public_interface_tokens(pool);
     for name in &interface_tokens {
-        leaves.insert(names.route_class_ref(name));
+        leaves.insert(names.route(name));
     }
 
     // `baml/` always exists — even if no stdlib symbols route there,
@@ -376,10 +376,9 @@ fn to_source_code_internal(
     // Walk every leaf's ancestor chain to discover all directories that
     // need an `__init__.py` and the set of immediate subdirectory
     // children for each directory. A single directory may be both a
-    // routed leaf AND have subdirectory children (e.g. `stream_types/`
-    // when there are no-namespace `root..Foo$stream` symbols alongside
-    // namespaced stream symbols). Those cases merge into a single
-    // `__init__.py` emission below.
+    // routed leaf AND have subdirectory children (e.g. `baml/` holds
+    // `baml` symbols alongside `baml/http/`). Those cases merge into a
+    // single `__init__.py` emission below.
     let mut all_dirs: BTreeSet<Vec<String>> = BTreeSet::new();
     let mut children: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
 
@@ -427,7 +426,7 @@ fn to_source_code_internal(
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
-                .filter(|name| names.route_class_ref(name) == leaf_path)
+                .filter(|name| names.route(name) == leaf_path)
                 .cloned(),
             false,
             &names,
@@ -455,7 +454,7 @@ fn to_source_code_internal(
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
-                .filter(|name| names.route_class_ref(name) == leaf_path)
+                .filter(|name| names.route(name) == leaf_path)
                 .cloned(),
             true,
             &names,
@@ -536,19 +535,19 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                         baml_base::Name::new(format!("{}@spec", name.name())),
                     )) =>
             {
-                Some((name, symbol, function))
+                Some((name, function))
             }
             _ => None,
         })
         .collect();
-    functions.sort_by_key(|(name, _, _)| *name);
+    functions.sort_by_key(|(name, _)| *name);
 
     let mut out = String::from(
         "from __future__ import annotations\n\nFUNCTIONS: dict[str, dict[str, object]] = {\n",
     );
-    for (name, symbol, function) in functions {
+    for (name, function) in functions {
         let fqn = name.to_string();
-        let leaf = names.route(name, symbol);
+        let leaf = names.route(name);
         let module = if leaf.segments.is_empty() {
             "baml_sdk".to_string()
         } else {
@@ -567,7 +566,7 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                 out,
                 "        {}: {},",
                 py_string(role.registry_key()),
-                py_string(&binding)
+                py_string(&binding),
             );
         }
         for suffix in ["spec", "stream"] {
@@ -633,7 +632,7 @@ fn init_pyi_path(dir: &[String]) -> PathBuf {
 ///    partial) `sys.modules` entry synchronously. The dotted walk
 ///    proceeds through each `__getattr__` until it reaches a fully
 ///    loaded leaf, so pydantic's eager eval of private-attribute
-///    annotations like `_sse: stream_types.baml.http.SseStream`
+///    annotations like `_sse: baml.http.SseStream`
 ///    resolves without manual setattr boilerplate.
 ///
 /// The `.pyi` counterpart (`render_package_init_pyi`) emits the
@@ -695,7 +694,7 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
 /// Render the SDK root `__init__.py`. Eagerly imports the two
 /// data-only modules (`_inlinedbaml`, `_typemap`) and wires up the
 /// runtime + typemap. Top-level child packages (`baml`, `lorem`,
-/// `vendor`, `stream_types`, …) are exposed lazily through a PEP 562
+/// `vendor`, …) are exposed lazily through a PEP 562
 /// `__getattr__` — `import baml_sdk` no longer transitively loads any
 /// leaf, restoring the 25b2 lazy-import goal. The chain of attribute
 /// accesses in `<top>.<intermediate>.<bare>` annotations still works
@@ -1684,52 +1683,6 @@ mod tests {
     }
 
     #[test]
-    fn stream_state_class_is_not_rewritten_as_host_handle() {
-        let mut pool: SymbolPool = HashMap::new();
-        let stream_state_name = cg_name("ai", &["stream"], "Stream$stream");
-        let holder_name = cg_name("user", &["lorem"], "PartialHolder");
-        pool.insert(stream_state_name.clone(), class(stream_state_name.clone()));
-        pool.insert(
-            holder_name.clone(),
-            class_with_props(
-                holder_name,
-                vec![(
-                    "stream_state",
-                    class_ty(stream_state_name, vec![Ty::Int, Ty::String]),
-                )],
-                "x.baml",
-                0,
-            ),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
-            let leaf = &out[&PathBuf::from(path)];
-            assert!(
-                leaf.contains("stream_state: stream_types.ai.stream.Stream[int, str]"),
-                "{path} lowered a partial-state class incorrectly:\n{leaf}"
-            );
-            assert!(!leaf.contains("_BamlStream["));
-        }
-    }
-
-    #[test]
-    fn partial_alias_hoisting_ignores_the_synthetic_stream_types_prefix() {
-        let partial_ai = LeafPath {
-            segments: vec!["stream_types".into(), "ai".into()],
-        };
-
-        assert!(crate::leaf::routes_outside_package(
-            &partial_ai,
-            &cg_name("baml", &["media"], "Image")
-        ));
-        assert!(!crate::leaf::routes_outside_package(
-            &partial_ai,
-            &cg_name("ai", &["content"], "Media")
-        ));
-    }
-
-    #[test]
     fn function_does_not_emit_removed_utility_companions() {
         let mut pool: SymbolPool = HashMap::new();
         pool.insert(
@@ -1755,26 +1708,6 @@ mod tests {
             "{leaf}"
         );
         assert!(!leaf.contains("user.lorem.extract_resume$spec"), "{leaf}");
-    }
-
-    #[test]
-    fn stream_class_routes_to_stream_types() {
-        let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(n.clone(), class(n));
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
-        // The Python identifier strips `$stream`; the engine FQN keeps
-        // it (stored on the `_baml_type_name` ClassVar) so the engine
-        // and the typemap key agree on the wire name.
-        assert!(!leaf.contains("class Resume$stream"));
-        assert!(!leaf.contains("Resume$stream =")); // no register-as-suffix
-
-        // The non-stream `lorem/` dir isn't emitted — no non-stream
-        // user.lorem symbols routed here.
-        assert!(!out.contains_key(&PathBuf::from("lorem/__init__.py")));
     }
 
     #[test]
@@ -1913,37 +1846,6 @@ mod tests {
             !ipsum.contains("_define_function"),
             "ipsum leaf must not reference _define_function:\n{ipsum}"
         );
-
-        // Stream-types leaves carry only stream-companion classes — no
-        // factories — so they must not pull a function-factory helper.
-        for (path, content) in &out {
-            let s = path.to_string_lossy();
-            if s.starts_with("stream_types/") && s.ends_with("__init__.py") {
-                assert!(
-                    !content.contains("_define_function"),
-                    "stream_types leaf {} must not import factory:\n{}",
-                    path.display(),
-                    content
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn stream_variant_under_stream_types() {
-        let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(n.clone(), class(n));
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-
-        assert!(out.contains_key(&PathBuf::from("stream_types/__init__.py")));
-        assert!(out.contains_key(&PathBuf::from("stream_types/lorem/__init__.py")));
-
-        // 25b2 Phase 4: subpackage cascade is gone — root no longer pulls
-        // in stream_types. The leaf still carries the routed companion.
-        let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        assert!(stream_leaf.contains("class Resume(pydantic.BaseModel):"));
     }
 
     #[test]
@@ -2329,64 +2231,6 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
         assert!(leaf.contains("Bar: typing.TypeAlias = typing.List[JsonValue]\n"));
-    }
-
-    #[test]
-    fn stream_companion_resolves_non_stream_sibling_by_fqn() {
-        // $stream companion with a field typed as the non-stream sibling.
-        let mut pool: SymbolPool = HashMap::new();
-        let non_stream = cg_name("user", &["lorem"], "Resume");
-        let stream = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(
-            non_stream.clone(),
-            class_with_props(non_stream.clone(), vec![("name", Ty::String)], "x.baml", 0),
-        );
-        pool.insert(
-            stream.clone(),
-            class_with_props(
-                stream,
-                vec![
-                    ("summary", union(vec![Ty::String, Ty::Null])),
-                    // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
-                    ("origin", class_ty(non_stream, vec![])),
-                ],
-                "x.baml",
-                0,
-            ),
-        );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-
-        // Non-stream leaf has the sibling.
-        let non_stream_leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(non_stream_leaf.contains("class Resume(pydantic.BaseModel):\n"));
-
-        // Stream leaf has the companion; the cross-stream reference to
-        // the non-stream sibling should render as `lorem.Resume` (G3's
-        // cross-leaf FQN form).
-        let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        let expected = "class Resume(pydantic.BaseModel):\n\
-                        \x20   model_config = pydantic.ConfigDict(\n\
-                        \x20       arbitrary_types_allowed=True,\n\
-                        \x20       extra=\"ignore\",\n\
-                        \x20       populate_by_name=True,\n\
-                        \x20   )\n\
-                        \x20   summary: typing.Optional[str] = None\n\
-                        \x20   origin: lorem.Resume\n";
-        assert!(
-            stream_leaf.contains(expected),
-            "stream leaf missing body:\n{stream_leaf}"
-        );
-        // 25b2 Phase 4: cross-leaf Pydantic field-edge import lifted out
-        // of TYPE_CHECKING. Different first segments so root-anchored
-        // (three dots from depth-2 stream leaf).
-        assert!(
-            stream_leaf.contains("\nfrom ... import lorem\n"),
-            "stream leaf missing unconditional three-dot lorem import:\n{stream_leaf}"
-        );
-        assert!(
-            !stream_leaf.contains("if typing.TYPE_CHECKING:\n    from ... import lorem"),
-            "lorem import should not be under TYPE_CHECKING:\n{stream_leaf}"
-        );
     }
 
     #[test]
@@ -2902,8 +2746,6 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         pool.insert(resume.clone(), class(resume));
-        let stream = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(stream.clone(), class(stream));
         let bucket = cg_name("aws", &["s3"], "Bucket");
         pool.insert(bucket.clone(), class(bucket));
 
@@ -3392,67 +3234,31 @@ mod tests {
     }
 
     #[test]
-    fn cross_leaf_stream_to_nonstream() {
-        // stream_types/lorem leaf references the non-stream Resume —
-        // depth 2, three dots: `from ... import lorem`.
-        let mut pool: SymbolPool = HashMap::new();
-        let non_stream = cg_name("user", &["lorem"], "Resume");
-        let stream = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(
-            non_stream.clone(),
-            class_with_props(non_stream.clone(), vec![("name", Ty::String)], "x.baml", 0),
-        );
-        pool.insert(
-            stream.clone(),
-            class_with_props(
-                stream,
-                vec![("origin", class_ty(non_stream, vec![]))],
-                "x.baml",
-                0,
-            ),
-        );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        // 25b2 Phase 4: lifted out of TYPE_CHECKING in `.py`. Different
-        // first segments (stream_types vs lorem) so import stays root-
-        // anchored — three dots from depth-2 stream leaf.
-        assert!(
-            py.contains("\nfrom ... import lorem\n"),
-            "py missing unconditional lorem import from stream leaf:\n{py}"
-        );
-        assert!(
-            !py.contains("if typing.TYPE_CHECKING:\n    from ... import lorem"),
-            "py lorem import should not be under TYPE_CHECKING:\n{py}"
-        );
-    }
-
-    #[test]
-    fn cross_leaf_deep_stream_vendor() {
-        // stream_types/vendor/aws/s3 leaf (depth 4) referencing
-        // baml.http.Response. Always anchor at the SDK root and import
-        // the top-level segment `baml` — five dots escape the depth-4
-        // leaf to the SDK root.
+    fn cross_leaf_deep_vendor() {
+        // vendor/aws/s3 leaf (depth 3) referencing baml.http.Response.
+        // Always anchor at the SDK root and import the top-level segment
+        // `baml` — four dots escape the depth-3 leaf to the SDK root.
         let mut pool: SymbolPool = HashMap::new();
         let response = cg_name("baml", &["http"], "Response");
-        let stream_bucket = cg_name("aws", &["s3"], "Bucket$stream");
+        let bucket = cg_name("aws", &["s3"], "Bucket");
         pool.insert(response.clone(), class(response.clone()));
         pool.insert(
-            stream_bucket.clone(),
+            bucket.clone(),
             class_with_props(
-                stream_bucket,
+                bucket,
                 vec![("resp", class_ty(response, vec![]))],
                 "x.baml",
                 0,
             ),
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let py = &out[&PathBuf::from("stream_types/vendor/aws/s3/__init__.py")];
+        let py = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(
-            py.contains("\nfrom ..... import baml\n"),
-            "py missing five-dot import of baml:\n{py}"
+            py.contains("\nfrom .... import baml\n"),
+            "py missing four-dot import of baml:\n{py}"
         );
         assert!(
-            !py.contains("if typing.TYPE_CHECKING:\n    from ..... import baml"),
+            !py.contains("if typing.TYPE_CHECKING:\n    from .... import baml"),
             "baml should not be under TYPE_CHECKING:\n{py}"
         );
         assert!(py.contains("    resp: baml.http.Response\n"));
@@ -3678,23 +3484,23 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains("T = typing.TypeVar(\"T\")"),
-            "missing TypeVar declaration:\n{leaf}"
+            "missing TypeVar declaration:\n{leaf}",
         );
         assert!(
             leaf.contains("class Box(pydantic.BaseModel, typing.Generic[T]):"),
-            "missing Generic[T] base on Box:\n{leaf}"
+            "missing Generic[T] base on Box:\n{leaf}",
         );
         assert!(
             leaf.contains("    item: T"),
-            "missing T-typed field on Box:\n{leaf}"
+            "missing T-typed field on Box:\n{leaf}",
         );
         assert!(
             leaf.contains("class Crate(pydantic.BaseModel, typing.Generic[T]):"),
-            "missing Generic[T] base on Crate:\n{leaf}"
+            "missing Generic[T] base on Crate:\n{leaf}",
         );
         assert!(
             leaf.contains("    contents: typing.List[Box[T]]"),
-            "missing nested generic ref Box[T]:\n{leaf}"
+            "missing nested generic ref Box[T]:\n{leaf}",
         );
         assert_eq!(
             leaf.matches(
@@ -3702,11 +3508,11 @@ mod tests {
             )
             .count(),
             2,
-            "every generated generic model should ignore extra fields:\n{leaf}"
+            "every generated generic model should ignore extra fields:\n{leaf}",
         );
         assert!(
             !leaf.contains("extra=\"forbid\""),
-            "generated generic models must not forbid extra fields:\n{leaf}"
+            "generated generic models must not forbid extra fields:\n{leaf}",
         );
 
         // TypeVar declaration appears once.
@@ -3721,21 +3527,21 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("T = typing.TypeVar(\"T\")"),
-            "pyi missing TypeVar:\n{pyi}"
+            "pyi missing TypeVar:\n{pyi}",
         );
         assert!(
             pyi.contains("class Box(pydantic.BaseModel, typing.Generic[T]):\n    item: T\n"),
-            "pyi missing Generic[T] on Box:\n{pyi}"
+            "pyi missing Generic[T] on Box:\n{pyi}",
         );
         assert!(
             pyi.contains(
-                "class Crate(pydantic.BaseModel, typing.Generic[T]):\n    contents: typing.List[Box[T]]\n"
+                "class Crate(pydantic.BaseModel, typing.Generic[T]):\n    contents: typing.List[Box[T]]\n",
             ),
-            "pyi missing typed Crate body:\n{pyi}"
+            "pyi missing typed Crate body:\n{pyi}",
         );
         assert!(
             !pyi.contains("model_config"),
-            "runtime Pydantic configuration should not be redeclared in stubs:\n{pyi}"
+            "runtime Pydantic configuration should not be redeclared in stubs:\n{pyi}",
         );
     }
 
@@ -3781,32 +3587,32 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("T = typing.TypeVar(\"T\")"),
-            "pyi missing TypeVar:\n{pyi}"
+            "pyi missing TypeVar:\n{pyi}",
         );
         // Required value arguments make `_types=` optional.
         assert!(
             pyi.contains(
                 "def echo(value: T, *, _types: dict[str, typing.Any] | None = None) -> T: ..."
             ),
-            "pyi missing typed echo signature:\n{pyi}"
+            "pyi missing typed echo signature:\n{pyi}",
         );
         assert!(
             pyi.contains(
                 "async def echo_async(value: T, *, _types: dict[str, typing.Any] | None = None) -> T: ..."
             ),
-            "pyi missing async echo signature:\n{pyi}"
+            "pyi missing async echo signature:\n{pyi}",
         );
         // A body-only TypeVar has no inference source, so `_types=` stays
         // statically required on both host modes.
         assert!(
             pyi.contains("def one_type_arg(*, _types: dict[str, typing.Any]) -> str: ..."),
-            "pyi should require body-only TypeVars:\n{pyi}"
+            "pyi should require body-only TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
                 "async def one_type_arg_async(*, _types: dict[str, typing.Any]) -> str: ..."
             ),
-            "pyi should require async body-only TypeVars:\n{pyi}"
+            "pyi should require async body-only TypeVars:\n{pyi}",
         );
     }
 
@@ -4123,39 +3929,39 @@ mod tests {
             pyi.contains(
                 "def pair_with(self, other: U, *, _types: dict[str, typing.Any] | None = None) -> U: ..."
             ),
-            "pyi should allow inferred method TypeVars:\n{pyi}"
+            "pyi should allow inferred method TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
                 "async def pair_with_async(self, other: U, *, _types: dict[str, typing.Any] | None = None) -> U: ..."
             ),
-            "pyi should allow inferred async method TypeVars:\n{pyi}"
+            "pyi should allow inferred async method TypeVars:\n{pyi}",
         );
         assert!(
             pyi.contains(
                 "def pair_with_default(self, other: U, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None) -> U: ..."
             ),
-            "pyi should keep inferred `_types` after instance defaults:\n{pyi}"
+            "pyi should keep inferred `_types` after instance defaults:\n{pyi}",
         );
         assert!(
             pyi.contains(
                 "def static_with_default(value: V, *, label: typing.Union[str, UNSET] = \"default\", _types: dict[str, typing.Any] | None = None) -> V: ..."
             ),
-            "pyi should keep inferred `_types` after static defaults:\n{pyi}"
+            "pyi should keep inferred `_types` after static defaults:\n{pyi}",
         );
         assert!(
             pyi.contains("def static_type_name(*, _types: dict[str, typing.Any]) -> str: ..."),
-            "zero-arg static own generics should require `_types`:\n{pyi}"
+            "zero-arg static own generics should require `_types`:\n{pyi}",
         );
         assert!(
             pyi.contains(
                 "async def static_type_name_async(*, _types: dict[str, typing.Any]) -> str: ..."
             ),
-            "zero-arg async static own generics should require `_types`:\n{pyi}"
+            "zero-arg async static own generics should require `_types`:\n{pyi}",
         );
         assert!(
             !pyi.contains("static_type_name(,"),
-            "zero-arg static signatures must not start with a comma:\n{pyi}"
+            "zero-arg static signatures must not start with a comma:\n{pyi}",
         );
     }
 

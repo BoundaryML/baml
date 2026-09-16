@@ -1035,7 +1035,7 @@ impl<N: Clone> LoweringTy<N> {
                     "({}) -> {} throws {}",
                     ps.join(", "),
                     ret.render_as_function_result(s),
-                    throws.render_with(s)
+                    throws.render_with(s),
                 )
             }
             LoweringTy::TypeVar(param) => s.type_var(param.name()),

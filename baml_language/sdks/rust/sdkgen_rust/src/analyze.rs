@@ -73,10 +73,11 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         match symbol {
             Symbol::Class(class) => classes.push((name, class)),
             Symbol::Enum(_) => {
-                if name.name().as_str().contains('$') && !name.is_stream() {
+                if name.name().as_str().contains('$') {
                     warnings.push(SkipWarning {
                         fqn: name.to_string(),
-                        reason: "companion types ($stream, …) are not emitted yet".to_string(),
+                        reason: "`$`-named types are not representable as Rust identifiers"
+                            .to_string(),
                     });
                 } else {
                     enums.insert(name.clone());
@@ -95,13 +96,12 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     let mut deps: BTreeMap<&Name, Vec<Name>> = BTreeMap::new();
     let mut alive: HashSet<Name> = HashSet::new();
     for (name, class) in &classes {
-        // `$`-suffixed companion types ($stream partials, …) are not
-        // representable as Rust identifiers and are not emitted yet —
+        // `$`-named types are not representable as Rust identifiers —
         // same filter the function emitter applies.
-        if name.name().as_str().contains('$') && !name.is_stream() {
+        if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
-                reason: "companion types ($stream, …) are not emitted yet".to_string(),
+                reason: "`$`-named types are not representable as Rust identifiers".to_string(),
             });
             continue;
         }
@@ -159,10 +159,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // types; only recursive aliases (unrepresentable as a plain Rust
     // `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
-        if name.name().as_str().contains('$') && !name.is_stream() {
+        if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
-                reason: "companion types ($stream, …) are not emitted yet".to_string(),
+                reason: "`$`-named types are not representable as Rust identifiers".to_string(),
             });
             continue;
         }
@@ -253,7 +253,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             type_names_by_leaf
                 .entry(leaf)
                 .or_default()
-                .insert(name.bare_name().to_string());
+                .insert(name.name().to_string());
         }
     }
 
@@ -544,7 +544,7 @@ fn compute_renames(
             types_in
                 .entry(path.clone())
                 .or_default()
-                .insert(name.bare_name().to_string());
+                .insert(name.name().to_string());
         }
     }
 

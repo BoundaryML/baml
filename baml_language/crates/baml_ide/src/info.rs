@@ -2773,10 +2773,10 @@ function example(name: string) -> string {
 
     #[test]
     fn llm_prompt_hover_survives_companion_span_aliasing() {
-        // The demo-project crash: llm companions are PPIR-expansion items
-        // whose spans alias the prompt text; resolving through HIR's
-        // pre-expansion body query panicked "no entry found for key". All
-        // body reads go through PPIR's canonical accessors now.
+        // The demo-project crash: llm companions are synthesized items whose
+        // spans alias the prompt text; resolving through a pre-expansion body
+        // query panicked "no entry found for key". All body reads go through
+        // HIR's canonical accessors now.
         let test = CursorTest::new(
             r#"client Terra = openai.ResponsesClient.new(model = "gpt-5.6-terra");
 

@@ -295,7 +295,7 @@ impl RenderDefinitionValidator<'_> {
                         return Some(format!(
                             "non-regular recursive generic class `{}` expands from `{}` to `{display_name}` and cannot be rendered as an LLM output schema",
                             baml_type::HeadDisplay::head_display_name(head),
-                            ancestor.display_name
+                            ancestor.display_name,
                         ));
                     }
                 }
@@ -407,7 +407,7 @@ impl RenderDefinitionValidator<'_> {
                 if first.identity != class.identity && !equivalent {
                     return Some(format!(
                         "classes `{}` and `{}` both render as `{}` in the same LLM render context",
-                        first.display_name, class.display_name, class.rendered_name
+                        first.display_name, class.display_name, class.rendered_name,
                     ));
                 }
             } else {

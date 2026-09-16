@@ -500,7 +500,7 @@ mod tests {
         // name, so it has no meaning at an interned head.
         assert_eq!(
             RuntimeTy::class_with_args(TypeName::local(Name::new("P")), Box::new([])),
-            RuntimeTy::class("P")
+            RuntimeTy::class("P"),
         );
     }
 

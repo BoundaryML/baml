@@ -911,7 +911,7 @@ pub(crate) mod tests {
         vm.collect_roots(&mut roots);
         assert!(
             roots.contains(&class_ptr),
-            "a live realized frame argument must root its declaration without metadata"
+            "a live realized frame argument must root its declaration without metadata",
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe {
@@ -962,7 +962,7 @@ pub(crate) mod tests {
         vm.collect_roots(&mut roots);
         assert!(
             roots.contains(&class_ptr),
-            "a native call's realized argument must root its runtime declaration"
+            "a native call's realized argument must root its runtime declaration",
         );
 
         let (_stats, _remapped_roots, forwarding) = unsafe {
@@ -2945,7 +2945,7 @@ impl BexVm {
                             debug_assert_eq!(
                                 type_args_templates.len(),
                                 inst.class_type_args.len(),
-                                "Class should have consistent number of generic parameters"
+                                "Class should have consistent number of generic parameters",
                             );
                             if type_args_templates.len() != inst.class_type_args.len() {
                                 return Ok(false);
@@ -6440,7 +6440,7 @@ impl BexVm {
             user_args.len(),
             arity,
             "HostClosure call: drained {} args but declared arity is {arity}",
-            user_args.len()
+            user_args.len(),
         );
         // Split the positional call args by the callable's declared params:
         // required (leading) args stay positional; supplied optionals are
@@ -7016,7 +7016,7 @@ impl BexVm {
                     "sysop dispatch: args must be the top {callee_arity} stack slots \
                      (len {}, locals_offset {})",
                     self.stack.len(),
-                    locals_offset.raw()
+                    locals_offset.raw(),
                 );
                 // Sys-ops do not thread type arguments: a method-level-generic
                 // sys-op is rejected at compile time (E0153), and class/interface
@@ -7026,7 +7026,7 @@ impl BexVm {
                     closure_type_args.is_empty()
                         && bound_method_class_type_args.is_empty()
                         && specialized_type_args.is_empty(),
-                    "sysop dispatch received type args, which it cannot thread to the op"
+                    "sysop dispatch received type args, which it cannot thread to the op",
                 );
                 return Ok(Some(self.dispatch_sysop_yield(
                     callee_fn_ptr,
@@ -8722,7 +8722,7 @@ impl BexVm {
                         debug_assert!(
                             self.stack.len() >= arity,
                             "HostClosure CallIndirect: operand stack holds {} slots but declared arity is {arity}",
-                            self.stack.len()
+                            self.stack.len(),
                         );
                         let args_offset = self
                             .stack

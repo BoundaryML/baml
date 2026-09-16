@@ -1,5 +1,5 @@
 //! The engine's fact oracle: a [`TypeContext`] implementation backed by
-//! ppir's item data, consulted by every subtype/equivalence/canonicalization
+//! HIR's item data, consulted by every subtype/equivalence/canonicalization
 //! query. Facts are FAIL-SAFE per the trait's contract: an unanswerable
 //! question returns the conservative answer, never a guess.
 //!
@@ -62,7 +62,7 @@ impl<'db> Facts<'db> {
     }
 
     /// Resolves a qualified name back to its definition through the owning
-    /// package's canonical (ppir) items.
+    /// package's canonical HIR items.
     pub fn definition_of(&self, name: &DeclName) -> Option<Definition<'db>> {
         definition_of(self.db, name)
     }

@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// The `@stream.*` field attributes the language accepts (the schema field
 /// attributes are `baml_compiler2_ast::FIELD_ATTR_NAMES`'s business). Public so
 /// completion can enumerate exactly what this validation accepts.
-pub const KNOWN_STREAM_ATTRS: &[&str] = &["stream.done", "stream.must_exist", "stream.with_state"];
+pub const KNOWN_STREAM_ATTRS: &[&str] = &["stream.done", "stream.must_exist"];
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
@@ -1956,7 +1956,8 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// - `description` / `alias`: exactly 1 argument, must be a string literal
     /// - `skip`: exactly 0 arguments
     ///
-    /// Unknown attributes are silently passed through (e.g. `@stream.*` for PPIR).
+    /// Other attributes pass through; `@stream.*` names are checked by
+    /// `validate_stream_attributes`.
     fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
         // E0014: reject the same single-valued schema attribute appearing more
         // than once on one declaration. `@alias`, `@description`, and `@skip`

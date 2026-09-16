@@ -1731,9 +1731,9 @@ mod tests {
                 &Ty::TypeAlias(s),
                 &[],
                 &crate::test_heads::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1813,9 +1813,9 @@ mod tests {
                 &Ty::bool(),
                 &[],
                 &crate::test_heads::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1837,9 +1837,9 @@ mod tests {
                 &func(Ty::int()),
                 &vars,
                 &crate::test_heads::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1864,7 +1864,7 @@ mod tests {
                 &crate::test_heads::alias_ctx(&aliases),
                 &mut bindings
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -2153,7 +2153,7 @@ mod tests {
     fn union_overlap_three_sat_satisfiable_is_yes() {
         assert_eq!(
             three_sat_overlap(3, &[[(0, true), (1, true), (2, true)]]),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 

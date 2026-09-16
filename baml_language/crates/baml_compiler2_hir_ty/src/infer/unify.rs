@@ -957,7 +957,7 @@ mod tests {
             UnifyError {
                 left: Ty::int(),
                 right: Ty::string(),
-                escaped: None
+                escaped: None,
             }
         );
     }
@@ -1087,7 +1087,7 @@ mod tests {
             table
                 .unify(
                     &Ty::union([Ty::int(), Ty::string()]),
-                    &Ty::union([Ty::string(), Ty::int()])
+                    &Ty::union([Ty::string(), Ty::int()]),
                 )
                 .is_err()
         );

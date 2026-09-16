@@ -557,7 +557,7 @@ function google_stream_decode() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string | null, string>(
+            let stream = ai.stream.from_spec<string, string>(
                 GoogleEcho@spec("Say pong."),
                 client = cl,
             );
@@ -588,7 +588,7 @@ function _stream_failure_label(events: string[]) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string | null, string>(
+            let stream = ai.stream.from_spec<string, string>(
                 GoogleEcho@spec("Say pong."),
                 client = cl,
             );
@@ -906,7 +906,7 @@ function vertex_stream_decode() -> string {
                 api_key = "express-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string | null, string>(
+            let stream = ai.stream.from_spec<string, string>(
                 GoogleEcho@spec("Say pong."),
                 client = cl,
             );
@@ -937,7 +937,7 @@ function vertex_stream_time_to_first_token_timeout_ms() -> string {
                 request_timeout_ms = 15000,
                 time_to_first_token_timeout_ms = 5000,
             );
-            let stream = ai.stream.from_spec<string | null, string>(
+            let stream = ai.stream.from_spec<string, string>(
                 GoogleEcho@spec("Say pong."),
                 client = cl,
             );

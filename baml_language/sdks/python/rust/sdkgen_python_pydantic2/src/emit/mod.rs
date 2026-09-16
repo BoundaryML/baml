@@ -80,7 +80,7 @@ pub(crate) fn build_emitted(
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
     for (key, symbol) in entries {
-        let leaf = names.route(key, symbol);
+        let leaf = names.route(key);
         let bare = names.symbol(key).into_owned();
 
         match symbol {

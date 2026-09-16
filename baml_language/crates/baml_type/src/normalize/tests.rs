@@ -174,7 +174,7 @@ fn projection_reduces_to_its_binding() {
     assert!(equivalent(
         &projection(class("C"), "Foo", "Assoc"),
         &Ty::string(),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -203,7 +203,7 @@ fn reflection_kind_classes_are_ordinary_classes_disjoint_from_the_carrier() {
                     .expect("closed fixture"),
                 &interned::ClosedTy::try_from(interned::Ty::from_plain(&carrier))
                     .expect("closed fixture"),
-                &ctx
+                &ctx,
             ),
             "interned subtype entry admitted {kind:?} beneath the carrier"
         );
@@ -243,7 +243,7 @@ fn cyclic_projection_reduction_terminates_and_stays_opaque() {
     assert!(!equivalent(
         &projection(class("C"), "I", "A"),
         &Ty::int(),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -256,7 +256,7 @@ fn union_aci() {
     assert!(equivalent(
         &union(vec![Ty::int(), Ty::string()]),
         &union(vec![Ty::string(), Ty::int()]),
-        &ctx
+        &ctx,
     ));
     // Idempotence.
     assert!(equivalent(
@@ -268,7 +268,7 @@ fn union_aci() {
     assert!(equivalent(
         &union(vec![Ty::int(), union(vec![Ty::string(), Ty::bool()])]),
         &union(vec![union(vec![Ty::int(), Ty::string()]), Ty::bool()]),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -278,12 +278,12 @@ fn never_is_removed_unknown_absorbs() {
     assert!(equivalent(
         &union(vec![Ty::int(), Ty::Never]),
         &Ty::int(),
-        &ctx
+        &ctx,
     ));
     assert!(equivalent(
         &union(vec![Ty::int(), Ty::Unknown]),
         &Ty::Unknown,
-        &ctx
+        &ctx,
     ));
 }
 
@@ -358,7 +358,7 @@ fn optional_is_union_with_null() {
     assert!(equivalent(
         &Ty::optional(Ty::int()),
         &union(vec![Ty::int(), null]),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -374,7 +374,7 @@ fn enum_completeness_collapse() {
     assert!(equivalent(
         &union(vec![variant("Side", "Left"), variant("Side", "Right")]),
         &enum_ty("Side"),
-        &ctx
+        &ctx,
     ));
     // An incomplete set does NOT collapse.
     assert!(!equivalent(
@@ -386,7 +386,7 @@ fn enum_completeness_collapse() {
     assert!(equivalent(
         &union(vec![variant("Side", "Left"), enum_ty("Side")]),
         &enum_ty("Side"),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -397,7 +397,7 @@ fn unknown_enum_does_not_collapse() {
     assert!(!equivalent(
         &union(vec![variant("Side", "Left"), variant("Side", "Right")]),
         &enum_ty("Side"),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -413,14 +413,14 @@ fn concrete_implements_interface() {
     assert!(equivalent(
         &union(vec![class("Dog"), iface("Animal")]),
         &iface("Animal"),
-        &ctx
+        &ctx,
     ));
     // A non-implementor is not absorbed.
     assert!(!is_subtype(&class("Rock"), &iface("Animal"), &ctx));
     assert!(!equivalent(
         &union(vec![class("Rock"), iface("Animal")]),
         &iface("Animal"),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -434,7 +434,7 @@ fn interface_requires_absorption() {
     assert!(equivalent(
         &union(vec![iface("Compare"), iface("Equals")]),
         &iface("Equals"),
-        &ctx
+        &ctx,
     ));
     assert!(!is_subtype(&iface("Equals"), &iface("Compare"), &ctx));
 }
@@ -449,7 +449,7 @@ fn type_var_bound_absorption() {
     assert!(equivalent(
         &union(vec![typevar(0, "T"), iface("Animal")]),
         &iface("Animal"),
-        &ctx
+        &ctx,
     ));
     // A different type variable is not absorbed and not equivalent.
     assert!(!equivalent(&typevar(0, "T"), &typevar(1, "U"), &ctx));
@@ -485,12 +485,12 @@ fn type_var_conjunction_bound() {
     assert!(equivalent(
         &union(vec![typevar(0, "T"), iface("Equals")]),
         &iface("Equals"),
-        &ctx
+        &ctx,
     ));
     assert!(!equivalent(
         &union(vec![typevar(0, "T"), iface("Serialize")]),
         &iface("Serialize"),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -508,7 +508,7 @@ fn generics_are_invariant_up_to_equivalence() {
     assert!(equivalent(
         &class1("Box", union(vec![lit_int(1), Ty::int()])),
         &class1("Box", Ty::int()),
-        &ctx
+        &ctx,
     ));
     assert!(!is_subtype(
         &class1("Box", Ty::int()),
@@ -543,7 +543,7 @@ fn subtype_basics() {
     assert!(is_subtype(
         &union(vec![Ty::int(), Ty::string()]),
         &union(vec![Ty::string(), Ty::int(), Ty::bool()]),
-        &ctx
+        &ctx,
     ));
     assert!(!is_subtype(
         &union(vec![Ty::int(), Ty::string()]),
@@ -705,13 +705,13 @@ fn interface_membership_through_unions() {
     assert!(is_subtype(
         &class("Dog"),
         &union(vec![iface("Animal"), Ty::null()]),
-        &ctx
+        &ctx,
     ));
     // A union of implementors is a subtype of the interface (left-union rule).
     assert!(is_subtype(
         &union(vec![class("Dog"), class("Cat")]),
         &iface("Animal"),
-        &ctx
+        &ctx,
     ));
     // …but `null` is not a member of the bare interface.
     assert!(!is_subtype(
@@ -732,7 +732,7 @@ fn type_var_is_reflexive_independent_of_its_bound() {
     assert!(is_subtype(
         &typevar(0, "T"),
         &union(vec![typevar(0, "T"), typevar(1, "U")]),
-        &ctx
+        &ctx,
     ));
     assert!(is_subtype(
         &typevar(0, "T"),
@@ -826,7 +826,7 @@ fn complete_bool_literals_collapse_to_bool() {
     assert!(equivalent(
         &union(vec![lit_bool(true), lit_bool(false), Ty::int()]),
         &union(vec![Ty::bool(), Ty::int()]),
-        &ctx
+        &ctx,
     ));
     // A single literal does not collapse (absorption into a present base still
     // applies).
@@ -1105,24 +1105,24 @@ fn containers_are_invariant_even_when_the_element_is_a_genuine_subtype() {
     assert!(!is_subtype(
         &Ty::list(class("Dog")),
         &Ty::list(iface("Animal")),
-        &ctx
+        &ctx,
     ));
     assert!(!is_subtype(
         &map_ty(Ty::string(), class("Dog")),
         &map_ty(Ty::string(), iface("Animal")),
-        &ctx
+        &ctx,
     ));
     // A generic class is invariant in its argument for the same reason.
     assert!(!is_subtype(
         &class1("Box", class("Dog")),
         &class1("Box", iface("Animal")),
-        &ctx
+        &ctx,
     ));
     // Reflexive same-instantiation still holds.
     assert!(is_subtype(
         &Ty::list(class("Dog")),
         &Ty::list(class("Dog")),
-        &ctx
+        &ctx,
     ));
 }
 
@@ -1315,7 +1315,7 @@ fn any_class_membership_is_derived_for_classes_only() {
     assert!(!is_subtype(
         &Ty::Map {
             key: Box::new(Ty::string()),
-            value: Box::new(Ty::int())
+            value: Box::new(Ty::int()),
         },
         &target,
         &ctx
@@ -1520,7 +1520,7 @@ mod interned_entry {
         assert!(equivalent_interned(
             &it(&union(vec![Ty::int(), Ty::string()])),
             &it(&union(vec![Ty::string(), Ty::int()])),
-            &ctx
+            &ctx,
         ));
     }
 

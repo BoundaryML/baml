@@ -20,13 +20,12 @@
 //!     INSTA_UPDATE=always infisical run -- cargo nextest run -p sdk_test_llm_recordings
 
 // Flat `_stream` bindings invoke the compiler-private `Fn@stream` projection
-// through the authored function FQN plus the Stream boundary operation. The
-// `Out$stream` type still carries every partial-output rule.
+// through the authored function FQN plus the Stream boundary operation.
 
 use crate::replay_harness::{replay_server, replay_server_async};
 
 // ---------------------------------------------------------------------------
-// String-typed `T` — Stream<null | string, string>.
+// String-typed `T` — Stream<string, string>.
 // ---------------------------------------------------------------------------
 
 /// Sync `next()` yields a stream of partials and drains to `None`.
@@ -39,9 +38,8 @@ fn test_streaming_e2e_stream() {
         let mut results = 0;
         while let Some(v) = stream.next().unwrap() {
             results += 1;
-            // python: `v is None or isinstance(v, str)` — compile-time here:
-            // the partial type is `Option<String>`.
-            let _: Option<String> = v;
+            // python: `isinstance(v, str)` — compile-time here.
+            let _: String = v;
             assert!(results < 10_000, "stream.next() failed to terminate");
         }
         assert!(
@@ -66,7 +64,7 @@ async fn test_streaming_e2e_stream_async() {
         let mut results = 0;
         while let Some(v) = stream.next_async().await.unwrap() {
             results += 1;
-            let _: Option<String> = v;
+            let _: String = v;
             assert!(results < 10_000, "stream.next() failed to terminate");
         }
         assert!(
@@ -78,7 +76,7 @@ async fn test_streaming_e2e_stream_async() {
     .await;
 }
 
-/// BAML-side collection keeps the `S | Done` protocol inside the engine and
+/// BAML-side collection keeps the `Partial | Done` protocol inside the engine and
 /// returns only concrete host values.
 #[test]
 fn test_streaming_e2e_stream_collect_in_baml() {
@@ -92,14 +90,14 @@ fn test_streaming_e2e_stream_collect_in_baml() {
             "expected at least 10 collected partials"
         );
         for item in result.next_calls {
-            let _: Option<String> = item;
+            let _: String = item;
         }
         let _: String = result.final_call;
     });
 }
 
 // ---------------------------------------------------------------------------
-// Class-typed `T` — Stream<StreamingDoc$stream, StreamingDoc>. The case the
+// Class-typed `T` — Stream<StreamingDoc, StreamingDoc>. The case the
 // plain-`string` tests above deliberately avoid; the regression guard for the
 // class-typed streaming bug (doc 00).
 // ---------------------------------------------------------------------------
@@ -114,10 +112,8 @@ fn test_streaming_e2e_stream_doc() {
         let mut results = 0;
         while let Some(v) = stream.next().unwrap() {
             results += 1;
-            if let Some(partial) = &v {
-                // python: `hasattr(v, "title")` — the field access pins it.
-                let _ = &partial.title;
-            }
+            // python: `isinstance(v, StreamingDoc)` — compile-time here.
+            let _: &StreamingDoc = &v;
             assert!(results < 10_000, "stream.next() failed to terminate");
         }
         assert!(
@@ -141,9 +137,7 @@ async fn test_streaming_e2e_stream_doc_async() {
         let mut results = 0;
         while let Some(v) = stream.next_async().await.unwrap() {
             results += 1;
-            if let Some(partial) = &v {
-                let _ = &partial.title;
-            }
+            let _: &StreamingDoc = &v;
             assert!(results < 10_000, "stream.next() failed to terminate");
         }
         assert!(

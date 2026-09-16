@@ -5,8 +5,8 @@
 //! `FunctionDef`. Companions are complete, self-contained AST items that flow
 //! through HIR → TIR → MIR → emit with zero special-casing.
 //!
-//! Adding a new companion = writing one `fn(&FunctionDef) -> Option<FunctionDef>`
-//! and appending it to `COMPANIONS`.
+//! Adding a new companion = writing one expander returning `Option<FunctionDef>`
+//! and adding it to `expand_companions`.
 //!
 //! Every LLM function lives in the single-path ai world and gets its
 //! companions: `@spec` (the bound, unrun `ai.FunctionSpec<Out>`), `@render_prompt`

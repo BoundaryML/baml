@@ -18,8 +18,8 @@ use crate::loc::{
 };
 
 /// Declare an enumeration query: `file_<plural>(file) -> Vec<XLoc>`, ordered by
-/// source position. Synthetic `*$stream` companions carry no source span, so they
-/// sort first (at offset 0); user-declared items follow in source order.
+/// source position. Synthesized companions share their parent's span, so they
+/// sort beside it.
 macro_rules! file_items {
     ($(#[$meta:meta])* $name:ident, $map:ident, $loc:ident) => {
         $(#[$meta])*
@@ -28,7 +28,7 @@ macro_rules! file_items {
             let item_tree = crate::file_item_tree(db, file);
             let mut items: Vec<_> = item_tree.$map.iter().collect();
             // Source position, then a stable tiebreaker for items that share an
-            // offset: synthetic `*$stream` companions all sit at offset 0, and
+            // offset: companions sit at their parent's offset, and
             // `$map` is an `FxHashMap` (nondeterministic iteration), so ties must
             // be broken by a position-independent key — otherwise this query's
             // value (and its early-cutoff) would be unstable across rebuilds.
@@ -48,13 +48,13 @@ macro_rules! file_items {
 }
 
 file_items!(
-    /// Every class in `file`, in source order (synthetic `*$stream` companions first).
+    /// Every class in `file`, in source order.
     file_classes,
     classes,
     ClassLoc
 );
 file_items!(
-    /// Every function in `file`, in source order (synthetic companions first). Includes methods.
+    /// Every function in `file`, in source order (companions beside their parent). Includes methods.
     file_functions,
     functions,
     FunctionLoc
@@ -72,7 +72,7 @@ file_items!(
     InterfaceLoc
 );
 file_items!(
-    /// Every type alias in `file`, in source order (synthetic `*$stream` companions first).
+    /// Every type alias in `file`, in source order.
     file_type_aliases,
     type_aliases,
     TypeAliasLoc

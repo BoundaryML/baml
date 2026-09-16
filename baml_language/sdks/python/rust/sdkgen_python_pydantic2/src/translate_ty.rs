@@ -14,7 +14,7 @@ use indexmap::IndexMap;
 use crate::{
     names::PythonNames,
     py_string,
-    routing::{LeafPath, route_class_ref},
+    routing::{LeafPath, route},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,8 +44,7 @@ pub(crate) struct TranslateCtx {
     /// Rewrite source `ai.stream.Stream<T, F>` to the underlying host
     /// `_BamlStream` type. `Stream` is a host re-export rather than a normal
     /// generated class, so retaining the source spelling in annotations is
-    /// not valid Python codegen. Its synthesized `Stream$stream` companion is
-    /// deliberately excluded: that is a real Pydantic partial-state class.
+    /// not valid Python codegen.
     pub(crate) type_stream_accessors: bool,
     /// Stub-only: include the generated terminal marker in the raw-next stream
     /// type argument so `next()` is typed as `T | Done`. Runtime annotations
@@ -108,7 +107,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                     "_BamlStream[{}, {}, {}]",
                     next_type,
                     yield_type,
-                    translate_ty(final_value, ctx)
+                    translate_ty(final_value, ctx),
                 );
             }
             let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
@@ -291,15 +290,14 @@ fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
 }
 
 fn routed_leaf(name: &Name, ctx: &TranslateCtx) -> LeafPath {
-    ctx.names.as_ref().map_or_else(
-        || route_class_ref(name),
-        |names| names.route_class_ref(name),
-    )
+    ctx.names
+        .as_ref()
+        .map_or_else(|| route(name), |names| names.route(name))
 }
 
 fn projected_bare_name(name: &Name, ctx: &TranslateCtx) -> String {
     ctx.names.as_ref().map_or_else(
-        || name.bare_name().to_string(),
+        || name.name().to_string(),
         |names| names.symbol(name).into_owned(),
     )
 }
@@ -667,24 +665,6 @@ mod tests {
                 expected: "Response",
             },
             Case {
-                label: "class stream from non stream leaf",
-                ty: class_ty(name("user", &["lorem"], "Resume$stream"), vec![]),
-                ctx: ctx(&["lorem"]),
-                expected: "stream_types.lorem.Resume",
-            },
-            Case {
-                label: "class stream same leaf",
-                ty: class_ty(name("user", &["lorem"], "Resume$stream"), vec![]),
-                ctx: ctx(&["stream_types", "lorem"]),
-                expected: "Resume",
-            },
-            Case {
-                label: "class non stream from stream leaf",
-                ty: class_ty(name("user", &["lorem"], "Resume"), vec![]),
-                ctx: ctx(&["stream_types", "lorem"]),
-                expected: "lorem.Resume",
-            },
-            Case {
                 label: "enum same leaf",
                 ty: enum_ty(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["ipsum"]),
@@ -817,15 +797,6 @@ mod tests {
                 expected: "typing.Callable[..., bool]",
             },
             Case {
-                label: "union stream and non stream classes",
-                ty: union(vec![
-                    class_ty(name("user", &["lorem"], "Resume"), vec![]),
-                    class_ty(name("user", &["lorem"], "Resume$stream"), vec![]),
-                ]),
-                ctx: ctx(&["lorem"]),
-                expected: "typing.Union[Resume, stream_types.lorem.Resume]",
-            },
-            Case {
                 label: "optional media",
                 ty: union(vec![media(MediaKind::Image), Ty::Null]),
                 ctx: ctx(&["lorem"]),
@@ -937,15 +908,6 @@ mod tests {
                 expected: "typing.List[vendor.aws.s3.Bucket]",
             },
             Case {
-                label: "map enum to stream vendor class",
-                ty: Ty::Map {
-                    key: Box::new(enum_ty(name("user", &["ipsum"], "Sentiment"))),
-                    value: Box::new(class_ty(name("aws", &["s3"], "Bucket$stream"), vec![])),
-                },
-                ctx: ctx(&["lorem"]),
-                expected: "typing.Dict[ipsum.Sentiment, stream_types.vendor.aws.s3.Bucket]",
-            },
-            Case {
                 label: "union across placements",
                 ty: union(vec![
                     class_ty(name("user", &["lorem"], "Resume"), vec![]),
@@ -985,12 +947,6 @@ mod tests {
                 ),
                 ctx: ctx(&["lorem"]),
                 expected: "Box[Box[int]]",
-            },
-            Case {
-                label: "generic class stream from non-stream leaf",
-                ty: class_ty(name("user", &["lorem"], "Box$stream"), vec![Ty::Int]),
-                ctx: ctx(&["lorem"]),
-                expected: "stream_types.lorem.Box[int]",
             },
             Case {
                 label: "generic class with typevar arg",

@@ -2715,7 +2715,7 @@ mod tests {
                 &crate::test_heads::alias_ctx(&aliases)
             )
             .is_some(),
-            "`Side.Left` should match a `for Side` pattern"
+            "`Side.Left` should match a `for Side` pattern",
         );
         assert!(
             match_ty_patterns(
@@ -2724,7 +2724,7 @@ mod tests {
                 &crate::test_heads::alias_ctx(&aliases)
             )
             .is_none(),
-            "a variant of a *different* enum must not match"
+            "a variant of a *different* enum must not match",
         );
     }
 

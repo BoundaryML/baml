@@ -410,8 +410,8 @@ pub(crate) fn render_class(
 
     // `final`: generated value classes carry exact-class value semantics — the
     // encoder keys its typemap on the concrete class, so a user subclass would
-    // silently break inbound encode. This covers plain value classes, generic
-    // classes, and `$stream` companions (all routed through here). Sealed-union
+    // silently break inbound encode. This covers plain value classes and generic
+    // classes (both routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
     out.push_str(&format!("public final class {ident}{generics} {{\n"));
@@ -547,7 +547,7 @@ pub(crate) fn render_class(
             String::new()
         } else {
             format!("<{}>", vec!["?"; class.generic_params.len()].join(", "))
-        }
+        },
     ));
     if fields.is_empty() {
         out.push_str("        return true;\n");
@@ -623,7 +623,7 @@ fn render_reified_factory(
         "\n    /**\n     * Reified factory: constructs a {ident} bound to the given type-arg\n     * tokens (one per class type parameter, in declaration order), binding\n     * them in the runtime side-table so the value carries its concrete\n     * {{@code class_ty.type_args}} on the wire and {{@link #bamlTypeArgs()}}\n     * reads them back. The plain constructor leaves an instance unbound.\n     */\n    public static {generics} {ret_ty} of({}) {{\n        {ret_ty} $instance = new {ident}<>({});\n        baml_bridge.TypeRegistry.bindTypeArgs($instance, java.util.List.of({}));\n        return $instance;\n    }}\n",
         params.join(", "),
         field_args.join(", "),
-        token_names.join(", ")
+        token_names.join(", "),
     )
 }
 
@@ -783,7 +783,7 @@ fn render_callable_pair(
     let receiver_guard: Option<String> = if is_instance && !class_generic_params.is_empty() {
         Some(
             "        if (baml_bridge.TypeRegistry.typeArgsOf(this).isEmpty()) {\n            throw new java.lang.IllegalArgumentException(\"explicit type bindings on a generic method require a reified receiver so the class type args can be recovered\");\n        }\n"
-                .to_string()
+                .to_string(),
         )
     } else {
         None
@@ -1247,7 +1247,7 @@ fn render_method_pair(
     let async_body = if let Some(callable) = returned_callable {
         format!(
             "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.returnedClosureAsync({async_call}, {}.class, {}, {});",
-            callable.raw_type, callable.parameter_names, callable.return_descriptor
+            callable.raw_type, callable.parameter_names, callable.return_descriptor,
         )
     } else {
         format!(
@@ -1553,7 +1553,7 @@ pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
         apply_params.join(", ")
     ));
     out.push_str(
-        "    /**\n     * Bridge dispatch: reshape the engine's flat declared-order arg list\n     * into this callable's SAM. Required args arrive positionally; supplied\n     * optionals fold into the always-non-null {@code Opts} bag.\n     */\n    @Override\n    default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {\n"
+        "    /**\n     * Bridge dispatch: reshape the engine's flat declared-order arg list\n     * into this callable's SAM. Required args arrive positionally; supplied\n     * optionals fold into the always-non-null {@code Opts} bag.\n     */\n    @Override\n    default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {\n",
     );
     out.push_str(&format!(
         "        return apply({});\n    }}\n",

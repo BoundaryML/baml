@@ -722,7 +722,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Yes
         );
@@ -733,7 +733,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::No
         );
@@ -760,7 +760,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Yes
         );
@@ -771,7 +771,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Yes
         );
@@ -818,7 +818,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::No
         );
@@ -829,7 +829,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &|_, _| true
+                &|_, _| true,
             ),
             Overlap::Yes
         );
@@ -849,7 +849,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &std::collections::HashMap::default(),
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Yes
         );
@@ -872,7 +872,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &always
+                &always,
             ),
             Overlap::No
         );
@@ -883,7 +883,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &aliases,
-                &always
+                &always,
             ),
             Overlap::No
         );
@@ -905,7 +905,7 @@ mod tests {
                 &vars,
                 &bounds,
                 &std::collections::HashMap::default(),
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Yes
         );
@@ -1014,7 +1014,7 @@ mod tests {
                 &vars,
                 &TypeVarBoundsMap::default(),
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Yes
         );
@@ -1042,7 +1042,7 @@ mod tests {
                 &vars,
                 &TypeVarBoundsMap::default(),
                 &aliases,
-                &|_, _| false
+                &|_, _| false,
             ),
             Overlap::Unknown
         );

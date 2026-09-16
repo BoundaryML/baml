@@ -976,7 +976,7 @@ fn simulate_rvalue_pull_stack<'db>(
         rvalue,
         Rvalue::Aggregate {
             kind: AggregateKind::Class { .. },
-            fields
+            fields,
         } if fields.iter().any(is_class_field_copy_operand)
     ) {
         return false;
@@ -1788,7 +1788,7 @@ mod tests {
                         &mut sim,
                         local,
                         &analysis.classifications,
-                        &analysis.def_use
+                        &analysis.def_use,
                     ),
                     depth == expected_depth,
                     "{local:?} at depth {depth}"
@@ -1976,7 +1976,7 @@ mod tests {
                 &mut sim,
                 carried,
                 &HashMap::new(),
-                &HashMap::new()
+                &HashMap::new(),
             ),
             None
         );
@@ -2008,7 +2008,7 @@ mod tests {
             carried,
             &body,
             &HashMap::new(),
-            &HashMap::new()
+            &HashMap::new(),
         ));
         assert!(!sim.used);
     }
@@ -2020,7 +2020,7 @@ mod tests {
             &int_body,
             BinOp::Add,
             &Operand::Constant(Constant::Int(1)),
-            &Operand::copy_local(Local(1))
+            &Operand::copy_local(Local(1)),
         ));
 
         let mixed_body = body_with_locals(vec![int_ty(), float_ty()]);
@@ -2028,7 +2028,7 @@ mod tests {
             &mixed_body,
             BinOp::Add,
             &Operand::Constant(Constant::Int(1)),
-            &Operand::copy_local(Local(1))
+            &Operand::copy_local(Local(1)),
         ));
     }
 

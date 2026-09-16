@@ -2783,7 +2783,7 @@ class Person {
 enum Color {
     Red,
     Green,
-    Blue
+    Blue,
 }
 "#,
         );
@@ -2906,7 +2906,7 @@ class Person {
 }
 
 class Robot {
-    name: string
+    name: string,
 }
 
 implement Named for Robot {

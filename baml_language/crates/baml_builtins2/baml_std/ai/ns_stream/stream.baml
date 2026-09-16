@@ -536,8 +536,8 @@ class Stream<TStream, TFinal> {
 /// One-turn streaming over a spec: render the spec's prompt exactly as the
 /// default runner's first turn would, require a streaming-capable client, and
 /// return the typed partial stream. The compiler-private `Fn@stream` entry
-/// calls this function with the `Out$stream` partial schema; host stream
-/// helpers reach that companion through the normal bridge.
+/// calls this function; host stream helpers reach that companion through the
+/// normal bridge.
 ///
 /// Streaming does not run the tool loop yet: a spec with a non-empty toolbox
 /// is rejected. The client override is typed as the capability, so passing a

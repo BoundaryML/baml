@@ -297,8 +297,8 @@ function f(seed: int) -> int throws never {
 
     #[test]
     fn a_synthesized_companion_is_never_offered() {
-        // `Summarize$stream` and friends resolve, but no reader can write a
-        // `$` in a name, so an enumeration of what to WRITE drops them.
+        // `summarize@stream` and friends resolve, but no reader can write an
+        // `@` in a name, so an enumeration of what to WRITE drops them.
         let test = CursorTest::new(
             r#"function summarize(input: string) -> string {
     client: "openai/gpt-4o"
@@ -320,11 +320,11 @@ function f() -> int throws never {
             "the function itself completes: {labels:?}"
         );
         assert!(
-            !labels.iter().any(|label| label.contains('$')),
+            !labels.iter().any(|label| label.contains('@')),
             "no companion spelling is offerable: {:?}",
             labels
                 .iter()
-                .filter(|label| label.contains('$'))
+                .filter(|label| label.contains('@'))
                 .collect::<Vec<_>>()
         );
     }
@@ -1242,7 +1242,7 @@ function f() -> int throws <[CURSOR]
             "description",
             "skip",
             "stream.done",
-            "stream.with_state",
+            "stream.must_exist",
         ] {
             assert!(labels.contains(&name), "missing `{name}`: {labels:?}");
         }

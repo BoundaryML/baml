@@ -9,7 +9,7 @@
 //!
 //! - per-namespace diagnostics snapshots plus the corpus-wide zero-error
 //!   invariant,
-//! - opt-in representative PPIR, MIR and bytecode snapshots,
+//! - opt-in representative HIR, MIR and bytecode snapshots,
 //! - opt-in formatter goldens, plus formatting/idempotency of every file.
 //!
 //! `corpus_snapshot_policy.rs` documents each selected example. No blanket
@@ -17,7 +17,7 @@
 //!
 //! The snapshot tree mirrors the corpus source tree: a namespace's snapshots
 //! live in `snapshots/baml_src/<same ns_ path>/`, named for their phase
-//! (`ppir.snap`, `mir.snap`, `bytecode.snap`), with per-file formatter output
+//! (`hir.snap`, `mir.snap`, `bytecode.snap`), with per-file formatter output
 //! as `<file stem>.fmt.snap` beside them. Every namespace occupies exactly one
 //! directory, so grouping per namespace and mirroring the directory tree are
 //! the same partition.
@@ -127,7 +127,7 @@ fn snap(dir: &str, name: &str, content: &str) {
 /// example must fail loudly instead of silently losing golden coverage.
 fn validate_snapshot_policy(files: &[(String, String)]) {
     for (phase, examples) in [
-        ("ppir", snapshot_policy::PPIR),
+        ("hir", snapshot_policy::HIR),
         ("mir", snapshot_policy::MIR),
         ("bytecode", snapshot_policy::BYTECODE),
         ("formatter", snapshot_policy::FORMATTER),
@@ -215,7 +215,7 @@ fn snapshot_inventory_matches_policy() {
     let root = Path::new(SNAPSHOT_BASE);
     let mut expected = std::collections::BTreeSet::new();
     for (phase, examples) in [
-        ("ppir", snapshot_policy::PPIR),
+        ("hir", snapshot_policy::HIR),
         ("mir", snapshot_policy::MIR),
         ("bytecode", snapshot_policy::BYTECODE),
         ("fmt", snapshot_policy::FORMATTER),
@@ -359,7 +359,7 @@ fn corpus_snapshots() {
         snap(&dir, &name, &output);
     }
 
-    // ---- Representative PPIR and MIR only; still use the shared database ----
+    // ---- Representative HIR and MIR only; still use the shared database ----
     let selected_file = |path: &str| {
         source_files
             .iter()
@@ -367,12 +367,12 @@ fn corpus_snapshots() {
             .unwrap_or_else(|| panic!("selected source missing: {path}"))
             .1
     };
-    for example in snapshot_policy::PPIR {
+    for example in snapshot_policy::HIR {
         let out = format!(
-            "=== PPIR ===\n{}",
-            crate::compiler2_tir::support::render_ppir(&db, selected_file(example.path))
+            "=== HIR ===\n{}",
+            crate::compiler2_tir::support::render_hir(&db, selected_file(example.path))
         );
-        snap(&source_dir(example.path), "ppir", &out);
+        snap(&source_dir(example.path), "hir", &out);
     }
     for example in snapshot_policy::MIR {
         let mut out = String::from("=== MIR2 ===\n");

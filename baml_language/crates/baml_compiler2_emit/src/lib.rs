@@ -14,8 +14,8 @@ use std::collections::{HashMap, HashSet};
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
 use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
-// PPIR item-data firewall (canonical / post-expansion view, including synthetic
-// `*$stream` items) — enumeration + lookup queries in place of the raw item tree.
+// HIR item-data firewall — enumeration + lookup queries in place of the raw
+// item tree.
 use baml_compiler2_hir::{
     body::function_body,
     item_data::{
@@ -812,9 +812,9 @@ fn build_packages<'db>(
                                             interface_associated_type_default(
                                                 db,
                                                 iface_loc,
-                                                assoc.name.clone()
+                                                assoc.name.clone(),
                                             )
-                                            .map(|(ty, _decl_site_diags)| ty)
+                                            .map(|(ty, _decl_site_diags)| ty),
                                     )
                                 })
                                 .collect(),
@@ -1102,7 +1102,7 @@ fn build_packages<'db>(
                                 BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
                             )
                         ),
-                        "impl method `{method_name}` has no pooled function object"
+                        "impl method `{method_name}` has no pooled function object",
                     );
                     continue;
                 };
@@ -1141,7 +1141,7 @@ fn build_packages<'db>(
                     debug_assert!(
                         false,
                         "out-of-body impl of field-bearing interface `{iface_tn}` should be \
-                         rejected by E0126"
+                         rejected by E0126",
                     );
                     None
                 }
@@ -1164,7 +1164,7 @@ fn build_packages<'db>(
                             debug_assert!(
                                 slot.is_some(),
                                 "interface `{iface_tn}` field `{iface_field}` links to \
-                                 `{class_tn}.{class_field}`, which has no runtime slot"
+                                 `{class_tn}.{class_field}`, which has no runtime slot",
                             );
                             slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
                         })
@@ -3644,7 +3644,7 @@ fn generate_impl<'db>(
                     }
                     let Some(ConstValue::Object(idx)) = base.globals.get(slot) else {
                         return Err(LoweringError::Internal(format!(
-                            "stdlib splice: global slot {slot} does not hold an object"
+                            "stdlib splice: global slot {slot} does not hold an object",
                         )));
                     };
                     // The replay is ordinal, so it is only as sound as the
@@ -3668,7 +3668,7 @@ fn generate_impl<'db>(
                         }
                         None => {
                             return Err(LoweringError::Internal(format!(
-                                "stdlib splice: global slot {slot} points past the pool"
+                                "stdlib splice: global slot {slot} points past the pool",
                             )));
                         }
                     };
@@ -3676,7 +3676,7 @@ fn generate_impl<'db>(
                         return Err(LoweringError::Internal(format!(
                             "stdlib splice: global slot {slot} holds `{actual}` where this \
                              compiler enumerates `{expected}` — the precompiled stdlib's \
-                             declaration order disagrees with this build's"
+                             declaration order disagrees with this build's",
                         )));
                     }
                     let interface_body_slot =
@@ -4428,7 +4428,7 @@ fn emit_file_group<'db>(
                     "type alias `{}` lowered to a non-realized type (`{}`); aliases \
                      cannot be generic, so this is a compiler bug",
                     wire.render_dotted(false),
-                    e.variant
+                    e.variant,
                 ))
             })?;
             let fq_name = wire.render_dotted(false);
@@ -4624,9 +4624,9 @@ fn emit_file_group<'db>(
                 // `synthesize_init_test_function`. The trailing underscore in the
                 // filter is intentional: all real files produce a path-derived
                 // suffix. The no-path branch in lower_cst.rs produces bare
-                // `$init_test` (no suffix), but that only runs in unit tests, PPIR
-                // intermediate processing, and codegen — none of which produce
-                // functions that reach program.function_indices at emit time. So
+                // `$init_test` (no suffix), but that only runs in unit tests and
+                // codegen — neither of which produces functions that reach
+                // program.function_indices at emit time. So
                 // `contains("$init_test_")` safely matches only per-file functions
                 // without risk of collision with the chainer name we're about to
                 // synthesize.
@@ -6388,7 +6388,7 @@ fn register_compiled_function(
         let slot = program.globals.len();
         debug_assert_eq!(
             pass1_slot, slot,
-            "Pass-4 append slot must match the Pass-1 assignment for {fq_name}"
+            "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
         );
         program.add_global(val);
         slot
@@ -6968,7 +6968,7 @@ mod tests {
                 "interface Src {\n",
                 "  type Item\n",
                 "  function next(self) -> Self.Item throws never\n",
-                "}\n"
+                "}\n",
             ),
             "Src",
         );
@@ -6996,7 +6996,7 @@ mod tests {
                 "interface Sink<T> {\n",
                 "  type Item\n",
                 "  function put(self, first: Self.Item, second: T, third: int) -> int throws never\n",
-                "}\n"
+                "}\n",
             ),
             "Sink",
         );
@@ -7026,7 +7026,7 @@ mod tests {
                 "interface Derived requires Base<Item = Self.Item> {\n",
                 "  type Item\n",
                 "  function d(self) -> int throws never\n",
-                "}\n"
+                "}\n",
             ),
             "Derived",
         );

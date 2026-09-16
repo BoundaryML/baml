@@ -308,7 +308,7 @@ pub(super) fn validate_class_witnesses(
                         required.name,
                         class_field_name,
                         class_field.ty
-                    )
+                    ),
                 ));
                 continue;
             }
@@ -1234,7 +1234,7 @@ pub(crate) fn check_kind_invariant(
             message: format!(
                 "reflect.{}.Type `_ty` holds a {actual} type; the field is private to \
                  reflection and must keep its view's kind",
-                expected.namespace()
+                expected.namespace(),
             ),
         })
     };

@@ -65,7 +65,7 @@ const WITNESS_CONSUMER: &str = r#"
 function inspect(
     value: app.Entry,
     generic: app.Box<app.Entry>,
-    view: app.View<int>
+    view: app.View<int>,
 ) -> int[] throws never {
     let field: string = value.label
     let class_field: int = generic.get_value().value
@@ -158,7 +158,7 @@ fn mounted_interface_skew_is_rejected_before_installation() {
             baml_artifact::BUILD_FINGERPRINT,
             baml_artifact::FORMAT_VERSION + 1,
             baml_artifact::BUILD_FINGERPRINT,
-            baml_artifact::FORMAT_VERSION
+            baml_artifact::FORMAT_VERSION,
         )
     );
 }

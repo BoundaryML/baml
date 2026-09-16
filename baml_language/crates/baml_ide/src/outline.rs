@@ -6,7 +6,7 @@
 //! functions" rule. It is a Salsa tracked query because:
 //!
 //! - Both `textDocument/documentSymbol` and `workspace/symbol` need it.
-//! - It depends only on `file_symbol_contributions` + the PPIR item-data
+//! - It depends only on `file_symbol_contributions` + the HIR item-data
 //!   firewall queries, all of which are Salsa-cached per file revision.
 //! - Workspace symbol search iterates all files — caching per-file outlines
 //!   avoids redundant work.
@@ -14,7 +14,7 @@
 //! ## Structure
 //!
 //! Top-level items come from `file_symbol_contributions` (which carries each
-//! item's `name_span`); their full extents come from the matching PPIR
+//! item's `name_span`); their full extents come from the matching HIR
 //! item-data source map (`class_source_map`, `function_source_map`, …).
 //! Children (class fields, class methods, enum variants) come from the same
 //! item-data queries. The HIR item tree records only the *name token* for
@@ -61,7 +61,7 @@ pub struct OutlineItem {
 /// Hierarchical symbol outline for a single file.
 ///
 /// Salsa tracked query — cached per file revision. Both `file_symbol_contributions`
-/// and the PPIR item-data firewall queries are Salsa-cached, so this query is
+/// and the HIR item-data firewall queries are Salsa-cached, so this query is
 /// cheap to re-evaluate when the file hasn't changed.
 ///
 /// Returns `Vec<OutlineItem>` in the order contributions appear (types first,
@@ -100,7 +100,7 @@ pub fn file_outline(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Ou
     for (name, contrib) in &contribs.values {
         // `Definition::is_language_internal` reads the raw HIR item tree,
         // which re-runs on every keystroke; `function_data` carries the same
-        // metadata bit through the PPIR firewall. Only functions can be
+        // metadata bit through the HIR firewall. Only functions can be
         // language-internal (mirrors the `Definition` impl).
         let is_internal = match contrib.definition {
             Definition::Function(loc) => function_data(db, loc).metadata.is_language_internal,
@@ -123,7 +123,7 @@ pub fn file_outline(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Ou
         // For `Definition::Let`, use the `LetOrigin` to report the symbol
         // kind the user wrote (Client or RetryPolicy) rather than the generic
         // `Let` kind. `Definition::source_kind` computes the same mapping but
-        // reads the raw item tree; `let_data` is the PPIR firewall query.
+        // reads the raw item tree; `let_data` is the HIR firewall query.
         let kind = match contrib.definition {
             Definition::Let(loc) => match let_data(db, loc).origin {
                 LetOrigin::Client => DefinitionKind::Client,
@@ -153,7 +153,7 @@ pub fn file_outline(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Ou
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Full declaration span of a top-level definition, from its PPIR source map.
+/// Full declaration span of a top-level definition, from its HIR source map.
 ///
 /// The whole-item counterpart of [`crate::syntax::definition_span`] (which
 /// returns the *name* span): every item kind's `*_source_map` firewall query

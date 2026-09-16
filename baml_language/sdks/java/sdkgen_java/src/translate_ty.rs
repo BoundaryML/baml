@@ -869,9 +869,8 @@ mod tests {
         translate_ty(ty, pos, &ctx, &mut sink)
     }
 
-    // Leaf-type constructors: the codegen `Ty` is now a re-export of
-    // `baml_type::CodegenTy`, whose variants carry a `TyAttr` (and
-    // literals a `Freshness`). These keep the assertions readable.
+    // Type constructors for fixtures (literals carry a `Freshness`, containers
+    // box their children). These keep the assertions readable.
     fn int() -> Ty {
         Ty::Int
     }
@@ -976,8 +975,6 @@ mod tests {
         assert_eq!(tr(&c, TyPosition::TopLevel), "baml_sdk.lorem.Resume");
         let e = enum_ty(name("user", &["ipsum"], "Sentiment"));
         assert_eq!(tr(&e, TyPosition::TopLevel), "baml_sdk.ipsum.Sentiment");
-        let s = class_ty(name("user", &["lorem"], "Resume$stream"), vec![]);
-        assert_eq!(tr(&s, TyPosition::TopLevel), "baml_sdk.lorem.Resume$stream");
 
         let stream = class_ty(name("ai", &["stream"], "Stream"), vec![string(), string()]);
         assert_eq!(

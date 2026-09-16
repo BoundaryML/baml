@@ -75,7 +75,7 @@ pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
     let routed = routing::route(name).segments;
     let segments = analysis.renamed(&routed);
     let mods = segments.iter().map(|seg| idents::ident(seg));
-    let type_ident = idents::ident(name.bare_name());
+    let type_ident = idents::ident(name.name().as_str());
     quote! { crate::#(#mods::)*#type_ident }
 }
 
@@ -291,7 +291,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
             let arguments = match argument_types.as_slice() {
                 [] => quote! { () },
-                values => quote! { (#(#values)*) },
+                values => quote! { (#(#values,)*) },
             };
             let ret = translate_inner(ret, ctx, true)?;
             let throws = match throws.as_ref() {
@@ -470,14 +470,14 @@ mod tests {
         assert_eq!(
             rendered(&Ty::Literal(
                 baml_base::Literal::String("hello world".into()),
-                baml_codegen_types::Freshness::Regular
+                baml_codegen_types::Freshness::Regular,
             )),
             ":: std :: string :: String"
         );
         assert_eq!(
             rendered(&Ty::Literal(
                 baml_base::Literal::Int(42),
-                baml_codegen_types::Freshness::Regular
+                baml_codegen_types::Freshness::Regular,
             )),
             ":: core :: primitive :: i64"
         );
@@ -761,7 +761,7 @@ mod tests {
                     unions: &NO_UNIONS,
                     leaf: &[],
                     boxing_for: None,
-                    generic_params: &[]
+                    generic_params: &[],
                 }
             )
             .unwrap()

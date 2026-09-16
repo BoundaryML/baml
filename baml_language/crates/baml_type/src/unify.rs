@@ -1677,9 +1677,9 @@ mod tests {
                 &Ty::TypeAlias(s),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1697,9 +1697,9 @@ mod tests {
                 &Ty::Union(Box::new([bool_literal(true), bool_literal(false)])),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1735,9 +1735,9 @@ mod tests {
                 &Ty::TypeAlias(s),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::No
+            Overlap::No,
         );
     }
 
@@ -1823,9 +1823,9 @@ mod tests {
                 &Ty::bool(),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1850,9 +1850,9 @@ mod tests {
                 &func(Ty::int()),
                 &vars,
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings
+                &mut bindings,
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -1881,7 +1881,7 @@ mod tests {
                 &crate::test_roots::alias_ctx(&aliases),
                 &mut bindings
             ),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 
@@ -2204,7 +2204,7 @@ mod tests {
         // any non-all-false assignment.
         assert_eq!(
             three_sat_overlap(3, &[[(0, true), (1, true), (2, true)]]),
-            Overlap::Yes
+            Overlap::Yes,
         );
     }
 

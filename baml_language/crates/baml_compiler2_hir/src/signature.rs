@@ -365,10 +365,11 @@ fn elaborated_function_signature_with_source_map<'db>(
     (signature, source_map)
 }
 
-/// Salsa query: semantic function signature (no spans).
+/// Salsa query: semantic function signature.
 ///
-/// Cached independently of the source map. Downstream type-checking queries
-/// depend on this and will NOT re-run on whitespace-only file changes.
+/// Cached independently of the source map. Its written types keep their spans
+/// (see [`SignatureTypeExpr`]), so it does not cut off when they move;
+/// span-free consumers use [`crate::item_data::function_data`].
 #[salsa::tracked]
 pub fn function_signature<'db>(
     db: &'db dyn crate::Db,
@@ -380,8 +381,7 @@ pub fn function_signature<'db>(
 
 /// Salsa query: function signature source map (spans only).
 ///
-/// Re-runs on any file change (including whitespace), but because downstream
-/// type queries only depend on `function_signature`, they are unaffected.
+/// Re-runs on any file change (including whitespace).
 #[salsa::tracked]
 pub fn function_signature_source_map<'db>(
     db: &'db dyn crate::Db,

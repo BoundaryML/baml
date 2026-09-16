@@ -380,6 +380,15 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                      ╰── unknown attribute
      ╰────
 
+  [hir] E0015
+
+  × unknown attribute `@stream.with_state`
+     ╭─[class_decls.baml:292:14]
+ 292 │     f string @stream.with_state
+     ·              ─────────┬────────
+     ·                       ╰── unknown attribute
+     ╰────
+
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client BasicClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /

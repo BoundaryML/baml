@@ -532,8 +532,7 @@ const OPTS_MEMBER: &str = "opts";
 const ASYNC_MEMBER: &str = "async";
 
 /// One typed request per identifier any emit pass may need. Mirrors the
-/// pool-level skip filters (`pkg`, partial `$stream` types, legacy `$`
-/// companions); symbols that
+/// pool-level skip filters (`pkg`, legacy `$` companions); symbols that
 /// only emission can rule out (unsupported field types, broken cycles) still
 /// get allocations, which are simply never rendered.
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
@@ -730,11 +729,11 @@ mod injected_argument_tests {
     }
 }
 
-/// Legacy `$`-suffixed companion functions are not part of the host surface.
-/// Partial `$stream` types route under `stream_types`, while callable
-/// `@spec`/`@stream` companions continue to ordinary function emission.
+/// Legacy `$`-suffixed companion functions are not part of the host surface;
+/// callable `@spec`/`@stream` companions continue to ordinary function
+/// emission.
 fn skip_symbol(name: &Name) -> bool {
-    name.bare_name().contains('$')
+    name.name().as_str().contains('$')
 }
 
 /// Whether `name` is a NON-recursive type alias, i.e. one that emits a
@@ -1304,7 +1303,7 @@ fn translate_callable_ty(
 
 fn unqualified_leaf_name(ty: &Ty) -> String {
     match ty {
-        Ty::Class(name, ..) | Ty::Enum(name) | Ty::TypeAlias(name) => name.bare_name().to_string(),
+        Ty::Class(name, ..) | Ty::Enum(name) | Ty::TypeAlias(name) => name.name().to_string(),
         other => other.to_string(),
     }
 }
@@ -1861,7 +1860,7 @@ fn render_body(
         let _ = writeln!(
             buf,
             "{indent}{args}.add_arg(\"self\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
-             ::baml::codec<{self_type}>::encode({w}, *this); }});"
+             ::baml::codec<{self_type}>::encode({w}, *this); }});",
         );
     }
     for p in &f.params {
@@ -1878,7 +1877,7 @@ fn render_body(
                  std::array<std::string, {n}>{{{{{names_array}}}}}); }});",
                 wire = p.name.wire(),
                 value = p.name.identifier(),
-                n = callable_names.len()
+                n = callable_names.len(),
             );
             continue;
         }
@@ -1915,7 +1914,7 @@ fn render_body(
         "{indent}return ::baml::detail::{driver}<{ret}{thrown}>(\"{fqn}\", \
          std::move({args}));",
         ret = f.ret,
-        fqn = f.call_fqn
+        fqn = f.call_fqn,
     );
 }
 fn render_header(
@@ -2106,7 +2105,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
              (!v.enum_value().name().empty() &&\n       \
              v.enum_value().name() != \"{fqn}\")) {{\n      \
              detail::kind_mismatch(\"enum {fqn}\", v);\n    }}\n    \
-             return FromWire(v.enum_value().value());\n  }}"
+             return FromWire(v.enum_value().value());\n  }}",
         );
         buf.push_str("  static const char* ToWire(");
         let _ = write!(buf, "{q} v) {{\n    switch (v) {{\n");
@@ -2129,7 +2128,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let _ = writeln!(
             buf,
             "    throw error(\"unknown variant '\" + value + \"' for enum {fqn}\");\n  \
-             }}\n}};"
+             }}\n}};",
         );
     }
 
@@ -2189,7 +2188,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         let _ = writeln!(
             buf,
-            "    value_msg.mutable_value_type()->mutable_class_ty()->set_name(\"{fqn}\");\n  }}"
+            "    value_msg.mutable_value_type()->mutable_class_ty()->set_name(\"{fqn}\");\n  }}",
         );
         // Decode: strict field mapping (extra field or missing field = error,
         // pydantic extra="forbid" parity), FQN-checked for precise
@@ -2202,7 +2201,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
              if (v.value_case() != detail::pb::BamlOutboundValue::kClassValue ||\n      \
              (!v.class_value().name().empty() &&\n       \
              v.class_value().name() != \"{fqn}\")) {{\n      \
-             detail::kind_mismatch(\"class {fqn}\", v);\n    }}"
+             detail::kind_mismatch(\"class {fqn}\", v);\n    }}",
         );
         for field in &c.fields {
             let _ = writeln!(
@@ -2234,7 +2233,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let _ = writeln!(
             buf,
             "        throw error(\"unexpected field '\" + field.key() + \"' on {fqn}\");\n      \
-             }}\n    }}"
+             }}\n    }}",
         );
         for field in &c.fields {
             let _ = writeln!(
@@ -2433,7 +2432,7 @@ fn render_inlinedbaml(
         );
         buf = buf.replace(
             &legacy_call,
-            "::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);"
+            "::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
         );
     }
     let _ = writeln!(buf, "}}  // namespace {detail}");

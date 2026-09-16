@@ -51,10 +51,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
 
     for (key, symbol) in entries {
         let leaf = route(key);
-        // spec2: preserve the BAML name verbatim — `$` is a valid TS
-        // identifier char, so a `$stream` companion class is emitted as
-        // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
-        // symbols are unaffected (their name carries no `$stream`).
+        // spec2: preserve the BAML name verbatim.
         let bare = key.name().as_str().to_string();
 
         match symbol {

@@ -1,4 +1,4 @@
-// Compiler-corpus coverage for generated `$stream` companions. This pins both
+// Compiler-corpus coverage for generated `@stream` companions. This pins both
 // primitive and namespaced class return types to the canonical
 // `ai.stream.Stream<TPartial, TFinal>` surface. Runnable provider/SSE and host
 // bridge coverage lives in the SDK replay tests; provider-wire prompt coverage

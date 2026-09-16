@@ -590,6 +590,56 @@ fn editing_a_function_body_preserves_its_signature_data() {
     assert_eq!(before.params.len(), 2);
 }
 
+/// A downstream consumer that reads spans out of the memoized signature, the
+/// way a signature-lowering pass anchors its diagnostics.
+#[salsa::tracked]
+fn signature_param_type_spans<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Vec<text_size::TextRange> {
+    baml_compiler2_hir::signature::function_signature(db, function).params[0]
+        .ty
+        .spans()
+}
+
+/// A signature's written types carry the nested spans that diagnostics anchor
+/// on. An edit that only moves them must not let the signature cut off, or a
+/// consumer reading those spans is never re-run and keeps the old positions.
+#[test]
+fn moving_a_function_refreshes_its_signature_type_spans() {
+    fn param_type_texts(
+        db: &baml_db::ProjectDatabase,
+        file: SourceFile,
+        text: &str,
+    ) -> Vec<String> {
+        signature_param_type_spans(db, function_loc(db, file, "lookup"))
+            .iter()
+            .map(|span| text[usize::from(span.start())..usize::from(span.end())].to_string())
+            .collect()
+    }
+    let expected = [
+        "map<string, map<string, int>>",
+        "string",
+        "map<string, int>",
+        "string",
+        "int",
+    ];
+
+    let mut test_db = IncrementalTestDb::new();
+    let before_text = "function lookup(table: map<string, map<string, int>>) -> int {\n  1\n}\n";
+    let file = test_db.db_mut().file("test.baml", before_text);
+    assert_eq!(param_type_texts(test_db.db(), file, before_text), expected);
+
+    let after_text =
+        "// a comment\nfunction lookup(table: map<string, map<string, int>>) -> int {\n  1\n}\n";
+    file.set_text(test_db.db_mut()).to(after_text.to_string());
+    assert_eq!(
+        param_type_texts(test_db.db(), file, after_text),
+        expected,
+        "a span-reading consumer must re-run when the signature's types move"
+    );
+}
+
 // ── Item ↔ scope index ───────────────────────────────────────────────────────
 //
 // ~20 sites across TIR/MIR/LSP used to recover "the scope for this item" by
