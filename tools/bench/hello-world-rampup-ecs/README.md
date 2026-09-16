@@ -156,7 +156,7 @@ npx cdk destroy hello-ramp-001 -c run=hello-ramp-001 -c images=artifacts/rampup-
 
 ## Render retained threshold charts
 
-`scripts/render_threshold_charts.py` downloads the retained ARM64 pre/post threshold events from CloudWatch Logs, joins them to AWS/ECS CPU and memory metrics, writes the source JSON, and renders fifteen per-benchmark Matplotlib charts plus the highest-passing-RPS overview. All RPS panels share one y-axis, all CPU panels share one y-axis, and all memory panels share one y-axis. Centers and whiskers show p50 ± 2 sample standard deviations: RPS uses the six four-second active cycles, while CPU and memory use the per-minute AWS/ECS Maximum values whose 60-second buckets overlap each 30-second phase. Whiskers are clipped at zero, and phases with only one overlapping CloudWatch point necessarily have zero-width whiskers.
+`scripts/render_threshold_charts.py` downloads the retained ARM64 pre/post threshold events from CloudWatch Logs, joins them to AWS/ECS CPU and memory metrics, writes the source JSON, and renders fifteen per-benchmark Matplotlib charts plus the highest-passing-RPS overview. All RPS panels share one y-axis, all CPU panels share one y-axis, and all memory panels share one y-axis. RPS is aggregated across the six four-second active cycles in each phase. CPU and memory have 60-second CloudWatch granularity, so each 30-second phase uses the Maximum from the point nearest its midpoint and can blend an adjacent phase.
 
 ```sh
 python3 -m venv /tmp/baml-threshold-charts-venv
