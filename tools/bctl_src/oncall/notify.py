@@ -109,6 +109,7 @@ def compose_handoff(
 
         sections = [
             f"*{rot}* - {mention} is oncall starting {_fmt_date(current.date)}{prev_clause}",
+            "Your job is to oversee the next release &amp; respond on Discord over the next week.",
             "*1. Prep the next release*\n"
             "> Prepare a PR to trigger the next BAML language canary release. See "
             "<https://github.com/BoundaryML/baml/blob/canary/"
