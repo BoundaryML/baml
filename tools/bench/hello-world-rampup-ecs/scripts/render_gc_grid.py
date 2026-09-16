@@ -84,6 +84,7 @@ def collect(profile, region, run, start_ms):
     metadata = starts[0]
     summaries = sorted((event for event in load_events if event.get('event') == 'gc_grid_cell_finished'), key=lambda event: event['started_at_unix_ms'])
     gc_events = [event for event in load_events if event.get('event') == 'gc_grid_gc_finished']
+    cycle_events = [event for event in load_events if event.get('event') == 'gc_grid_cycle_finished']
     stops = app_stops(task_events, run)
     cells = []
     for index, summary in enumerate(summaries):
@@ -107,6 +108,24 @@ def collect(profile, region, run, start_ms):
         cells.append({**summary, 'explicit_gc': derived_gc, 'outcome': outcome, 'matching_stops': matching_stops})
     expected = {(float(frequency), int(rate)) for frequency in metadata['gc_frequencies_hz'] for rate in metadata['rates_rps']}
     actual = {(float(cell['gc_frequency_hz']), int(cell['rate'])) for cell in cells}
+    complete_keys = {(float(cell['gc_frequency_hz']), int(cell['rate'])) for cell in cells if cell['outcome'] == 'complete'}
+    complete_cycles = [event for event in cycle_events if (float(event['gc_frequency_hz']), int(event['rate'])) in complete_keys]
+
+    def cycle_validation(events):
+        scheduled = sum(event['scheduled'] for event in events)
+        requests = sum(event['requests'] for event in events)
+        http200 = sum(event['http200'] for event in events)
+        return {
+            'cycles': len(events), 'scheduled': scheduled, 'requests': requests, 'http200': http200,
+            'scheduled_ratio': requests / scheduled if scheduled else 0,
+            'success_ratio': http200 / scheduled if scheduled else 0,
+            'scheduled_minus_requests': scheduled - requests, 'requests_minus_http200': requests - http200,
+            'body_mismatch_cycles': sum(event['body_mismatch'] for event in events),
+            'forced_stop_cycles': sum(event['forced_stop'] for event in events),
+            'probe_unavailable_cycles': sum(not event['probe_up'] for event in events),
+            'report_error_cycles': sum(event['report_error'] is not None for event in events),
+            'cycles_with_vegeta_errors': sum(bool(event['vegeta_errors']) for event in events),
+        }
     return {
         'metadata': {
             'generated_at': dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -124,6 +143,7 @@ def collect(profile, region, run, start_ms):
         },
         'cells': cells,
         'app_stops': stops,
+        'cycle_validation': {'all_cells': cycle_validation(cycle_events), 'complete_cells': cycle_validation(complete_cycles)},
     }
 
 
@@ -183,7 +203,10 @@ def render(data, output):
     colorbar.outline.set_visible(False)
     colorbar.ax.tick_params(labelsize=10)
     fig.text(0.855, 0.805, 'Achieved RPS', fontsize=12, fontweight='bold')
-    fig.legend(handles=[Patch(facecolor='#111827', edgecolor='#111827', label='OOM'), Patch(facecolor='#7F1D1D', edgecolor='#7F1D1D', label='Incomplete')], loc='center left', bbox_to_anchor=(0.855, 0.235), frameon=False, fontsize=11)
+    legend = [Patch(facecolor='#111827', edgecolor='#111827', label='OOM')]
+    if any(cell['outcome'] == 'incomplete' for cell in data['cells']):
+        legend.append(Patch(facecolor='#7F1D1D', edgecolor='#7F1D1D', label='Incomplete'))
+    fig.legend(handles=legend, loc='center left', bbox_to_anchor=(0.855, 0.235), frameon=False, fontsize=11)
     footer = plt.Rectangle((0.025, 0.035), 0.93, 0.12, transform=fig.transFigure, facecolor='#F8FAFC', edgecolor='#D6DEE8', linewidth=0.8)
     fig.patches.append(footer)
     fig.text(0.045, 0.126, 'Environment', fontsize=11, fontweight='bold', color='#172033')
