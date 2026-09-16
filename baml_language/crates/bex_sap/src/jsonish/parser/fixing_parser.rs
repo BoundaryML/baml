@@ -214,4 +214,30 @@ mod tests {
             _ => panic!("Expected string, got: {:?}", vals[0].0),
         }
     }
+
+    #[test]
+    fn test_compact_unquoted_null_value_does_not_swallow_comma() {
+        // Regression for #4790: in `{a:null,b:2}` the unquoted value `null`
+        // must close at the ',' even with no whitespace after it, instead of
+        // absorbing the rest of the object into one string.
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{a:null,b:2}"#, &opts).unwrap();
+        match &vals[0].0 {
+            Value::Object(fields, _) => {
+                assert_eq!(fields.len(), 2, "Expected two keys, got: {fields:?}");
+                assert_eq!(fields[0].0, "a");
+                assert!(
+                    matches!(fields[0].1, Value::Null),
+                    "Expected a == null, got: {:?}",
+                    fields[0].1
+                );
+                assert_eq!(fields[1].0, "b");
+                match &fields[1].1 {
+                    Value::Number(n, _) => assert_eq!(n, &serde_json::Number::from(2)),
+                    other => panic!("Expected number for b, got: {other:?}"),
+                }
+            }
+            _ => panic!("Expected object, got: {:?}", vals[0].0),
+        }
+    }
 }
