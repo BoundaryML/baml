@@ -355,6 +355,8 @@ def run_one(target, workload, args, expected, result_root):
         "max_phys_footprint_mib": args.max_phys_footprint_mib,
         "response_bytes": len(expected["body"]),
         "response_sha256": sha256_bytes(expected["body"]),
+        "load_metrics_available": final_metrics.get("available", False),
+        "load_metrics_error": final_metrics.get("error"),
         "status_counts": statuses,
         "completed_requests": sum(statuses.values()),
         "delivered_rps": sum(statuses.values()) / elapsed if elapsed else None,
@@ -499,6 +501,8 @@ def main():
             not summary["preflight"]["ok"]
             or not summary["postflight"]["ok"]
             or not summary["alive_at_last_sample"]
+            or not summary["load_metrics_available"]
+            or summary["completed_requests"] <= 0
             or summary["stopped_reason"] is not None
             or any(
                 status != "200" and count
