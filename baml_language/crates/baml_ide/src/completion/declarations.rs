@@ -5,7 +5,7 @@
 //! forms the grammar parses in each container, and the attribute names are
 //! the SAME constants validation reads
 //! ([`FIELD_ATTR_NAMES`](baml_compiler2_ast::FIELD_ATTR_NAMES),
-//! [`KNOWN_TYPE_ATTRS`](baml_compiler2_hir::KNOWN_TYPE_ATTRS)) —
+//! [`KNOWN_STREAM_ATTRS`](baml_compiler2_hir::KNOWN_STREAM_ATTRS)) —
 //! what is offered is what checks.
 
 use super::{completions::Completions, context::ItemContainer};
@@ -78,7 +78,7 @@ pub(crate) fn complete_attributes(out: &mut Completions<'_>) {
     for name in baml_compiler2_ast::FIELD_ATTR_NAMES {
         out.add_attribute(name);
     }
-    for name in baml_compiler2_hir::KNOWN_TYPE_ATTRS {
+    for name in baml_compiler2_hir::KNOWN_STREAM_ATTRS {
         out.add_attribute(name);
     }
 }

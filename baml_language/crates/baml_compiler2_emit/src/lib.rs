@@ -4859,7 +4859,6 @@ fn type_expr_for_name(name: Name) -> TypeExpr {
         segments: vec![name],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
-        attrs: Vec::new(),
     }
     .at(baml_compiler2_ast::TextRange::default())
 }
@@ -4878,7 +4877,6 @@ fn type_expr_for_name_with_generic_args(
             .map(|param| type_expr_for_name(param.name.clone()))
             .collect(),
         associated_type_bindings: Vec::new(),
-        attrs: Vec::new(),
     }
     .at(baml_compiler2_ast::TextRange::default())
 }

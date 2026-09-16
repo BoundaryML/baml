@@ -1415,15 +1415,15 @@ pub(crate) mod support {
                     }
                     rendered
                 }
-                baml_compiler2_ast::TypeExprKind::Int { .. } => "int".into(),
-                baml_compiler2_ast::TypeExprKind::Bigint { .. } => "bigint".into(),
-                baml_compiler2_ast::TypeExprKind::Float { .. } => "float".into(),
-                baml_compiler2_ast::TypeExprKind::String { .. } => "string".into(),
-                baml_compiler2_ast::TypeExprKind::Bool { .. } => "bool".into(),
-                baml_compiler2_ast::TypeExprKind::Null { .. } => "null".into(),
-                baml_compiler2_ast::TypeExprKind::Never { .. } => "never".into(),
-                baml_compiler2_ast::TypeExprKind::Void { .. } => "void".into(),
-                baml_compiler2_ast::TypeExprKind::Uint8Array { .. } => "uint8array".into(),
+                baml_compiler2_ast::TypeExprKind::Int => "int".into(),
+                baml_compiler2_ast::TypeExprKind::Bigint => "bigint".into(),
+                baml_compiler2_ast::TypeExprKind::Float => "float".into(),
+                baml_compiler2_ast::TypeExprKind::String => "string".into(),
+                baml_compiler2_ast::TypeExprKind::Bool => "bool".into(),
+                baml_compiler2_ast::TypeExprKind::Null => "null".into(),
+                baml_compiler2_ast::TypeExprKind::Never => "never".into(),
+                baml_compiler2_ast::TypeExprKind::Void => "void".into(),
+                baml_compiler2_ast::TypeExprKind::Uint8Array => "uint8array".into(),
                 baml_compiler2_ast::TypeExprKind::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
                 }
@@ -1493,7 +1493,7 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                baml_compiler2_ast::TypeExprKind::Unknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExprKind::Unknown => "unknown".into(),
                 baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
                     base,
                     interface,
@@ -1509,11 +1509,11 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                baml_compiler2_ast::TypeExprKind::Type { .. } => "reflect.Type".into(),
-                baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
-                baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
-                baml_compiler2_ast::TypeExprKind::Missing { .. } => "?".into(),
-                baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
+                baml_compiler2_ast::TypeExprKind::Type => "reflect.Type".into(),
+                baml_compiler2_ast::TypeExprKind::Rust => "$rust_type".into(),
+                baml_compiler2_ast::TypeExprKind::Error => "error".into(),
+                baml_compiler2_ast::TypeExprKind::Missing => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Infer => "_".into(),
             }
         }
 

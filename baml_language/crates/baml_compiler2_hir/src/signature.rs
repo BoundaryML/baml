@@ -144,7 +144,7 @@ fn signature_param(p: &crate::item_tree::FunctionParam) -> SignatureParam {
     let type_expr = p
         .type_expr
         .clone()
-        .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
+        .unwrap_or_else(|| TypeExprKind::Missing.at(TextRange::default()));
     SignatureParam {
         name: p.name.clone(),
         ty: SignatureTypeExpr::new(type_expr),
@@ -192,7 +192,6 @@ fn type_expr_for_effect_param(name: Name) -> TypeExpr {
         segments: vec![name],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
-        attrs: Vec::new(),
     }
     .at(TextRange::default())
 }
@@ -211,14 +210,12 @@ fn fresh_effect_param_name(used_names: &mut FxHashSet<Name>) -> Name {
 fn elaborate_immediate_callback_param(
     params: Vec<FunctionTypeParam>,
     ret: TypeExpr,
-    attrs: Vec<baml_compiler2_ast::RawAttribute>,
     effect_param: Name,
 ) -> TypeExpr {
     TypeExprKind::Function {
         params,
         ret: Box::new(ret),
         throws: Some(Box::new(type_expr_for_effect_param(effect_param))),
-        attrs,
     }
     .at(TextRange::default())
 }
@@ -248,40 +245,38 @@ fn elaborate_callback_param_root(
             params,
             ret,
             throws: None,
-            attrs,
         } => {
             let effect_param = fresh_effect_param_name(used_names);
             synthetic_effect_params.push(effect_param.clone());
-            elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
+            elaborate_immediate_callback_param(params, *ret, effect_param)
         }
-        TypeExprKind::Optional { inner, attrs } => {
+        TypeExprKind::Optional { inner } => {
             let inner = elaborate_callback_param_root(*inner, used_names, synthetic_effect_params);
             TypeExprKind::Optional {
                 inner: Box::new(inner),
-                attrs,
             }
             .at(ty.span)
         }
         // `T | null` is the same type as `T?`, so it opens the same way. A
         // union carrying any other arm is not an optional callback and is
         // left alone.
-        TypeExprKind::Union { variants, attrs }
+        TypeExprKind::Union { variants }
             if variants
                 .iter()
-                .filter(|variant| !matches!(variant.kind, TypeExprKind::Null { .. }))
+                .filter(|variant| !matches!(variant.kind, TypeExprKind::Null))
                 .count()
                 == 1 =>
         {
             let variants = variants
                 .into_iter()
                 .map(|variant| match variant.kind {
-                    TypeExprKind::Null { .. } => variant,
+                    TypeExprKind::Null => variant,
                     _ => {
                         elaborate_callback_param_root(variant, used_names, synthetic_effect_params)
                     }
                 })
                 .collect();
-            TypeExprKind::Union { variants, attrs }.at(ty.span)
+            TypeExprKind::Union { variants }.at(ty.span)
         }
         other => other.at(ty.span),
     }

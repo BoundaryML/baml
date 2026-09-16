@@ -43,7 +43,7 @@ pub enum Hir2Diagnostic {
         valid_attributes: Vec<&'static str>,
     },
     /// An attribute on a type expression is not a known type or field attribute.
-    UnknownTypeAttribute { attr_name: Name, span: TextRange },
+    UnknownStreamAttribute { attr_name: Name, span: TextRange },
     /// Builtin-internal attribute used in the wrong place.
     InvalidAttributeContext {
         attr_name: Name,
@@ -379,7 +379,7 @@ impl Hir2Diagnostic {
             )
             .with_primary(Span { file_id, range: *span }, "unknown attribute")
             .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::UnknownTypeAttribute { attr_name, span } => Diagnostic::error(
+            Hir2Diagnostic::UnknownStreamAttribute { attr_name, span } => Diagnostic::error(
                 DiagnosticId::UnknownAttribute,
                 format!("unknown attribute `@{attr_name}`"),
             )

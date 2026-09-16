@@ -610,7 +610,6 @@ pub(crate) fn synthesize_llm_spec_body(
                 segments: vec![Name::new("ai"), Name::new("OutputFormat")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             })
             .at(span),
         ),
@@ -824,7 +823,7 @@ fn synthesize_shorthand_prefixes(ctx: &mut LoweringContext, span: TextRange) -> 
 fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) -> ExprId {
     let prefix_name = Name::new("prefix");
     let model_name = Name::new("model");
-    let string_ty = || (TypeExprKind::String { attrs: vec![] }).at(span);
+    let string_ty = || (TypeExprKind::String).at(span);
     let param = |name: &Name| Param {
         name: name.clone(),
         type_expr: Some(string_ty()),
@@ -840,7 +839,6 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
             Pattern::Type(
                 (TypeExprKind::Literal {
                     value: baml_base::Literal::String((*prefix).to_string()),
-                    attrs: vec![],
                 })
                 .at(span),
             ),
@@ -891,12 +889,10 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
         segments: vec![Name::new("ai"), Name::new("Client")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(span);
     let return_type = (TypeExprKind::Optional {
         inner: Box::new(client_ty),
-        attrs: vec![],
     })
     .at(span);
     let lambda_span = TextRange::empty(span.end());
@@ -1230,7 +1226,6 @@ fn companion_type_args(
                 segments: vec![name.clone()],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(span)
         })
@@ -3797,7 +3792,7 @@ impl LoweringContext {
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te))
-            .unwrap_or_else(|| TypeExprKind::Missing { attrs: Vec::new() }.at(node.span_range()));
+            .unwrap_or_else(|| TypeExprKind::Missing.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
@@ -3821,7 +3816,7 @@ impl LoweringContext {
             .children()
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te));
-        let missing = || TypeExprKind::Missing { attrs: Vec::new() }.at(span);
+        let missing = || TypeExprKind::Missing.at(span);
         let qself = types.next().unwrap_or_else(missing);
         let interface = types.next().unwrap_or_else(missing);
 
@@ -4600,17 +4595,9 @@ impl LoweringContext {
 
         let mut stmts: Vec<StmtId> = Vec::new();
         // let __tt_parts: string[] = [];
-        stmts.push(self.tt_let_typed_empty_list(
-            &parts,
-            TypeExprKind::String { attrs: Vec::new() }.at(span),
-            span,
-        ));
+        stmts.push(self.tt_let_typed_empty_list(&parts, TypeExprKind::String.at(span), span));
         // let __tt_values: unknown[] = [];
-        stmts.push(self.tt_let_typed_empty_list(
-            &values,
-            TypeExprKind::Unknown { attrs: Vec::new() }.at(span),
-            span,
-        ));
+        stmts.push(self.tt_let_typed_empty_list(&values, TypeExprKind::Unknown.at(span), span));
         // let __tt_cur = "";
         let at = TextRange::empty(span.start());
         let cur_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), at);
@@ -4814,7 +4801,6 @@ impl LoweringContext {
         let at = TextRange::empty(span.start());
         let list_ty = TypeExprKind::List {
             inner: Box::new(elem),
-            attrs: Vec::new(),
         }
         .at(span);
         let type_pat = self.alloc_pattern(Pattern::Type(list_ty), at);
@@ -5630,19 +5616,14 @@ impl LoweringContext {
                                         },
                                     );
                                 }
-                                TypeBindingValue::Static(
-                                    TypeExprKind::Error { attrs: Vec::new() }
-                                        .at(first.text_range()),
-                                )
+                                TypeBindingValue::Static(TypeExprKind::Error.at(first.text_range()))
                             }
                             None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
                         }
                     }
                 }
             }
-            None => TypeBindingValue::Static(
-                TypeExprKind::Error { attrs: Vec::new() }.at(node.span_range()),
-            ),
+            None => TypeBindingValue::Static(TypeExprKind::Error.at(node.span_range())),
         };
         self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
     }
@@ -6092,7 +6073,6 @@ impl LoweringContext {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
                     associated_type_bindings: vec![],
-                    attrs: vec![],
                 }
                 .at(span),
             ),

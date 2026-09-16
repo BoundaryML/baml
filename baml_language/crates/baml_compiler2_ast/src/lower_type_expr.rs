@@ -3,7 +3,7 @@
 //! Adapts the logic from `TypeRef::from_ast()` in `baml_compiler_hir/src/type_ref.rs`.
 //! The output is the same recursive structure but as `ast::TypeExpr` instead of `TypeRef`.
 //!
-//! Source types carry no attributes (BEP-075), so every lowered node's `attrs` is empty.
+//! Types carry no attributes (BEP-075); `@` attributes belong to declarations.
 
 use baml_base::Name;
 use baml_compiler_syntax::{
@@ -50,11 +50,7 @@ fn lower_union(
 
     // Apply postfix modifiers (e.g., `(A | B)[]`)
     apply_modifiers(
-        TypeExprKind::Union {
-            variants,
-            attrs: vec![],
-        }
-        .at(type_expr.syntax().span_range()),
+        TypeExprKind::Union { variants }.at(type_expr.syntax().span_range()),
         &type_expr.postfix_modifiers(),
     )
 }
@@ -72,14 +68,12 @@ fn apply_modifiers(
             baml_compiler_syntax::ast::TypePostFixModifier::Optional => {
                 result = TypeExprKind::Optional {
                     inner: Box::new(result),
-                    attrs: vec![],
                 }
                 .at(span);
             }
             baml_compiler_syntax::ast::TypePostFixModifier::Array => {
                 result = TypeExprKind::List {
                     inner: Box::new(result),
-                    attrs: vec![],
                 }
                 .at(span);
             }
@@ -118,7 +112,7 @@ fn lower_base_terminal(
             span: unreflect.span_range(),
             owner,
         });
-        return TypeExprKind::Error { attrs: vec![] }.at(unreflect.span_range());
+        return TypeExprKind::Error.at(unreflect.span_range());
     }
     // BUG: a qualified projection captures only a single member — `(base as I).A.B`
     // drops the trailing `.B` (`associated_type_projection` returns one member). A chained
@@ -130,7 +124,6 @@ fn lower_base_terminal(
             base: Box::new(lower_type_expr_node(&base, diags, owner)),
             interface: Some(Box::new(lower_type_expr_node(&interface, diags, owner))),
             member: Name::new(member.text()),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -148,14 +141,14 @@ fn lower_base_terminal(
                 let ty = p
                     .ty()
                     .map(|t| lower_type_expr_node(&t, diags, owner))
-                    .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
+                    .unwrap_or_else(|| TypeExprKind::Missing.at(span));
                 AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr
             .function_return_type()
             .map(|t| lower_type_expr_node(&t, diags, owner))
-            .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
+            .unwrap_or_else(|| TypeExprKind::Missing.at(span));
         let throws = type_expr
             .function_throws_type()
             .map(|t| Box::new(lower_type_expr_node(&t, diags, owner)));
@@ -163,7 +156,6 @@ fn lower_base_terminal(
             params,
             ret: Box::new(ret),
             throws,
-            attrs: vec![],
         }
         .at(span);
     }
@@ -183,11 +175,7 @@ fn lower_base_terminal(
                 .map(|t| lower_type_expr_node(&t, diags, owner))
                 .collect();
             if !members.is_empty() {
-                return TypeExprKind::Union {
-                    variants: members,
-                    attrs: vec![],
-                }
-                .at(span);
+                return TypeExprKind::Union { variants: members }.at(span);
             }
         }
     }
@@ -204,7 +192,6 @@ fn lower_base_type(
     if let Some(s) = type_expr.string_literal() {
         return TypeExprKind::Literal {
             value: baml_base::Literal::String(s),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -213,7 +200,6 @@ fn lower_base_type(
         let value = crate::lower_bigint_literal(tok.text(), tok.text_range(), diags);
         return TypeExprKind::Literal {
             value: baml_base::Literal::Bigint(if negated { -value } else { value }),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -222,7 +208,6 @@ fn lower_base_type(
         let value = crate::lower_int_literal(tok.text(), tok.text_range(), diags);
         return TypeExprKind::Literal {
             value: baml_base::Literal::Int(if negated { -value } else { value }),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -231,7 +216,6 @@ fn lower_base_type(
         let text = baml_base::num_lit::normalize_float_literal(tok.text());
         return TypeExprKind::Literal {
             value: baml_base::Literal::Float(if negated { format!("-{text}") } else { text }),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -239,7 +223,6 @@ fn lower_base_type(
     if let Some(b) = type_expr.bool_literal() {
         return TypeExprKind::Literal {
             value: baml_base::Literal::Bool(b),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -266,7 +249,7 @@ fn lower_base_type(
         );
     }
 
-    TypeExprKind::Missing { attrs: vec![] }.at(span)
+    TypeExprKind::Missing.at(span)
 }
 
 /// Parse a union member from its structured parts.
@@ -295,14 +278,13 @@ fn lower_union_member_base(
             span: unreflect.span_range(),
             owner,
         });
-        return TypeExprKind::Error { attrs: vec![] }.at(unreflect.span_range());
+        return TypeExprKind::Error.at(unreflect.span_range());
     }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_node(&base, diags, owner)),
             interface: Some(Box::new(lower_type_expr_node(&interface, diags, owner))),
             member: Name::new(member.text()),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -327,7 +309,6 @@ fn lower_union_member_base(
     if let Some(s) = parts.string_literal() {
         return TypeExprKind::Literal {
             value: baml_base::Literal::String(s),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -336,7 +317,6 @@ fn lower_union_member_base(
         let value = crate::lower_bigint_literal(tok.text(), tok.text_range(), diags);
         return TypeExprKind::Literal {
             value: baml_base::Literal::Bigint(if negated { -value } else { value }),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -345,7 +325,6 @@ fn lower_union_member_base(
         let value = crate::lower_int_literal(tok.text(), tok.text_range(), diags);
         return TypeExprKind::Literal {
             value: baml_base::Literal::Int(if negated { -value } else { value }),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -354,7 +333,6 @@ fn lower_union_member_base(
         let text = baml_base::num_lit::normalize_float_literal(tok.text());
         return TypeExprKind::Literal {
             value: baml_base::Literal::Float(if negated { format!("-{text}") } else { text }),
-            attrs: vec![],
         }
         .at(span);
     }
@@ -386,12 +364,10 @@ fn lower_union_member_base(
         return match name.as_str() {
             "true" => TypeExprKind::Literal {
                 value: baml_base::Literal::Bool(true),
-                attrs: vec![],
             }
             .at(span),
             "false" => TypeExprKind::Literal {
                 value: baml_base::Literal::Bool(false),
-                attrs: vec![],
             }
             .at(span),
             _ => lower_from_type_name_with_generic_args(
@@ -404,7 +380,7 @@ fn lower_union_member_base(
         };
     }
 
-    TypeExprKind::Missing { attrs: vec![] }.at(span)
+    TypeExprKind::Missing.at(span)
 }
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.
@@ -420,7 +396,7 @@ pub(crate) fn lower_associated_type_binding(
     let ty = binding
         .default_or_binding()
         .map(|ty| lower_type_expr_node(&ty, diags, owner))
-        .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
+        .unwrap_or_else(|| TypeExprKind::Missing.at(TextRange::default()));
     Some(AssociatedTypeBinding {
         name: Name::new(name.text()),
         ty: Box::new(ty),
@@ -442,7 +418,6 @@ fn lower_from_type_name_with_generic_args(
         segments: name.split('.').map(Name::new).collect(),
         generic_args,
         associated_type_bindings,
-        attrs: vec![],
     };
     let kind = if let Some(alias) = compiler_aliases::by_spelling(name) {
         if generic_args.len() != alias.arity || !associated_type_bindings.is_empty() {
@@ -455,17 +430,17 @@ fn lower_from_type_name_with_generic_args(
             });
             // The syntax parsed successfully. Recover without a second,
             // misleading "could not parse type expression" diagnostic.
-            return TypeExprKind::Unknown { attrs: vec![] }.at(span);
+            return TypeExprKind::Unknown.at(span);
         }
         match alias.target {
             AliasTarget::Primitive(primitive) => match primitive {
-                P::Int => TypeExprKind::Int { attrs: vec![] },
-                P::Bigint => TypeExprKind::Bigint { attrs: vec![] },
-                P::Float => TypeExprKind::Float { attrs: vec![] },
-                P::String => TypeExprKind::String { attrs: vec![] },
-                P::Bool => TypeExprKind::Bool { attrs: vec![] },
-                P::Null => TypeExprKind::Null { attrs: vec![] },
-                P::Uint8Array => TypeExprKind::Uint8Array { attrs: vec![] },
+                P::Int => TypeExprKind::Int,
+                P::Bigint => TypeExprKind::Bigint,
+                P::Float => TypeExprKind::Float,
+                P::String => TypeExprKind::String,
+                P::Bool => TypeExprKind::Bool,
+                P::Null => TypeExprKind::Null,
+                P::Uint8Array => TypeExprKind::Uint8Array,
                 P::Image | P::Audio | P::Video | P::Pdf => TypeExprKind::Media {
                     kind: match primitive {
                         P::Image => baml_base::MediaKind::Image,
@@ -474,20 +449,18 @@ fn lower_from_type_name_with_generic_args(
                         P::Pdf => baml_base::MediaKind::Pdf,
                         _ => unreachable!("media primitive"),
                     },
-                    attrs: vec![],
                 },
             },
-            AliasTarget::Never => TypeExprKind::Never { attrs: vec![] },
-            AliasTarget::Void => TypeExprKind::Void { attrs: vec![] },
-            AliasTarget::Unknown => TypeExprKind::Unknown { attrs: vec![] },
-            AliasTarget::Type => TypeExprKind::Type { attrs: vec![] },
+            AliasTarget::Never => TypeExprKind::Never,
+            AliasTarget::Void => TypeExprKind::Void,
+            AliasTarget::Unknown => TypeExprKind::Unknown,
+            AliasTarget::Type => TypeExprKind::Type,
             AliasTarget::Map => {
                 let value = generic_args.pop().expect("checked map arity");
                 let key = generic_args.pop().expect("checked map arity");
                 TypeExprKind::Map {
                     key: Box::new(key),
                     value: Box::new(value),
-                    attrs: vec![],
                 }
             }
             AliasTarget::Json => {
@@ -496,7 +469,6 @@ fn lower_from_type_name_with_generic_args(
                     segments: definition.source_segments().map(Name::new).collect(),
                     generic_args,
                     associated_type_bindings,
-                    attrs: vec![],
                 }
             }
             AliasTarget::Future => path(generic_args, associated_type_bindings),
@@ -504,8 +476,8 @@ fn lower_from_type_name_with_generic_args(
         }
     } else {
         match name {
-            "_" => TypeExprKind::Infer { attrs: vec![] },
-            "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
+            "_" => TypeExprKind::Infer,
+            "$rust_type" => TypeExprKind::Rust,
             _ => path(generic_args, associated_type_bindings),
         }
     };
@@ -531,10 +503,10 @@ pub(crate) fn check_void_type(
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
     match &type_expr.kind {
-        TypeExprKind::Void { .. } if !allow_root_void => {
+        TypeExprKind::Void if !allow_root_void => {
             diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
         }
-        TypeExprKind::Void { .. } => {}
+        TypeExprKind::Void => {}
         TypeExprKind::Optional { inner, .. } => {
             // Once inside a wrapper, void is never allowed (even in return position).
             check_void_type(
@@ -598,12 +570,12 @@ pub(crate) fn check_throws_wildcard(
 ) {
     match &mut type_expr.kind {
         // Bare `throws _` — the whole error set is inferred; keep the hole.
-        TypeExprKind::Infer { .. } => {}
+        TypeExprKind::Infer => {}
         TypeExprKind::Union { variants, .. } => {
             for v in variants {
                 // A top-level `_` member is the open slot (kept); anything
                 // deeper is a non-inferable nested hole (rewritten to an error).
-                if !matches!(v.kind, TypeExprKind::Infer { .. }) {
+                if !matches!(v.kind, TypeExprKind::Infer) {
                     check_wildcard_type(v, "a `throws` clause", span, diags);
                 }
             }
@@ -641,13 +613,13 @@ pub(crate) fn check_wildcard_type(
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
     match &mut type_expr.kind {
-        TypeExprKind::Infer { .. } => {
+        TypeExprKind::Infer => {
             diags.push(LoweringDiagnostic::WildcardTypeNotAllowed {
                 context: context.to_string(),
                 span,
             });
             // Neutralize: a hole must never survive into TIR type checking.
-            type_expr.kind = TypeExprKind::Error { attrs: vec![] };
+            type_expr.kind = TypeExprKind::Error;
         }
         TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             check_wildcard_type(inner, context, span, diags);

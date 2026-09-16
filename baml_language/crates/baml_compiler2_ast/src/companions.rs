@@ -109,7 +109,6 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
         segments: vec![Name::new("ai"), Name::new("FunctionSpec")],
         generic_args: vec![out],
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(parent.span);
 
@@ -149,7 +148,6 @@ fn llm_render_prompt(
         segments: vec![Name::new("ai"), Name::new("Prompt")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(parent.span);
     Some(companion_def(
@@ -201,7 +199,6 @@ fn llm_build_request(
                 segments: vec![Name::new("baml"), Name::new("http"), Name::new("Request")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             })
             .at(parent.span),
         ),
@@ -216,7 +213,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     let return_type = parent.return_type.clone()?;
     let json_param = Param {
         name: Name::new("json"),
-        type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(parent.span)),
+        type_expr: Some((TypeExprKind::String).at(parent.span)),
         default: None,
         span: parent.span,
         name_span: parent.name_span,
@@ -254,7 +251,6 @@ fn llm_stream(
         segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
         generic_args: type_args.clone(),
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(span);
 
@@ -272,13 +268,11 @@ fn llm_stream(
                     ],
                     generic_args: vec![],
                     associated_type_bindings: vec![],
-                    attrs: vec![],
                 })
                 .at(span);
                 param.type_expr = Some(
                     (TypeExprKind::Optional {
                         inner: Box::new(streaming_client),
-                        attrs: vec![],
                     })
                     .at(span),
                 );

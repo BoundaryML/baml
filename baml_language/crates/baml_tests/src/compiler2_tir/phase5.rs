@@ -551,7 +551,7 @@ fn rust_type_field_lowers_to_rust_type() {
     // Lower $rust_type — should produce Ty::RustType
     let ty = lower_type_expr_hir(
         &db,
-        &baml_compiler2_ast::TypeExprKind::Rust { attrs: vec![] }.at(Default::default()),
+        &baml_compiler2_ast::TypeExprKind::Rust.at(Default::default()),
     );
     let diags: Vec<()> = Vec::new();
 
@@ -607,7 +607,6 @@ fn cross_namespace_type_resolution_via_root() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -630,7 +629,6 @@ fn cross_namespace_type_resolution_via_root() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -663,7 +661,6 @@ fn same_namespace_resolution_no_prefix() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -716,7 +713,6 @@ fn nested_namespace_resolution() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -747,7 +743,6 @@ fn bare_name_cross_namespace_rejected() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -785,7 +780,6 @@ fn multi_segment_bare_path_rejected() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );

@@ -262,8 +262,8 @@ mod tests {
         let call = body.exprs.alloc(Expr::Call {
             callee,
             type_args: vec![
-                TypeExprKind::Int { attrs: Vec::new() }.at(int_span),
-                TypeExprKind::String { attrs: Vec::new() }.at(string_span),
+                TypeExprKind::Int.at(int_span),
+                TypeExprKind::String.at(string_span),
             ],
             args: Vec::new(),
         });
@@ -296,8 +296,7 @@ mod tests {
             name: Name::new("S"),
             value: TypeBindingValue::Static(
                 TypeExprKind::List {
-                    inner: Box::new(TypeExprKind::Int { attrs: Vec::new() }.at(static_span)),
-                    attrs: Vec::new(),
+                    inner: Box::new(TypeExprKind::Int.at(static_span)),
                 }
                 .at(static_span),
             ),

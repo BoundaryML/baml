@@ -25,7 +25,7 @@ pub use ast::*;
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
 pub use docstring::extract_docstring;
-pub use field_attrs::{FIELD_ATTR_NAMES, is_field_attr};
+pub use field_attrs::FIELD_ATTR_NAMES;
 pub use lower_cst::{
     SHORTHAND_PROVIDERS, lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
     lower_session_file_with_path_and_test_owner,
@@ -187,14 +187,14 @@ mod tests {
     /// ```
     macro_rules! type_expr {
         // ── Leaves ──
-        (Int) => { TypeExprKind::Int { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (Bigint) => { TypeExprKind::Bigint { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (Float) => { TypeExprKind::Float { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (String) => { TypeExprKind::String { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (Bool) => { TypeExprKind::Bool { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (Null) => { TypeExprKind::Null { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (Never) => { TypeExprKind::Never { attrs: vec![] }.at(text_size::TextRange::default()) };
-        (Rust) => { TypeExprKind::Rust { attrs: vec![] }.at(text_size::TextRange::default()) };
+        (Int) => { TypeExprKind::Int.at(text_size::TextRange::default()) };
+        (Bigint) => { TypeExprKind::Bigint.at(text_size::TextRange::default()) };
+        (Float) => { TypeExprKind::Float.at(text_size::TextRange::default()) };
+        (String) => { TypeExprKind::String.at(text_size::TextRange::default()) };
+        (Bool) => { TypeExprKind::Bool.at(text_size::TextRange::default()) };
+        (Null) => { TypeExprKind::Null.at(text_size::TextRange::default()) };
+        (Never) => { TypeExprKind::Never.at(text_size::TextRange::default()) };
+        (Rust) => { TypeExprKind::Rust.at(text_size::TextRange::default()) };
 
         // ── Path ──
         (Path($name:expr)) => {
@@ -202,7 +202,6 @@ mod tests {
                 segments: vec![baml_base::Name::new($name)],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(text_size::TextRange::default())
         };
@@ -211,14 +210,12 @@ mod tests {
         (Optional($($inner:tt)+)) => {
             TypeExprKind::Optional {
                 inner: Box::new(type_expr!($($inner)+)),
-                attrs: vec![],
             }
             .at(text_size::TextRange::default())
         };
         (List($($inner:tt)+)) => {
             TypeExprKind::List {
                 inner: Box::new(type_expr!($($inner)+)),
-                attrs: vec![],
             }
             .at(text_size::TextRange::default())
         };
@@ -227,7 +224,6 @@ mod tests {
         (Union($(($($variant:tt)+)),+ $(,)?)) => {
             TypeExprKind::Union {
                 variants: vec![$(type_expr!(($($variant)+))),+],
-                attrs: vec![],
             }
             .at(text_size::TextRange::default())
         };
@@ -242,62 +238,21 @@ mod tests {
     /// replacing them with `TextRange::default()`. This allows `assert_eq!`
     /// comparison against hand-built expected values.
     fn strip_spans(expr: &TypeExpr) -> TypeExpr {
-        fn strip_attr(attr: &crate::ast::RawAttribute) -> crate::ast::RawAttribute {
-            crate::ast::RawAttribute {
-                name: attr.name.clone(),
-                args: attr
-                    .args
-                    .iter()
-                    .map(|a| crate::ast::RawAttributeArg {
-                        key: a.key.clone(),
-                        value: a.value.clone(),
-                        span: text_size::TextRange::default(),
-                    })
-                    .collect(),
-                span: text_size::TextRange::default(),
-            }
-        }
-
-        fn strip_attrs(attrs: &[crate::ast::RawAttribute]) -> Vec<crate::ast::RawAttribute> {
-            attrs.iter().map(strip_attr).collect()
-        }
-
         let __stripped = match &expr.kind {
-            TypeExprKind::Int { attrs } => TypeExprKind::Int {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Bigint { attrs } => TypeExprKind::Bigint {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Float { attrs } => TypeExprKind::Float {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::String { attrs } => TypeExprKind::String {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Bool { attrs } => TypeExprKind::Bool {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Null { attrs } => TypeExprKind::Null {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Uint8Array { attrs } => TypeExprKind::Uint8Array {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Never { attrs } => TypeExprKind::Never {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Void { attrs } => TypeExprKind::Void {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Rust { attrs } => TypeExprKind::Rust {
-                attrs: strip_attrs(attrs),
-            },
+            TypeExprKind::Int => TypeExprKind::Int,
+            TypeExprKind::Bigint => TypeExprKind::Bigint,
+            TypeExprKind::Float => TypeExprKind::Float,
+            TypeExprKind::String => TypeExprKind::String,
+            TypeExprKind::Bool => TypeExprKind::Bool,
+            TypeExprKind::Null => TypeExprKind::Null,
+            TypeExprKind::Uint8Array => TypeExprKind::Uint8Array,
+            TypeExprKind::Never => TypeExprKind::Never,
+            TypeExprKind::Void => TypeExprKind::Void,
+            TypeExprKind::Rust => TypeExprKind::Rust,
             TypeExprKind::Path {
                 segments,
                 generic_args,
                 associated_type_bindings,
-                attrs,
             } => TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args.iter().map(strip_spans).collect(),
@@ -308,47 +263,38 @@ mod tests {
                         ty: Box::new(strip_spans(&binding.ty)),
                     })
                     .collect(),
-                attrs: strip_attrs(attrs),
             },
             TypeExprKind::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
-                attrs,
             } => TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(strip_spans(base)),
                 interface: interface
                     .as_ref()
                     .map(|interface| Box::new(strip_spans(interface))),
                 member: member.clone(),
-                attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
+            TypeExprKind::Optional { inner } => TypeExprKind::Optional {
                 inner: Box::new(strip_spans(inner)),
-                attrs: strip_attrs(attrs),
             },
-            TypeExprKind::List { inner, attrs } => TypeExprKind::List {
+            TypeExprKind::List { inner } => TypeExprKind::List {
                 inner: Box::new(strip_spans(inner)),
-                attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
+            TypeExprKind::Map { key, value } => TypeExprKind::Map {
                 key: Box::new(strip_spans(key)),
                 value: Box::new(strip_spans(value)),
-                attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
+            TypeExprKind::Union { variants } => TypeExprKind::Union {
                 variants: variants.iter().map(strip_spans).collect(),
-                attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Literal { value, attrs } => TypeExprKind::Literal {
+            TypeExprKind::Literal { value } => TypeExprKind::Literal {
                 value: value.clone(),
-                attrs: strip_attrs(attrs),
             },
             TypeExprKind::Function {
                 params,
                 ret,
                 throws,
-                attrs,
             } => TypeExprKind::Function {
                 params: params
                     .iter()
@@ -360,27 +306,13 @@ mod tests {
                     .collect(),
                 ret: Box::new(strip_spans(ret)),
                 throws: throws.as_ref().map(|throws| Box::new(strip_spans(throws))),
-                attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Media { kind, attrs } => TypeExprKind::Media {
-                kind: *kind,
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Type { attrs } => TypeExprKind::Type {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Error { attrs } => TypeExprKind::Error {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Missing { attrs } => TypeExprKind::Missing {
-                attrs: strip_attrs(attrs),
-            },
-            TypeExprKind::Infer { attrs } => TypeExprKind::Infer {
-                attrs: strip_attrs(attrs),
-            },
+            TypeExprKind::Media { kind } => TypeExprKind::Media { kind: *kind },
+            TypeExprKind::Unknown => TypeExprKind::Unknown,
+            TypeExprKind::Type => TypeExprKind::Type,
+            TypeExprKind::Error => TypeExprKind::Error,
+            TypeExprKind::Missing => TypeExprKind::Missing,
+            TypeExprKind::Infer => TypeExprKind::Infer,
         };
         __stripped.at(text_size::TextRange::default())
     }
@@ -1250,7 +1182,6 @@ class Response {
                 ],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![]
             }
         );
     }
@@ -1358,7 +1289,6 @@ interface Response {
                 ],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![]
             }
         );
     }
@@ -1637,7 +1567,7 @@ class Media {
             .expect("expected _data field");
 
         match &field.type_expr.kind {
-            TypeExprKind::Rust { .. } => {}
+            TypeExprKind::Rust => {}
             other => panic!("expected TypeExprKind::Rust, got {other:?}"),
         }
     }
@@ -1749,10 +1679,7 @@ class Media {
             let data_field = c.fields.iter().find(|f| f.name.as_str() == "_data");
             assert!(data_field.is_some(), "expected _data field");
             assert!(
-                matches!(
-                    &data_field.unwrap().type_expr.kind,
-                    TypeExprKind::Rust { .. }
-                ),
+                matches!(&data_field.unwrap().type_expr.kind, TypeExprKind::Rust),
                 "_data field should have TypeExprKind::Rust"
             );
         } else {
@@ -1772,7 +1699,7 @@ function f() -> int throws never {
             .throws
             .expect("expected throws clause to be lowered into FunctionDef.throws");
         assert!(
-            matches!(throws.kind, TypeExprKind::Never { .. }),
+            matches!(throws.kind, TypeExprKind::Never),
             "expected throws type to lower as TypeExprKind::Never, got {:?}",
             throws.kind
         );
@@ -2008,7 +1935,7 @@ function f() -> int {
         assert!(
             matches!(
                 throws.as_deref().map(|t| &t.kind),
-                Some(TypeExprKind::Never { .. })
+                Some(TypeExprKind::Never)
             ),
             "expected explicit nested throws never to be preserved, got {throws:?}"
         );

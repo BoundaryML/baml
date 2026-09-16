@@ -8517,11 +8517,7 @@ impl<'db> InferenceContext<'db> {
         else {
             return None;
         };
-        if !written.attrs.is_empty()
-            || segments.len() != 1
-            || !generic_args.is_empty()
-            || !associated_type_bindings.is_empty()
-        {
+        if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
             return None;
         }
         let name = &segments[0];

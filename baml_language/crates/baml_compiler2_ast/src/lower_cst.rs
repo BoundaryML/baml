@@ -303,7 +303,7 @@ fn check_missing_type(
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    if matches!(type_expr.kind, crate::ast::TypeExprKind::Missing { .. }) {
+    if matches!(type_expr.kind, crate::ast::TypeExprKind::Missing) {
         diags.push(LoweringDiagnostic::UnparseableType { context, span });
     }
 }
@@ -739,7 +739,6 @@ pub(crate) fn append_spec_client_param(
         segments: vec![Name::new("ai"), Name::new("Client")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     }
     .at(span);
     params.push(Param {
@@ -747,7 +746,6 @@ pub(crate) fn append_spec_client_param(
         type_expr: Some(
             TypeExprKind::Optional {
                 inner: Box::new(client_ty),
-                attrs: vec![],
             }
             .at(span),
         ),
@@ -778,7 +776,6 @@ pub(crate) fn append_spec_on_event_param(
         segments: vec![Name::new("ai"), Name::new("events"), Name::new("Event")],
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     }
     .at(span);
     let listener_ty = TypeExprKind::Function {
@@ -787,9 +784,8 @@ pub(crate) fn append_spec_on_event_param(
             optional: false,
             ty: event_ty,
         }],
-        ret: Box::new(TypeExprKind::Void { attrs: vec![] }.at(span)),
+        ret: Box::new(TypeExprKind::Void.at(span)),
         throws: None,
-        attrs: vec![],
     }
     .at(span);
     params.push(Param {
@@ -797,7 +793,6 @@ pub(crate) fn append_spec_on_event_param(
         type_expr: Some(
             TypeExprKind::Optional {
                 inner: Box::new(listener_ty),
-                attrs: vec![],
             }
             .at(span),
         ),
@@ -1091,7 +1086,7 @@ fn lower_class(
             // own stand-in. `Error` suppresses follow-on diagnostics while the rest of
             // the declaration still type-checks.
             let type_expr = f.ty().map_or_else(
-                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                || TypeExprKind::Error.at(f.syntax().span_range()),
                 |te| {
                     let mut expr = lower_type_expr::lower_type_expr_node(
                         &te,
@@ -1350,7 +1345,7 @@ fn lower_interface(
             // See the class-field site: the parser already reports a missing type, so
             // recover with the error sentinel instead of an optional type.
             let type_expr = f.ty().map_or_else(
-                || TypeExprKind::Error { attrs: Vec::new() }.at(f.syntax().span_range()),
+                || TypeExprKind::Error.at(f.syntax().span_range()),
                 |te| {
                     let mut expr = lower_type_expr::lower_type_expr_node(
                         &te,
@@ -2014,7 +2009,6 @@ fn synthesize_init_test_function(
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(span),
         ),
@@ -2064,7 +2058,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
                 throws: None,
                 body: Some(lambda_body),
                 span,
@@ -2123,7 +2117,6 @@ fn synthesize_register_call(
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         generic_args: vec![],
                         associated_type_bindings: vec![],
-                        attrs: vec![],
                     }
                     .at(span),
                 ),
@@ -2136,7 +2129,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
                 throws: None,
                 body: Some(collector_exprs),
                 span,

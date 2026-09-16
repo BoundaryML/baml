@@ -1066,10 +1066,7 @@ fn lower_interface_export<'db>(
         .iter()
         .zip(&data.fields)
         .map(|((field, ty, attrs), field_data)| {
-            let mut exported = exported_field_attrs(attrs, field_data.docstring.as_deref());
-            let type_attrs = exported_field_attrs(&data.type_refs[field_data.type_ref].attrs, None);
-            exported.alias = exported.alias.or(type_attrs.alias);
-            exported.description = exported.description.or(type_attrs.description);
+            let exported = exported_field_attrs(attrs, field_data.docstring.as_deref());
             (field.clone(), ty.clone(), exported)
         })
         .collect();

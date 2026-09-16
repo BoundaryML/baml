@@ -4587,10 +4587,8 @@ impl<'db> LoweringContext<'db> {
         // for out-of-body implementations, otherwise the enclosing class type.
         for (param_idx, param) in sig.params.iter().enumerate() {
             let param_ty = if param.name.as_str() == "self"
-                && matches!(
-                    param.ty.kind,
-                    baml_compiler2_ast::TypeExprKind::Missing { .. }
-                ) {
+                && matches!(param.ty.kind, baml_compiler2_ast::TypeExprKind::Missing)
+            {
                 if let Some(imp) = enclosing_impl
                     && let baml_compiler2_hir::item_data::ImplSubjectData::Free {
                         for_target, ..
@@ -14480,7 +14478,7 @@ impl<'db> LoweringContext<'db> {
                         failure,
                     );
                 }
-                AstTypeExprKind::Null { .. } => {
+                AstTypeExprKind::Null => {
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
                         left: Operand::Copy(Place::Local(scrutinee)),

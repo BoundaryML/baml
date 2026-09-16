@@ -8,10 +8,10 @@
 
 use std::sync::Arc;
 
-/// Known type-level attribute names (not field attrs, which are
-/// `baml_compiler2_ast::FIELD_ATTR_NAMES`'s business). Public so completion can
-/// enumerate exactly what this validation accepts.
-pub const KNOWN_TYPE_ATTRS: &[&str] = &["stream.done", "stream.must_exist", "stream.with_state"];
+/// The `@stream.*` field attributes the language accepts (the schema field
+/// attributes are `baml_compiler2_ast::FIELD_ATTR_NAMES`'s business). Public so
+/// completion can enumerate exactly what this validation accepts.
+pub const KNOWN_STREAM_ATTRS: &[&str] = &["stream.done", "stream.must_exist", "stream.with_state"];
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
@@ -2125,11 +2125,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 span,
             });
         }
-
-        Self::collect_unknown_type_attrs(type_expr, &mut self.diagnostics);
     }
 
-    /// Reject a `@stream.*` field attribute outside [`KNOWN_TYPE_ATTRS`]. Other
+    /// Reject a `@stream.*` field attribute outside [`KNOWN_STREAM_ATTRS`]. Other
     /// unknown names pass through as user schema annotations.
     fn validate_stream_attributes(
         &mut self,
@@ -2141,83 +2139,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
         for attr in attributes {
             let name = attr.name.as_str();
-            if name.starts_with("stream.") && !KNOWN_TYPE_ATTRS.contains(&name) {
-                self.diagnostics.push(Hir2Diagnostic::UnknownTypeAttribute {
-                    attr_name: attr.name.clone(),
-                    span: attr.span,
-                });
+            if name.starts_with("stream.") && !KNOWN_STREAM_ATTRS.contains(&name) {
+                self.diagnostics
+                    .push(Hir2Diagnostic::UnknownStreamAttribute {
+                        attr_name: attr.name.clone(),
+                        span: attr.span,
+                    });
             }
-        }
-    }
-
-    fn collect_unknown_type_attrs(
-        type_expr: &ast::TypeExpr,
-        diagnostics: &mut Vec<Hir2Diagnostic>,
-    ) {
-        for attr in type_expr.attrs() {
-            let name = attr.name.as_str();
-            if !ast::is_field_attr(name) && !KNOWN_TYPE_ATTRS.contains(&name) {
-                diagnostics.push(Hir2Diagnostic::UnknownTypeAttribute {
-                    attr_name: attr.name.clone(),
-                    span: attr.span,
-                });
-            }
-        }
-
-        match &type_expr.kind {
-            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
-                Self::collect_unknown_type_attrs(inner, diagnostics);
-            }
-            ast::TypeExprKind::Map { key, value, .. } => {
-                Self::collect_unknown_type_attrs(key, diagnostics);
-                Self::collect_unknown_type_attrs(value, diagnostics);
-            }
-            ast::TypeExprKind::Union { variants, .. } => {
-                for v in variants {
-                    Self::collect_unknown_type_attrs(v, diagnostics);
-                }
-            }
-            ast::TypeExprKind::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                for p in params {
-                    Self::collect_unknown_type_attrs(&p.ty, diagnostics);
-                }
-                Self::collect_unknown_type_attrs(ret, diagnostics);
-                if let Some(throws) = throws {
-                    Self::collect_unknown_type_attrs(throws, diagnostics);
-                }
-            }
-            ast::TypeExprKind::Path {
-                generic_args,
-                associated_type_bindings,
-                ..
-            } => {
-                for arg in generic_args {
-                    Self::collect_unknown_type_attrs(arg, diagnostics);
-                }
-                for binding in associated_type_bindings {
-                    Self::collect_unknown_type_attrs(&binding.ty, diagnostics);
-                }
-            }
-            ast::TypeExprKind::AssociatedTypeProjection {
-                base, interface, ..
-            } => {
-                Self::collect_unknown_type_attrs(base, diagnostics);
-                if let Some(interface) = interface {
-                    Self::collect_unknown_type_attrs(interface, diagnostics);
-                }
-            }
-            _ => {}
         }
     }
 
     fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
         match &type_expr.kind {
-            ast::TypeExprKind::Rust { .. } => true,
+            ast::TypeExprKind::Rust => true,
             ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::type_expr_contains_rust(inner)
             }
@@ -2348,7 +2282,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             // `throws never` and `throws unknown` are the two explicit effect
             // bounds and are both valid for host-bound functions. The latter
             // is needed by continuations that execute user bytecode.
-            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::Unknown { .. } => {}
+            ast::TypeExprKind::Never | ast::TypeExprKind::Unknown => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
@@ -2361,15 +2295,15 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .collect::<Vec<_>>()
                 .join("."),
             ast::TypeExprKind::AssociatedTypeProjection { .. } => type_expr.to_string(),
-            ast::TypeExprKind::Int { .. } => "int".to_string(),
-            ast::TypeExprKind::Bigint { .. } => "bigint".to_string(),
-            ast::TypeExprKind::Float { .. } => "float".to_string(),
-            ast::TypeExprKind::String { .. } => "string".to_string(),
-            ast::TypeExprKind::Bool { .. } => "bool".to_string(),
-            ast::TypeExprKind::Null { .. } => "null".to_string(),
-            ast::TypeExprKind::Never { .. } => "never".to_string(),
-            ast::TypeExprKind::Void { .. } => "void".to_string(),
-            ast::TypeExprKind::Uint8Array { .. } => "uint8array".to_string(),
+            ast::TypeExprKind::Int => "int".to_string(),
+            ast::TypeExprKind::Bigint => "bigint".to_string(),
+            ast::TypeExprKind::Float => "float".to_string(),
+            ast::TypeExprKind::String => "string".to_string(),
+            ast::TypeExprKind::Bool => "bool".to_string(),
+            ast::TypeExprKind::Null => "null".to_string(),
+            ast::TypeExprKind::Never => "never".to_string(),
+            ast::TypeExprKind::Void => "void".to_string(),
+            ast::TypeExprKind::Uint8Array => "uint8array".to_string(),
             ast::TypeExprKind::Media { kind, .. } => kind.to_string(),
             ast::TypeExprKind::Optional { inner, .. } => {
                 format!("{}?", Self::render_type_expr(inner))
@@ -2413,12 +2347,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     throws
                 )
             }
-            ast::TypeExprKind::Unknown { .. } => "unknown".to_string(),
-            ast::TypeExprKind::Type { .. } => "reflect.Type".to_string(),
-            ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
-            ast::TypeExprKind::Error { .. } => "<error>".to_string(),
-            ast::TypeExprKind::Missing { .. } => "<unknown>".to_string(),
-            ast::TypeExprKind::Infer { .. } => "_".to_string(),
+            ast::TypeExprKind::Unknown => "unknown".to_string(),
+            ast::TypeExprKind::Type => "reflect.Type".to_string(),
+            ast::TypeExprKind::Rust => "$rust_type".to_string(),
+            ast::TypeExprKind::Error => "<error>".to_string(),
+            ast::TypeExprKind::Missing => "<unknown>".to_string(),
+            ast::TypeExprKind::Infer => "_".to_string(),
         }
     }
 }
