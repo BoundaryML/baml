@@ -12,6 +12,16 @@ import urllib.request
 
 NAMESPACE = 'BAML/HelloWorldRampup'
 COUNTERS = ('Requests', 'Http200', 'TransportErrors', 'HttpErrors', 'BodyMismatches')
+OUTPUT_LOCK = threading.Lock()
+
+
+def output_line(line):
+    with OUTPUT_LOCK:
+        print(line, flush=True)
+
+
+def output_json(value):
+    output_line(json.dumps(value))
 
 
 def emf(dimensions, values, units, timestamp=None):
@@ -177,16 +187,16 @@ def run_gc_grid(url, target_path, collector, stop, children, children_lock, on_s
         raise ValueError('GC_GRID_SECONDS_PER_CELL must be a multiple of the duty-cycle duration')
     planned_cycles = seconds // (on_seconds + off_seconds)
     dimensions = collector.dimensions
-    print(json.dumps(dict(dimensions, event='gc_grid_started', rates_rps=rates, gc_frequencies_hz=frequencies,
-                          seconds_per_cell=seconds, planned_cycles=planned_cycles, connections=connections,
-                          request_timeout_ms=timeout_ms)), flush=True)
+    output_json(dict(dimensions, event='gc_grid_started', rates_rps=rates, gc_frequencies_hz=frequencies,
+                     seconds_per_cell=seconds, planned_cycles=planned_cycles, connections=connections,
+                     request_timeout_ms=timeout_ms))
     for frequency_hz in frequencies:
         for rate in rates:
             if stop.is_set():
                 break
             readiness = wait_until_ready(url, explicit_gc_url, stop)
-            print(json.dumps(dict(dimensions, event='gc_grid_cell_target_ready', rate=rate,
-                                  gc_frequency_hz=frequency_hz, **readiness)), flush=True)
+            output_json(dict(dimensions, event='gc_grid_cell_target_ready', rate=rate,
+                             gc_frequency_hz=frequency_hz, **readiness))
             if not readiness['ok']:
                 raise RuntimeError(f'target did not recover before testing {rate} RPS at {frequency_hz} GC/s')
             wall_started = time.time()
@@ -205,9 +215,9 @@ def run_gc_grid(url, target_path, collector, stop, children, children_lock, on_s
                         break
                     result = request_explicit_gc(explicit_gc_url)
                     gc_results.append(result)
-                    print(json.dumps(dict(dimensions, event='gc_grid_gc_finished', rate=rate,
-                                          gc_frequency_hz=frequency_hz, sequence=len(gc_results) - 1,
-                                          **result)), flush=True)
+                    output_json(dict(dimensions, event='gc_grid_gc_finished', rate=rate,
+                                     gc_frequency_hz=frequency_hz, sequence=len(gc_results) - 1,
+                                     **result))
                     collector.emit({'ExplicitGcUp': int(result['ok']), 'ExplicitGcDurationMs': result['duration_ms'],
                                     'ConfiguredGcFrequencyHz': frequency_hz},
                                    {'ExplicitGcUp': 'Count', 'ExplicitGcDurationMs': 'Milliseconds',
@@ -222,9 +232,9 @@ def run_gc_grid(url, target_path, collector, stop, children, children_lock, on_s
             gc_thread = threading.Thread(target=collect_periodically, daemon=True)
             gc_thread.start()
             cycles = []
-            print(json.dumps(dict(dimensions, event='gc_grid_cell_started', rate=rate,
-                                  gc_frequency_hz=frequency_hz, planned_cycles=planned_cycles,
-                                  started_at_unix_ms=int(wall_started * 1000))), flush=True)
+            output_json(dict(dimensions, event='gc_grid_cell_started', rate=rate,
+                             gc_frequency_hz=frequency_hz, planned_cycles=planned_cycles,
+                             started_at_unix_ms=int(wall_started * 1000)))
             for cycle in range(planned_cycles):
                 if stop.is_set():
                     break
@@ -267,7 +277,7 @@ def run_gc_grid(url, target_path, collector, stop, children, children_lock, on_s
                               probe_up=probe_up, body_mismatch=body_mismatch, report_error=report_error,
                               vegeta_errors=report.get('errors', []))
                 cycles.append(record)
-                print(json.dumps(dict(dimensions, event='gc_grid_cycle_finished', **record)), flush=True)
+                output_json(dict(dimensions, event='gc_grid_cycle_finished', **record))
                 if not probe_up:
                     break
             cell_stop.set()
@@ -288,10 +298,10 @@ def run_gc_grid(url, target_path, collector, stop, children, children_lock, on_s
                            forced_stop=any(record['forced_stop'] for record in cycles),
                            elapsed_seconds=elapsed_seconds, started_at_unix_ms=int(wall_started * 1000),
                            ended_at_unix_ms=int(time.time() * 1000), explicit_gc=gc)
-            print(json.dumps(dict(dimensions, event='gc_grid_cell_finished', **summary)), flush=True)
+            output_json(dict(dimensions, event='gc_grid_cell_finished', **summary))
         if stop.is_set():
             break
-    print(json.dumps(dict(dimensions, event='gc_grid_finished')), flush=True)
+    output_json(dict(dimensions, event='gc_grid_finished'))
     while not stop.wait(60):
         pass
 
@@ -313,11 +323,10 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
         records = []
         if explicit_gc_url:
             readiness = wait_until_ready(url, explicit_gc_url, stop)
-            print(json.dumps(dict(dimensions, event='binary_candidate_target_ready', rate=rate,
-                                  **readiness)), flush=True)
+            output_json(dict(dimensions, event='binary_candidate_target_ready', rate=rate, **readiness))
             if not readiness['ok']:
                 raise RuntimeError(f'target did not recover before testing {rate} RPS')
-        print(json.dumps(dict(dimensions, event='binary_candidate_started', rate=rate, cycles=cycles)), flush=True)
+        output_json(dict(dimensions, event='binary_candidate_started', rate=rate, cycles=cycles))
         for cycle in range(cycles):
             cycle_started = time.monotonic()
             scheduled = rate * on_seconds
@@ -348,8 +357,7 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
                 report_error = repr(error)
             gc_result = request_explicit_gc(explicit_gc_url) if explicit_gc_url else None
             if gc_result:
-                print(json.dumps(dict(dimensions, event='explicit_gc_finished', rate=rate, cycle=cycle,
-                                      **gc_result)), flush=True)
+                output_json(dict(dimensions, event='explicit_gc_finished', rate=rate, cycle=cycle, **gc_result))
                 collector.emit({'ExplicitGcUp': int(gc_result['ok']), 'ExplicitGcDurationMs': gc_result['duration_ms']},
                                {'ExplicitGcUp': 'Count', 'ExplicitGcDurationMs': 'Milliseconds'})
                 stop.wait(off_seconds)
@@ -369,7 +377,7 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
                           explicit_gc=gc_result,
                           vegeta_errors=report.get('errors', []))
             records.append(record)
-            print(json.dumps(dict(dimensions, event='binary_cycle_finished', **record)), flush=True)
+            output_json(dict(dimensions, event='binary_cycle_finished', **record))
             if explicit_gc_url and (not gc_result['ok'] or not probe_up or forced_stop):
                 break
         scheduled = sum(record['scheduled'] for record in records)
@@ -382,12 +390,12 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
         summary = dict(rate=rate, cycles=len(records), planned_cycles=cycles, passed=passed, scheduled=scheduled, requests=requests,
                        http200=http200, scheduled_ratio=requests / scheduled, success_ratio=http200 / scheduled,
                        minimum_cycle_success_ratio=min(record['success_ratio'] for record in records))
-        print(json.dumps(dict(dimensions, event='binary_candidate_finished', **summary)), flush=True)
+        output_json(dict(dimensions, event='binary_candidate_finished', **summary))
         return passed
 
-    print(json.dumps(dict(dimensions, event='binary_search_started', lower=lower, upper=upper,
-                          resolution=resolution, seconds_per_candidate=seconds, connections=connections,
-                          request_timeout_ms=timeout_ms, explicit_gc_url=explicit_gc_url)), flush=True)
+    output_json(dict(dimensions, event='binary_search_started', lower=lower, upper=upper,
+                     resolution=resolution, seconds_per_candidate=seconds, connections=connections,
+                     request_timeout_ms=timeout_ms, explicit_gc_url=explicit_gc_url))
     upper_passed = run_candidate(upper)
     if upper_passed:
         result = dict(status='upper_bound_passed', highest_pass=upper, lowest_fail=None)
@@ -404,8 +412,8 @@ def run_binary_search(url, target_path, collector, stop, children, children_lock
                 else:
                     lowest_fail = candidate
             result = dict(status='complete', highest_pass=highest_pass, lowest_fail=lowest_fail)
-    print(json.dumps(dict(dimensions, event='binary_search_finished', resolution=resolution,
-                          seconds_per_candidate=seconds, **result)), flush=True)
+    output_json(dict(dimensions, event='binary_search_finished', resolution=resolution,
+                     seconds_per_candidate=seconds, **result))
     while not stop.wait(60):
         if os.environ.get('PROCESS_METRICS_URL'):
             collector.scrape(os.environ['PROCESS_METRICS_URL'])
@@ -427,7 +435,7 @@ def main():
     if not url.startswith('http://') or '\n' in url:
         raise ValueError('Expected a single private HTTP target')
     Path('/tmp/target.txt').write_text('GET ' + url + '\n')
-    collector = Collector(dimensions, lambda line: print(line, flush=True))
+    collector = Collector(dimensions, output_line)
     stop = threading.Event()
     children_lock = threading.Lock()
     children = []
@@ -467,13 +475,13 @@ def main():
                     child.kill()
                     child.wait()
             scraper.join(timeout=5)
-            print(json.dumps(dict(dimensions, event='load_stopped')), flush=True)
+            output_json(dict(dimensions, event='load_stopped'))
         return
     benchmark_started = time.monotonic()
     cycle = 0
-    print(json.dumps(dict(dimensions, event='load_started', start_rate=start_rate, rate_step=rate_step,
-                          step_seconds=step_seconds, maximum_rate=maximum_rate, on_seconds=on_seconds,
-                          off_seconds=off_seconds, target=url)), flush=True)
+    output_json(dict(dimensions, event='load_started', start_rate=start_rate, rate_step=rate_step,
+                     step_seconds=step_seconds, maximum_rate=maximum_rate, on_seconds=on_seconds,
+                     off_seconds=off_seconds, target=url))
     try:
         while not stop.is_set():
             cycle_started = time.monotonic()
@@ -481,8 +489,8 @@ def main():
             step = int(elapsed // step_seconds)
             rate = rate_at(start_rate, rate_step, step_seconds, maximum_rate, elapsed)
             scheduled = rate * on_seconds
-            print(json.dumps(dict(dimensions, event='load_cycle_started', cycle=cycle, ramp_step=step,
-                                  rate=rate, scheduled=scheduled)), flush=True)
+            output_json(dict(dimensions, event='load_cycle_started', cycle=cycle, ramp_step=step,
+                             rate=rate, scheduled=scheduled))
             attack = subprocess.Popen(['vegeta', 'attack', '-targets=/tmp/target.txt', f'-rate={rate}/1s',
                                        f'-duration={on_seconds}s', '-timeout=10s', '-dns-ttl=1s', '-workers=10',
                                        '-max-workers=50000', '-connections=100', '-max-connections=50000',
@@ -524,10 +532,10 @@ def main():
             collector.emit(values, units)
             counts = {key: values[key] for key in COUNTERS}
             completion_ratio = counts['Http200'] / scheduled
-            print(json.dumps(dict(dimensions, event='load_cycle_finished', cycle=cycle, ramp_step=step,
-                                  rate=rate, scheduled=scheduled, completion_ratio=completion_ratio,
-                                  forced_stop=forced_stop, probe_up=probe_up, report_error=report_error,
-                                  vegeta_errors=report.get('errors', []), **counts)), flush=True)
+            output_json(dict(dimensions, event='load_cycle_finished', cycle=cycle, ramp_step=step,
+                             rate=rate, scheduled=scheduled, completion_ratio=completion_ratio,
+                             forced_stop=forced_stop, probe_up=probe_up, report_error=report_error,
+                             vegeta_errors=report.get('errors', []), **counts))
             cycle += 1
     finally:
         stop.set()
@@ -539,7 +547,7 @@ def main():
                 child.kill()
                 child.wait()
         scraper.join(timeout=5)
-        print(json.dumps(dict(dimensions, event='load_stopped')), flush=True)
+        output_json(dict(dimensions, event='load_stopped'))
 
 
 if __name__ == '__main__':

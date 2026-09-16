@@ -6,6 +6,8 @@ import datetime as dt
 import json
 import os
 from pathlib import Path
+import re
+import statistics
 import subprocess
 
 import matplotlib
@@ -27,17 +29,27 @@ def log_messages(profile, region, group, start_ms):
     response = aws_json(profile, region, 'logs', 'filter-log-events', '--log-group-name', group,
                         '--start-time', str(start_ms))
     messages = []
+    decoder = json.JSONDecoder()
     for item in response.get('events', []):
-        try:
-            message = json.loads(item['message'])
-        except json.JSONDecodeError:
-            continue
-        messages.append({'cloudwatch_log_timestamp_ms': item['timestamp'], **message})
+        text = item['message']
+        offset = 0
+        while offset < len(text):
+            try:
+                message, offset = decoder.raw_decode(text, offset)
+            except json.JSONDecodeError:
+                break
+            messages.append({'cloudwatch_log_timestamp_ms': item['timestamp'], **message})
+            while offset < len(text) and text[offset].isspace():
+                offset += 1
     return messages
 
 
 def iso_ms(value):
-    return int(dt.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp() * 1000)
+    value = value.replace('Z', '+00:00')
+    match = re.fullmatch(r'(.*\.)(\d+)([+-]\d{2}:\d{2})', value)
+    if match:
+        value = match.group(1) + match.group(2).ljust(6, '0')[:6] + match.group(3)
+    return int(dt.datetime.fromisoformat(value).timestamp() * 1000)
 
 
 def app_stops(events, run):
@@ -71,6 +83,7 @@ def collect(profile, region, run, start_ms):
         raise RuntimeError(f'Expected one gc_grid_started event, found {len(starts)}')
     metadata = starts[0]
     summaries = sorted((event for event in load_events if event.get('event') == 'gc_grid_cell_finished'), key=lambda event: event['started_at_unix_ms'])
+    gc_events = [event for event in load_events if event.get('event') == 'gc_grid_gc_finished']
     stops = app_stops(task_events, run)
     cells = []
     for index, summary in enumerate(summaries):
@@ -78,7 +91,20 @@ def collect(profile, region, run, start_ms):
         matching_stops = [stop for stop in stops if summary['started_at_unix_ms'] <= stop['timestamp_ms'] < stop_window_end]
         oom = any(stop['oom'] for stop in matching_stops)
         outcome = 'oom' if oom else ('complete' if summary['completed_full_duration'] else 'incomplete')
-        cells.append({**summary, 'outcome': outcome, 'matching_stops': matching_stops})
+        calls = [event for event in gc_events if event['rate'] == summary['rate'] and event['gc_frequency_hz'] == summary['gc_frequency_hz']]
+        durations = [event['duration_ms'] for event in calls]
+        successful = sum(event['ok'] for event in calls)
+        derived_gc = {
+            **summary['explicit_gc'],
+            'attempted': len(calls),
+            'successful': successful,
+            'failed': len(calls) - successful,
+            'achieved_frequency_hz': successful / summary['elapsed_seconds'] if summary['elapsed_seconds'] else 0,
+            'duration_ms_min': min(durations) if durations else None,
+            'duration_ms_median': statistics.median(durations) if durations else None,
+            'duration_ms_max': max(durations) if durations else None,
+        }
+        cells.append({**summary, 'explicit_gc': derived_gc, 'outcome': outcome, 'matching_stops': matching_stops})
     expected = {(float(frequency), int(rate)) for frequency in metadata['gc_frequencies_hz'] for rate in metadata['rates_rps']}
     actual = {(float(cell['gc_frequency_hz']), int(cell['rate'])) for cell in cells}
     return {
