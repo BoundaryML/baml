@@ -261,7 +261,7 @@ fn interface_export_carries_full_symbolic_surface() {
     // Fields with schema attributes, resolved in the interface's own scope.
     let (field_name, field_ty, attrs) = &fields[0];
     assert_eq!(field_name.as_str(), "label");
-    assert!(matches!(field_ty, Ty::String { .. }));
+    assert!(matches!(field_ty, Ty::String));
     assert_eq!(attrs.alias.as_deref(), Some("lbl"));
     assert_eq!(attrs.description.as_deref(), Some("source label"));
 
@@ -276,7 +276,7 @@ fn interface_export_carries_full_symbolic_surface() {
         matches!(&next.return_type, Ty::AssociatedTypeProjection { member, .. }
             if member.as_str() == "Item")
     );
-    assert!(matches!(&next.callable_throws, Ty::Never { .. }));
+    assert!(matches!(&next.callable_throws, Ty::Never));
     assert_eq!(next.callable_fqn, "user.Source.next");
     assert!(next.interface_target.is_none());
 
@@ -288,7 +288,7 @@ fn interface_export_carries_full_symbolic_surface() {
     assert!(matches!(&twice.return_type, Ty::List(inner, _)
             if matches!(inner.as_ref(), Ty::AssociatedTypeProjection { member, .. }
                 if member.as_str() == "Item")));
-    assert!(matches!(&twice.callable_throws, Ty::Never { .. }));
+    assert!(matches!(&twice.callable_throws, Ty::Never));
     assert_eq!(twice.callable_fqn, "user.Source.twice");
 }
 
@@ -568,7 +568,7 @@ fn stdlib_interfaces_derive_enriched() {
     assert!(item.default.is_none(), "Item declares no default");
     let error = assoc(associated_types, "Error");
     assert!(
-        matches!(error.default.as_ref(), Some(Ty::Never { .. })),
+        matches!(error.default.as_ref(), Some(Ty::Never)),
         "`type Error = never` exports its default"
     );
 
@@ -741,7 +741,7 @@ fn in_body_impl_exports_with_field_links() {
         "the receiver realizes to the for-type, got {:?}",
         id.sig.params[0].ty
     );
-    assert!(matches!(&id.sig.return_type, Ty::String { .. }));
+    assert!(matches!(&id.sig.return_type, Ty::String));
 }
 
 #[test]
@@ -781,7 +781,7 @@ fn out_of_body_impl_realizes_self_to_the_for_type() {
         "-> Self: {:?}",
         merge.sig.return_type
     );
-    assert!(matches!(&merge.sig.callable_throws, Ty::Never { .. }));
+    assert!(matches!(&merge.sig.callable_throws, Ty::Never));
     assert!(merge.sig.generic_params.is_empty());
     // A free-impl method's fqn renders owner-less — identity is the structural
     // (impl, name) pair, and MIR's scoped symbol is reconstructed downstream.
@@ -1000,7 +1000,7 @@ fn blanket_impl_exports_the_bare_typevar_pattern() {
         "the blanket receiver stays the impl's param, got {:?}",
         tag.sig.params[0].ty
     );
-    assert!(matches!(&tag.sig.return_type, Ty::String { .. }));
+    assert!(matches!(&tag.sig.return_type, Ty::String));
 }
 
 #[test]
@@ -1032,7 +1032,7 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
         .find(|row| {
             row.interface.name.name().as_str() == "Equals"
                 && *row.interface.name.namespace() == [Name::new("ops")]
-                && matches!(row.for_ty_pattern, Ty::Int { .. })
+                && matches!(row.for_ty_pattern, Ty::Int)
         })
         .expect("baml.ops's `implement Equals for int` is exported");
     assert!(matches!(row.origin, ExportedImplOrigin::OutOfBody));
@@ -1041,16 +1041,16 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
 
     let eq = impl_method(&row.methods, "eq");
     assert!(
-        matches!(&eq.sig.params[0].ty, Ty::Int { .. }),
+        matches!(&eq.sig.params[0].ty, Ty::Int),
         "self realizes to int"
     );
     assert!(
-        matches!(&eq.sig.params[1].ty, Ty::Int { .. }),
+        matches!(&eq.sig.params[1].ty, Ty::Int),
         "`other: Self` realizes to int, got {:?}",
         eq.sig.params[1].ty
     );
-    assert!(matches!(&eq.sig.return_type, Ty::Bool { .. }));
-    assert!(matches!(&eq.sig.callable_throws, Ty::Never { .. }));
+    assert!(matches!(&eq.sig.return_type, Ty::Bool));
+    assert!(matches!(&eq.sig.callable_throws, Ty::Never));
     assert_eq!(
         eq.sig.builtin_kind,
         Some(baml_compiler2_ast::BuiltinKind::Vm),

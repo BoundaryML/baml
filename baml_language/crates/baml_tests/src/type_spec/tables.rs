@@ -532,7 +532,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 assert!(binding.parameter.index() & 0x8000_0000 != 0);
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param)
                         if param == &binding.parameter)
                 ));
             }
@@ -541,7 +541,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_branch = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param)
                         if param == &binding.parameter)
                 ));
             }

@@ -277,24 +277,24 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
 /// than emitting broken code.
 fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<(), String> {
     match ty {
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Void { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Void
         | Ty::Literal(..)
-        | Ty::Uint8Array { .. } => Ok(()),
-        Ty::List(inner, _) => field_deps(inner, generic_params, deps),
+        | Ty::Uint8Array => Ok(()),
+        Ty::List(inner) => field_deps(inner, generic_params, deps),
         Ty::Map { key, value, .. } => {
             match key.as_ref() {
-                Ty::String { .. } => {}
+                Ty::String => {}
                 other => return Err(format!("unsupported map key type: {other}")),
             }
             field_deps(value, generic_params, deps)
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             let (arms, _) = crate::unions::strip_null(items);
             match arms.as_slice() {
                 // Pure optionality (or the degenerate all-null union).
@@ -314,7 +314,7 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         // A class reference depends on the class item; its concrete type
         // arguments are themselves types that must be representable (a
         // generic argument referencing a skipped type poisons this field).
-        Ty::Class(name, args, _) => {
+        Ty::Class(name, args) => {
             deps.push(name.clone());
             for arg in args {
                 field_deps(arg, generic_params, deps)?;
@@ -323,21 +323,21 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         }
         // An enum-variant type (`Sentiment.Positive`) drops its tag to the
         // enum, so it depends on the same enum item.
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+        Ty::Enum(name) | Ty::EnumVariant(name, _) => {
             deps.push(name.clone());
             Ok(())
         }
         // Opaque alias references (the pool builder inlines in-package
         // non-recursive aliases, so these are recursive or cross-package
         // ones): representable iff the alias item itself is emitted.
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             deps.push(name.clone());
             Ok(())
         }
         // A TypeVar naming one of the enclosing generic class's own params
         // is representable (it becomes that Rust generic parameter); any
         // other TypeVar is not.
-        Ty::TypeVar(var, _) => {
+        Ty::TypeVar(var) => {
             if generic_params.contains(&var.as_str()) {
                 Ok(())
             } else {
@@ -347,16 +347,16 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
                 ))
             }
         }
-        Ty::Media(kind, _) => Err(format!("unsupported type: media ({kind})")),
-        Ty::Unknown { .. } => Err("unsupported type: unknown".to_string()),
+        Ty::Media(kind) => Err(format!("unsupported type: media ({kind})")),
+        Ty::Unknown => Err("unsupported type: unknown".to_string()),
         Ty::Function { .. } => Err("unsupported type: function".to_string()),
         Ty::Future(..) => Err("unsupported type: future handle".to_string()),
         Ty::Interface(..) => Err("unsupported type: interface".to_string()),
-        Ty::Type { .. } => Err("unsupported type: reflect.Type metatype".to_string()),
-        Ty::Resource { .. } => Err("unsupported type: resource handle".to_string()),
-        Ty::PromptAst { .. } => Err("unsupported type: prompt AST".to_string()),
-        Ty::Never { .. } => Err("unsupported type: never".to_string()),
-        Ty::RustType { .. } => Err("unsupported type: $rust_type handle".to_string()),
+        Ty::Type => Err("unsupported type: reflect.Type metatype".to_string()),
+        Ty::Resource => Err("unsupported type: resource handle".to_string()),
+        Ty::PromptAst => Err("unsupported type: prompt AST".to_string()),
+        Ty::Never => Err("unsupported type: never".to_string()),
+        Ty::RustType => Err("unsupported type: $rust_type handle".to_string()),
     }
 }
 
@@ -367,22 +367,22 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
 /// seen only inside `self_name<…>` fails that rule.
 fn collect_non_recursive_type_vars<'a>(ty: &'a Ty, self_name: &Name, used: &mut HashSet<&'a str>) {
     match ty {
-        Ty::TypeVar(var, _) => {
+        Ty::TypeVar(var) => {
             used.insert(var.as_str());
         }
-        Ty::List(inner, _) => collect_non_recursive_type_vars(inner, self_name, used),
+        Ty::List(inner) => collect_non_recursive_type_vars(inner, self_name, used),
         Ty::Map { key, value, .. } => {
             collect_non_recursive_type_vars(key, self_name, used);
             collect_non_recursive_type_vars(value, self_name, used);
         }
-        Ty::Union(items, _) => items
+        Ty::Union(items) => items
             .iter()
             .for_each(|item| collect_non_recursive_type_vars(item, self_name, used)),
         // A recursive self-reference does not constrain its args' variance,
         // so type vars appearing only there do not count as used. Arguments
         // of a *different* generic class do count (that class's definition
         // pins their variance).
-        Ty::Class(name, args, _) if name != self_name => args
+        Ty::Class(name, args) if name != self_name => args
             .iter()
             .for_each(|arg| collect_non_recursive_type_vars(arg, self_name, used)),
         _ => {}
@@ -402,7 +402,7 @@ fn non_heap_class_refs<'a>(
         // generic; a generic instance stores its arguments inline, so those
         // arguments continue the walk (an inline same-SCC argument, e.g.
         // `GenericBox<Self>`, is a cycle too).
-        Ty::Class(name, args, _) => {
+        Ty::Class(name, args) => {
             if emitted.contains(name) && !enums.contains(name) {
                 out.push(name);
             }
@@ -410,7 +410,7 @@ fn non_heap_class_refs<'a>(
                 non_heap_class_refs(arg, emitted, enums, out);
             }
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             for item in items {
                 non_heap_class_refs(item, emitted, enums, out);
             }

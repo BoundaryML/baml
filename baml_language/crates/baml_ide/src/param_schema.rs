@@ -235,20 +235,20 @@ impl<'db> SchemaCx<'db, '_> {
             return self.unsupported(ty);
         }
         match ty {
-            Ty::String { .. } => FieldSchema::String,
-            Ty::Int { .. } => FieldSchema::Int,
-            Ty::Float { .. } => FieldSchema::Float,
-            Ty::Bool { .. } => FieldSchema::Bool,
-            Ty::Null { .. } => FieldSchema::Null,
-            Ty::Bigint { .. } => FieldSchema::Bigint,
-            Ty::Media(kind, _) => FieldSchema::Media {
+            Ty::String => FieldSchema::String,
+            Ty::Int => FieldSchema::Int,
+            Ty::Float => FieldSchema::Float,
+            Ty::Bool => FieldSchema::Bool,
+            Ty::Null => FieldSchema::Null,
+            Ty::Bigint => FieldSchema::Bigint,
+            Ty::Media(kind) => FieldSchema::Media {
                 kind: kind.tag_str().to_string(),
             },
-            Ty::Literal(lit, _, _) => match literal_value(lit) {
+            Ty::Literal(lit, _) => match literal_value(lit) {
                 Some(value) => FieldSchema::Literal { value },
                 None => self.unsupported(ty),
             },
-            Ty::Enum(qtn, _) => match self.lookup_type(qtn) {
+            Ty::Enum(qtn) => match self.lookup_type(qtn) {
                 Some(ExportedType::Enum { variants, .. }) => {
                     let name = self.key(qtn);
                     let values = variants.iter().map(ToString::to_string).collect();
@@ -259,14 +259,14 @@ impl<'db> SchemaCx<'db, '_> {
                 }
                 _ => self.unsupported(ty),
             },
-            Ty::EnumVariant(qtn, variant, _) => match self.lookup_type(qtn) {
+            Ty::EnumVariant(qtn, variant) => match self.lookup_type(qtn) {
                 Some(ExportedType::Enum { .. }) => FieldSchema::EnumVariant {
                     name: self.key(qtn),
                     value: variant.to_string(),
                 },
                 _ => self.unsupported(ty),
             },
-            Ty::Class(qtn, args, _) => {
+            Ty::Class(qtn, args) => {
                 // Generic instantiations are out of scope: the `$baml` marker
                 // encodes `typeArgs: []`, which the engine treats as unbound.
                 if !args.is_empty() {
@@ -307,7 +307,7 @@ impl<'db> SchemaCx<'db, '_> {
             // into the table exactly like classes — inlining would re-expand
             // the target per reference site, which blows up on alias DAGs
             // just like the class-graph case.
-            Ty::TypeAlias(qtn, _) => {
+            Ty::TypeAlias(qtn) => {
                 let name = self.key(qtn);
                 if self.table.contains_key(&name) {
                     return FieldSchema::Ref { name };
@@ -331,14 +331,14 @@ impl<'db> SchemaCx<'db, '_> {
                     _ => self.unsupported(ty),
                 }
             }
-            Ty::List(item, _) => FieldSchema::List {
+            Ty::List(item) => FieldSchema::List {
                 item: Box::new(self.field_schema(item, depth + 1)),
             },
             Ty::Map { key, value, .. } => FieldSchema::Map {
                 key: Box::new(self.field_schema(key, depth + 1)),
                 value: Box::new(self.field_schema(value, depth + 1)),
             },
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 if ty.is_nullable_union() {
                     let stripped = ty.strip_null();
                     // `strip_null` returns the union unchanged when every
@@ -496,7 +496,7 @@ mod tests {
                     { "name": "age",
                       "schema": { "type": "optional", "inner": { "type": "int" } } },
                     { "name": "nested", "schema": { "type": "ref", "name": "user.Nested" } },
-                ] },
+                ] }
             })
         );
     }
@@ -596,7 +596,7 @@ mod tests {
             json!({ "kind": "class", "fields": [
                 { "name": "value", "schema": { "type": "int" } },
                 { "name": "children", "schema": {
-                    "type": "list", "item": { "type": "ref", "name": "user.Tree" },
+                    "type": "list", "item": { "type": "ref", "name": "user.Tree" }
                 } },
             ] })
         );
@@ -718,7 +718,7 @@ mod tests {
             types_json(&listing),
             json!({
                 "user.A": { "kind": "alias", "schema": { "type": "ref", "name": "user.B" } },
-                "user.B": { "kind": "alias", "schema": { "type": "ref", "name": "user.A" } },
+                "user.B": { "kind": "alias", "schema": { "type": "ref", "name": "user.A" } }
             })
         );
     }
@@ -880,7 +880,7 @@ function plain(x: int) -> int { x }
         let listing = list_functions_with_metadata(&db, package);
         let actual = serde_json::json!({
             "params": params_json(&listing, "golden"),
-            "types": types_json(&listing),
+            "types": types_json(&listing)
         });
         let golden: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json"

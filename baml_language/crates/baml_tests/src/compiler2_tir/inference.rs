@@ -9,7 +9,7 @@ use baml_compiler2_hir_ty::{
     package_interface::{ExportedType, package_interface, package_resolution_context},
     render::Viewpoint,
 };
-use baml_type::{FunctionParamMode, Ty, TyAttr};
+use baml_type::{FunctionParamMode, Ty};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
@@ -360,7 +360,7 @@ fn resolve_type_alias_query() {
 #[test]
 fn class_field_bigint() {
     // Asserts that `class Foo { x bigint }` lowers the field type to
-    // `Ty::Bigint { .. }`, displayed as `bigint`.
+    // `Ty::Bigint`, displayed as `bigint`.
     // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
     // wires up the bigint.to_json() method.
     let mut db = make_db();
@@ -555,7 +555,6 @@ implements ToJson for Dog {
     let dog = Ty::Class(
         baml_type::DeclName::in_root(user_root, vec![], Name::new("Dog")),
         Box::new([]),
-        TyAttr::default(),
     );
     let to_json = baml_type::Interface::new(
         baml_type::DeclName::in_root(user_root, vec![], Name::new("ToJson")),
@@ -599,7 +598,6 @@ fn builtin_equals_compare_visible_from_user_package() {
     let bare = Ty::Class(
         baml_type::DeclName::in_root(user_pkg, vec![], Name::new("Bare")),
         Box::new([]),
-        TyAttr::default(),
     );
 
     // The membership query walks the interface's package (`baml`) via the orphan
@@ -657,7 +655,7 @@ class SearchService {
 
     assert_eq!(&own_method.function.params, &exported_method.params);
     assert!(
-        !matches!(own_method.function.params[0].ty, Ty::Error { .. }),
+        !matches!(own_method.function.params[0].ty, Ty::Error),
         "implicit self should be reified before lowering"
     );
     assert_eq!(

@@ -463,7 +463,7 @@ pub fn receiver_at_dot<'db>(
     // package qualifier, and inference records the error sentinel for the
     // `baml` it could not read as a value. Reporting that as a receiver
     // would answer "no members" for a dot that has plenty.
-    best.filter(|(_, ty, _)| !matches!(ty, baml_type::Ty::Error { .. }))
+    best.filter(|(_, ty, _)| !matches!(ty, baml_type::Ty::Error))
         .map(|(owner, ty, _)| (owner, ty))
 }
 
@@ -1442,7 +1442,7 @@ fn constructor_field_at<'db>(
         })?;
 
         let obj_ty = inference.type_of_expr.get(&expr_id)?.clone();
-        let Ty::Class(ref qtn, _, _) = obj_ty else {
+        let Ty::Class(ref qtn, _) = obj_ty else {
             return None;
         };
 

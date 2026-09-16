@@ -38,7 +38,7 @@ pub(super) fn json_alias_ty(vm: &BexVm) -> RealizedTy {
     let head = vm
         .declaration_head(&qtn)
         .unwrap_or_else(|| unreachable!("`{BAML_JSON_JSON}` is declared by the stdlib"));
-    RealizedTy::TypeAlias(head, baml_type::TyAttr::default())
+    RealizedTy::TypeAlias(head)
 }
 
 /// Run `f` with `seg` appended to `path`, then restore `path` to its prior
@@ -776,15 +776,14 @@ fn ty_value_to_serde(
     match ty {
         // Primitive shapes: emit the value directly through value_to_serde,
         // which is total for scalar values.
-        RealizedTy::Null { .. } => Ok(serde_json::Value::Null),
-        RealizedTy::Int { .. }
-        | RealizedTy::Float { .. }
-        | RealizedTy::Bool { .. }
-        | RealizedTy::String { .. } => Ok(value_to_serde(vm, value)),
-        RealizedTy::Bigint { .. } => Ok(value_to_serde(vm, value)),
-        RealizedTy::Literal(_, _, _) => Ok(value_to_serde(vm, value)),
+        RealizedTy::Null => Ok(serde_json::Value::Null),
+        RealizedTy::Int | RealizedTy::Float | RealizedTy::Bool | RealizedTy::String => {
+            Ok(value_to_serde(vm, value))
+        }
+        RealizedTy::Bigint => Ok(value_to_serde(vm, value)),
+        RealizedTy::Literal(_, _) => Ok(value_to_serde(vm, value)),
 
-        RealizedTy::List(elem, _) => {
+        RealizedTy::List(elem) => {
             let items = match value.as_object_ptr() {
                 Some(ptr) => match vm.get_object(ptr) {
                     Object::Array(arr) => arr.to_vec(),
@@ -820,18 +819,18 @@ fn ty_value_to_serde(
             Ok(serde_json::Value::Object(out))
         }
 
-        RealizedTy::TypeAlias(head, _) if is_json_alias(*head) => Ok(value_to_serde(vm, value)),
+        RealizedTy::TypeAlias(head) if is_json_alias(*head) => Ok(value_to_serde(vm, value)),
 
-        RealizedTy::TypeAlias(_, _) => {
+        RealizedTy::TypeAlias(_) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
             Ok(value_to_serde(vm, value))
         }
 
-        RealizedTy::Class(head, _type_args, _) | RealizedTy::Interface(head, _type_args, _, _) => {
+        RealizedTy::Class(head, _type_args) | RealizedTy::Interface(head, _type_args, _) => {
             serialize_class_instance(vm, value, *head, path)
         }
 
-        RealizedTy::Enum(_, _) => match value.as_object_ptr() {
+        RealizedTy::Enum(_) => match value.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
                 Object::Variant(var) => {
                     let enm_ptr = var.enm;
@@ -854,18 +853,18 @@ fn ty_value_to_serde(
             None => Err(raise_serialize(vm, "expected enum variant", path, "enum")),
         },
 
-        RealizedTy::EnumVariant(_, name, _) => Ok(serde_json::Value::String(name.to_string())),
+        RealizedTy::EnumVariant(_, name) => Ok(serde_json::Value::String(name.to_string())),
 
-        RealizedTy::Media(kind, _) => serialize_media(vm, value, *kind, path),
+        RealizedTy::Media(kind) => serialize_media(vm, value, *kind, path),
 
-        RealizedTy::Uint8Array { .. } => Err(raise_serialize(
+        RealizedTy::Uint8Array => Err(raise_serialize(
             vm,
             "uint8array requires explicit encoding (use to_base64() or to_hex())",
             path,
             "uint8array",
         )),
 
-        RealizedTy::Union(members, _) => {
+        RealizedTy::Union(members) => {
             // Select the first declared member that contains the runtime value,
             // using the same ordered, decidable membership relation as `is` and
             // typed match arms. Serialization then remains fully type-directed:
@@ -895,7 +894,7 @@ fn ty_value_to_serde(
             }
         }
 
-        RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => Err(raise_serialize(
+        RealizedTy::Resource | RealizedTy::PromptAst => Err(raise_serialize(
             vm,
             "cannot serialize opaque type",
             path,
@@ -909,19 +908,19 @@ fn ty_value_to_serde(
             path,
             "function",
         )),
-        RealizedTy::Future(_, _, _) => Err(raise_serialize(
+        RealizedTy::Future(_, _) => Err(raise_serialize(
             vm,
             "cannot serialize future values",
             path,
             "future",
         )),
-        RealizedTy::Unknown { .. } => Err(raise_serialize(
+        RealizedTy::Unknown => Err(raise_serialize(
             vm,
             "cannot serialize unknown type",
             path,
             "unknown",
         )),
-        RealizedTy::Void { .. } => {
+        RealizedTy::Void => {
             // `void` has no declared JSON shape to validate against here.
             // Use structural serialization of the produced value.
             // Instantiated generic class fields normally use `field_template`
@@ -932,14 +931,12 @@ fn ty_value_to_serde(
         // Type-level and opaque types carry no serializable runtime value:
         // reflection types (`Type`), opaque Rust state (`RustType`), and the
         // bottom type (`Never`).
-        RealizedTy::Never { .. } | RealizedTy::RustType { .. } | RealizedTy::Type { .. } => {
-            Err(raise_serialize(
-                vm,
-                "cannot serialize compiler-only type",
-                path,
-                "compiler_only",
-            ))
-        }
+        RealizedTy::Never | RealizedTy::RustType | RealizedTy::Type => Err(raise_serialize(
+            vm,
+            "cannot serialize compiler-only type",
+            path,
+            "compiler_only",
+        )),
     }
 }
 
@@ -1151,17 +1148,17 @@ fn ty_serde_to_value(
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     match ty {
-        RealizedTy::Null { .. } => match json {
+        RealizedTy::Null => match json {
             serde_json::Value::Null => Ok(Value::NULL),
             _ => Err(raise_decode(vm, "expected null", path)),
         },
 
-        RealizedTy::Bool { .. } => match json {
+        RealizedTy::Bool => match json {
             serde_json::Value::Bool(b) => Ok(Value::bool(*b)),
             _ => Err(raise_decode(vm, "expected boolean", path)),
         },
 
-        RealizedTy::Int { .. } => match json {
+        RealizedTy::Int => match json {
             serde_json::Value::Number(n) => n.as_i64().and_then(Value::try_int).ok_or_else(|| {
                 raise_decode(
                     vm,
@@ -1173,13 +1170,13 @@ fn ty_serde_to_value(
         },
 
         // Bigint JSON decoding is not yet implemented (Phase 9+).
-        RealizedTy::Bigint { .. } => Err(raise_decode(
+        RealizedTy::Bigint => Err(raise_decode(
             vm,
             "bigint JSON decoding not yet implemented",
             path,
         )),
 
-        RealizedTy::Float { .. } => match json {
+        RealizedTy::Float => match json {
             serde_json::Value::Number(n) => {
                 if let Some(f) = n.as_f64() {
                     Ok(Value::object(vm.alloc_float(f)))
@@ -1190,12 +1187,12 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected number", path)),
         },
 
-        RealizedTy::String { .. } => match json {
+        RealizedTy::String => match json {
             serde_json::Value::String(s) => Ok(Value::object(vm.alloc_string(s.clone()))),
             _ => Err(raise_decode(vm, "expected string", path)),
         },
 
-        RealizedTy::List(elem, _) => match json {
+        RealizedTy::List(elem) => match json {
             serde_json::Value::Array(arr) => {
                 let mut items = Vec::with_capacity(arr.len());
                 for (i, item) in arr.iter().enumerate() {
@@ -1232,30 +1229,30 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected object", path)),
         },
 
-        RealizedTy::TypeAlias(head, _) if is_json_alias(*head) => Ok(serde_to_value(vm, json)),
+        RealizedTy::TypeAlias(head) if is_json_alias(*head) => Ok(serde_to_value(vm, json)),
 
-        RealizedTy::TypeAlias(_, _) => {
+        RealizedTy::TypeAlias(_) => {
             // Unknown / cross-package recursive aliases: fall back to untyped.
             Ok(serde_to_value(vm, json))
         }
 
-        RealizedTy::Class(head, type_args, _) => {
+        RealizedTy::Class(head, type_args) => {
             if let Some(kind) = media_kind_from_head(*head) {
                 return deserialize_media(vm, json, kind, *head, path);
             }
             deserialize_class_instance(vm, json, *head, type_args, path)
         }
 
-        RealizedTy::Interface(head, type_args, _, _) => {
+        RealizedTy::Interface(head, type_args, _) => {
             deserialize_class_instance(vm, json, *head, type_args, path)
         }
 
-        RealizedTy::Enum(head, _) => match json {
+        RealizedTy::Enum(head) => match json {
             serde_json::Value::String(s) => deserialize_enum_variant(vm, *head, s, path),
             _ => Err(raise_decode(vm, "expected enum variant string", path)),
         },
 
-        RealizedTy::EnumVariant(head, name, _) => match json {
+        RealizedTy::EnumVariant(head, name) => match json {
             serde_json::Value::String(s) if s == name.as_str() => {
                 deserialize_enum_variant(vm, *head, s, path)
             }
@@ -1266,15 +1263,15 @@ fn ty_serde_to_value(
             )),
         },
 
-        RealizedTy::Media(kind, _) => deserialize_media_by_kind(vm, json, *kind, path),
+        RealizedTy::Media(kind) => deserialize_media_by_kind(vm, json, *kind, path),
 
-        RealizedTy::Uint8Array { .. } => Err(raise_decode(
+        RealizedTy::Uint8Array => Err(raise_decode(
             vm,
             "uint8array requires explicit encoding (use from_base64() or from_hex())",
             path,
         )),
 
-        RealizedTy::Union(members, _) => {
+        RealizedTy::Union(members) => {
             // Try each member structurally; first match wins.
             for member in members {
                 let mut tmp_path = path.clone();
@@ -1285,7 +1282,7 @@ fn ty_serde_to_value(
             Err(raise_decode(vm, "no union member matched", path))
         }
 
-        RealizedTy::Literal(lit, _, _) => match (lit, json) {
+        RealizedTy::Literal(lit, _) => match (lit, json) {
             (baml_type::Literal::Bool(b), serde_json::Value::Bool(jb)) if b == jb => {
                 Ok(Value::bool(*jb))
             }
@@ -1317,14 +1314,14 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 
-        RealizedTy::Resource { .. } | RealizedTy::PromptAst { .. } => {
+        RealizedTy::Resource | RealizedTy::PromptAst => {
             Err(raise_decode(vm, "cannot deserialize opaque type", path))
         }
 
         RealizedTy::Function { .. }
-        | RealizedTy::Future(_, _, _)
-        | RealizedTy::Unknown { .. }
-        | RealizedTy::Void { .. } => {
+        | RealizedTy::Future(_, _)
+        | RealizedTy::Unknown
+        | RealizedTy::Void => {
             // These variants do not provide a concrete JSON schema to validate
             // against here. Preserve structural JSON conversion for values
             // whose shape is already JSON-representable.
@@ -1334,7 +1331,7 @@ fn ty_serde_to_value(
         // Type-level and opaque types are not valid decode targets: reflection
         // types (`Type`), opaque Rust state (`RustType`), and the bottom type
         // (`Never`).
-        RealizedTy::Never { .. } | RealizedTy::RustType { .. } | RealizedTy::Type { .. } => {
+        RealizedTy::Never | RealizedTy::RustType | RealizedTy::Type => {
             Err(raise_decode(vm, "cannot decode compiler-only type", path))
         }
     }
@@ -1572,16 +1569,16 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
 ///   structural decode (no overrides possible).
 fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
     match ty {
-        RealizedTy::Union(members, _) if members.iter().any(RealizedTy::is_null) => {
+        RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
             if j.is_null() {
                 NativeCallResult::Done(Value::NULL)
             } else {
                 json_to_dispatch(vm, j, &ty.strip_null())
             }
         }
-        RealizedTy::List(elem, _) => list_from_json_start(vm, j, elem),
+        RealizedTy::List(elem) => list_from_json_start(vm, j, elem),
         RealizedTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
-        RealizedTy::Class(head, type_args, _) | RealizedTy::Interface(head, type_args, _, _)
+        RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _)
             if media_kind_from_head(*head).is_none() =>
         {
             match try_yield_interface_from_json(vm, j, ty) {
@@ -1775,7 +1772,7 @@ fn try_yield_interface_from_json(
     ty: &RealizedTy,
 ) -> Option<NativeCallResult> {
     let head = match ty {
-        RealizedTy::Class(head, _, _) | RealizedTy::Interface(head, _, _, _) => head,
+        RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _) => head,
         _ => return None,
     };
     if media_kind_from_head(*head).is_some() {
@@ -2079,7 +2076,7 @@ fn optional_null_short_circuit(v: Value, ty: &RealizedTy) -> Option<Value> {
 /// so that `T | null` element types still dispatch through `C.from_json` for
 /// the non-null member.
 fn peel_optional(ty: &RealizedTy) -> &RealizedTy {
-    if let RealizedTy::Union(members, _) = ty {
+    if let RealizedTy::Union(members) = ty {
         if members.iter().any(RealizedTy::is_null) {
             if let Some(inner) = members.iter().find(|m| !m.is_null()) {
                 if members.iter().filter(|m| !m.is_null()).count() == 1 {

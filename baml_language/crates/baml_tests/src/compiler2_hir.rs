@@ -369,7 +369,7 @@ mod tests {
     #[test]
     fn get_implements_block_enforces_bounds_and_blanket_concreteness() {
         use baml_compiler2_hir::contributions::Definition;
-        use baml_type::{Ty, TyAttr};
+        use baml_type::Ty;
 
         let mut db = make_db();
         let file = db.file(
@@ -405,7 +405,7 @@ mod tests {
             let data = baml_compiler2_hir::item_data::class_data(&db, loc);
             let qtn =
                 baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
-            Ty::Class(qtn, Box::new([]), TyAttr::default())
+            Ty::Class(qtn, Box::new([]))
         };
         let iface = |iface_name: &str| {
             let loc = *baml_compiler2_hir::item_data::file_interfaces(&db, file)
@@ -462,7 +462,6 @@ mod tests {
             printable.name,
             printable.generics,
             printable.associated_types,
-            TyAttr::default(),
         );
         assert!(
             baml_compiler2_hir_ty::interfaces::get_implements_block(

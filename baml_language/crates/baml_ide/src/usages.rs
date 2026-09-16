@@ -532,7 +532,7 @@ fn collect_constructor_key_usages(
         let Some(obj_ty) = inference.type_of_expr.get(&expr_id).cloned() else {
             continue;
         };
-        let Ty::Class(ref qtn, _, _) = obj_ty else {
+        let Ty::Class(ref qtn, _) = obj_ty else {
             continue;
         };
 

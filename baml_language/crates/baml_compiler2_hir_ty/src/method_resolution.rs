@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
-    DeclName, Name, ParamTy, TyAttr,
+    DeclName, Name, ParamTy,
     interned::{InferInterface, InferTy, Ty},
     normalize::TypeContext as _,
 };
@@ -110,8 +110,8 @@ pub(crate) fn external_class_for_type(
     fuel: u32,
 ) -> Option<(DeclName, Vec<Ty>)> {
     match receiver.kind() {
-        InferTy::Class(qtn, args, _) => Some((qtn.clone(), args.to_vec())),
-        InferTy::TypeAlias(qtn, _) => {
+        InferTy::Class(qtn, args) => Some((qtn.clone(), args.to_vec())),
+        InferTy::TypeAlias(qtn) => {
             let expanded = facts.alias_def(qtn)?;
             external_class_for_type(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
         }
@@ -274,11 +274,11 @@ pub(crate) fn member_roots<'db>(
     receiver: &Ty,
 ) -> Option<(Vec<InferInterface>, bool)> {
     match receiver.kind() {
-        InferTy::Interface(qtn, args, pins, _) => Some((
+        InferTy::Interface(qtn, args, pins) => Some((
             vec![InferInterface::new(qtn.clone(), args.clone(), pins.clone())],
             true,
         )),
-        InferTy::TypeVar(param, _) => Some((
+        InferTy::TypeVar(param) => Some((
             baml_type::normalize::TypeContext::type_var_bound(facts, param)
                 .iter()
                 .map(InferInterface::from_constraint)
@@ -495,7 +495,7 @@ fn lookup_impl_member<'db>(
     // unwritable in user identifiers, so `$probe$…` collides with nothing
     // a declaration produces; a bounded blanket therefore declines here
     // (fail closed) exactly like an argument-pinning impl.
-    if let InferTy::Class(qtn, args, _) = receiver.kind()
+    if let InferTy::Class(qtn, args) = receiver.kind()
         && args.iter().any(Ty::has_infer)
         && let Some(Definition::Class(class)) = facts.definition_of(qtn)
     {
@@ -508,7 +508,7 @@ fn lookup_impl_member<'db>(
             crate::lower::class_qualified_name(db, class),
             frame
                 .iter()
-                .map(|param| Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())))
+                .map(|param| Ty::intern(InferTy::TypeVar(param.clone())))
                 .collect(),
         );
         let lookup = lookup_impl_member(db, viewer, facts, &probe, name);
@@ -522,8 +522,8 @@ fn lookup_impl_member<'db>(
     // a second `"a"` rather than any `string`.
     let widened;
     let receiver = match receiver.kind() {
-        InferTy::Literal(literal, _, attr) => {
-            widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
+        InferTy::Literal(literal, _) => {
+            widened = Ty::intern(crate::infer::literal_base(literal));
             &widened
         }
         _ => receiver,
@@ -788,7 +788,7 @@ fn assoc_bound_roots<'db>(
     };
     let realized = crate::lower::substitute_params(&bound_ty, &instantiation);
     match realized.kind() {
-        InferTy::Interface(name, args, pins, _) => vec![InferInterface::new(
+        InferTy::Interface(name, args, pins) => vec![InferInterface::new(
             name.clone(),
             args.clone(),
             pins.clone(),
@@ -942,7 +942,7 @@ fn env_proves<'db>(
     actual: &Ty,
     goal: &InferInterface,
 ) -> bool {
-    let InferTy::TypeVar(param, _) = actual.kind() else {
+    let InferTy::TypeVar(param) = actual.kind() else {
         return crate::impls::resolve_impl(db, actual, goal).is_some();
     };
     let eq = crate::impls::AliasOnlyFacts::new(db);
@@ -969,7 +969,7 @@ fn substitute_class_params(ty: &Ty, frame: &[ParamTy], args: &[Ty]) -> Ty {
     if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
         return ty.clone();
     }
-    if let InferTy::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param) = ty.kind()
         && let Some(position) = frame.iter().position(|candidate| candidate == param)
         && let Some(replacement) = args.get(position)
     {
@@ -1619,7 +1619,6 @@ pub(crate) fn instantiate_external_signature(
             &Ty::from_plain(&function.callable_throws),
             instantiation,
         ),
-        attr: TyAttr::default(),
     })
 }
 
@@ -1629,7 +1628,7 @@ fn exported_signature_breaks_one_self(
 ) -> bool {
     let contains = |ty: &baml_type::Ty, top_ok: bool| {
         self_occurs(&Ty::from_plain(ty), top_ok)
-            || matches!(ty, baml_type::Ty::TypeVar(param, _) if param == self_param && !top_ok)
+            || matches!(ty, baml_type::Ty::TypeVar(param) if param == self_param && !top_ok)
     };
     function
         .params
@@ -1691,7 +1690,7 @@ pub(crate) fn interface_instantiation(
             "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
-            data.generic_params.len(),
+            data.generic_params.len()
         );
         return None;
     }
@@ -1734,7 +1733,6 @@ fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiat
             &crate::impls::interned_ty(&signature.throws),
             instantiation,
         ),
-        attr: TyAttr::default(),
     })
 }
 
@@ -1761,10 +1759,10 @@ fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> boo
 /// Projection bases are exempt.
 fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
     match ty.kind() {
-        InferTy::TypeVar(param, _) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
+        InferTy::TypeVar(param) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
         InferTy::AssociatedTypeProjection { .. } => false,
         // Unions and optionals are covariant-transparent.
-        InferTy::Union(members, _) => members.iter().any(|member| self_occurs(member, top_ok)),
+        InferTy::Union(members) => members.iter().any(|member| self_occurs(member, top_ok)),
         _ => {
             let mut found = false;
             let mut children = Vec::new();
@@ -1876,7 +1874,7 @@ fn union_arm_interfaces<'db>(
         return Vec::new();
     }
     match arm.kind() {
-        InferTy::Interface(qtn, args, pins, _) => {
+        InferTy::Interface(qtn, args, pins) => {
             let root = InferInterface::new(qtn.clone(), args.clone(), pins.clone());
             let mut out = vec![root.clone()];
             for required in crate::impls::direct_requires_closure(db, &root, arm, 8) {
@@ -1886,7 +1884,7 @@ fn union_arm_interfaces<'db>(
             }
             out
         }
-        InferTy::TypeVar(param, _) => {
+        InferTy::TypeVar(param) => {
             let mut out = Vec::new();
             for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
                 let root = InferInterface::from_constraint(&bound);

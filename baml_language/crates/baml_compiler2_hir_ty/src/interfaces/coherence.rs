@@ -7,7 +7,7 @@
 
 use std::cell::OnceCell;
 
-use baml_base::{Name, Span, TyAttr};
+use baml_base::{Name, Span};
 use baml_type::{
     DeclName, ParamTy, Ty,
     unify::{
@@ -312,11 +312,7 @@ fn bounds_hold_at_common_instance<'db>(
         .map(|(j, (name, _))| {
             (
                 name.clone(),
-                chase_var(
-                    &Ty::TypeVar(renamed_var(prefix, j), TyAttr::default()),
-                    vars,
-                    bindings,
-                ),
+                chase_var(&Ty::TypeVar(renamed_var(prefix, j)), vars, bindings),
             )
         })
         .collect();
@@ -376,12 +372,7 @@ fn renamed_subject(
         .generic_params
         .iter()
         .enumerate()
-        .map(|(i, (name, _bounds))| {
-            (
-                name.clone(),
-                Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
-            )
-        })
+        .map(|(i, (name, _bounds))| (name.clone(), Ty::TypeVar(renamed_var(prefix, i))))
         .collect();
     let for_ty = nf(&substitute_ty(&rule.for_ty_pattern, &rename), enum_variants);
     let args = rule

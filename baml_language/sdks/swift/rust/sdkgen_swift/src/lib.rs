@@ -308,8 +308,8 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
         // Parameterized targets box exactly like bare ones —
         // `GenericLinkedList<T>` self-references store inline via
         // Optional the same way.
-        Ty::Class(name, _, _) => out.push(name.to_string()),
-        Ty::Union(members, _) => {
+        Ty::Class(name, _) => out.push(name.to_string()),
+        Ty::Union(members) => {
             let (non_null, _) = normalize_union(members);
             // A >=2-arm union renders as an `indirect` BamlUnionN — its
             // payload is heap-boxed, so it breaks cycles on its own.
@@ -318,7 +318,7 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
                 if !alias.recursive {
                     direct_class_targets(&alias.resolves_to, pool, out);
@@ -400,7 +400,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: matches!(prop.ty, Ty::RustType { .. }),
+            is_rust: matches!(prop.ty, Ty::RustType),
         });
     }
 
@@ -516,7 +516,7 @@ pub(crate) fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, 
     if !alias.recursive {
         return None;
     }
-    let Ty::Union(members, _) = &alias.resolves_to else {
+    let Ty::Union(members) = &alias.resolves_to else {
         return None;
     };
     let (non_null, nullable) = normalize_union(members);
@@ -650,7 +650,7 @@ fn render_root(root_decls: &BTreeMap<String, String>) -> String {
          \t\t)\n\
          \t\treturn true\n\
          \t}}()\n",
-        version = baml_version::CANONICAL_VERSION,
+        version = baml_version::CANONICAL_VERSION
     );
     for rendered in root_decls.values() {
         out.push('\n');
@@ -782,44 +782,31 @@ mod tests {
     }
 
     fn int() -> Ty {
-        Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Int
     }
     fn float() -> Ty {
-        Ty::Float {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Float
     }
     fn string() -> Ty {
-        Ty::String {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::String
     }
     fn null() -> Ty {
-        Ty::Null {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Null
     }
     fn list(inner: Ty) -> Ty {
-        Ty::List(Box::new(inner), baml_base::TyAttr::EMPTY)
+        Ty::List(Box::new(inner))
     }
     fn map(key: Ty, value: Ty) -> Ty {
         Ty::Map {
             key: Box::new(key),
             value: Box::new(value),
-            attr: baml_base::TyAttr::EMPTY,
         }
     }
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into())
     }
     fn literal(value: baml_base::Literal) -> Ty {
-        Ty::Literal(
-            value,
-            baml_codegen_types::Freshness::Regular,
-            baml_base::TyAttr::EMPTY,
-        )
+        Ty::Literal(value, baml_codegen_types::Freshness::Regular)
     }
 
     #[test]
@@ -854,11 +841,7 @@ mod tests {
             vec![baml_base::Name::new("stream")],
             baml_base::Name::new("Stream"),
         );
-        let stream = Ty::Class(
-            stream_name,
-            Box::new([string(), string()]),
-            baml_base::TyAttr::EMPTY,
-        );
+        let stream = Ty::Class(stream_name, Box::new([string(), string()]));
         assert_eq!(
             t(&stream).as_deref(),
             Some("BamlStream<Swift.String, Swift.String>")

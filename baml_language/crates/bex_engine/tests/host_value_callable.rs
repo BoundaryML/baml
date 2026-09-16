@@ -471,7 +471,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
     let source = r#"
         function round_trip(
             f: (int | string) -> int | string,
-            value: int | string,
+            value: int | string
         ) -> int | string {
             f(value)
         }
@@ -586,13 +586,13 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
     let source = r#"
         function round_trip(
             f: (int[] | string[]) -> int[] | string[],
-            value: int[] | string[],
+            value: int[] | string[]
         ) -> int[] | string[] {
             f(value)
         }
     "#;
-    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default());
-    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()), baml_type::TyAttr::default());
+    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()));
+    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()));
     let arc = register_host_callable({
         let int_list = int_list.clone();
         let string_list = string_list.clone();
@@ -720,7 +720,7 @@ async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument
     let source = r#"
         function call_host_with_id(
             f: (int) -> int throws baml.errors.InvalidArgument,
-            x: int,
+            x: int
         ) -> string {
             baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
                 baml.errors.InvalidArgument => "caught"
@@ -1441,7 +1441,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
         }
         function call_typed(
             f: (int) -> int throws Failure,
-            x: int,
+            x: int
         ) -> int throws Failure | baml.errors.UnknownError {
             return f(x);
         }
@@ -1476,10 +1476,10 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                 assert!(
                     matches!(
                         &metadata.selected_option,
-                        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+                        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
                     ),
                     "expected the Failure interface arm, got {:?}",
-                    metadata.selected_option,
+                    metadata.selected_option
                 );
                 assert!(
                     matches!(
@@ -1487,7 +1487,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                         BexExternalValue::Instance { class_name, .. }
                             if class_name == "baml.errors.HostCallable"
                     ),
-                    "expected the concrete HostCallable throw, got {value:?}",
+                    "expected the concrete HostCallable throw, got {value:?}"
                 );
             }
             other => panic!("expected union-wrapped HostCallable throw, got {other:?}"),
@@ -1531,7 +1531,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
     };
     assert!(matches!(
         &metadata.selected_option,
-        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
     ));
     assert!(matches!(
         value.as_ref(),
@@ -1620,7 +1620,7 @@ async fn host_callable_throw_caught_in_baml() {
     let source = r#"
         function call_and_catch(
             f: (int) -> string throws baml.errors.HostCallable,
-            x: int,
+            x: int
         ) -> string {
             f(x) catch (e) {
                 _ => "caught:" + e.class_name
@@ -1672,20 +1672,20 @@ async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
     let source = r#"
         function invoke_host(
             f: (int) -> string throws baml.errors.HostCallable,
-            x: int,
+            x: int
         ) -> string {
             f(x)
         }
 
         function normalize_host_throw(
             f: (int) -> string throws baml.errors.HostCallable,
-            x: int,
+            x: int
         ) -> string throws baml.errors.UnknownError {
             invoke_host(f, x) catch_all (error) {
                 _ => throw baml.errors.UnknownError.with_message<never>(
                     error,
-                    "host callback failed",
-                ),
+                    "host callback failed"
+                )
             }
         }
     "#;

@@ -299,7 +299,7 @@
 /// candidates with different scoring behavior.
 use std::collections::{HashMap, HashSet};
 
-use crate::{Literal, RuntimeTy, TyAttr, TyAttrValue};
+use crate::{Literal, RuntimeTy};
 
 /// Simplify a type for SAP processing.
 ///
@@ -333,40 +333,36 @@ fn simplify_impl<N: crate::Head>(
     expand_recursive_alias_unions: bool,
 ) -> RuntimeTy<N> {
     match ty {
-        RuntimeTy::TypeAlias(ref name, ref outer_attr) => {
+        RuntimeTy::TypeAlias(ref name) => {
             if recursive.contains(name) {
                 // Recursive alias: keep as TypeAlias, don't inline.
                 ty
             } else if let Some(target) = aliases.get(name) {
-                // Non-recursive: expand, merge attrs (nesting), simplify result.
-                let merged = merge_attr_nested(target.attr(), outer_attr);
-                let expanded = target.clone().with_attr(merged);
-                simplify_impl(expanded, aliases, recursive, expand_recursive_alias_unions)
+                // Non-recursive: expand and simplify the result.
+                simplify_impl(
+                    target.clone(),
+                    aliases,
+                    recursive,
+                    expand_recursive_alias_unions,
+                )
             } else {
                 // Unknown alias — leave as-is.
                 ty
             }
         }
 
-        RuntimeTy::Union(variants, attr) => simplify_union(
-            variants,
-            attr,
+        RuntimeTy::Union(variants) => {
+            simplify_union(variants, aliases, recursive, expand_recursive_alias_unions)
+        }
+
+        // Recurse into compound types.
+        RuntimeTy::List(inner) => RuntimeTy::List(Box::new(simplify_impl(
+            *inner,
             aliases,
             recursive,
             expand_recursive_alias_unions,
-        ),
-
-        // Recurse into compound types.
-        RuntimeTy::List(inner, attr) => RuntimeTy::List(
-            Box::new(simplify_impl(
-                *inner,
-                aliases,
-                recursive,
-                expand_recursive_alias_unions,
-            )),
-            attr,
-        ),
-        RuntimeTy::Map { key, value, attr } => RuntimeTy::Map {
+        ))),
+        RuntimeTy::Map { key, value } => RuntimeTy::Map {
             key: Box::new(simplify_impl(
                 *key,
                 aliases,
@@ -379,7 +375,6 @@ fn simplify_impl<N: crate::Head>(
                 recursive,
                 expand_recursive_alias_unions,
             )),
-            attr,
         },
 
         // Leaf types pass through unchanged.
@@ -393,7 +388,6 @@ fn simplify_impl<N: crate::Head>(
 
 fn simplify_union<N: crate::Head>(
     variants: Box<[RuntimeTy<N>]>,
-    attr: TyAttr,
     aliases: &HashMap<N, RuntimeTy<N>>,
     recursive: &HashSet<N>,
     expand_recursive_alias_unions: bool,
@@ -414,27 +408,23 @@ fn simplify_union<N: crate::Head>(
         variants
     };
 
-    // 3. Distribute outer attrs into variants.
-    //    SAP flags: or'd in, kept at union level.
-    let (variants, attr) = distribute_attrs(variants, attr);
-
-    // 4. Flatten nested unions.
+    // 3. Flatten nested unions.
     let variants = flatten_union(variants);
 
-    // 5. Deduplicate (attr-aware subtyping).
+    // 4. Deduplicate.
     let variants = dedup_variants(variants);
 
-    // 6. Push null to end.
+    // 5. Push null to end.
     let variants = null_to_end(variants);
 
-    // 7. Unwrap singleton.
+    // 6. Unwrap singleton.
     if variants.len() == 1 {
-        let v = variants.into_iter().next().unwrap();
-        // Merge remaining union-level SAP flags onto the single variant.
-        let merged = merge_attr_nested(v.attr(), &attr);
-        v.with_attr(merged)
+        variants
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| unreachable!("a length-1 vec has an element"))
     } else {
-        RuntimeTy::Union(variants.into(), attr)
+        RuntimeTy::Union(variants.into())
     }
 }
 
@@ -458,105 +448,54 @@ fn expand_recursive_union_alias_variant<N: crate::Head>(
     expanding: &mut HashSet<N>,
     out: &mut Vec<RuntimeTy<N>>,
 ) {
-    let RuntimeTy::TypeAlias(name, reference_attr) = variant else {
+    let RuntimeTy::TypeAlias(name) = variant else {
         out.push(variant);
         return;
     };
 
-    let Some(RuntimeTy::Union(alias_variants, alias_attr)) = aliases.get(&name) else {
-        out.push(RuntimeTy::TypeAlias(name, reference_attr));
+    let Some(RuntimeTy::Union(alias_variants)) = aliases.get(&name) else {
+        out.push(RuntimeTy::TypeAlias(name));
         return;
     };
     if !recursive.contains(&name) || !expanding.insert(name.clone()) {
-        out.push(RuntimeTy::TypeAlias(name, reference_attr));
+        out.push(RuntimeTy::TypeAlias(name));
         return;
     }
 
-    let inherited_attr = merge_attr_nested(alias_attr, &reference_attr);
     for member in alias_variants {
-        let member_attr = merge_attr_nested(member.attr(), &inherited_attr);
-        let member = simplify_impl(
-            member.clone().with_attr(member_attr),
-            aliases,
-            recursive,
-            true,
-        );
+        let member = simplify_impl(member.clone(), aliases, recursive, true);
         expand_recursive_union_alias_variant(member, aliases, recursive, expanding, out);
     }
     expanding.remove(&name);
 }
 
-// ---------------------------------------------------------------------------
-// Attr helpers
-// ---------------------------------------------------------------------------
-
-/// Merge an outer attr into an inner attr (nesting semantics).
-///
-/// SAP flags: disjunctive (`Set` wins via `or`).
-fn merge_attr_nested(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
-    TyAttr {
-        sap_parse_without_null: inner
-            .sap_parse_without_null
-            .or(outer.sap_parse_without_null),
-        sap_pending_never: inner.sap_pending_never.or(outer.sap_pending_never),
-        sap_in_progress_never: inner.sap_in_progress_never.or(outer.sap_in_progress_never),
-    }
-}
-
-/// Distribute union-level attrs into each variant.
-///
-/// SAP flags are or'd into each variant and preserved at the union level.
-fn distribute_attrs<N: crate::Head>(
-    variants: Vec<RuntimeTy<N>>,
-    union_attr: TyAttr,
-) -> (Vec<RuntimeTy<N>>, TyAttr) {
-    let distributed = variants
-        .into_iter()
-        .map(|v| {
-            let merged = merge_attr_nested(v.attr(), &union_attr);
-            v.with_attr(merged)
-        })
-        .collect();
-
-    (distributed, union_attr)
-}
-
 /// Flatten nested unions into a single level.
-///
-/// When an inner union is flattened, its union-level attr is merged (nesting
-/// semantics) into each of its variants.
 fn flatten_union<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
     let mut out = Vec::new();
     for v in variants {
         match v {
-            RuntimeTy::Union(inner_variants, inner_attr) => {
-                for iv in inner_variants {
-                    let merged = merge_attr_nested(iv.attr(), &inner_attr);
-                    out.push(iv.with_attr(merged));
-                }
-            }
+            RuntimeTy::Union(inner_variants) => out.extend(inner_variants),
             other => out.push(other),
         }
     }
     out
 }
 
-/// Remove variants that are subtypes of other variants (attr-aware).
+/// Remove variants that are subtypes of other variants.
 ///
-/// If variant A is a subtype of variant B (considering attrs), A is dropped
-/// and B is kept.
+/// If variant A is a subtype of variant B, A is dropped and B is kept.
 fn dedup_variants<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
     let mut result: Vec<RuntimeTy<N>> = Vec::new();
     for candidate in variants {
         if result
             .iter()
-            .any(|existing| is_subtype_with_attrs(&candidate, existing))
+            .any(|existing| is_sap_structural_subtype(&candidate, existing))
         {
             // candidate is already covered by something in result — skip it.
             continue;
         }
         // Remove any existing variants that the candidate now covers.
-        result.retain(|existing| !is_subtype_with_attrs(existing, &candidate));
+        result.retain(|existing| !is_sap_structural_subtype(existing, &candidate));
         result.push(candidate);
     }
     result
@@ -567,7 +506,7 @@ fn null_to_end<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>>
     let mut non_null = Vec::new();
     let mut nulls = Vec::new();
     for v in variants {
-        if matches!(v, RuntimeTy::Null { .. }) {
+        if matches!(v, RuntimeTy::Null) {
             nulls.push(v);
         } else {
             non_null.push(v);
@@ -578,60 +517,29 @@ fn null_to_end<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>>
 }
 
 // ---------------------------------------------------------------------------
-// Attr-aware subtyping (for deduplication)
+// Subtyping (for deduplication)
 // ---------------------------------------------------------------------------
-
-/// Check if `sub` is a subtype of `sup`, accounting for `TyAttr`.
-///
-/// Uses a *restricted* structural check: only identical types and
-/// literal→base-type relationships count.  Most cross-type widening
-/// (e.g. `int → float`) is intentionally excluded — SAP treats `int`
-/// and `float` as distinct parse candidates with different scoring.
-///
-/// The one exception is `int → bigint`, which is permitted because it is
-/// lossless (any `int` fits in `bigint`). See the inline comment on the
-/// `RuntimeTy::Int → RuntimeTy::Bigint` arm of [`is_sap_structural_subtype`].
-fn is_subtype_with_attrs<N: crate::Head>(sub: &RuntimeTy<N>, sup: &RuntimeTy<N>) -> bool {
-    is_sap_structural_subtype(sub, sup) && attr_is_subtype(sub.attr(), sup.attr())
-}
 
 /// Restricted structural subtyping for SAP dedup.
 ///
-/// Returns `true` when `sub` and `sup` are the same type (ignoring attrs),
-/// or when `sub` is a literal whose base primitive matches `sup`.
+/// Returns `true` when `sub` and `sup` are the same type, or when `sub` is a
+/// literal whose base primitive matches `sup`.
 fn is_sap_structural_subtype<N: crate::Head>(sub: &RuntimeTy<N>, sup: &RuntimeTy<N>) -> bool {
-    let sub_s = sub.clone().with_attr(TyAttr::default());
-    let sup_s = sup.clone().with_attr(TyAttr::default());
-
-    if sub_s == sup_s {
+    if sub == sup {
         return true;
     }
 
     matches!(
-        (&sub_s, &sup_s),
-        (RuntimeTy::Literal(Literal::Int(_), _, _), RuntimeTy::Int { .. })
-            | (RuntimeTy::Literal(Literal::Int(_), _, _), RuntimeTy::Bigint { .. })
-            | (RuntimeTy::Literal(Literal::Bigint(_), _, _), RuntimeTy::Bigint { .. })
-            | (RuntimeTy::Literal(Literal::Float(_), _, _), RuntimeTy::Float { .. })
-            | (RuntimeTy::Literal(Literal::String(_), _, _), RuntimeTy::String { .. })
-            | (RuntimeTy::Literal(Literal::Bool(_), _, _), RuntimeTy::Bool { .. })
+        (sub, sup),
+        (RuntimeTy::Literal(Literal::Int(_), _), RuntimeTy::Int)
+            | (RuntimeTy::Literal(Literal::Int(_), _), RuntimeTy::Bigint)
+            | (RuntimeTy::Literal(Literal::Bigint(_), _), RuntimeTy::Bigint)
+            | (RuntimeTy::Literal(Literal::Float(_), _), RuntimeTy::Float)
+            | (RuntimeTy::Literal(Literal::String(_), _), RuntimeTy::String)
+            | (RuntimeTy::Literal(Literal::Bool(_), _), RuntimeTy::Bool)
             // The one cross-type widening allowed by SAP: `int → bigint`
             // is lossless, unlike `int → float` which loses precision past
             // 2^53.
-            | (RuntimeTy::Int { .. }, RuntimeTy::Bigint { .. })
+            | (RuntimeTy::Int, RuntimeTy::Bigint)
     )
-}
-
-/// Attr subtyping: `sub` is narrower-than-or-equal-to `sup`.
-///
-/// SAP flags: `Set` (narrower) ≤ `Unset` (wider).
-fn attr_is_subtype(sub: &TyAttr, sup: &TyAttr) -> bool {
-    flag_leq(sub.sap_parse_without_null, sup.sap_parse_without_null)
-        && flag_leq(sub.sap_pending_never, sup.sap_pending_never)
-        && flag_leq(sub.sap_in_progress_never, sup.sap_in_progress_never)
-}
-
-/// `Set ≤ Unset`, `Set ≤ Set`, `Unset ≤ Unset`. Only `Unset ≤ Set` is false.
-fn flag_leq(sub: TyAttrValue, sup: TyAttrValue) -> bool {
-    !matches!((sub, sup), (TyAttrValue::Unset, TyAttrValue::Set))
 }

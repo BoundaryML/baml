@@ -3607,9 +3607,7 @@ mod tests {
                 _ => None,
             })
             .expect("stable function");
-        stable_fn.throws_type = baml_type::TyTemplate::String {
-            attr: baml_type::TyAttr::default(),
-        };
+        stable_fn.throws_type = baml_type::TyTemplate::String;
 
         let prepared = prepare_reuse_plan(&mut db2, pkg2, Some(plan))
             .expect("the unaffected clean unit remains reusable");

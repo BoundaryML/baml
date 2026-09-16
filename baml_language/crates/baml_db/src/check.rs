@@ -1526,7 +1526,7 @@ fn tir_rendered_to_diagnostic_with_message(
 ) -> Diagnostic {
     let unknown_member_access_member = match &rendered.error {
         TirTypeError::UnresolvedMember {
-            base_type: Ty::Unknown { .. },
+            base_type: Ty::Unknown,
             member,
         } => Some(member.clone()),
         _ => None,
@@ -1719,7 +1719,7 @@ fn source_aware_tir_type_error_message(
             format!("type mismatch: expected {}, got {}", ty(expected), ty(got))
         }
         TirTypeError::UnresolvedMember {
-            base_type: Ty::Unknown { .. },
+            base_type: Ty::Unknown,
             member,
         } => {
             format!("cannot access field `{member}` on `unknown`")
@@ -2172,12 +2172,8 @@ mod tests {
     fn dummy_rendered(severity: DiagnosticSeverity) -> RenderedTirDiagnostic {
         RenderedTirDiagnostic {
             error: baml_compiler2_hir_ty::diagnostics::TirTypeError::TypeMismatch {
-                expected: baml_type::Ty::Never {
-                    attr: baml_type::TyAttr::default(),
-                },
-                got: baml_type::Ty::Never {
-                    attr: baml_type::TyAttr::default(),
-                },
+                expected: baml_type::Ty::Never,
+                got: baml_type::Ty::Never,
             },
             message: "test message".to_string(),
             range: TextRange::new(TextSize::from(0u32), TextSize::from(5u32)),

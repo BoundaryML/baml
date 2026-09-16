@@ -32,7 +32,7 @@ use std::fmt;
 
 use crate::{
     Interface, Name, RealizedFunctionParamTy, RealizedTy, RuntimeFunctionParamTy, RuntimeInterface,
-    RuntimeTy, Ty, TyAttr, TyTemplate, TyTemplateInterface, TypeName,
+    RuntimeTy, Ty, TyTemplate, TyTemplateInterface, TypeName,
     normalize::{ProjectionStep, TypeContext},
 };
 
@@ -94,7 +94,7 @@ impl<N: Clone + PartialEq> TyTemplateOrigins<N> {
     /// Project these origins through a list element.
     pub fn list_element(&self) -> Self {
         self.project(|origin| match origin {
-            TyTemplate::List(element, _) => Some(element.as_ref().clone()),
+            TyTemplate::List(element) => Some(element.as_ref().clone()),
             _ => None,
         })
     }
@@ -118,7 +118,7 @@ impl<N: Clone + PartialEq> TyTemplateOrigins<N> {
     /// Project these origins through one union member.
     pub fn union_member(&self, index: usize) -> Self {
         self.project(|origin| match origin {
-            TyTemplate::Union(members, _) => members.get(index).cloned(),
+            TyTemplate::Union(members) => members.get(index).cloned(),
             _ => None,
         })
     }
@@ -126,7 +126,7 @@ impl<N: Clone + PartialEq> TyTemplateOrigins<N> {
     /// Project these origins through a future's value type.
     pub fn future_value(&self) -> Self {
         self.project(|origin| match origin {
-            TyTemplate::Future(value, _, _) => Some(value.as_ref().clone()),
+            TyTemplate::Future(value, _) => Some(value.as_ref().clone()),
             _ => None,
         })
     }
@@ -134,7 +134,7 @@ impl<N: Clone + PartialEq> TyTemplateOrigins<N> {
     /// Project these origins through a future's error type.
     pub fn future_error(&self) -> Self {
         self.project(|origin| match origin {
-            TyTemplate::Future(_, error, _) => Some(error.as_ref().clone()),
+            TyTemplate::Future(_, error) => Some(error.as_ref().clone()),
             _ => None,
         })
     }
@@ -201,15 +201,15 @@ fn walk_template<N: Clone>(
     }
     let mut child = |template: &mut TyTemplate<N>| walk_template(template, true, visitor);
     match template {
-        TyTemplate::List(inner, _) => child(inner),
+        TyTemplate::List(inner) => child(inner),
         TyTemplate::Map { key, value, .. } => {
             child(key);
             child(value);
         }
-        TyTemplate::Union(members, _) | TyTemplate::Class(_, members, _) => {
+        TyTemplate::Union(members) | TyTemplate::Class(_, members) => {
             members.iter_mut().for_each(&mut child);
         }
-        TyTemplate::Interface(_, args, associated_bindings, _) => {
+        TyTemplate::Interface(_, args, associated_bindings) => {
             args.iter_mut().for_each(&mut child);
             associated_bindings
                 .iter_mut()
@@ -225,7 +225,7 @@ fn walk_template<N: Clone>(
             child(ret);
             child(throws);
         }
-        TyTemplate::Future(value, error, _) => {
+        TyTemplate::Future(value, error) => {
             child(value);
             child(error);
         }
@@ -240,25 +240,25 @@ fn walk_template<N: Clone>(
                 .for_each(|(_, binding)| child(binding));
         }
         TyTemplate::TypeArgRef(_)
-        | TyTemplate::Int { .. }
-        | TyTemplate::Bigint { .. }
-        | TyTemplate::Float { .. }
-        | TyTemplate::String { .. }
-        | TyTemplate::Bool { .. }
-        | TyTemplate::Null { .. }
-        | TyTemplate::Uint8Array { .. }
+        | TyTemplate::Int
+        | TyTemplate::Bigint
+        | TyTemplate::Float
+        | TyTemplate::String
+        | TyTemplate::Bool
+        | TyTemplate::Null
+        | TyTemplate::Uint8Array
         | TyTemplate::Media(..)
         | TyTemplate::Literal(..)
         | TyTemplate::Enum(..)
         | TyTemplate::EnumVariant(..)
-        | TyTemplate::RustType { .. }
-        | TyTemplate::Type { .. }
-        | TyTemplate::Resource { .. }
-        | TyTemplate::PromptAst { .. }
-        | TyTemplate::Void { .. }
+        | TyTemplate::RustType
+        | TyTemplate::Type
+        | TyTemplate::Resource
+        | TyTemplate::PromptAst
+        | TyTemplate::Void
         | TyTemplate::TypeAlias(..)
-        | TyTemplate::Unknown { .. }
-        | TyTemplate::Never { .. } => {}
+        | TyTemplate::Unknown
+        | TyTemplate::Never => {}
     }
 }
 
@@ -269,15 +269,15 @@ fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&
     visitor(template);
     let mut child = |template: &TyTemplate<N>| visit_template(template, visitor);
     match template {
-        TyTemplate::List(inner, _) => child(inner),
+        TyTemplate::List(inner) => child(inner),
         TyTemplate::Map { key, value, .. } => {
             child(key);
             child(value);
         }
-        TyTemplate::Union(members, _) | TyTemplate::Class(_, members, _) => {
+        TyTemplate::Union(members) | TyTemplate::Class(_, members) => {
             members.iter().for_each(&mut child);
         }
-        TyTemplate::Interface(_, args, associated_bindings, _) => {
+        TyTemplate::Interface(_, args, associated_bindings) => {
             args.iter().for_each(&mut child);
             associated_bindings
                 .iter()
@@ -293,7 +293,7 @@ fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&
             child(ret);
             child(throws);
         }
-        TyTemplate::Future(value, error, _) => {
+        TyTemplate::Future(value, error) => {
             child(value);
             child(error);
         }
@@ -308,25 +308,25 @@ fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&
                 .for_each(|(_, binding)| child(binding));
         }
         TyTemplate::TypeArgRef(_)
-        | TyTemplate::Int { .. }
-        | TyTemplate::Bigint { .. }
-        | TyTemplate::Float { .. }
-        | TyTemplate::String { .. }
-        | TyTemplate::Bool { .. }
-        | TyTemplate::Null { .. }
-        | TyTemplate::Uint8Array { .. }
+        | TyTemplate::Int
+        | TyTemplate::Bigint
+        | TyTemplate::Float
+        | TyTemplate::String
+        | TyTemplate::Bool
+        | TyTemplate::Null
+        | TyTemplate::Uint8Array
         | TyTemplate::Media(..)
         | TyTemplate::Literal(..)
         | TyTemplate::Enum(..)
         | TyTemplate::EnumVariant(..)
-        | TyTemplate::RustType { .. }
-        | TyTemplate::Type { .. }
-        | TyTemplate::Resource { .. }
-        | TyTemplate::PromptAst { .. }
-        | TyTemplate::Void { .. }
+        | TyTemplate::RustType
+        | TyTemplate::Type
+        | TyTemplate::Resource
+        | TyTemplate::PromptAst
+        | TyTemplate::Void
         | TyTemplate::TypeAlias(..)
-        | TyTemplate::Unknown { .. }
-        | TyTemplate::Never { .. } => {}
+        | TyTemplate::Unknown
+        | TyTemplate::Never => {}
     }
 }
 
@@ -335,7 +335,7 @@ fn class_origin_args<'a, N: Clone + PartialEq>(
     class_name: &N,
     class_arity: usize,
 ) -> Option<&'a [TyTemplate<N>]> {
-    let Some(TyTemplate::Class(origin_name, type_args, _)) = origin else {
+    let Some(TyTemplate::Class(origin_name, type_args)) = origin else {
         return None;
     };
     (origin_name == class_name && type_args.len() == class_arity).then_some(type_args)
@@ -466,7 +466,7 @@ impl fmt::Display for SubstituteError {
 impl std::error::Error for SubstituteError {}
 
 impl<N: Clone> TyTemplate<N> {
-    // --- Ergonomic constructors (default TyAttr) ---
+    // --- Ergonomic constructors ---
     //
     // Head-generic: a constructor only *places* a head, it never reads one, so
     // pinning these to the compiler's head would leave the runtime hand-rolling
@@ -474,7 +474,7 @@ impl<N: Clone> TyTemplate<N> {
 
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Self) -> Self {
-        TyTemplate::List(Box::new(inner), TyAttr::default())
+        TyTemplate::List(Box::new(inner))
     }
 
     /// `map<K, V>` with default attributes.
@@ -482,23 +482,22 @@ impl<N: Clone> TyTemplate<N> {
         TyTemplate::Map {
             key: Box::new(key),
             value: Box::new(value),
-            attr: TyAttr::default(),
         }
     }
 
     /// `A | B | ...` (union) with default attributes.
     pub fn union(members: impl IntoIterator<Item = Self>) -> Self {
-        TyTemplate::Union(members.into_iter().collect(), TyAttr::default())
+        TyTemplate::Union(members.into_iter().collect())
     }
 
     /// `Class<A1, A2, ...>` (generic class instantiation) with default attributes.
     pub fn class(head: N, args: Box<[Self]>) -> Self {
-        TyTemplate::Class(head, args, TyAttr::default())
+        TyTemplate::Class(head, args)
     }
 
     /// `Interface<A1, Assoc = A2, ...>` with default attributes.
     pub fn interface(head: N, args: Box<[Self]>, associated_bindings: Box<[(Name, Self)]>) -> Self {
-        TyTemplate::Interface(head, args, associated_bindings, TyAttr::default())
+        TyTemplate::Interface(head, args, associated_bindings)
     }
 }
 
@@ -569,30 +568,26 @@ impl<N: crate::Head> TyTemplate<N> {
             },
 
             // ── Composites: recurse, propagating failures ─────────────────────
-            Self::List(inner, attr) => Ok(RealizedTy::List(
-                Box::new(inner.substitute_with_fuel(type_args, ctx, fuel)?),
-                attr.clone(),
-            )),
-            Self::Map { key, value, attr } => Ok(RealizedTy::Map {
+            Self::List(inner) => Ok(RealizedTy::List(Box::new(
+                inner.substitute_with_fuel(type_args, ctx, fuel)?,
+            ))),
+            Self::Map { key, value } => Ok(RealizedTy::Map {
                 key: Box::new(key.substitute_with_fuel(type_args, ctx, fuel)?),
                 value: Box::new(value.substitute_with_fuel(type_args, ctx, fuel)?),
-                attr: attr.clone(),
             }),
-            Self::Union(parts, attr) => Ok(RealizedTy::Union(
+            Self::Union(parts) => Ok(RealizedTy::Union(
                 parts
                     .iter()
                     .map(|p| p.substitute_with_fuel(type_args, ctx, fuel))
                     .collect::<Result<_, _>>()?,
-                attr.clone(),
             )),
-            Self::Class(name, args, attr) => Ok(RealizedTy::Class(
+            Self::Class(name, args) => Ok(RealizedTy::Class(
                 name.clone(),
                 args.iter()
                     .map(|a| a.substitute_with_fuel(type_args, ctx, fuel))
                     .collect::<Result<_, _>>()?,
-                attr.clone(),
             )),
-            Self::Interface(name, args, associated_bindings, attr) => Ok(RealizedTy::Interface(
+            Self::Interface(name, args, associated_bindings) => Ok(RealizedTy::Interface(
                 name.clone(),
                 args.iter()
                     .map(|a| a.substitute_with_fuel(type_args, ctx, fuel))
@@ -603,13 +598,11 @@ impl<N: crate::Head> TyTemplate<N> {
                         Ok((name.clone(), ty.substitute_with_fuel(type_args, ctx, fuel)?))
                     })
                     .collect::<Result<_, _>>()?,
-                attr.clone(),
             )),
             Self::Function {
                 params,
                 ret,
                 throws,
-                attr,
             } => Ok(RealizedTy::Function {
                 params: params
                     .iter()
@@ -623,12 +616,10 @@ impl<N: crate::Head> TyTemplate<N> {
                     .collect::<Result<_, _>>()?,
                 ret: Box::new(ret.substitute_with_fuel(type_args, ctx, fuel)?),
                 throws: Box::new(throws.substitute_with_fuel(type_args, ctx, fuel)?),
-                attr: attr.clone(),
             }),
-            Self::Future(value, error, attr) => Ok(RealizedTy::Future(
+            Self::Future(value, error) => Ok(RealizedTy::Future(
                 Box::new(value.substitute_with_fuel(type_args, ctx, fuel)?),
                 Box::new(error.substitute_with_fuel(type_args, ctx, fuel)?),
-                attr.clone(),
             )),
             // Realize the base, then reduce the projection to the impl's binding.
             // The qualifier is always known and the base is realized here, so a
@@ -789,29 +780,24 @@ impl<N: Clone> TyTemplate<N> {
                 .get(*n as usize)
                 .cloned()
                 .unwrap_or_else(RuntimeTy::unknown),
-            Self::List(inner, attr) => {
-                RuntimeTy::List(Box::new(inner.substitute_symbolic(type_args)), attr.clone())
-            }
-            Self::Map { key, value, attr } => RuntimeTy::Map {
+            Self::List(inner) => RuntimeTy::List(Box::new(inner.substitute_symbolic(type_args))),
+            Self::Map { key, value } => RuntimeTy::Map {
                 key: Box::new(key.substitute_symbolic(type_args)),
                 value: Box::new(value.substitute_symbolic(type_args)),
-                attr: attr.clone(),
             },
-            Self::Union(parts, attr) => RuntimeTy::Union(
+            Self::Union(parts) => RuntimeTy::Union(
                 parts
                     .iter()
                     .map(|p| p.substitute_symbolic(type_args))
                     .collect(),
-                attr.clone(),
             ),
-            Self::Class(name, args, attr) => RuntimeTy::Class(
+            Self::Class(name, args) => RuntimeTy::Class(
                 name.clone(),
                 args.iter()
                     .map(|a| a.substitute_symbolic(type_args))
                     .collect(),
-                attr.clone(),
             ),
-            Self::Interface(name, args, associated_bindings, attr) => RuntimeTy::Interface(
+            Self::Interface(name, args, associated_bindings) => RuntimeTy::Interface(
                 name.clone(),
                 args.iter()
                     .map(|a| a.substitute_symbolic(type_args))
@@ -820,13 +806,11 @@ impl<N: Clone> TyTemplate<N> {
                     .iter()
                     .map(|(name, ty)| (name.clone(), ty.substitute_symbolic(type_args)))
                     .collect(),
-                attr.clone(),
             ),
             Self::Function {
                 params,
                 ret,
                 throws,
-                attr,
             } => RuntimeTy::Function {
                 params: params
                     .iter()
@@ -838,23 +822,19 @@ impl<N: Clone> TyTemplate<N> {
                     .collect(),
                 ret: Box::new(ret.substitute_symbolic(type_args)),
                 throws: Box::new(throws.substitute_symbolic(type_args)),
-                attr: attr.clone(),
             },
-            Self::Future(value, error, attr) => RuntimeTy::Future(
+            Self::Future(value, error) => RuntimeTy::Future(
                 Box::new(value.substitute_symbolic(type_args)),
                 Box::new(error.substitute_symbolic(type_args)),
-                attr.clone(),
             ),
             Self::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
-                attr,
             } => RuntimeTy::AssociatedTypeProjection {
                 base: Box::new(base.substitute_symbolic(type_args)),
                 interface: Box::new(interface.substitute_symbolic(type_args)),
                 member: member.clone(),
-                attr: attr.clone(),
             },
             // A realized leaf narrows to `RealizedTy` then widens to `RuntimeTy`.
             other => RealizedTy::<N>::try_from(other.clone())
@@ -893,39 +873,28 @@ impl<N: Clone> TyTemplate<N> {
     fn to_display_ty(&self) -> crate::Ty<N> {
         use crate::Ty;
         match self {
-            Self::TypeArgRef(n) => Ty::TypeVar(
-                crate::ParamTy::new(*n, Name::new(format!("#{n}"))),
-                TyAttr::default(),
-            ),
-            Self::List(inner, attr) => Ty::List(Box::new(inner.to_display_ty()), attr.clone()),
-            Self::Map { key, value, attr } => Ty::Map {
+            Self::TypeArgRef(n) => Ty::TypeVar(crate::ParamTy::new(*n, Name::new(format!("#{n}")))),
+            Self::List(inner) => Ty::List(Box::new(inner.to_display_ty())),
+            Self::Map { key, value } => Ty::Map {
                 key: Box::new(key.to_display_ty()),
                 value: Box::new(value.to_display_ty()),
-                attr: attr.clone(),
             },
-            Self::Union(parts, attr) => Ty::Union(
-                parts.iter().map(Self::to_display_ty).collect(),
-                attr.clone(),
-            ),
-            Self::Class(name, args, attr) => Ty::Class(
-                name.clone(),
-                args.iter().map(Self::to_display_ty).collect(),
-                attr.clone(),
-            ),
-            Self::Interface(name, args, associated_bindings, attr) => Ty::Interface(
+            Self::Union(parts) => Ty::Union(parts.iter().map(Self::to_display_ty).collect()),
+            Self::Class(name, args) => {
+                Ty::Class(name.clone(), args.iter().map(Self::to_display_ty).collect())
+            }
+            Self::Interface(name, args, associated_bindings) => Ty::Interface(
                 name.clone(),
                 args.iter().map(Self::to_display_ty).collect(),
                 associated_bindings
                     .iter()
                     .map(|(n, t)| (n.clone(), t.to_display_ty()))
                     .collect(),
-                attr.clone(),
             ),
             Self::Function {
                 params,
                 ret,
                 throws,
-                attr,
             } => Ty::Function {
                 params: params
                     .iter()
@@ -937,18 +906,15 @@ impl<N: Clone> TyTemplate<N> {
                     .collect(),
                 ret: Box::new(ret.to_display_ty()),
                 throws: Box::new(throws.to_display_ty()),
-                attr: attr.clone(),
             },
-            Self::Future(value, error, attr) => Ty::Future(
+            Self::Future(value, error) => Ty::Future(
                 Box::new(value.to_display_ty()),
                 Box::new(error.to_display_ty()),
-                attr.clone(),
             ),
             Self::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
-                attr,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.to_display_ty()),
                 interface: Box::new(crate::Interface {
@@ -961,7 +927,6 @@ impl<N: Clone> TyTemplate<N> {
                         .collect(),
                 }),
                 member: member.clone(),
-                attr: attr.clone(),
             },
             // A realized leaf widens into `Ty` by the generated conversion.
             other => Ty::from(RealizedTy::try_from(other.clone()).unwrap_or_else(|e| {
@@ -1092,16 +1057,15 @@ mod tests {
         let every_shape = TyTemplate::class(
             name.clone(),
             Box::new([
-                TyTemplate::List(Box::new(TyTemplate::TypeArgRef(2)), TyAttr::default()),
+                TyTemplate::List(Box::new(TyTemplate::TypeArgRef(2))),
                 TyTemplate::Map {
                     key: Box::new(TyTemplate::TypeArgRef(3)),
                     value: Box::new(TyTemplate::TypeArgRef(4)),
-                    attr: TyAttr::default(),
                 },
-                TyTemplate::Union(
-                    Box::new([TyTemplate::TypeArgRef(5), TyTemplate::TypeArgRef(6)]),
-                    TyAttr::default(),
-                ),
+                TyTemplate::Union(Box::new([
+                    TyTemplate::TypeArgRef(5),
+                    TyTemplate::TypeArgRef(6),
+                ])),
                 TyTemplate::interface(
                     TypeName::local(crate::Name::new("Shown")),
                     Box::new([TyTemplate::TypeArgRef(7)]),
@@ -1115,18 +1079,15 @@ mod tests {
                     }]),
                     ret: Box::new(TyTemplate::TypeArgRef(10)),
                     throws: Box::new(TyTemplate::TypeArgRef(11)),
-                    attr: TyAttr::default(),
                 },
                 TyTemplate::Future(
                     Box::new(TyTemplate::TypeArgRef(12)),
                     Box::new(TyTemplate::TypeArgRef(13)),
-                    TyAttr::default(),
                 ),
                 TyTemplate::AssociatedTypeProjection {
                     base: Box::new(TyTemplate::TypeArgRef(14)),
                     interface: Box::new(iface),
                     member: crate::Name::new("Item"),
-                    attr: TyAttr::default(),
                 },
             ]),
         );
@@ -1216,7 +1177,6 @@ mod tests {
                 associated_types: Box::new([]),
             }),
             member,
-            attr: TyAttr::default(),
         }
     }
 
@@ -1283,7 +1243,7 @@ mod tests {
         assert_eq!(
             proj.substitute_with_fuel(&[RealizedTy::unknown()], &CyclicCtx, 0),
             Err(SubstituteError::ProjectionFuelExhausted {
-                member: crate::Name::new("Item"),
+                member: crate::Name::new("Item")
             })
         );
     }
@@ -1351,11 +1311,7 @@ mod tests {
         assert!(tmpl.is_fully_concrete());
         assert_eq!(
             sub(&tmpl, &[]),
-            RuntimeTy::Class(
-                TypeName::local(crate::Name::new("User")),
-                Box::new([]),
-                crate::TyAttr::default()
-            )
+            RuntimeTy::Class(TypeName::local(crate::Name::new("User")), Box::new([]))
         );
     }
 }

@@ -27,7 +27,7 @@ use bex_vm_types::{
 
 /// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
 ///
-/// Collapses `RuntimeTy::Int { .. }` / `RuntimeTy::Literal(Int(_))` (and similar) into a
+/// Collapses `RuntimeTy::Int` / `RuntimeTy::Literal(Int(_))` (and similar) into a
 /// single tag so specialization works regardless of whether TIR preserved a
 /// literal type after constant-folding.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -219,7 +219,7 @@ fn find_perfect_hash(keys: &[(i64, usize)]) -> Option<PerfectHashResult> {
                     let mut entries = vec![
                         MatchHashEntry {
                             expected_tag: i64::MIN, // sentinel for empty slots
-                            dense_index: 0,
+                            dense_index: 0
                         };
                         table_size
                     ];
@@ -576,7 +576,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    bex_vm_types::RuntimeTy::Class(head, _, _) => self
+                    bex_vm_types::RuntimeTy::Class(head, _) => self
                         .class_fields_for(head.tag())?
                         .get(*field)
                         .map(|(_, field_type)| field_type.clone()),
@@ -586,7 +586,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    bex_vm_types::RuntimeTy::List(inner, _) => Some(*inner),
+                    bex_vm_types::RuntimeTy::List(inner) => Some(*inner),
                     bex_vm_types::RuntimeTy::Map { value, .. } => Some(*value),
                     _ => None,
                 }
@@ -614,19 +614,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Classify a type for binary-op specialization. Returns `None` if the
     /// type isn't one of the primitive numeric forms we can specialize on.
     ///
-    /// Both `RuntimeTy::Int { .. }` and `RuntimeTy::Literal(Literal::Int(_), _)` map to
+    /// Both `RuntimeTy::Int` and `RuntimeTy::Literal(Literal::Int(_), _)` map to
     /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
     /// expressions like `(-1n) & 255n` where the lhs operand carries a
     /// `RuntimeTy::Literal(Bigint(-1))` after constant-folding in TIR.
     fn classify_arith_ty(ty: &bex_vm_types::RuntimeTy) -> Option<ArithTyClass> {
         use bex_vm_types::RuntimeTy as T;
         match ty {
-            T::Int { .. } => Some(ArithTyClass::Int),
-            T::Float { .. } => Some(ArithTyClass::Float),
-            T::Bigint { .. } => Some(ArithTyClass::Bigint),
-            T::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
-            T::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
-            T::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
+            T::Int => Some(ArithTyClass::Int),
+            T::Float => Some(ArithTyClass::Float),
+            T::Bigint => Some(ArithTyClass::Bigint),
+            T::Literal(baml_type::Literal::Int(_), _) => Some(ArithTyClass::Int),
+            T::Literal(baml_type::Literal::Float(_), _) => Some(ArithTyClass::Float),
+            T::Literal(baml_type::Literal::Bigint(_), _) => Some(ArithTyClass::Bigint),
             _ => None,
         }
     }
@@ -1099,9 +1099,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::TyTemplate::Null {
-                attr: baml_type::TyAttr::default(),
-            },
+            return_type: baml_type::TyTemplate::Null,
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
@@ -1109,9 +1107,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: baml_type::TyTemplate::Never {
-                attr: baml_type::TyAttr::default(),
-            },
+            throws_type: baml_type::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
             is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
@@ -2736,7 +2732,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             PendingJumpTarget::Trap => self.trap_pc.unwrap_or_else(|| {
                 panic!("missing trap PC for dead-unreachable jump target")
-            }),
+            })
         }
     }
 
@@ -2838,7 +2834,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             let Some(&error_slot) = self.local_slots.get(&region.error_local) else {
                 log::debug!(
                     "exception table: error local {:?} has no slot (optimized away)",
-                    region.error_local,
+                    region.error_local
                 );
                 continue;
             };
@@ -3627,7 +3623,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
-            TyTemplate::Class(tn, type_args_templates, _) => {
+            TyTemplate::Class(tn, type_args_templates) => {
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
                     emit_false(self);
@@ -3698,7 +3694,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // to constant-FALSE — silently misrouting every value, not just the
             // valueless ones. (Only refutable positions reach here at all: an
             // exhaustive final `let v: unknown` arm has its test elided.)
-            TyTemplate::Unknown { .. } => emit_true(self),
+            TyTemplate::Unknown => emit_true(self),
 
             // ── Singleton (literal) ──────────────────────────────────────────
             // A literal type is a set of one, so membership is decided against
@@ -3708,7 +3704,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // `type One = 1`). `ConstValue::Literal` is the exact test — the
             // specialization of the `ConstValue::Type(Literal)` structural form
             // the algebra would otherwise decide, minus the reconstruction.
-            TyTemplate::Literal(literal, _, _) => {
+            TyTemplate::Literal(literal, _) => {
                 let c = self.add_constant(ConstValue::Literal(literal.clone()));
                 let inst = self.emit(Instruction::IsType(c));
                 self.set_operand(inst, OperandMeta::Const(literal.to_string()));
@@ -3718,22 +3714,22 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // then use structural matching when no exact fast path exists.
             // This list is exhaustive on purpose: a new template variant must
             // choose its type-test strategy here.
-            other @ (TyTemplate::Int { .. }
-            | TyTemplate::Bigint { .. }
-            | TyTemplate::Float { .. }
-            | TyTemplate::String { .. }
-            | TyTemplate::Bool { .. }
-            | TyTemplate::Null { .. }
-            | TyTemplate::Uint8Array { .. }
+            other @ (TyTemplate::Int
+            | TyTemplate::Bigint
+            | TyTemplate::Float
+            | TyTemplate::String
+            | TyTemplate::Bool
+            | TyTemplate::Null
+            | TyTemplate::Uint8Array
             | TyTemplate::Enum(..)
             | TyTemplate::EnumVariant(..)
-            | TyTemplate::RustType { .. }
-            | TyTemplate::Type { .. }
-            | TyTemplate::Resource { .. }
-            | TyTemplate::PromptAst { .. }
-            | TyTemplate::Void { .. }
+            | TyTemplate::RustType
+            | TyTemplate::Type
+            | TyTemplate::Resource
+            | TyTemplate::PromptAst
+            | TyTemplate::Void
             | TyTemplate::TypeAlias(..)
-            | TyTemplate::Never { .. }) => {
+            | TyTemplate::Never) => {
                 // A fully-realized leaf (primitive, enum, alias, literal, ...):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
                 // tag when one exactly represents the test. Tagless leaves use
@@ -3741,7 +3737,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                 // compiling to false.
                 let realized = <&RealizedTy>::try_from(other)
                     .expect("exhaustive realized-leaf template classification");
-                if let RealizedTy::TypeAlias(tn, _) = realized {
+                if let RealizedTy::TypeAlias(tn) = realized {
                     if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                         let c = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
@@ -3750,7 +3746,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                     } else {
                         emit_false(self);
                     }
-                } else if let RealizedTy::Enum(tn, _) = realized {
+                } else if let RealizedTy::Enum(tn) = realized {
                     // Enum-pointer identity: `is Color` tests the value's enum
                     // object, so it discriminates `Color` from `Status` - the
                     // shared `ENUM` type tag cannot. Falls back to constant-false
@@ -3861,7 +3857,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class = match self.resolve_place_type(base) {
-            Some(bex_vm_types::RuntimeTy::Class(head, _, _)) => head.tag(),
+            Some(bex_vm_types::RuntimeTy::Class(head, _)) => head.tag(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(class, field_idx)
@@ -3907,18 +3903,18 @@ impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
 /// with no representable tag (classes take the pointer-identity path instead).
 fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
     match ty {
-        RealizedTy::Int { .. } => Some(baml_type::typetag::INT),
-        RealizedTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-        RealizedTy::String { .. } => Some(baml_type::typetag::STRING),
-        RealizedTy::Bool { .. } => Some(baml_type::typetag::BOOL),
-        RealizedTy::Null { .. } => Some(baml_type::typetag::NULL),
-        RealizedTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+        RealizedTy::Int => Some(baml_type::typetag::INT),
+        RealizedTy::Bigint => Some(baml_type::typetag::BIGINT),
+        RealizedTy::String => Some(baml_type::typetag::STRING),
+        RealizedTy::Bool => Some(baml_type::typetag::BOOL),
+        RealizedTy::Null => Some(baml_type::typetag::NULL),
+        RealizedTy::Float => Some(baml_type::typetag::FLOAT),
         RealizedTy::Enum(..) => Some(baml_type::typetag::ENUM),
         RealizedTy::List(..) => Some(baml_type::typetag::LIST),
         RealizedTy::Map { .. } => Some(baml_type::typetag::MAP),
         RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
-        RealizedTy::Type { .. } => Some(baml_type::typetag::TYPE),
-        RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+        RealizedTy::Type => Some(baml_type::typetag::TYPE),
+        RealizedTy::Uint8Array => Some(baml_type::typetag::UINT8ARRAY),
         // A literal type has no type tag. Tags name base types, and a literal
         // is a strict subset of its base, so its base's tag over-accepts every
         // other inhabitant — `1` would admit any int. Literal membership is
@@ -3931,13 +3927,13 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::Interface(..)
         | RealizedTy::Union(..)
         | RealizedTy::Future(..)
-        | RealizedTy::RustType { .. }
-        | RealizedTy::Resource { .. }
-        | RealizedTy::PromptAst { .. }
-        | RealizedTy::Void { .. }
+        | RealizedTy::RustType
+        | RealizedTy::Resource
+        | RealizedTy::PromptAst
+        | RealizedTy::Void
         | RealizedTy::TypeAlias(..)
-        | RealizedTy::Unknown { .. }
-        | RealizedTy::Never { .. }
+        | RealizedTy::Unknown
+        | RealizedTy::Never
         | RealizedTy::EnumVariant(..) => None,
     }
 }

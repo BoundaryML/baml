@@ -144,9 +144,7 @@ pub fn operator_method<'db>(
     rhs: Option<&Ty>,
 ) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
     let widen = |ty: &Ty| match ty.kind() {
-        InferTy::Literal(literal, _, attr) => {
-            Ty::intern(crate::infer::literal_base(literal, attr.clone()))
-        }
+        InferTy::Literal(literal, _) => Ty::intern(crate::infer::literal_base(literal)),
         _ => ty.clone(),
     };
     let lhs = widen(lhs);

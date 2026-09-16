@@ -2152,16 +2152,16 @@ fn collect_ty_deps(
 ) {
     use baml_type::Ty;
     match ty {
-        Ty::Class(qtn, generics, _) => {
+        Ty::Class(qtn, generics) => {
             collect_qtn_dep(db, viewer, files, qtn, deps, seen);
             for generic in generics {
                 collect_ty_deps(db, viewer, files, generic, deps, seen);
             }
         }
-        Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
+        Ty::Enum(qtn) | Ty::TypeAlias(qtn) => {
             collect_qtn_dep(db, viewer, files, qtn, deps, seen);
         }
-        Ty::List(inner, _) => {
+        Ty::List(inner) => {
             collect_ty_deps(db, viewer, files, inner, deps, seen);
         }
         Ty::Map {
@@ -2170,7 +2170,7 @@ fn collect_ty_deps(
             collect_ty_deps(db, viewer, files, k, deps, seen);
             collect_ty_deps(db, viewer, files, v, deps, seen);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for m in members {
                 collect_ty_deps(db, viewer, files, m, deps, seen);
             }
@@ -2783,7 +2783,7 @@ class Person {
 enum Color {
     Red,
     Green,
-    Blue,
+    Blue
 }
 "#,
         );
@@ -2906,7 +2906,7 @@ class Person {
 }
 
 class Robot {
-    name: string,
+    name: string
 }
 
 implement Named for Robot {

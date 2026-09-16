@@ -167,8 +167,8 @@ fn emit_binding(
             (
                 "self",
                 ::std::option::Option::Some(
-                    ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(self),
-                ),
+                    ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(self)
+                )
             )
         });
     }
@@ -209,7 +209,7 @@ fn emit_binding(
             converts.push(quote! {
                 let #param = ::baml_bridge::host_value::callable_handle(
                     #param,
-                    &[#(#host_params),*],
+                    &[#(#host_params),*]
                 );
             });
             kwarg_entries.push(quote! {
@@ -247,8 +247,8 @@ fn emit_binding(
                 (
                     #arg_name,
                     ::std::option::Option::Some(
-                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param),
-                    ),
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param)
+                    )
                 )
             });
         }
@@ -272,7 +272,7 @@ fn emit_binding(
 
     let self_param = match receiver {
         Receiver::None => TokenStream::new(),
-        Receiver::RefSelf => quote! { &self, },
+        Receiver::RefSelf => quote! { &self },
     };
     let sync_name = idents::ident(binding_name);
     let async_name = format_ident!("{}_async", idents::dir_segment(binding_name));
@@ -331,7 +331,7 @@ fn emit_binding(
             quote! {
                 (
                     #param,
-                    <#ident as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <#ident as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()
                 )
             }
         });
@@ -347,8 +347,8 @@ fn emit_binding(
             #schema_method_name_attr
             pub fn #with_name #generics_decl (
                 #self_param
-                #(#params,)*
-                options: ::baml_bridge::CallOptions,
+                #(#params)*
+                options: ::baml_bridge::CallOptions
             ) -> #result_ty {
                 crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
                 #(#converts)*
@@ -364,8 +364,8 @@ fn emit_binding(
             #schema_method_name_attr
             pub async fn #with_async_name #generics_decl (
                 #self_param
-                #(#params,)*
-                options: ::baml_bridge::CallOptions,
+                #(#params)*
+                options: ::baml_bridge::CallOptions
             ) -> #result_ty {
                 crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
                 #(#converts)*
@@ -390,7 +390,7 @@ fn emit_binding(
             ::baml_bridge::runtime::invoke_sync(
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr,
+                #type_args_expr
             )
         }
 
@@ -403,7 +403,7 @@ fn emit_binding(
             ::baml_bridge::runtime::invoke(
                 #fqn,
                 ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
-                #type_args_expr,
+                #type_args_expr
             )
             .await
         }
@@ -417,7 +417,7 @@ fn emit_binding(
 /// (`::baml_bridge::HostCallback`), plus one [`HostParam`] descriptor per
 /// callable parameter that the dispatcher slots incoming BAML args against.
 struct CallableParts {
-    /// `(A1, A2, …)` — the closure's argument tuple (`(A,)` for one arg,
+    /// `(A1, A2, …)` — the closure's argument tuple (`(A)` for one arg,
     /// `()` for none).
     args_tuple: TokenStream,
     /// The closure's return type.
@@ -447,7 +447,7 @@ fn collect_effect_params(
             && arg.default.is_none()
             && let Some(baml_codegen_types::Ty::Function { throws, .. }) =
                 crate::effect_rename::callback_root(&arg.ty)
-            && let baml_codegen_types::Ty::TypeVar(name, _) = throws.as_ref()
+            && let baml_codegen_types::Ty::TypeVar(name) = throws.as_ref()
         {
             let name = name.as_str();
             let already = class_params.iter().any(|p| p == name)
@@ -470,7 +470,7 @@ fn translate_throws(
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, translate_ty::Unsupported> {
     match ty {
-        baml_codegen_types::Ty::Never { .. } => Ok(quote! { ::core::convert::Infallible }),
+        baml_codegen_types::Ty::Never => Ok(quote! { ::core::convert::Infallible }),
         _ => translate_ty::translate(ty, ctx),
     }
 }
@@ -519,10 +519,10 @@ fn translate_callable(
         });
     }
     // A one-element tuple needs its trailing comma; the parenthesized form
-    // `(A)` is just `A`, not `(A,)`.
+    // `(A)` is just `A`, not `(A)`.
     let args_tuple = match arg_types.as_slice() {
         [] => quote! { () },
-        [one] => quote! { (#one,) },
+        [one] => quote! { (#one) },
         many => quote! { (#(#many),*) },
     };
     let ret_ty: &baml_codegen_types::Ty = ret;
@@ -542,7 +542,7 @@ fn translate_callable(
 /// which parameters accept via `impl Into<_>`.
 fn is_multi_arm_union(ty: &baml_codegen_types::Ty) -> bool {
     match ty {
-        baml_codegen_types::Ty::Union(items, _) => crate::unions::strip_null(items).0.len() >= 2,
+        baml_codegen_types::Ty::Union(items) => crate::unions::strip_null(items).0.len() >= 2,
         _ => false,
     }
 }
@@ -598,13 +598,13 @@ fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
                 let n = name.bare_name().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }

@@ -86,7 +86,7 @@ fn shape_key(arms: &[Ty]) -> String {
 pub(crate) fn strip_null(items: &[Ty]) -> (Vec<Ty>, bool) {
     let non_null: Vec<Ty> = items
         .iter()
-        .filter(|t| !matches!(t, Ty::Null { .. }))
+        .filter(|t| !matches!(t, Ty::Null))
         .cloned()
         .collect();
     let had_null = non_null.len() != items.len();
@@ -172,7 +172,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
 pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
     match ty {
         Ty::Interface(..) => None,
-        Ty::Union(items, attr) => {
+        Ty::Union(items) => {
             let representable = items
                 .iter()
                 .filter_map(|item| filter_throws_type(item, analysis))
@@ -181,19 +181,15 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
             if representable.is_empty() {
                 None
             } else {
-                Some(Ty::Union(representable.into(), attr.clone()))
+                Some(Ty::Union(representable.into()))
             }
         }
-        Ty::List(inner, attr) => Some(Ty::List(
-            Box::new(filter_throws_type(inner, analysis)?),
-            attr.clone(),
-        )),
-        Ty::Map { key, value, attr } => Some(Ty::Map {
+        Ty::List(inner) => Some(Ty::List(Box::new(filter_throws_type(inner, analysis)?))),
+        Ty::Map { key, value } => Some(Ty::Map {
             key: key.clone(),
             value: Box::new(filter_throws_type(value, analysis)?),
-            attr: attr.clone(),
         }),
-        Ty::Class(name, args, attr) => {
+        Ty::Class(name, args) => {
             if !analysis.is_emitted(name) {
                 return None;
             }
@@ -201,9 +197,9 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
                 .iter()
                 .map(|arg| filter_throws_type(arg, analysis))
                 .collect::<Option<Box<[_]>>>()?;
-            Some(Ty::Class(name.clone(), args, attr.clone()))
+            Some(Ty::Class(name.clone(), args))
         }
-        Ty::TypeAlias(name, _) if !analysis.is_emitted(name) => None,
+        Ty::TypeAlias(name) if !analysis.is_emitted(name) => None,
         _ => Some(ty.clone()),
     }
 }
@@ -211,7 +207,7 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
 /// Walk a type and register every representable multi-arm union in it.
 fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &mut UnionRegistry) {
     match ty {
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             let (arms, _) = strip_null(items);
             if arms.len() >= 2
                 && let Some(union_enum) = synthesize(&arms, analysis)
@@ -227,11 +223,11 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
                 register_unions_in(item, leaf, analysis, registry);
             }
         }
-        Ty::List(inner, _) => register_unions_in(inner, leaf, analysis, registry),
+        Ty::List(inner) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
         // A union nested inside a generic instantiation (`GenericBox<int |
         // string>`) is registered in the same leaf as its enclosing symbol.
-        Ty::Class(_, args, _) => {
+        Ty::Class(_, args) => {
             for arg in args {
                 register_unions_in(arg, leaf, analysis, registry);
             }
@@ -258,7 +254,7 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
                     "unsupported union arm: non-string literal ({lit:?})"
                 ));
             }
-            Ty::String { .. } => has_bare_string_arm = true,
+            Ty::String => has_bare_string_arm = true,
             _ => {}
         }
         let Some(variant) = variant_name(arm) else {
@@ -333,21 +329,21 @@ fn union_generic_params(arms: &[Ty]) -> Vec<String> {
 
 fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<String>) {
     match ty {
-        Ty::TypeVar(var, _) => {
+        Ty::TypeVar(var) => {
             let name = var.as_str().to_string();
             if seen.insert(name.clone()) {
                 out.push(name);
             }
         }
-        Ty::List(inner, _) => collect_arm_type_vars(inner, out, seen),
+        Ty::List(inner) => collect_arm_type_vars(inner, out, seen),
         Ty::Map { key, value, .. } => {
             collect_arm_type_vars(key, out, seen);
             collect_arm_type_vars(value, out, seen);
         }
-        Ty::Union(items, _) => items
+        Ty::Union(items) => items
             .iter()
             .for_each(|item| collect_arm_type_vars(item, out, seen)),
-        Ty::Class(_, args, _) => args
+        Ty::Class(_, args) => args
             .iter()
             .for_each(|arg| collect_arm_type_vars(arg, out, seen)),
         _ => {}
@@ -358,44 +354,39 @@ fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<Stri
 /// (the structural checks live in [`shape_error`]).
 pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
     match ty {
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Uint8Array { .. } => true,
+        Ty::Int | Ty::Bigint | Ty::Float | Ty::String | Ty::Bool | Ty::Uint8Array => true,
         // A `TypeVar` arm makes the enum generic over that param: the
         // variant holds a bare `T`. Whether `T` is actually in scope at the
         // use site is enforced when the reference is translated.
         Ty::TypeVar(..) => true,
-        Ty::Class(name, args, _) => args.is_empty() && analysis.is_emitted(name),
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
+        Ty::Class(name, args) => args.is_empty() && analysis.is_emitted(name),
+        Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
             analysis.is_emitted(name)
         }
-        Ty::List(inner, _) => arm_is_representable(inner, analysis),
+        Ty::List(inner) => arm_is_representable(inner, analysis),
         Ty::Map { key, value, .. } => {
-            matches!(key.as_ref(), Ty::String { .. }) && arm_is_representable(value, analysis)
+            matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
         }
         // A nested union arm inside a list/map arm collapses to its only
         // non-null member here; real multi-arm nesting is rejected
         // upstream by `Ty::validate`.
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             let (arms, _) = strip_null(items);
             arms.len() == 1 && arm_is_representable(&arms[0], analysis)
         }
-        Ty::Null { .. }
-        | Ty::Void { .. }
+        Ty::Null
+        | Ty::Void
         | Ty::Literal(..)
         | Ty::Media(..)
-        | Ty::Unknown { .. }
+        | Ty::Unknown
         | Ty::Function { .. }
         | Ty::Future(..)
         | Ty::Interface(..)
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Never { .. }
-        | Ty::RustType { .. } => false,
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Never
+        | Ty::RustType => false,
     }
 }
 
@@ -403,16 +394,13 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
 /// can be derived.
 fn variant_name(arm: &Ty) -> Option<String> {
     match arm {
-        Ty::Int { .. } => Some("Int".to_string()),
-        Ty::Bigint { .. } => Some("Bigint".to_string()),
-        Ty::Float { .. } => Some("Float".to_string()),
-        Ty::String { .. } => Some("String".to_string()),
-        Ty::Bool { .. } => Some("Bool".to_string()),
-        Ty::Uint8Array { .. } => Some("Uint8Array".to_string()),
-        Ty::Class(name, _, _)
-        | Ty::Enum(name, _)
-        | Ty::EnumVariant(name, _, _)
-        | Ty::TypeAlias(name, _) => {
+        Ty::Int => Some("Int".to_string()),
+        Ty::Bigint => Some("Bigint".to_string()),
+        Ty::Float => Some("Float".to_string()),
+        Ty::String => Some("String".to_string()),
+        Ty::Bool => Some("Bool".to_string()),
+        Ty::Uint8Array => Some("Uint8Array".to_string()),
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
             let mut variant = name.bare_name().to_string();
             if name.name().as_str().ends_with("$stream") {
                 variant.push_str("Stream");
@@ -421,8 +409,8 @@ fn variant_name(arm: &Ty) -> Option<String> {
         }
         // A `TypeVar` arm's variant is named after the type parameter
         // (`T | string` → `TOrString { T(T), String(String) }`).
-        Ty::TypeVar(var, _) => Some(var.as_str().to_string()),
-        Ty::List(inner, _) => Some(format!("{}List", variant_name(inner)?)),
+        Ty::TypeVar(var) => Some(var.as_str().to_string()),
+        Ty::List(inner) => Some(format!("{}List", variant_name(inner)?)),
         Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value)?)),
         Ty::Literal(baml_base::Literal::String(value), ..) => {
             let mut chars = value.chars();
@@ -436,7 +424,7 @@ fn variant_name(arm: &Ty) -> Option<String> {
             }
             Some(format!("{}{rest}", first.to_ascii_uppercase()))
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             // Only reachable for the degenerate single-arm nested case.
             let (arms, _) = strip_null(items);
             match arms.as_slice() {
@@ -444,18 +432,18 @@ fn variant_name(arm: &Ty) -> Option<String> {
                 _ => None,
             }
         }
-        Ty::Null { .. }
-        | Ty::Void { .. }
+        Ty::Null
+        | Ty::Void
         | Ty::Literal(..)
         | Ty::Media(..)
-        | Ty::Unknown { .. }
+        | Ty::Unknown
         | Ty::Function { .. }
         | Ty::Future(..)
         | Ty::Interface(..)
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Never { .. }
-        | Ty::RustType { .. } => None,
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Never
+        | Ty::RustType => None,
     }
 }

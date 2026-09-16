@@ -162,16 +162,14 @@ impl OutputFormatContent {
         }
 
         // For string target with no explicit prefix, return None
-        if matches!(self.target, SapTy::String { .. })
-            && matches!(options.prefix, RenderSetting::Auto)
-        {
+        if matches!(self.target, SapTy::String) && matches!(options.prefix, RenderSetting::Auto) {
             return Ok(None);
         }
 
         // The `json` type alias is an opaque leaf from the LLM's perspective.
         // Regardless of rendering options, the only thing we ask the model to produce
         // is arbitrary JSON — no schema body, no prefix enumeration.
-        if let SapTy::TypeAlias(tn, _) = &self.target {
+        if let SapTy::TypeAlias(tn) = &self.target {
             if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
                 return Ok(Some("Respond with valid JSON.".to_string()));
             }
@@ -188,14 +186,14 @@ impl OutputFormatContent {
         // But with explicit prefix, we need to append the type
         if matches!(
             self.target,
-            SapTy::Int { .. } | SapTy::Bigint { .. } | SapTy::Float { .. } | SapTy::Bool { .. }
+            SapTy::Int | SapTy::Bigint | SapTy::Float | SapTy::Bool
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
         }
 
         // Check if the target is a hoisted enum
-        let target_is_hoisted_enum = if let SapTy::Enum(tn, _) = &self.target {
+        let target_is_hoisted_enum = if let SapTy::Enum(tn) = &self.target {
             hoisted_enums.contains(tn.display_name().as_str())
         } else {
             false
@@ -278,7 +276,7 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) = &self.target {
+        let message = if let SapTy::Class(tn, _) | SapTy::Interface(tn, _, _) = &self.target {
             let tn_display_name = tn.display_name();
             let class_key = class_instantiation_key(&self.target);
             if hoisted_classes.contains(&class_key) {
@@ -290,7 +288,7 @@ impl OutputFormatContent {
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
-        } else if let SapTy::Enum(tn, _) = &self.target {
+        } else if let SapTy::Enum(tn) = &self.target {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
@@ -300,7 +298,7 @@ impl OutputFormatContent {
             } else {
                 Some(tn.display_name().to_string())
             }
-        } else if let SapTy::TypeAlias(fqn, _) = &self.target {
+        } else if let SapTy::TypeAlias(fqn) = &self.target {
             Some(fqn.display_name().to_string())
         } else {
             self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
@@ -482,13 +480,13 @@ impl OutputFormatContent {
         hoisted: &indexmap::IndexSet<String>,
     ) -> Option<String> {
         match ty {
-            SapTy::String { .. } => None,
-            SapTy::Int { .. } => Some("Answer as an int".to_string()),
-            SapTy::Bigint { .. } => Some("Answer as a bigint".to_string()),
-            SapTy::Float { .. } => Some("Answer as a float".to_string()),
-            SapTy::Bool { .. } => Some("Answer as a bool".to_string()),
+            SapTy::String => None,
+            SapTy::Int => Some("Answer as an int".to_string()),
+            SapTy::Bigint => Some("Answer as a bigint".to_string()),
+            SapTy::Float => Some("Answer as a float".to_string()),
+            SapTy::Bool => Some("Answer as a bool".to_string()),
             SapTy::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
-            SapTy::Class(_, _, _) | SapTy::Interface(_, _, _, _) => {
+            SapTy::Class(_, _) | SapTy::Interface(_, _, _) => {
                 let end = if class_is_hoisted(ty, hoisted) {
                     " "
                 } else {
@@ -498,10 +496,10 @@ impl OutputFormatContent {
             }
             SapTy::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
             SapTy::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
-            SapTy::Union(variants, _) => {
+            SapTy::Union(variants) => {
                 let non_null: Vec<&SapTy> = variants
                     .iter()
-                    .filter(|v| !matches!(v, SapTy::Null { .. }))
+                    .filter(|v| !matches!(v, SapTy::Null))
                     .collect();
                 // `T?` (single non-null member + null) follows the inner type's
                 // prefix — except that a nullable PRIMITIVE, unlike a bare
@@ -512,11 +510,7 @@ impl OutputFormatContent {
                 // in front of the rendered schema.
                 if non_null.len() == 1 && non_null.len() < variants.len() {
                     match non_null[0] {
-                        SapTy::String { .. }
-                        | SapTy::Int { .. }
-                        | SapTy::Bigint { .. }
-                        | SapTy::Float { .. }
-                        | SapTy::Bool { .. } => {
+                        SapTy::String | SapTy::Int | SapTy::Bigint | SapTy::Float | SapTy::Bool => {
                             Some(format!("Answer in JSON using this {type_word}:\n"))
                         }
                         inner => Self::auto_prefix(inner, type_word, hoisted)
@@ -528,7 +522,7 @@ impl OutputFormatContent {
                     Some(format!("Answer in JSON using this {type_word}:\n"))
                 }
             }
-            SapTy::TypeAlias(tn, _)
+            SapTy::TypeAlias(tn)
                 if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
             {
                 None
@@ -548,7 +542,7 @@ impl OutputFormatContent {
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
-        if let SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) = ty {
+        if let SapTy::Class(tn, _) | SapTy::Interface(tn, _, _) = ty {
             let tn_display_name = tn.display_name();
             let class_key = class_instantiation_key(ty);
             if hoisted_classes.contains(&class_key) {
@@ -566,14 +560,14 @@ impl OutputFormatContent {
         };
 
         match ty {
-            SapTy::String { .. } => Ok(Some("string".to_string())),
-            SapTy::Int { .. } => Ok(Some("int".to_string())),
-            SapTy::Bigint { .. } => Ok(Some("bigint".to_string())),
-            SapTy::Float { .. } => Ok(Some("float".to_string())),
-            SapTy::Bool { .. } => Ok(Some("bool".to_string())),
-            SapTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
+            SapTy::String => Ok(Some("string".to_string())),
+            SapTy::Int => Ok(Some("int".to_string())),
+            SapTy::Bigint => Ok(Some("bigint".to_string())),
+            SapTy::Float => Ok(Some("float".to_string())),
+            SapTy::Bool => Ok(Some("bool".to_string())),
+            SapTy::Null => Ok(Some(rendered_null_type(options).to_string())),
 
-            SapTy::List(inner, _) => {
+            SapTy::List(inner) => {
                 let inner_str = self
                     .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
@@ -583,41 +577,41 @@ impl OutputFormatContent {
                     SapTy::Class(..) | SapTy::Interface(..) => {
                         class_is_hoisted(inner, hoisted_classes)
                     }
-                    SapTy::TypeAlias(tn, _) => self
+                    SapTy::TypeAlias(tn) => self
                         .recursive_type_aliases
                         .contains_key(tn.display_name().as_str()),
-                    _ => false,
+                    _ => false
                 };
                 let needs_multiline = !is_hoisted
                     && match inner.as_ref() {
-                        SapTy::String { .. }
-                        | SapTy::Int { .. }
-                        | SapTy::Float { .. }
-                        | SapTy::Bool { .. }
-                        | SapTy::Null { .. } => false,
-                        SapTy::Enum(tn, _) => {
+                        SapTy::String
+                        | SapTy::Int
+                        | SapTy::Float
+                        | SapTy::Bool
+                        | SapTy::Null => false,
+                        SapTy::Enum(tn) => {
                             // Hoisted enums render as a bracketed block (legacy
                             // parity: `[\n  Name\n]`); inline enums go
                             // multiline only when long.
                             hoisted_enums.contains(tn.display_name().as_str())
                                 || inner_str.len() > 15
                         }
-                        SapTy::Union(items, _) => items.iter().all(|t| {
+                        SapTy::Union(items) => items.iter().all(|t| {
                             !matches!(
                                 t,
-                                SapTy::String { .. }
-                                    | SapTy::Int { .. }
-                                    | SapTy::Float { .. }
-                                    | SapTy::Bool { .. }
-                                    | SapTy::Null { .. }
+                                SapTy::String
+                                    | SapTy::Int
+                                    | SapTy::Float
+                                    | SapTy::Bool
+                                    | SapTy::Null
                             )
                         }),
-                        _ => true,
+                        _ => true
                     };
 
                 if needs_multiline {
                     Ok(Some(format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))))
-                } else if matches!(inner.as_ref(), SapTy::Union(_, _)) {
+                } else if matches!(inner.as_ref(), SapTy::Union(_)) {
                     Ok(Some(format!("({inner_str})[]")))
                 } else {
                     Ok(Some(format!("{inner_str}[]")))
@@ -639,12 +633,12 @@ impl OutputFormatContent {
                 }
             }
 
-            SapTy::Union(variants, _) => {
+            SapTy::Union(variants) => {
                 // Null arms render last (`X or null`), matching the legacy
                 // renderer regardless of the union's internal arm order.
                 let (null_variants, value_variants): (Vec<&SapTy>, Vec<&SapTy>) = variants
                     .iter()
-                    .partition(|v| matches!(v, SapTy::Null { .. }));
+                    .partition(|v| matches!(v, SapTy::Null));
                 let rendered: Vec<String> = value_variants
                     .into_iter()
                     .chain(null_variants)
@@ -657,7 +651,7 @@ impl OutputFormatContent {
                 Ok(Some(rendered.join(or_splitter)))
             }
 
-            SapTy::Enum(tn, _) => {
+            SapTy::Enum(tn) => {
                 let tn_display_name = tn.display_name();
                 if hoisted_enums.contains(tn_display_name.as_str()) {
                     // Hoisted enum: render as just the display name
@@ -682,7 +676,7 @@ impl OutputFormatContent {
                 }
             }
 
-            SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) => {
+            SapTy::Class(tn, _) | SapTy::Interface(tn, _, _) => {
                 let class_key = class_instantiation_key(ty);
                 if let Some(cls) = self
                     .find_class(&class_key)
@@ -693,51 +687,51 @@ impl OutputFormatContent {
                         options,
                         hoisted_classes,
                         hoisted_enums,
-                        false,
+                        false
                     )?))
                 } else {
                     Ok(Some(class_instantiation_key(ty)))
                 }
             }
 
-            SapTy::Uint8Array { .. } => {
+            SapTy::Uint8Array => {
                 Err(RenderError::UnsupportedType("uint8array".to_string()))
             }
-            SapTy::Media(kind, _) => Ok(Some(kind.to_string())),
+            SapTy::Media(kind) => Ok(Some(kind.to_string())),
 
-            SapTy::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
+            SapTy::Literal(lit, _) => Ok(Some(render_literal(lit))),
 
             // Opaque leaf types have no JSON output-format schema. They surface
             // as `UnsupportedType` named the same way `SapTy`'s `Display` renders
             // them (`reflect.Type`, or the fixed qualified name).
-            SapTy::Type { .. } => {
+            SapTy::Type => {
                 Err(RenderError::UnsupportedType("reflect.Type".to_string()))
             }
-            SapTy::Resource { .. } => {
+            SapTy::Resource => {
                 Err(RenderError::UnsupportedType("ai.Resource".to_string()))
             }
-            SapTy::PromptAst { .. } => {
+            SapTy::PromptAst => {
                 Err(RenderError::UnsupportedType("ai.Prompt".to_string()))
             }
 
-            SapTy::TypeAlias(fqn, _) => {
+            SapTy::TypeAlias(fqn) => {
                 // Recursive type aliases render as just their display name
                 Ok(Some(fqn.display_name().to_string()))
             }
 
             SapTy::Function { .. }
-            | SapTy::Void { .. }
-            | SapTy::Unknown { .. }
+            | SapTy::Void
+            | SapTy::Unknown
             | SapTy::EnumVariant(..)
             | SapTy::Future(..)
             | SapTy::TypeVar(..)
             | SapTy::AssociatedTypeProjection { .. }
-            | SapTy::Never { .. }
+            | SapTy::Never
             // Checked LLM execution and render-companion paths reject these at
             // `validate_output_type`. Throws-never low-level output-format
             // helpers may still degrade this error to an empty string, so keep
             // the formatter fallible rather than aborting the process.
-            | SapTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
+            | SapTy::RustType => Err(RenderError::UnsupportedType(ty.to_string()))
         }
     }
 
@@ -908,7 +902,7 @@ fn class_is_hoisted(ty: &SapTy, hoisted: &indexmap::IndexSet<String>) -> bool {
 /// class's display name alone is insufficient: `Box<int>` and `Box<string>`
 /// have different field schemas even though both are named `Box`.
 fn class_instantiation_key(ty: &SapTy) -> String {
-    let (SapTy::Class(type_name, type_args, _) | SapTy::Interface(type_name, type_args, _, _)) = ty
+    let (SapTy::Class(type_name, type_args) | SapTy::Interface(type_name, type_args, _)) = ty
     else {
         unreachable!("class_instantiation_key called for a non-class type")
     };
@@ -930,7 +924,7 @@ fn class_instantiation_key(ty: &SapTy) -> String {
 /// Extract the display name from an enum target type.
 fn enm_display_name(ty: &SapTy) -> Option<baml_type::Name> {
     match ty {
-        SapTy::Enum(tn, _) => Some(tn.display_name()),
+        SapTy::Enum(tn) => Some(tn.display_name()),
         _ => None,
     }
 }
@@ -956,13 +950,13 @@ fn rendered_null_type(options: &RenderOptions) -> &str {
 fn media_output_instruction(target: &SapTy, options: &RenderOptions) -> Option<String> {
     let null_type = rendered_null_type(options);
     match target {
-        SapTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
-        SapTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
+        SapTy::Media(kind) => Some(format!("Return an {kind} output.")),
+        SapTy::Union(variants) if nullable_media_union_kind(variants).is_some() => {
             let kind = nullable_media_union_kind(variants).expect("checked above");
             Some(format!("Return an {kind} output or {null_type}."))
         }
-        SapTy::List(inner, _) => match inner.as_ref() {
-            SapTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
+        SapTy::List(inner) => match inner.as_ref() {
+            SapTy::Media(kind) => Some(format!("Return one or more {kind} outputs.")),
             inner if is_text_or_image_union(inner) => {
                 Some("Return an ordered sequence of text and image outputs.".to_string())
             }
@@ -980,7 +974,7 @@ fn nullable_media_union_kind(variants: &[SapTy]) -> Option<baml_base::MediaKind>
     let mut has_null = false;
     for variant in variants {
         match variant {
-            SapTy::Media(media_kind, _) => {
+            SapTy::Media(media_kind) => {
                 if kind
                     .replace(*media_kind)
                     .is_some_and(|prev| prev != *media_kind)
@@ -988,7 +982,7 @@ fn nullable_media_union_kind(variants: &[SapTy]) -> Option<baml_base::MediaKind>
                     return None;
                 }
             }
-            SapTy::Null { .. } => has_null = true,
+            SapTy::Null => has_null = true,
             _ => return None,
         }
     }
@@ -997,7 +991,7 @@ fn nullable_media_union_kind(variants: &[SapTy]) -> Option<baml_base::MediaKind>
 }
 
 pub(crate) fn is_text_or_image_union(target: &SapTy) -> bool {
-    let SapTy::Union(variants, _) = target else {
+    let SapTy::Union(variants) = target else {
         return false;
     };
 
@@ -1005,9 +999,9 @@ pub(crate) fn is_text_or_image_union(target: &SapTy) -> bool {
     let mut has_image = false;
     for variant in variants {
         match variant {
-            SapTy::String { .. } => has_string = true,
-            SapTy::Media(baml_base::MediaKind::Image, _) => has_image = true,
-            SapTy::Null { .. } => {}
+            SapTy::String => has_string = true,
+            SapTy::Media(baml_base::MediaKind::Image) => has_image = true,
+            SapTy::Null => {}
             _ => return false,
         }
     }
@@ -1212,7 +1206,7 @@ fn walk_ty(
     ancestry: &mut Vec<ClassFrame>,
 ) -> Result<(), RenderError> {
     match ty {
-        SapTy::Class(type_name, type_args, _) => {
+        SapTy::Class(type_name, type_args) => {
             let output_key = class_instantiation_key(ty);
             let output_name = type_name.display_name().to_string();
 
@@ -1301,7 +1295,7 @@ fn walk_ty(
                 ancestry.pop();
             }
         }
-        SapTy::Enum(type_name, _) => {
+        SapTy::Enum(type_name) => {
             let key = OutputVisitKey::Enum(type_name.clone());
             if !visited.insert(key) {
                 // Legacy renderer parity: a re-reference moves the enum to the
@@ -1343,7 +1337,7 @@ fn walk_ty(
                 );
             }
         }
-        SapTy::TypeAlias(type_name, _) => {
+        SapTy::TypeAlias(type_name) => {
             // The `baml.json.json` recursive alias is an opaque leaf for output-format
             // rendering — it has no schema body to collect.  Record the sentinel visit so
             // any later reference is de-duped, but do *not* insert it into
@@ -1377,7 +1371,7 @@ fn walk_ty(
                 walk_ty(target_ty, &target_origins, ctx, content, visited, ancestry)?;
             }
         }
-        SapTy::List(inner, _) => {
+        SapTy::List(inner) => {
             let inner_origins = origins.list_element();
             walk_ty(inner, &inner_origins, ctx, content, visited, ancestry)?;
         }
@@ -1387,7 +1381,7 @@ fn walk_ty(
             walk_ty(key, &key_origins, ctx, content, visited, ancestry)?;
             walk_ty(value, &value_origins, ctx, content, visited, ancestry)?;
         }
-        SapTy::Union(members, _) => {
+        SapTy::Union(members) => {
             for (index, member) in members.iter().enumerate() {
                 let member_origins = origins.union_member(index);
                 walk_ty(member, &member_origins, ctx, content, visited, ancestry)?;
@@ -1403,7 +1397,7 @@ fn walk_ty(
 mod tests {
     use std::sync::Arc;
 
-    use baml_type::{DeclarationName, Freshness, TyAttr, TypeName};
+    use baml_type::{DeclarationName, Freshness, TypeName};
     use sys_types::{DefKey, SapTy as RuntimeTy};
 
     /// Build a lane key for a test declaration: a compiled declaration's
@@ -1428,13 +1422,10 @@ mod tests {
     fn duplicate_hoisted_enum_aliases_are_rejected() {
         let first = dynamic_key("Choice");
         let second = dynamic_key("Choice_2");
-        let target = RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::Enum(first.clone(), TyAttr::default()),
-                RuntimeTy::Enum(second.clone(), TyAttr::default()),
-            ]),
-            TyAttr::default(),
-        );
+        let target = RuntimeTy::Union(Box::new([
+            RuntimeTy::Enum(first.clone()),
+            RuntimeTy::Enum(second.clone()),
+        ]));
         let definition = |name: &str| sys_types::EnumDefinition {
             name: name.to_string(),
             docstring: None,
@@ -1465,7 +1456,7 @@ mod tests {
             RenderError::RenderedEnumNameCollision {
                 rendered_name,
                 first,
-                second,
+                second
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
         ));
     }
@@ -1474,13 +1465,10 @@ mod tests {
     fn class_and_enum_hoisted_alias_collision_is_rejected() {
         let class_key = dynamic_key("Choice");
         let enum_key = dynamic_key("Choice_2");
-        let target = RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::Class(class_key.clone(), Box::new([]), TyAttr::default()),
-                RuntimeTy::Enum(enum_key.clone(), TyAttr::default()),
-            ]),
-            TyAttr::default(),
-        );
+        let target = RuntimeTy::Union(Box::new([
+            RuntimeTy::Class(class_key.clone(), Box::new([])),
+            RuntimeTy::Enum(enum_key.clone()),
+        ]));
         let mut class = ctx_class_definition(
             &class_key,
             vec![ctx_class_field("value", ty_string(), None)],
@@ -1521,7 +1509,7 @@ mod tests {
             RenderError::RenderedEnumNameCollision {
                 rendered_name,
                 first,
-                second,
+                second
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
         ));
     }
@@ -1546,7 +1534,7 @@ mod tests {
             RenderError::RenderedClassNameCollision {
                 rendered_name,
                 first,
-                second,
+                second
             } if rendered_name == "SharedChoice" && first == "SharedChoice" && second == "Choice"
         ));
     }
@@ -1555,13 +1543,10 @@ mod tests {
     fn same_name_type_aliases_with_different_targets_are_rejected() {
         let first = dynamic_key("SharedAlias");
         let second = dynamic_key("SharedAlias");
-        let target = RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
-                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
-            ]),
-            TyAttr::default(),
-        );
+        let target = RuntimeTy::Union(Box::new([
+            RuntimeTy::TypeAlias(first.clone()),
+            RuntimeTy::TypeAlias(second.clone()),
+        ]));
         let mut aliases = indexmap::IndexMap::new();
         aliases.insert(first, ty_string());
         aliases.insert(second, ty_int());
@@ -1576,7 +1561,7 @@ mod tests {
             RenderError::RenderedTypeAliasNameCollision {
                 rendered_name,
                 first,
-                second,
+                second
             } if rendered_name == "SharedAlias" && first == "string" && second == "int"
         ));
     }
@@ -1585,13 +1570,10 @@ mod tests {
     fn same_name_type_aliases_with_equivalent_targets_fold_once() {
         let first = dynamic_key("SharedAlias");
         let second = dynamic_key("SharedAlias");
-        let target = RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
-                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
-            ]),
-            TyAttr::default(),
-        );
+        let target = RuntimeTy::Union(Box::new([
+            RuntimeTy::TypeAlias(first.clone()),
+            RuntimeTy::TypeAlias(second.clone()),
+        ]));
         let mut aliases = indexmap::IndexMap::new();
         aliases.insert(first, ty_string());
         aliases.insert(second, ty_string());
@@ -1613,7 +1595,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = RuntimeTy::TypeAlias(key(&json_tn), TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(key(&json_tn));
         let content = OutputFormatContent::new(json_ty);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -1629,7 +1611,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel_ignores_explicit_prefix() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = RuntimeTy::TypeAlias(key(&json_tn), TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(key(&json_tn));
         let content = OutputFormatContent::new(json_ty);
 
         let options = RenderOptions {
@@ -1648,7 +1630,7 @@ mod tests {
     #[test]
     fn test_render_non_json_alias_does_not_sentinel() {
         let other_tn = TypeName::from_dotted_path("baml.other.SomeAlias");
-        let other_ty = RuntimeTy::TypeAlias(key(&other_tn), TyAttr::default());
+        let other_ty = RuntimeTy::TypeAlias(key(&other_tn));
         // Without any class/enum definitions or recursive_type_aliases, the alias
         // renders as just its display name (the existing fallback).
         let content = OutputFormatContent::new(other_ty);
@@ -1664,57 +1646,42 @@ mod tests {
 
     #[test]
     fn test_render_string() {
-        let content = OutputFormatContent::new(RuntimeTy::String {
-            attr: TyAttr::default(),
-        });
+        let content = OutputFormatContent::new(RuntimeTy::String);
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, None);
     }
 
     #[test]
     fn test_render_int() {
-        let content = OutputFormatContent::new(RuntimeTy::Int {
-            attr: TyAttr::default(),
-        });
+        let content = OutputFormatContent::new(RuntimeTy::Int);
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as an int".to_string()));
     }
 
     #[test]
     fn test_render_bigint() {
-        let content = OutputFormatContent::new(RuntimeTy::Bigint {
-            attr: TyAttr::default(),
-        });
+        let content = OutputFormatContent::new(RuntimeTy::Bigint);
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as a bigint".to_string()));
     }
 
     #[test]
     fn test_render_float() {
-        let content = OutputFormatContent::new(RuntimeTy::Float {
-            attr: TyAttr::default(),
-        });
+        let content = OutputFormatContent::new(RuntimeTy::Float);
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as a float".to_string()));
     }
 
     #[test]
     fn test_render_bool() {
-        let content = OutputFormatContent::new(RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        });
+        let content = OutputFormatContent::new(RuntimeTy::Bool);
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as a bool".to_string()));
     }
 
     #[test]
     fn test_render_list() {
-        let content = OutputFormatContent::new(RuntimeTy::List(
-            Box::new(RuntimeTy::String {
-                attr: TyAttr::default(),
-            }),
-            TyAttr::default(),
-        ));
+        let content = OutputFormatContent::new(RuntimeTy::List(Box::new(RuntimeTy::String)));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -1724,12 +1691,7 @@ mod tests {
 
     #[test]
     fn test_render_list_of_int() {
-        let content = OutputFormatContent::new(RuntimeTy::List(
-            Box::new(RuntimeTy::Int {
-                attr: TyAttr::default(),
-            }),
-            TyAttr::default(),
-        ));
+        let content = OutputFormatContent::new(RuntimeTy::List(Box::new(RuntimeTy::Int)));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -1739,31 +1701,22 @@ mod tests {
 
     #[test]
     fn test_render_media_output_instructions() {
-        let image = RuntimeTy::Media(baml_base::MediaKind::Image, TyAttr::default());
+        let image = RuntimeTy::Media(baml_base::MediaKind::Image);
 
         let rendered = OutputFormatContent::new(image.clone())
             .render(&RenderOptions::default())
             .unwrap();
         assert_eq!(rendered, Some("Return an image output.".to_string()));
 
-        let rendered =
-            OutputFormatContent::new(RuntimeTy::List(Box::new(image.clone()), TyAttr::default()))
-                .render(&RenderOptions::default())
-                .unwrap();
+        let rendered = OutputFormatContent::new(RuntimeTy::List(Box::new(image.clone())))
+            .render(&RenderOptions::default())
+            .unwrap();
         assert_eq!(
             rendered,
             Some("Return one or more image outputs.".to_string())
         );
 
-        let text_or_image = RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::String {
-                    attr: TyAttr::default(),
-                },
-                image.clone(),
-            ]),
-            TyAttr::default(),
-        );
+        let text_or_image = RuntimeTy::Union(Box::new([RuntimeTy::String, image.clone()]));
 
         let rendered = OutputFormatContent::new(text_or_image.clone())
             .render(&RenderOptions::default())
@@ -1773,10 +1726,9 @@ mod tests {
             Some("Return either text or an image output.".to_string())
         );
 
-        let rendered =
-            OutputFormatContent::new(RuntimeTy::List(Box::new(text_or_image), TyAttr::default()))
-                .render(&RenderOptions::default())
-                .unwrap();
+        let rendered = OutputFormatContent::new(RuntimeTy::List(Box::new(text_or_image)))
+            .render(&RenderOptions::default())
+            .unwrap();
         assert_eq!(
             rendered,
             Some("Return an ordered sequence of text and image outputs.".to_string())
@@ -1801,17 +1753,10 @@ mod tests {
             Some("Return an image output or omit.".to_string())
         );
 
-        let rendered = OutputFormatContent::new(RuntimeTy::Union(
-            Box::new([
-                image,
-                RuntimeTy::Null {
-                    attr: TyAttr::default(),
-                },
-            ]),
-            TyAttr::default(),
-        ))
-        .render(&RenderOptions::default())
-        .unwrap();
+        let rendered =
+            OutputFormatContent::new(RuntimeTy::Union(Box::new([image, RuntimeTy::Null])))
+                .render(&RenderOptions::default())
+                .unwrap();
         assert_eq!(
             rendered,
             Some("Return an image output or null.".to_string())
@@ -1820,9 +1765,7 @@ mod tests {
 
     #[test]
     fn test_render_optional() {
-        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }));
+        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         // A nullable primitive renders a schema, so it takes the generic
         // schema prefix (legacy renderer parity) — unlike a bare primitive.
@@ -1834,9 +1777,7 @@ mod tests {
 
     #[test]
     fn test_render_optional_with_custom_null_type() {
-        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String {
-            attr: TyAttr::default(),
-        }));
+        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String));
         let rendered = content
             .render(&RenderOptions {
                 render_null_as: RenderSetting::Always("omit".to_string()),
@@ -1852,13 +1793,8 @@ mod tests {
     #[test]
     fn test_render_map() {
         let content = OutputFormatContent::new(RuntimeTy::Map {
-            key: Box::new(RuntimeTy::String {
-                attr: TyAttr::default(),
-            }),
-            value: Box::new(RuntimeTy::Int {
-                attr: TyAttr::default(),
-            }),
-            attr: TyAttr::default(),
+            key: Box::new(RuntimeTy::String),
+            value: Box::new(RuntimeTy::Int),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -1872,13 +1808,8 @@ mod tests {
         // `map_style='type_parameters'` stays available as an opt-in escape hatch
         // that renders the literal BAML type syntax.
         let content = OutputFormatContent::new(RuntimeTy::Map {
-            key: Box::new(RuntimeTy::String {
-                attr: TyAttr::default(),
-            }),
-            value: Box::new(RuntimeTy::Int {
-                attr: TyAttr::default(),
-            }),
-            attr: TyAttr::default(),
+            key: Box::new(RuntimeTy::String),
+            value: Box::new(RuntimeTy::Int),
         });
         let rendered = content
             .render(&RenderOptions {
@@ -1908,7 +1839,7 @@ mod tests {
             Some(String::from(
                 r#"Answer in JSON using this schema:
 {
-  scores: { "<string>": int },
+  scores: { "<string>": int }
 }"#
             ))
         );
@@ -1925,18 +1856,14 @@ mod tests {
                 ClassField {
                     name: "name".to_string(),
                     alias: None,
-                    field_type: RuntimeTy::String {
-                        attr: TyAttr::default(),
-                    },
+                    field_type: RuntimeTy::String,
                     description: None,
                     docstring: None,
                 },
                 ClassField {
                     name: "age".to_string(),
                     alias: None,
-                    field_type: RuntimeTy::Int {
-                        attr: TyAttr::default(),
-                    },
+                    field_type: RuntimeTy::Int,
                     description: Some("Age in years".to_string()),
                     docstring: None,
                 },
@@ -1946,7 +1873,6 @@ mod tests {
         let content = OutputFormatContent::new(RuntimeTy::Class(
             key(&baml_type::TypeName::local("Person".into())),
             Box::new([]),
-            TyAttr::default(),
         ))
         .with_class(cls);
 
@@ -1978,18 +1904,14 @@ mod tests {
                 ClassField {
                     name: "x".to_string(),
                     alias: None,
-                    field_type: RuntimeTy::Int {
-                        attr: TyAttr::default(),
-                    },
+                    field_type: RuntimeTy::Int,
                     description: None,
                     docstring: None,
                 },
                 ClassField {
                     name: "y".to_string(),
                     alias: None,
-                    field_type: RuntimeTy::Int {
-                        attr: TyAttr::default(),
-                    },
+                    field_type: RuntimeTy::Int,
                     description: None,
                     docstring: None,
                 },
@@ -1999,7 +1921,6 @@ mod tests {
         let content = OutputFormatContent::new(RuntimeTy::Class(
             key(&baml_type::TypeName::local("Point".into())),
             Box::new([]),
-            TyAttr::default(),
         ))
         .with_class(cls);
 
@@ -2046,10 +1967,9 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(RuntimeTy::Enum(
-            key(&baml_type::TypeName::local("Color".into())),
-            TyAttr::default(),
-        ))
+        let content = OutputFormatContent::new(RuntimeTy::Enum(key(&baml_type::TypeName::local(
+            "Color".into(),
+        ))))
         .with_enum(enm);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -2123,20 +2043,11 @@ mod tests {
 
     #[test]
     fn test_render_union() {
-        let content = OutputFormatContent::new(RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::String {
-                    attr: TyAttr::default(),
-                },
-                RuntimeTy::Int {
-                    attr: TyAttr::default(),
-                },
-                RuntimeTy::Bool {
-                    attr: TyAttr::default(),
-                },
-            ]),
-            TyAttr::default(),
-        ));
+        let content = OutputFormatContent::new(RuntimeTy::Union(Box::new([
+            RuntimeTy::String,
+            RuntimeTy::Int,
+            RuntimeTy::Bool,
+        ])));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -2146,17 +2057,10 @@ mod tests {
 
     #[test]
     fn test_render_with_custom_or_splitter() {
-        let content = OutputFormatContent::new(RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::String {
-                    attr: TyAttr::default(),
-                },
-                RuntimeTy::Int {
-                    attr: TyAttr::default(),
-                },
-            ]),
-            TyAttr::default(),
-        ));
+        let content = OutputFormatContent::new(RuntimeTy::Union(Box::new([
+            RuntimeTy::String,
+            RuntimeTy::Int,
+        ])));
         let options = RenderOptions {
             or_splitter: RenderSetting::Always(" | ".to_string()),
             ..Default::default()
@@ -2173,7 +2077,6 @@ mod tests {
         let content = OutputFormatContent::new(RuntimeTy::Literal(
             LiteralValue::String("hello".to_string()),
             Freshness::Regular,
-            TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -2187,7 +2090,6 @@ mod tests {
         let content = OutputFormatContent::new(RuntimeTy::Literal(
             LiteralValue::Int(42),
             Freshness::Regular,
-            TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -2201,7 +2103,6 @@ mod tests {
         let content = OutputFormatContent::new(RuntimeTy::Literal(
             LiteralValue::Bool(true),
             Freshness::Regular,
-            TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -2219,9 +2120,7 @@ mod tests {
 
     #[test]
     fn test_render_non_data_type_returns_error_instead_of_panicking() {
-        let content = OutputFormatContent::new(RuntimeTy::Never {
-            attr: TyAttr::default(),
-        });
+        let content = OutputFormatContent::new(RuntimeTy::Never);
         let err = content.render(&RenderOptions::default()).unwrap_err();
         assert!(matches!(err, RenderError::UnsupportedType(s) if s == "never"));
     }
@@ -2231,61 +2130,41 @@ mod tests {
     // ========================================================================
 
     fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
     fn ty_bool() -> RuntimeTy {
-        RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Bool
     }
     fn ty_string() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::String
     }
     fn ty_float() -> RuntimeTy {
-        RuntimeTy::Float {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Float
     }
     fn ty_class(name: &str) -> RuntimeTy {
-        RuntimeTy::Class(
-            key(&baml_type::TypeName::local(name.into())),
-            Box::new([]),
-            TyAttr::default(),
-        )
+        RuntimeTy::Class(key(&baml_type::TypeName::local(name.into())), Box::new([]))
     }
     fn ty_class_with_args(name: &str, args: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Class(
-            key(&baml_type::TypeName::local(name.into())),
-            args.into(),
-            TyAttr::default(),
-        )
+        RuntimeTy::Class(key(&baml_type::TypeName::local(name.into())), args.into())
     }
     fn ty_optional(inner: RuntimeTy) -> RuntimeTy {
         RuntimeTy::optional(inner)
     }
     fn ty_list(inner: RuntimeTy) -> RuntimeTy {
-        RuntimeTy::List(Box::new(inner), TyAttr::default())
+        RuntimeTy::List(Box::new(inner))
     }
     fn ty_map(key: RuntimeTy, value: RuntimeTy) -> RuntimeTy {
         RuntimeTy::Map {
             key: Box::new(key),
             value: Box::new(value),
-            attr: TyAttr::default(),
         }
     }
     fn ty_union(variants: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(variants.into(), TyAttr::default())
+        RuntimeTy::Union(variants.into())
     }
 
     fn ty_enum(name: &str) -> RuntimeTy {
-        RuntimeTy::Enum(
-            key(&baml_type::TypeName::local(name.into())),
-            TyAttr::default(),
-        )
+        RuntimeTy::Enum(key(&baml_type::TypeName::local(name.into())))
     }
 
     fn mk_class(name: &str, fields: Vec<(&str, RuntimeTy)>) -> Class {
@@ -2352,14 +2231,11 @@ mod tests {
         // still report declaration order: first == Choice.
         let first = dynamic_key("Choice");
         let second = dynamic_key("Choice_2");
-        let target = RuntimeTy::Union(
-            Box::new([
-                RuntimeTy::Enum(first.clone(), TyAttr::default()),
-                RuntimeTy::Enum(second.clone(), TyAttr::default()),
-                RuntimeTy::Enum(first.clone(), TyAttr::default()),
-            ]),
-            TyAttr::default(),
-        );
+        let target = RuntimeTy::Union(Box::new([
+            RuntimeTy::Enum(first.clone()),
+            RuntimeTy::Enum(second.clone()),
+            RuntimeTy::Enum(first.clone()),
+        ]));
         let definition = |name: &str| sys_types::EnumDefinition {
             name: name.to_string(),
             docstring: None,
@@ -2390,16 +2266,14 @@ mod tests {
             RenderError::RenderedEnumNameCollision {
                 rendered_name,
                 first,
-                second,
+                second
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
         ));
     }
 
     #[test]
     fn nullable_primitive_targets_take_the_generic_schema_prefix() {
-        let ty_bigint = || RuntimeTy::Bigint {
-            attr: TyAttr::default(),
-        };
+        let ty_bigint = || RuntimeTy::Bigint;
         for (ty, rendered) in [
             (ty_int(), "int"),
             (ty_bigint(), "bigint"),
@@ -2415,7 +2289,7 @@ mod tests {
                 .unwrap_or_default();
             assert_eq!(
                 output,
-                format!("Answer in JSON using this schema:\n{rendered} or null"),
+                format!("Answer in JSON using this schema:\n{rendered} or null")
             );
         }
     }
@@ -2527,13 +2401,13 @@ mod tests {
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer in JSON using this schema:
 {
   head: Node or null,
-  len: int,
+  len: int
 }"#
             ))
         );
@@ -2552,15 +2426,15 @@ Answer in JSON using this schema:
             rendered,
             Some(String::from(
                 r#"A {
-  pointer: B,
+  pointer: B
 }
 
 B {
-  pointer: C,
+  pointer: C
 }
 
 C {
-  pointer: A or null,
+  pointer: A or null
 }
 
 Answer in JSON using this schema: A"#
@@ -2589,22 +2463,22 @@ Answer in JSON using this schema: A"#
             rendered,
             Some(String::from(
                 r#"A {
-  pointer: B,
+  pointer: B
 }
 
 B {
-  pointer: C,
+  pointer: C
 }
 
 C {
-  pointer: A or null,
+  pointer: A or null
 }
 
 Answer in JSON using this schema:
 {
   pointer: A,
   data: int,
-  field: bool,
+  field: bool
 }"#
             ))
         );
@@ -2641,23 +2515,23 @@ Answer in JSON using this schema:
   pointer: B,
   nested: {
     data: int,
-    field: bool,
-  },
+    field: bool
+  }
 }
 
 B {
-  pointer: C,
+  pointer: C
 }
 
 C {
-  pointer: A or null,
+  pointer: A or null
 }
 
 Answer in JSON using this schema:
 {
   pointer: A,
   data: int,
-  field: bool,
+  field: bool
 }"#
             ))
         );
@@ -2682,11 +2556,11 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Tree {
   data: int,
-  children: Forest,
+  children: Forest
 }
 
 Forest {
-  trees: Tree[],
+  trees: Tree[]
 }
 
 Answer in JSON using this schema: Tree"#
@@ -2741,12 +2615,12 @@ Answer in JSON using this schema: Tree"#
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Tree {
   data: int,
-  children: Tree[],
+  children: Tree[]
 }
 
 Answer in JSON using any of these schemas:
@@ -2785,19 +2659,19 @@ Node or Tree"#
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Tree {
   data: int,
-  children: Tree[],
+  children: Tree[]
 }
 
 Answer in JSON using this schema:
 {
   data_type: Node or Tree,
   len: int,
-  description: string,
+  description: string
 }"#
             ))
         );
@@ -2830,18 +2704,18 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Tree {
   data: int,
-  children: Tree[],
+  children: Tree[]
 }
 
 Answer in JSON using any of these schemas:
 Node or Tree or {
   data: int,
-  tag: string,
+  tag: string
 }"#
             ))
         );
@@ -2885,22 +2759,22 @@ Node or Tree or {
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Tree {
   data: int,
-  children: Tree[],
+  children: Tree[]
 }
 
 Answer in JSON using this schema:
 {
   data_type: Node or Tree or {
     data: int,
-    tag: string,
+    tag: string
   },
   len: int,
-  description: string,
+  description: string
 }"#
             ))
         );
@@ -2928,12 +2802,12 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Tree {
   data: int,
-  children: Tree[],
+  children: Tree[]
 }
 
 Answer in JSON using any of these schemas:
@@ -2975,19 +2849,19 @@ Node or int or string or Tree"#
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Tree {
   data: int,
-  children: Tree[],
+  children: Tree[]
 }
 
 Answer in JSON using this schema:
 {
   the_union: Node or int or string or Tree,
   data: int,
-  field: bool,
+  field: bool
 }"#
             ))
         );
@@ -3011,7 +2885,7 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer with a JSON Array using this schema:
@@ -3033,7 +2907,7 @@ Node[]"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: { "<string>": RecursiveMap },
+  data: { "<string>": RecursiveMap }
 }
 
 Answer in JSON using this schema: RecursiveMap"#
@@ -3059,12 +2933,12 @@ Answer in JSON using this schema: RecursiveMap"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: { "<string>": RecursiveMap },
+  data: { "<string>": RecursiveMap }
 }
 
 Answer in JSON using this schema:
 {
-  rec_map: RecursiveMap,
+  rec_map: RecursiveMap
 }"#
             ))
         );
@@ -3085,7 +2959,7 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer in JSON using this schema:
@@ -3113,12 +2987,12 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer in JSON using this schema:
 {
-  data: { "<string>": Node },
+  data: { "<string>": Node }
 }"#
             ))
         );
@@ -3143,12 +3017,12 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer in JSON using this schema:
 {
-  data: { "<string>": Node or null },
+  data: { "<string>": Node or null }
 }"#
             ))
         );
@@ -3176,13 +3050,13 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer in JSON using this schema:
 { "<string>": Node or int or {
   field: string,
-  data: int,
+  data: int
 } }"#
             ))
         );
@@ -3217,15 +3091,15 @@ Answer in JSON using this schema:
             Some(String::from(
                 r#"Node {
   data: int,
-  next: Node or null,
+  next: Node or null
 }
 
 Answer in JSON using this schema:
 {
   data: { "<string>": Node or int or {
     field: string,
-    data: int,
-  } },
+    data: int
+  } }
 }"#
             ))
         );
@@ -3260,22 +3134,22 @@ Answer in JSON using this schema:
             rendered,
             Some(String::from(
                 r#"interface A {
-  pointer: B,
+  pointer: B
 }
 
 interface B {
-  pointer: C,
+  pointer: C
 }
 
 interface C {
-  pointer: A or null,
+  pointer: A or null
 }
 
 Answer in JSON using this interface:
 {
   pointer: A,
   data: int,
-  field: bool,
+  field: bool
 }"#
             ))
         );
@@ -3305,11 +3179,11 @@ Answer in JSON using this interface:
             rendered,
             Some(String::from(
                 r#"A {
-  prop: int,
+  prop: int
 }
 
 B {
-  prop: string,
+  prop: string
 }
 
 Answer in JSON using this schema:
@@ -3317,8 +3191,8 @@ Answer in JSON using this schema:
   a: A,
   b: B,
   c: {
-    prop: float,
-  },
+    prop: float
+  }
 }"#
             ))
         );
@@ -3380,21 +3254,21 @@ Answer in JSON using this schema:
             rendered,
             Some(String::from(
                 r#"A {
-  prop: int,
+  prop: int
 }
 
 B {
-  prop: string,
+  prop: string
 }
 
 C {
-  prop: float,
+  prop: float
 }
 
 Ret {
   a: A,
   b: B,
-  c: C,
+  c: C
 }
 
 Answer in JSON using this schema: Ret"#
@@ -3546,7 +3420,6 @@ Answer in JSON using this schema: Ret"#
                         RuntimeTy::Literal(
                             LiteralValue::String("current".to_string()),
                             Freshness::Regular,
-                            TyAttr::default(),
                         ),
                     ]),
                     description: None,
@@ -3680,7 +3553,6 @@ Answer in JSON using this schema: Ret"#
                         RuntimeTy::Literal(
                             LiteralValue::String("current".to_string()),
                             Freshness::Regular,
-                            TyAttr::default(),
                         ),
                     ]),
                     description: None,
@@ -4023,7 +3895,7 @@ Answer in JSON using this schema: Ret"#
             RenderError::RenderedClassNameCollision {
                 rendered_name,
                 first,
-                second,
+                second
             } if rendered_name == "Container<int>"
                 && first == "Box<int>"
                 && second == "Crate<int>"
@@ -4079,10 +3951,7 @@ Answer in JSON using this schema: Ret"#
     // ========================================================================
 
     fn ty_alias(name: &str) -> RuntimeTy {
-        RuntimeTy::TypeAlias(
-            key(&baml_type::TypeName::local(name.into())),
-            TyAttr::default(),
-        )
+        RuntimeTy::TypeAlias(key(&baml_type::TypeName::local(name.into())))
     }
 
     #[test]
@@ -4106,7 +3975,7 @@ Answer in JSON using this schema: Ret"#
             rendered,
             Some(String::from(
                 r#"SelfReferential {
-  recursion: int or string or SelfReferential or null,
+  recursion: int or string or SelfReferential or null
 }
 
 Answer in JSON using this schema: SelfReferential"#
@@ -4193,7 +4062,7 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_build_output_format_preserves_exact_recursive_generic() {
         let chain = key(&baml_type::TypeName::local("Chain".into()));
-        let target = RuntimeTy::Class(chain.clone(), Box::new([ty_int()]), TyAttr::default());
+        let target = RuntimeTy::Class(chain.clone(), Box::new([ty_int()]));
         let next_template = baml_type::TyTemplate::class(
             chain.clone(),
             Box::new([baml_type::TyTemplate::TypeArgRef(0)]),
@@ -4219,8 +4088,8 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_build_output_format_preserves_finite_nested_generic() {
         let boxed = key(&baml_type::TypeName::local("Box".into()));
-        let box_int = RuntimeTy::Class(boxed.clone(), Box::new([ty_int()]), TyAttr::default());
-        let target = RuntimeTy::Class(boxed.clone(), Box::new([box_int]), TyAttr::default());
+        let box_int = RuntimeTy::Class(boxed.clone(), Box::new([ty_int()]));
+        let target = RuntimeTy::Class(boxed.clone(), Box::new([box_int]));
 
         let mut classes = indexmap::IndexMap::new();
         classes.insert(
@@ -4247,11 +4116,7 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_build_output_format_preserves_finite_transformed_recursion() {
         let step = key(&baml_type::TypeName::local("Step".into()));
-        let target = RuntimeTy::Class(
-            step.clone(),
-            Box::new([ty_string(), ty_bool()]),
-            TyAttr::default(),
-        );
+        let target = RuntimeTy::Class(step.clone(), Box::new([ty_string(), ty_bool()]));
         let next_template = baml_type::TyTemplate::class(
             step.clone(),
             Box::new([
@@ -4259,11 +4124,8 @@ Answer in JSON using this type: A"#
                 baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
             ]),
         );
-        let next_realized = RuntimeTy::Class(
-            step.clone(),
-            Box::new([ty_list(ty_bool()), ty_int()]),
-            TyAttr::default(),
-        );
+        let next_realized =
+            RuntimeTy::Class(step.clone(), Box::new([ty_list(ty_bool()), ty_int()]));
 
         let mut classes = indexmap::IndexMap::new();
         classes.insert(
@@ -4287,7 +4149,7 @@ Answer in JSON using this type: A"#
     #[test]
     fn test_render_output_format_content_rejects_non_regular_recursive_generic() {
         let chain = key(&baml_type::TypeName::local("Chain".into()));
-        let target = RuntimeTy::Class(chain.clone(), Box::new([ty_int()]), TyAttr::default());
+        let target = RuntimeTy::Class(chain.clone(), Box::new([ty_int()]));
         let next_template = baml_type::TyTemplate::class(
             chain.clone(),
             Box::new([baml_type::TyTemplate::class(
@@ -4297,12 +4159,7 @@ Answer in JSON using this type: A"#
         );
         let next_realized = RuntimeTy::Class(
             chain.clone(),
-            Box::new([RuntimeTy::Class(
-                chain.clone(),
-                Box::new([ty_int()]),
-                TyAttr::default(),
-            )]),
-            TyAttr::default(),
+            Box::new([RuntimeTy::Class(chain.clone(), Box::new([ty_int()]))]),
         );
 
         let mut classes = indexmap::IndexMap::new();
@@ -4324,7 +4181,7 @@ Answer in JSON using this type: A"#
             RenderError::NonRegularRecursiveGeneric {
                 class,
                 ancestor,
-                instantiation,
+                instantiation
             } if class == "Chain"
                 && ancestor == "Chain<int>"
                 && instantiation == "Chain<Chain<int>>"
@@ -4335,16 +4192,11 @@ Answer in JSON using this type: A"#
     fn test_build_output_format_rejects_mutually_expansive_recursive_generic() {
         let a = key(&baml_type::TypeName::local("A".into()));
         let b = key(&baml_type::TypeName::local("B".into()));
-        let target = RuntimeTy::Class(a.clone(), Box::new([ty_int()]), TyAttr::default());
-        let b_int = RuntimeTy::Class(b.clone(), Box::new([ty_int()]), TyAttr::default());
+        let target = RuntimeTy::Class(a.clone(), Box::new([ty_int()]));
+        let b_int = RuntimeTy::Class(b.clone(), Box::new([ty_int()]));
         let a_a_int = RuntimeTy::Class(
             a.clone(),
-            Box::new([RuntimeTy::Class(
-                a.clone(),
-                Box::new([ty_int()]),
-                TyAttr::default(),
-            )]),
-            TyAttr::default(),
+            Box::new([RuntimeTy::Class(a.clone(), Box::new([ty_int()]))]),
         );
 
         let mut classes = indexmap::IndexMap::new();
@@ -4390,7 +4242,7 @@ Answer in JSON using this type: A"#
             RenderError::NonRegularRecursiveGeneric {
                 class,
                 ancestor,
-                instantiation,
+                instantiation
             } if class == "A" && ancestor == "A<int>" && instantiation == "A<A<int>>"
         ));
     }

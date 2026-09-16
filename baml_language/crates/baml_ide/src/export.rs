@@ -120,14 +120,14 @@ fn container_qtn(name: &str) -> QualifiedTypeName {
 /// projections, sentinels), which no impl can attach to by head.
 fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
     match ty {
-        Ty::Int { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Int))),
-        Ty::Bigint { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Bigint))),
-        Ty::Float { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Float))),
-        Ty::String { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::String))),
-        Ty::Bool { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Bool))),
-        Ty::Null { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Null))),
-        Ty::Uint8Array { .. } => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Uint8Array))),
-        Ty::Media(kind, _) => match kind {
+        Ty::Int => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Int))),
+        Ty::Bigint => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Bigint))),
+        Ty::Float => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Float))),
+        Ty::String => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::String))),
+        Ty::Bool => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Bool))),
+        Ty::Null => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Null))),
+        Ty::Uint8Array => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Uint8Array))),
+        Ty::Media(kind) => match kind {
             MediaKind::Image => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Image))),
             MediaKind::Audio => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Audio))),
             MediaKind::Video => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Video))),
@@ -135,30 +135,26 @@ fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
             // "Any media" has no single companion class.
             MediaKind::Generic => None,
         },
-        Ty::Literal(lit, _, _) => Some(TyHead::Nominal(primitive_qtn(
-            PrimitiveType::from_literal(lit),
-        ))),
+        Ty::Literal(lit, _) => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::from_literal(
+            lit,
+        )))),
         // Companion classes (`baml.Int`, `baml.Array`, …) already carry the
         // canonical name, so nominal heads pass through unchanged.
-        Ty::Class(qtn, _, _) | Ty::Interface(qtn, _, _, _) | Ty::Enum(qtn, _) => {
+        Ty::Class(qtn, _) | Ty::Interface(qtn, _, _) | Ty::Enum(qtn) => {
             Some(TyHead::Nominal(spelling.wire(qtn)))
         }
-        Ty::EnumVariant(qtn, _, _) => Some(TyHead::Nominal(spelling.wire(qtn))),
-        Ty::List(_, _) => Some(TyHead::Nominal(container_qtn("Array"))),
+        Ty::EnumVariant(qtn, _) => Some(TyHead::Nominal(spelling.wire(qtn))),
+        Ty::List(_) => Some(TyHead::Nominal(container_qtn("Array"))),
         Ty::Map { .. } => Some(TyHead::Nominal(container_qtn("Map"))),
         Ty::Function { .. } => Some(TyHead::Function),
-        Ty::Future(_, _, _) => Some(TyHead::Future),
+        Ty::Future(_, _) => Some(TyHead::Future),
         // Lossy by design: the alias head attaches without expansion.
-        Ty::TypeAlias(qtn, _) => Some(TyHead::Nominal(spelling.wire(qtn))),
-        Ty::TypeVar(_, _) => Some(TyHead::Blanket),
-        Ty::Union(_, _) => None,
+        Ty::TypeAlias(qtn) => Some(TyHead::Nominal(spelling.wire(qtn))),
+        Ty::TypeVar(_) => Some(TyHead::Blanket),
+        Ty::Union(_) => None,
         Ty::AssociatedTypeProjection { .. } => None,
-        Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. } => None,
-        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } => None,
+        Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst | Ty::Void => None,
+        Ty::Unknown | Ty::Never | Ty::Error => None,
     }
 }
 

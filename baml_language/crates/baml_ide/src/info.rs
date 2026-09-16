@@ -1272,12 +1272,12 @@ fn function_param_matches_effect_slot(
     match ty {
         Ty::Function { throws, .. } => matches!(
             throws.as_ref(),
-            Ty::TypeVar(param, _) if param == effect_param
+            Ty::TypeVar(param) if param == effect_param
         ),
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             let mut matched = false;
             for member in members {
-                if matches!(member, Ty::Null { .. }) {
+                if matches!(member, Ty::Null) {
                     continue;
                 }
                 if !function_param_matches_effect_slot(member, effect_param) {
@@ -1302,7 +1302,7 @@ fn callback_forwarding_note(
     let [only_fact] = throw_fact_refs.as_slice() else {
         return None;
     };
-    let Ty::TypeVar(effect_name, _) = only_fact else {
+    let Ty::TypeVar(effect_name) = only_fact else {
         return None;
     };
     if !baml_type::is_synthetic_effect_param(effect_name.name()) {
@@ -1791,7 +1791,7 @@ pub(crate) fn impl_is_for_type(
 ) -> bool {
     use baml_type::Ty;
     match (&resolved.facts.for_ty_pattern().to_plain(), self_ty) {
-        (Ty::Class(pattern, ..), Ty::Class(own, ..)) | (Ty::Enum(pattern, _), Ty::Enum(own, _)) => {
+        (Ty::Class(pattern, ..), Ty::Class(own, ..)) | (Ty::Enum(pattern), Ty::Enum(own)) => {
             pattern == own
         }
         (Ty::Class(..) | Ty::Enum(..), _) | (_, Ty::Class(..) | Ty::Enum(..)) => false,

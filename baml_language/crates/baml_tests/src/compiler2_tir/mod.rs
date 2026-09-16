@@ -777,20 +777,20 @@ pub(crate) mod support {
     fn collect_typevars_inner(ty: &baml_type::Ty, out: &mut Vec<String>) {
         use baml_type::Ty;
         match ty {
-            Ty::TypeVar(name, _) => {
+            Ty::TypeVar(name) => {
                 let s = name.to_string();
                 if !out.contains(&s) {
                     out.push(s);
                 }
             }
-            Ty::List(inner, _) => collect_typevars_inner(inner, out),
+            Ty::List(inner) => collect_typevars_inner(inner, out),
             Ty::Map {
                 key: k, value: v, ..
             } => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 for m in members {
                     collect_typevars_inner(m, out);
                 }
@@ -1064,7 +1064,6 @@ pub(crate) mod support {
                                 );
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
                                 for (fname, fty, fattrs) in resolved {
-                                    let ty_attr_names = fty.attr().attr_names();
                                     let field_attr_strs: Vec<String> = fattrs
                                         .iter()
                                         .map(|a| {
@@ -1084,17 +1083,8 @@ pub(crate) mod support {
                                             }
                                         })
                                         .collect();
-                                    // Format: field: (Ty @ty_attr) @field_attr
-                                    let ty_str = if ty_attr_names.is_empty() {
-                                        fty.render_with(&vp)
-                                    } else {
-                                        let ta = ty_attr_names
-                                            .iter()
-                                            .map(|a| format!("@{a}"))
-                                            .collect::<Vec<_>>()
-                                            .join(" ");
-                                        format!("({} {ta})", fty.render_with(&vp))
-                                    };
+                                    // Format: field: Ty @field_attr
+                                    let ty_str = fty.render_with(&vp);
                                     if field_attr_strs.is_empty() {
                                         writeln!(output, "  {fname}: {ty_str}").ok();
                                     } else {
@@ -1844,7 +1834,7 @@ pub(crate) mod support {
                 Expr::Is { scrutinee, pattern } => format!(
                     "{} is {}",
                     expr_desc_hir(*scrutinee, body, prefix, local_type_names),
-                    pat_desc_hir(*pattern, body, prefix, local_type_names),
+                    pat_desc_hir(*pattern, body, prefix, local_type_names)
                 ),
                 Expr::Catch { base, clauses } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);

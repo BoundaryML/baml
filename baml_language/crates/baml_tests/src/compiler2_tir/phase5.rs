@@ -555,12 +555,7 @@ fn rust_type_field_lowers_to_rust_type() {
     );
     let diags: Vec<()> = Vec::new();
 
-    assert_eq!(
-        ty,
-        baml_type::Ty::RustType {
-            attr: Default::default()
-        }
-    );
+    assert_eq!(ty, baml_type::Ty::RustType);
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
 }
 
@@ -616,7 +611,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "root.llm.Response should not resolve to an error sentinel"
     );
 
@@ -638,7 +633,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "root.Config should not resolve to an error sentinel from llm namespace"
     );
 }
@@ -671,7 +666,7 @@ fn same_namespace_resolution_no_prefix() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "LLMConfig should not resolve to an error sentinel within same namespace"
     );
 }
@@ -722,7 +717,7 @@ fn nested_namespace_resolution() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "root.llm.openai.ResponsesClient should not resolve to an error sentinel"
     );
 }
@@ -747,7 +742,7 @@ fn bare_name_cross_namespace_rejected() {
         .at(Default::default()),
     );
     assert!(
-        matches!(ty, baml_type::Ty::Error { .. }),
+        matches!(ty, baml_type::Ty::Error),
         "bare Config from ns_llm should not resolve (an unresolved name is the diagnosed \
          `!error` sentinel, never `unknown`)"
     );
@@ -784,7 +779,7 @@ fn multi_segment_bare_path_rejected() {
         .at(Default::default()),
     );
     assert!(
-        matches!(ty, baml_type::Ty::Error { .. }),
+        matches!(ty, baml_type::Ty::Error),
         "ns2.MyClass from ns1 should not resolve without root. prefix (an unresolved name \
          is the diagnosed `!error` sentinel, never `unknown`)"
     );

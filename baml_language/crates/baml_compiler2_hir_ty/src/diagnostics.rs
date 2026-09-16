@@ -1004,7 +1004,7 @@ impl TirTypeError {
                     )
                 }
                 TirTypeError::UnresolvedMember { base_type, member } => {
-                    if matches!(base_type, Ty::Unknown { .. }) {
+                    if matches!(base_type, Ty::Unknown) {
                         write!(f, "cannot access field `{member}` on `unknown`")
                     } else {
                         write!(f, "type `{}` has no member `{member}`", base_type.spell(vp))

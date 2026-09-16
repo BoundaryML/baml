@@ -175,10 +175,7 @@ impl TypeContext for Facts<'_> {
         // args with `Self` left symbolic (the trait's contract: the oracle
         // is a function of the reference, not an implementor) - rustc's
         // `explicit_item_bounds` instantiated.
-        let symbolic_self = Ty::TypeVar(
-            ParamTy::new(0, Name::new("Self")),
-            baml_type::TyAttr::default(),
-        );
+        let symbolic_self = Ty::TypeVar(ParamTy::new(0, Name::new("Self")));
         crate::impls::realized_assoc_bound_plain(self.db, interface, &symbolic_self, &assoc)
             .and_then(|bound| bound.as_interface())
             .map(|bound| {
@@ -243,7 +240,7 @@ impl TypeContext for Facts<'_> {
         }
         let target = InferInterface::from_constraint(interface);
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
-        if let Ty::TypeVar(param, _) = base {
+        if let Ty::TypeVar(param) = base {
             let base_interned = crate::impls::interned_ty(base);
             let mut candidates: Vec<baml_type::interned::Ty> = Vec::new();
             for bound in self.type_var_bound(param) {
@@ -284,7 +281,7 @@ impl TypeContext for Facts<'_> {
                 _ => ProjectionStep::Opaque,
             };
         }
-        if let Ty::Interface(name, args, pins, _) = base {
+        if let Ty::Interface(name, args, pins) = base {
             if let Some((_, pin)) = pins.iter().find(|(pin_name, _)| pin_name == member) {
                 return ProjectionStep::Reduced(pin.clone());
             }

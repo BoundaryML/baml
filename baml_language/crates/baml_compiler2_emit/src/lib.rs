@@ -38,7 +38,7 @@ use baml_compiler2_mir::{
     RuntimeLowering, Rvalue, StatementKind, Terminator, def_to_item_ref, lower_function,
     lower_let_body, native_key_for,
 };
-use baml_type::{ParamTy, RuntimeTy, TyAttr};
+use baml_type::{ParamTy, RuntimeTy};
 use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
     FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
@@ -155,7 +155,7 @@ fn build_interface_def(
             id,
             baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
         ));
-        let baml_type::Ty::Interface(qtn, args, assoc, _) = lowered else {
+        let baml_type::Ty::Interface(qtn, args, assoc) = lowered else {
             return None;
         };
         let to_runtime = |t: &baml_type::Ty| {
@@ -190,12 +190,8 @@ fn build_interface_def(
      -> InterfaceMethodDef {
         // An untyped parameter is a syntax-level error, so it cannot reach
         // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || bex_vm_types::RuntimeTy::Unknown {
-            attr: TyAttr::default(),
-        };
-        let void = || bex_vm_types::RuntimeTy::Void {
-            attr: TyAttr::default(),
-        };
+        let unannotated = || bex_vm_types::RuntimeTy::Unknown;
+        let void = || bex_vm_types::RuntimeTy::Void;
         let mut args = Vec::new();
         let mut kwargs = Vec::new();
         for p in params {
@@ -554,7 +550,7 @@ fn split_interface(
     resolved: &RuntimeLowering<'_>,
     generics: &[ParamTy],
 ) -> Option<IfaceParts> {
-    let baml_type::Ty::Interface(qtn, args, assoc, _) = iface_ty else {
+    let baml_type::Ty::Interface(qtn, args, assoc) = iface_ty else {
         return None;
     };
     let arg_templates = args
@@ -816,9 +812,9 @@ fn build_packages<'db>(
                                             interface_associated_type_default(
                                                 db,
                                                 iface_loc,
-                                                assoc.name.clone(),
+                                                assoc.name.clone()
                                             )
-                                            .map(|(ty, _decl_site_diags)| ty),
+                                            .map(|(ty, _decl_site_diags)| ty)
                                     )
                                 })
                                 .collect(),
@@ -1058,7 +1054,7 @@ fn build_packages<'db>(
                 &impl_bounds,
             ));
             let iface_arg_tys = match &iface_ty {
-                ty::Ty::Interface(_, args, _, _) => args.clone(),
+                ty::Ty::Interface(_, args, _) => args.clone(),
                 _ => unreachable!("split_interface matched an interface"),
             };
             complete_interface_assoc(
@@ -1106,7 +1102,7 @@ fn build_packages<'db>(
                                 BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
                             )
                         ),
-                        "impl method `{method_name}` has no pooled function object",
+                        "impl method `{method_name}` has no pooled function object"
                     );
                     continue;
                 };
@@ -1145,7 +1141,7 @@ fn build_packages<'db>(
                     debug_assert!(
                         false,
                         "out-of-body impl of field-bearing interface `{iface_tn}` should be \
-                         rejected by E0126",
+                         rejected by E0126"
                     );
                     None
                 }
@@ -1168,7 +1164,7 @@ fn build_packages<'db>(
                             debug_assert!(
                                 slot.is_some(),
                                 "interface `{iface_tn}` field `{iface_field}` links to \
-                                 `{class_tn}.{class_field}`, which has no runtime slot",
+                                 `{class_tn}.{class_field}`, which has no runtime slot"
                             );
                             slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
                         })
@@ -3648,7 +3644,7 @@ fn generate_impl<'db>(
                     }
                     let Some(ConstValue::Object(idx)) = base.globals.get(slot) else {
                         return Err(LoweringError::Internal(format!(
-                            "stdlib splice: global slot {slot} does not hold an object",
+                            "stdlib splice: global slot {slot} does not hold an object"
                         )));
                     };
                     // The replay is ordinal, so it is only as sound as the
@@ -3672,7 +3668,7 @@ fn generate_impl<'db>(
                         }
                         None => {
                             return Err(LoweringError::Internal(format!(
-                                "stdlib splice: global slot {slot} points past the pool",
+                                "stdlib splice: global slot {slot} points past the pool"
                             )));
                         }
                     };
@@ -3680,7 +3676,7 @@ fn generate_impl<'db>(
                         return Err(LoweringError::Internal(format!(
                             "stdlib splice: global slot {slot} holds `{actual}` where this \
                              compiler enumerates `{expected}` — the precompiled stdlib's \
-                             declaration order disagrees with this build's",
+                             declaration order disagrees with this build's"
                         )));
                     }
                     let interface_body_slot =
@@ -4225,7 +4221,6 @@ fn emit_file_group<'db>(
                 docstring: class_meta.docstring,
                 other: class_meta.other,
                 type_tag,
-                ty_attr: TyAttr::default(),
                 has_cleanup,
                 generic_param_count: class.generic_params.len(),
                 owner: bex_vm_types::HeapPtr::null(),
@@ -4322,7 +4317,6 @@ fn emit_file_group<'db>(
                 alias: enum_meta.alias,
                 docstring: enum_meta.docstring,
                 other: enum_meta.other,
-                ty_attr: TyAttr::default(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
@@ -4434,7 +4428,7 @@ fn emit_file_group<'db>(
                     "type alias `{}` lowered to a non-realized type (`{}`); aliases \
                      cannot be generic, so this is a compiler bug",
                     wire.render_dotted(false),
-                    e.variant,
+                    e.variant
                 ))
             })?;
             let fq_name = wire.render_dotted(false);
@@ -4702,21 +4696,15 @@ fn emit_file_group<'db>(
                 local_names: vec![String::new(), "registry".to_string()],
                 debug_locals: Vec::new(),
                 span: Span::fake(),
-                return_type: bex_vm_types::TyTemplate::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
+                return_type: bex_vm_types::TyTemplate::Null,
                 param_names: vec!["registry".to_string()],
-                param_types: vec![bex_vm_types::TyTemplate::Unknown {
-                    attr: baml_type::TyAttr::default(),
-                }], // type not needed for chainer dispatch
+                param_types: vec![bex_vm_types::TyTemplate::Unknown], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
-                throws_type: bex_vm_types::TyTemplate::Never {
-                    attr: baml_type::TyAttr::default(),
-                },
+                throws_type: bex_vm_types::TyTemplate::Never,
                 origin: FunctionOrigin::Internal,
                 is_interface_body: false,
                 native_key: None,
@@ -4779,9 +4767,7 @@ fn compute_throws_type(
     frame_params: &[baml_type::ParamTy],
 ) -> baml_type::TyTemplate {
     // An empty throw set is `never` — the empty error set — not an absent one.
-    let never = || baml_type::TyTemplate::Never {
-        attr: baml_type::TyAttr::default(),
-    };
+    let never = || baml_type::TyTemplate::Never;
     let pkg_info = file_package(db, file);
     let pkg_id = pkg_info.root;
     let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
@@ -4806,7 +4792,7 @@ fn compute_throws_type(
     if converted.len() == 1 {
         converted.into_iter().next().unwrap()
     } else {
-        baml_type::TyTemplate::Union(converted.into(), baml_type::TyAttr::default())
+        baml_type::TyTemplate::Union(converted.into())
     }
 }
 
@@ -5011,7 +4997,6 @@ fn compute_function_metadata<'db>(
             self_param
                 .clone()
                 .expect("interface method environment contains Self"),
-            baml_type::TyAttr::default(),
         )
     };
     let interface_signature_bindings: rustc_hash::FxHashMap<ParamTy, Ty> = match enclosing_interface
@@ -5019,12 +5004,7 @@ fn compute_function_metadata<'db>(
         Some(_) => {
             let mut bindings: rustc_hash::FxHashMap<ParamTy, Ty> = enclosing_generics
                 .iter()
-                .map(|p| {
-                    (
-                        p.clone(),
-                        Ty::TypeVar(p.clone(), baml_type::TyAttr::default()),
-                    )
-                })
+                .map(|p| (p.clone(), Ty::TypeVar(p.clone())))
                 .collect();
             // Associated types are not frame params: signature references to
             // them already lower as `Self.X` projections, so only `Self` and
@@ -5231,9 +5211,7 @@ fn compute_function_metadata<'db>(
                 .collect()
         })
         .collect();
-    let null_template = || baml_type::TyTemplate::Null {
-        attr: baml_type::TyAttr::default(),
-    };
+    let null_template = || baml_type::TyTemplate::Null;
 
     // Runtime parameter templates come from the ELABORATED signature — the one
     // the checker types calls against. Only the effect differs from the raw
@@ -5479,9 +5457,7 @@ struct LambdaCaptureInfo {
 }
 
 fn unknown_capture_ty() -> RuntimeTy {
-    RuntimeTy::Unknown {
-        attr: TyAttr::default(),
-    }
+    RuntimeTy::Unknown
 }
 
 fn local_def_rvalue<'a, 'db>(
@@ -6321,9 +6297,7 @@ fn builtin_emit_function(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
-        return_type: bex_vm_types::TyTemplate::Null {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: bex_vm_types::TyTemplate::Null,
         param_names: Vec::new(),
         param_types: Vec::new(),
         param_has_default: Vec::new(),
@@ -6331,9 +6305,7 @@ fn builtin_emit_function(
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: bex_vm_types::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Builtin,
         is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
@@ -6416,7 +6388,7 @@ fn register_compiled_function(
         let slot = program.globals.len();
         debug_assert_eq!(
             pass1_slot, slot,
-            "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
+            "Pass-4 append slot must match the Pass-1 assignment for {fq_name}"
         );
         program.add_global(val);
         slot
@@ -6659,9 +6631,7 @@ fn compile_init_function<'db>(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
-                    return_type: bex_vm_types::TyTemplate::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
+                    return_type: bex_vm_types::TyTemplate::Null,
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
@@ -6669,9 +6639,7 @@ fn compile_init_function<'db>(
                     generic_param_bounds: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
-                    throws_type: bex_vm_types::TyTemplate::Never {
-                        attr: baml_type::TyAttr::default(),
-                    },
+                    throws_type: bex_vm_types::TyTemplate::Never,
                     origin: FunctionOrigin::Internal,
                     is_interface_body: false,
                     native_key: None,
@@ -6740,9 +6708,7 @@ fn compile_init_function<'db>(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        return_type: bex_vm_types::TyTemplate::Null {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: bex_vm_types::TyTemplate::Null,
         param_names: Vec::new(),
         param_types: Vec::new(),
         param_has_default: Vec::new(),
@@ -6750,9 +6716,7 @@ fn compile_init_function<'db>(
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: bex_vm_types::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Internal,
         is_interface_body: false,
         native_key: None,
@@ -7004,7 +6968,7 @@ mod tests {
                 "interface Src {\n",
                 "  type Item\n",
                 "  function next(self) -> Self.Item throws never\n",
-                "}\n",
+                "}\n"
             ),
             "Src",
         );
@@ -7032,7 +6996,7 @@ mod tests {
                 "interface Sink<T> {\n",
                 "  type Item\n",
                 "  function put(self, first: Self.Item, second: T, third: int) -> int throws never\n",
-                "}\n",
+                "}\n"
             ),
             "Sink",
         );
@@ -7047,7 +7011,7 @@ mod tests {
             "the `self` receiver drops, the other three stay: {:?}",
             put.args
         );
-        assert!(matches!(put.args[2], baml_type::RuntimeTy::Int { .. }));
+        assert!(matches!(put.args[2], baml_type::RuntimeTy::Int));
     }
 
     /// A `requires` clause is recorded even when it projects through `Self`.
@@ -7062,7 +7026,7 @@ mod tests {
                 "interface Derived requires Base<Item = Self.Item> {\n",
                 "  type Item\n",
                 "  function d(self) -> int throws never\n",
-                "}\n",
+                "}\n"
             ),
             "Derived",
         );

@@ -42,19 +42,19 @@ use crate::{
 
 fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
     match ty {
-        Ty::Interface(name, generics, associated, _) => {
+        Ty::Interface(name, generics, associated) => {
             out.insert(name.clone());
             for nested in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
                 collect_interface_tys(nested, out);
             }
         }
-        Ty::Class(_, args, _) => args.iter().for_each(|ty| collect_interface_tys(ty, out)),
-        Ty::List(inner, _) => collect_interface_tys(inner, out),
+        Ty::Class(_, args) => args.iter().for_each(|ty| collect_interface_tys(ty, out)),
+        Ty::List(inner) => collect_interface_tys(inner, out),
         Ty::Map { key, value, .. } => {
             collect_interface_tys(key, out);
             collect_interface_tys(value, out);
         }
-        Ty::Union(items, _) => items.iter().for_each(|ty| collect_interface_tys(ty, out)),
+        Ty::Union(items) => items.iter().for_each(|ty| collect_interface_tys(ty, out)),
         Ty::Function {
             params,
             ret,
@@ -67,7 +67,7 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
             collect_interface_tys(ret, out);
             collect_interface_tys(throws, out);
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             collect_interface_tys(value, out);
             collect_interface_tys(error, out);
         }
@@ -75,22 +75,22 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
         | Ty::EnumVariant(..)
         | Ty::TypeAlias(..)
         | Ty::Literal(..)
-        | Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. } => {}
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Void
+        | Ty::Unknown
+        | Ty::Never => {}
     }
 }
 
@@ -134,7 +134,7 @@ fn render_interface_tokens(tokens: impl Iterator<Item = Name>) -> String {
         let _ = writeln!(
             out,
             "\n/** Erased runtime token for BAML interface `{fqn}`. */\nexport const {bare} = Object.freeze({{ __baml_interface_fqn__: {} }} as const);",
-            ts_string(&fqn),
+            ts_string(&fqn)
         );
     }
     out
@@ -200,7 +200,7 @@ pub fn to_source_code_with_metadata(
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
         "sdkgen_typescript only supports naming_convention = PreserveCase \
-         (got {naming_convention})",
+         (got {naming_convention})"
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
     let interface_tokens = public_interface_tokens(pool);
@@ -435,14 +435,10 @@ mod tests {
                 injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                ty: Ty::Int,
                 default: None,
             }],
-            return_type: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            return_type: Ty::Int,
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),

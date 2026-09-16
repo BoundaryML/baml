@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_base::{Name, Span, TyAttr};
+use baml_base::{Name, Span};
 use baml_compiler2_hir::{contributions::Definition, package::lang_roots};
 use baml_type::{
     DeclName, ParamTy, Ty,
@@ -194,7 +194,7 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
             {
                 diags.push(TirTypeError::BuiltinInterfaceNotABound { interface: qtn });
             }
-            Ty::Interface(qtn, generics, assoc, _) => {
+            Ty::Interface(qtn, generics, assoc) => {
                 ifaces.push(baml_type::Interface {
                     name: qtn,
                     generics,
@@ -202,7 +202,7 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
                 });
             }
             // Already diagnosed by lowering the bound expression itself.
-            Ty::Error { .. } | Ty::Unknown { .. } => {}
+            Ty::Error | Ty::Unknown => {}
             // BEP-044 requires bounds to be interfaces (E0142).
             other => diags.push(TirTypeError::GenericBoundNotInterface { bound: other }),
         }
@@ -255,9 +255,8 @@ pub fn impl_data<'db>(
                 class_qtn.clone(),
                 generic_param_names
                     .iter()
-                    .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                    .map(|p| Ty::TypeVar(p.clone()))
                     .collect(),
-                TyAttr::default(),
             );
             // An in-body impl's generics ARE the class's; the class declaration
             // owns its bounds' diagnostics, so they are lowered into a
@@ -364,7 +363,7 @@ pub fn impl_data<'db>(
         crate::lower::TypePosition::ConstraintHead,
         &mut interface_target_diags,
     );
-    let interface_args = if let Ty::Interface(_, args, _, _) = &lowered_interface {
+    let interface_args = if let Ty::Interface(_, args, _) = &lowered_interface {
         args.clone()
     } else {
         Box::new([])
@@ -899,7 +898,6 @@ impl<'db> InterfaceMethodSpec<'db> {
             params,
             ret: Box::new(lower(self.return_type, diags)),
             throws: Box::new(lower(self.throws, diags)),
-            attr: TyAttr::default(),
         }
     }
 }
@@ -994,7 +992,7 @@ fn orphan_check(
             Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.root() == current_package => {
                 return OrphanOutcome::Ok;
             }
-            Ty::TypeVar(param, _) => {
+            Ty::TypeVar(param) => {
                 return OrphanOutcome::UncoveredParam(param.name().clone());
             }
             _ => {}
@@ -1036,7 +1034,7 @@ fn realize_with_symbolic_self<'db>(
         ns_context,
         generic_params: &generics,
         bounds: &bounds,
-        self_ty: Some(Ty::TypeVar(self_param.clone(), TyAttr::default())),
+        self_ty: Some(Ty::TypeVar(self_param.clone())),
     });
     // Substitute the receiver for `Self` last: `(Self as I).member` becomes
     // `(receiver as I).member`, which `normalize` reduces against the receiver's impl.
@@ -1429,12 +1427,7 @@ pub fn validate_impl_signatures<'db>(
         let mut iface_method_bindings = iface_bindings.clone();
         if method_generic_arity_matches {
             iface_method_bindings.extend(iface_method_params.iter().zip(impl_method_params).map(
-                |(iface_param, impl_param)| {
-                    (
-                        iface_param.clone(),
-                        Ty::TypeVar(impl_param.clone(), TyAttr::default()),
-                    )
-                },
+                |(iface_param, impl_param)| (iface_param.clone(), Ty::TypeVar(impl_param.clone())),
             ));
         }
         let iface_fn = realize_with_symbolic_self(
@@ -1547,7 +1540,7 @@ pub fn validate_impl_signatures<'db>(
             // Reduce any `Self.member` projection in the realized obligation so
             // the associated pins below are concrete.
             let required = baml_type::normalize::normalize(&required, &ctx);
-            let Ty::Interface(qtn, generics, assoc, _) = &required else {
+            let Ty::Interface(qtn, generics, assoc) = &required else {
                 continue;
             };
             // An ill-formed clause realizes to an obligation carrying a recovery
@@ -1654,20 +1647,20 @@ fn is_concrete_receiver(ty: &Ty) -> bool {
         ty,
         Ty::Class(..)
             | Ty::Enum(..)
-            | Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
+            | Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Future(..)
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
     )
 }
 
@@ -1720,13 +1713,13 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
         }
     };
     match ty {
-        Ty::Class(qtn, args, _) => {
+        Ty::Class(qtn, args) => {
             push(qtn, out);
             for a in args {
                 collect_ty_packages(a, out);
             }
         }
-        Ty::Interface(qtn, args, assoc, _) => {
+        Ty::Interface(qtn, args, assoc) => {
             push(qtn, out);
             for a in args {
                 collect_ty_packages(a, out);
@@ -1735,15 +1728,15 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
                 collect_ty_packages(t, out);
             }
         }
-        Ty::Enum(qtn, _) | Ty::EnumVariant(qtn, _, _) | Ty::TypeAlias(qtn, _) => push(qtn, out),
-        Ty::List(inner, _) => {
+        Ty::Enum(qtn) | Ty::EnumVariant(qtn, _) | Ty::TypeAlias(qtn) => push(qtn, out),
+        Ty::List(inner) => {
             collect_ty_packages(inner, out);
         }
-        Ty::Map { key, value, .. } | Ty::Future(key, value, _) => {
+        Ty::Map { key, value, .. } | Ty::Future(key, value) => {
             collect_ty_packages(key, out);
             collect_ty_packages(value, out);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for m in members {
                 collect_ty_packages(m, out);
             }
@@ -1767,24 +1760,24 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
             collect_interface_packages(interface, out);
         }
         // No qualified name: primitives, literals, type variables, sentinels.
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. }
-        | Ty::Error { .. } => {}
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Void
+        | Ty::Unknown
+        | Ty::Never
+        | Ty::Error => {}
     }
 }
 
@@ -2011,7 +2004,7 @@ fn match_impl_head<'db>(
         .iter()
         .map(|(name, _)| name.clone())
         .collect();
-    if let Ty::TypeVar(name, _) = &data.for_ty_pattern
+    if let Ty::TypeVar(name) = &data.for_ty_pattern
         && param_names.contains(name)
         && !is_concrete_receiver(concrete)
     {
@@ -2097,7 +2090,7 @@ pub fn impls_for_type<'db>(
                 .iter()
                 .map(|(name, _)| name.clone())
                 .collect();
-            if let Ty::TypeVar(name, _) = &data.for_ty_pattern
+            if let Ty::TypeVar(name) = &data.for_ty_pattern
                 && param_names.contains(name)
                 && !is_concrete_receiver(concrete)
             {
@@ -2133,7 +2126,7 @@ pub fn first_failing_impl_bound(
     aliases: &HashMap<DeclName, Ty>,
     mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> Option<(Name, Ty, Ty)> {
-    let Ty::Interface(requested_qtn, requested_args, _, _) = requested else {
+    let Ty::Interface(requested_qtn, requested_args, _) = requested else {
         return None;
     };
     let mut packages = vec![pkg_id];
@@ -2231,8 +2224,7 @@ mod tests {
     fn collect_ty_packages_covers_head_and_nested_covered_args() {
         let ty = Ty::Class(
             qtn("user", "Box"),
-            Box::new([Ty::Enum(qtn("dep", "Meters"), TyAttr::default())]),
-            TyAttr::default(),
+            Box::new([Ty::Enum(qtn("dep", "Meters"))]),
         );
         let mut out = Vec::new();
         collect_ty_packages(&ty, &mut out);
@@ -2250,15 +2242,8 @@ mod tests {
     fn collect_interface_packages_covers_head_args_and_pins() {
         let iface = baml_type::Interface::new(
             qtn("ifacepkg", "Conv"),
-            Box::new([Ty::Class(
-                qtn("argpkg", "Meters"),
-                Box::new([]),
-                TyAttr::default(),
-            )]),
-            Box::new([(
-                Name::new("Out"),
-                Ty::Enum(qtn("pinpkg", "Unit"), TyAttr::default()),
-            )]),
+            Box::new([Ty::Class(qtn("argpkg", "Meters"), Box::new([]))]),
+            Box::new([(Name::new("Out"), Ty::Enum(qtn("pinpkg", "Unit")))]),
         );
         let mut out = Vec::new();
         collect_interface_packages(&iface, &mut out);

@@ -14,7 +14,7 @@ mod impl_rules;
 use baml_base::{Literal, Name};
 use baml_compiler2_hir::contributions::Definition;
 use baml_type::{
-    DeclName, ParamTy, Ty, TyAttr,
+    DeclName, ParamTy, Ty,
     normalize::TypeContext as _,
     pattern_overlap::TypeVarBoundsMap,
     unify::{AliasEquivCtx, TypeBindings, contains_bound_typevar},
@@ -176,7 +176,7 @@ pub(crate) fn collapse_self_assoc_projections(
 fn identity_bindings(generic_params: &[ParamTy]) -> TypeBindings {
     generic_params
         .iter()
-        .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
+        .map(|param| (param.clone(), Ty::TypeVar(param.clone())))
         .collect()
 }
 
@@ -337,8 +337,8 @@ pub fn normalized_arg_implements_bound(
     bound: &baml_type::Interface,
 ) -> bool {
     let carried_bounds = match arg {
-        Ty::Error { .. } => return true,
-        Ty::TypeVar(name, _) => ctx.type_var_bound(name),
+        Ty::Error => return true,
+        Ty::TypeVar(name) => ctx.type_var_bound(name),
         Ty::AssociatedTypeProjection {
             interface, member, ..
         } => ctx.associated_type_bound(interface, member.clone()),
@@ -410,7 +410,7 @@ fn lower_interface_associated_bindings<'db>(
     value_bindings.insert(self_param.clone(), self_ty.clone());
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
     let default_bindings = baml_type::unify::bind_type_vars(&iface_params, interface_args);
-    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let self_var = Ty::TypeVar(self_param.clone());
 
     iface
         .associated_types
@@ -440,7 +440,7 @@ fn lower_interface_associated_bindings<'db>(
                             ns_context: binding_namespace_path,
                             generic_params: &value_scope,
                             bounds: &bounds,
-                            self_ty: Some(Ty::TypeVar(self_param.clone(), TyAttr::default())),
+                            self_ty: Some(Ty::TypeVar(self_param.clone())),
                         },
                         binding_type_refs,
                         type_ref,
@@ -497,7 +497,7 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
     let iface_params = crate::lower::interface_declared_params(db, iface_loc);
     let iface_qtn = interface_loc_qtn(db, iface_loc);
     let bindings = baml_type::unify::bind_type_vars(&iface_params, interface_args);
-    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let self_var = Ty::TypeVar(self_param.clone());
     // The members resolved so far, in declaration order — a later member's
     // `Self.X` projection collapses through them.
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
@@ -534,7 +534,6 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
                 iface_qtn.clone()?,
                 interface_args.into(),
                 resolved_pins.clone().into(),
-                TyAttr::default(),
             );
             let realized = realize_associated_default(
                 &default,
@@ -600,7 +599,7 @@ impl<'db> InterfaceDeclScope<'db> {
             qualify_def(db, Definition::Interface(iface_loc), &iface.name),
             generics[1..]
                 .iter()
-                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                .map(|p| Ty::TypeVar(p.clone()))
                 .collect(),
             Box::new([]),
         );
@@ -635,7 +634,7 @@ impl<'db> InterfaceDeclScope<'db> {
             ns_context: &self.ns,
             generic_params: generics,
             bounds,
-            self_ty: Some(Ty::TypeVar(self.self_param.clone(), TyAttr::default())),
+            self_ty: Some(Ty::TypeVar(self.self_param.clone())),
         }
     }
 }
@@ -891,7 +890,7 @@ fn lower_interface_type_associated_bindings(
     // binding value or default resolves `T`'s declaring interface.
     let iface_bounds = interface_declared_param_bounds(ctx.db, ctx.iface_loc);
     let iface_qtn = interface_loc_qtn(ctx.db, ctx.iface_loc);
-    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let self_var = Ty::TypeVar(self_param.clone());
     // The members resolved so far, in declaration order — a later member's
     // `Self.X` projection collapses through them.
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
@@ -921,7 +920,7 @@ fn lower_interface_type_associated_bindings(
                         ns_context: ctx.binding_namespace_path,
                         generic_params: &generic_params,
                         bounds: &bounds,
-                        self_ty: Some(Ty::TypeVar(self_param.clone(), TyAttr::default())),
+                        self_ty: Some(Ty::TypeVar(self_param.clone())),
                     };
                     baml_type::unify::substitute_ty(
                         &lower_ref_in(&scope, ctx.binding_type_refs, binding.ty, diagnostics),
@@ -963,7 +962,6 @@ fn lower_interface_type_associated_bindings(
                 iface_qtn.clone()?,
                 ctx.interface_args.into(),
                 resolved_pins.clone().into(),
-                TyAttr::default(),
             );
             let realized = realize_associated_default(
                 &default,
@@ -1010,7 +1008,7 @@ pub fn match_ty_pattern_into(
     aliases: &AliasEquivCtx<'_>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
-    if let Ty::TypeVar(name, _) = pattern
+    if let Ty::TypeVar(name) = pattern
         && generic_params.contains(name)
     {
         return bind_type_var(name, concrete, bindings, aliases);
@@ -1036,7 +1034,7 @@ pub fn match_ty_pattern_into(
     }
 
     match (pattern, concrete) {
-        (Ty::Class(p_qtn, p_args, _), Ty::Class(c_qtn, c_args, _))
+        (Ty::Class(p_qtn, p_args), Ty::Class(c_qtn, c_args))
             if p_qtn == c_qtn && p_args.len() == c_args.len() =>
         {
             for (p, c) in p_args.iter().zip(c_args.iter()) {
@@ -1044,7 +1042,7 @@ pub fn match_ty_pattern_into(
             }
             Some(())
         }
-        (Ty::Interface(p_qtn, p_args, p_assoc, _), Ty::Interface(c_qtn, c_args, c_assoc, _))
+        (Ty::Interface(p_qtn, p_args, p_assoc), Ty::Interface(c_qtn, c_args, c_assoc))
             if p_qtn == c_qtn && p_args.len() == c_args.len() =>
         {
             for (p, c) in p_args.iter().zip(c_args.iter()) {
@@ -1056,7 +1054,7 @@ pub fn match_ty_pattern_into(
             }
             Some(())
         }
-        (Ty::List(p, _), Ty::List(c, _)) => {
+        (Ty::List(p), Ty::List(c)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
         (
@@ -1070,23 +1068,21 @@ pub fn match_ty_pattern_into(
             match_ty_pattern_into(pk, ck, generic_params, aliases, bindings)?;
             match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)
         }
-        (Ty::Future(pv, pe, _), Ty::Future(cv, ce, _)) => {
+        (Ty::Future(pv, pe), Ty::Future(cv, ce)) => {
             match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)?;
             match_ty_pattern_into(pe, ce, generic_params, aliases, bindings)
         }
-        (Ty::Union(p_members, _), Ty::Union(c_members, _))
-            if p_members.len() == c_members.len() =>
-        {
+        (Ty::Union(p_members), Ty::Union(c_members)) if p_members.len() == c_members.len() => {
             match_union_members(p_members, c_members, generic_params, aliases, bindings)
         }
-        (Ty::Int { .. }, Ty::Literal(Literal::Int(_), _, _))
-        | (Ty::Bigint { .. }, Ty::Literal(Literal::Bigint(_), _, _))
-        | (Ty::Float { .. }, Ty::Literal(Literal::Float(_), _, _))
-        | (Ty::String { .. }, Ty::Literal(Literal::String(_), _, _))
-        | (Ty::Bool { .. }, Ty::Literal(Literal::Bool(_), _, _)) => Some(()),
+        (Ty::Int, Ty::Literal(Literal::Int(_), _))
+        | (Ty::Bigint, Ty::Literal(Literal::Bigint(_), _))
+        | (Ty::Float, Ty::Literal(Literal::Float(_), _))
+        | (Ty::String, Ty::Literal(Literal::String(_), _))
+        | (Ty::Bool, Ty::Literal(Literal::Bool(_), _)) => Some(()),
         // An enum variant is a member of its enum's set, so a `for Side` impl (or a
         // blanket `for T`) applies to a `Side.Left` receiver.
-        (Ty::Enum(p_qtn, _), Ty::EnumVariant(c_qtn, _, _)) if p_qtn == c_qtn => Some(()),
+        (Ty::Enum(p_qtn), Ty::EnumVariant(c_qtn, _)) if p_qtn == c_qtn => Some(()),
         (
             Ty::Function {
                 params: p_params,
@@ -1242,7 +1238,7 @@ fn resolved_interface_from_ty(
     db: &dyn baml_compiler2_hir::Db,
     ty: Ty,
 ) -> Option<ResolvedInterface<'_>> {
-    let Ty::Interface(qtn, _, _, _) = ty else {
+    let Ty::Interface(qtn, _, _) = ty else {
         return None;
     };
     let pkg_id = qtn.root();
@@ -1608,7 +1604,7 @@ fn collect_type_generic_bound_errors<'db>(
 ) {
     use baml_type::normalize::TypeContext as _;
     match ty {
-        baml_type::LoweringTy::Class(qtn, args, _) => {
+        baml_type::LoweringTy::Class(qtn, args) => {
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
@@ -1618,7 +1614,7 @@ fn collect_type_generic_bound_errors<'db>(
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
-        baml_type::LoweringTy::Interface(qtn, args, pins, _) => {
+        baml_type::LoweringTy::Interface(qtn, args, pins) => {
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
@@ -1631,14 +1627,14 @@ fn collect_type_generic_bound_errors<'db>(
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
-        baml_type::LoweringTy::List(inner, _) => {
+        baml_type::LoweringTy::List(inner) => {
             collect_type_generic_bound_errors(db, facts, inner, seen_aliases, errors);
         }
         baml_type::LoweringTy::Map { key, value, .. } => {
             collect_type_generic_bound_errors(db, facts, key, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
         }
-        baml_type::LoweringTy::Union(members, _) => {
+        baml_type::LoweringTy::Union(members) => {
             for member in members {
                 collect_type_generic_bound_errors(db, facts, member, seen_aliases, errors);
             }
@@ -1655,11 +1651,11 @@ fn collect_type_generic_bound_errors<'db>(
             collect_type_generic_bound_errors(db, facts, ret, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, throws, seen_aliases, errors);
         }
-        baml_type::LoweringTy::Future(value, error, _) => {
+        baml_type::LoweringTy::Future(value, error) => {
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, error, seen_aliases, errors);
         }
-        baml_type::LoweringTy::TypeAlias(qtn, _) => {
+        baml_type::LoweringTy::TypeAlias(qtn) => {
             if !seen_aliases.insert(qtn.clone()) {
                 return;
             }
@@ -1721,7 +1717,7 @@ fn check_head_args(
             let admissible = arg.is_concrete()
                 || matches!(
                     arg,
-                    Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } | Ty::Error { .. }
+                    Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } | Ty::Error
                 );
             if !admissible {
                 errors.push(TirTypeError::BoundedTypeArgNotConcrete {
@@ -1817,7 +1813,7 @@ pub enum Determination {
 /// Whether `ty` already carries an upstream error, so a projection over it
 /// must not emit a fresh diagnostic.
 fn projection_poisoned(ty: &Ty) -> bool {
-    matches!(ty, Ty::Error { .. } | Ty::Unknown { .. })
+    matches!(ty, Ty::Error | Ty::Unknown)
 }
 
 /// Determine which interface declares `member` for `base`, in `ns` - the
@@ -1917,37 +1913,28 @@ pub fn lower_projection(
                     base: Box::new(base),
                     interface: Box::new(interface),
                     member,
-                    attr: TyAttr::default(),
                 }
             }
         }
         Determination::Undeclared { container } => {
             diagnostics.push(TirTypeError::UnknownAssociatedType { member, container });
-            Ty::Error {
-                attr: TyAttr::default(),
-            }
+            Ty::Error
         }
         Determination::Ambiguous(candidates) => {
             diagnostics.push(TirTypeError::AmbiguousAssociatedTypeProjection {
                 member,
                 candidates: candidates.into_iter().map(|iface| iface.name).collect(),
             });
-            Ty::Error {
-                attr: TyAttr::default(),
-            }
+            Ty::Error
         }
         Determination::SubjectDoesNotImplementQualifier { subject, qualifier } => {
             diagnostics.push(TirTypeError::TypeDoesNotImplementInterface {
                 value_type: subject,
                 interface: qualifier.to_ty(),
             });
-            Ty::Error {
-                attr: TyAttr::default(),
-            }
+            Ty::Error
         }
-        Determination::InvalidBase | Determination::Poisoned => Ty::Error {
-            attr: TyAttr::default(),
-        },
+        Determination::InvalidBase | Determination::Poisoned => Ty::Error,
     };
     ProjectionLowering { ty, diagnostics }
 }
@@ -1973,7 +1960,7 @@ fn determine_interface<'db>(
     }
     let base = projection_expand_aliases(facts, base.clone());
     match &base {
-        Ty::Interface(qtn, args, assoc, _) => {
+        Ty::Interface(qtn, args, assoc) => {
             let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
             let undeclared = AssocContainer::Interface(root.name.clone());
             resolve_via_roots(
@@ -1988,7 +1975,7 @@ fn determine_interface<'db>(
                 ns,
             )
         }
-        Ty::TypeVar(param, _) => {
+        Ty::TypeVar(param) => {
             use baml_type::normalize::TypeContext as _;
             let bounds = facts.type_var_bound(param);
             if bounds.is_empty() {
@@ -2012,13 +1999,13 @@ fn determine_interface<'db>(
         | Ty::Enum(..)
         | Ty::List(..)
         | Ty::Map { .. }
-        | Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::EnumVariant(..) => match explicit {
@@ -2070,7 +2057,7 @@ fn determine_interface<'db>(
                 },
             }
         }
-        Ty::Error { .. } | Ty::Unknown { .. } => Determination::Poisoned,
+        Ty::Error | Ty::Unknown => Determination::Poisoned,
         Ty::TypeAlias(..) => Determination::Poisoned,
         _ => match explicit {
             Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
@@ -2229,7 +2216,7 @@ fn complete_qualifier_candidate_associated_bindings(
     };
 
     let generic_bindings = baml_type::unify::bind_type_vars(generic_params, &candidate.generics);
-    let self_var = Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let self_var = Ty::TypeVar(self_param.clone());
     let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
 
     for associated_type in associated_types {
@@ -2237,7 +2224,6 @@ fn complete_qualifier_candidate_associated_bindings(
             candidate.name.clone(),
             candidate.generics.clone(),
             resolved_pins.clone().into(),
-            TyAttr::default(),
         );
         let ty = if let Some((_, written)) = candidate
             .associated_types
@@ -2477,7 +2463,7 @@ fn concrete_realized_interface(
 fn projection_expand_aliases(facts: &crate::facts::Facts<'_>, mut ty: Ty) -> Ty {
     use baml_type::normalize::TypeContext as _;
     for _ in 0..64 {
-        let Ty::TypeAlias(qtn, _) = &ty else {
+        let Ty::TypeAlias(qtn) = &ty else {
             return ty;
         };
         match facts.alias_def(qtn) {
@@ -2640,10 +2626,10 @@ pub fn interface_base_without_member_pin(
     let mut current = base_ty.clone();
     loop {
         match current {
-            Ty::Interface(qtn, _, pins, _) => {
+            Ty::Interface(qtn, _, pins) => {
                 return (!pins.iter().any(|(name, _)| name == member)).then_some(qtn);
             }
-            Ty::TypeAlias(qtn, _) => {
+            Ty::TypeAlias(qtn) => {
                 if !seen.insert(qtn.clone()) {
                     return None;
                 }
@@ -2667,27 +2653,23 @@ mod tests {
     }
 
     fn class(namespace: &[&str], name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Class(qtn(namespace, name), args.into(), TyAttr::default())
+        Ty::Class(qtn(namespace, name), args.into())
     }
 
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Interface(qtn(&[], name), args.into(), Box::new([]), TyAttr::default())
+        Ty::Interface(qtn(&[], name), args.into(), Box::new([]))
     }
 
     fn int() -> Ty {
-        Ty::Int {
-            attr: TyAttr::default(),
-        }
+        Ty::Int
     }
 
     fn string() -> Ty {
-        Ty::String {
-            attr: TyAttr::default(),
-        }
+        Ty::String
     }
 
     fn type_var(name: &str) -> Ty {
-        Ty::TypeVar(param(name), TyAttr::default())
+        Ty::TypeVar(param(name))
     }
 
     fn param(name: &str) -> ParamTy {
@@ -2721,9 +2703,9 @@ mod tests {
 
     #[test]
     fn match_ty_pattern_matches_enum_variant_against_enum() {
-        let side = Ty::Enum(qtn(&[], "Side"), TyAttr::default());
-        let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"), TyAttr::default());
-        let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"), TyAttr::default());
+        let side = Ty::Enum(qtn(&[], "Side"));
+        let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"));
+        let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"));
         let aliases: std::collections::HashMap<DeclName, Ty> = std::collections::HashMap::default();
 
         assert!(
@@ -2733,7 +2715,7 @@ mod tests {
                 &crate::test_heads::alias_ctx(&aliases)
             )
             .is_some(),
-            "`Side.Left` should match a `for Side` pattern",
+            "`Side.Left` should match a `for Side` pattern"
         );
         assert!(
             match_ty_patterns(
@@ -2742,20 +2724,14 @@ mod tests {
                 &crate::test_heads::alias_ctx(&aliases)
             )
             .is_none(),
-            "a variant of a *different* enum must not match",
+            "a variant of a *different* enum must not match"
         );
     }
 
     #[test]
     fn match_ty_pattern_handles_nested_interface_args() {
-        let pattern = interface(
-            "Container",
-            vec![Ty::List(Box::new(type_var("T")), TyAttr::default())],
-        );
-        let actual = interface(
-            "Container",
-            vec![Ty::List(Box::new(int()), TyAttr::default())],
-        );
+        let pattern = interface("Container", vec![Ty::List(Box::new(type_var("T")))]);
+        let actual = interface("Container", vec![Ty::List(Box::new(int()))]);
         let params = vec![param("T")];
 
         let bindings = match_ty_patterns(
@@ -2772,11 +2748,7 @@ mod tests {
         let ty = Ty::Interface(
             qtn(&[], "Source"),
             Box::new([]),
-            Box::new([(
-                Name::new("Item"),
-                Ty::List(Box::new(type_var("T")), TyAttr::default()),
-            )]),
-            TyAttr::default(),
+            Box::new([(Name::new("Item"), Ty::List(Box::new(type_var("T"))))]),
         );
 
         assert!(contains_bound_typevar(&ty, &[param("T")]));
@@ -2801,8 +2773,8 @@ mod tests {
 
     #[test]
     fn match_ty_pattern_unions_are_order_insensitive_with_bindings() {
-        let pattern = Ty::Union(Box::new([type_var("T"), string()]), TyAttr::default());
-        let actual = Ty::Union(Box::new([string(), int()]), TyAttr::default());
+        let pattern = Ty::Union(Box::new([type_var("T"), string()]));
+        let actual = Ty::Union(Box::new([string(), int()]));
         let params = vec![param("T")];
 
         let bindings = match_ty_patterns(

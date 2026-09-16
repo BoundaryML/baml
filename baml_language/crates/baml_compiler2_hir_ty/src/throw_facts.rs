@@ -17,7 +17,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageItems, accessible_package},
 };
-use baml_type::{Ty, TyAttr, throw_facts::FunctionThrowFacts};
+use baml_type::{Ty, throw_facts::FunctionThrowFacts};
 
 use crate::{
     lower::qualify_def,
@@ -375,21 +375,11 @@ fn throw_fact_from_expr<'db>(
     body: &ExprBody,
 ) -> Ty {
     let fact = match &body.exprs[expr_id] {
-        Expr::Literal(Literal::String(_)) => Some(Ty::String {
-            attr: TyAttr::default(),
-        }),
-        Expr::Literal(Literal::Int(_)) => Some(Ty::Int {
-            attr: TyAttr::default(),
-        }),
-        Expr::Literal(Literal::Float(_)) => Some(Ty::Float {
-            attr: TyAttr::default(),
-        }),
-        Expr::Literal(Literal::Bool(_)) => Some(Ty::Bool {
-            attr: TyAttr::default(),
-        }),
-        Expr::Null => Some(Ty::Null {
-            attr: TyAttr::default(),
-        }),
+        Expr::Literal(Literal::String(_)) => Some(Ty::String),
+        Expr::Literal(Literal::Int(_)) => Some(Ty::Int),
+        Expr::Literal(Literal::Float(_)) => Some(Ty::Float),
+        Expr::Literal(Literal::Bool(_)) => Some(Ty::Bool),
+        Expr::Null => Some(Ty::Null),
         Expr::Path(segments) if !segments.is_empty() => {
             // A thrown bare identifier naming a parameter (`throw s`) carries
             // that parameter's declared type — it is a value, not a type path.
@@ -415,9 +405,7 @@ fn throw_fact_from_expr<'db>(
     // has a runtime representation. Full inference types these precisely for
     // diagnostics; this set only feeds runtime throws metadata, where a
     // conservative bound is correct.
-    fact.unwrap_or(Ty::Unknown {
-        attr: TyAttr::default(),
-    })
+    fact.unwrap_or(Ty::Unknown)
 }
 
 /// Rewrite a call target name from `self.X` to `ClassName.X`.
@@ -451,7 +439,7 @@ fn resolve_path_to_ty<'db>(
             lookup_type_in_scope(db, pkg_items, ns_context, enum_ns, enum_name)
         {
             let qtn = qualify_def(db, def, enum_name);
-            return Some(Ty::EnumVariant(qtn, variant.clone(), TyAttr::default()));
+            return Some(Ty::EnumVariant(qtn, variant.clone()));
         }
     }
 
@@ -460,15 +448,9 @@ fn resolve_path_to_ty<'db>(
     let seg_ns = &segments[..segments.len() - 1];
     let def = lookup_type_in_scope(db, pkg_items, ns_context, seg_ns, name)?;
     match def {
-        Definition::Class(_) => Some(Ty::Class(
-            qualify_def(db, def, name),
-            Box::new([]),
-            TyAttr::default(),
-        )),
-        Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, name), TyAttr::default())),
-        Definition::TypeAlias(_) => {
-            Some(Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default()))
-        }
+        Definition::Class(_) => Some(Ty::Class(qualify_def(db, def, name), Box::new([]))),
+        Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, name))),
+        Definition::TypeAlias(_) => Some(Ty::TypeAlias(qualify_def(db, def, name))),
         // `lookup_type_in_scope` searches the type namespace, so these are
         // unreachable for its results; either way they are not nameable as a
         // thrown type. Spelled out rather than wildcarded so a new
@@ -573,24 +555,23 @@ pub fn flatten_declared_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
 fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
         // Compound types: decompose
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for member in members {
                 collect_widened_leaf_types(member, out);
             }
         }
         // Literal types: widen to primitive for throw fact purposes
-        Ty::Literal(lit, _, _) => {
-            let attr = TyAttr::default();
+        Ty::Literal(lit, _) => {
             out.insert(match lit {
-                Literal::Int(_) => Ty::Int { attr },
-                Literal::Bigint(_) => Ty::Bigint { attr },
-                Literal::Float(_) => Ty::Float { attr },
-                Literal::String(_) => Ty::String { attr },
-                Literal::Bool(_) => Ty::Bool { attr },
+                Literal::Int(_) => Ty::Int,
+                Literal::Bigint(_) => Ty::Bigint,
+                Literal::Float(_) => Ty::Float,
+                Literal::String(_) => Ty::String,
+                Literal::Bool(_) => Ty::Bool,
             });
         }
         // Bottom/void: no facts
-        Ty::Never { .. } | Ty::Void { .. } => {}
+        Ty::Never | Ty::Void => {}
         // Everything else: keep as-is
         _ => {
             out.insert(ty.clone());
@@ -665,7 +646,7 @@ mod tests {
                 .filter(|node| **node == BodyNode::Expr(binding_throw))
                 .count(),
             1,
-            "the binding operand must participate exactly once",
+            "the binding operand must participate exactly once"
         );
     }
 }

@@ -174,7 +174,7 @@ impl Facts {
                 if self.integers.contains_key(&local)
                     || matches!(
                         body.locals[local.0].ty,
-                        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), ..)
+                        RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), ..)
                     )
                 {
                     Some(Number::Local(local))

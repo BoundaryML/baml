@@ -1484,14 +1484,14 @@ fn enforce_host_throw_contract(
 ) -> Value {
     // `Unknown` is the top type — short-circuit before any heap
     // walking.
-    if matches!(contract, RuntimeTy::Unknown { .. }) {
+    if matches!(contract, RuntimeTy::Unknown) {
         return value;
     }
     let runtime_ty = value_runtime_baml_ty(value, thread.proof());
     // Panics propagate as panics regardless of `E` — they're an
     // engine-level failure mode, not something the user's callable opts
     // into via `throws`.
-    if let Some(bex_vm_types::RuntimeTy::Class(head, _, _)) = runtime_ty.as_ref()
+    if let Some(bex_vm_types::RuntimeTy::Class(head, _)) = runtime_ty.as_ref()
         && head
             .declared_name()
             .is_some_and(|name| name.is_panic_type())
@@ -1513,7 +1513,7 @@ fn enforce_host_throw_contract(
             message: format!(
                 "host callable's declared throws contract (`{contract}`) names a \
                  declaration this engine cannot resolve, so the thrown value cannot \
-                 be checked against it",
+                 be checked against it"
             ),
             class_name: host_class,
             language: host_language,
@@ -1541,7 +1541,7 @@ fn enforce_host_throw_contract(
     let panic = bex_vm::errors::VmPanic::HostContractViolation {
         message: format!(
             "host callable threw a value of type `{runtime_ty_str}` that is not in its \
-             declared throws contract (`{contract}`)",
+             declared throws contract (`{contract}`)"
         ),
         class_name: host_class,
         language: host_language,
@@ -1562,19 +1562,12 @@ fn value_runtime_baml_ty(
     value: Value,
     _proof: bex_heap::PermitProof<'_>,
 ) -> Option<bex_vm_types::RuntimeTy> {
-    use baml_type::TyAttr;
     use bex_vm_types::ValueKind;
     match value.kind() {
         ValueKind::OmittedArg => None,
-        ValueKind::Null => Some(RuntimeTy::Null {
-            attr: TyAttr::default(),
-        }),
-        ValueKind::Int(_) => Some(RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }),
-        ValueKind::Bool(_) => Some(RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        }),
+        ValueKind::Null => Some(RuntimeTy::Null),
+        ValueKind::Int(_) => Some(RuntimeTy::Int),
+        ValueKind::Bool(_) => Some(RuntimeTy::Bool),
         ValueKind::Object(ptr) => {
             // SAFETY: caller holds an active heap permit (`_proof`), so
             // deref'ing this `HeapPtr` is sound.
@@ -1593,15 +1586,10 @@ fn value_runtime_baml_ty(
                             .iter()
                             .map(baml_type::RuntimeTy::from)
                             .collect(),
-                        TyAttr::default(),
                     ))
                 }
-                Object::String(_) => Some(RuntimeTy::String {
-                    attr: TyAttr::default(),
-                }),
-                Object::Float(_) => Some(RuntimeTy::Float {
-                    attr: TyAttr::default(),
-                }),
+                Object::String(_) => Some(RuntimeTy::String),
+                Object::Float(_) => Some(RuntimeTy::Float),
                 Object::Variant(variant) => {
                     // SAFETY: the variant's `enm` is a heap-rooted Enum
                     // class, valid under the same permit.
@@ -1609,10 +1597,10 @@ fn value_runtime_baml_ty(
                     let Object::Enum(enum_def) = enum_obj else {
                         return None;
                     };
-                    Some(bex_vm_types::RuntimeTy::Enum(
-                        bex_vm_types::TypeHead::new(variant.enm, enum_def.type_tag),
-                        TyAttr::default(),
-                    ))
+                    Some(bex_vm_types::RuntimeTy::Enum(bex_vm_types::TypeHead::new(
+                        variant.enm,
+                        enum_def.type_tag,
+                    )))
                 }
                 // Other Object shapes (HostClosure, FunctionRef, Array,
                 // Map, etc.) are not meaningful in a thrown position;
@@ -1732,13 +1720,10 @@ fn declared_symbolic(
         .iter()
         .enumerate()
         .map(|(i, p)| {
-            bex_vm_types::RuntimeTy::TypeVar(
-                baml_type::ParamTy::new(
-                    u32::try_from(i).unwrap_or(u32::MAX),
-                    baml_type::Name::new(p.split_whitespace().next().unwrap_or(p)),
-                ),
-                baml_type::TyAttr::default(),
-            )
+            bex_vm_types::RuntimeTy::TypeVar(baml_type::ParamTy::new(
+                u32::try_from(i).unwrap_or(u32::MAX),
+                baml_type::Name::new(p.split_whitespace().next().unwrap_or(p)),
+            ))
         })
         .collect();
     // Returned at the runtime's head. The consumers want different spellings
@@ -3445,7 +3430,7 @@ impl BexEngine {
             "GC: {} total roots from {} handles and {} parked heap permits",
             all_roots.len(),
             self.heap.stats().active_handles,
-            heap_guard.num_permits(),
+            heap_guard.num_permits()
         );
 
         cycle.roots_scanned();
@@ -3678,9 +3663,7 @@ impl BexEngine {
         self.validate_bound_args(function_name, &args)?;
         let mut return_type = self
             .function_return_type(function_name)
-            .unwrap_or(RuntimeTy::Null {
-                attr: baml_type::TyAttr::default(),
-            });
+            .unwrap_or(RuntimeTy::Null);
         let throws_type = self.function_throws_type(function_name);
 
         // Declared parameter types (TypeVars unsubstituted).
@@ -3855,9 +3838,7 @@ impl BexEngine {
                 }
                 type_args
                     .entry(var.clone())
-                    .or_insert_with(|| RuntimeTy::RustType {
-                        attr: baml_type::TyAttr::default(),
-                    });
+                    .or_insert_with(|| RuntimeTy::RustType);
             }
         }
 
@@ -4472,8 +4453,7 @@ impl BexEngine {
                 }
                 Object::HostClosure(host) => {
                     let throws_type = match &*host.throws_ty {
-                        bex_vm_types::RealizedTy::Never { .. }
-                        | bex_vm_types::RealizedTy::Void { .. } => None,
+                        bex_vm_types::RealizedTy::Never | bex_vm_types::RealizedTy::Void => None,
                         ty => Some(bex_vm_types::RuntimeTy::from(ty.clone())),
                     };
                     let param_types: Vec<bex_vm_types::RuntimeTy> = host
@@ -4570,13 +4550,10 @@ impl BexEngine {
                         .map(|i| {
                             seed_type_args.get(i).map_or_else(
                                 || {
-                                    bex_vm_types::RuntimeTy::TypeVar(
-                                        baml_type::ParamTy::new(
-                                            u32::try_from(i).unwrap_or(u32::MAX),
-                                            baml_type::Name::new(generic_param_names[i].as_str()),
-                                        ),
-                                        baml_type::TyAttr::default(),
-                                    )
+                                    bex_vm_types::RuntimeTy::TypeVar(baml_type::ParamTy::new(
+                                        u32::try_from(i).unwrap_or(u32::MAX),
+                                        baml_type::Name::new(generic_param_names[i].as_str()),
+                                    ))
                                 },
                                 |t| t.as_runtime_ty().clone(),
                             )
@@ -4585,7 +4562,7 @@ impl BexEngine {
                     (
                         func.return_type.substitute_symbolic(&slot_types),
                         match &func.throws_type {
-                            baml_type::TyTemplate::Never { .. } => None,
+                            baml_type::TyTemplate::Never => None,
                             t => Some(t.substitute_symbolic(&slot_types)),
                         },
                         func.arity,
@@ -4613,7 +4590,7 @@ impl BexEngine {
         // return arm stays an unsubstituted type var and host-return conversion
         // panics on a concrete value. See bridge-generics/streaming/04.
         if receiver.is_some() {
-            if let Some(bex_vm_types::RuntimeTy::Class(_, declared_args, _)) = param_types.first() {
+            if let Some(bex_vm_types::RuntimeTy::Class(_, declared_args)) = param_types.first() {
                 let mut bindings = indexmap::IndexMap::new();
                 for (declared, concrete) in declared_args.iter().zip(seed_type_args.iter()) {
                     crate::conversion::collect_type_var_bindings(
@@ -4879,7 +4856,7 @@ impl BexEngine {
         let obj = unsafe { ptr.get() };
         match obj {
             Object::Function(func) => match &func.throws_type {
-                baml_type::TyTemplate::Never { .. } => None,
+                baml_type::TyTemplate::Never => None,
                 t => crate::conversion::to_wire_ty(&declared_symbolic(t, func)).ok(),
             },
             _ => None,
@@ -5525,7 +5502,7 @@ impl BexEngine {
         // `TypeMismatch` leak instead of the clean panic. This mirrors the
         // panic bypass in [`enforce_host_throw_contract`].
         let value_is_panic = value_runtime_baml_ty(value, thread.proof()).is_some_and(|rt| {
-            matches!(&rt, bex_vm_types::RuntimeTy::Class(head, _, _)
+            matches!(&rt, bex_vm_types::RuntimeTy::Class(head, _)
                     if head.declared_name().is_some_and(|n| n.is_panic_type()))
         });
         let external = match throws_type {
@@ -5905,9 +5882,7 @@ impl BexEngine {
         // Return type / throws type are approximated; the future's value is
         // converted on the awaiter side.
         let engine = self;
-        let return_type = RuntimeTy::Null {
-            attr: baml_type::TyAttr::default(),
-        };
+        let return_type = RuntimeTy::Null;
         let task = async move {
             // Outlives the execution locals (but not SpawnedWork): if dropped at
             // any await below (before the event loop takes over), the closer
@@ -6436,7 +6411,7 @@ impl BexEngine {
                             let outcome = tokio::select! {
                                 biased;
                                 () = cancel.cancelled() => SysOpOutcome::Cancelled,
-                                r = fut                  => SysOpOutcome::Result(r),
+                                r = fut                  => SysOpOutcome::Result(r)
                             };
                             thread = inactive.acquire().await;
                             if let Some((call_id, start_ticks)) = prof_await {
@@ -6840,7 +6815,7 @@ impl BexEngine {
                     let outcome = tokio::select! {
                         biased;
                         () = cancel.cancelled() => AwaitOutcome::Cancelled,
-                        r = future              => AwaitOutcome::Done(r),
+                        r = future              => AwaitOutcome::Done(r)
                     };
                     thread = inactive.acquire().await;
                     if let Some((call_id, start_ticks)) = prof_await {
@@ -6933,7 +6908,7 @@ impl BexEngine {
                         tokio::select! {
                             biased;
                             () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
-                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
+                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r)
                         }
                     };
                     thread = inactive.acquire().await;
@@ -7207,7 +7182,7 @@ impl BexEngine {
         // the root class's rules into the mount artifact so type checking in the
         // consumer world sees the same conformances as runtime dispatch.
         let witnesses = match &value.ty {
-            bex_vm_types::RealizedTy::Class(head, _, _) if head.is_resolved() => {
+            bex_vm_types::RealizedTy::Class(head, _) if head.is_resolved() => {
                 let Object::Class(class) = vm.get_object(head.ptr()) else {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
@@ -7223,7 +7198,7 @@ impl BexEngine {
                             return Err(EngineError::TypeMismatch {
                                 message: format!(
                                     "mounted type `{export_name}` has an invalid witness rule"
-                                ),
+                                )
                             });
                         };
                         let Object::Interface(interface) = vm.get_object(rule.interface_head)
@@ -7231,19 +7206,19 @@ impl BexEngine {
                             return Err(EngineError::TypeMismatch {
                                 message: format!(
                                     "mounted type `{export_name}` has an invalid witness interface"
-                                ),
+                                )
                             });
                         };
                         if interface.fields.len() != rule.field_links.len() {
                             return Err(EngineError::TypeMismatch {
                                 message: format!(
                                     "mounted type `{export_name}` has an incomplete witness field map"
-                                ),
+                                )
                             });
                         }
                         let interface_head = bex_vm_types::TypeHead::new(
                             rule.interface_head,
-                            interface.type_tag,
+                            interface.type_tag
                         );
                         let interface_name = wire_head(&interface_head)?;
                         let interface_args = rule
@@ -7254,7 +7229,7 @@ impl BexEngine {
                                     EngineError::TypeMismatch {
                                         message: format!(
                                             "mounted type `{export_name}` has an unrealized witness argument: {error}"
-                                        ),
+                                        )
                                     }
                                 })?;
                                 let ty = bex_vm_types::RuntimeTy::from(ty);
@@ -7269,7 +7244,7 @@ impl BexEngine {
                                     EngineError::TypeMismatch {
                                         message: format!(
                                             "mounted type `{export_name}` has an unrealized witness associated type: {error}"
-                                        ),
+                                        )
                                     }
                                 })?;
                                 let ty = bex_vm_types::RuntimeTy::from(ty);
@@ -7285,12 +7260,12 @@ impl BexEngine {
                                     EngineError::TypeMismatch {
                                         message: format!(
                                             "mounted type `{export_name}` has an out-of-range witness field link"
-                                        ),
+                                        )
                                     }
                                 })?;
                                 Ok((
                                     field.name.clone(),
-                                    baml_type::Name::new(&class_field.name),
+                                    baml_type::Name::new(&class_field.name)
                                 ))
                             })
                             .collect::<Result<Vec<_>, EngineError>>()?;
@@ -7298,9 +7273,9 @@ impl BexEngine {
                             baml_type::Interface::new(
                                 interface_name,
                                 interface_args.into(),
-                                associated_types.into(),
+                                associated_types.into()
                             ),
-                            field_links,
+                            field_links
                         ))
                     })
                     .collect::<Result<Vec<_>, EngineError>>()?
@@ -7486,8 +7461,8 @@ impl BexEngine {
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
                         "message".to_string() => BexExternalValue::String(
-                            "a Session permits only one active eval".into(),
-                        ),
+                            "a Session permits only one active eval".into()
+                        )
                     },
                 },
             ));
@@ -7567,7 +7542,7 @@ impl BexEngine {
                 fields: indexmap::indexmap! {
                     "file".to_string() => string(value.file),
                     "start".to_string() => BexExternalValue::Int(i64::try_from(value.start).expect("source offsets fit BAML int")),
-                    "end".to_string() => BexExternalValue::Int(i64::try_from(value.end).expect("source offsets fit BAML int")),
+                    "end".to_string() => BexExternalValue::Int(i64::try_from(value.end).expect("source offsets fit BAML int"))
                 },
             }
         }
@@ -7605,7 +7580,7 @@ impl BexEngine {
                         fields: indexmap::indexmap! {
                             "start".to_string() => BexExternalValue::Int(i64::from(value.start)),
                             "end".to_string() => BexExternalValue::Int(i64::from(value.end)),
-                            "kind".to_string() => string(kind),
+                            "kind".to_string() => string(kind)
                         },
                     }
                 })
@@ -7632,12 +7607,12 @@ impl BexEngine {
                             highlights(Vec::new()),
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: Vec::new(),
+                                items: Vec::new()
                             },
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: Vec::new(),
-                            },
+                                items: Vec::new()
+                            }
                         )
                     },
                     |details| {
@@ -7645,7 +7620,7 @@ impl BexEngine {
                             bex_vm_types::RuntimeDiagnosticPhase::Parse => "parse",
                             bex_vm_types::RuntimeDiagnosticPhase::Hir => "hir",
                             bex_vm_types::RuntimeDiagnosticPhase::Validation => "validation",
-                            bex_vm_types::RuntimeDiagnosticPhase::Type => "type",
+                            bex_vm_types::RuntimeDiagnosticPhase::Type => "type"
                         };
                         let annotations = details
                             .annotations
@@ -7657,8 +7632,8 @@ impl BexEngine {
                                     "span".to_string() => span(annotation.span),
                                     "message".to_string() => annotation.message.map_or(BexExternalValue::Null, string),
                                     "message_highlights".to_string() => highlights(annotation.message_highlights),
-                                    "is_primary".to_string() => BexExternalValue::Bool(annotation.is_primary),
-                                },
+                                    "is_primary".to_string() => BexExternalValue::Bool(annotation.is_primary)
+                                }
                             })
                             .collect();
                         let related_info = details
@@ -7671,8 +7646,8 @@ impl BexEngine {
                                     "span".to_string() => span(related.span),
                                     "message".to_string() => string(related.message),
                                     "message_highlights".to_string() => highlights(related.message_highlights),
-                                    "file_path".to_string() => related.file_path.map_or(BexExternalValue::Null, string),
-                                },
+                                    "file_path".to_string() => related.file_path.map_or(BexExternalValue::Null, string)
+                                }
                             })
                             .collect();
                         (
@@ -7682,14 +7657,14 @@ impl BexEngine {
                             highlights(details.message_highlights),
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: annotations,
+                                items: annotations
                             },
                             BexExternalValue::Array {
                                 element_type: baml_type::RuntimeTy::unknown(),
-                                items: related_info,
-                            },
+                                items: related_info
+                            }
                         )
-                    },
+                    }
                 );
             BexExternalValue::Instance {
                 class_name: "reflect.Diagnostic".to_string(),
@@ -7704,7 +7679,7 @@ impl BexEngine {
                     "primary_label".to_string() => primary_label,
                     "message_highlights".to_string() => message_highlights,
                     "annotations".to_string() => annotations,
-                    "related_info".to_string() => related_info,
+                    "related_info".to_string() => related_info
                 },
             }
         }
@@ -7728,7 +7703,7 @@ impl BexEngine {
                     class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(artifact)))),
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(artifact))))
                     },
                 }),
                 Err(diagnostics) => {
@@ -7751,8 +7726,8 @@ impl BexEngine {
                                 "message".to_string() => string(message),
                                 "diagnostics".to_string() => BexExternalValue::Array {
                                     element_type: baml_type::RuntimeTy::unknown(),
-                                    items,
-                                },
+                                    items
+                                }
                             },
                         },
                     ))
@@ -8021,15 +7996,12 @@ mod type_identity_tests {
             root: baml_type::RuntimeTy::Class(
                 baml_type::QualifiedTypeName::from_dotted_path("user.Foo"),
                 Box::new([]),
-                baml_type::TyAttr::default(),
             ),
             classes: vec![bex_vm_types::types::PortableClassDef {
                 name: baml_type::QualifiedTypeName::from_dotted_path("user.Foo"),
                 fields: vec![bex_vm_types::types::PortableClassFieldDef {
                     name: "value".to_string(),
-                    ty: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
+                    ty: baml_type::RuntimeTy::Int,
                     metadata: bex_vm_types::types::PortableMetadata {
                         description: None,
                         alias: None,
@@ -8085,9 +8057,7 @@ mod type_identity_tests {
         let exported = engine
             .convert_vm_value_to_external_with_type(
                 bex_vm_types::Value::object(original),
-                &baml_type::RuntimeTy::Type {
-                    attr: baml_type::TyAttr::default(),
-                },
+                &baml_type::RuntimeTy::Type,
                 &thread.vm,
                 thread.proof(),
             )
@@ -8128,9 +8098,7 @@ mod type_identity_tests {
         let exported = source
             .convert_vm_value_to_external_with_type(
                 bex_vm_types::Value::object(original),
-                &baml_type::RuntimeTy::Type {
-                    attr: baml_type::TyAttr::default(),
-                },
+                &baml_type::RuntimeTy::Type,
                 &source_thread.vm,
                 source_thread.proof(),
             )

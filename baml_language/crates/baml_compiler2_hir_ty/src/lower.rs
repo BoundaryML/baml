@@ -33,7 +33,6 @@ use baml_compiler2_hir::{
 };
 use baml_type::{
     DeclName, Freshness, LoweringFunctionParamTy, LoweringInterface, LoweringTy, Name, ParamTy,
-    TyAttr,
     compiler_aliases::{self, AliasTarget},
     interned::{InferTy, Ty},
 };
@@ -435,7 +434,6 @@ impl<'db> LowerCtx<'db> {
         id: TypeRefId,
         position: TypePosition,
     ) -> LoweringTy {
-        let attr = TyAttr::default;
         let extraction_contract = position == TypePosition::ExtractionContract;
         let position = if extraction_contract {
             TypePosition::Existential
@@ -444,18 +442,18 @@ impl<'db> LowerCtx<'db> {
         };
         match &store[id].kind {
             TypeRefKind::Int => LoweringTy::int(),
-            TypeRefKind::Bigint => LoweringTy::Bigint { attr: attr() },
+            TypeRefKind::Bigint => LoweringTy::Bigint,
             TypeRefKind::Float => LoweringTy::float(),
             TypeRefKind::String => LoweringTy::string(),
             TypeRefKind::Bool => LoweringTy::bool(),
             TypeRefKind::Null => LoweringTy::null(),
             TypeRefKind::Never => LoweringTy::never(),
             TypeRefKind::Void => LoweringTy::void(),
-            TypeRefKind::Uint8Array => LoweringTy::Uint8Array { attr: attr() },
-            TypeRefKind::Media { kind } => LoweringTy::Media(*kind, attr()),
-            TypeRefKind::Unknown => LoweringTy::Unknown { attr: attr() },
-            TypeRefKind::Type => LoweringTy::Type { attr: attr() },
-            TypeRefKind::Rust => LoweringTy::RustType { attr: attr() },
+            TypeRefKind::Uint8Array => LoweringTy::Uint8Array,
+            TypeRefKind::Media { kind } => LoweringTy::Media(*kind),
+            TypeRefKind::Unknown => LoweringTy::Unknown,
+            TypeRefKind::Type => LoweringTy::Type,
+            TypeRefKind::Rust => LoweringTy::RustType,
             TypeRefKind::Optional { inner } => {
                 LoweringTy::optional(self.lower_type_ref(store, *inner))
             }
@@ -463,7 +461,6 @@ impl<'db> LowerCtx<'db> {
             TypeRefKind::Map { key, value } => LoweringTy::Map {
                 key: Box::new(self.checked_map_key(self.lower_type_ref(store, *key))),
                 value: Box::new(self.lower_type_ref(store, *value)),
-                attr: attr(),
             },
             TypeRefKind::Union { variants } => LoweringTy::union(
                 variants
@@ -471,7 +468,7 @@ impl<'db> LowerCtx<'db> {
                     .map(|variant| self.lower_type_ref(store, *variant)),
             ),
             TypeRefKind::Literal { value } => {
-                LoweringTy::Literal(value.clone(), Freshness::Regular, attr())
+                LoweringTy::Literal(value.clone(), Freshness::Regular)
             }
             TypeRefKind::Function {
                 params,
@@ -499,7 +496,7 @@ impl<'db> LowerCtx<'db> {
                     .map(|throws| self.lower_type_ref(store, throws))
                     .unwrap_or_else(|| {
                         if extraction_contract {
-                            return LoweringTy::Unknown { attr: attr() };
+                            return LoweringTy::Unknown;
                         }
                         if let (Some(diags), Some(type_ref)) = (&self.diags, self.current_ref.get())
                         {
@@ -511,7 +508,6 @@ impl<'db> LowerCtx<'db> {
                         LoweringTy::never()
                     })
                     .into(),
-                attr: attr(),
             },
             TypeRefKind::Path {
                 segments,
@@ -550,7 +546,6 @@ impl<'db> LowerCtx<'db> {
                         base: Box::new(base_ty),
                         interface: Box::new(head),
                         member: member.clone(),
-                        attr: attr(),
                     };
                 }
                 // The qualifier names the interface to project *through* -
@@ -700,7 +695,7 @@ impl<'db> LowerCtx<'db> {
             )
         };
         match base {
-            LoweringTy::TypeVar(param, _) => {
+            LoweringTy::TypeVar(param) => {
                 let candidates: Vec<&baml_type::Interface> = self
                     .bounds
                     .get(param)
@@ -716,7 +711,7 @@ impl<'db> LowerCtx<'db> {
                     _ => None,
                 }
             }
-            LoweringTy::Interface(name, args, pins, _) => declares(name)
+            LoweringTy::Interface(name, args, pins) => declares(name)
                 .then(|| LoweringInterface::new(name.clone(), args.clone(), pins.clone())),
             // A chained step (`T.Item.Sub`): the previous member's
             // declared bound (`type Item extends J`), realized at its
@@ -739,7 +734,7 @@ impl<'db> LowerCtx<'db> {
                     prev_member,
                 )?;
                 match &bound {
-                    baml_type::Ty::Interface(name, args, pins, _) => declares(name).then(|| {
+                    baml_type::Ty::Interface(name, args, pins) => declares(name).then(|| {
                         materialize(&baml_type::Interface::new(
                             name.clone(),
                             args.clone(),
@@ -775,9 +770,7 @@ impl<'db> LowerCtx<'db> {
             return key;
         }
         let facts = crate::facts::Facts::new(self.db);
-        let string = baml_type::Ty::String {
-            attr: TyAttr::default(),
-        };
+        let string = baml_type::Ty::String;
         // Past the gate the key is hole-free, so the reject fold is a pure
         // narrowing; the judgment stays in the plain vocabulary.
         if !baml_type::normalize::is_subtype(&reject_holes(&key), &string, &facts) {
@@ -808,7 +801,6 @@ impl<'db> LowerCtx<'db> {
         bindings: Vec<(Name, LoweringTy)>,
         position: TypePosition,
     ) -> LoweringTy {
-        let attr = TyAttr::default;
         let short = segments.last().expect("type paths are never empty");
 
         // Lexical generic names (including a body-local overlay appended to
@@ -826,21 +818,20 @@ impl<'db> LowerCtx<'db> {
         if segments.len() == 1
             && let Some(param) = generic_head
         {
-            return LoweringTy::TypeVar(param.clone(), attr());
+            return LoweringTy::TypeVar(param.clone());
         }
         if segments.len() > 1
             && args.is_empty()
             && bindings.is_empty()
             && let Some(param) = generic_head
         {
-            let mut ty = LoweringTy::TypeVar(param.clone(), attr());
+            let mut ty = LoweringTy::TypeVar(param.clone());
             for member in &segments[1..] {
                 if let Some(interface) = self.projection_interface_for(&ty, member) {
                     ty = LoweringTy::AssociatedTypeProjection {
                         base: Box::new(ty),
                         interface: Box::new(interface),
                         member: member.clone(),
-                        attr: attr(),
                     };
                     continue;
                 }
@@ -860,7 +851,7 @@ impl<'db> LowerCtx<'db> {
                 );
                 self.record_type_errors(lowered.diagnostics);
                 ty = lowered.ty.as_lowering_ty().clone();
-                if matches!(ty, LoweringTy::Error { .. }) {
+                if matches!(ty, LoweringTy::Error) {
                     return ty;
                 }
             }
@@ -917,7 +908,7 @@ impl<'db> LowerCtx<'db> {
                 ResolvedTypeDefinition::Source(_) => None,
             };
             if let Some(qtn) = enum_qtn {
-                return LoweringTy::EnumVariant(qtn, short.clone(), attr());
+                return LoweringTy::EnumVariant(qtn, short.clone());
             }
         }
 
@@ -934,7 +925,7 @@ impl<'db> LowerCtx<'db> {
                 .rev()
                 .find(|param| param.name() == &segments[0])
             {
-                return Some(LoweringTy::TypeVar(param.clone(), attr()));
+                return Some(LoweringTy::TypeVar(param.clone()));
             }
             // `Self.Member` under a concrete impl owner: the head is the
             // subject itself; `projection_interface_for`'s concrete-Self
@@ -957,7 +948,6 @@ impl<'db> LowerCtx<'db> {
                             base: Box::new(ty),
                             interface: Box::new(interface),
                             member: member.clone(),
-                            attr: attr(),
                         };
                         continue;
                     }
@@ -974,7 +964,7 @@ impl<'db> LowerCtx<'db> {
                     );
                     self.record_type_errors(lowered.diagnostics);
                     ty = lowered.ty.as_lowering_ty().clone();
-                    if matches!(ty, LoweringTy::Error { .. }) {
+                    if matches!(ty, LoweringTy::Error) {
                         return ty;
                     }
                 }
@@ -1075,7 +1065,6 @@ impl<'db> LowerCtx<'db> {
         bindings: Vec<(Name, LoweringTy)>,
         position: TypePosition,
     ) -> LoweringTy {
-        let attr = TyAttr::default;
         match def {
             Definition::Class(class_loc) => {
                 let data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
@@ -1087,11 +1076,10 @@ impl<'db> LowerCtx<'db> {
                 // The `baml.Map<K, V>` spelling bridges to the structural
                 // map (B-1080), so it gets the same key validation as the
                 // `map<k, v>` syntax.
-                if let LoweringTy::Map { key, value, attr } = ty {
+                if let LoweringTy::Map { key, value } = ty {
                     return LoweringTy::Map {
                         key: Box::new(self.checked_map_key(*key)),
                         value,
-                        attr,
                     };
                 }
                 ty
@@ -1176,7 +1164,6 @@ impl<'db> LowerCtx<'db> {
                                 .iter()
                                 .map(|(name, ty)| (name.clone(), reject_holes(ty)))
                                 .collect(),
-                            attr(),
                         );
                         let realized = crate::interfaces::realize_associated_default(
                             &default,
@@ -1207,12 +1194,12 @@ impl<'db> LowerCtx<'db> {
                 }
                 // Sorted for order-insensitive identity.
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
-                LoweringTy::Interface(qtn, args.into(), bindings.into(), attr())
+                LoweringTy::Interface(qtn, args.into(), bindings.into())
             }
-            Definition::Enum(_) => LoweringTy::Enum(self.qualify(def, short), attr()),
+            Definition::Enum(_) => LoweringTy::Enum(self.qualify(def, short)),
             // Aliases stay nominal at lowering; expansion is lazy and
             // cycle-guarded, through the fact oracle.
-            Definition::TypeAlias(_) => LoweringTy::TypeAlias(self.qualify(def, short), attr()),
+            Definition::TypeAlias(_) => LoweringTy::TypeAlias(self.qualify(def, short)),
             // Value-namespace definitions are not types.
             Definition::Function(_)
             | Definition::TemplateString(_)
@@ -1231,7 +1218,6 @@ impl<'db> LowerCtx<'db> {
         position: TypePosition,
     ) -> LoweringTy {
         use crate::package_interface::ExportedType;
-        let attr = TyAttr::default;
         match exported {
             ExportedType::Class {
                 qtn,
@@ -1250,11 +1236,10 @@ impl<'db> LowerCtx<'db> {
                 // The `baml.Map<K, V>` spelling bridges to the structural
                 // map, so it gets the same key validation as the
                 // `map<k, v>` syntax.
-                if let LoweringTy::Map { key, value, attr } = ty {
+                if let LoweringTy::Map { key, value } = ty {
                     return LoweringTy::Map {
                         key: Box::new(self.checked_map_key(*key)),
                         value,
-                        attr,
                     };
                 }
                 ty
@@ -1262,12 +1247,12 @@ impl<'db> LowerCtx<'db> {
             ExportedType::Enum { qtn, .. } => {
                 self.record_arity(short, args.len(), 0);
                 self.reject_non_interface_bindings(bindings);
-                LoweringTy::Enum(qtn, attr())
+                LoweringTy::Enum(qtn)
             }
             ExportedType::TypeAlias { qtn, .. } => {
                 self.record_arity(short, args.len(), 0);
                 self.reject_non_interface_bindings(bindings);
-                LoweringTy::TypeAlias(qtn, attr())
+                LoweringTy::TypeAlias(qtn)
             }
             ExportedType::Interface {
                 qtn,
@@ -1321,7 +1306,6 @@ impl<'db> LowerCtx<'db> {
                                 .iter()
                                 .map(|(name, ty)| (name.clone(), reject_holes(ty)))
                                 .collect(),
-                            attr(),
                         );
                         let realized = crate::interfaces::realize_associated_default(
                             default,
@@ -1353,12 +1337,7 @@ impl<'db> LowerCtx<'db> {
                     }
                 }
                 checked.sort_by(|(a, _), (b, _)| a.cmp(b));
-                LoweringTy::Interface(
-                    qtn,
-                    args.into_boxed_slice(),
-                    checked.into_boxed_slice(),
-                    attr(),
-                )
+                LoweringTy::Interface(qtn, args.into_boxed_slice(), checked.into_boxed_slice())
             }
         }
     }
@@ -1561,7 +1540,7 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
         return ty.clone();
     }
-    if let InferTy::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param) = ty.kind()
         && let Some(replacement) = args.get(param.index() as usize)
     {
         return replacement.clone();
@@ -1648,16 +1627,15 @@ fn builtin_structural(lang: LangRoots, qtn: &DeclName, arity: usize) -> Option<A
 /// types in the lowering chain, shared by annotation lowering and
 /// `class_self_ty`.
 pub fn class_lowering_ty(lang: LangRoots, qtn: DeclName, mut args: Vec<LoweringTy>) -> LoweringTy {
-    let attr = TyAttr::default;
     match builtin_structural(lang, &qtn, args.len()) {
         Some(AliasTarget::Future) => {
             let error_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
             let value_ty = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            LoweringTy::Future(Box::new(value_ty), Box::new(error_ty), attr())
+            LoweringTy::Future(Box::new(value_ty), Box::new(error_ty))
         }
         Some(AliasTarget::List) => {
             let element = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
-            LoweringTy::List(Box::new(element), attr())
+            LoweringTy::List(Box::new(element))
         }
         Some(AliasTarget::Map) => {
             let value = args.pop().unwrap_or_else(|| unreachable!("checked arity"));
@@ -1665,16 +1643,15 @@ pub fn class_lowering_ty(lang: LangRoots, qtn: DeclName, mut args: Vec<LoweringT
             LoweringTy::Map {
                 key: Box::new(key),
                 value: Box::new(value),
-                attr: attr(),
             }
         }
         Some(AliasTarget::Primitive(primitive)) => {
-            LoweringTy::from(&baml_type::Ty::from_primitive(primitive, attr()))
+            LoweringTy::from(&baml_type::Ty::from_primitive(primitive))
         }
-        Some(AliasTarget::Type) => LoweringTy::Type { attr: attr() },
+        Some(AliasTarget::Type) => LoweringTy::Type,
         // Json expands through the alias resolver; intrinsics have no class.
         Some(AliasTarget::Json | AliasTarget::Void | AliasTarget::Never | AliasTarget::Unknown)
-        | None => LoweringTy::Class(qtn, args.into(), attr()),
+        | None => LoweringTy::Class(qtn, args.into()),
     }
 }
 
@@ -1687,7 +1664,7 @@ pub fn class_ty(lang: LangRoots, qtn: DeclName, args: Vec<Ty>) -> Ty {
     {
         return ty;
     }
-    Ty::intern(InferTy::Class(qtn, args.into(), TyAttr::default()))
+    Ty::intern(InferTy::Class(qtn, args.into()))
 }
 
 /// The qualified name a class definition contributes, from its file's
@@ -1716,7 +1693,7 @@ pub fn class_self_ty<'db>(
 ) -> baml_type::Ty {
     let args: Vec<LoweringTy> = class_generic_frame(db, class)
         .into_iter()
-        .map(|param| LoweringTy::TypeVar(param, TyAttr::default()))
+        .map(LoweringTy::TypeVar)
         .collect();
     // Hole-free by construction, so the reject fold is a pure narrowing.
     reject_holes(&class_lowering_ty(
@@ -1733,10 +1710,7 @@ pub fn enum_self_ty<'db>(
     enum_loc: baml_compiler2_hir::loc::EnumLoc<'db>,
 ) -> baml_type::Ty {
     let data = baml_compiler2_hir::item_data::enum_data(db, enum_loc);
-    baml_type::Ty::Enum(
-        qualify_def(db, Definition::Enum(enum_loc), &data.name),
-        TyAttr::default(),
-    )
+    baml_type::Ty::Enum(qualify_def(db, Definition::Enum(enum_loc), &data.name))
 }
 
 /// The concrete type a declaration denotes at its own generic params - the
@@ -1997,39 +1971,27 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
     let fill_all = |tys: &[LoweringTy]| -> Box<[baml_type::Ty]> {
         tys.iter().map(fill_holes_as_errors).collect()
     };
-    let attr = |attr: &TyAttr| attr.clone();
     match ty {
-        LoweringTy::Infer { attr: a } => baml_type::Ty::Error { attr: attr(a) },
-        LoweringTy::List(inner, a) => {
-            baml_type::Ty::List(Box::new(fill_holes_as_errors(inner)), attr(a))
-        }
-        LoweringTy::Map {
-            key,
-            value,
-            attr: a,
-        } => baml_type::Ty::Map {
+        LoweringTy::Infer => baml_type::Ty::Error,
+        LoweringTy::List(inner) => baml_type::Ty::List(Box::new(fill_holes_as_errors(inner))),
+        LoweringTy::Map { key, value } => baml_type::Ty::Map {
             key: Box::new(fill_holes_as_errors(key)),
             value: Box::new(fill_holes_as_errors(value)),
-            attr: attr(a),
         },
-        LoweringTy::Union(members, a) => baml_type::Ty::Union(fill_all(members), attr(a)),
-        LoweringTy::Class(name, args, a) => {
-            baml_type::Ty::Class(name.clone(), fill_all(args), attr(a))
-        }
-        LoweringTy::Interface(name, args, assoc, a) => baml_type::Ty::Interface(
+        LoweringTy::Union(members) => baml_type::Ty::Union(fill_all(members)),
+        LoweringTy::Class(name, args) => baml_type::Ty::Class(name.clone(), fill_all(args)),
+        LoweringTy::Interface(name, args, assoc) => baml_type::Ty::Interface(
             name.clone(),
             fill_all(args),
             assoc
                 .iter()
                 .map(|(name, ty)| (name.clone(), fill_holes_as_errors(ty)))
                 .collect(),
-            attr(a),
         ),
         LoweringTy::Function {
             params,
             ret,
             throws,
-            attr: a,
         } => baml_type::Ty::Function {
             params: params
                 .iter()
@@ -2041,18 +2003,15 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
                 .collect(),
             ret: Box::new(fill_holes_as_errors(ret)),
             throws: Box::new(fill_holes_as_errors(throws)),
-            attr: attr(a),
         },
-        LoweringTy::Future(value, error, a) => baml_type::Ty::Future(
+        LoweringTy::Future(value, error) => baml_type::Ty::Future(
             Box::new(fill_holes_as_errors(value)),
             Box::new(fill_holes_as_errors(error)),
-            attr(a),
         ),
         LoweringTy::AssociatedTypeProjection {
             base,
             interface,
             member,
-            attr: a,
         } => baml_type::Ty::AssociatedTypeProjection {
             base: Box::new(fill_holes_as_errors(base)),
             interface: Box::new(baml_type::Interface::new(
@@ -2065,7 +2024,6 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
                     .collect(),
             )),
             member: member.clone(),
-            attr: attr(a),
         },
         // Hole-free leaves: the generated narrowing is total on them.
         other => baml_type::Ty::try_from(other)
@@ -2232,7 +2190,7 @@ pub fn interface_scope_bounds<'db>(
             .iter()
             .skip(1)
             .take(data.generic_params.len())
-            .map(|param| baml_type::Ty::TypeVar(param.clone(), TyAttr::default()))
+            .map(|param| baml_type::Ty::TypeVar(param.clone()))
             .collect();
         // `Self`'s self-bound carries no pins: a `Self.Member` projection
         // stays symbolic inside the interface and reduces through the
@@ -2499,11 +2457,11 @@ pub(crate) fn is_open_throws_contract(db: &dyn baml_compiler2_hir::Db, ty: &Ty) 
         seen_aliases: &mut FxHashSet<DeclName>,
     ) -> bool {
         match ty.kind() {
-            InferTy::Unknown { .. } => true,
-            InferTy::Union(members, _) => members
+            InferTy::Unknown => true,
+            InferTy::Union(members) => members
                 .iter()
                 .any(|member| visit(facts, member, seen_aliases)),
-            InferTy::TypeAlias(name, _) if seen_aliases.insert(name.clone()) => {
+            InferTy::TypeAlias(name) if seen_aliases.insert(name.clone()) => {
                 baml_type::normalize::TypeContext::alias_def(facts, name)
                     .map(|target| visit(facts, &Ty::from_plain(&target), seen_aliases))
                     .unwrap_or(false)
@@ -2646,7 +2604,7 @@ fn bound_binding_violations(
     if associated_type_bindings.is_empty() {
         return Vec::new();
     }
-    let baml_type::Ty::Interface(qtn, generics, pins, _) = lowered else {
+    let baml_type::Ty::Interface(qtn, generics, pins) = lowered else {
         return Vec::new();
     };
     let head = baml_type::Interface::new(qtn.clone(), generics.clone(), pins.clone());
@@ -2891,7 +2849,7 @@ pub fn interface_lowering_diagnostics<'db>(
         let facts = crate::facts::Facts::with_bounds(db, interface_scope_bounds(db, interface));
         let own_params: Vec<baml_type::Ty> = interface_declared_params(db, interface)
             .iter()
-            .map(|param| baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()))
+            .map(|param| baml_type::Ty::TypeVar(param.clone()))
             .collect();
         let head = baml_type::Interface::new(
             interface_qualified_name(db, interface),
@@ -3114,7 +3072,6 @@ pub fn function_signature_with_diagnostics<'db>(
                     .first()
                     .cloned()
                     .expect("interface frame starts with Self"),
-                TyAttr::default(),
             )),
             _ => concrete_self.clone(),
         }
@@ -3311,24 +3268,22 @@ fn lower_assoc_type_ref<'db>(
 /// ruling-4 rejections through `reject_holes` on the named part.
 pub fn throws_clause_parts(ty: &LoweringTy) -> (baml_type::Ty, bool) {
     let members: Vec<&LoweringTy> = match ty {
-        LoweringTy::Union(members, _) => members.iter().collect(),
+        LoweringTy::Union(members) => members.iter().collect(),
         _ => vec![ty],
     };
     let mut named = Vec::new();
     let mut open = false;
     for member in members {
-        if matches!(member, LoweringTy::Infer { .. }) {
+        if matches!(member, LoweringTy::Infer) {
             open = true;
         } else {
             named.push(reject_holes(member));
         }
     }
     let named = match named.len() {
-        0 => baml_type::Ty::Never {
-            attr: TyAttr::default(),
-        },
+        0 => baml_type::Ty::Never,
         1 => named.pop().expect("checked len"),
-        _ => baml_type::Ty::Union(named.into(), TyAttr::default()),
+        _ => baml_type::Ty::Union(named.into()),
     };
     (named, open)
 }
@@ -3344,7 +3299,7 @@ mod compiler_alias_tests {
         for primitive in baml_type::PrimitiveType::ALL {
             let alias = compiler_aliases::by_target(AliasTarget::Primitive(primitive));
             let name = alias.definition.unwrap().decl_name(lang).unwrap();
-            let expected = baml_type::Ty::from_primitive(primitive, TyAttr::default());
+            let expected = baml_type::Ty::from_primitive(primitive);
             assert_eq!(
                 class_ty(lang, name.clone(), vec![]),
                 Ty::from_plain(&expected)
@@ -3372,10 +3327,10 @@ mod compiler_alias_tests {
                 wire.name().clone(),
             );
             assert!(
-                matches!(class_ty(lang, name.clone(), vec![]).kind(), InferTy::Class(actual, _, _) if actual == &name)
+                matches!(class_ty(lang, name.clone(), vec![]).kind(), InferTy::Class(actual, _) if actual == &name)
             );
             assert!(
-                matches!(class_lowering_ty(lang, name.clone(), vec![]), LoweringTy::Class(actual, _, _) if actual == name)
+                matches!(class_lowering_ty(lang, name.clone(), vec![]), LoweringTy::Class(actual, _) if actual == name)
             );
         }
     }
@@ -3392,7 +3347,7 @@ mod compiler_alias_tests {
                 .unwrap();
         assert!(matches!(
             class_ty(LangRoots::default(), name.clone(), vec![]).kind(),
-            InferTy::Class(actual, _, _) if actual == &name
+            InferTy::Class(actual, _) if actual == &name
         ));
     }
 }

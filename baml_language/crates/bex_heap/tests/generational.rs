@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use baml_type::{Name, QualifiedTypeName, TyAttr};
+use baml_type::{Name, QualifiedTypeName};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
@@ -142,7 +142,6 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             docstring: None,
             other: IndexMap::new(),
             type_tag,
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: package_ptr,
@@ -150,7 +149,6 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         let ty = RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
             Box::new([]),
-            TyAttr::default(),
         );
         let type_ptr = tlab.alloc_type(TypeValue::new(ty));
         let function_ptr = tlab.alloc(Object::GenericFunction(GenericFunction {
@@ -196,7 +194,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
         panic!("package type value ceased to be a type")
     };
-    let RealizedTy::Class(head, _, _) = &type_value.ty else {
+    let RealizedTy::Class(head, _) = &type_value.ty else {
         panic!("package type value ceased to wrap a class type")
     };
     assert_eq!(
@@ -680,7 +678,7 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
     assert_eq!(
         heap.gen2_dirty_card_count(),
         1,
-        "marking a Gen2 card should register exactly one dirty card",
+        "marking a Gen2 card should register exactly one dirty card"
     );
 
     // First minor GC — the dirty card is scanned but the Gen2 object has no
@@ -694,7 +692,7 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
     assert_eq!(
         heap.gen2_dirty_card_count(),
         1,
-        "Minor GC does not clear the Gen2 card table — the mark persists",
+        "Minor GC does not clear the Gen2 card table — the mark persists"
     );
 
     // Allocate a brand-new Gen0 object that nothing references.
@@ -1121,13 +1119,9 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         docstring: None,
         other: IndexMap::new(),
         type_tag: enum_tag,
-        ty_attr: TyAttr::default(),
         owner: package_ptr,
     })));
-    let field_ty = RealizedTy::Enum(
-        bex_vm_types::TypeHead::new(enum_ptr, enum_tag),
-        TyAttr::default(),
-    );
+    let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(
             "FieldOwner",
@@ -1148,7 +1142,6 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         docstring: None,
         other: IndexMap::new(),
         type_tag: baml_type::typetag::TypeTag::of_head("FieldOwner"),
-        ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
@@ -1175,7 +1168,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         .runtime_type
         .as_ref()
         .expect("field runtime type was lost");
-    let RealizedTy::Enum(head, _) = &exact.ty else {
+    let RealizedTy::Enum(head) = &exact.ty else {
         panic!("field runtime type ceased to wrap an enum")
     };
     assert_eq!(head.tag(), enum_tag, "a move must not change identity");
@@ -1282,12 +1275,8 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
             name: Name::new("greet"),
             args: Vec::new(),
             kwargs: Vec::new(),
-            returns: baml_type::RuntimeTy::Void {
-                attr: TyAttr::default(),
-            },
-            errors: baml_type::RuntimeTy::Void {
-                attr: TyAttr::default(),
-            },
+            returns: baml_type::RuntimeTy::Void,
+            errors: baml_type::RuntimeTy::Void,
             default: Some(bex_vm_types::ObjectIndex::from_raw(0)),
             default_fn: body_ptr,
         }],
@@ -1384,7 +1373,6 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         docstring: None,
         other: IndexMap::new(),
         type_tag,
-        ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
@@ -1392,7 +1380,6 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let returns = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, type_tag),
         Box::new([]),
-        TyAttr::default(),
     );
     let future = bex_vm_types::types::Future::pending(
         bex_vm_types::types::FutureId::from_usize(1),
@@ -1413,7 +1400,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let Object::Future(future) = (unsafe { moved_future.get() }) else {
         panic!("root ceased to be a future")
     };
-    let RealizedTy::Class(head, _, _) = future.returns() else {
+    let RealizedTy::Class(head, _) = future.returns() else {
         panic!("future returns ceased to be a class")
     };
     assert!(head.is_resolved());

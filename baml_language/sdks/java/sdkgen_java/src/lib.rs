@@ -113,7 +113,7 @@ fn to_source_code_internal(
     // Only `PreserveCase` is wired up so far.
     assert!(
         matches!(naming_convention, NamingConvention::PreserveCase),
-        "sdkgen_java only supports naming_convention = PreserveCase (got {naming_convention})",
+        "sdkgen_java only supports naming_convention = PreserveCase (got {naming_convention})"
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
@@ -291,10 +291,10 @@ fn to_source_code_internal(
             aliases: &aliases,
             pkg: pkg.clone(),
         };
-        let body = if let Ty::Union(items, _) = resolves_to {
+        let body = if let Ty::Union(items) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
-                .filter(|t| !matches!(t, Ty::Null { .. }))
+                .filter(|t| !matches!(t, Ty::Null))
                 .cloned()
                 .collect();
             let (union_binary, arm_entries) = union_registration(&pkg, &ident, &arms, &aliases);
@@ -371,7 +371,7 @@ fn to_source_code_internal(
                 "        baml_bridge.TypeRegistry.registerUnionAlias({alias_fqn:?}, {union_binary:?}, new baml_bridge.BamlType[] {{{}}}, new java.lang.String[] {{{}}});\n",
                 tokens.join(", "),
                 records.join(", ")
-            )),
+            ))
         }
     }
     for (fqn, java_name, fields, descriptors) in &class_registry {
@@ -401,7 +401,7 @@ fn to_source_code_internal(
             "            baml_bridge.BamlFfi.initFromBytecode(bytecode);",
             &format!(
                 "            try (java.io.InputStream manifestIn = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.toml\")) {{\n                if (manifestIn == null) {{\n                    throw new IllegalStateException(\"baml_sdk/inlinedbaml.toml not found on the classpath\");\n                }}\n                String embeddedBamlToml = new String(manifestIn.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);\n                baml_bridge.BamlFfi.initFromBytecode(bytecode, embeddedBamlToml);\n            }}"
-            ),
+            )
         )
     } else {
         anchor_body
@@ -473,22 +473,22 @@ pub fn to_source_code_with_bytecode_and_metadata(
 /// literal value with no escaping.)
 pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
     match ty {
-        Ty::Int { .. } => "int".to_string(),
-        Ty::Bigint { .. } => "bigint".to_string(),
-        Ty::Float { .. } => "float".to_string(),
-        Ty::String { .. } => "string".to_string(),
-        Ty::Bool { .. } => "bool".to_string(),
-        Ty::Null { .. } => "null".to_string(),
-        Ty::Uint8Array { .. } => "uint8array".to_string(),
-        Ty::Void { .. } => "void".to_string(),
-        Ty::Unknown { .. } => "unknown".to_string(),
+        Ty::Int => "int".to_string(),
+        Ty::Bigint => "bigint".to_string(),
+        Ty::Float => "float".to_string(),
+        Ty::String => "string".to_string(),
+        Ty::Bool => "bool".to_string(),
+        Ty::Null => "null".to_string(),
+        Ty::Uint8Array => "uint8array".to_string(),
+        Ty::Void => "void".to_string(),
+        Ty::Unknown => "unknown".to_string(),
         // A generic class carries its concrete type args in its identity token
         // (`Wrapper<int>` vs `Wrapper<string>`) — kept for parity with
         // `registry_arm_expr`, which distinguishes two instantiations so a union /
         // registry key can't silently first-win. (The class *descriptor* path
         // stays bare — see `descriptor_expr`'s `Class` arm — so class decode still
         // resolves by FQN.)
-        Ty::Class(name, args, _) => {
+        Ty::Class(name, args) => {
             let base = baml_fqn(name);
             if args.is_empty() {
                 base
@@ -497,13 +497,13 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
                 format!("{base}<{}>", inner.join(","))
             }
         }
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => baml_fqn(name),
-        Ty::TypeAlias(name, _) => match aliases.get(name) {
+        Ty::Enum(name) | Ty::EnumVariant(name, _) => baml_fqn(name),
+        Ty::TypeAlias(name) => match aliases.get(name) {
             Some((resolved, false)) => signature_token(resolved, aliases),
             _ => baml_fqn(name),
         },
-        Ty::TypeVar(name, _) => format!("tv:{}", name.as_str()),
-        Ty::List(inner, _) => format!("list<{}>", signature_token(inner, aliases)),
+        Ty::TypeVar(name) => format!("tv:{}", name.as_str()),
+        Ty::List(inner) => format!("list<{}>", signature_token(inner, aliases)),
         Ty::Map { key, value, .. } => format!(
             "map<{},{}>",
             signature_token(key, aliases),
@@ -516,16 +516,16 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
             baml_base::Literal::String(v) => format!("lit:string:{v}"),
             baml_base::Literal::Bool(v) => format!("lit:bool:{v}"),
         },
-        Ty::Media(kind, _) => format!("media:{}", format!("{kind:?}").to_lowercase()),
+        Ty::Media(kind) => format!("media:{}", format!("{kind:?}").to_lowercase()),
         Ty::Function { .. } => "callable".to_string(),
-        Ty::RustType { .. } => "handle".to_string(),
+        Ty::RustType => "handle".to_string(),
         // Types the Java SDK does not model yet collapse to the opaque
         // `unknown` token (the conservative "?"-token fallback).
         Ty::Interface(..)
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Never { .. }
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Never
         | Ty::Future(..) => "unknown".to_string(),
         Ty::Union(..) => "union".to_string(), // banned by validate(); defensive
     }
@@ -659,17 +659,14 @@ mod tests {
 
     // Leaf-type constructors: the codegen `Ty` variants now carry a
     // `TyAttr`, so these keep the fixture builders readable.
-    fn a() -> baml_base::TyAttr {
-        baml_base::TyAttr::EMPTY
-    }
     fn t_int() -> Ty {
-        Ty::Int { attr: a() }
+        Ty::Int
     }
     fn t_float() -> Ty {
-        Ty::Float { attr: a() }
+        Ty::Float
     }
     fn t_string() -> Ty {
-        Ty::String { attr: a() }
+        Ty::String
     }
     fn nullary_fn(fn_name: &str, span: u32) -> Function {
         Function {
@@ -684,29 +681,29 @@ mod tests {
         }
     }
     fn t_uint8array() -> Ty {
-        Ty::Uint8Array { attr: a() }
+        Ty::Uint8Array
     }
     fn t_typevar(n: &str) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new(n)), a())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new(n)))
     }
     fn t_union(items: Vec<Ty>) -> Ty {
-        Ty::Union(items.into(), a())
+        Ty::Union(items.into())
     }
     fn t_list(inner: Ty) -> Ty {
-        Ty::List(Box::new(inner), a())
+        Ty::List(Box::new(inner))
     }
     fn t_alias(n: Name) -> Ty {
-        Ty::TypeAlias(n, a())
+        Ty::TypeAlias(n)
     }
     fn t_class(n: Name) -> Ty {
-        Ty::Class(n, Box::new([]), a())
+        Ty::Class(n, Box::new([]))
     }
     fn t_null() -> Ty {
-        Ty::Null { attr: a() }
+        Ty::Null
     }
     /// `T?` — a nullable BAML type (`T | null`).
     fn t_opt(inner: Ty) -> Ty {
-        Ty::Union(Box::new([inner, t_null()]), a())
+        Ty::Union(Box::new([inner, t_null()]))
     }
 
     fn class_sym_with_props(
@@ -1284,9 +1281,8 @@ mod tests {
                 ty: t_class(event),
                 mode: CodegenFunctionParamMode::Required,
             }]),
-            ret: Box::new(Ty::Void { attr: a() }),
-            throws: Box::new(Ty::Never { attr: a() }),
-            attr: a(),
+            ret: Box::new(Ty::Void),
+            throws: Box::new(Ty::Never),
         };
         pool.insert(
             name("user", &[], "probe@stream"),
@@ -1396,8 +1392,7 @@ mod tests {
                 },
             ]),
             ret: Box::new(t_int()),
-            throws: Box::new(Ty::Never { attr: a() }),
-            attr: a(),
+            throws: Box::new(Ty::Never),
         };
         let f = Function {
             name: BaseName::new("call_cb"),
@@ -1486,8 +1481,7 @@ mod tests {
                 mode: CodegenFunctionParamMode::Optional,
             }]),
             ret: Box::new(t_int()),
-            throws: Box::new(Ty::Never { attr: a() }),
-            attr: a(),
+            throws: Box::new(Ty::Never),
         };
         let mut pool = SymbolPool::new();
         pool.insert(
@@ -1517,8 +1511,7 @@ mod tests {
                 mode: CodegenFunctionParamMode::Required,
             }]),
             ret: Box::new(t_int()),
-            throws: Box::new(Ty::Never { attr: a() }),
-            attr: a(),
+            throws: Box::new(Ty::Never),
         };
         let mut pool = SymbolPool::new();
         pool.insert(

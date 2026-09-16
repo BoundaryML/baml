@@ -58,9 +58,6 @@ pub struct Class {
     /// value and the identity a `TypeHead` referring to this class compares by.
     pub type_tag: baml_type::typetag::TypeTag,
 
-    /// Class-level type attribute (e.g., from @@stream.done).
-    pub ty_attr: baml_type::TyAttr,
-
     /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
     /// finalizer. Set at emit time. The GC checks this bit to decide whether an
     /// instance is finalizable — so the common case (no `cleanup`) is a single

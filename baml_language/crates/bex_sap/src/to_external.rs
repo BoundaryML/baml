@@ -28,42 +28,34 @@ use crate::{
 /// - Aliases already resolved into the target type have no nominal name to recover; named alias
 ///   references inside containers are preserved.
 /// - `EnumVariant` becomes `Enum` (variant specificity lost at the type level).
-/// - `TyAttr` annotations are not reconstructed; `TyAttr::default()` is used throughout.
 pub trait ToBamlTy {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy;
 }
 
 impl ToBamlTy for TyResolvedRef<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        let attr = baml_type::TyAttr::default();
         match self {
-            TyResolvedRef::Int(_) => SapTy::Int { attr },
-            TyResolvedRef::Bigint(_) => SapTy::Bigint { attr },
-            TyResolvedRef::Float(_) => SapTy::Float { attr },
-            TyResolvedRef::String(_) => SapTy::String { attr },
-            TyResolvedRef::Bool(_) => SapTy::Bool { attr },
-            TyResolvedRef::Null(_) => SapTy::Null { attr },
-            TyResolvedRef::Media(media) => SapTy::Media(media.to_baml_media_kind(), attr),
-            TyResolvedRef::LiteralInt(v) => SapTy::Literal(
-                baml_type::Literal::Int(v.0),
-                baml_type::Freshness::Regular,
-                attr,
-            ),
+            TyResolvedRef::Int(_) => SapTy::Int,
+            TyResolvedRef::Bigint(_) => SapTy::Bigint,
+            TyResolvedRef::Float(_) => SapTy::Float,
+            TyResolvedRef::String(_) => SapTy::String,
+            TyResolvedRef::Bool(_) => SapTy::Bool,
+            TyResolvedRef::Null(_) => SapTy::Null,
+            TyResolvedRef::Media(media) => SapTy::Media(media.to_baml_media_kind()),
+            TyResolvedRef::LiteralInt(v) => {
+                SapTy::Literal(baml_type::Literal::Int(v.0), baml_type::Freshness::Regular)
+            }
             TyResolvedRef::LiteralBigint(v) => SapTy::Literal(
                 baml_type::Literal::Bigint(v.0.clone()),
                 baml_type::Freshness::Regular,
-                attr,
             ),
             TyResolvedRef::LiteralString(v) => SapTy::Literal(
                 baml_type::Literal::String(v.0.to_string()),
                 baml_type::Freshness::Regular,
-                attr,
             ),
-            TyResolvedRef::LiteralBool(v) => SapTy::Literal(
-                baml_type::Literal::Bool(v.0),
-                baml_type::Freshness::Regular,
-                attr,
-            ),
+            TyResolvedRef::LiteralBool(v) => {
+                SapTy::Literal(baml_type::Literal::Bool(v.0), baml_type::Freshness::Regular)
+            }
             TyResolvedRef::Array(a) => a.to_baml_ty(db),
             TyResolvedRef::Map(m) => m.to_baml_ty(db),
             TyResolvedRef::Class(c) => c.to_baml_ty(db),
@@ -85,7 +77,7 @@ impl ToBamlTy for Ty<'_, DefKey> {
                 Some(TyResolvedRef::Enum(enm)) if enm.name == *name => enm.to_baml_ty(db),
                 // Any other named entry is an alias. Keep it nominal here
                 // instead of recursively expanding aliases such as `json`.
-                Some(_) => SapTy::TypeAlias(name.clone(), baml_type::TyAttr::default()),
+                Some(_) => SapTy::TypeAlias(name.clone()),
                 None => SapTy::unknown(),
             },
         }
@@ -95,7 +87,7 @@ impl ToBamlTy for Ty<'_, DefKey> {
 impl ToBamlTy for ArrayTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         let inner = self.ty.ty.to_baml_ty(db);
-        SapTy::List(Box::new(inner), baml_type::TyAttr::default())
+        SapTy::List(Box::new(inner))
     }
 }
 
@@ -104,38 +96,33 @@ impl ToBamlTy for MapTy<'_, DefKey> {
         SapTy::Map {
             key: Box::new(self.key.ty.to_baml_ty(db)),
             value: Box::new(self.value.ty.to_baml_ty(db)),
-            attr: baml_type::TyAttr::default(),
         }
     }
 }
 
 impl ToBamlTy for ClassTy<'_, DefKey> {
     fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Class(
-            self.name.clone(),
-            Box::new([]),
-            baml_type::TyAttr::default(),
-        )
+        SapTy::Class(self.name.clone(), Box::new([]))
     }
 }
 
 impl ToBamlTy for EnumTy<'_, DefKey> {
     fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Enum(self.name.clone(), baml_type::TyAttr::default())
+        SapTy::Enum(self.name.clone())
     }
 }
 
 impl ToBamlTy for EnumVariantTy<'_, DefKey> {
     /// Loses variant specificity — maps back to the parent enum type.
     fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Enum(self.name.clone(), baml_type::TyAttr::default())
+        SapTy::Enum(self.name.clone())
     }
 }
 
 impl ToBamlTy for UnionTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         let members: Vec<SapTy> = self.variants.iter().map(|v| v.ty.to_baml_ty(db)).collect();
-        SapTy::Union(members.into(), baml_type::TyAttr::default())
+        SapTy::Union(members.into())
     }
 }
 

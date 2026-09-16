@@ -28,7 +28,7 @@
 use std::fmt;
 
 use baml_base::Literal;
-use baml_type::{DeclName, PrimitiveType, Ty, TyAttr, contains_error_recovery};
+use baml_type::{DeclName, PrimitiveType, Ty, contains_error_recovery};
 use rustc_hash::FxHashSet;
 
 use crate::render::{Spell, Viewpoint};
@@ -47,7 +47,7 @@ use crate::render::{Spell, Viewpoint};
 #[derive(Debug, Clone)]
 pub enum Ctor {
     /// Any singleton type. Identity is determined by [`ty_ctor_identity`],
-    /// which strips `TyAttr`/`Freshness` and canonicalizes float literals.
+    /// which strips `Freshness` and canonicalizes float literals.
     /// Absorbs Bool, Null, Int, Float, Str literals, and flat enum variants.
     Single(Ty),
     /// Array shape. Sub-patterns' types come from the array's element type.
@@ -93,7 +93,7 @@ pub enum Ctor {
 /// `Box<T>` and `Box<int>` are distinct ctors (a rigid-arg row is a
 /// possible-but-not-covering row in a `Box<int>` column, never a cover).
 /// Compared per-arg via [`ty_ctor_identity`] — never raw `Ty` equality, whose
-/// `TyAttr`/`Freshness` baggage would split identical ctors. Builders
+/// `Freshness` baggage would split identical ctors. Builders
 /// canonicalize the args via the canonical type algebra
 /// (`TypeContext::normalize`), whose guarantee makes identical spellings here
 /// exactly `equivalent` on both the pattern and column sides.
@@ -237,8 +237,8 @@ fn class_args_have_recovery(args: &[Ty]) -> bool {
 
 fn class_ty_for_ctor(qtn: &DeclName, args: &[Ty], fallback: &Ty) -> Ty {
     match fallback {
-        Ty::Class(fallback_qtn, _, _) if fallback_qtn == qtn => fallback.clone(),
-        _ => Ty::Class(qtn.clone(), args.into(), TyAttr::default()),
+        Ty::Class(fallback_qtn, _) if fallback_qtn == qtn => fallback.clone(),
+        _ => Ty::Class(qtn.clone(), args.into()),
     }
 }
 
@@ -268,7 +268,7 @@ fn slice_covers(a: &SliceShape, b: &SliceShape) -> bool {
 }
 
 /// A canonicalized form of `Ty` used as the identity key for [`Ctor::Single`].
-/// Strips `TyAttr` (span/comment baggage), normalizes `Ty::Literal` `Freshness`,
+/// Normalizes `Ty::Literal` `Freshness`,
 /// and canonicalizes float string forms (`1.0` ≡ `1.00` ≡ `1e0`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CtorIdentity(String);
@@ -310,17 +310,17 @@ impl CtorHead for baml_type::TypeName {
 fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>) {
     use std::fmt::Write;
     match ty {
-        Ty::Literal(lit, _, _) => {
+        Ty::Literal(lit, _) => {
             out.push_str("L:");
             write_literal_identity(out, lit);
         }
-        Ty::EnumVariant(qtn, name, _) => {
+        Ty::EnumVariant(qtn, name) => {
             let _ = write!(out, "EV:{}::{name}", qtn.ctor_identity());
         }
-        Ty::Enum(qtn, _) => {
+        Ty::Enum(qtn) => {
             let _ = write!(out, "E:{}", qtn.ctor_identity());
         }
-        Ty::Class(qtn, args, _) => {
+        Ty::Class(qtn, args) => {
             let _ = write!(out, "C:{}<", qtn.ctor_identity());
             for (i, a) in args.iter().enumerate() {
                 if i > 0 {
@@ -330,7 +330,7 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
             }
             out.push('>');
         }
-        Ty::Interface(qtn, args, associated_bindings, _) => {
+        Ty::Interface(qtn, args, associated_bindings) => {
             let _ = write!(out, "I:{}<", qtn.ctor_identity());
             let mut wrote_any = false;
             for (i, a) in args.iter().enumerate() {
@@ -362,17 +362,17 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
             write_ty_identity(out, &interface.to_ty());
             let _ = write!(out, ".{member}>");
         }
-        Ty::Int { .. } => out.push_str("P:Int"),
-        Ty::Bigint { .. } => out.push_str("P:Bigint"),
-        Ty::Float { .. } => out.push_str("P:Float"),
-        Ty::String { .. } => out.push_str("P:String"),
-        Ty::Bool { .. } => out.push_str("P:Bool"),
-        Ty::Null { .. } => out.push_str("P:Null"),
-        Ty::Uint8Array { .. } => out.push_str("P:Uint8Array"),
-        Ty::Media(kind, _) => {
+        Ty::Int => out.push_str("P:Int"),
+        Ty::Bigint => out.push_str("P:Bigint"),
+        Ty::Float => out.push_str("P:Float"),
+        Ty::String => out.push_str("P:String"),
+        Ty::Bool => out.push_str("P:Bool"),
+        Ty::Null => out.push_str("P:Null"),
+        Ty::Uint8Array => out.push_str("P:Uint8Array"),
+        Ty::Media(kind) => {
             let _ = write!(out, "P:{kind:?}");
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             out.push_str("U:[");
             for (i, m) in members.iter().enumerate() {
                 if i > 0 {
@@ -382,7 +382,7 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
             }
             out.push(']');
         }
-        Ty::List(elem, _) => {
+        Ty::List(elem) => {
             out.push_str("Lst:");
             write_ty_identity(out, elem);
         }
@@ -394,18 +394,18 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
             out.push(',');
             write_ty_identity(out, v);
         }
-        Ty::TypeAlias(qtn, _) => {
+        Ty::TypeAlias(qtn) => {
             let _ = write!(out, "A:{}", qtn.ctor_identity());
         }
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             let _ = write!(out, "V:{name}");
         }
-        Ty::Never { .. } => out.push_str("Never"),
-        Ty::Void { .. } => out.push_str("Void"),
-        Ty::Unknown { .. } => out.push_str("BUnk"),
-        Ty::Error { .. } => out.push_str("Err"),
-        Ty::RustType { .. } => out.push_str("Rust"),
-        Ty::Type { .. } => out.push_str("Type"),
+        Ty::Never => out.push_str("Never"),
+        Ty::Void => out.push_str("Void"),
+        Ty::Unknown => out.push_str("BUnk"),
+        Ty::Error => out.push_str("Err"),
+        Ty::RustType => out.push_str("Rust"),
+        Ty::Type => out.push_str("Type"),
         Ty::Function {
             params,
             ret,
@@ -424,7 +424,7 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
             out.push('!');
             write_ty_identity(out, throws);
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             out.push_str("Fut<");
             write_ty_identity(out, value);
             out.push(',');
@@ -434,8 +434,8 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
         // `Resource`/`PromptAst` are never produced by TIR; the
         // arms exist only so the match stays exhaustive over the shared
         // `baml_type::Ty`.
-        Ty::Resource { .. } => out.push_str("Res"),
-        Ty::PromptAst { .. } => out.push_str("PAst"),
+        Ty::Resource => out.push_str("Res"),
+        Ty::PromptAst => out.push_str("PAst"),
     }
 }
 
@@ -766,15 +766,15 @@ fn write_single_witness(f: &mut String, vp: &Viewpoint<'_>, ty: &Ty) -> fmt::Res
     use std::fmt::Write as _;
 
     match ty {
-        Ty::Literal(lit, _, _) => match lit {
+        Ty::Literal(lit, _) => match lit {
             Literal::Int(v) => write!(f, "{v}"),
             Literal::Bigint(v) => write!(f, "{v}n"),
             Literal::Bool(v) => write!(f, "{v}"),
             Literal::String(v) => write!(f, "{v:?}"),
             Literal::Float(s) => write!(f, "{s}"),
         },
-        Ty::EnumVariant(qtn, variant, _) => write!(f, "{}.{variant}", qtn.spell(vp)),
-        Ty::Null { .. } => write!(f, "null"),
+        Ty::EnumVariant(qtn, variant) => write!(f, "{}.{variant}", qtn.spell(vp)),
+        Ty::Null => write!(f, "null"),
         _ => write!(f, "{ty:?}"),
     }
 }
@@ -786,21 +786,21 @@ fn write_member_ty_witness(f: &mut String, vp: &Viewpoint<'_>, ty: &Ty) -> fmt::
     use std::fmt::Write as _;
 
     match ty {
-        Ty::Int { .. } => write!(f, "{}", PrimitiveType::Int),
-        Ty::Bigint { .. } => write!(f, "{}", PrimitiveType::Bigint),
-        Ty::Float { .. } => write!(f, "{}", PrimitiveType::Float),
-        Ty::String { .. } => write!(f, "{}", PrimitiveType::String),
-        Ty::Bool { .. } => write!(f, "{}", PrimitiveType::Bool),
-        Ty::Null { .. } => write!(f, "{}", PrimitiveType::Null),
-        Ty::Uint8Array { .. } => write!(f, "{}", PrimitiveType::Uint8Array),
-        Ty::Media(kind, _) => write!(f, "{kind}"),
+        Ty::Int => write!(f, "{}", PrimitiveType::Int),
+        Ty::Bigint => write!(f, "{}", PrimitiveType::Bigint),
+        Ty::Float => write!(f, "{}", PrimitiveType::Float),
+        Ty::String => write!(f, "{}", PrimitiveType::String),
+        Ty::Bool => write!(f, "{}", PrimitiveType::Bool),
+        Ty::Null => write!(f, "{}", PrimitiveType::Null),
+        Ty::Uint8Array => write!(f, "{}", PrimitiveType::Uint8Array),
+        Ty::Media(kind) => write!(f, "{kind}"),
         // Interfaces are open-world, so a union-member witness names the
         // uncovered interface (`Animal`, `Slot<int>`) rather than collapsing to
         // a bare `_`. Rendered user-facing (no `user.` package prefix).
-        Ty::Interface(_, _, _, _) => write!(f, "{}", ty.spell(vp)),
-        Ty::Class(qtn, _, _) | Ty::Enum(qtn, _) => write!(f, "{}", qtn.spell(vp)),
-        Ty::EnumVariant(qtn, variant, _) => write!(f, "{}.{variant}", qtn.spell(vp)),
-        Ty::Literal(_, _, _) => write_single_witness(f, vp, ty),
+        Ty::Interface(_, _, _) => write!(f, "{}", ty.spell(vp)),
+        Ty::Class(qtn, _) | Ty::Enum(qtn) => write!(f, "{}", qtn.spell(vp)),
+        Ty::EnumVariant(qtn, variant) => write!(f, "{}.{variant}", qtn.spell(vp)),
+        Ty::Literal(_, _) => write_single_witness(f, vp, ty),
         _ => write!(f, "_"),
     }
 }
@@ -886,8 +886,8 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
     seen: &mut FxHashSet<DeclName>,
 ) -> bool {
     match ty {
-        Ty::Never { .. } => false,
-        Ty::Class(qtn, _, _) => {
+        Ty::Never => false,
+        Ty::Class(qtn, _) => {
             if !seen.insert(qtn.clone()) {
                 // Cycle: assume inhabited. Uninhabitedness is only
                 // *proven* by reaching a Never; we never assume it.
@@ -900,9 +900,9 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
             seen.remove(qtn);
             r
         }
-        Ty::Union(members, _) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
+        Ty::Union(members) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
         // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
-        Ty::List(_, _) => true,
+        Ty::List(_) => true,
         _ => true,
     }
 }
@@ -1408,7 +1408,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
         // returns empty (slice splitting normally handles it). Without
         // this short-circuit, the empty result would incorrectly mark the
         // list as vacuously exhaustive.
-        if matches!(col_ty, Ty::List(_, _)) {
+        if matches!(col_ty, Ty::List(_)) {
             return CtorSplit::alphabet(
                 vec![Ctor::Missing],
                 vec![Ctor::Slice(SliceShape::Variable {
@@ -1439,7 +1439,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
 
     // Slice types need a special split that treats variable-length patterns
     // as covering open-ended length classes — set membership isn't enough.
-    if matches!(col_ty, Ty::List(_, _)) {
+    if matches!(col_ty, Ty::List(_)) {
         return split_slice_ctors(&present_no_wild, has_wildcard);
     }
 
@@ -1694,18 +1694,18 @@ mod tests {
     impl PatCtx for StubCtx {
         fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
             match ty {
-                Ty::Bool { .. } => {
+                Ty::Bool => {
                     vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
                 }
-                Ty::Int { .. } | Ty::Float { .. } | Ty::String { .. } => vec![Ctor::NonExhaustive],
-                Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
-                Ty::Union(members, _) => members
+                Ty::Int | Ty::Float | Ty::String => vec![Ctor::NonExhaustive],
+                Ty::Null => vec![Ctor::Single(ty.clone())],
+                Ty::Union(members) => members
                     .iter()
                     .flat_map(|m| self.enumerate_ctors(m))
                     .collect(),
-                Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => vec![Ctor::Single(ty.clone())],
-                Ty::Never { .. } => vec![],
-                Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+                Ty::Literal(_, _) | Ty::EnumVariant(_, _) => vec![Ctor::Single(ty.clone())],
+                Ty::Never => vec![],
+                Ty::TypeVar(_) => vec![Ctor::NonExhaustive],
                 _ => vec![Ctor::NonExhaustive],
             }
         }
@@ -1716,34 +1716,26 @@ mod tests {
 
         fn list_element_type(&self, ty: &Ty) -> Ty {
             match ty {
-                Ty::List(elem, _) => (**elem).clone(),
+                Ty::List(elem) => (**elem).clone(),
                 _ => ty.clone(),
             }
         }
     }
 
     fn bool_lit(v: bool) -> Ty {
-        Ty::Literal(Literal::Bool(v), Freshness::Regular, Default::default())
+        Ty::Literal(Literal::Bool(v), Freshness::Regular)
     }
     fn int_lit(v: i64) -> Ty {
-        Ty::Literal(Literal::Int(v), Freshness::Regular, Default::default())
+        Ty::Literal(Literal::Int(v), Freshness::Regular)
     }
     fn float_lit(s: &str) -> Ty {
-        Ty::Literal(
-            Literal::Float(s.into()),
-            Freshness::Regular,
-            Default::default(),
-        )
+        Ty::Literal(Literal::Float(s.into()), Freshness::Regular)
     }
     fn bool_ty() -> Ty {
-        Ty::Bool {
-            attr: Default::default(),
-        }
+        Ty::Bool
     }
     fn int_ty() -> Ty {
-        Ty::Int {
-            attr: Default::default(),
-        }
+        Ty::Int
     }
 
     #[test]
@@ -1818,9 +1810,7 @@ mod tests {
 
     #[test]
     fn never_is_vacuously_exhaustive() {
-        let never = Ty::Never {
-            attr: Default::default(),
-        };
+        let never = Ty::Never;
         let arms: Vec<DPat> = vec![];
         let report = compute_match_usefulness(&StubCtx, &arms, never);
         assert!(report.missing.is_empty());
@@ -1839,7 +1829,7 @@ mod tests {
     /// `[false, false]` as missing.
     #[test]
     fn array_pair_missing_diagonal() {
-        let array_bool = Ty::List(Box::new(bool_ty()), Default::default());
+        let array_bool = Ty::List(Box::new(bool_ty()));
 
         let arm1 = DPat::slice(
             SliceShape::Fixed(2),
@@ -1863,19 +1853,11 @@ mod tests {
         impl PatCtx for ArrayCtx {
             fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
                 match ty {
-                    Ty::Bool { .. } => vec![
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(true),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(false),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
+                    Ty::Bool => vec![
+                        Ctor::Single(Ty::Literal(Literal::Bool(true), Freshness::Regular)),
+                        Ctor::Single(Ty::Literal(Literal::Bool(false), Freshness::Regular)),
                     ],
-                    Ty::List(_, _) => {
+                    Ty::List(_) => {
                         // Enumerate length-0..=N for tests; rely on Variable as catchall.
                         let mut out = Vec::new();
                         for n in 0..=3 {
@@ -1887,7 +1869,7 @@ mod tests {
                         }));
                         out
                     }
-                    Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
+                    Ty::Literal(_, _) => vec![Ctor::Single(ty.clone())],
                     _ => vec![Ctor::NonExhaustive],
                 }
             }
@@ -1896,7 +1878,7 @@ mod tests {
             }
             fn list_element_type(&self, ty: &Ty) -> Ty {
                 match ty {
-                    Ty::List(e, _) => (**e).clone(),
+                    Ty::List(e) => (**e).clone(),
                     _ => ty.clone(),
                 }
             }
@@ -1921,7 +1903,7 @@ mod tests {
     /// over all lengths.
     #[test]
     fn array_rest_covers_all_lengths() {
-        let array_bool = Ty::List(Box::new(bool_ty()), Default::default());
+        let array_bool = Ty::List(Box::new(bool_ty()));
 
         let arms = vec![
             DPat::slice(SliceShape::Fixed(0), vec![], array_bool.clone()),
@@ -1944,19 +1926,11 @@ mod tests {
         impl PatCtx for ArrayCtx {
             fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
                 match ty {
-                    Ty::Bool { .. } => vec![
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(true),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(false),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
+                    Ty::Bool => vec![
+                        Ctor::Single(Ty::Literal(Literal::Bool(true), Freshness::Regular)),
+                        Ctor::Single(Ty::Literal(Literal::Bool(false), Freshness::Regular)),
                     ],
-                    Ty::List(_, _) => {
+                    Ty::List(_) => {
                         // Enumerate the length classes appearing in the
                         // matrix plus a variable catchall.
                         vec![
@@ -1968,7 +1942,7 @@ mod tests {
                             }),
                         ]
                     }
-                    Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
+                    Ty::Literal(_, _) => vec![Ctor::Single(ty.clone())],
                     _ => vec![Ctor::NonExhaustive],
                 }
             }
@@ -1977,7 +1951,7 @@ mod tests {
             }
             fn list_element_type(&self, ty: &Ty) -> Ty {
                 match ty {
-                    Ty::List(e, _) => (**e).clone(),
+                    Ty::List(e) => (**e).clone(),
                     _ => ty.clone(),
                 }
             }
@@ -2027,7 +2001,7 @@ mod tests {
         fn expand_alias(&self, ty: &Ty) -> Ty {
             let mut current = ty.clone();
             let mut seen: std::collections::HashSet<DeclName> = std::collections::HashSet::new();
-            while let Ty::TypeAlias(qtn, _) = &current {
+            while let Ty::TypeAlias(qtn) = &current {
                 if !seen.insert(qtn.clone()) {
                     return current;
                 }
@@ -2044,25 +2018,25 @@ mod tests {
             // Peel aliases first, the same way the real builder will.
             let ty = self.expand_alias(ty);
             match &ty {
-                Ty::Bool { .. } => {
+                Ty::Bool => {
                     vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
                 }
-                Ty::Int { .. } | Ty::Float { .. } | Ty::String { .. } => vec![Ctor::NonExhaustive],
-                Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
-                Ty::Union(members, _) => members
+                Ty::Int | Ty::Float | Ty::String => vec![Ctor::NonExhaustive],
+                Ty::Null => vec![Ctor::Single(ty.clone())],
+                Ty::Union(members) => members
                     .iter()
                     .flat_map(|m| self.enumerate_ctors(m))
                     .collect(),
-                Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
+                Ty::Literal(_, _) | Ty::EnumVariant(_, _) => {
                     vec![Ctor::Single(ty.clone())]
                 }
-                Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
+                Ty::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
                 // For slices, split_ctors handles enumeration via slice splitting;
                 // returning NonExhaustive here is OK because the slice path is taken
                 // before this is consulted.
-                Ty::List(_, _) => vec![Ctor::NonExhaustive],
-                Ty::Never { .. } => vec![],
-                Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+                Ty::List(_) => vec![Ctor::NonExhaustive],
+                Ty::Never => vec![],
+                Ty::TypeVar(_) => vec![Ctor::NonExhaustive],
                 _ => vec![Ctor::NonExhaustive],
             }
         }
@@ -2071,7 +2045,7 @@ mod tests {
         }
         fn list_element_type(&self, ty: &Ty) -> Ty {
             match self.expand_alias(ty) {
-                Ty::List(e, _) => (*e).clone(),
+                Ty::List(e) => (*e).clone(),
                 t => t,
             }
         }
@@ -2081,26 +2055,22 @@ mod tests {
         crate::test_heads::new(Name::new("user"), vec![], Name::new(name))
     }
     fn class_ty(q: &DeclName) -> Ty {
-        Ty::Class(q.clone(), Box::new([]), Default::default())
+        Ty::Class(q.clone(), Box::new([]))
     }
     fn list_of(elem: Ty) -> Ty {
-        Ty::List(Box::new(elem), Default::default())
+        Ty::List(Box::new(elem))
     }
     fn opt_of(t: Ty) -> Ty {
         Ty::optional(t)
     }
     fn union_of(ts: Vec<Ty>) -> Ty {
-        Ty::Union(ts.into(), Default::default())
+        Ty::Union(ts.into())
     }
     fn null_ty() -> Ty {
-        Ty::Null {
-            attr: Default::default(),
-        }
+        Ty::Null
     }
     fn never_ty() -> Ty {
-        Ty::Never {
-            attr: Default::default(),
-        }
+        Ty::Never
     }
 
     // ── Rustc pattern-analysis ports ───────────────────────────────────
@@ -3040,9 +3010,7 @@ mod tests {
     #[test]
     fn testing_12b_never_zero_arms_exhaustive() {
         let cx = TestingCtx::new();
-        let never = Ty::Never {
-            attr: Default::default(),
-        };
+        let never = Ty::Never;
         let report = compute_match_usefulness(&cx, &[], never);
         assert!(report.missing.is_empty());
     }
@@ -4209,9 +4177,7 @@ mod tests {
     #[test]
     fn testing_42_list_of_never_empty_arm_is_exhaustive() {
         let cx = TestingCtx::new();
-        let never = Ty::Never {
-            attr: Default::default(),
-        };
+        let never = Ty::Never;
         let arr = list_of(never);
         let empty = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
 
@@ -4271,12 +4237,7 @@ mod tests {
         let mut cx = TestingCtx::new();
         let inner = qtn("Inner");
         let outer = qtn("Outer");
-        cx.register(
-            inner.clone(),
-            vec![Ty::Never {
-                attr: Default::default(),
-            }],
-        );
+        cx.register(inner.clone(), vec![Ty::Never]);
         cx.register(outer.clone(), vec![class_ty(&inner)]);
 
         let report = compute_match_usefulness(&cx, &[], class_ty(&outer));
@@ -4298,12 +4259,7 @@ mod tests {
     fn testing_46c_wildcard_over_uninhabited_class_unreachable() {
         let mut cx = TestingCtx::new();
         let empty = qtn("Empty");
-        cx.register(
-            empty.clone(),
-            vec![Ty::Never {
-                attr: Default::default(),
-            }],
-        );
+        cx.register(empty.clone(), vec![Ty::Never]);
         let ty = class_ty(&empty);
         let report = compute_match_usefulness(&cx, &[DPat::wildcard(ty.clone())], ty);
         assert!(
@@ -4338,23 +4294,23 @@ mod tests {
     impl PatCtx for UnionCtx {
         fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
             match ty {
-                Ty::Bool { .. } => {
+                Ty::Bool => {
                     vec![Ctor::Single(bool_lit(true)), Ctor::Single(bool_lit(false))]
                 }
-                Ty::Int { .. } | Ty::Float { .. } | Ty::String { .. } => vec![Ctor::NonExhaustive],
-                Ty::Null { .. } => vec![Ctor::Single(ty.clone())],
+                Ty::Int | Ty::Float | Ty::String => vec![Ctor::NonExhaustive],
+                Ty::Null => vec![Ctor::Single(ty.clone())],
                 // Key change: each union member becomes a UnionMember ctor.
-                Ty::Union(members, _) => members
+                Ty::Union(members) => members
                     .iter()
                     .map(|m| Ctor::UnionMember(m.clone()))
                     .collect(),
-                Ty::Literal(_, _, _) | Ty::EnumVariant(_, _, _) => {
+                Ty::Literal(_, _) | Ty::EnumVariant(_, _) => {
                     vec![Ctor::Single(ty.clone())]
                 }
-                Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
-                Ty::List(_, _) => vec![],
-                Ty::Never { .. } => vec![],
-                Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
+                Ty::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
+                Ty::List(_) => vec![],
+                Ty::Never => vec![],
+                Ty::TypeVar(_) => vec![Ctor::NonExhaustive],
                 _ => vec![Ctor::NonExhaustive],
             }
         }
@@ -4363,7 +4319,7 @@ mod tests {
         }
         fn list_element_type(&self, ty: &Ty) -> Ty {
             match ty {
-                Ty::List(e, _) => (**e).clone(),
+                Ty::List(e) => (**e).clone(),
                 _ => ty.clone(),
             }
         }
@@ -4572,7 +4528,7 @@ mod tests {
         let foo = qtn("Foo");
         cx.register_alias(foo.clone(), bool_ty());
 
-        let alias_ty = Ty::TypeAlias(foo.clone(), Default::default());
+        let alias_ty = Ty::TypeAlias(foo.clone());
 
         // Both branches → exhaustive.
         let arms = vec![
@@ -4613,7 +4569,7 @@ mod tests {
             tri.clone(),
             union_of(vec![int_lit(1), int_lit(2), int_lit(3)]),
         );
-        let tri_ty = Ty::TypeAlias(tri, Default::default());
+        let tri_ty = Ty::TypeAlias(tri);
 
         let arms = vec![
             DPat::single(int_lit(1), tri_ty.clone()),
@@ -4643,7 +4599,7 @@ mod tests {
         cx.register(n.clone(), vec![bool_ty(), opt_n.clone()]);
         let alias = qtn("Tree");
         cx.register_alias(alias.clone(), opt_n.clone());
-        let alias_ty = Ty::TypeAlias(alias, Default::default());
+        let alias_ty = Ty::TypeAlias(alias);
 
         let null_top = DPat::single(null_ty(), alias_ty.clone());
         let some_any = DPat::class(
@@ -4724,7 +4680,7 @@ mod tests {
     #[test]
     fn class_pair_missing_one_combo() {
         let qtn = crate::test_heads::new(Name::new("user"), vec![], Name::new("Pair"));
-        let pair_ty = Ty::Class(qtn.clone(), Box::new([]), Default::default());
+        let pair_ty = Ty::Class(qtn.clone(), Box::new([]));
 
         let arm1 = DPat::class(
             qtn.clone(),
@@ -4747,32 +4703,17 @@ mod tests {
         impl PatCtx for PairCtx {
             fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
                 match ty {
-                    Ty::Bool { .. } => vec![
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(true),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
-                        Ctor::Single(Ty::Literal(
-                            Literal::Bool(false),
-                            Freshness::Regular,
-                            Default::default(),
-                        )),
+                    Ty::Bool => vec![
+                        Ctor::Single(Ty::Literal(Literal::Bool(true), Freshness::Regular)),
+                        Ctor::Single(Ty::Literal(Literal::Bool(false), Freshness::Regular)),
                     ],
-                    Ty::Class(_, args, _) => vec![Ctor::Class(self.0.clone(), args.clone())],
-                    Ty::Literal(_, _, _) => vec![Ctor::Single(ty.clone())],
+                    Ty::Class(_, args) => vec![Ctor::Class(self.0.clone(), args.clone())],
+                    Ty::Literal(_, _) => vec![Ctor::Single(ty.clone())],
                     _ => vec![Ctor::NonExhaustive],
                 }
             }
             fn class_field_types(&self, _q: &DeclName, _t: &Ty) -> Vec<Ty> {
-                vec![
-                    Ty::Bool {
-                        attr: Default::default(),
-                    },
-                    Ty::Bool {
-                        attr: Default::default(),
-                    },
-                ]
+                vec![Ty::Bool, Ty::Bool]
             }
             fn list_element_type(&self, ty: &Ty) -> Ty {
                 ty.clone()
@@ -4814,7 +4755,6 @@ mod tests {
                 Box::new([]),
             )),
             member: Name::new(member),
-            attr: Default::default(),
         }
     }
 
@@ -4890,9 +4830,7 @@ mod tests {
         // class is covered (the wildcard is required), but the row gets its
         // own split branch and stays reachable.
         let cx = TestingCtx::new();
-        let col = list_of(Ty::String {
-            attr: Default::default(),
-        });
+        let col = list_of(Ty::String);
         let rigid = DPat::single(list_of(type_var_ty("T")), col.clone());
         let report = compute_match_usefulness(
             &cx,
@@ -4919,12 +4857,8 @@ mod tests {
         let mut cx = TestingCtx::new();
         let box_q = qtn("Box");
         cx.register(box_q.clone(), vec![int_ty()]);
-        let box_int = Ty::Class(box_q.clone(), Box::new([int_ty()]), Default::default());
-        let box_t = Ty::Class(
-            box_q.clone(),
-            Box::new([type_var_ty("T")]),
-            Default::default(),
-        );
+        let box_int = Ty::Class(box_q.clone(), Box::new([int_ty()]));
+        let box_t = Ty::Class(box_q.clone(), Box::new([type_var_ty("T")]));
 
         let rigid_row = DPat::class_inst(
             box_q.clone(),
@@ -4981,7 +4915,7 @@ mod tests {
         let mut cx = TestingCtx::new();
         let box_q = qtn("Box");
         cx.register(box_q.clone(), vec![int_ty()]);
-        let box_int = Ty::Class(box_q.clone(), Box::new([int_ty()]), Default::default());
+        let box_int = Ty::Class(box_q.clone(), Box::new([int_ty()]));
 
         let rigid_refutable = DPat::class_inst(
             box_q.clone(),
@@ -5038,11 +4972,9 @@ mod tests {
         // that branch non-exhaustive internally — its witness must be dropped.
         let mut cx = TestingCtx::new();
         let holder_q = qtn("Holder");
-        let strings = list_of(Ty::String {
-            attr: Default::default(),
-        });
+        let strings = list_of(Ty::String);
         cx.register(holder_q.clone(), vec![strings.clone(), int_ty()]);
-        let holder = Ty::Class(holder_q.clone(), Box::new([]), Default::default());
+        let holder = Ty::Class(holder_q.clone(), Box::new([]));
 
         let rigid_row = DPat::class(
             holder_q.clone(),

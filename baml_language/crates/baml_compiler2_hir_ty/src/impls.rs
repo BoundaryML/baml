@@ -81,7 +81,7 @@ fn subject_head_is_implementor(db: &dyn baml_compiler2_hir::Db, ty: &baml_type::
     let mut head = ty.clone();
     // Bounded: a cyclic alias is rejected at its declaration (E0068).
     for _ in 0..64 {
-        let baml_type::Ty::TypeAlias(name, _) = &head else {
+        let baml_type::Ty::TypeAlias(name) = &head else {
             break;
         };
         match crate::facts::uncached_alias_def(db, name) {
@@ -383,17 +383,12 @@ pub fn impl_facts<'db>(
         // progressively pinned bound. Lowering with the concrete receiver here
         // loses that bound for blanket impls (`for T`) and makes an explicitly
         // qualified `(Self as dep.I).Item` re-enter impl selection on itself.
-        let self_var = baml_type::Ty::TypeVar(self_param.clone(), baml_type::TyAttr::default());
+        let self_var = baml_type::Ty::TypeVar(self_param.clone());
         let mut value_scope = params.clone();
         value_scope.push(self_param.clone());
         let mut value_bindings: baml_type::unify::TypeBindings = params
             .iter()
-            .map(|param| {
-                (
-                    param.clone(),
-                    baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()),
-                )
-            })
+            .map(|param| (param.clone(), baml_type::Ty::TypeVar(param.clone())))
             .collect();
         value_bindings.insert(self_param.clone(), for_ty.clone());
         let mut resolved_pins: Vec<(Name, baml_type::Ty)> = Vec::new();
@@ -623,20 +618,20 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
         ty.kind(),
         InferTy::Class(..)
             | InferTy::Enum(..)
-            | InferTy::Int { .. }
-            | InferTy::Bigint { .. }
-            | InferTy::Float { .. }
-            | InferTy::String { .. }
-            | InferTy::Bool { .. }
-            | InferTy::Null { .. }
-            | InferTy::Uint8Array { .. }
+            | InferTy::Int
+            | InferTy::Bigint
+            | InferTy::Float
+            | InferTy::String
+            | InferTy::Bool
+            | InferTy::Null
+            | InferTy::Uint8Array
             | InferTy::Media(..)
             | InferTy::List(..)
             | InferTy::Map { .. }
             | InferTy::Future(..)
-            | InferTy::Type { .. }
-            | InferTy::Resource { .. }
-            | InferTy::PromptAst { .. }
+            | InferTy::Type
+            | InferTy::Resource
+            | InferTy::PromptAst
     )
 }
 
@@ -1018,7 +1013,6 @@ pub(crate) fn realized_assoc_bound(
                 .iter()
                 .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                 .collect(),
-            baml_type::TyAttr::default(),
         ));
         return Some(crate::lower::substitute_params(&bound_ty, &instantiation));
     }
@@ -1075,7 +1069,7 @@ pub(crate) fn mounted_interface_instantiation(
             "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
-            generic_params.len(),
+            generic_params.len()
         );
         return None;
     }
@@ -1178,11 +1172,9 @@ pub fn impls_for_type<'db>(
     //
     // Widen BEFORE the memo key is built, so both spellings share one
     // cache entry instead of the literal interning a second, empty one.
-    if let baml_type::Ty::Literal(literal, _, attr) = concrete {
-        let widened = baml_type::Ty::from_primitive(
-            baml_type::PrimitiveType::from_literal(literal),
-            attr.clone(),
-        );
+    if let baml_type::Ty::Literal(literal, _) = concrete {
+        let widened =
+            baml_type::Ty::from_primitive(baml_type::PrimitiveType::from_literal(literal));
         return impls_for_type(db, viewer, &widened);
     }
     impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
@@ -1335,7 +1327,7 @@ fn impls_for_type_cached<'db>(
                 .map(|(param, _)| param.clone())
                 .collect();
             // Bare-blanket guard, as in `match_impl_head`.
-            if let InferTy::TypeVar(param, _) = pattern.kind()
+            if let InferTy::TypeVar(param) = pattern.kind()
                 && params.contains(param)
                 && !is_concrete_receiver(&concrete)
             {
@@ -1590,8 +1582,8 @@ pub fn resolve_impl<'db>(
     // A literal-typed value implements what its base primitive does
     // (the receiver-class rule applied to impl goals): `1` proves
     // `GrptChild<int>` through `implements GrptChild<int> for int`.
-    if let InferTy::Literal(literal, _, attr) = concrete.kind() {
-        let widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
+    if let InferTy::Literal(literal, _) = concrete.kind() {
+        let widened = Ty::intern(crate::infer::literal_base(literal));
         return resolve_impl(db, &widened, interface);
     }
     resolve_within_depth(
@@ -1676,21 +1668,21 @@ fn collect_packages(lang: baml_base::LangRoots, ty: &Ty, out: &mut Vec<baml_base
     match ty.kind() {
         InferTy::Class(qtn, ..)
         | InferTy::Interface(qtn, ..)
-        | InferTy::Enum(qtn, _)
+        | InferTy::Enum(qtn)
         | InferTy::EnumVariant(qtn, ..)
-        | InferTy::TypeAlias(qtn, _) => out.push(qtn.root()),
+        | InferTy::TypeAlias(qtn) => out.push(qtn.root()),
         _ => {}
     }
     // Primitives and structural types live in the stdlib package.
     if matches!(
         ty.kind(),
-        InferTy::Int { .. }
-            | InferTy::Bigint { .. }
-            | InferTy::Float { .. }
-            | InferTy::String { .. }
-            | InferTy::Bool { .. }
-            | InferTy::Null { .. }
-            | InferTy::Uint8Array { .. }
+        InferTy::Int
+            | InferTy::Bigint
+            | InferTy::Float
+            | InferTy::String
+            | InferTy::Bool
+            | InferTy::Null
+            | InferTy::Uint8Array
             | InferTy::Media(..)
             | InferTy::List(..)
             | InferTy::Map { .. }
@@ -1726,7 +1718,7 @@ fn match_impl_head(
     let pattern = facts.for_ty_pattern();
     // Bare-blanket guard: `implement<T> I for T` applies only to
     // concrete receivers - never existentials, unions, or vars.
-    if let InferTy::TypeVar(param, _) = pattern.kind()
+    if let InferTy::TypeVar(param) = pattern.kind()
         && facts.generic_params().iter().any(|(p, _)| p == param)
         && !is_concrete_receiver(concrete)
     {
@@ -1860,7 +1852,7 @@ fn match_pattern(
     bindings: &mut FxHashMap<ParamTy, Ty>,
     eq: &AliasOnlyFacts<'_>,
 ) -> bool {
-    if let InferTy::TypeVar(param, _) = pattern.kind()
+    if let InferTy::TypeVar(param) = pattern.kind()
         && params.contains(param)
     {
         return match bindings.get(param) {
@@ -1884,7 +1876,7 @@ fn match_pattern(
         }
     }
     match (pattern.kind(), target.kind()) {
-        (InferTy::Class(a, a_args, _), InferTy::Class(b, b_args, _)) => {
+        (InferTy::Class(a, a_args), InferTy::Class(b, b_args)) => {
             a == b
                 && a_args.len() == b_args.len()
                 && a_args
@@ -1892,7 +1884,7 @@ fn match_pattern(
                     .zip(b_args.iter())
                     .all(|(p, t)| match_pattern(p, t, params, bindings, eq))
         }
-        (InferTy::Interface(a, a_args, a_pins, _), InferTy::Interface(b, b_args, b_pins, _)) => {
+        (InferTy::Interface(a, a_args, a_pins), InferTy::Interface(b, b_args, b_pins)) => {
             a == b
                 && a_args.len() == b_args.len()
                 && a_args
@@ -1908,7 +1900,7 @@ fn match_pattern(
                     })
                 })
         }
-        (InferTy::List(p, _), InferTy::List(t, _)) => match_pattern(p, t, params, bindings, eq),
+        (InferTy::List(p), InferTy::List(t)) => match_pattern(p, t, params, bindings, eq),
         (
             InferTy::Map {
                 key: pk, value: pv, ..
@@ -1920,11 +1912,11 @@ fn match_pattern(
             match_pattern(pk, tk, params, bindings, eq)
                 && match_pattern(pv, tv, params, bindings, eq)
         }
-        (InferTy::Future(pv, pe, _), InferTy::Future(tv, te, _)) => {
+        (InferTy::Future(pv, pe), InferTy::Future(tv, te)) => {
             match_pattern(pv, tv, params, bindings, eq)
                 && match_pattern(pe, te, params, bindings, eq)
         }
-        (InferTy::Union(p_members, _), InferTy::Union(t_members, _)) => {
+        (InferTy::Union(p_members), InferTy::Union(t_members)) => {
             match_union_members(p_members, t_members, params, bindings, eq)
         }
         (
@@ -1950,12 +1942,12 @@ fn match_pattern(
         }
         // Widenings: a literal target matches its base primitive; an
         // enum-variant target matches its enum.
-        (InferTy::Int { .. }, InferTy::Literal(baml_type::Literal::Int(_), ..))
-        | (InferTy::Bigint { .. }, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
-        | (InferTy::Float { .. }, InferTy::Literal(baml_type::Literal::Float(_), ..))
-        | (InferTy::String { .. }, InferTy::Literal(baml_type::Literal::String(_), ..))
-        | (InferTy::Bool { .. }, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
-        (InferTy::Enum(p, _), InferTy::EnumVariant(t, ..)) => p == t,
+        (InferTy::Int, InferTy::Literal(baml_type::Literal::Int(_), ..))
+        | (InferTy::Bigint, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
+        | (InferTy::Float, InferTy::Literal(baml_type::Literal::Float(_), ..))
+        | (InferTy::String, InferTy::Literal(baml_type::Literal::String(_), ..))
+        | (InferTy::Bool, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
+        (InferTy::Enum(p), InferTy::EnumVariant(t, ..)) => p == t,
         _ => false,
     }
 }
@@ -2016,7 +2008,7 @@ fn pattern_fully_bound(
     bindings: &FxHashMap<ParamTy, Ty>,
 ) -> bool {
     fn walk(ty: &Ty, params: &[ParamTy], bindings: &FxHashMap<ParamTy, Ty>, out: &mut bool) {
-        if let InferTy::TypeVar(param, _) = ty.kind()
+        if let InferTy::TypeVar(param) = ty.kind()
             && params.contains(param)
             && !bindings.contains_key(param)
         {
@@ -2063,7 +2055,7 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     if !ty.has_typevar() {
         return ty.clone();
     }
-    if let InferTy::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param) = ty.kind()
         && let Some(bound) = bindings.get(param)
     {
         return bound.clone();

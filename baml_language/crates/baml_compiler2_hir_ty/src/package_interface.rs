@@ -21,9 +21,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
     package::{PackageItems, accessible_package, is_precompiled_stdlib, is_served_from_interface},
 };
-use baml_type::{
-    DeclName, FunctionParamMode, FunctionParamTy, Head, ParamTy, Ty, TyAttr, TypeName,
-};
+use baml_type::{DeclName, FunctionParamMode, FunctionParamTy, Head, ParamTy, Ty, TypeName};
 use indexmap::IndexMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -669,14 +667,13 @@ impl<N: Head> ExportedType<N> {
                 qtn.clone(),
                 generic_params
                     .iter()
-                    .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                    .map(|p| Ty::TypeVar(p.clone()))
                     .collect(),
-                TyAttr::default(),
             ),
-            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
-            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
+            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone()),
+            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone()),
             ExportedType::Interface { qtn, .. } => {
-                Ty::Interface(qtn.clone(), Box::new([]), Box::new([]), TyAttr::default())
+                Ty::Interface(qtn.clone(), Box::new([]), Box::new([]))
             }
         }
     }
@@ -774,7 +771,6 @@ pub fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel:
             base,
             interface,
             member,
-            attr,
         } => {
             let base_reduced = recurse(base);
             if fuel > 0 && !baml_type_runtime::contains_typevar(&base_reduced) {
@@ -789,39 +785,27 @@ pub fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel:
                 base: Box::new(base_reduced),
                 interface: Box::new(interface.map_tys(|t| recurse(t))),
                 member: member.clone(),
-                attr: attr.clone(),
             }
         }
-        Ty::List(inner, attr) => Ty::List(Box::new(recurse(inner)), attr.clone()),
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(recurse(inner))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(recurse(key)),
             value: Box::new(recurse(value)),
-            attr: attr.clone(),
         },
-        Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(recurse(value)),
-            Box::new(recurse(error)),
-            attr.clone(),
-        ),
-        Ty::Union(members, attr) => Ty::Union(members.iter().map(recurse).collect(), attr.clone()),
-        Ty::Class(name, args, attr) => Ty::Class(
-            name.clone(),
-            args.iter().map(recurse).collect(),
-            attr.clone(),
-        ),
-        Ty::Interface(name, args, pins, attr) => Ty::Interface(
+        Ty::Future(value, error) => Ty::Future(Box::new(recurse(value)), Box::new(recurse(error))),
+        Ty::Union(members) => Ty::Union(members.iter().map(recurse).collect()),
+        Ty::Class(name, args) => Ty::Class(name.clone(), args.iter().map(recurse).collect()),
+        Ty::Interface(name, args, pins) => Ty::Interface(
             name.clone(),
             args.iter().map(recurse).collect(),
             pins.iter()
                 .map(|(pin, t)| (pin.clone(), recurse(t)))
                 .collect(),
-            attr.clone(),
         ),
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .iter()
@@ -833,7 +817,6 @@ pub fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel:
                 .collect(),
             ret: Box::new(recurse(ret)),
             throws: Box::new(recurse(throws)),
-            attr: attr.clone(),
         },
         other => other.clone(),
     }
@@ -1013,7 +996,7 @@ fn lower_interface_export<'db>(
         .with_frame(frame.clone())
         .with_bounds(bounds.clone());
 
-    let self_ty = baml_type::Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let self_ty = baml_type::Ty::TypeVar(self_param.clone());
     let mut requires: Vec<baml_type::Interface> = Vec::new();
     for &required in &data.requires {
         let Some(root) = crate::lower::reject_holes(&ctx.lower_type_ref_at(
@@ -1541,12 +1524,12 @@ pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
 
 fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for member in members {
                 collect_leaf_types(member, out);
             }
         }
-        Ty::Never { .. } => {}
+        Ty::Never => {}
         other => {
             out.insert(other.clone());
         }
@@ -1592,9 +1575,7 @@ pub fn function_throw_sets(
                     return None;
                 }
                 Some(if baml_type_runtime::contains_error_recovery(&fact) {
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
-                    }
+                    Ty::Unknown
                 } else {
                     fact
                 })
@@ -1898,25 +1879,17 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_hir::Db, def: Definition<'db>) -> 
             // produce the same `Ty::Class(qtn, [TypeVar…])` shape.
             let args = crate::lower::class_generic_frame(db, loc)
                 .iter()
-                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                .map(|p| Ty::TypeVar(p.clone()))
                 .collect();
-            Some(Ty::Class(
-                qualify_def(db, def, &name),
-                args,
-                TyAttr::default(),
-            ))
+            Some(Ty::Class(qualify_def(db, def, &name), args))
         }
         Definition::Interface(_) => Some(Ty::Interface(
             qualify_def(db, def, &name),
             Box::new([]),
             Box::new([]),
-            TyAttr::default(),
         )),
-        Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, &name), TyAttr::default())),
-        Definition::TypeAlias(_) => Some(Ty::TypeAlias(
-            qualify_def(db, def, &name),
-            TyAttr::default(),
-        )),
+        Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, &name))),
+        Definition::TypeAlias(_) => Some(Ty::TypeAlias(qualify_def(db, def, &name))),
         // The non-type definitions returned above, before `name` was bound.
         Definition::Function(_)
         | Definition::TemplateString(_)

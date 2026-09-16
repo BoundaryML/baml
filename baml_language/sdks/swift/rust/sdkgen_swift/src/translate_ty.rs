@@ -78,22 +78,22 @@ pub(crate) fn swift_type_path(name: &Name) -> String {
 /// Swift spelling of `ty`, or `None` if the type is not yet supported.
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     match ty {
-        Ty::Int { .. } => Some("Swift.Int".to_string()),
+        Ty::Int => Some("Swift.Int".to_string()),
         // BAML float is f64.
-        Ty::Float { .. } => Some("Swift.Double".to_string()),
-        Ty::String { .. } => Some("Swift.String".to_string()),
-        Ty::Bool { .. } => Some("Swift.Bool".to_string()),
+        Ty::Float => Some("Swift.Double".to_string()),
+        Ty::String => Some("Swift.String".to_string()),
+        Ty::Bool => Some("Swift.Bool".to_string()),
         // Standalone `null` type: Swift has no untyped nil, so it gets
         // a unit-like runtime type that encodes/decodes as BAML null.
-        Ty::Null { .. } => Some("BamlNull".to_string()),
-        Ty::Uint8Array { .. } => Some("Foundation.Data".to_string()),
+        Ty::Null => Some("BamlNull".to_string()),
+        Ty::Uint8Array => Some("Foundation.Data".to_string()),
         // Provider-neutral prompts cross as a copied protobuf tree. They are
         // portable values, not generated `$rust_type` handle wrappers.
-        Ty::PromptAst { .. } => Some("BamlPrompt".to_string()),
+        Ty::PromptAst => Some("BamlPrompt".to_string()),
         // Media primitives are the handle-backed stdlib classes
         // (already emitted as generated structs; construction via
         // BamlMedia over the C ABI).
-        Ty::Media(kind, _) => {
+        Ty::Media(kind) => {
             let name = match format!("{kind:?}").as_str() {
                 "Image" => "Image",
                 "Audio" => "Audio",
@@ -116,18 +116,18 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             }
             .to_string(),
         ),
-        Ty::List(inner, _) => Some(format!("[{}]", translate_ty(inner, ctx)?)),
+        Ty::List(inner) => Some(format!("[{}]", translate_ty(inner, ctx)?)),
         Ty::Map { key, value, .. } => {
             // BAML map keys are stringified engine-side; only string
             // keys are supported host-side for now (mirrors Python's
             // dict[str, Any] posture on the decode path).
-            if !matches!(**key, Ty::String { .. }) {
+            if !matches!(**key, Ty::String) {
                 return None;
             }
             Some(format!("[Swift.String: {}]", translate_ty(value, ctx)?))
         }
-        Ty::Union(members, _) => translate_union(members, ctx),
-        Ty::Class(name, args, _) => {
+        Ty::Union(members) => translate_union(members, ctx),
+        Ty::Class(name, args) => {
             // `ai.FunctionSpec<Final>` is a live runtime capability, never a
             // generated value-model class. The PPIR partial type belongs to
             // the separate `ai.stream.Stream<Partial, Final>` projection.
@@ -172,9 +172,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // A generic parameter reference (`T`) — spelled bare; only
         // valid inside the generic declaration that binds it, which is
         // the only place the pool produces it.
-        Ty::TypeVar(name, _) => Some(crate::escape_ident(name.as_str())),
-        Ty::Enum(name, _) => TranslateCtx::named_ref(name, &ctx.supported_enums),
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeVar(name) => Some(crate::escape_ident(name.as_str())),
+        Ty::Enum(name) => TranslateCtx::named_ref(name, &ctx.supported_enums),
+        Ty::TypeAlias(name) => {
             let path = TranslateCtx::named_ref(name, &ctx.supported_aliases)?;
             if ctx.nullable_aliases.contains(&name.to_string()) {
                 Some(format!("{path}?"))
@@ -184,7 +184,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         }
         // Opaque engine-owned state (`$rust_type` fields on stdlib
         // resource classes: File._handle, Response._body, media _data).
-        Ty::RustType { .. } => Some("BamlHandle?".to_string()),
+        Ty::RustType => Some("BamlHandle?".to_string()),
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,
@@ -204,7 +204,7 @@ pub(crate) fn normalize_union(members: &[Ty]) -> (Vec<Ty>, bool) {
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut non_null: Vec<Ty> = Vec::new();
     for member in members {
-        if matches!(member, Ty::Null { .. }) {
+        if matches!(member, Ty::Null) {
             nullable = true;
             continue;
         }
@@ -251,7 +251,7 @@ pub(crate) fn translate_union_arms(non_null: &[Ty], ctx: &TranslateCtx) -> Optio
 /// nullable declared type contributes its non-null part (the `.null`
 /// case covers the rest); a non-nullable defaulted type is used as-is.
 pub(crate) fn translate_optional_arg_inner(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
-    if let Ty::Union(members, _) = ty {
+    if let Ty::Union(members) = ty {
         let (non_null, nullable) = normalize_union(members);
         if nullable {
             let arms = translate_union_arms(&non_null, ctx)?;

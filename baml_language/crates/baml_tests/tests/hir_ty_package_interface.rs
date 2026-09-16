@@ -65,7 +65,7 @@ const WITNESS_CONSUMER: &str = r#"
 function inspect(
     value: app.Entry,
     generic: app.Box<app.Entry>,
-    view: app.View<int>,
+    view: app.View<int>
 ) -> int[] throws never {
     let field: string = value.label
     let class_field: int = generic.get_value().value
@@ -158,7 +158,7 @@ fn mounted_interface_skew_is_rejected_before_installation() {
             baml_artifact::BUILD_FINGERPRINT,
             baml_artifact::FORMAT_VERSION + 1,
             baml_artifact::BUILD_FINGERPRINT,
-            baml_artifact::FORMAT_VERSION,
+            baml_artifact::FORMAT_VERSION
         )
     );
 }
@@ -246,15 +246,13 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         baml_type::Ty::Interface(ref qtn, ..)
             if baml_compiler2_hir::package::spelling(&db).of(qtn.root()).as_str() == "app"
     ));
-    let baml_type::Ty::Interface(qtn, args, pins, _) = ty else {
+    let baml_type::Ty::Interface(qtn, args, pins) = ty else {
         unreachable!()
     };
     let root = baml_type::Interface::new(
         qtn,
         if args.is_empty() {
-            Box::new([baml_type::Ty::Int {
-                attr: baml_type::TyAttr::default(),
-            }])
+            Box::new([baml_type::Ty::Int])
         } else {
             args.clone()
         },
@@ -287,7 +285,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         &db,
         db.workspace_root().expect("workspace root"),
         &bounds,
-        baml_type::Ty::TypeVar(param, baml_type::TyAttr::default()),
+        baml_type::Ty::TypeVar(param),
         None,
         Name::new("Root"),
     );
@@ -364,10 +362,10 @@ class ConcreteBatch {
         .map(|(_, ty)| ty.to_plain())
         .expect("Items witness");
 
-    assert!(matches!(item, baml_type::Ty::Int { .. }), "{item:#?}");
+    assert!(matches!(item, baml_type::Ty::Int), "{item:#?}");
     assert!(
-        matches!(&items, baml_type::Ty::List(inner, _)
-            if matches!(inner.as_ref(), baml_type::Ty::Int { .. })),
+        matches!(&items, baml_type::Ty::List(inner)
+            if matches!(inner.as_ref(), baml_type::Ty::Int)),
         "a blanket receiver must keep Self's progressively pinned witness: {items:#?}"
     );
 
@@ -384,8 +382,8 @@ class ConcreteBatch {
         .map(|(_, ty)| ty.to_plain())
         .expect("qualified Items witness");
     assert!(
-        matches!(&qualified_items, baml_type::Ty::List(inner, _)
-            if matches!(inner.as_ref(), baml_type::Ty::Int { .. })),
+        matches!(&qualified_items, baml_type::Ty::List(inner)
+            if matches!(inner.as_ref(), baml_type::Ty::Int)),
         "a qualified mounted Self projection must resolve from the symbolic bound: \
          {qualified_items:#?}"
     );

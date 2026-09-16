@@ -379,7 +379,7 @@ impl InferenceTable {
             if escaped.is_some() || !ty.has_typevar() {
                 return;
             }
-            if let InferTy::TypeVar(param, _) = ty.kind()
+            if let InferTy::TypeVar(param) = ty.kind()
                 && param.is_scoped()
                 && scoped_params
                     .get(&param.index())
@@ -528,9 +528,7 @@ impl InferenceTable {
             return Ok(());
         }
         // Error unifies with everything: a diagnostic was already emitted.
-        if matches!(left.kind(), InferTy::Error { .. })
-            || matches!(right.kind(), InferTy::Error { .. })
-        {
+        if matches!(left.kind(), InferTy::Error) || matches!(right.kind(), InferTy::Error) {
             return Ok(());
         }
         match (left.kind(), right.kind()) {
@@ -824,47 +822,33 @@ impl InferenceTable {
             escaped: None,
         };
         let pairs: Vec<(Ty, Ty)> = match (left.kind(), right.kind()) {
-            (InferTy::Class(ln, la, lat), InferTy::Class(rn, ra, rat))
-                if ln == rn && la.len() == ra.len() && lat == rat =>
+            (InferTy::Class(ln, la), InferTy::Class(rn, ra))
+                if ln == rn && la.len() == ra.len() =>
             {
                 la.iter().cloned().zip(ra.iter().cloned()).collect()
             }
-            (InferTy::List(li, lat), InferTy::List(ri, rat)) if lat == rat => {
+            (InferTy::List(li), InferTy::List(ri)) => {
                 vec![(li.clone(), ri.clone())]
             }
-            (
-                InferTy::Map {
-                    key: lk,
-                    value: lv,
-                    attr: lat,
-                },
-                InferTy::Map {
-                    key: rk,
-                    value: rv,
-                    attr: rat,
-                },
-            ) if lat == rat => {
+            (InferTy::Map { key: lk, value: lv }, InferTy::Map { key: rk, value: rv }) => {
                 vec![(lk.clone(), rk.clone()), (lv.clone(), rv.clone())]
             }
-            (InferTy::Future(lv, le, lat), InferTy::Future(rv, re, rat)) if lat == rat => {
+            (InferTy::Future(lv, le), InferTy::Future(rv, re)) => {
                 vec![(lv.clone(), rv.clone()), (le.clone(), re.clone())]
             }
-            (InferTy::Union(lm, lat), InferTy::Union(rm, rat))
-                if lm.len() == rm.len() && lat == rat =>
-            {
+            (InferTy::Union(lm), InferTy::Union(rm)) if lm.len() == rm.len() => {
                 // Positional; the ACI (reorder/absorb) equality class defers
                 // to the budgeted machinery that lands with Sub constraints.
                 lm.iter().cloned().zip(rm.iter().cloned()).collect()
             }
-            (InferTy::Interface(ln, la, lassoc, lat), InferTy::Interface(rn, ra, rassoc, rat))
+            (InferTy::Interface(ln, la, lassoc), InferTy::Interface(rn, ra, rassoc))
                 if ln == rn
                     && la.len() == ra.len()
                     && lassoc.len() == rassoc.len()
                     && lassoc
                         .iter()
                         .zip(rassoc.iter())
-                        .all(|((lname, _), (rname, _))| lname == rname)
-                    && lat == rat =>
+                        .all(|((lname, _), (rname, _))| lname == rname) =>
             {
                 la.iter()
                     .cloned()
@@ -882,20 +866,17 @@ impl InferenceTable {
                     params: lp,
                     ret: lr,
                     throws: le,
-                    attr: lat,
                 },
                 InferTy::Function {
                     params: rp,
                     ret: rr,
                     throws: re,
-                    attr: rat,
                 },
             ) if lp.len() == rp.len()
                 && lp
                     .iter()
                     .zip(rp.iter())
-                    .all(|(l, r)| l.name == r.name && l.mode == r.mode)
-                && lat == rat =>
+                    .all(|(l, r)| l.name == r.name && l.mode == r.mode) =>
             {
                 lp.iter()
                     .map(|p| p.ty.clone())
@@ -914,7 +895,6 @@ impl InferenceTable {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::TyAttr;
 
     use super::*;
 
@@ -977,7 +957,7 @@ mod tests {
             UnifyError {
                 left: Ty::int(),
                 right: Ty::string(),
-                escaped: None,
+                escaped: None
             }
         );
     }
@@ -1031,16 +1011,11 @@ mod tests {
         Ty::intern(InferTy::Class(
             crate::test_heads::local(Name::new(name)),
             args.into_iter().collect(),
-            TyAttr::default(),
         ))
     }
 
     fn map(key: Ty, value: Ty) -> Ty {
-        Ty::intern(InferTy::Map {
-            key,
-            value,
-            attr: TyAttr::default(),
-        })
+        Ty::intern(InferTy::Map { key, value })
     }
 
     fn func(params: impl IntoIterator<Item = Ty>, ret: Ty, throws: Ty) -> Ty {
@@ -1052,7 +1027,6 @@ mod tests {
                 .collect(),
             ret,
             throws,
-            attr: TyAttr::default(),
         })
     }
 
@@ -1113,7 +1087,7 @@ mod tests {
             table
                 .unify(
                     &Ty::union([Ty::int(), Ty::string()]),
-                    &Ty::union([Ty::string(), Ty::int()]),
+                    &Ty::union([Ty::string(), Ty::int()])
                 )
                 .is_err()
         );
@@ -1346,7 +1320,7 @@ mod tests {
             super::super::SCOPED_PARAM_BIT | 7,
             baml_type::Name::new("T"),
         );
-        let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+        let scoped = Ty::intern(InferTy::TypeVar(param.clone()));
 
         table.bind_scoped_param(&param);
         let inner = table.new_var();
@@ -1398,7 +1372,7 @@ mod tests {
             super::super::SCOPED_PARAM_BIT | 9,
             baml_type::Name::new("T"),
         );
-        let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+        let scoped = Ty::intern(InferTy::TypeVar(param.clone()));
         let before = table.new_var();
         table.bind_scoped_param(&param);
         let inner = table.new_var();
@@ -1437,7 +1411,7 @@ mod tests {
             super::super::SCOPED_PARAM_BIT | 3,
             baml_type::Name::new("T"),
         );
-        let scoped = Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default()));
+        let scoped = Ty::intern(InferTy::TypeVar(param.clone()));
 
         table.bind_scoped_param(&param);
         let inner = table.new_var();

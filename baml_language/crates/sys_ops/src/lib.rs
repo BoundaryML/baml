@@ -219,10 +219,9 @@ mod schema {
     /// a lane type; `baml.json.json` is compiled, so it has a real qualified
     /// name and this conversion is total.
     fn json_alias_ty() -> baml_type::RuntimeTy {
-        baml_type::RuntimeTy::TypeAlias(
-            baml_type::TypeName::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON),
-            baml_type::TyAttr::default(),
-        )
+        baml_type::RuntimeTy::TypeAlias(baml_type::TypeName::from_dotted_path(
+            baml_base::qualified_name::BAML_JSON_JSON,
+        ))
     }
 
     pub(super) fn json_to_bex(value: Value) -> BexExternalValue {
@@ -258,7 +257,7 @@ mod schema {
         };
 
         let (mut root, root_class_key) = match ty {
-            SapTy::Class(name, _, _) => {
+            SapTy::Class(name, _) => {
                 let key = definition_key(name);
                 builder.building.insert(key.clone());
                 let schema = builder.class_object(name)?;
@@ -293,26 +292,26 @@ mod schema {
     impl SchemaBuilder<'_> {
         fn ty_schema(&mut self, ty: &SapTy) -> Result<Value, String> {
             match ty {
-                SapTy::Int { .. } | SapTy::Bigint { .. } => Ok(json!({ "type": "integer" })),
-                SapTy::Float { .. } => Ok(json!({ "type": "number" })),
-                SapTy::String { .. } => Ok(json!({ "type": "string" })),
-                SapTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
-                SapTy::Null { .. } => Ok(json!({ "type": "null" })),
-                SapTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
-                SapTy::Literal(lit, _, _) => Ok(Self::literal_schema(lit)),
-                SapTy::List(inner, _) => Ok(json!({
+                SapTy::Int | SapTy::Bigint => Ok(json!({ "type": "integer" })),
+                SapTy::Float => Ok(json!({ "type": "number" })),
+                SapTy::String => Ok(json!({ "type": "string" })),
+                SapTy::Bool => Ok(json!({ "type": "boolean" })),
+                SapTy::Null => Ok(json!({ "type": "null" })),
+                SapTy::Uint8Array => Ok(json!({ "type": "string" })),
+                SapTy::Literal(lit, _) => Ok(Self::literal_schema(lit)),
+                SapTy::List(inner) => Ok(json!({
                     "type": "array",
-                    "items": self.ty_schema(inner)?,
+                    "items": self.ty_schema(inner)?
                 })),
                 SapTy::Map { value, .. } => Ok(json!({
                     "type": "object",
-                    "additionalProperties": self.ty_schema(value)?,
+                    "additionalProperties": self.ty_schema(value)?
                 })),
-                SapTy::Union(members, _) => self.union_schema(members),
-                SapTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
-                SapTy::Class(name, _, _) => self.class_ref(name),
-                SapTy::TypeAlias(name, _) => self.type_alias_ref(name),
-                SapTy::Unknown { .. } => Ok(json!({})),
+                SapTy::Union(members) => self.union_schema(members),
+                SapTy::Enum(name) => Self::enum_schema(name, self.ctx),
+                SapTy::Class(name, _) => self.class_ref(name),
+                SapTy::TypeAlias(name) => self.type_alias_ref(name),
+                SapTy::Unknown => Ok(json!({})),
                 other => Err(format!(
                     "json_schema: no JSON Schema representation for `{other}`"
                 )),
@@ -440,7 +439,7 @@ mod schema {
             Ok(json!({
                 "type": "object",
                 "properties": properties,
-                "required": required,
+                "required": required
             }))
         }
     }
@@ -492,7 +491,7 @@ mod schema {
     mod tests {
         use std::sync::Arc;
 
-        use baml_type::{TyAttr, TypeName};
+        use baml_type::TypeName;
         use serde_json::json;
         use sys_types::{
             ClassDefinition, ClassFieldDefinition, DefKey, EnumDefinition, EnumVariantDefinition,
@@ -506,7 +505,7 @@ mod schema {
         }
 
         fn class_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::Class(key(name), Box::new([]), TyAttr::default())
+            RuntimeTy::Class(key(name), Box::new([]))
         }
 
         /// A lane key for a compiled test declaration.
@@ -518,7 +517,7 @@ mod schema {
         }
 
         fn alias_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::TypeAlias(key(name), TyAttr::default())
+            RuntimeTy::TypeAlias(key(name))
         }
 
         fn field(name: &str, field_type: RuntimeTy) -> ClassFieldDefinition {
@@ -652,8 +651,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.enum_definitions = Arc::new(enums);
 
-            let schema = json_schema(&RuntimeTy::Enum(key(&status), TyAttr::default()), &ctx)
-                .expect("schema should lower");
+            let schema =
+                json_schema(&RuntimeTy::Enum(key(&status)), &ctx).expect("schema should lower");
             assert_eq!(
                 schema,
                 json!({ "type": "string", "enum": ["ready-now", "Done"] })
@@ -2927,7 +2926,7 @@ mod tests {
                 fn_name: SysOp::BamlFsOpen,
                 payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
                     VmPanic::HostUnavailable { .. }
-                )),
+                ))
             }))
         ));
 
@@ -2939,7 +2938,7 @@ mod tests {
                 fn_name: SysOp::BamlSysShell,
                 payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
                     VmPanic::HostUnavailable { .. }
-                )),
+                ))
             }))
         ));
     }

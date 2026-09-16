@@ -1139,20 +1139,7 @@ mod tests {
             vec![class_sym(
                 "Resume",
                 name("user", &["lorem"], "Resume"),
-                vec![
-                    (
-                        "name",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
-                    (
-                        "age",
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
-                ],
+                vec![("name", Ty::String), ("age", Ty::Int)],
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
@@ -1186,29 +1173,15 @@ mod tests {
                     "extract",
                     "user.lorem.extract",
                     SyncAsync::Sync,
-                    vec![(
-                        "text",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    )],
-                    Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    vec![("text", Ty::String)],
+                    Ty::Int,
                 ),
                 func_sym(
                     "extract_async",
                     "user.lorem.extract",
                     SyncAsync::Async,
-                    vec![(
-                        "text",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    )],
-                    Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    vec![("text", Ty::String)],
+                    Ty::Int,
                 ),
             ],
         );
@@ -1229,35 +1202,23 @@ mod tests {
                 "user.lorem.extract",
                 SyncAsync::Sync,
                 vec![
-                    (
-                        "arg0",
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
+                    ("arg0", Ty::Int, None),
                     (
                         "default",
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::Int,
                         Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             Literal::Int(1),
                         ))),
                     ),
                     (
                         "not-valid",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::String,
                         Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             Literal::String("x".to_string()),
                         ))),
                     ),
                 ],
-                Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                Ty::Int,
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
@@ -1276,40 +1237,18 @@ mod tests {
                 "user.lorem.extract",
                 SyncAsync::Sync,
                 vec![
-                    (
-                        "arguments",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
-                    (
-                        "arguments_",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
-                    (
-                        "$opts",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                        None,
-                    ),
+                    ("arguments", Ty::String, None),
+                    ("arguments_", Ty::String, None),
+                    ("$opts", Ty::String, None),
                     (
                         "eval",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::String,
                         Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             Literal::String("x".to_string()),
                         ))),
                     ),
                 ],
-                Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                Ty::String,
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false, TEST_RUNTIME_PACKAGE);
@@ -1330,11 +1269,7 @@ mod tests {
                 name("user", &["consumer"], "Holder"),
                 vec![(
                     "r",
-                    Ty::Class(
-                        name("user", &["lorem"], "Resume"),
-                        Box::new([]),
-                        baml_base::TyAttr::EMPTY,
-                    ),
+                    Ty::Class(name("user", &["lorem"], "Resume"), Box::new([])),
                 )],
             )],
         );
@@ -1402,22 +1337,14 @@ mod tests {
                     "boundary.id",
                     SyncAsync::Sync,
                     vec![],
-                    Ty::Class(
-                        name("boundary", &[], "LocalId"),
-                        Box::new([]),
-                        baml_base::TyAttr::EMPTY,
-                    ),
+                    Ty::Class(name("boundary", &[], "LocalId"), Box::new([])),
                 ),
                 func_sym(
                     "id_async",
                     "boundary.id",
                     SyncAsync::Async,
                     vec![],
-                    Ty::Class(
-                        name("boundary", &[], "LocalId"),
-                        Box::new([]),
-                        baml_base::TyAttr::EMPTY,
-                    ),
+                    Ty::Class(name("boundary", &[], "LocalId"), Box::new([])),
                 ),
                 class_sym("LocalId", name("boundary", &[], "LocalId"), vec![]),
             ],
@@ -1446,9 +1373,7 @@ mod tests {
                 "user.make_foo",
                 SyncAsync::Sync,
                 vec![],
-                Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                Ty::Int,
             )],
         );
         let mut kids = BTreeSet::new();

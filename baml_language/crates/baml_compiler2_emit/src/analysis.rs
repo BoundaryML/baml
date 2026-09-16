@@ -2357,14 +2357,14 @@ fn operand_could_be_int<'db>(body: &MirFunctionBody<'db>, operand: &Operand<'db>
 /// newly added variant on the conservative side.
 fn ty_could_be_int(ty: &RuntimeTy) -> bool {
     match ty {
-        RuntimeTy::Int { .. } => true,
+        RuntimeTy::Int => true,
         RuntimeTy::Literal(lit, ..) => matches!(lit, Literal::Int(_)),
-        RuntimeTy::Bigint { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::String { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Null { .. }
-        | RuntimeTy::Void { .. }
+        RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Void
         | RuntimeTy::Media(..)
         | RuntimeTy::Class(..)
         | RuntimeTy::Enum(..)
@@ -2373,10 +2373,10 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
         | RuntimeTy::Map { .. }
         | RuntimeTy::Function { .. }
         | RuntimeTy::Future(..)
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. }
-        | RuntimeTy::Resource { .. }
-        | RuntimeTy::PromptAst { .. } => false,
+        | RuntimeTy::RustType
+        | RuntimeTy::Type
+        | RuntimeTy::Resource
+        | RuntimeTy::PromptAst => false,
         _ => true,
     }
 }
@@ -2677,7 +2677,7 @@ mod tests {
         BasicBlock, CatchRegion, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement,
         Terminator,
     };
-    use baml_type::{RuntimeTy, TyAttr};
+    use baml_type::RuntimeTy;
 
     use super::*;
 
@@ -2843,9 +2843,7 @@ mod tests {
     fn int_local_decl(name: Option<&str>) -> LocalDecl {
         LocalDecl {
             name: name.map(baml_base::Name::new),
-            ty: RuntimeTy::Int {
-                attr: TyAttr::default(),
-            },
+            ty: RuntimeTy::Int,
             span: None,
             scope_span: None,
             is_captured: false,
@@ -2922,9 +2920,7 @@ mod tests {
     fn bool_local_decl(name: Option<&str>) -> LocalDecl {
         LocalDecl {
             name: name.map(baml_base::Name::new),
-            ty: RuntimeTy::Bool {
-                attr: TyAttr::default(),
-            },
+            ty: RuntimeTy::Bool,
             span: None,
             scope_span: None,
             is_captured: false,

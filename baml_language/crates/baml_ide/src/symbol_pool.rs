@@ -15,7 +15,7 @@ use baml_compiler2_hir::{
     package::{Spelling, spelling},
 };
 use baml_db::{Name, ProjectDatabase};
-use baml_type::{DeclName, Freshness, ParamTy, Ty as TirTy, TyAttr};
+use baml_type::{DeclName, Freshness, ParamTy, Ty as TirTy};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,7 +35,7 @@ fn name_from_qtn(spelling: &Spelling, qtn: &DeclName) -> cg::Name {
 fn ty_is_function_shaped(ty: &cg::Ty) -> bool {
     match ty {
         cg::Ty::Function { .. } => true,
-        cg::Ty::Union(members, _) => members.iter().any(ty_is_function_shaped),
+        cg::Ty::Union(members) => members.iter().any(ty_is_function_shaped),
         _ => false,
     }
 }
@@ -241,7 +241,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     baml_compiler2_hir::item_data::method_interface_target(db, method_loc)
                         .is_none(),
                     "interface targets are recorded on impl-block methods, which never appear \
-                     in `class.methods`",
+                     in `class.methods`"
                 );
 
                 if matches!(
@@ -328,12 +328,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     })
                     .collect();
 
-                let return_type = sig.return_type.map_or(
-                    cg::Ty::Void {
-                        attr: TyAttr::default(),
-                    },
-                    lower,
-                );
+                let return_type = sig.return_type.map_or(cg::Ty::Void, lower);
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
@@ -565,12 +560,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 })
                 .collect();
 
-            let return_type = sig.return_type.map_or(
-                cg::Ty::Void {
-                    attr: TyAttr::default(),
-                },
-                lower,
-            );
+            let return_type = sig.return_type.map_or(cg::Ty::Void, lower);
 
             let cg_func = cg::Function {
                 name: func.name.clone(),
@@ -655,7 +645,7 @@ fn resolve_throws<'db>(
     recursive_aliases: &std::collections::HashSet<DeclName>,
 ) -> Option<cg::Ty> {
     match &baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0 {
-        TirTy::Never { .. } => None,
+        TirTy::Never => None,
         ty => Some(convert_tir_to_codegen_ty(
             spelling(db),
             ty,
@@ -681,50 +671,42 @@ fn convert_tir_to_codegen_ty(
 }
 
 fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy) -> cg::Ty {
-    // Each recursive invocation reads the attribute from its own source node,
-    // so nested SAP/streaming annotations survive the codegen boundary.
-    let attr = || ty.attr().clone();
     let convert = |ty: &TirTy| convert_tir_leaf(spelling, ty);
     match ty {
-        TirTy::Int { .. } => cg::Ty::Int { attr: attr() },
-        TirTy::Bigint { .. } => cg::Ty::Bigint { attr: attr() },
-        TirTy::Float { .. } => cg::Ty::Float { attr: attr() },
-        TirTy::String { .. } => cg::Ty::String { attr: attr() },
-        TirTy::Bool { .. } => cg::Ty::Bool { attr: attr() },
-        TirTy::Null { .. } => cg::Ty::Null { attr: attr() },
-        TirTy::Uint8Array { .. } => cg::Ty::Uint8Array { attr: attr() },
-        TirTy::Media(kind, _) => cg::Ty::Media(*kind, attr()),
-        TirTy::Literal(literal, _, _) => {
-            cg::Ty::Literal(literal.clone(), Freshness::Regular, attr())
-        }
-        TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
+        TirTy::Int => cg::Ty::Int,
+        TirTy::Bigint => cg::Ty::Bigint,
+        TirTy::Float => cg::Ty::Float,
+        TirTy::String => cg::Ty::String,
+        TirTy::Bool => cg::Ty::Bool,
+        TirTy::Null => cg::Ty::Null,
+        TirTy::Uint8Array => cg::Ty::Uint8Array,
+        TirTy::Media(kind) => cg::Ty::Media(*kind),
+        TirTy::Literal(literal, _) => cg::Ty::Literal(literal.clone(), Freshness::Regular),
+        TirTy::Class(qtn, type_args) => cg::Ty::Class(
             name_from_qtn(spelling, qtn),
             type_args.iter().map(convert).collect(),
-            attr(),
         ),
-        TirTy::Interface(qtn, generics, associated_types, _) => cg::Ty::Interface(
+        TirTy::Interface(qtn, generics, associated_types) => cg::Ty::Interface(
             name_from_qtn(spelling, qtn),
             generics.iter().map(convert).collect(),
             associated_types
                 .iter()
                 .map(|(name, ty)| (name.clone(), convert(ty)))
                 .collect(),
-            attr(),
         ),
-        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(spelling, qtn), attr()),
-        TirTy::EnumVariant(qtn, variant, _) => {
-            cg::Ty::EnumVariant(name_from_qtn(spelling, qtn), variant.clone(), attr())
+        TirTy::Enum(qtn) => cg::Ty::Enum(name_from_qtn(spelling, qtn)),
+        TirTy::EnumVariant(qtn, variant) => {
+            cg::Ty::EnumVariant(name_from_qtn(spelling, qtn), variant.clone())
         }
-        TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(spelling, qtn), attr()),
-        TirTy::List(inner, _) => cg::Ty::List(Box::new(convert(inner)), attr()),
+        TirTy::TypeAlias(qtn) => cg::Ty::TypeAlias(name_from_qtn(spelling, qtn)),
+        TirTy::List(inner) => cg::Ty::List(Box::new(convert(inner))),
         TirTy::Map {
             key: k, value: v, ..
         } => cg::Ty::Map {
             key: Box::new(convert(k)),
             value: Box::new(convert(v)),
-            attr: attr(),
         },
-        TirTy::Union(members, _) => cg::Ty::Union(members.iter().map(convert).collect(), attr()),
+        TirTy::Union(members) => cg::Ty::Union(members.iter().map(convert).collect()),
         TirTy::Function {
             params,
             ret,
@@ -741,26 +723,23 @@ fn convert_tir_leaf(spelling: &Spelling, ty: &TirTy) -> cg::Ty {
                 .collect(),
             ret: Box::new(convert(ret)),
             throws: Box::new(convert(throws)),
-            attr: attr(),
         },
-        TirTy::Future(value, error, _) => {
-            cg::Ty::Future(Box::new(convert(value)), Box::new(convert(error)), attr())
+        TirTy::Future(value, error) => {
+            cg::Ty::Future(Box::new(convert(value)), Box::new(convert(error)))
         }
-        TirTy::RustType { .. } => cg::Ty::RustType { attr: attr() },
-        TirTy::Type { .. } => cg::Ty::Type { attr: attr() },
-        TirTy::Resource { .. } => cg::Ty::Resource { attr: attr() },
-        TirTy::PromptAst { .. } => cg::Ty::PromptAst { attr: attr() },
-        TirTy::Void { .. } => cg::Ty::Void { attr: attr() },
-        TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone(), attr()),
-        TirTy::Unknown { .. } => cg::Ty::Unknown { attr: attr() },
-        TirTy::Never { .. } => cg::Ty::Never { attr: attr() },
+        TirTy::RustType => cg::Ty::RustType,
+        TirTy::Type => cg::Ty::Type,
+        TirTy::Resource => cg::Ty::Resource,
+        TirTy::PromptAst => cg::Ty::PromptAst,
+        TirTy::Void => cg::Ty::Void,
+        TirTy::TypeVar(name) => cg::Ty::TypeVar(name.clone()),
+        TirTy::Unknown => cg::Ty::Unknown,
+        TirTy::Never => cg::Ty::Never,
 
         // These are compiler recovery/inference states, not public API types.
         // Diagnostics have already been emitted; retain the historical opaque
         // fallback so code generation remains total in error-tolerant flows.
-        TirTy::AssociatedTypeProjection { .. } | TirTy::Error { .. } => {
-            cg::Ty::Unknown { attr: attr() }
-        }
+        TirTy::AssociatedTypeProjection { .. } | TirTy::Error => cg::Ty::Unknown,
     }
 }
 
@@ -773,53 +752,20 @@ mod tests {
     use std::path::Path;
 
     use baml_compiler2_hir::ids::{FunctionMarker, LocalItemId};
-    use baml_type::TyAttrValue;
 
     use super::*;
     use crate::test_support::TestDbExt;
 
-    fn codegen_attr() -> TyAttr {
-        TyAttr::default()
-    }
-
     fn codegen_alias(name: cg::Name) -> cg::Ty {
-        cg::Ty::TypeAlias(name, codegen_attr())
+        cg::Ty::TypeAlias(name)
     }
 
     fn codegen_list(inner: cg::Ty) -> cg::Ty {
-        cg::Ty::List(Box::new(inner), codegen_attr())
+        cg::Ty::List(Box::new(inner))
     }
 
     fn codegen_union(members: Vec<cg::Ty>) -> cg::Ty {
-        cg::Ty::Union(members.into(), codegen_attr())
-    }
-
-    #[test]
-    fn tir_attributes_survive_recursive_codegen_lowering() {
-        let outer_attr = TyAttr {
-            sap_pending_never: TyAttrValue::Set,
-            ..TyAttr::default()
-        };
-        let inner_attr = TyAttr {
-            sap_parse_without_null: TyAttrValue::Set,
-            ..TyAttr::default()
-        };
-        let tir = TirTy::List(
-            Box::new(TirTy::String {
-                attr: inner_attr.clone(),
-            }),
-            outer_attr.clone(),
-        );
-
-        assert_eq!(
-            convert_tir_to_codegen_ty(
-                &Spelling::from_pairs([]),
-                &tir,
-                &HashMap::new(),
-                &std::collections::HashSet::new(),
-            ),
-            cg::Ty::List(Box::new(cg::Ty::String { attr: inner_attr }), outer_attr,)
-        );
+        cg::Ty::Union(members.into())
     }
 
     // ── Unit tests for pure helpers ─────────────────────────────────────────
@@ -860,7 +806,7 @@ mod tests {
             cg_name.namespace(),
             &vec![Name::new("foo")],
             "namespace_path mismatch: {:?}",
-            cg_name.namespace(),
+            cg_name.namespace()
         );
         assert_eq!(cg_name.name().as_str(), "Sentiment");
         assert!(!cg_name.is_stream());
@@ -890,7 +836,7 @@ mod tests {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction extract_resume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `extract resume from ${resume} ${ctx.output_format()}`\n}\n",
+            "class Resume { name string }\nfunction extract_resume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `extract resume from ${resume} ${ctx.output_format()}`\n}\n"
         );
 
         let pool = build_symbol_pool(&db);
@@ -908,7 +854,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{expected} must be in the pool"));
             assert!(
                 matches!(pool.get(key), Some(cg::Symbol::Function(_))),
-                "{expected} must be a Function symbol",
+                "{expected} must be a Function symbol"
             );
         }
     }
@@ -1131,7 +1077,7 @@ function extract(client: string, text: string) -> string {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "/// A document with a title.\nclass Doc {\n  /// Title shown in lists.\n  title string\n}\n\n/// Sentiment labels.\nenum Sentiment {\n  /// Smiling face.\n  HAPPY\n  SAD\n}\n",
+            "/// A document with a title.\nclass Doc {\n  /// Title shown in lists.\n  title string\n}\n\n/// Sentiment labels.\nenum Sentiment {\n  /// Smiling face.\n  HAPPY\n  SAD\n}\n"
         );
 
         let pool = build_symbol_pool(&db);
@@ -1146,7 +1092,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             doc.docstring.as_deref(),
             Some("A document with a title."),
-            "class /// must reach pool",
+            "class /// must reach pool"
         );
         let title = doc
             .properties
@@ -1156,7 +1102,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             title.docstring.as_deref(),
             Some("Title shown in lists."),
-            "field /// must reach pool",
+            "field /// must reach pool"
         );
 
         let enum_key = pool
@@ -1169,7 +1115,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             en.docstring.as_deref(),
             Some("Sentiment labels."),
-            "enum /// must reach pool",
+            "enum /// must reach pool"
         );
         let happy = en
             .variants
@@ -1179,7 +1125,7 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             happy.docstring.as_deref(),
             Some("Smiling face."),
-            "variant /// must reach pool",
+            "variant /// must reach pool"
         );
     }
 
@@ -1192,10 +1138,10 @@ function extract(client: string, text: string) -> string {
     fn test_throws_reaches_symbol_pool() {
         fn walk(ty: &cg::Ty, out: &mut Vec<String>) {
             match ty {
-                cg::Ty::Class(n, _, _) | cg::Ty::Enum(n, _) | cg::Ty::TypeAlias(n, _) => {
+                cg::Ty::Class(n, _) | cg::Ty::Enum(n) | cg::Ty::TypeAlias(n) => {
                     out.push(n.name().as_str().to_string());
                 }
-                cg::Ty::Union(ms, _) => ms.iter().for_each(|m| walk(m, out)),
+                cg::Ty::Union(ms) => ms.iter().for_each(|m| walk(m, out)),
                 _ => {}
             }
         }
@@ -1213,7 +1159,7 @@ function extract(client: string, text: string) -> string {
                 "}\n\n",
                 "function g() -> int {\n",
                 "  throw E1 { message: \"y\" }\n",
-                "}\n",
+                "}\n"
             ),
         );
 
@@ -1238,14 +1184,14 @@ function extract(client: string, text: string) -> string {
         assert_eq!(
             throws_names("f"),
             vec!["E1".to_string(), "E2".to_string()],
-            "declared union throws must reach pool in order",
+            "declared union throws must reach pool in order"
         );
         // No `throws` clause but a throwing body → the inferred contract still
         // surfaces E1.
         assert_eq!(
             throws_names("g"),
             vec!["E1".to_string()],
-            "inferred throws (no clause) must reach pool",
+            "inferred throws (no clause) must reach pool"
         );
     }
 
@@ -1326,7 +1272,7 @@ function extract(client: string, text: string) -> string {
         db.workspace(root);
         db.file(
             root.join("main.baml").as_path(),
-            "class Counter {\n  count int\n  function bump(self, by: int) -> int { self.count + by }\n  function zero() -> int { 0 }\n}\n",
+            "class Counter {\n  count int\n  function bump(self, by: int) -> int { self.count + by }\n  function zero() -> int { 0 }\n}\n"
         );
 
         let pool = build_symbol_pool(&db);
@@ -1401,15 +1347,15 @@ class GenericMirror<T> {
             .expect("clone instance method missing");
         assert!(matches!(
             &clone.arguments[0].ty,
-            cg::Ty::Union(members, _)
-                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
-                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+            cg::Ty::Union(members)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null))
         ));
         assert!(matches!(
             &clone.return_type,
             cg::Ty::Map { key, value, .. }
-                if matches!(key.as_ref(), cg::Ty::String { .. })
-                    && matches!(value.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+                if matches!(key.as_ref(), cg::Ty::String)
+                    && matches!(value.as_ref(), cg::Ty::Class(name, args) if name == owner && args.is_empty())
         ));
 
         let pick = class
@@ -1419,15 +1365,15 @@ class GenericMirror<T> {
             .expect("pick instance method missing");
         assert!(matches!(
             &pick.arguments[0].ty,
-            cg::Ty::Union(members, _)
-                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
-                    && members.iter().any(|ty| matches!(ty, cg::Ty::Int { .. }))
+            cg::Ty::Union(members)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Int))
         ));
         assert!(matches!(
             &pick.return_type,
-            cg::Ty::Union(members, _)
-                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args, _) if name == owner && args.is_empty()))
-                    && members.iter().any(|ty| matches!(ty, cg::Ty::String { .. }))
+            cg::Ty::Union(members)
+                if members.iter().any(|ty| matches!(ty, cg::Ty::Class(name, args) if name == owner && args.is_empty()))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::String))
         ));
 
         let wrap = class
@@ -1437,12 +1383,12 @@ class GenericMirror<T> {
             .expect("wrap static method missing");
         assert!(matches!(
             &wrap.arguments[0].ty,
-            cg::Ty::List(inner, _)
-                if matches!(inner.as_ref(), cg::Ty::Class(name, args, _) if name == owner && args.is_empty())
+            cg::Ty::List(inner)
+                if matches!(inner.as_ref(), cg::Ty::Class(name, args) if name == owner && args.is_empty())
         ));
         assert!(matches!(
             &wrap.return_type,
-            cg::Ty::Class(name, args, _) if name == owner && args.is_empty()
+            cg::Ty::Class(name, args) if name == owner && args.is_empty()
         ));
 
         let (generic_owner, generic_class) = pool
@@ -1462,22 +1408,22 @@ class GenericMirror<T> {
         let is_instantiated_self = |ty: &cg::Ty| {
             matches!(
                 ty,
-                cg::Ty::Class(name, args, _)
+                cg::Ty::Class(name, args)
                     if name == generic_owner
-                        && matches!(&**args, [cg::Ty::TypeVar(name, _)] if name.as_str() == "T")
+                        && matches!(&**args, [cg::Ty::TypeVar(name)] if name.as_str() == "T")
             )
         };
         assert!(matches!(
             &nested.arguments[0].ty,
-            cg::Ty::Union(members, _)
+            cg::Ty::Union(members)
                 if members.iter().any(&is_instantiated_self)
-                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null { .. }))
+                    && members.iter().any(|ty| matches!(ty, cg::Ty::Null))
         ));
         assert!(matches!(
             &nested.return_type,
             cg::Ty::Map { key, value, .. }
-                if matches!(key.as_ref(), cg::Ty::String { .. })
-                    && matches!(value.as_ref(), cg::Ty::List(inner, _) if is_instantiated_self(inner))
+                if matches!(key.as_ref(), cg::Ty::String)
+                    && matches!(value.as_ref(), cg::Ty::List(inner) if is_instantiated_self(inner))
         ));
 
         let identity = generic_class
@@ -1513,7 +1459,7 @@ class GenericMirror<T> {
             key.namespace(),
             &vec![Name::new("foo")],
             "namespace_path mismatch: {:?}",
-            key.namespace(),
+            key.namespace()
         );
         assert!(!key.is_stream(), "Sentiment must not be marked as stream");
     }
@@ -1541,7 +1487,7 @@ class GenericMirror<T> {
             .expect("return_int must be in the pool");
         assert!(
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
-            "return_int must be a Function symbol",
+            "return_int must be a Function symbol"
         );
     }
 
@@ -1622,7 +1568,7 @@ function passthrough(x: Marker) -> Marker { x }
 
         for ty in [&function.arguments[0].ty, &function.return_type] {
             assert!(
-                matches!(ty, cg::Ty::Interface(name, generics, associated, _)
+                matches!(ty, cg::Ty::Interface(name, generics, associated)
                     if name.bare_name() == "Marker"
                         && generics.is_empty()
                         && associated.is_empty()),
@@ -1669,12 +1615,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         let cg::Symbol::TypeAlias(text_decl) = &pool[&text] else {
             panic!("Text must be an alias")
         };
-        assert_eq!(
-            text_decl.resolves_to,
-            cg::Ty::String {
-                attr: codegen_attr()
-            }
-        );
+        assert_eq!(text_decl.resolves_to, cg::Ty::String);
 
         let cg::Symbol::TypeAlias(chain_decl) = &pool[&text_chain] else {
             panic!("TextChain must be an alias")
@@ -1686,12 +1627,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         };
         assert_eq!(
             maybe_decl.resolves_to,
-            codegen_union(vec![
-                codegen_alias(text_chain.clone()),
-                cg::Ty::Null {
-                    attr: codegen_attr()
-                }
-            ])
+            codegen_union(vec![codegen_alias(text_chain.clone()), cg::Ty::Null])
         );
 
         let cg::Symbol::TypeAlias(rec_decl) = &pool[&rec] else {
@@ -1700,12 +1636,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         assert!(rec_decl.recursive);
         assert_eq!(
             rec_decl.resolves_to,
-            codegen_union(vec![
-                cg::Ty::Int {
-                    attr: codegen_attr()
-                },
-                codegen_list(codegen_alias(rec.clone())),
-            ])
+            codegen_union(vec![cg::Ty::Int, codegen_list(codegen_alias(rec.clone())),])
         );
 
         let cg::Symbol::Class(holder) = &pool[&name("Holder")] else {
@@ -1726,25 +1657,15 @@ function normalize(value: null | string | null) -> null | string | null { value 
         assert_eq!(
             property("mapped"),
             &cg::Ty::Map {
-                key: Box::new(cg::Ty::String {
-                    attr: codegen_attr()
-                }),
-                value: Box::new(codegen_list(codegen_alias(text_chain))),
-                attr: codegen_attr(),
+                key: Box::new(cg::Ty::String),
+                value: Box::new(codegen_list(codegen_alias(text_chain)))
             }
         );
 
         let cg::Symbol::Function(normalize) = &pool[&name("normalize")] else {
             panic!("normalize must be a function")
         };
-        let nullable_string = codegen_union(vec![
-            cg::Ty::String {
-                attr: codegen_attr(),
-            },
-            cg::Ty::Null {
-                attr: codegen_attr(),
-            },
-        ]);
+        let nullable_string = codegen_union(vec![cg::Ty::String, cg::Ty::Null]);
         assert_eq!(normalize.arguments[0].ty, nullable_string);
         assert_eq!(normalize.return_type, nullable_string);
         cg::validate_symbol_pool_map_keys(&pool).expect("canonical alias map keys must validate");
@@ -1759,7 +1680,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
         legal_db.workspace(legal_root);
         legal_db.file(
             legal_root.join("main.baml").as_path(),
-            "type Key = \"first\" | \"second\"\ntype KeyChain = Key\nclass Lookup { values map<KeyChain, int> }\n",
+            "type Key = \"first\" | \"second\"\ntype KeyChain = Key\nclass Lookup { values map<KeyChain, int> }\n"
         );
         let diagnostics = baml_db::collect_compiler2_diagnostics(&legal_db);
         assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
@@ -1773,10 +1694,7 @@ function normalize(value: null | string | null) -> null | string | null { value 
             lookup.properties[0].ty,
             cg::Ty::Map {
                 key: Box::new(codegen_alias(key_chain)),
-                value: Box::new(cg::Ty::Int {
-                    attr: codegen_attr()
-                }),
-                attr: codegen_attr(),
+                value: Box::new(cg::Ty::Int)
             }
         );
         cg::validate_symbol_pool_map_keys(&legal_pool)
@@ -1834,12 +1752,12 @@ function normalize(value: null | string | null) -> null | string | null { value 
         assert!(matches!(
             &pool[&left_alias],
             cg::Symbol::TypeAlias(alias)
-                if alias.resolves_to == cg::Ty::String { attr: codegen_attr() }
+                if alias.resolves_to == cg::Ty::String
         ));
         assert!(matches!(
             &pool[&right_alias],
             cg::Symbol::TypeAlias(alias)
-                if alias.resolves_to == cg::Ty::Int { attr: codegen_attr() }
+                if alias.resolves_to == cg::Ty::Int
         ));
 
         for (class_name, alias_name) in [

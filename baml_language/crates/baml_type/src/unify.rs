@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::{LangRoots, Literal, Name, TyAttr};
+use baml_base::{LangRoots, Literal, Name};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -195,22 +195,22 @@ pub const MAX_UNIFY_DEPTH: usize = 256;
 /// `RealizedTy::try_from` as well.
 pub fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
     match ty {
-        Ty::TypeVar(name, _) => generic_params.contains(name),
-        Ty::Class(_, args, _) | Ty::Union(args, _) => args
+        Ty::TypeVar(name) => generic_params.contains(name),
+        Ty::Class(_, args) | Ty::Union(args) => args
             .iter()
             .any(|arg| contains_bound_typevar(arg, generic_params)),
-        Ty::Interface(_, args, associated_bindings, _) => {
+        Ty::Interface(_, args, associated_bindings) => {
             args.iter()
                 .any(|arg| contains_bound_typevar(arg, generic_params))
                 || associated_bindings
                     .iter()
                     .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
         }
-        Ty::List(inner, _) => contains_bound_typevar(inner, generic_params),
+        Ty::List(inner) => contains_bound_typevar(inner, generic_params),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::Future(k, v, _) => {
+        | Ty::Future(k, v) => {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
         Ty::Function {
@@ -236,21 +236,21 @@ pub fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
 /// (an out-of-scope variable is an opaque atom the oracle cannot see).
 pub fn all_typevars_within(ty: &Ty, vars: &[ParamTy]) -> bool {
     match ty {
-        Ty::TypeVar(name, _) => vars.contains(name),
-        Ty::Class(_, args, _) | Ty::Union(args, _) => {
+        Ty::TypeVar(name) => vars.contains(name),
+        Ty::Class(_, args) | Ty::Union(args) => {
             args.iter().all(|arg| all_typevars_within(arg, vars))
         }
-        Ty::Interface(_, args, associated_bindings, _) => {
+        Ty::Interface(_, args, associated_bindings) => {
             args.iter().all(|arg| all_typevars_within(arg, vars))
                 && associated_bindings
                     .iter()
                     .all(|(_, ty)| all_typevars_within(ty, vars))
         }
-        Ty::List(inner, _) => all_typevars_within(inner, vars),
+        Ty::List(inner) => all_typevars_within(inner, vars),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::Future(k, v, _) => all_typevars_within(k, vars) && all_typevars_within(v, vars),
+        | Ty::Future(k, v) => all_typevars_within(k, vars) && all_typevars_within(v, vars),
         Ty::Function {
             params,
             ret,
@@ -287,18 +287,18 @@ pub fn all_typevars_within(ty: &Ty, vars: &[ParamTy]) -> bool {
 pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
     fn occurs(param: &ParamTy, ty: &Ty, in_union: bool) -> bool {
         match ty {
-            Ty::TypeVar(candidate, _) => in_union && candidate == param,
-            Ty::Union(members, _) => members.iter().any(|m| occurs(param, m, true)),
-            Ty::Class(_, args, _) => args.iter().any(|a| occurs(param, a, in_union)),
-            Ty::Interface(_, args, assoc, _) => {
+            Ty::TypeVar(candidate) => in_union && candidate == param,
+            Ty::Union(members) => members.iter().any(|m| occurs(param, m, true)),
+            Ty::Class(_, args) => args.iter().any(|a| occurs(param, a, in_union)),
+            Ty::Interface(_, args, assoc) => {
                 args.iter().any(|a| occurs(param, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(param, t, in_union))
             }
-            Ty::List(inner, _) => occurs(param, inner, in_union),
+            Ty::List(inner) => occurs(param, inner, in_union),
             Ty::Map {
                 key: k, value: v, ..
             }
-            | Ty::Future(k, v, _) => occurs(param, k, in_union) || occurs(param, v, in_union),
+            | Ty::Future(k, v) => occurs(param, k, in_union) || occurs(param, v, in_union),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => {
@@ -319,26 +319,26 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             }
             // Leaf types hold no nested type, so no variable occurs in them. Listed
             // explicitly (no total wildcard) so a new `Ty` variant must be classified.
-            Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
+            Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Literal(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
-            | Ty::RustType { .. }
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Void { .. }
+            | Ty::RustType
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::Void
             | Ty::TypeAlias(..)
-            | Ty::Unknown { .. }
-            | Ty::Never { .. }
-            | Ty::Error { .. } => false,
+            | Ty::Unknown
+            | Ty::Never
+            | Ty::Error => false,
         }
     }
     occurs(param, ty, false)
@@ -356,52 +356,44 @@ pub type EnumVariants<'a> = &'a dyn Fn(&DeclName) -> Option<Vec<Name>>;
 /// be folded away — is handled conservatively in `unify_into`.
 pub fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
     match ty {
-        Ty::Union(members, attr) => normalize_union(
+        Ty::Union(members) => normalize_union(
             members.iter().map(|m| nf(m, enum_variants)).collect(),
-            attr.clone(),
             enum_variants,
         ),
-        Ty::List(inner, attr) => Ty::List(Box::new(nf(inner, enum_variants)), attr.clone()),
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(nf(inner, enum_variants))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(nf(key, enum_variants)),
             value: Box::new(nf(value, enum_variants)),
-            attr: attr.clone(),
         },
-        Ty::Future(value, error, attr) => Ty::Future(
+        Ty::Future(value, error) => Ty::Future(
             Box::new(nf(value, enum_variants)),
             Box::new(nf(error, enum_variants)),
-            attr.clone(),
         ),
-        Ty::Class(name, args, attr) => Ty::Class(
+        Ty::Class(name, args) => Ty::Class(
             name.clone(),
             args.iter().map(|a| nf(a, enum_variants)).collect(),
-            attr.clone(),
         ),
-        Ty::Interface(name, args, bindings, attr) => Ty::Interface(
+        Ty::Interface(name, args, bindings) => Ty::Interface(
             name.clone(),
             args.iter().map(|a| nf(a, enum_variants)).collect(),
             bindings
                 .iter()
                 .map(|(n, t)| (n.clone(), nf(t, enum_variants)))
                 .collect(),
-            attr.clone(),
         ),
         Ty::AssociatedTypeProjection {
             base,
             interface,
             member,
-            attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(nf(base, enum_variants)),
             interface: Box::new(interface.map_tys(|t| nf(t, enum_variants))),
             member: member.clone(),
-            attr: attr.clone(),
         },
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .iter()
@@ -413,25 +405,24 @@ pub fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
                 .collect(),
             ret: Box::new(nf(ret, enum_variants)),
             throws: Box::new(nf(throws, enum_variants)),
-            attr: attr.clone(),
         },
         _ => ty.clone(),
     }
 }
 
 /// The union laws of [`nf`]. `members` are already individually normalized.
-fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) -> Ty {
+fn normalize_union(members: Vec<Ty>, enum_variants: EnumVariants) -> Ty {
     // Flatten, drop `never`, absorb `unknown`, deduplicate.
     let mut flat: Vec<Ty> = Vec::new();
     for member in members {
         match member {
-            Ty::Never { .. } => {}
-            Ty::Unknown { .. } => return Ty::Unknown { attr },
-            Ty::Union(inner, _) => {
+            Ty::Never => {}
+            Ty::Unknown => return Ty::Unknown,
+            Ty::Union(inner) => {
                 for inner_member in inner {
                     match inner_member {
-                        Ty::Never { .. } => {}
-                        Ty::Unknown { .. } => return Ty::Unknown { attr },
+                        Ty::Never => {}
+                        Ty::Unknown => return Ty::Unknown,
                         other if !flat.contains(&other) => flat.push(other),
                         _ => {}
                     }
@@ -456,11 +447,11 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
     flat.sort();
 
     match flat.len() {
-        0 => Ty::Never { attr },
+        0 => Ty::Never,
         1 => flat
             .pop()
             .unwrap_or_else(|| unreachable!("a length-1 vec has an element")),
-        _ => Ty::Union(flat.into(), attr),
+        _ => Ty::Union(flat.into()),
     }
 }
 
@@ -469,19 +460,17 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
 fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
     let has_bool_literal = |value: bool| {
         flat.iter()
-            .any(|m| matches!(m, Ty::Literal(Literal::Bool(v), _, _) if *v == value))
+            .any(|m| matches!(m, Ty::Literal(Literal::Bool(v), _) if *v == value))
     };
     if has_bool_literal(true) && has_bool_literal(false) {
-        flat.retain(|m| !matches!(m, Ty::Literal(Literal::Bool(_), _, _)));
-        flat.push(Ty::Bool {
-            attr: TyAttr::default(),
-        });
+        flat.retain(|m| !matches!(m, Ty::Literal(Literal::Bool(_), _)));
+        flat.push(Ty::Bool);
     }
 
     // Each enum that has a variant member: fold if *all* its variants are present.
     let mut enums: Vec<DeclName> = Vec::new();
     for member in flat.iter() {
-        if let Ty::EnumVariant(enum_name, _, _) = member
+        if let Ty::EnumVariant(enum_name, _) = member
             && !enums.contains(enum_name)
         {
             enums.push(enum_name.clone());
@@ -497,13 +486,13 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
         let present: std::collections::HashSet<&Name> = flat
             .iter()
             .filter_map(|m| match m {
-                Ty::EnumVariant(en, v, _) if *en == enum_name => Some(v),
+                Ty::EnumVariant(en, v) if *en == enum_name => Some(v),
                 _ => None,
             })
             .collect();
         if all_variants.iter().all(|v| present.contains(v)) {
-            flat.retain(|m| !matches!(m, Ty::EnumVariant(en, _, _) if *en == enum_name));
-            flat.push(Ty::Enum(enum_name.clone(), TyAttr::default()));
+            flat.retain(|m| !matches!(m, Ty::EnumVariant(en, _) if *en == enum_name));
+            flat.push(Ty::Enum(enum_name.clone()));
         }
     }
 }
@@ -516,7 +505,7 @@ fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
 pub fn expand_alias_head(ty: &Ty, env: &AliasEquivCtx<'_>) -> Ty {
     let mut current = ty.clone();
     for _ in 0..64 {
-        let Ty::TypeAlias(qtn, _) = &current else {
+        let Ty::TypeAlias(qtn) = &current else {
             break;
         };
         match env.aliases.get(qtn) {
@@ -588,16 +577,16 @@ fn unify_into_at(
     // variable (below), and is otherwise a distinct atomic type compared by
     // equality — `Box<unknown>` is disjoint from `Box<int>`, exactly how the
     // runtime resolver matches it.
-    if matches!(x, Ty::Error { .. }) || matches!(y, Ty::Error { .. }) {
+    if matches!(x, Ty::Error) || matches!(y, Ty::Error) {
         return Overlap::No;
     }
 
-    if let Ty::TypeVar(n, _) = &x
+    if let Ty::TypeVar(n) = &x
         && vars.contains(n)
     {
         return bind_unify_var(n, &y, vars, env, bindings, depth + 1);
     }
-    if let Ty::TypeVar(n, _) = &y
+    if let Ty::TypeVar(n) = &y
         && vars.contains(n)
     {
         return bind_unify_var(n, &x, vars, env, bindings, depth + 1);
@@ -610,10 +599,10 @@ fn unify_into_at(
     }
 
     match (&x, &y) {
-        (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => {
+        (Ty::Class(xq, xa), Ty::Class(yq, ya)) if xq == yq && xa.len() == ya.len() => {
             unify_all(xa, ya, vars, env, bindings, depth + 1)
         }
-        (Ty::Interface(xq, xa, xb, _), Ty::Interface(yq, ya, yb, _))
+        (Ty::Interface(xq, xa, xb), Ty::Interface(yq, ya, yb))
             if xq == yq && xa.len() == ya.len() =>
         {
             // Generic args *and* associated bindings are part of an interface-existential
@@ -630,7 +619,7 @@ fn unify_into_at(
                 depth + 1,
             ))
         }
-        (Ty::List(xi, _), Ty::List(yi, _)) => unify_into_at(xi, yi, vars, env, bindings, depth + 1),
+        (Ty::List(xi), Ty::List(yi)) => unify_into_at(xi, yi, vars, env, bindings, depth + 1),
         (
             Ty::Map {
                 key: xk, value: xv, ..
@@ -646,7 +635,7 @@ fn unify_into_at(
             bindings,
             depth + 1,
         )),
-        (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => unify_into_at(
+        (Ty::Future(xv, xe), Ty::Future(yv, ye)) => unify_into_at(
             xv,
             yv,
             vars,
@@ -692,13 +681,13 @@ fn unify_into_at(
         // union opposite a single type from being wrongly judged disjoint by the
         // wildcard arm below. (The finite-base residual `true | T` / `Cmp.Less | T` is
         // covered precisely via `cover`'s `literal <: base` / `variant <: enum` oracle.)
-        (Ty::Union(xm, _), Ty::Union(ym, _)) => {
+        (Ty::Union(xm), Ty::Union(ym)) => {
             unify_union_members_at(xm, ym, vars, env, bindings, depth + 1)
         }
-        (Ty::Union(xm, _), _) => {
+        (Ty::Union(xm), _) => {
             unify_union_members_at(xm, std::slice::from_ref(&y), vars, env, bindings, depth + 1)
         }
-        (_, Ty::Union(ym, _)) => {
+        (_, Ty::Union(ym)) => {
             unify_union_members_at(std::slice::from_ref(&x), ym, vars, env, bindings, depth + 1)
         }
         // An associated-type projection could stand for any concrete type, so under the
@@ -725,28 +714,28 @@ fn unify_into_at(
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Future(..)
-            | Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
+            | Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Literal(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::Function { .. }
-            | Ty::RustType { .. }
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Void { .. }
+            | Ty::RustType
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::Void
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::Unknown { .. }
-            | Ty::Never { .. }
-            | Ty::Error { .. },
+            | Ty::Unknown
+            | Ty::Never
+            | Ty::Error,
             _,
         ) => Overlap::No,
     }
@@ -887,19 +876,14 @@ fn unify_union_members_at(
 
 /// Flatten nested unions, drop `Never`, deduplicate; collapse a single survivor
 /// to a bare type and an empty result to `Never`.
-pub fn normalize_union_members<N: Head>(
-    members: impl IntoIterator<Item = Ty<N>>,
-    attr: TyAttr,
-) -> Ty<N> {
+pub fn normalize_union_members<N: Head>(members: impl IntoIterator<Item = Ty<N>>) -> Ty<N> {
     let mut normalized = Vec::new();
     for member in members {
         match member {
-            Ty::Never { .. } => {}
-            Ty::Union(inner, _) => {
+            Ty::Never => {}
+            Ty::Union(inner) => {
                 for inner_member in inner {
-                    if !matches!(inner_member, Ty::Never { .. })
-                        && !normalized.contains(&inner_member)
-                    {
+                    if !matches!(inner_member, Ty::Never) && !normalized.contains(&inner_member) {
                         normalized.push(inner_member);
                     }
                 }
@@ -910,21 +894,15 @@ pub fn normalize_union_members<N: Head>(
     }
 
     match normalized.len() {
-        0 => Ty::Never { attr },
+        0 => Ty::Never,
         1 => normalized.pop().expect("length checked"),
-        _ => {
-            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
-            // single "original attr" to preserve. If inputs carry different attrs, which one
-            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
-            // attrs describe declaration sites rather than computed types.
-            Ty::Union(normalized.into(), attr)
-        }
+        _ => Ty::Union(normalized.into()),
     }
 }
 
 /// Bind type variables from generic params to concrete type arguments.
 ///
-/// Example: `bind_type_vars(&["T"], &[Ty::Int { attr: TyAttr::default() }])` → `{"T" → Int}`
+/// Example: `bind_type_vars(&["T"], &[Ty::Int])` → `{"T" → Int}`
 ///
 /// If there are more params than args (or vice versa), the extra entries are
 /// silently ignored — callers are responsible for providing matching lengths.
@@ -950,7 +928,7 @@ pub fn substitute_ty<N: Head>(ty: &Ty<N>, bindings: &FxHashMap<ParamTy, Ty<N>>) 
         return ty.clone();
     }
     rewrite_ty(ty, &mut |node| match node {
-        Ty::TypeVar(name, _) => bindings.get(name).cloned(),
+        Ty::TypeVar(name) => bindings.get(name).cloned(),
         _ => None,
     })
 }
@@ -964,40 +942,31 @@ pub fn rewrite_ty<N: Head>(ty: &Ty<N>, rewrite: &mut dyn FnMut(&Ty<N>) -> Option
         return replacement;
     }
     match ty {
-        Ty::List(inner, attr) => Ty::List(Box::new(rewrite_ty(inner, rewrite)), attr.clone()),
-        Ty::Map {
-            key: k,
-            value: v,
-            attr,
-        } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(rewrite_ty(inner, rewrite))),
+        Ty::Map { key: k, value: v } => Ty::Map {
             key: Box::new(rewrite_ty(k, rewrite)),
             value: Box::new(rewrite_ty(v, rewrite)),
-            attr: attr.clone(),
         },
-        Ty::Future(value, error, attr) => Ty::Future(
+        Ty::Future(value, error) => Ty::Future(
             Box::new(rewrite_ty(value, rewrite)),
             Box::new(rewrite_ty(error, rewrite)),
-            attr.clone(),
         ),
         Ty::AssociatedTypeProjection {
             base,
             interface,
             member,
-            attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(rewrite_ty(base, rewrite)),
             interface: Box::new(interface.map_tys(|t| rewrite_ty(t, rewrite))),
             member: member.clone(),
-            attr: attr.clone(),
         },
-        Ty::Union(members, attr) => {
-            normalize_union_members(members.iter().map(|m| rewrite_ty(m, rewrite)), attr.clone())
+        Ty::Union(members) => {
+            normalize_union_members(members.iter().map(|m| rewrite_ty(m, rewrite)))
         }
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => {
             // Function values are realized: a function type carries no generics of
             // its own, only free typevars from the enclosing context — so there is
@@ -1013,22 +982,21 @@ pub fn rewrite_ty<N: Head>(ty: &Ty<N>, rewrite: &mut dyn FnMut(&Ty<N>) -> Option
                     .collect(),
                 ret: Box::new(rewrite_ty(ret, rewrite)),
                 throws: Box::new(rewrite_ty(throws, rewrite)),
-                attr: attr.clone(),
             }
         }
-        Ty::Class(name, type_args, attr) => {
+        Ty::Class(name, type_args) => {
             let rebuilt_args: Box<[Ty<N>]> =
                 type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
-            Ty::Class(name.clone(), rebuilt_args, attr.clone())
+            Ty::Class(name.clone(), rebuilt_args)
         }
-        Ty::Interface(name, type_args, associated_bindings, attr) => {
+        Ty::Interface(name, type_args, associated_bindings) => {
             let rebuilt_args: Box<[Ty<N>]> =
                 type_args.iter().map(|t| rewrite_ty(t, rewrite)).collect();
             let rebuilt_bindings = associated_bindings
                 .iter()
                 .map(|(name, ty)| (name.clone(), rewrite_ty(ty, rewrite)))
                 .collect();
-            Ty::Interface(name.clone(), rebuilt_args, rebuilt_bindings, attr.clone())
+            Ty::Interface(name.clone(), rebuilt_args, rebuilt_bindings)
         }
         // All other types are leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),
@@ -1077,7 +1045,7 @@ fn try_union_mutual_absorption(xs: &[Ty], ys: &[Ty], vars: &[ParamTy]) -> Option
 /// True iff `m` is a bare unification-variable member — a top-level type variable
 /// in `vars`, as opposed to a variable nested inside a constructor.
 fn is_bare_var(m: &Ty, vars: &[ParamTy]) -> bool {
-    matches!(m, Ty::TypeVar(n, _) if vars.contains(n))
+    matches!(m, Ty::TypeVar(n) if vars.contains(n))
 }
 
 /// Whether two ground unions denote the same set of types (order-insensitive).
@@ -1138,12 +1106,12 @@ fn cover(
 /// (`Color.Red <: Color`). Directional — `int` is *not* a subtype of `1`.
 pub fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
     match (member, candidate) {
-        (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. })
-        | (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. })
-        | (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. })
-        | (Ty::Literal(Literal::String(_), _, _), Ty::String { .. })
-        | (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => true,
-        (Ty::EnumVariant(variant_enum, _, _), Ty::Enum(base_enum, _)) => variant_enum == base_enum,
+        (Ty::Literal(Literal::Int(_), _), Ty::Int)
+        | (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint)
+        | (Ty::Literal(Literal::Float(_), _), Ty::Float)
+        | (Ty::Literal(Literal::String(_), _), Ty::String)
+        | (Ty::Literal(Literal::Bool(_), _), Ty::Bool) => true,
+        (Ty::EnumVariant(variant_enum, _), Ty::Enum(base_enum)) => variant_enum == base_enum,
         _ => false,
     }
 }
@@ -1154,7 +1122,7 @@ pub fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
 /// or an opaque `$rust_type`. Two interfaces of the *same* name are decided precisely by
 /// `unify_into` (generic args + associated bindings), so they are **not** conservative.
 fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
-    if matches!(a, Ty::RustType { .. }) || matches!(b, Ty::RustType { .. }) {
+    if matches!(a, Ty::RustType) || matches!(b, Ty::RustType) {
         return true;
     }
     match (a, b) {
@@ -1249,7 +1217,7 @@ fn cover_search(
 /// variable, replace it with its binding (so callers see the representative).
 pub fn chase_var(ty: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> Ty {
     let mut current = ty.clone();
-    while let Ty::TypeVar(name, _) = &current {
+    while let Ty::TypeVar(name) = &current {
         if vars.contains(name)
             && let Some(bound) = bindings.get(name)
         {
@@ -1271,7 +1239,7 @@ fn bind_unify_var(
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
-    if let Ty::TypeVar(tn, _) = t
+    if let Ty::TypeVar(tn) = t
         && tn == n
     {
         return Overlap::Yes;
@@ -1292,19 +1260,19 @@ fn bind_unify_var(
 fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> bool {
     let t = chase_var(t, vars, bindings);
     match &t {
-        Ty::TypeVar(m, _) => m == n,
-        Ty::Class(_, args, _) | Ty::Union(args, _) => {
+        Ty::TypeVar(m) => m == n,
+        Ty::Class(_, args) | Ty::Union(args) => {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
         }
-        Ty::Interface(_, args, assoc, _) => {
+        Ty::Interface(_, args, assoc) => {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
                 || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
         }
-        Ty::List(inner, _) => occurs_in(n, inner, vars, bindings),
+        Ty::List(inner) => occurs_in(n, inner, vars, bindings),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::Future(k, v, _) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
+        | Ty::Future(k, v) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => {
@@ -1325,26 +1293,26 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         }
         // Leaf types hold no nested type, so a variable cannot occur in them. Listed
         // explicitly (no total wildcard) so a new `Ty` variant must be classified here.
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. }
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Void
         | Ty::TypeAlias(..)
-        | Ty::Unknown { .. }
-        | Ty::Never { .. }
-        | Ty::Error { .. } => false,
+        | Ty::Unknown
+        | Ty::Never
+        | Ty::Error => false,
     }
 }
 
@@ -1361,7 +1329,6 @@ mod tests {
             crate::test_roots::local(Name::new(name)),
             args.into(),
             Box::new([]),
-            TyAttr::default(),
         )
     }
 
@@ -1373,42 +1340,30 @@ mod tests {
                 .into_iter()
                 .map(|(name, ty)| (Name::new(name), ty))
                 .collect(),
-            TyAttr::default(),
         )
     }
 
     fn int_literal(n: i64) -> Ty {
-        Ty::Literal(
-            Literal::Int(n),
-            crate::Freshness::Regular,
-            TyAttr::default(),
-        )
+        Ty::Literal(Literal::Int(n), crate::Freshness::Regular)
     }
 
     fn bool_literal(b: bool) -> Ty {
-        Ty::Literal(
-            Literal::Bool(b),
-            crate::Freshness::Regular,
-            TyAttr::default(),
-        )
+        Ty::Literal(Literal::Bool(b), crate::Freshness::Regular)
     }
 
     fn enum_ty(name: &str) -> Ty {
-        Ty::Enum(crate::test_roots::local(Name::new(name)), TyAttr::default())
+        Ty::Enum(crate::test_roots::local(Name::new(name)))
     }
 
     fn enum_variant(enum_name: &str, variant: &str) -> Ty {
         Ty::EnumVariant(
             crate::test_roots::local(Name::new(enum_name)),
             Name::new(variant),
-            TyAttr::default(),
         )
     }
 
     fn never() -> Ty {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 
     /// Stub enum schema for `nf` tests: `Cmp` has variants `Less`, `Equal`, `More`.
@@ -1422,11 +1377,7 @@ mod tests {
         let ty = Ty::Interface(
             crate::test_roots::local(Name::new("Source")),
             Box::new([]),
-            Box::new([(
-                Name::new("Item"),
-                Ty::List(Box::new(Ty::type_var("T")), TyAttr::default()),
-            )]),
-            TyAttr::default(),
+            Box::new([(Name::new("Item"), Ty::List(Box::new(Ty::type_var("T"))))]),
         );
 
         assert!(contains_bound_typevar(&ty, &[param("T")]));
@@ -1713,28 +1664,22 @@ mod tests {
         let mut aliases = std::collections::HashMap::default();
         aliases.insert(
             r.clone(),
-            crate::test_roots::class_with_args(
-                "Box",
-                vec![Ty::TypeAlias(r.clone(), TyAttr::default())],
-            ),
+            crate::test_roots::class_with_args("Box", vec![Ty::TypeAlias(r.clone())]),
         );
         aliases.insert(
             s.clone(),
-            crate::test_roots::class_with_args(
-                "Box",
-                vec![Ty::TypeAlias(s.clone(), TyAttr::default())],
-            ),
+            crate::test_roots::class_with_args("Box", vec![Ty::TypeAlias(s.clone())]),
         );
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
-                &Ty::TypeAlias(r, TyAttr::default()),
-                &Ty::TypeAlias(s, TyAttr::default()),
+                &Ty::TypeAlias(r),
+                &Ty::TypeAlias(s),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings,
+                &mut bindings
             ),
-            Overlap::Yes,
+            Overlap::Yes
         );
     }
 
@@ -1749,15 +1694,12 @@ mod tests {
         assert_eq!(
             unify_into(
                 &Ty::bool(),
-                &Ty::Union(
-                    Box::new([bool_literal(true), bool_literal(false)]),
-                    TyAttr::default(),
-                ),
+                &Ty::Union(Box::new([bool_literal(true), bool_literal(false)])),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings,
+                &mut bindings
             ),
-            Overlap::Yes,
+            Overlap::Yes
         );
     }
 
@@ -1774,10 +1716,7 @@ mod tests {
         let mut aliases = std::collections::HashMap::default();
         aliases.insert(
             r.clone(),
-            crate::test_roots::class_with_args(
-                "Box",
-                vec![Ty::TypeAlias(r.clone(), TyAttr::default())],
-            ),
+            crate::test_roots::class_with_args("Box", vec![Ty::TypeAlias(r.clone())]),
         );
         aliases.insert(
             s.clone(),
@@ -1785,20 +1724,20 @@ mod tests {
                 "Box",
                 vec![crate::test_roots::class_with_args(
                     "Pair",
-                    vec![Ty::TypeAlias(s.clone(), TyAttr::default()), Ty::int()],
+                    vec![Ty::TypeAlias(s.clone()), Ty::int()],
                 )],
             ),
         );
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
-                &Ty::TypeAlias(r, TyAttr::default()),
-                &Ty::TypeAlias(s, TyAttr::default()),
+                &Ty::TypeAlias(r),
+                &Ty::TypeAlias(s),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings,
+                &mut bindings
             ),
-            Overlap::No,
+            Overlap::No
         );
     }
 
@@ -1880,13 +1819,13 @@ mod tests {
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
-                &Ty::TypeAlias(tf, TyAttr::default()),
+                &Ty::TypeAlias(tf),
                 &Ty::bool(),
                 &[],
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings,
+                &mut bindings
             ),
-            Overlap::Yes,
+            Overlap::Yes
         );
     }
 
@@ -1900,7 +1839,6 @@ mod tests {
                 params: Box::new([crate::FunctionParamTy::required(None, param)]),
                 ret: Box::new(Ty::int()),
                 throws: Box::new(never()),
-                attr: TyAttr::default(),
             }
         }
         let vars = vec![param("T")];
@@ -1912,9 +1850,9 @@ mod tests {
                 &func(Ty::int()),
                 &vars,
                 &crate::test_roots::alias_ctx(&aliases),
-                &mut bindings,
+                &mut bindings
             ),
-            Overlap::Yes,
+            Overlap::Yes
         );
     }
 
@@ -1932,7 +1870,6 @@ mod tests {
                     .expect("interface() builds an existential"),
             ),
             member: Name::new("Item"),
-            attr: TyAttr::default(),
         };
         let aliases = std::collections::HashMap::default();
         let mut bindings = TypeBindings::default();
@@ -1944,7 +1881,7 @@ mod tests {
                 &crate::test_roots::alias_ctx(&aliases),
                 &mut bindings
             ),
-            Overlap::Yes,
+            Overlap::Yes
         );
     }
 
@@ -2267,7 +2204,7 @@ mod tests {
         // any non-all-false assignment.
         assert_eq!(
             three_sat_overlap(3, &[[(0, true), (1, true), (2, true)]]),
-            Overlap::Yes,
+            Overlap::Yes
         );
     }
 

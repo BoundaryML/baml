@@ -1,14 +1,14 @@
 //! Markdown-driven tests for `simplify_sap::simplify`.
 //!
 //! Test cases live in `simplify_sap_tests.md`.  A tiny type DSL is parsed
-//! into `baml_type::RuntimeTy` values (with attrs), fed through `simplify`, and
-//! the result is compared structurally (including attrs) against the expected
+//! into `baml_type::RuntimeTy` values, fed through `simplify`, and
+//! the result is compared structurally against the expected
 //! output parsed from the same DSL.
 
 use std::collections::{HashMap, HashSet};
 
 use baml_type::{
-    Freshness, Literal, RuntimeTy, TyAttr, TyAttrValue, TypeName,
+    Freshness, Literal, RuntimeTy, TypeName,
     simplify_sap::{simplify, simplify_parse_target},
 };
 
@@ -163,13 +163,13 @@ fn collect_alias_refs(ty: &RuntimeTy) -> Vec<TypeName> {
 
 fn collect_alias_refs_inner(ty: &RuntimeTy, out: &mut Vec<TypeName>) {
     match ty {
-        RuntimeTy::TypeAlias(name, _) => out.push(name.clone()),
-        RuntimeTy::List(inner, _) => collect_alias_refs_inner(inner, out),
-        RuntimeTy::Future(value, error, _) => {
+        RuntimeTy::TypeAlias(name) => out.push(name.clone()),
+        RuntimeTy::List(inner) => collect_alias_refs_inner(inner, out),
+        RuntimeTy::Future(value, error) => {
             collect_alias_refs_inner(value, out);
             collect_alias_refs_inner(error, out);
         }
-        RuntimeTy::Union(members, _) => {
+        RuntimeTy::Union(members) => {
             for m in members {
                 collect_alias_refs_inner(m, out);
             }
@@ -278,8 +278,8 @@ impl Parser {
     // type := union_expr attrs?
     fn parse_type(&mut self) -> RuntimeTy {
         let ty = self.parse_union();
-        let attr = self.parse_attrs();
-        apply_attr(ty, attr)
+        self.parse_attrs();
+        ty
     }
 
     // union_expr := element ('|' element)*
@@ -298,15 +298,15 @@ impl Parser {
         if members.len() == 1 {
             members.pop().unwrap()
         } else {
-            RuntimeTy::Union(members.into(), TyAttr::default())
+            RuntimeTy::Union(members.into())
         }
     }
 
     // element := postfix attrs?
     fn parse_element(&mut self) -> RuntimeTy {
         let ty = self.parse_postfix();
-        let attr = self.parse_attrs();
-        apply_attr(ty, attr)
+        self.parse_attrs();
+        ty
     }
 
     // postfix := atom ('[]' | '?')*
@@ -319,7 +319,7 @@ impl Parser {
                 && self.chars[self.pos + 1] == ']'
             {
                 self.pos += 2;
-                ty = RuntimeTy::List(Box::new(ty), TyAttr::default());
+                ty = RuntimeTy::List(Box::new(ty));
             } else if self.peek() == Some('?') {
                 self.advance();
                 ty = RuntimeTy::optional(ty);
@@ -343,11 +343,11 @@ impl Parser {
             Some('$') => {
                 self.advance();
                 let name = self.read_word();
-                RuntimeTy::TypeAlias(TypeName::local(name.into()), TyAttr::default())
+                RuntimeTy::TypeAlias(TypeName::local(name.into()))
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
                 let n = self.read_int();
-                RuntimeTy::Literal(Literal::Int(n), Freshness::Regular, TyAttr::default())
+                RuntimeTy::Literal(Literal::Int(n), Freshness::Regular)
             }
             Some(c) if c.is_alphabetic() => {
                 let word = self.read_word();
@@ -357,16 +357,8 @@ impl Parser {
                     "string" => RuntimeTy::string(),
                     "bool" => RuntimeTy::bool(),
                     "null" => RuntimeTy::null(),
-                    "true" => RuntimeTy::Literal(
-                        Literal::Bool(true),
-                        Freshness::Regular,
-                        TyAttr::default(),
-                    ),
-                    "false" => RuntimeTy::Literal(
-                        Literal::Bool(false),
-                        Freshness::Regular,
-                        TyAttr::default(),
-                    ),
+                    "true" => RuntimeTy::Literal(Literal::Bool(true), Freshness::Regular),
+                    "false" => RuntimeTy::Literal(Literal::Bool(false), Freshness::Regular),
                     "map" => {
                         self.skip_ws();
                         assert_eq!(self.advance(), '<');
@@ -379,15 +371,10 @@ impl Parser {
                         RuntimeTy::Map {
                             key: Box::new(key),
                             value: Box::new(value),
-                            attr: TyAttr::default(),
                         }
                     }
                     // Capitalized or otherwise — treat as class name.
-                    name => RuntimeTy::Class(
-                        TypeName::local(name.into()),
-                        Box::new([]),
-                        TyAttr::default(),
-                    ),
+                    name => RuntimeTy::Class(TypeName::local(name.into()), Box::new([])),
                 }
             }
             other => panic!("unexpected {:?} at pos {} in type DSL", other, self.pos),
@@ -395,8 +382,7 @@ impl Parser {
     }
 
     // attrs := attr*
-    fn parse_attrs(&mut self) -> TyAttr {
-        let mut attr = TyAttr::default();
+    fn parse_attrs(&mut self) {
         loop {
             self.skip_ws();
             if !self.starts_with("@") {
@@ -404,27 +390,14 @@ impl Parser {
             }
             if self.starts_with("@sap.parse_without_null") {
                 self.consume_str("@sap.parse_without_null");
-                attr.sap_parse_without_null = TyAttrValue::Set;
             } else if self.starts_with("@sap.pending_never") {
                 self.consume_str("@sap.pending_never");
-                attr.sap_pending_never = TyAttrValue::Set;
             } else if self.starts_with("@sap.in_progress_never") {
                 self.consume_str("@sap.in_progress_never");
-                attr.sap_in_progress_never = TyAttrValue::Set;
             } else {
                 break;
             }
         }
-        attr
-    }
-}
-
-/// Apply a parsed attr to a RuntimeTy. If the attr is all-default, return ty unchanged.
-fn apply_attr(ty: RuntimeTy, attr: TyAttr) -> RuntimeTy {
-    if attr == TyAttr::default() {
-        ty
-    } else {
-        ty.with_attr(attr)
     }
 }
 
@@ -435,7 +408,7 @@ fn parse_ty(s: &str) -> RuntimeTy {
     assert!(
         parser.pos == parser.chars.len(),
         "trailing characters in type DSL: {:?}",
-        &s[parser.pos..],
+        &s[parser.pos..]
     );
     ty
 }
@@ -458,7 +431,7 @@ fn simplify_sap_tests() {
         if actual != case.expected {
             failures.push(format!(
                 "  {}:\n    expected: {:#?}\n    actual:   {:#?}",
-                case.name, case.expected, actual,
+                case.name, case.expected, actual
             ));
         }
     }
@@ -467,7 +440,7 @@ fn simplify_sap_tests() {
         panic!(
             "\n{} simplify_sap test(s) failed:\n{}\n",
             failures.len(),
-            failures.join("\n\n"),
+            failures.join("\n\n")
         );
     }
 }

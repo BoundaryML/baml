@@ -23,7 +23,7 @@
 //! ```
 
 // Re-export RuntimeTy and TypeName from baml_type for convenience
-pub use baml_type::{RuntimeTy, TyAttr, TypeName};
+pub use baml_type::{RuntimeTy, TypeName};
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -60,7 +60,7 @@ impl UnionMetadata {
     /// Create metadata for a union type.
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
-            RuntimeTy::Union(members, _) => {
+            RuntimeTy::Union(members) => {
                 let is_optional = members.iter().any(RuntimeTy::is_null);
                 let non_null_count = members.iter().filter(|member| !member.is_null()).count();
                 (is_optional, non_null_count == 1)
@@ -477,10 +477,8 @@ impl BexExternalValue {
     /// existing type-directed VM materialization can honor `value_type`, while
     /// explicitly distinguishing it from an actual declared union.
     pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
-        let mut metadata = UnionMetadata::new(
-            RuntimeTy::Union(Box::new([value_type.clone()]), TyAttr::default()),
-            value_type,
-        );
+        let mut metadata =
+            UnionMetadata::new(RuntimeTy::Union(Box::new([value_type.clone()])), value_type);
         metadata.is_inbound_type_annotation = true;
         BexExternalValue::Union {
             value: Box::new(value),
@@ -498,7 +496,7 @@ impl BexExternalValue {
         members: impl IntoIterator<Item = RuntimeTy>,
         selected: RuntimeTy,
     ) -> Self {
-        let union_type = RuntimeTy::Union(members.into_iter().collect(), TyAttr::default());
+        let union_type = RuntimeTy::Union(members.into_iter().collect());
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(union_type, selected),

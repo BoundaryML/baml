@@ -130,9 +130,7 @@ fn callable_throws_cycle_initial<'db>(
 ) -> CallableThrows {
     // The fixpoint seed: a recursive call contributes nothing until an
     // iteration proves otherwise.
-    CallableThrows(baml_type::Ty::Never {
-        attr: baml_type::TyAttr::default(),
-    })
+    CallableThrows(baml_type::Ty::Never)
 }
 
 /// What `function` throws: the declared clause when written, else the
