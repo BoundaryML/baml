@@ -309,12 +309,17 @@ fn write_enum_doc(out: &mut String, e: &TypeScriptEnum) {
     out.push_str(" */\n");
 }
 
-/// `<T, U>` generic-parameter list, or empty.
+/// `<T, U>` generic-parameter list, or empty. A type-parameter name is a
+/// binding identifier, so it takes the same declaration escape as a class or
+/// enum name; `translate_ty` re-applies that escape at every `Ty::TypeVar` use
+/// site. The raw spellings still reach the runtime through the `$generic`
+/// array and the `typeParams` factory argument, which are string literals.
 fn generic_decl(params: &[String]) -> String {
     if params.is_empty() {
         String::new()
     } else {
-        format!("<{}>", params.join(", "))
+        let escaped: Vec<String> = params.iter().map(|p| safe_decl_name(p.as_str())).collect();
+        format!("<{}>", escaped.join(", "))
     }
 }
 
@@ -323,6 +328,31 @@ fn generic_decl(params: &[String]) -> String {
 /// `(default: V)` becomes `(default_: V)`. The real BAML name still travels in
 /// the `defineFunction` `paramNames` array for marshalling.
 pub(crate) fn safe_param_name(name: &str) -> String {
+    if is_js_reserved(name) {
+        format!("{name}_")
+    } else {
+        name.to_string()
+    }
+}
+
+/// A DECLARATION name binds an identifier in module scope, so unlike an enum
+/// member or a class property (both `IdentifierName`, where reserved words are
+/// legal) it cannot be a reserved word. `export enum import {}` is TS1359, and
+/// because it is a parse error it kills the whole generated file rather than
+/// just that one symbol. Append `_`, the same rule [`safe_param_name`] uses and
+/// the same rule the Python SDK's `escape_python_keyword` uses, so a BAML
+/// `enum import` renders as `export enum import_ {}`.
+///
+/// The escape is deliberately STATELESS. A class / enum / type-alias name has
+/// to be reproducible from the bare BAML `Name` alone at a distance, because
+/// `translate_ty::render_name_ref` re-derives the reference from the IR at
+/// every cross-reference rather than reading the emitted declaration back.
+///
+/// Only the TypeScript identifier moves. Wire identity travels on separate
+/// channels and is untouched: `defineFunction` is handed `baml_fqn`,
+/// `_typemap.ts` is keyed on `TypeScriptClass::source`, and enum member values
+/// are emitted verbatim, so dispatch and marshalling still target `import`.
+pub(crate) fn safe_decl_name(name: &str) -> String {
     if is_js_reserved(name) {
         format!("{name}_")
     } else {
@@ -1130,6 +1160,32 @@ mod tests {
             docstring: None,
             raises_names: Vec::new(),
         })
+    }
+
+    #[test]
+    fn safe_decl_name_escapes_only_reserved_words() {
+        assert_eq!(safe_decl_name("import"), "import_");
+        assert_eq!(safe_decl_name("class"), "class_");
+        assert_eq!(safe_decl_name("interface"), "interface_");
+        assert_eq!(safe_decl_name("Resume"), "Resume");
+        // Companion suffixes survive: `$` is a legal TS identifier character.
+        assert_eq!(safe_decl_name("Resume$stream"), "Resume$stream");
+        // Python keywords that are not reserved in TypeScript stay put, so the
+        // shared `reserved_keywords` fixture keeps per-language spellings
+        // rather than converging on one escaped set.
+        assert_eq!(safe_decl_name("None"), "None");
+        assert_eq!(safe_decl_name("pass"), "pass");
+        assert_eq!(safe_decl_name("lambda"), "lambda");
+    }
+
+    #[test]
+    fn generic_decl_escapes_reserved_type_parameters() {
+        assert_eq!(generic_decl(&[]), "");
+        assert_eq!(generic_decl(&["T".to_string()]), "<T>");
+        assert_eq!(
+            generic_decl(&["package".to_string(), "T".to_string()]),
+            "<package_, T>"
+        );
     }
 
     #[test]

@@ -505,6 +505,54 @@ mod tests {
     }
 
     #[test]
+    fn reserved_declaration_name_is_escaped_and_wire_identity_is_preserved() {
+        let mut pool = SymbolPool::new();
+        let enum_name = name("user", &["lorem"], "import");
+        pool.insert(enum_name.clone(), enum_sym(&enum_name, 0));
+        let fn_name = name("user", &["lorem"], "pick");
+        pool.insert(
+            fn_name,
+            Symbol::Function(Function {
+                name: BaseName::new("pick"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: Vec::new(),
+                return_type: Ty::Enum(enum_name, baml_base::TyAttr::EMPTY),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(1),
+            }),
+        );
+
+        let out = emit_sdk(&pool);
+        let leaf = &out[&PathBuf::from("lorem/index.ts")];
+        // `export enum import {` is TS1359, so the declaration takes the
+        // trailing-underscore escape ...
+        assert!(leaf.contains("export enum import_ {"), "{leaf}");
+        assert!(!leaf.contains("export enum import {"), "{leaf}");
+        // ... the member name is an `IdentifierName` and keeps its source
+        // spelling, as does its wire value ...
+        assert!(leaf.contains("POSITIVE = \"POSITIVE\","), "{leaf}");
+        // ... and the reference re-derives the same escaped spelling from the
+        // IR rather than dangling on the raw name.
+        assert!(leaf.contains("=> import_;"), "{leaf}");
+
+        // Wire identity is untouched: dispatch still names the raw BAML FQN.
+        assert!(
+            leaf.contains("defineFunction(\"user.lorem.pick\", \"sync\", [])"),
+            "{leaf}"
+        );
+        // The type map is still keyed on the raw FQN; only the module-scope
+        // attribute it resolves through moved.
+        let typemap = &out[&PathBuf::from("_typemap.ts")];
+        let entry = typemap
+            .lines()
+            .find(|line| line.contains("\"user.lorem.import\":"))
+            .expect("type map keys the enum on its raw BAML FQN");
+        assert!(entry.ends_with("[\"import_\"],"), "{entry}");
+    }
+
+    #[test]
     fn function_fans_out_sync_and_async() {
         let mut pool = SymbolPool::new();
         let n = name("user", &["lorem"], "extract_resume");
