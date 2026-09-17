@@ -3,7 +3,7 @@
 /// `float` (Noul probability, or Score when `score_criteria` is configured),
 /// unions of string literals or enums (Choice), and classes of those fields,
 /// including nested classes. Each leaf field becomes a separate question in
-/// one request and needs an `@description`.
+/// one request and needs an `@description` or doc comment.
 /// Other result types fail with `ai.errors.InvalidRequest` before HTTP is sent.
 /// The client builds questions from the return type; prompts do not need
 /// `ctx.output_format()`.
@@ -16,9 +16,11 @@ class Client {
     model: string,
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    /// Overrides the question instruction. The rendered prompt is always the
-    /// request's `state`; by default the instruction asks Jev to answer the
-    /// question contained in that state.
+    /// Overrides the question instruction for a non-class output. For class
+    /// outputs, each leaf field's `@description` or doc comment supplies its
+    /// instruction, and this value is unused. The rendered prompt is always
+    /// the request's `state`; by default the instruction asks Jev to answer
+    /// the question contained in that state.
     instructions: string?,
     /// For a `float` output, switch from Noul probability to Score. Each entry
     /// describes one ordered level; Jev returns a probability-weighted score
