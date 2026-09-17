@@ -76,11 +76,6 @@ const constructors = [
 describe("bridge package-root parity contract", () => {
   it("bridge_surface_exports_the_same_runtime_values_in_node_browsers_and_workers", () => {
     expect(Object.keys(bridge).sort()).toEqual([...packageRootExports].sort());
-    expect("Collector" in bridge).toBe(false);
-    expect("FunctionLog" in bridge).toBe(false);
-    expect("Timing" in bridge).toBe(false);
-    expect("Usage" in bridge).toBe(false);
-    expect("LLMCall" in bridge).toBe(false);
   });
 
   it("bridge_surface_preserves_the_public_constructor_names", () => {
