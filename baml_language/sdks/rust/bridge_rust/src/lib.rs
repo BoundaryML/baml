@@ -20,6 +20,7 @@ pub mod error;
 mod function;
 pub mod host_value;
 pub mod loader;
+pub mod media;
 pub mod runtime;
 mod spec;
 #[cfg(test)]
