@@ -199,6 +199,30 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_unquoted_object_value_retains_url_after_comma,
+    r#"{reason:docs,https://example.com}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "docs,https://example.com" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_colon_text_after_phrase,
+    r#"{reason:see docs,label:value}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "see docs,label:value" }
+);
+
+test_deserializer!(
     test_compact_numeric_unquoted_key,
     r#"{id:001,1:foo}"#,
     baml_tyannotated!(NumericKey),

@@ -91,6 +91,30 @@ class Reason {
 );
 
 test_deserializer!(
+    test_unquoted_object_value_retains_url_after_comma,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:docs,https://example.com}"#,
+    TypeIR::class("Reason"),
+    { "reason": "docs,https://example.com" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_colon_text_after_phrase,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:see docs,label:value}"#,
+    TypeIR::class("Reason"),
+    { "reason": "see docs,label:value" }
+);
+
+test_deserializer!(
     test_compact_numeric_unquoted_key,
     r#"
 class NumericKey {

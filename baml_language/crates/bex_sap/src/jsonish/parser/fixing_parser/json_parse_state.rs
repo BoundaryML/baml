@@ -259,7 +259,8 @@ impl<'s> JsonParseState<'s> {
                             let is_possible_value =
                                 is_numeric || is_bool || is_null || is_identifier;
 
-                            if Self::starts_compact_unquoted_object_key(&next) {
+                            if is_possible_value && Self::starts_compact_unquoted_object_key(&next)
+                            {
                                 log::debug!("Closing due to: compact unquoted key after comma");
                                 return CloseStringResult::Close(idx, CompletionState::Complete);
                             }
@@ -395,9 +396,11 @@ impl<'s> JsonParseState<'s> {
             return false;
         }
 
-        for (_, c) in lookahead {
+        while let Some((_, c)) = lookahead.next() {
             match c {
-                ':' => return true,
+                // A slash immediately after the colon is value text such as
+                // `https://...`, not a compact object field.
+                ':' => return !matches!(lookahead.peek(), Some((_, '/'))),
                 c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => {}
                 _ => return false,
             }
