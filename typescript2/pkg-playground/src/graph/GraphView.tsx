@@ -44,6 +44,9 @@ import {
   liftGroupValuePreviews,
 } from './value-previews';
 
+/** How the graph decides which subgraphs to reveal vs. collapse. */
+export type ExpandMode = 'zoom' | 'click' | 'all';
+
 interface GraphViewProps {
   graph: ControlFlowGraph;
   /** Function whose graph is displayed — keys the per-function layout
@@ -55,19 +58,13 @@ interface GraphViewProps {
   runStatus?: Run['status'];
   runError?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
+  expandMode: ExpandMode;
+  onExpandModeChange: (mode: ExpandMode) => void;
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
 }
 
-interface GraphViewInnerProps extends GraphViewProps {
-  expandMode: ExpandMode;
-  onExpandModeChange: (mode: ExpandMode) => void;
-}
-
 type LayoutDirection = 'horizontal' | 'vertical';
-
-/** How the graph decides which subgraphs to reveal vs. collapse. */
-type ExpandMode = 'zoom' | 'click' | 'all';
 
 const EXPAND_MODES: { id: ExpandMode; label: string; title: string }[] = [
   { id: 'zoom', label: 'Zoom', title: 'Reveal subgraphs as you zoom in' },
@@ -156,7 +153,7 @@ function GraphViewInner({
   onNodeClick,
   expandMode,
   onExpandModeChange,
-}: GraphViewInnerProps) {
+}: GraphViewProps) {
   const theme = useGraphTheme();
   const chrome = getChrome(theme);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
@@ -858,21 +855,11 @@ function GraphViewInner({
 }
 
 export function GraphView(props: GraphViewProps) {
-  // Expand mode is a session-scoped view preference. Keep it outside the
-  // function-keyed inner graph so navigating between functions preserves the
-  // user's selection while a fresh Playground still defaults to Click.
-  const [expandMode, setExpandMode] = useState<ExpandMode>('click');
-
   return (
     <ReactFlowProvider>
       {/* Keyed per function so the remembered layout direction is re-read
           when the displayed function changes. */}
-      <GraphViewInner
-        key={props.functionName ?? ''}
-        {...props}
-        expandMode={expandMode}
-        onExpandModeChange={setExpandMode}
-      />
+      <GraphViewInner key={props.functionName ?? ''} {...props} />
     </ReactFlowProvider>
   );
 }
