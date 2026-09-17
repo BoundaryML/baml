@@ -1139,7 +1139,7 @@ pub fn json_from_string_typed(
     ty_serde_to_value(vm, &parsed, ty, &mut path)
 }
 
-/// Decode the decimal string emitted for a bigint by `value_to_serde`.
+/// Decode the numeric string emitted for a bigint by `value_to_serde`.
 /// Check the size before parsing so untrusted JSON cannot allocate an
 /// unbounded integer.
 fn parse_json_bigint(json: &serde_json::Value) -> Option<num_bigint::BigInt> {
@@ -1194,7 +1194,7 @@ fn ty_serde_to_value(
 
         RealizedTy::Bigint => {
             let bigint = parse_json_bigint(json)
-                .ok_or_else(|| raise_decode(vm, "expected decimal bigint string", path))?;
+                .ok_or_else(|| raise_decode(vm, "expected numeric string for bigint", path))?;
             vm.try_alloc_bigint(Arc::new(bigint)).map_err(Into::into)
         }
 
@@ -1329,7 +1329,7 @@ fn ty_serde_to_value(
             }
             (baml_type::Literal::Bigint(expected), json) => {
                 let actual = parse_json_bigint(json)
-                    .ok_or_else(|| raise_decode(vm, "expected decimal bigint string", path))?;
+                    .ok_or_else(|| raise_decode(vm, "expected numeric string for bigint", path))?;
                 if &actual != expected {
                     return Err(raise_decode(vm, "literal bigint mismatch", path));
                 }
