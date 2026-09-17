@@ -20,7 +20,7 @@ use super::{
     BamlClassEnumReflectTypeView_for_Type, BamlClassEnumType,
     BamlClassFunctionReflectTypeView_for_Type, BamlClassFunctionType,
     BamlClassInterfaceImplementation, BamlClassInterfaceReflectTypeView_for_Type,
-    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type,
+    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type, BamlClassLiteralType,
     BamlClassMapReflectTypeView_for_Type, BamlClassMapType,
     BamlClassPrimitiveReflectTypeView_for_Type, BamlClassType,
     BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType, BamlNamespaceArray,
@@ -879,6 +879,8 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
             baml_type::Literal::Int(value)
         } else if let Some(value) = value.as_bool() {
             baml_type::Literal::Bool(value)
+        } else if let Ok(value) = vm.as_bigint(value) {
+            baml_type::Literal::Bigint((**value).clone())
         } else if let Ok(value) = vm.as_string(value) {
             baml_type::Literal::String(value.to_string())
         } else {
@@ -889,6 +891,24 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
             baml_type::type_kind::TypeKind::Literal,
             bex_vm_types::RealizedTy::Literal(literal, baml_type::Freshness::Regular),
         )
+    }
+}
+
+impl BamlClassLiteralType for PackageReflectImpl {
+    fn value(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Literal)?;
+        let bex_vm_types::RealizedTy::Literal(literal, _, _) = ty else {
+            unreachable!("a Literal-classified type is RealizedTy::Literal")
+        };
+        match literal {
+            baml_type::Literal::String(s) => Ok(Value::object(vm.alloc_string(s.as_str()))),
+            baml_type::Literal::Int(n) => Ok(Value::int(n)),
+            baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n)).map_err(Into::into),
+            baml_type::Literal::Bool(b) => Ok(Value::bool(b)),
+            baml_type::Literal::Float(_) => {
+                unreachable!("source and reflected literal types do not include floats")
+            }
+        }
     }
 }
 impl BamlNamespaceMap for PackageReflectImpl {
