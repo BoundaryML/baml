@@ -37,6 +37,16 @@ pub(crate) trait PullSink<'db> {
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
 
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
+    /// Complete a binary operation after its operands have been pulled. Typed
+    /// code generators can use the operands to select a specialized opcode.
+    fn binary_op_for_operands(
+        &mut self,
+        op: BinOp,
+        _left: &Operand<'db>,
+        _right: &Operand<'db>,
+    ) -> Result<(), Self::Error> {
+        self.binary_op(op)
+    }
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
@@ -132,16 +142,6 @@ pub(crate) trait PullSink<'db> {
 
 /// Stack-effect callbacks for statement/terminator helpers.
 pub(crate) trait StackEffectSink<'db>: PullSink<'db> {
-    /// Pull the value for a projection store. Bytecode emission overrides this
-    /// hook so rvalue-specific optimizations (including typed numeric opcodes)
-    /// apply without changing the shared base/index/value evaluation order.
-    fn pull_store_rvalue(&mut self, value: &Rvalue<'db>) -> Result<(), Self::Error>
-    where
-        Self: Sized,
-    {
-        walk_rvalue_pull(self, value)
-    }
-
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
@@ -213,14 +213,14 @@ pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
         Place::Field { base, field } => {
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
-            sink.pull_store_rvalue(value)?;
+            walk_rvalue_pull(sink, value)?;
             sink.store_field_value(*field, &name)?;
             Ok(true)
         }
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;
             walk_place_pull(sink, &Place::Local(*index))?;
-            sink.pull_store_rvalue(value)?;
+            walk_rvalue_pull(sink, value)?;
             sink.store_index_value(*kind)?;
             Ok(true)
         }
@@ -382,7 +382,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
         Rvalue::BinaryOp { op, left, right } => {
             walk_operand_pull(sink, left)?;
             walk_operand_pull(sink, right)?;
-            sink.binary_op(*op)
+            sink.binary_op_for_operands(*op, left, right)
         }
         Rvalue::UnaryOp { op, operand } => {
             walk_operand_pull(sink, operand)?;
