@@ -184,7 +184,7 @@ class BammyGithubApp(unittest.TestCase):
 
     def test_both_infisical_envs_are_read_and_the_app_replaces_personal_tokens(self):
         prod = [{"key": "FEEDBACK_SUPABASE_KEY", "value": "k"}, {"key": "ATB2_GITHUB_TOKEN", "value": "ghp_person"}, {"key": "ATB_GITHUB_TOKEN", "value": "ghp_legacy"}]
-        app = [{"key": "BAMMY_GITHUB_APP_CLIENT_ID", "value": "Iv1.x"}, {"key": "BAMMY_GITHUB_APP_PRIVATE_KEY", "value": "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----"}, {"key": "BAMMY_GITHUB_APP_CLIENT_SECRET", "value": "never-needed"}]
+        app = [{"key": "BAMMY_GITHUB_APP_CLIENT_ID", "value": "Iv1.x"}, {"key": "BAMMY_GITHUB_APP_PRIVATE_KEY", "value": "-----BEGIN " + "RSA PRIVATE KEY-----\nabc\n-----END " + "RSA PRIVATE KEY-----"}, {"key": "BAMMY_GITHUB_APP_CLIENT_SECRET", "value": "never-needed"}]
         with patch.object(launcher.subprocess, "run", side_effect=[self.export(prod), self.export(app)]) as run:
             env = launcher.runtime_environment(dict(self.source))
         envs = [next(a for a in call.args[0] if a.startswith("--env=")) for call in run.call_args_list]
