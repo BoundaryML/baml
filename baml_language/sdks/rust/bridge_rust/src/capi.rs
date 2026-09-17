@@ -53,6 +53,16 @@ pub(crate) struct Api {
     pub(crate) call_function: unsafe extern "C" fn(*const u8, usize, u32),
     pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
+    pub(crate) media_from_url:
+        unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> u32,
+    pub(crate) media_from_file:
+        unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> u32,
+    pub(crate) media_from_base64:
+        unsafe extern "C" fn(i32, *const c_char, *const c_char, *mut u64, *mut i32) -> u32,
+    pub(crate) media_url: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    pub(crate) media_file: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    pub(crate) media_base64: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
+    pub(crate) media_mime_type: unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32,
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
     pub(crate) register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
@@ -88,6 +98,18 @@ impl Api {
             };
             (self.free_buffer)(buffer);
             bytes
+        }
+    }
+
+    pub(crate) fn take_optional_string(&self, buffer: Buffer) -> Result<Option<String>, SdkError> {
+        let is_none = buffer.ptr.is_null();
+        let bytes = self.copy_and_free(buffer);
+        if is_none {
+            Ok(None)
+        } else {
+            String::from_utf8(bytes)
+                .map(Some)
+                .map_err(|_| SdkError::new("media accessor returned invalid UTF-8"))
         }
     }
 }
@@ -269,13 +291,13 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let complete_host_call = required_slot(table.complete_host_call, "complete_host_call", &path)?;
     let handle_clone = required_slot(table.handle_clone, "handle_clone", &path)?;
     let handle_release = required_slot(table.handle_release, "handle_release", &path)?;
-    required_slot(table.media_from_url, "media_from_url", &path)?;
-    required_slot(table.media_from_file, "media_from_file", &path)?;
-    required_slot(table.media_from_base64, "media_from_base64", &path)?;
-    required_slot(table.media_url, "media_url", &path)?;
-    required_slot(table.media_file, "media_file", &path)?;
-    required_slot(table.media_base64, "media_base64", &path)?;
-    required_slot(table.media_mime_type, "media_mime_type", &path)?;
+    let media_from_url = required_slot(table.media_from_url, "media_from_url", &path)?;
+    let media_from_file = required_slot(table.media_from_file, "media_from_file", &path)?;
+    let media_from_base64 = required_slot(table.media_from_base64, "media_from_base64", &path)?;
+    let media_url = required_slot(table.media_url, "media_url", &path)?;
+    let media_file = required_slot(table.media_file, "media_file", &path)?;
+    let media_base64 = required_slot(table.media_base64, "media_base64", &path)?;
+    let media_mime_type = required_slot(table.media_mime_type, "media_mime_type", &path)?;
     let register_bridge = required_slot(table.register_bridge, "register_bridge", &path)?;
     required_slot(
         table.register_unhandled_spawn_error_callback,
@@ -294,6 +316,13 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         call_function,
         handle_clone,
         handle_release,
+        media_from_url,
+        media_from_file,
+        media_from_base64,
+        media_url,
+        media_file,
+        media_base64,
+        media_mime_type,
         free_buffer,
         register_host_dispatch_callback,
         register_host_release_callback,
