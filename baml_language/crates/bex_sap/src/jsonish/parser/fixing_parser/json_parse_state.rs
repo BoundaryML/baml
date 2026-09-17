@@ -399,8 +399,23 @@ impl<'s> JsonParseState<'s> {
     fn starts_compact_unquoted_object_key(
         next: &Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> bool {
+        let mut quote = None;
+        let mut escaped = false;
+
         for (_, c) in next.clone() {
+            if let Some(closing_quote) = quote {
+                if escaped {
+                    escaped = false;
+                } else if c == '\\' {
+                    escaped = true;
+                } else if c == closing_quote {
+                    quote = None;
+                }
+                continue;
+            }
+
             match c {
+                '"' | '\'' | '`' => quote = Some(c),
                 ':' => return true,
                 // A structural delimiter before `:` means this is not a key.
                 ',' | '}' | ']' | '\n' => return false,

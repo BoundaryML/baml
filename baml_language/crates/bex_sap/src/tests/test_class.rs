@@ -285,6 +285,19 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_compact_quoted_key_with_comma,
+    r#"{a:null,"last,name":foo}"#,
+    baml_tyannotated!(QuotedCommaKey),
+    baml_db! {
+        class QuotedCommaKey {
+            a: (string | null) @class_completed_field_missing(null),
+            name: string @alias("last,name"),
+        }
+    },
+    { "a": null, "name": "foo" }
+);
+
+test_deserializer!(
     test_compact_key_before_unquoted_unicode_value,
     r#"{a:null,b:x😀}"#,
     baml_tyannotated!(UnicodeCompact),

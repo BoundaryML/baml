@@ -177,6 +177,19 @@ class PunctuationKey {
 );
 
 test_deserializer!(
+    test_compact_quoted_key_with_comma,
+    r#"
+class QuotedCommaKey {
+  a string?
+  name string @alias("last,name")
+}
+"#,
+    r#"{a:null,"last,name":foo}"#,
+    TypeIR::class("QuotedCommaKey"),
+    { "a": null, "name": "foo" }
+);
+
+test_deserializer!(
     test_compact_key_before_unquoted_unicode_value,
     r#"
 class UnicodeCompact {
