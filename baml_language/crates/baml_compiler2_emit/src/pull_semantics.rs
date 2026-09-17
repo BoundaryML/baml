@@ -36,6 +36,7 @@ pub(crate) trait PullSink<'db> {
     fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
 
+    /// Complete a binary operation after its operands have been pulled.
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
     /// Complete a binary operation after its operands have been pulled. Typed
     /// code generators can use the operands to select a specialized opcode.
