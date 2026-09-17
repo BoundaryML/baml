@@ -298,6 +298,19 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_compact_unquoted_key_with_embedded_apostrophe,
+    r#"{a:null,owner's_name:foo}"#,
+    baml_tyannotated!(ApostropheKey),
+    baml_db! {
+        class ApostropheKey {
+            a: (string | null) @class_completed_field_missing(null),
+            owner: string @alias("owner's_name"),
+        }
+    },
+    { "a": null, "owner": "foo" }
+);
+
+test_deserializer!(
     test_compact_key_before_unquoted_unicode_value,
     r#"{a:null,b:x😀}"#,
     baml_tyannotated!(UnicodeCompact),

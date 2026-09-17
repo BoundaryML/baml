@@ -190,6 +190,19 @@ class QuotedCommaKey {
 );
 
 test_deserializer!(
+    test_compact_unquoted_key_with_embedded_apostrophe,
+    r#"
+class ApostropheKey {
+  a string?
+  owner string @alias("owner's_name")
+}
+"#,
+    r#"{a:null,owner's_name:foo}"#,
+    TypeIR::class("ApostropheKey"),
+    { "a": null, "owner": "foo" }
+);
+
+test_deserializer!(
     test_compact_key_before_unquoted_unicode_value,
     r#"
 class UnicodeCompact {

@@ -401,6 +401,7 @@ impl<'s> JsonParseState<'s> {
     ) -> bool {
         let mut quote = None;
         let mut escaped = false;
+        let mut at_key_start = true;
 
         for (_, c) in next.clone() {
             if let Some(closing_quote) = quote {
@@ -414,8 +415,18 @@ impl<'s> JsonParseState<'s> {
                 continue;
             }
 
+            if at_key_start {
+                if c.is_whitespace() {
+                    continue;
+                }
+                at_key_start = false;
+                if matches!(c, '"' | '\'' | '`') {
+                    quote = Some(c);
+                    continue;
+                }
+            }
+
             match c {
-                '"' | '\'' | '`' => quote = Some(c),
                 ':' => return true,
                 // A structural delimiter before `:` means this is not a key.
                 ',' | '}' | ']' | '\n' => return false,
