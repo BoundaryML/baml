@@ -227,6 +227,32 @@ testset "kind_split" with testing.PassRate(0.9) {
 }
 
 // Token-free: the case files parse and the judge's reply parses.
+testset "slack_report_ingress" {
+    test "a top-level mention is a report: whole text as the body, files attached" {
+        let m = slack_mention(baml.json.parse(
+            `{"event_id":"Ev9","team_id":"T1","event":{"type":"app_mention","user":"U1","channel":"C1","ts":"1725000000.000200","text":"<@UBOT> there is an issue with this thing\\nbaml check panics on \`throws Nope\` with 0.17.0","files":[{"name":"main.baml","preview":"function f() -> int throws Nope { 1 }"}]}}`,
+        )) ?? baml.sys.panic("mention did not parse");
+        assert.is_true(mention_is_report(m));
+        let fb = mention_feedback(m);
+        assert.is_true(fb.title.starts_with("there is an issue with this thing"));
+        assert.is_true(fb.body.includes("baml check panics"));
+        assert.is_true(!fb.body.includes("<@UBOT>"));
+        assert.equal(fb.files.get("main.baml") ?? "", "function f() -> int throws Nope { 1 }");
+        assert.equal(fb.toolchain ?? "", "0.17.0");
+        assert.is_true(mention_ack(m).includes("Logged as feedback"));
+    }
+    test "a reply inside a thread and a command are not reports" {
+        let reply = slack_mention(baml.json.parse(
+            `{"event_id":"Ev10","team_id":"T1","event":{"type":"app_mention","user":"U1","channel":"C1","ts":"1725000000.000300","thread_ts":"1725000000.000200","text":"<@UBOT> also happens on 0.18"}}`,
+        )) ?? baml.sys.panic("reply did not parse");
+        assert.is_true(!mention_is_report(reply));
+        let cmd = slack_mention(baml.json.parse(
+            `{"event_id":"Ev11","team_id":"T1","event":{"type":"app_mention","user":"U1","channel":"C1","ts":"1725000000.000400","text":"<@UBOT> babysit https://github.com/BoundaryML/baml/pull/1"}}`,
+        )) ?? baml.sys.panic("command did not parse");
+        assert.is_true(!mention_is_report(cmd));
+    }
+}
+
 testset "metrics_wiring" {
     test "a dedup case parses with its subsystems" {
         let c = baml.json.from_string<DedupCase>(`{"id":"x","a":"Parser panics","b":"parser: panics","subsystem_a":"Syntax","subsystem_b":"Syntax","duplicate":true}`);

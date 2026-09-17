@@ -919,11 +919,16 @@ function write_issue(
              nearest thing that works if the report or comparisons show one.
           2. "Environment": platform if reported, what is NOT needed (model,
              network, credentials) when the repro is self-contained.
-          3. "Reproduction": "Save as <file>:" followed by each repro file in a
-             \`\`\`baml fenced block, then "Run:" with a \`\`\`sh block
-             containing \`baml toolchain install <toolchain>\` and the exact
-             command with BAML_VERSION=<toolchain> set. Use the verified files
-             below verbatim; do not restyle them.
+          3. "Reproduction": ONE file the reader pastes into any BAML project:
+             "Save as baml_src/repro.baml:" followed by a single \`\`\`baml block
+             holding the code AND the test that asserts the correct behavior
+             (merge the verified source file and its regression test into that
+             one block, code first, test last; keep their contents verbatim
+             otherwise). Never include baml.toml or any package scaffolding
+             unless the bug is about it. Then "Run:" with a \`\`\`sh block
+             containing \`baml toolchain install <toolchain>\` and
+             \`BAML_VERSION=<toolchain> baml test\` (or the exact command when
+             it is not a test).
           4. "Actual": the verified runner output, verbatim, in a \`\`\`text
              block, trimmed to the lines that matter (the traceback, the
              assertion, the diagnostic). Say whether stdout was empty and what
@@ -1021,11 +1026,13 @@ function write_feature(
              today and what the reporter wants to be able to do.
           2. "Use case": what the reporter is building and why this matters,
              from the report.
-          3. "Desired usage": "Save as <file>:" followed by the verified
-             example files in \`\`\`baml fenced blocks, then "Run:" with a
+          3. "Desired usage": ONE file the reader pastes into any BAML project:
+             "Save as baml_src/repro.baml:" followed by a single \`\`\`baml block
+             holding the example AND the test that asserts the desired behavior
+             (merge the verified files into that one block, verbatim otherwise).
+             Never include baml.toml or package scaffolding. Then "Run:" with a
              \`\`\`sh block containing \`baml toolchain install <toolchain>\`
-             and the exact command with BAML_VERSION=<toolchain> set. Use the
-             verified files below verbatim.
+             and \`BAML_VERSION=<toolchain> baml test\`.
           4. "Today": the verified runner output, verbatim, in a \`\`\`text
              block, trimmed to the lines that matter: the diagnostic or error
              that shows the gap.

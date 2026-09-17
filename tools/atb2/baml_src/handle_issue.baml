@@ -424,9 +424,19 @@ function run_repro_with_cli(
     }
     // A report's own baml.toml is often a fragment; the runner needs a
     // [package] table, so one without it is replaced by a minimal one.
+    // The package file is the runner's scaffolding, not part of the repro:
+    // it is written to disk but never recorded on the repro or in the ticket.
     if (!r.files.has("baml.toml") || !(r.files.get("baml.toml") ?? "").includes("[package]")) {
         baml.fs.write(dir + "/baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
-        r.files.set("baml.toml", "[package]\nname = \"repro" + n.to_string() + "\"\n");
+        if (r.files.has("baml.toml")) {
+            let kept: map<string, string> = {};
+            for (let name in r.files.keys()) {
+                if (name != "baml.toml") {
+                    kept.set(name, r.files.get(name) ?? "");
+                };
+            }
+            r.files = kept;
+        };
     };
     let prefixed = r.files.keys()
         .filter((k: string) -> bool {
@@ -829,10 +839,48 @@ function sandbox_env(with_gh: bool) -> map<string, string> {
     env
 }
 
-/// Prefer the dedicated atb2 credential, with legacy names as fallbacks.
+/// The runner's GitHub identity. With the bammy GitHub App configured, a
+/// fresh installation token from github-app-token.py (cached on disk until
+/// it nears expiry), so every push, PR and API call is the App's bot user;
+/// otherwise the dedicated atb2 credential, with legacy names as fallbacks.
 function github_token() -> string? {
-    baml.env.get("ATB2_GITHUB_TOKEN") ?? baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN")
-        ?? baml.env.get("ATB_GITHUB_TOKEN")
+    match (baml.env.get("BAMMY_GITHUB_APP_CLIENT_ID")) {
+        null => {
+            baml.env.get("ATB2_GITHUB_TOKEN") ?? baml.env.get("GH_TOKEN") ?? baml.env.get("GITHUB_TOKEN")
+                ?? baml.env.get("ATB_GITHUB_TOKEN")
+        },
+        let client_id: string => {
+            let out = baml.sys.exec(
+                "/usr/bin/python3",
+                ["-I", "/usr/local/lib/atb2/github-app-token.py"],
+                baml.sys.ProcessOptions {
+                    env: {
+                        "PATH": "/usr/bin:/bin",
+                        "HOME": baml.env.get("HOME") ?? "/tmp",
+                        "ATB2_REPO": repo_slug(),
+                        "BAMMY_GITHUB_APP_CLIENT_ID": client_id,
+                        "BAMMY_GITHUB_APP_PRIVATE_KEY": baml.env.get("BAMMY_GITHUB_APP_PRIVATE_KEY") ?? "",
+                    },
+                    timeout_ms: 60000,
+                },
+            ) catch (_) {
+                _ => {
+                    log.warn({ "github": "bammy App token could not be minted" });
+                    return null;
+                },
+            };
+            if (out.exit_code != 0) {
+                log.warn({ "github": "bammy App token could not be minted" });
+                return null;
+            };
+            let token = out.stdout.to_string().trim();
+            if (token.length() == 0) {
+                null
+            } else {
+                token
+            }
+        },
+    }
 }
 
 /// Runs every sandbox process under `caffeinate -i` on macOS: a laptop that

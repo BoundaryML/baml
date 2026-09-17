@@ -160,7 +160,12 @@ execution therefore requires the Linux runner image, rather than a host CLI.
 Pushes export Git objects without credentials, then use fresh trusted metadata,
 a fixed repository URL and an exact branch lease.
 
-`ATB2_GITHUB_TOKEN` takes precedence over legacy GitHub token names. Live runs
+With the bammy GitHub App configured (`BAMMY_GITHUB_APP_CLIENT_ID` and
+`BAMMY_GITHUB_APP_PRIVATE_KEY`, Infisical env `prod-atb2`, read alongside
+`prod` via `INFISICAL_ENV = "prod,prod-atb2"`), the runner mints an
+installation token per hour with `deploy/github-app-token.py`, every push,
+PR and API call carries the App's bot identity, and no personal token
+reaches the runtime. Without it, `ATB2_GITHUB_TOKEN` takes precedence over legacy GitHub token names. Live runs
 check basic push access before starting the fix agent. This read-only check
 cannot verify branch rules or workflow-file permissions: updating
 `.github/workflows/` also requires the token's Workflows write permission.

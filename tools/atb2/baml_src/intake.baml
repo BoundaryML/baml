@@ -331,6 +331,14 @@ class SlackMention {
     ts: string,
     thread: SlackRef,
     route: MentionRoute,
+    /// Text previews of files attached to the message, name -> content.
+    files: map<string, string>,
+}
+
+/// A top-level mention (not a reply inside a thread) that is not a command:
+/// it is a report, and goes straight to the feedback table.
+function mention_is_report(m: SlackMention) -> bool {
+    m.route.kind == "feedback" && m.ts == m.thread.ts
 }
 
 function slack_id(s: string) -> bool {
@@ -377,6 +385,14 @@ function slack_mention(envelope: json) -> SlackMention? {
     if (route.text.length() == 0) {
         return null;
     };
+    let files: map<string, string> = {};
+    for (let f in baml.json.path_or<json[]>(event, ".files", [])) {
+        let name = baml.json.path_or<string>(f, ".name", "");
+        let preview = baml.json.path_or<string?>(f, ".preview", null) ?? baml.json.path_or<string?>(f, ".plain_text", null);
+        if (name.length() > 0 && preview != null && (preview ?? "").length() > 0) {
+            files.set(name, preview ?? "");
+        };
+    }
     SlackMention {
         event_id: event_id,
         team: team,
@@ -384,6 +400,7 @@ function slack_mention(envelope: json) -> SlackMention? {
         ts: ts,
         thread: SlackRef { channel: channel, ts: anchor },
         route: route,
+        files: files,
     }
 }
 
@@ -395,7 +412,7 @@ function mention_feedback(m: SlackMention) -> Feedback {
         source: FeedbackSource.Slack,
         author: Author { email: null, github: null, device_id: "slack:" + m.user },
         toolchain: toolchain_mentioned(m.route.text),
-        files: {},
+        files: m.files,
         comments: [],
         issue_ids: [],
     }
@@ -420,6 +437,41 @@ function persist_mention(m: SlackMention) -> bool {
                 "kind": "babysit".to_json(),
                 "dataset": dataset().to_json(),
             };
+    } else if (mention_is_report(m)) {
+        // "@bammy there is an issue with X": the whole message is the report.
+        // It lands in the feedback table now and is triaged on the next run;
+        // the thread hears when the issue and its PR exist.
+        table = "feedback";
+        let fb = mention_feedback(m);
+        guard_dataset(fb.id);
+        let feedback = baml.json.from_json<map<string, json>>(
+            feedback_row(
+                fb,
+                { "kind": "slack", "team": m.team, "channel": m.thread.channel, "ts": m.thread.ts }
+                    .to_json(),
+            ),
+        );
+        feedback.set("slack_thread_ts", m.thread.ts.to_json());
+        row = feedback;
+        let text = supabase_send(
+            "POST",
+            "feedback?on_conflict=id",
+            baml.json.stringify([row.to_json()]),
+            "resolution=ignore-duplicates,return=representation",
+            timeout_s = 2,
+        );
+        let stored = rows_of(text).length() > 0;
+        if (stored) {
+            log_event(
+                "ingested",
+                null,
+                fb.id,
+                { "summary": "Report received from a Slack mention.", "source": "Slack" }.to_json(),
+                m.thread.channel,
+                m.thread.ts,
+            );
+        };
+        return stored;
     } else if (m.route.kind != "babysit") {
         table = "agent_turns";
         let fb = mention_feedback(m);
@@ -461,6 +513,9 @@ function persist_mention(m: SlackMention) -> bool {
 function mention_ack(m: SlackMention) -> string {
     if (m.route.kind == "shirt") {
         return "Queued your request in this thread.";
+    };
+    if (mention_is_report(m)) {
+        return "Logged as feedback `" + mention_feedback(m).id + "`. Triage runs within five minutes; the issue and its PR land in this thread.";
     };
     if (m.route.kind == "babysit") {
         if (m.route.pr == null) {
