@@ -4282,6 +4282,22 @@ impl BexVm {
         }
     }
 
+    /// Convert a runtime value to the operand form shared by bigint opcodes.
+    ///
+    /// Generic binary operations use this when specialization is deliberately
+    /// disabled, such as for values read from cells shared with spawned tasks.
+    fn value_as_bigint_operand(&self, value: Value) -> Option<BigintOperand> {
+        if let Some(n) = value.as_int() {
+            Some(BigintOperand::Int(n))
+        } else if let Some(ptr) = value.as_object_ptr()
+            && matches!(self.get_object(ptr), Object::Bigint(_))
+        {
+            Some(BigintOperand::Heap(ptr))
+        } else {
+            None
+        }
+    }
+
     /// View a `Value` as a `BigInt` for comparison, if it is numerically a
     /// bigint or an `int`: an `int` is widened to a small *local* `BigInt`
     /// (owned `Cow`, no heap alloc), a heap `Object::Bigint` is borrowed.
@@ -4292,16 +4308,8 @@ impl BexVm {
     /// opcodes (`bigint_cmp`) — when the static types were erased (e.g. a
     /// union/`any` operand) and the generic `CmpOp` was emitted instead.
     fn value_as_bigint_cow(&self, v: Value) -> Option<std::borrow::Cow<'_, num_bigint::BigInt>> {
-        if let Some(n) = v.as_int() {
-            Some(std::borrow::Cow::Owned(num_bigint::BigInt::from(n)))
-        } else if let Some(ptr) = v.as_object_ptr() {
-            match self.get_object(ptr) {
-                Object::Bigint(arc) => Some(std::borrow::Cow::Borrowed(arc.as_ref())),
-                _ => None,
-            }
-        } else {
-            None
-        }
+        self.value_as_bigint_operand(v)
+            .map(|operand| self.bigint_operand(operand))
     }
 
     /// Reconstruct the original `Value` for a [`BigintOperand`].
@@ -7624,6 +7632,15 @@ impl BexVm {
                 }
             };
             Value::object(self.alloc_float(f))
+        } else if let (Some(l), Some(r)) = (
+            self.value_as_bigint_operand(left),
+            self.value_as_bigint_operand(right),
+        ) {
+            // Spawn-shared operands intentionally use generic opcodes because
+            // another task may update the cell between evaluations. Preserve
+            // bigint semantics on that path instead of falling through to the
+            // object/object string-concatenation case.
+            self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
