@@ -363,13 +363,21 @@ impl JsonParseState {
                                             let _ = self.consume(c);
                                         }
                                     }
-                                    _ if is_null => {
-                                        return CloseStringResult::Close(
-                                            idx,
-                                            CompletionState::Complete,
-                                        );
-                                    }
                                     _ => {
+                                        // A comma between digits is likely a thousands/decimal
+                                        // separator (for example 1,234 or $1,234), so keep it as
+                                        // part of the unquoted value. Otherwise a completed value
+                                        // followed by a compact comma belongs to the next field.
+                                        let comma_between_digits = current_value
+                                            .trim_end()
+                                            .ends_with(|c: char| c.is_ascii_digit())
+                                            && next_c.is_ascii_digit();
+                                        if is_possible_value && !comma_between_digits {
+                                            return CloseStringResult::Close(
+                                                idx,
+                                                CompletionState::Complete,
+                                            );
+                                        }
                                         let _ = self.consume(c);
                                     }
                                 }
