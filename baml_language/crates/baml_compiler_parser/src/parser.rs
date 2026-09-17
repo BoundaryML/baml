@@ -3261,7 +3261,7 @@ impl<'a> Parser<'a> {
             // surrounding `UNION_PATTERN`. A later top-level `throws`, however,
             // can only belong to this function type, so use it as lookahead to
             // keep the preceding union in the return type as well.
-            let consume_return_union = consume_union || self.return_union_precedes_throws();
+            let consume_return_union = consume_union || self.return_type_is_followed_by_throws();
             self.parse_type_with(consume_return_union); // return type
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
@@ -3290,61 +3290,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Whether the return type at the current token contains a top-level `|`
-    /// followed by a top-level `throws` before the surrounding pattern ends.
+    /// Whether parsing the complete return type at the current token leaves a
+    /// top-level `throws` clause for this function type.
     ///
     /// In pattern position, `(A) -> B | C` remains a union pattern whose first
     /// alternative is a function type. With `(A) -> B | C throws E`, the
     /// `throws` token cannot begin a pattern alternative, so it disambiguates
     /// the pipe as part of the function's return type.
-    fn return_union_precedes_throws(&self) -> bool {
-        let mut delimiters: Vec<TokenKind> = Vec::new();
-        let mut angle_depth = 0_u32;
-        let mut saw_top_level_pipe = false;
-        let mut offset = 0;
-
-        while let Some(token) = self.peek(offset) {
-            let at_top_level = delimiters.is_empty() && angle_depth == 0;
-            if at_top_level {
-                match token.kind {
-                    TokenKind::Throws => return saw_top_level_pipe,
-                    TokenKind::Pipe => saw_top_level_pipe = true,
-                    TokenKind::Equals
-                    | TokenKind::FatArrow
-                    | TokenKind::Comma
-                    | TokenKind::Semicolon
-                    | TokenKind::LBrace
-                    | TokenKind::RBrace
-                    | TokenKind::RParen => return false,
-                    _ => {}
-                }
-            }
-
-            match token.kind {
-                TokenKind::LParen => delimiters.push(TokenKind::RParen),
-                TokenKind::LBracket => delimiters.push(TokenKind::RBracket),
-                TokenKind::LBrace => delimiters.push(TokenKind::RBrace),
-                close @ (TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace) => {
-                    if delimiters.last() == Some(&close) {
-                        delimiters.pop();
-                    } else if !delimiters.is_empty() {
-                        return false;
-                    }
-                }
-                TokenKind::Less if delimiters.is_empty() => angle_depth += 1,
-                TokenKind::Greater if delimiters.is_empty() && angle_depth > 0 => {
-                    angle_depth -= 1;
-                }
-                TokenKind::GreaterGreater if delimiters.is_empty() && angle_depth > 0 => {
-                    angle_depth = angle_depth.saturating_sub(2);
-                }
-                _ => {}
-            }
-
-            offset += 1;
-        }
-
-        false
+    fn return_type_is_followed_by_throws(&self) -> bool {
+        let mut preview = Parser::new(&self.tokens[self.current..]);
+        preview.parse_type();
+        preview.at(TokenKind::Throws)
     }
 
     /// Parse a single function type parameter: either `name: type` or just `type`.
@@ -10704,6 +10660,31 @@ function Demo(value: unknown) -> int {
             2,
             "the pattern union should retain both alternatives"
         );
+    }
+
+    #[test]
+    fn pattern_throws_text_in_string_alternative_does_not_change_precedence() {
+        let source = r#"
+function Quoted(value: unknown) -> int {
+  if (value is (int) -> int | "throws") { 1 } else { 0 }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let unions: Vec<_> = root
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::UNION_PATTERN)
+            .collect();
+        assert_eq!(unions.len(), 1, "the pipe must remain a pattern union");
+        assert!(unions.iter().all(|union| {
+            union
+                .children()
+                .filter(|node| node.kind() == SyntaxKind::TYPE_PATTERN)
+                .count()
+                == 2
+        }));
     }
 
     // ============ Pattern parsing ============
