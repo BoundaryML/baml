@@ -3,7 +3,7 @@ title: openai-generic
 ---
 
 
-The `openai-generic` provider supports third-party APIs that implement OpenAI's Chat Completions request and response format, such as Groq, HuggingFace, Ollama, OpenRouter, and Together AI. Use [`openai`](/ref/llm-client-providers/open-ai) for OpenAI's first-party API or [`openai-responses`](/ref/llm-client-providers/open-ai-responses-api) for an API that implements the Responses endpoint.
+The `openai-generic` provider supports third-party APIs that implement OpenAI's Chat Completions request and response format, such as Groq, HuggingFace, Ollama, OpenRouter, and Together AI. Use [`openai`](/ref/llm-client-providers/open-ai), which targets `api.openai.com`, for OpenAI's first-party API. Use [`openai-responses`](/ref/llm-client-providers/open-ai-responses-api) for an API that implements the `/responses` endpoint.
 
 Set `base_url` to the provider's API root. BAML appends `/chat/completions` when it sends a chat request, so a provider that exposes `GET /v1/models` and `POST /v1/chat/completions` needs a `base_url` ending in `/v1`. An origin-only URL would instead send the request to `/chat/completions` and commonly returns a 404.
 
