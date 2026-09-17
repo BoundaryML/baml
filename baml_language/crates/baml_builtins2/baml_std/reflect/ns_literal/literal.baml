@@ -22,7 +22,7 @@ class Type {
     /// Returns the value represented by this literal type.
     //baml:mut_vm
     //baml:fallible
-    function value(self) -> string | int | bigint | bool throws never {
+    function value(self) -> string | int | bigint | bool throws baml.errors.InvalidArgument {
         $rust_function
     }
 }
