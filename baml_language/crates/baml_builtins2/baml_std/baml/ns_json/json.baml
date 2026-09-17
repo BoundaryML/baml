@@ -157,8 +157,8 @@ function from<T>(value: T) -> json throws SerializationError {
 /// walk is a shape check rather than a coercion. A JSON string does not become
 /// an `int`, and a number outside BAML's 63-bit `int` is rejected rather than
 /// widened to `float`.
-/// A `bigint` is decoded from a decimal JSON string, matching its serialized
-/// form; a JSON number does not decode as `bigint`.
+/// A `bigint` is decoded from a numeric JSON string containing an optional sign
+/// and integer digits. A JSON number does not decode as `bigint`.
 ///
 /// `T` is delivered over the BEP-039 type-arg channel and read at runtime, so
 /// it need not be statically known at the call site. The text is parsed first,

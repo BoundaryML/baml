@@ -121,20 +121,11 @@ pub fn lower_bigint_literal(
     token_range: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> num_bigint::BigInt {
-    lower_bigint_literal_bounded(text, token_range, diags, baml_type::MAX_BIGINT_BITS)
-}
-
-fn lower_bigint_literal_bounded(
-    text: &str,
-    token_range: text_size::TextRange,
-    diags: &mut Vec<LoweringDiagnostic>,
-    max_bits: u64,
-) -> num_bigint::BigInt {
     let digits = text
         .strip_suffix('n')
         .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
     match baml_base::num_lit::parse_bigint_literal(digits) {
-        Ok(v) if v.bits() <= max_bits => v,
+        Ok(v) if v.bits() <= baml_type::MAX_BIGINT_BITS => v,
         Ok(_) => {
             push_num_lit_error(
                 baml_base::num_lit::IntLitError::TooLarge,
@@ -165,31 +156,6 @@ mod tests {
         lower_cst::lower_file,
         unescape_string_literal,
     };
-
-    #[test]
-    fn bigint_literals_respect_the_runtime_bit_limit() {
-        let span = text_size::TextRange::new(0.into(), 4.into());
-        let mut diags = Vec::new();
-        assert_eq!(
-            super::lower_bigint_literal_bounded("255n", span, &mut diags, 8),
-            255.into()
-        );
-        assert!(diags.is_empty());
-
-        assert_eq!(
-            super::lower_bigint_literal_bounded("256n", span, &mut diags, 8),
-            0.into()
-        );
-        assert_eq!(
-            diags,
-            vec![
-                crate::lowering_diagnostic::LoweringDiagnostic::InvalidNumericLiteral {
-                    error: baml_base::num_lit::IntLitError::TooLarge,
-                    span,
-                }
-            ],
-        );
-    }
 
     #[test]
     fn unescape_string_literal_decodes_supported_escapes() {

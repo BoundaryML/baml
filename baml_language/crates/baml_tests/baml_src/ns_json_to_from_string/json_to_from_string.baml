@@ -81,7 +81,7 @@ test "literal_bigint_json_rejects_wrong_value" {
     }
 }
 
-test "bigint_json_rejects_numbers_and_non_decimal_strings" {
+test "bigint_json_rejects_numbers_and_non_numeric_strings" {
     {
         let wrong: bigint = baml.json.from_string<bigint>("42");
         baml.sys.panic("expected bigint JSON number to fail")
@@ -90,7 +90,7 @@ test "bigint_json_rejects_numbers_and_non_decimal_strings" {
     };
     {
         let wrong: bigint = baml.json.from_string<bigint>("\"12.5\"");
-        baml.sys.panic("expected non-decimal bigint string to fail")
+        baml.sys.panic("expected non-numeric bigint string to fail")
     } catch (e) {
         baml.json.DecodeError => null
     }
