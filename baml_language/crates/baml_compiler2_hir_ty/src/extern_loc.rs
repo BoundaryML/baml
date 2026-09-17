@@ -259,19 +259,32 @@ pub fn mounted_interface_loc<'db>(
 
 // ── Impl identity ────────────────────────────────────────────────────────────
 
-/// An implementation block's identity: every input coherence discriminates
-/// on, nothing else — the structural twin of emit's `ImplCoherenceKey`,
-/// spelled in `hir_ty`'s own vocabulary so a source block and its exported
-/// row canonicalize to ONE value ([`impl_identity`] is the one
-/// canonicalizer).
+/// An implementation block's identity: the address of its exported row,
+/// spelled in `hir_ty`'s own vocabulary so a source block and its row
+/// canonicalize to ONE value ([`impl_identity`] and
+/// [`exported_impl_identity`] are the one canonicalizer) — the structural
+/// twin of emit's `ImplCoherenceKey`.
+///
+/// A SPELLING key, and a conservative refinement of coherence's
+/// equivalence — never an oracle for "are these the same impl?". Two blocks
+/// with one identity are one impl (a duplicate: the degenerate overlap).
+/// Two identities may still overlap — `Bar<int | string>` against
+/// `Bar<string | int>`, an alias against its body — and only the overlap
+/// engine ([`crate::coherence`]) decides that: at the source compile
+/// (E0132) and at the mount boundary (`ImportError::OverlappingImpls`).
+/// What the key guarantees is the other direction: it carries every input
+/// coherence discriminates on, so it never unifies two impls coherence
+/// separates.
 ///
 /// Parameter NAMES are canonicalized away: `ParamTy`'s equality includes
 /// the name, and a written rename must not fork the identity, so every
 /// `TypeVar` is respelled by its frame index. Each parameter's bound
 /// conjunction is sorted by `ClosedInterface`'s `Ord` (a written reorder of
 /// `A + B` cannot fork it either). The TARGET's own associated pins are
-/// EXCLUDED — they are outputs of a match, not inputs to admissibility —
-/// while bound-side pins ride inside each bound, as inputs.
+/// EXCLUDED — they are outputs of a match, not inputs to admissibility,
+/// and an impl header cannot carry one (`implement I<X = T> for …` is
+/// E0001; asserted where the identity is built) — while bound-side pins
+/// ride inside each bound, as inputs.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
 pub struct ImplIdentity {
     /// The implemented interface's head.
@@ -310,6 +323,10 @@ fn impl_identity_of(
     for_ty_pattern: &ClosedTy,
     generic_params: &[(ParamTy, Vec<ClosedInterface>)],
 ) -> ImplIdentity {
+    debug_assert!(
+        interface.associated_types.is_empty(),
+        "an impl header carries no associated-type pins (E0001), so the identity drops none"
+    );
     ImplIdentity {
         interface: interface.name.clone(),
         interface_args: interface

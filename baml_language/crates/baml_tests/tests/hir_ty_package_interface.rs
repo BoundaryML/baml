@@ -439,6 +439,100 @@ implement Marker for Entry {
     );
 }
 
+#[test]
+fn overlapping_impl_rows_are_refused_before_installation() {
+    let blanket = forged_library_blob(|interface| {
+        let mut row = interface
+            .impls
+            .iter()
+            .find(|row| row.interface.name.name().as_str() == "Parent")
+            .expect("Entry implements Parent")
+            .clone();
+        let param = ParamTy::new(0, Name::new("T"));
+        row.for_ty_pattern = baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default());
+        row.generic_params = vec![param];
+        row.param_bounds = vec![Vec::new()];
+        row.origin = ExportedImplOrigin::OutOfBody;
+        interface.impls.push(row);
+    });
+    assert_eq!(
+        mount_refusal(blanket),
+        "the interface exports overlapping impl rows `implement app.Parent for app.Entry` and \
+         `implement app.Parent for #0`"
+    );
+}
+
+/// The identity is a spelling key: these two blocks have DISTINCT identities
+/// (union member order is part of the spelling) while coherence rejects the
+/// pair. The mount boundary judges the blob by coherence, not by identity,
+/// so the export of such a package is refused as overlapping rather than
+/// served with dispatch picking one of the two.
+#[test]
+fn an_incoherent_package_with_distinct_identities_is_refused_as_overlapping() {
+    const REORDERED: &str = r#"
+interface Marker {
+    function mark(self) -> int throws never
+}
+
+class Bar<T> {
+    value T
+}
+
+implement Marker for Bar<int | string> {
+    function mark(self) -> int throws never {
+        1
+    }
+}
+
+implement Marker for Bar<string | int> {
+    function mark(self) -> int throws never {
+        2
+    }
+}
+"#;
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-reordered"));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", REORDERED);
+    let codes: Vec<String> = collect_diagnostics(&db)
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.code().to_string())
+        .collect();
+    assert_eq!(
+        codes,
+        ["E0132"],
+        "coherence condemns the pair at its own compile"
+    );
+
+    let app = app_root(&db);
+    let identities: Vec<_> = package_impl_locs(&db, app)
+        .iter()
+        .map(|&block| {
+            let facts = impl_facts(&db, block)
+                .resolved()
+                .expect("both headers resolve");
+            impl_identity(&ResolvedImplFacts::Source { block, facts })
+        })
+        .collect();
+    assert_eq!(identities.len(), 2);
+    assert_ne!(
+        identities[0], identities[1],
+        "the identity distinguishes what coherence unifies"
+    );
+
+    let blob = baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &export_interface(&db, app),
+    )
+    .expect("package interface serializes");
+    assert_eq!(
+        mount_refusal(blob),
+        "the interface exports overlapping impl rows `implement app.Marker for app.Bar<int | string>` \
+         and `implement app.Marker for app.Bar<string | int>`"
+    );
+}
+
 /// A faithful export always re-imports: the validator that refuses forged
 /// rows never refuses a compiler-built blob, for the fixture, the mounted
 /// copy of it, and every stdlib package.

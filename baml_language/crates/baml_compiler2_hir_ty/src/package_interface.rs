@@ -571,6 +571,14 @@ pub enum ImportError {
     /// rejects at the source compile, so the blob is not the export of a
     /// checked package; served, the identity would name no single row.
     DuplicateImpl { identity: String },
+    /// Two impl rows overlap, or could not be proven disjoint — a pair the
+    /// package's own compile rejects (E0132), so the blob is not the export
+    /// of a checked package; served, dispatch would pick one of them.
+    OverlappingImpls {
+        first: String,
+        second: String,
+        indeterminate: bool,
+    },
 }
 
 impl std::fmt::Display for ImportError {
@@ -601,6 +609,22 @@ impl std::fmt::Display for ImportError {
             Self::DuplicateImpl { identity } => {
                 write!(f, "the interface exports two impl rows for {identity}")
             }
+            Self::OverlappingImpls {
+                first,
+                second,
+                indeterminate: false,
+            } => write!(
+                f,
+                "the interface exports overlapping impl rows {first} and {second}"
+            ),
+            Self::OverlappingImpls {
+                first,
+                second,
+                indeterminate: true,
+            } => write!(
+                f,
+                "the interface exports impl rows {first} and {second} that cannot be proven disjoint"
+            ),
             Self::DanglingImplOrigin { interface, class } => write!(
                 f,
                 "an impl of `{interface}` claims the body of `{class}`, which this package does not export as a class"
@@ -624,7 +648,37 @@ pub fn import_interface(
             .ok_or_else(|| ImportError::UnresolvedHead(name.clone()))
     })?;
     validate_row_identities(db, root, &interface)?;
+    validate_impl_coherence(db, root, &interface)?;
     Ok(interface)
+}
+
+/// The rows must be coherent among themselves — what the source compile
+/// guarantees with E0132 and the served impl registry presumes. Judged by
+/// the one overlap engine ([`crate::coherence::exported_impl_overlaps`]);
+/// the first offending pair is reported, spelled by identity.
+fn validate_impl_coherence(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: baml_base::SourceRoot,
+    interface: &PackageInterface,
+) -> Result<(), ImportError> {
+    let Some(overlap) = crate::coherence::exported_impl_overlaps(db, root, interface)
+        .into_iter()
+        .next()
+    else {
+        return Ok(());
+    };
+    let viewpoint = Viewpoint::canonical(db);
+    let spell_row = |row: &ExportedImpl| {
+        crate::extern_loc::spell_impl_identity(
+            &crate::extern_loc::exported_impl_identity(row),
+            &viewpoint,
+        )
+    };
+    Err(ImportError::OverlappingImpls {
+        first: spell_row(&interface.impls[overlap.first]),
+        second: spell_row(&interface.impls[overlap.second]),
+        indeterminate: overlap.indeterminate,
+    })
 }
 
 /// Every row's claimed identity must be the key it is exported under: a

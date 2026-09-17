@@ -223,7 +223,8 @@ pub fn interface_declared_param_bounds(
 // `normalized_alias_map`) ──────────────────────────────────────────────────
 
 /// Every type alias visible to `pkg_id` (its own plus its dependency
-/// closure's), resolved to its one-level value through the `hir_ty` road.
+/// closure's), resolved to its one-level value through the `hir_ty` road,
+/// whichever lane each package is served from ([`package_declared_aliases`]).
 #[salsa::tracked(returns(ref))]
 pub fn package_resolved_aliases(
     db: &dyn baml_compiler2_ppir::Db,
@@ -235,18 +236,51 @@ pub fn package_resolved_aliases(
         db, pkg_id,
     ));
     for pkg in packages {
-        let items = baml_compiler2_ppir::package_items(db, pkg);
-        for ns in items.namespaces.values() {
-            for (name, def) in &ns.types {
-                if let Definition::TypeAlias(loc) = def {
-                    aliases
-                        .entry(qualify_def(db, Definition::TypeAlias(*loc), name))
-                        .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
-                }
+        package_declared_aliases(db, pkg, &mut aliases);
+    }
+    aliases
+}
+
+/// The aliases `pkg` declares, whichever lane serves it: a source package's
+/// alias items; a mounted package's exported alias rows — its link stubs
+/// carry no aliases, and a stub-less served root has no files at all, so the
+/// rows are the only place they exist; both for a precompiled stdlib root,
+/// which has source and a seeded interface. The one-shot oracle
+/// [`crate::facts::uncached_alias_def`] answers by the same two lanes; an
+/// environment that read only one would judge an alias it cannot see as an
+/// opaque head, and the overlap engine's verdict on an opaque head is
+/// "disjoint" — a fails-open coherence hole.
+pub(crate) fn package_declared_aliases(
+    db: &dyn baml_compiler2_ppir::Db,
+    pkg: baml_base::SourceRoot,
+    out: &mut std::collections::HashMap<DeclName, Ty>,
+) {
+    let items = baml_compiler2_ppir::package_items(db, pkg);
+    for ns in items.namespaces.values() {
+        for (name, def) in &ns.types {
+            if let Definition::TypeAlias(loc) = def {
+                out.entry(qualify_def(db, Definition::TypeAlias(*loc), name))
+                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
             }
         }
     }
-    aliases
+    if let Some(interface) = crate::package_interface::mounted_interface(db, pkg) {
+        interface_declared_aliases(interface, out);
+    }
+}
+
+/// The alias rows of an exported interface — the mounted lane of
+/// [`package_declared_aliases`], and the only alias source for an interface
+/// judged before it is installed.
+pub(crate) fn interface_declared_aliases(
+    interface: &crate::package_interface::PackageInterface,
+    out: &mut std::collections::HashMap<DeclName, Ty>,
+) {
+    for exported in interface.types.values().flat_map(|types| types.values()) {
+        if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } = exported {
+            out.entry(qtn.clone()).or_insert_with(|| resolved.clone());
+        }
+    }
 }
 
 /// Resolve an enum's full variant-name set (for `nf`'s complete-variant

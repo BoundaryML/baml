@@ -298,11 +298,13 @@ pub fn impl_facts<'db>(
                     crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, *for_target));
                 // E0138, decided on the LOWERED form — never the normalized
                 // one. Lowering is exactly the right amount of resolution:
-                // it expands aliases and applies the builtin bridges (so
-                // `Future<T>` and `E.A` are seen for what they denote), while
-                // leaving unions uncollapsed (so `true | false` stays a union
-                // rather than becoming the valid subject `bool`). It is the
-                // collapse that made this gate and coherence disagree.
+                // it applies the builtin bridges (so `Future<T>` and `E.A`
+                // are seen for what they denote) and leaves alias heads in
+                // place — the gate expands those itself
+                // (`subject_head_is_implementor`) — while leaving unions
+                // uncollapsed (so `true | false` stays a union rather than
+                // becoming the valid subject `bool`). It is the collapse
+                // that made this gate and coherence disagree.
                 //
                 // The subject is REPLACED by the Error sentinel rather than
                 // withheld: the rest of the header still lowers, so the IDE

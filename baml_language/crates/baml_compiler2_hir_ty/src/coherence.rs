@@ -29,7 +29,6 @@
 //! reported as degenerate overlaps.
 
 use baml_compiler2_hir::{
-    contributions::Definition,
     loc::ImplLoc,
     package::{lang_roots, package_dependency_closure},
 };
@@ -37,7 +36,7 @@ use baml_type::{
     DeclName, FunctionParamTy, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr,
     interned::{ClosedInterface, ClosedTy, InferInterface},
     normalize::TypeContext,
-    unify::AliasEquivCtx,
+    unify::{AliasEquivCtx, EnumVariants, nf},
 };
 use rustc_hash::FxHashMap;
 
@@ -161,203 +160,6 @@ fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
         }
     }
     occurs(param, ty, false)
-}
-
-/// Looks up an enum's full variant-name set (`None` if unresolvable).
-type EnumVariants<'a> = &'a dyn Fn(&DeclName) -> Option<Vec<Name>>;
-
-/// Normalize toward the union canonical form the covering solver assumes:
-/// flatten, drop `never`, absorb `unknown`, deduplicate, drop subsumed
-/// members (`1 | int -> int`), fold complete finite bases
-/// (`true | false -> bool`, all variants -> the enum), recursing into
-/// every argument.
-fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
-    match ty {
-        Ty::Union(members, attr) => normalize_union(
-            members.iter().map(|m| nf(m, enum_variants)).collect(),
-            attr.clone(),
-            enum_variants,
-        ),
-        Ty::List(inner, attr) => Ty::List(Box::new(nf(inner, enum_variants)), attr.clone()),
-        Ty::Map { key, value, attr } => Ty::Map {
-            key: Box::new(nf(key, enum_variants)),
-            value: Box::new(nf(value, enum_variants)),
-            attr: attr.clone(),
-        },
-        Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(nf(value, enum_variants)),
-            Box::new(nf(error, enum_variants)),
-            attr.clone(),
-        ),
-        Ty::Class(name, args, attr) => Ty::Class(
-            name.clone(),
-            args.iter().map(|a| nf(a, enum_variants)).collect(),
-            attr.clone(),
-        ),
-        Ty::Interface(name, args, bindings, attr) => Ty::Interface(
-            name.clone(),
-            args.iter().map(|a| nf(a, enum_variants)).collect(),
-            bindings
-                .iter()
-                .map(|(n, t)| (n.clone(), nf(t, enum_variants)))
-                .collect(),
-            attr.clone(),
-        ),
-        Ty::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            attr,
-        } => Ty::AssociatedTypeProjection {
-            base: Box::new(nf(base, enum_variants)),
-            interface: Box::new(interface.map_tys(|t| nf(t, enum_variants))),
-            member: member.clone(),
-            attr: attr.clone(),
-        },
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            attr,
-        } => Ty::Function {
-            params: params
-                .iter()
-                .map(|p| FunctionParamTy {
-                    name: p.name.clone(),
-                    ty: nf(&p.ty, enum_variants),
-                    mode: p.mode,
-                })
-                .collect(),
-            ret: Box::new(nf(ret, enum_variants)),
-            throws: Box::new(nf(throws, enum_variants)),
-            attr: attr.clone(),
-        },
-        _ => ty.clone(),
-    }
-}
-
-/// The union laws of [`nf`]. `members` are already individually normalized.
-fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) -> Ty {
-    let mut flat: Vec<Ty> = Vec::new();
-    for member in members {
-        match member {
-            Ty::Never { .. } => {}
-            Ty::Unknown { .. } => return Ty::Unknown { attr },
-            Ty::Union(inner, _) => {
-                for inner_member in inner {
-                    match inner_member {
-                        Ty::Never { .. } => {}
-                        Ty::Unknown { .. } => return Ty::Unknown { attr },
-                        other if !flat.contains(&other) => flat.push(other),
-                        _ => {}
-                    }
-                }
-            }
-            other if !flat.contains(&other) => flat.push(other),
-            _ => {}
-        }
-    }
-
-    flat = (0..flat.len())
-        .filter(|&i| !(0..flat.len()).any(|j| i != j && is_literal_subtype(&flat[i], &flat[j])))
-        .map(|i| flat[i].clone())
-        .collect();
-
-    fold_finite_bases(&mut flat, enum_variants);
-
-    // Deterministic member order: overlap decisions are order-insensitive,
-    // but a stable output avoids spurious salsa-cache churn.
-    flat.sort();
-
-    match flat.len() {
-        0 => Ty::Never { attr },
-        1 => flat
-            .pop()
-            .unwrap_or_else(|| unreachable!("a length-1 vec has an element")),
-        _ => Ty::Union(flat.into(), attr),
-    }
-}
-
-/// Fold complete finite bases: `true | false -> bool`; an enum all of
-/// whose variants are present folds to the enum.
-fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
-    let has_bool_literal = |value: bool| {
-        flat.iter()
-            .any(|m| matches!(m, Ty::Literal(Literal::Bool(v), _, _) if *v == value))
-    };
-    if has_bool_literal(true) && has_bool_literal(false) {
-        flat.retain(|m| !matches!(m, Ty::Literal(Literal::Bool(_), _, _)));
-        flat.push(Ty::Bool {
-            attr: TyAttr::default(),
-        });
-    }
-
-    let mut enums: Vec<DeclName> = Vec::new();
-    for member in flat.iter() {
-        if let Ty::EnumVariant(enum_name, _, _) = member
-            && !enums.contains(enum_name)
-        {
-            enums.push(enum_name.clone());
-        }
-    }
-    for enum_name in enums {
-        let Some(all_variants) = enum_variants(&enum_name) else {
-            continue;
-        };
-        if all_variants.is_empty() {
-            continue;
-        }
-        let present: std::collections::HashSet<&Name> = flat
-            .iter()
-            .filter_map(|m| match m {
-                Ty::EnumVariant(en, v, _) if *en == enum_name => Some(v),
-                _ => None,
-            })
-            .collect();
-        if all_variants.iter().all(|v| present.contains(v)) {
-            flat.retain(|m| !matches!(m, Ty::EnumVariant(en, _, _) if *en == enum_name));
-            flat.push(Ty::Enum(enum_name.clone(), TyAttr::default()));
-        }
-    }
-}
-
-/// Type aliases visible to `pkg` - its own plus its dependency closure's -
-/// bodies folded toward the union canonical form. An alias-obscured union
-/// must compare by the same union laws as its spelled-out form: without
-/// the fold, `Bar<TF>` vs `Bar<bool>` (with `type TF = true | false`) is
-/// wrongly judged disjoint - a fails-open coherence hole.
-fn normalized_alias_map(
-    db: &dyn baml_compiler2_ppir::Db,
-    pkg: baml_base::SourceRoot,
-) -> FxHashMap<DeclName, Ty> {
-    let mut aliases = FxHashMap::default();
-    collect_package_aliases(db, pkg, &mut aliases);
-    for dep in package_dependency_closure(db, pkg) {
-        collect_package_aliases(db, *dep, &mut aliases);
-    }
-    let facts = crate::facts::Facts::new(db);
-    let enum_variants = |qtn: &DeclName| facts.enum_variants(qtn);
-    for body in aliases.values_mut() {
-        *body = nf(body, &enum_variants);
-    }
-    aliases
-}
-
-fn collect_package_aliases(
-    db: &dyn baml_compiler2_ppir::Db,
-    pkg: baml_base::SourceRoot,
-    out: &mut FxHashMap<DeclName, Ty>,
-) {
-    let items = baml_compiler2_ppir::package_items(db, pkg);
-    for (ns_path, ns_items) in &items.namespaces {
-        for (name, def) in &ns_items.types {
-            if let Definition::TypeAlias(loc) = def {
-                let qualified = DeclName::in_root(items.root, ns_path.clone(), name.clone());
-                out.entry(qualified)
-                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
-            }
-        }
-    }
 }
 
 /// Resolve a chain of top-level aliases via the pre-normalized map,
@@ -1042,9 +844,8 @@ pub fn package_coherence_violations<'db>(
     // files, and impl ids are structural hashes, not source order.
     own.sort_by_key(|&(loc, _)| impl_sort_key(db, loc));
 
-    let aliases = normalized_alias_map(db, pkg);
     let alias_ctx = AliasEquivCtx {
-        aliases: &aliases,
+        aliases: crate::interfaces::normalized_alias_map(db, pkg),
         lang: lang_roots(db),
     };
     let dep_impls: Vec<(ImplLoc<'db>, &'db ImplFacts<'db>)> = package_dependency_closure(db, pkg)
@@ -1143,18 +944,32 @@ pub fn source_mounted_impl_conflict(
     source: &ImplFacts<'_>,
     mounted: &crate::package_interface::ExportedImpl,
 ) -> Overlap {
-    let mounted_facts = ImplFacts {
-        interface: ClosedInterface::from_constraint(&mounted.interface),
-        for_ty_pattern: ClosedTy::from_plain(&mounted.for_ty_pattern),
-        generic_params: mounted
+    impls_conflict(
+        db,
+        source,
+        &mounted_impl_facts(mounted),
+        &AliasEquivCtx {
+            aliases: crate::interfaces::normalized_alias_map(db, source_package),
+            lang: lang_roots(db),
+        },
+    )
+}
+
+/// An exported impl row in the shape the overlap engine compares. A row
+/// carries no method locs; the engine reads only the subject, the params
+/// and their bounds.
+pub fn mounted_impl_facts(row: &crate::package_interface::ExportedImpl) -> ImplFacts<'static> {
+    ImplFacts {
+        interface: ClosedInterface::from_constraint(&row.interface),
+        for_ty_pattern: ClosedTy::from_plain(&row.for_ty_pattern),
+        generic_params: row
             .generic_params
             .iter()
             .enumerate()
             .map(|(index, param)| {
                 (
                     param.clone(),
-                    mounted
-                        .param_bounds
+                    row.param_bounds
                         .get(index)
                         .into_iter()
                         .flatten()
@@ -1163,22 +978,84 @@ pub fn source_mounted_impl_conflict(
                 )
             })
             .collect(),
-        associated_types: mounted
+        associated_types: row
             .associated_types
             .iter()
             .map(|(name, ty)| (name.clone(), ClosedTy::from_plain(ty)))
             .collect(),
         methods: Vec::new(),
+    }
+}
+
+/// An overlapping pair among one interface's own impl rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExportedImplOverlap {
+    /// Indices into the interface's `impls`; `first < second`.
+    pub first: usize,
+    pub second: usize,
+    /// `true` when the pair could be neither proven nor disproven disjoint.
+    pub indeterminate: bool,
+}
+
+/// Coherence among a package interface's own impl rows, by the engine and
+/// alias laws source coherence uses: every same-interface pair that
+/// overlaps or could not be proven disjoint. A faithful export of a checked
+/// package has none — its compile rejected the pair with E0132 — and the
+/// served impl registry presumes none: it resolves a receiver through the
+/// rows and takes the one that matches. The interface is judged before it
+/// is installed, so its own alias and enum rows are read from the value in
+/// hand; its dependencies' come from the database.
+pub fn exported_impl_overlaps(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: baml_base::SourceRoot,
+    interface: &crate::package_interface::PackageInterface,
+) -> Vec<ExportedImplOverlap> {
+    let facts = crate::facts::Facts::new(db);
+    let own_enums: FxHashMap<DeclName, Vec<Name>> = interface
+        .types
+        .values()
+        .flat_map(|types| types.values())
+        .filter_map(|exported| match exported {
+            crate::package_interface::ExportedType::Enum { qtn, variants, .. } => {
+                Some((qtn.clone(), variants.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+    let enum_variants = |qtn: &DeclName| {
+        own_enums
+            .get(qtn)
+            .cloned()
+            .or_else(|| facts.enum_variants(qtn))
     };
-    impls_conflict(
-        db,
-        source,
-        &mounted_facts,
-        &AliasEquivCtx {
-            aliases: &normalized_alias_map(db, source_package),
-            lang: lang_roots(db),
-        },
-    )
+
+    let mut aliases = std::collections::HashMap::new();
+    crate::interfaces::interface_declared_aliases(interface, &mut aliases);
+    for dep in package_dependency_closure(db, root) {
+        crate::interfaces::package_declared_aliases(db, *dep, &mut aliases);
+    }
+    for body in aliases.values_mut() {
+        *body = nf(body, &enum_variants);
+    }
+    let alias_ctx = AliasEquivCtx {
+        aliases: &aliases,
+        lang: lang_roots(db),
+    };
+
+    let rows: Vec<ImplFacts<'static>> = interface.impls.iter().map(mounted_impl_facts).collect();
+    let mut overlaps = Vec::new();
+    for (first, a) in rows.iter().enumerate() {
+        for (offset, b) in rows[first + 1..].iter().enumerate() {
+            if let Some(indeterminate) = overlap_violation(impls_conflict(db, a, b, &alias_ctx)) {
+                overlaps.push(ExportedImplOverlap {
+                    first,
+                    second: first + 1 + offset,
+                    indeterminate,
+                });
+            }
+        }
+    }
+    overlaps
 }
 
 /// Conservative symmetric overlap over two impls of the same interface:
