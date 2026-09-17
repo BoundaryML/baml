@@ -57,6 +57,43 @@ test "roundtrip_simple" {
     assert.equal(roundtrip_simple_age(), 30)
 }
 
+// ─── Bigint round-trip ────────────────────────────────────────────────────────────────────
+
+class BigintRecord {
+    elapsed_ms: bigint,
+}
+
+function roundtrip_bigint_from_string_value() -> bigint {
+    let record = BigintRecord { elapsed_ms: 9007199254740993n };
+    let encoded = baml.json.to_string(record);
+    let decoded = baml.json.from_string<BigintRecord>(encoded);
+    decoded.elapsed_ms
+}
+
+test "roundtrip_bigint_from_string" {
+    assert.equal(roundtrip_bigint_from_string_value(), 9007199254740993n)
+}
+
+function roundtrip_bigint_from_json_value() -> bigint {
+    let record = BigintRecord { elapsed_ms: -9007199254740993n };
+    let encoded = baml.json.to_json(record);
+    let decoded = baml.json.from_json<BigintRecord>(encoded);
+    decoded.elapsed_ms
+}
+
+test "roundtrip_bigint_from_json" {
+    assert.equal(roundtrip_bigint_from_json_value(), -9007199254740993n)
+}
+
+test "reject_bigint_json_number" {
+    {
+        let value = baml.json.from_string<bigint>("42");
+        baml.sys.panic("expected JSON number to be rejected as bigint")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
 // ─── Composite generic ─────────────────────────────────────────────────────────
 
 class Container<T> { item T }
