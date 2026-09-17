@@ -418,7 +418,7 @@ impl JsonParseState {
         };
         lookahead.next();
 
-        if !(first.is_alphabetic() || matches!(first, '_' | '$')) {
+        if !(first.is_alphanumeric() || matches!(first, '_' | '$')) {
             return false;
         }
 

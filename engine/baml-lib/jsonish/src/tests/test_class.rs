@@ -91,6 +91,19 @@ class Reason {
 );
 
 test_deserializer!(
+    test_compact_numeric_unquoted_key,
+    r#"
+class NumericKey {
+  id int
+  numeric string @alias("1")
+}
+"#,
+    r#"{id:001,1:foo}"#,
+    TypeIR::class("NumericKey"),
+    { "id": 1, "numeric": "foo" }
+);
+
+test_deserializer!(
   str_with_quotes,
   FOO_FILE,
   r#"{"foo": "[\"bar\"]"}"#,

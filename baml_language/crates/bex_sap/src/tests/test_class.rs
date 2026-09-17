@@ -198,6 +198,19 @@ test_deserializer!(
     { "reason": "amount -1.617,98" }
 );
 
+test_deserializer!(
+    test_compact_numeric_unquoted_key,
+    r#"{id:001,1:foo}"#,
+    baml_tyannotated!(NumericKey),
+    baml_db! {
+        class NumericKey {
+            id: int,
+            numeric: string @alias("1"),
+        }
+    },
+    { "id": 1, "numeric": "foo" }
+);
+
 // Regression for #4589: a valid optional class must not lose to its null arm
 // merely because the class contains omitted optional fields. This keeps the
 // reported required/present/explicit-null comparison in one coercion.
