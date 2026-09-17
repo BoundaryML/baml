@@ -673,8 +673,8 @@ pub fn interface_associated_type_default<'db>(
 /// interface analogue of [`crate::lower::resolve_class_fields`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedInterfaceFields {
-    /// (field name, resolved type, field-level attributes)
-    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_hir::item_tree::Attribute>)>,
+    /// (field name, resolved type)
+    pub fields: Vec<(Name, Ty)>,
     /// Type lowering diagnostics: (error, span of the type annotation).
     pub diagnostics: Vec<(TirTypeError, text_size::TextRange)>,
 }
@@ -721,7 +721,7 @@ pub fn resolve_interface_fields<'db>(
         );
         let span = iface_spans.type_refs.span(field.type_ref);
         diagnostics.extend(field_diags.into_iter().map(|d| (d, span)));
-        fields.push((field.name.clone(), ty, field.attributes.clone()));
+        fields.push((field.name.clone(), ty));
     }
 
     ResolvedInterfaceFields {

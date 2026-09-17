@@ -2704,6 +2704,7 @@ impl BexEngine {
                         description: cls.description.clone(),
                         docstring: cls.docstring.clone(),
                         alias: cls.alias.clone(),
+                        stream_done: cls.stream_done,
                         fields: cls
                             .fields
                             .iter()
@@ -2730,6 +2731,8 @@ impl BexEngine {
                                 docstring: f.docstring.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,
+                                stream_done: f.stream_done,
+                                must_exist: f.must_exist,
                             })
                             .collect(),
                     },
@@ -2823,6 +2826,7 @@ impl BexEngine {
             description: class.description.clone(),
             docstring: class.docstring.clone(),
             alias: class.alias.clone(),
+            stream_done: class.stream_done,
             fields: class
                 .fields
                 .iter()
@@ -2835,6 +2839,8 @@ impl BexEngine {
                     docstring: field.docstring.clone(),
                     alias: field.alias.clone(),
                     skip: field.skip,
+                    stream_done: field.stream_done,
+                    must_exist: field.must_exist,
                 })
                 .collect(),
         }
@@ -2948,6 +2954,7 @@ impl BexEngine {
                         description: class.description.clone(),
                         docstring: class.docstring.clone(),
                         alias: class.alias.clone(),
+                        stream_done: class.stream_done,
                         fields: class
                             .fields
                             .iter()
@@ -2959,6 +2966,8 @@ impl BexEngine {
                                 docstring: field.docstring.clone(),
                                 alias: field.alias.clone(),
                                 skip: field.skip,
+                                stream_done: field.stream_done,
+                                must_exist: field.must_exist,
                             })
                             .collect(),
                     },

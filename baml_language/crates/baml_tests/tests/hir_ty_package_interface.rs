@@ -21,7 +21,8 @@ interface Parent {
 
 interface View<T> requires Parent {
     type Item = T
-    label string @alias("lbl")
+    /// The view's label.
+    label string
 
     function get(self) -> Self.Item throws never
     function twice(self) -> Self.Item[] throws never {
@@ -205,13 +206,27 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
         "{associated_types:#?}"
     );
     assert!(associated_types[0].default.is_some());
-    assert_eq!(fields[0].2.alias.as_deref(), Some("lbl"));
+    // An interface field is a signature: only its docstring travels.
+    assert_eq!(fields[0].2.docstring.as_deref(), Some("The view's label."));
+    assert_eq!(fields[0].2.alias, None);
+    assert_eq!(fields[0].2.description, None);
     assert_eq!(required_methods.len(), 1);
     assert_eq!(default_methods.len(), 1);
     assert!(matches!(
         required_methods[0].target,
         ExternalCallTarget::Interface { .. }
     ));
+
+    // A class field's lowered attributes export as they were written.
+    let ExportedType::Class {
+        fields: box_fields, ..
+    } = interface
+        .lookup_type(&[], &Name::new("Box"))
+        .expect("Box export")
+    else {
+        panic!("Box must export as a class");
+    };
+    assert_eq!(box_fields[0].2.description.as_deref(), Some("payload"));
 
     let choose = interface
         .lookup_function(&[], &Name::new("choose"))

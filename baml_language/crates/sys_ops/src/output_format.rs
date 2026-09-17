@@ -2344,6 +2344,8 @@ mod tests {
             docstring: None,
             alias: None,
             skip: false,
+            stream_done: false,
+            must_exist: false,
         }
     }
 
@@ -2357,6 +2359,7 @@ mod tests {
             docstring: None,
             alias: None,
             fields,
+            stream_done: false,
         }
     }
 

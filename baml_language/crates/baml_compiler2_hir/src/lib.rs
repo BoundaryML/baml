@@ -12,6 +12,7 @@
 //! - Per-item queries: `function_signature`, `function_body`
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
+mod attrs;
 pub mod body;
 pub mod body_type_refs;
 mod builder;
@@ -34,7 +35,7 @@ pub mod type_ref;
 use std::sync::Arc;
 
 use baml_base::SourceFile;
-pub use builder::{KNOWN_STREAM_ATTRS, SemanticIndexBuilder};
+pub use builder::SemanticIndexBuilder;
 pub use semantic_index::{ExprMetadataKey, ExprMetadataScope, PathResolution};
 
 use crate::{

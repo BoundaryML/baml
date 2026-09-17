@@ -5295,6 +5295,7 @@ mod union_container_selection_tests {
                 alias: None,
                 docstring: None,
                 other: indexmap::IndexMap::new(),
+                stream_done: false,
                 type_tag,
                 has_cleanup: false,
                 generic_param_count: 0,

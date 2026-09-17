@@ -1,12 +1,13 @@
 //! Item declarations and attributes: what opens a declaration where the
-//! cursor stands, and which `@attribute` names the compiler accepts.
+//! cursor stands, and which `@attribute` names the compiler accepts there.
 //!
 //! Both lists are the compiler's own: the keyword sets mirror the item
 //! forms the grammar parses in each container, and the attribute names are
-//! the SAME constants validation reads
-//! ([`FIELD_ATTR_NAMES`](baml_compiler2_ast::FIELD_ATTR_NAMES),
-//! [`KNOWN_STREAM_ATTRS`](baml_compiler2_hir::KNOWN_STREAM_ATTRS)) —
-//! what is offered is what checks.
+//! the SAME table validation reads
+//! ([`SCHEMA_ATTRIBUTE_SPECS`](baml_base::SCHEMA_ATTRIBUTE_SPECS)), filtered
+//! to the position — what is offered is what checks.
+
+use baml_base::AttributePosition;
 
 use super::{completions::Completions, context::ItemContainer};
 
@@ -71,14 +72,11 @@ pub(crate) fn complete_items(container: ItemContainer, out: &mut Completions<'_>
     }
 }
 
-pub(crate) fn complete_attributes(out: &mut Completions<'_>) {
-    // Unknown `@` names on FIELDS are legal user schema annotations (hoisted
-    // for reflection read-back), so this list is a menu of the names the
-    // compiler gives meaning to, not a closed set.
-    for name in baml_compiler2_ast::FIELD_ATTR_NAMES {
-        out.add_attribute(name);
-    }
-    for name in baml_compiler2_hir::KNOWN_STREAM_ATTRS {
-        out.add_attribute(name);
+pub(crate) fn complete_attributes(position: AttributePosition, out: &mut Completions<'_>) {
+    // Unknown `@` names are legal user schema annotations (hoisted for
+    // reflection read-back), so this list is a menu of the names the compiler
+    // gives meaning to at this position, not a closed set.
+    for spec in baml_base::schema_attribute_specs_at(position) {
+        out.add_attribute(spec.name);
     }
 }

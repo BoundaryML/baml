@@ -6,7 +6,7 @@ use crate::{
         AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData, GenericParamData,
         InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
     },
-    item_tree::Attribute,
+    item_tree::ClassAttrs,
     loc::{ClassLoc, FunctionLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
@@ -28,7 +28,8 @@ pub struct ClassData<'db> {
     pub fields: Vec<FieldData>,
     pub methods: Vec<FunctionLoc<'db>>,
     pub implements: Vec<ImplementsData>,
-    pub attributes: Vec<Attribute>,
+    /// The class's lowered `@@` attributes.
+    pub attrs: ClassAttrs,
     pub docstring: Option<String>,
 }
 
@@ -101,7 +102,7 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
         .map(|field| FieldData {
             name: field.name.clone(),
             type_ref: type_refs.lower(&field.type_expr),
-            attributes: field.attributes.clone(),
+            attrs: field.attrs.clone(),
             docstring: field.docstring.clone(),
         })
         .collect();
@@ -170,7 +171,7 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
                 .map(|method| FunctionLoc::new(db, file, *method))
                 .collect(),
             implements,
-            attributes: data.attributes.clone(),
+            attrs: data.attrs.clone(),
             docstring: data.docstring.clone(),
         },
         ClassSourceMap {

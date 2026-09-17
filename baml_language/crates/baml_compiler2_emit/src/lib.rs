@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
-use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
+use baml_compiler2_ast::TypeExpr;
 // HIR item-data firewall — enumeration + lookup queries in place of the raw
 // item tree.
 use baml_compiler2_hir::{
@@ -1487,64 +1487,6 @@ impl std::error::Error for MountedPackageLinkError {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-struct SchemaAttrs {
-    description: Option<String>,
-    alias: Option<String>,
-    docstring: Option<String>,
-    other: indexmap::IndexMap<String, String>,
-    skip: bool,
-}
-
-/// Extract schema metadata from span-free HIR attributes and docstrings.
-fn extract_schema_attrs(
-    attrs: &[baml_compiler2_hir::item_tree::Attribute],
-    docstring: Option<&str>,
-) -> SchemaAttrs {
-    let mut result = SchemaAttrs {
-        docstring: docstring.map(str::to_owned),
-        ..SchemaAttrs::default()
-    };
-    for attr in attrs {
-        match attr.name.as_str() {
-            "description" | "alias" if attr.args.len() == 1 => {
-                let raw = attr.args[0].value.as_str();
-                let value = parse_string_attr_value(raw);
-                if attr.name.as_str() == "description" {
-                    result.description = value;
-                } else {
-                    result.alias = value;
-                }
-            }
-            "description" | "alias" => {}
-            "skip" => {
-                result.skip = true;
-            }
-            _ => {
-                let value = match attr.args.as_slice() {
-                    [] => "true".to_string(),
-                    [arg] if arg.key.is_none() => {
-                        parse_string_attr_value(&arg.value).unwrap_or_else(|| arg.value.clone())
-                    }
-                    args => args
-                        .iter()
-                        .map(|arg| {
-                            let value = parse_string_attr_value(&arg.value)
-                                .unwrap_or_else(|| arg.value.clone());
-                            arg.key
-                                .as_ref()
-                                .map_or(value.clone(), |key| format!("{}={value}", key.as_str()))
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                };
-                result.other.insert(attr.name.to_string(), value);
-            }
-        }
-    }
-    result
-}
-
 pub use bex_vm_types::Program as ProgramAlias;
 
 /// One entry in the emitted runtime field list for a class. The field type is a
@@ -1552,7 +1494,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 type MergedFieldEntry = (
     String,
     baml_compiler2_hir::type_ref::TypeRefId,
-    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    baml_compiler2_hir::item_tree::ClassFieldAttrs,
     Option<String>,
     Vec<Name>,
     Vec<Name>,
@@ -1575,7 +1517,7 @@ fn collect_class_fields_with_implements(
         out.push((
             name,
             field.type_ref,
-            field.attributes.clone(),
+            field.attrs.clone(),
             field.docstring.clone(),
             class
                 .generic_params
@@ -4159,21 +4101,22 @@ fn emit_file_group<'db>(
                         (resolved_ty, template)
                     }
                 };
-                let meta = extract_schema_attrs(attrs.as_slice(), docstring.as_deref());
                 fields.push(ClassField {
                     name: name.clone(),
                     field_type: bex_vm_types::anchor_runtime_ty(&field_type),
                     field_template,
-                    description: meta.description,
-                    alias: meta.alias,
-                    docstring: meta.docstring,
-                    other: meta.other,
-                    skip: meta.skip,
+                    description: attrs.schema.description.clone(),
+                    alias: attrs.schema.alias.clone(),
+                    docstring: docstring.clone(),
+                    // Source attributes are a fixed vocabulary, all of it
+                    // typed; `other` is the runtime class builder's.
+                    other: indexmap::IndexMap::new(),
+                    skip: attrs.skip,
+                    stream_done: attrs.stream_done,
+                    must_exist: attrs.must_exist,
                     runtime_type: None,
                 });
             }
-
-            let class_meta = extract_schema_attrs(&class.attributes, class.docstring.as_deref());
 
             let type_tag = claim_type_tag(type_tags, &fq_name)?;
 
@@ -4216,10 +4159,11 @@ fn emit_file_group<'db>(
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
                 fields,
-                description: class_meta.description,
-                alias: class_meta.alias,
-                docstring: class_meta.docstring,
-                other: class_meta.other,
+                description: class.attrs.schema.description.clone(),
+                alias: class.attrs.schema.alias.clone(),
+                docstring: class.docstring.clone(),
+                other: indexmap::IndexMap::new(),
+                stream_done: class.attrs.stream_done,
                 type_tag,
                 has_cleanup,
                 generic_param_count: class.generic_params.len(),
@@ -4295,28 +4239,25 @@ fn emit_file_group<'db>(
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
             for (idx, variant) in enm.variants.iter().enumerate() {
-                let meta = extract_schema_attrs(&variant.attributes, variant.docstring.as_deref());
                 variant_map.insert(variant.name.to_string(), idx);
                 variants.push(EnumVariant {
                     name: variant.name.to_string(),
-                    description: meta.description,
-                    alias: meta.alias,
-                    docstring: meta.docstring,
-                    other: meta.other,
-                    skip: meta.skip,
+                    description: variant.attrs.schema.description.clone(),
+                    alias: variant.attrs.schema.alias.clone(),
+                    docstring: variant.docstring.clone(),
+                    other: indexmap::IndexMap::new(),
+                    skip: variant.attrs.skip,
                 });
             }
-
-            let enum_meta = extract_schema_attrs(&enm.attributes, enm.docstring.as_deref());
 
             let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
                 type_tag: claim_type_tag(type_tags, &fq_name)?,
                 variants,
-                description: enum_meta.description,
-                alias: enum_meta.alias,
-                docstring: enum_meta.docstring,
-                other: enum_meta.other,
+                description: enm.attrs.schema.description.clone(),
+                alias: enm.attrs.schema.alias.clone(),
+                docstring: enm.docstring.clone(),
+                other: indexmap::IndexMap::new(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
@@ -6736,7 +6677,7 @@ mod tests {
     };
 
     use baml_base::{FileId, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
-    use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
+    use baml_compiler2_ast::parse_string_attr_value;
     use salsa::Setter;
 
     use super::*;
@@ -7036,99 +6977,5 @@ mod tests {
             "the `requires` clause must survive lowering: {:?}",
             def.requires
         );
-    }
-
-    // ── extract_schema_attrs ────────────────────────────────────────────
-
-    fn mk_attr(name: &str, args: &[&str]) -> Attribute {
-        Attribute {
-            name: baml_base::Name::new(name),
-            args: args
-                .iter()
-                .map(|v| AttributeArg {
-                    key: None,
-                    value: v.to_string(),
-                })
-                .collect(),
-        }
-    }
-
-    #[test]
-    fn extract_description_and_alias() {
-        let attrs = vec![
-            mk_attr("description", &[r#""A field""#]),
-            mk_attr("alias", &[r#""myField""#]),
-        ];
-        let meta = extract_schema_attrs(&attrs, Some("docs"));
-        assert_eq!(meta.description, Some("A field".to_string()));
-        assert_eq!(meta.alias, Some("myField".to_string()));
-        assert_eq!(meta.docstring, Some("docs".to_string()));
-        assert!(!meta.skip);
-    }
-
-    #[test]
-    fn extract_skip() {
-        let attrs = vec![mk_attr("skip", &[])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-        assert_eq!(meta.alias, None);
-        assert!(meta.skip);
-    }
-
-    #[test]
-    fn extract_custom_attrs_into_other() {
-        let attrs = vec![
-            mk_attr("stream.done", &["true"]),
-            mk_attr("internal.opaque", &[]),
-            mk_attr("description", &[r#""kept""#]),
-        ];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("kept".to_string()));
-        assert_eq!(meta.other["stream.done"], "true");
-        assert_eq!(meta.other["internal.opaque"], "true");
-    }
-
-    #[test]
-    fn extract_non_string_arg_ignored() {
-        let attrs = vec![mk_attr("description", &["42"])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-    }
-
-    #[test]
-    fn extract_wrong_arg_count_ignored() {
-        let attrs = vec![mk_attr("description", &[])]; // 0 args
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-    }
-
-    #[test]
-    fn extract_duplicate_last_wins() {
-        let attrs = vec![
-            mk_attr("description", &[r#""first""#]),
-            mk_attr("description", &[r#""second""#]),
-        ];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("second".to_string()));
-    }
-
-    #[test]
-    fn removed_hash_string_attr_is_ignored() {
-        let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-    }
-
-    #[test]
-    fn extract_regular_string_attr_decodes_escapes() {
-        let attrs = vec![mk_attr("description", &[r#""a\nb\tc\\d\"e""#])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("a\nb\tc\\d\"e".to_string()));
-    }
-
-    #[test]
-    fn extract_no_attrs() {
-        let meta = extract_schema_attrs(&[], None);
-        assert_eq!(meta, SchemaAttrs::default());
     }
 }

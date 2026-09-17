@@ -1,14 +1,14 @@
 //! Item-data pieces shared by more than one item kind.
 //!
-//! Mirrors `item_tree::common`. Interfaces reuse the class field shape and the
-//! function parameter shape, exactly as they do in the `ItemTree`, so those live
-//! here rather than in `classes`/`functions`.
+//! Mirrors `item_tree::common`. Interfaces reuse the function parameter
+//! shape, exactly as they do in the `ItemTree`, so it lives here rather than
+//! in `functions`; the field shapes live here beside it.
 
 use baml_base::Name;
 use text_size::TextRange;
 
 use crate::{
-    item_tree::{Attribute, GenericParam},
+    item_tree::{ClassFieldAttrs, GenericParam},
     type_ref::{TypeRefBuilder, TypeRefId},
 };
 
@@ -56,6 +56,7 @@ pub struct FunctionParamData {
     pub has_default: bool,
 }
 
+/// A class field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldData {
     pub name: Name,
@@ -65,7 +66,18 @@ pub struct FieldData {
     /// type-checks. "No type" is not a kind of type, so it is not representable here —
     /// otherwise every consumer has to invent its own stand-in, and they disagree.
     pub type_ref: TypeRefId,
-    pub attributes: Vec<Attribute>,
+    /// The field's lowered `@` attributes.
+    pub attrs: ClassFieldAttrs,
+    pub docstring: Option<String>,
+}
+
+/// An interface field: a signature only — an interface is a contract, not a
+/// data type, so its fields carry no attributes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceFieldData {
+    pub name: Name,
+    /// Always present, as for [`FieldData::type_ref`].
+    pub type_ref: TypeRefId,
     pub docstring: Option<String>,
 }
 

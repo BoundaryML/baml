@@ -66,6 +66,8 @@ impl BexVm {
                 alias: class.metadata.alias.clone(),
                 docstring: class.metadata.docstring.clone(),
                 other: class.metadata.other.clone(),
+                // Host type definitions carry no streaming behaviour.
+                stream_done: false,
                 type_tag,
                 has_cleanup: false,
                 generic_param_count: class.generic_param_count,
@@ -144,6 +146,8 @@ impl BexVm {
                     docstring: field.metadata.docstring.clone(),
                     other: field.metadata.other.clone(),
                     skip: field.skip,
+                    stream_done: false,
+                    must_exist: false,
                     runtime_type: None,
                 });
             }
@@ -501,6 +505,8 @@ impl BamlNamespaceClass for PackageReflectImpl {
                 docstring: row.docstring,
                 other: row.other,
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: Some(row.type_value),
             });
         }
@@ -521,6 +527,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            stream_done: false,
             type_tag,
             has_cleanup: false,
             generic_param_count: 0,

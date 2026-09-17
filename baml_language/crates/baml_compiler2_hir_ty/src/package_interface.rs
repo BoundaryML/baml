@@ -738,25 +738,14 @@ fn external_target<'db>(
 }
 
 fn exported_field_attrs(
-    attrs: &[baml_compiler2_hir::item_tree::Attribute],
+    attrs: &baml_compiler2_hir::item_tree::ClassFieldAttrs,
     docstring: Option<&str>,
 ) -> ExportedFieldAttrs {
-    let mut result = ExportedFieldAttrs {
+    ExportedFieldAttrs {
+        alias: attrs.schema.alias.clone(),
+        description: attrs.schema.description.clone(),
         docstring: docstring.map(str::to_owned),
-        ..Default::default()
-    };
-    for attr in attrs {
-        if attr.args.len() != 1 {
-            continue;
-        }
-        let value = baml_compiler2_ast::parse_string_attr_value(attr.args[0].value.as_str());
-        match attr.name.as_str() {
-            "alias" => result.alias = value,
-            "description" => result.description = value,
-            _ => {}
-        }
     }
-    result
 }
 
 /// Reduce GROUND associated-type projections for an exported surface:
@@ -920,7 +909,7 @@ fn lower_class_export<'db>(
         fields.push((
             field.name.clone(),
             field_ty,
-            exported_field_attrs(&field.attributes, field.docstring.as_deref()),
+            exported_field_attrs(&field.attrs, field.docstring.as_deref()),
         ));
     }
 
@@ -1048,8 +1037,13 @@ fn lower_interface_export<'db>(
         .fields
         .iter()
         .zip(&data.fields)
-        .map(|((field, ty, attrs), field_data)| {
-            let exported = exported_field_attrs(attrs, field_data.docstring.as_deref());
+        .map(|((field, ty), field_data)| {
+            // An interface field carries no attributes; only its docstring
+            // travels.
+            let exported = ExportedFieldAttrs {
+                docstring: field_data.docstring.clone(),
+                ..Default::default()
+            };
             (field.clone(), ty.clone(), exported)
         })
         .collect();

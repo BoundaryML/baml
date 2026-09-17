@@ -1061,25 +1061,25 @@ pub(crate) mod support {
                                 );
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
                                 for (fname, fty, fattrs) in resolved {
-                                    let field_attr_strs: Vec<String> = fattrs
-                                        .iter()
-                                        .map(|a| {
-                                            if a.args.is_empty() {
-                                                format!("@{}", a.name)
-                                            } else {
-                                                let args_str = a
-                                                    .args
-                                                    .iter()
-                                                    .map(|arg| match &arg.key {
-                                                        Some(k) => format!("{}={}", k, arg.value),
-                                                        None => arg.value.clone(),
-                                                    })
-                                                    .collect::<Vec<_>>()
-                                                    .join(", ");
-                                                format!("@{}({})", a.name, args_str)
-                                            }
-                                        })
-                                        .collect();
+                                    // The lowered attributes as they would be
+                                    // written, in the table's order.
+                                    let mut field_attr_strs: Vec<String> = Vec::new();
+                                    if let Some(description) = &fattrs.schema.description {
+                                        field_attr_strs
+                                            .push(format!("@description({description:?})"));
+                                    }
+                                    if let Some(alias) = &fattrs.schema.alias {
+                                        field_attr_strs.push(format!("@alias({alias:?})"));
+                                    }
+                                    if fattrs.skip {
+                                        field_attr_strs.push("@skip".to_string());
+                                    }
+                                    if fattrs.stream_done {
+                                        field_attr_strs.push("@stream.done".to_string());
+                                    }
+                                    if fattrs.must_exist {
+                                        field_attr_strs.push("@stream.must_exist".to_string());
+                                    }
                                     // Format: field: Ty @field_attr
                                     let ty_str = fty.render_with(&vp);
                                     if field_attr_strs.is_empty() {

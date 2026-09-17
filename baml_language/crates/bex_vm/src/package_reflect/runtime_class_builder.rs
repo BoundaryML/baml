@@ -863,6 +863,9 @@ fn build_group(
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            // A runtime-built class cannot declare streaming behaviour yet:
+            // the builder's metadata surface has no slot for it.
+            stream_done: false,
             type_tag,
             has_cleanup: false,
             generic_param_count: 0,
@@ -931,6 +934,8 @@ fn build_group(
                 docstring: field.docstring.clone(),
                 other: field.other.clone(),
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: Some(type_value),
             });
         }

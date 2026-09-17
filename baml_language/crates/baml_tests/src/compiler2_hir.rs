@@ -1551,12 +1551,15 @@ function foo(user: User) -> string {
     }
 
     #[test]
-    fn builtin_only_internal_attribute_is_rejected_in_user_file() {
+    fn an_attribute_on_a_function_is_unknown() {
+        use baml_base::AttributePosition;
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
+        // Attributes are a fixed vocabulary and none of it applies to a
+        // function, so any name written there is reported at its position.
         let mut db = make_db();
         let file = db.file(
-            "user_internal_attr.baml",
+            "user_function_attr.baml",
             "@@internal.uses(vm)\nfunction helper(value: string) -> string {\n  value\n}",
         );
 
@@ -1564,7 +1567,8 @@ function foo(user: User) -> string {
         assert!(index.diagnostics().iter().any(|diag| {
             matches!(
                 diag,
-                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "@@internal.uses"
+                Hir2Diagnostic::UnknownAttribute { attr_name, position: AttributePosition::Function, .. }
+                    if attr_name.as_str() == "internal.uses"
             )
         }));
     }

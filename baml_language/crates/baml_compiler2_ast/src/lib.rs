@@ -11,7 +11,6 @@ pub mod ast;
 pub mod cleanup_guard;
 pub(crate) mod companions;
 pub mod docstring;
-pub(crate) mod field_attrs;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
@@ -25,7 +24,6 @@ pub use ast::*;
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
 pub use docstring::extract_docstring;
-pub use field_attrs::FIELD_ATTR_NAMES;
 pub use lower_cst::{
     SHORTHAND_PROVIDERS, lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
     lower_session_file_with_path_and_test_owner,

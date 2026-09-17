@@ -112,6 +112,7 @@ impl TypeCtx {
                     docstring: v.docstring.clone(),
                     alias: v.alias.clone(),
                     fields: fields.collect(),
+                    stream_done: v.stream_done,
                 };
                 (k.clone(), class)
             })

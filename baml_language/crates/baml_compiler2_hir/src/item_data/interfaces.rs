@@ -2,8 +2,9 @@ use baml_base::Name;
 use text_size::TextRange;
 
 use crate::{
-    item_data::common::{FieldData, FunctionParamData, GenericParamData, lower_generic_params},
-    item_tree::Attribute,
+    item_data::common::{
+        FunctionParamData, GenericParamData, InterfaceFieldData, lower_generic_params,
+    },
     loc::{FunctionLoc, InterfaceLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
@@ -21,7 +22,7 @@ pub struct InterfaceData<'db> {
     /// Targets of `requires I1, I2, …`.
     pub requires: Vec<TypeRefId>,
     /// Field signatures. Interface fields cannot have default values.
-    pub fields: Vec<FieldData>,
+    pub fields: Vec<InterfaceFieldData>,
     pub associated_types: Vec<AssociatedTypeData>,
     /// EVERY method as a real function item, default and required alike
     /// (a required method is a `Function` with `body: None`) - the
@@ -35,7 +36,6 @@ pub struct InterfaceData<'db> {
     /// shape (type refs in the interface's shared store). Derived, never
     /// authored; deleted with TIR at the S16 cutover.
     pub required_methods: Vec<InterfaceMethodSigData>,
-    pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
 }
 
@@ -55,7 +55,6 @@ pub struct InterfaceMethodSigData {
     pub params: Vec<FunctionParamData>,
     pub return_type: Option<TypeRefId>,
     pub throws: Option<TypeRefId>,
-    pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
 }
 
@@ -145,10 +144,9 @@ fn lower<'db>(
     let fields = data
         .fields
         .iter()
-        .map(|field| FieldData {
+        .map(|field| InterfaceFieldData {
             name: field.name.clone(),
             type_ref: type_refs.lower(&field.type_expr),
-            attributes: field.attributes.clone(),
             docstring: field.docstring.clone(),
         })
         .collect();
@@ -188,10 +186,6 @@ fn lower<'db>(
                 .collect(),
             return_type: method.return_type.as_ref().map(|te| type_refs.lower(te)),
             throws: method.throws.as_ref().map(|te| type_refs.lower(te)),
-            // Function items carry no attribute list; nothing consumed
-            // required-method attributes (verified before the view was
-            // derived), so the legacy field stays empty.
-            attributes: Vec::new(),
             docstring: method.docstring.clone(),
         })
         .collect();
@@ -218,7 +212,6 @@ fn lower<'db>(
                 .map(|&method| FunctionLoc::new(db, file, method))
                 .collect(),
             required_methods,
-            attributes: data.attributes.clone(),
             docstring: data.docstring.clone(),
         },
         InterfaceSourceMap {

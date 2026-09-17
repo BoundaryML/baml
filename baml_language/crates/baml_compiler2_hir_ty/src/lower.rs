@@ -2974,7 +2974,7 @@ pub fn resolve_class_fields<'db>(
 ) -> Vec<(
     Name,
     baml_type::Ty,
-    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    baml_compiler2_hir::item_tree::ClassFieldAttrs,
 )> {
     let data = baml_compiler2_hir::item_data::class_data(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db))
@@ -2986,7 +2986,7 @@ pub fn resolve_class_fields<'db>(
             (
                 field.name.clone(),
                 reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
-                field.attributes.clone(),
+                field.attrs.clone(),
             )
         })
         .collect()

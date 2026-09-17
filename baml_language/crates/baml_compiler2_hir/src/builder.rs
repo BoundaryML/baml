@@ -8,12 +8,7 @@
 
 use std::sync::Arc;
 
-/// The `@stream.*` field attributes the language accepts (the schema field
-/// attributes are `baml_compiler2_ast::FIELD_ATTR_NAMES`'s business). Public so
-/// completion can enumerate exactly what this validation accepts.
-pub const KNOWN_STREAM_ATTRS: &[&str] = &["stream.done", "stream.must_exist"];
-
-use baml_base::{Name, SourceFile};
+use baml_base::{AttributePosition, Name, SourceFile};
 use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -1282,6 +1277,11 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_function(&mut self, f: &ast::FunctionDef) -> LocalItemId<FunctionMarker> {
+        crate::attrs::reject_attributes(
+            &f.attributes,
+            AttributePosition::Function,
+            &mut self.diagnostics,
+        );
         let local_id = self.item_tree.alloc_function(f);
         let loc = FunctionLoc::new(self.db, self.file, local_id);
 
@@ -1318,7 +1318,26 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_class(&mut self, c: &ast::ClassDef) {
-        let local_id = self.item_tree.alloc_class(c);
+        let attrs = crate::attrs::lower_attributes(&c.attributes, &mut self.diagnostics);
+        let field_attrs: Vec<crate::item_tree::ClassFieldAttrs> = c
+            .fields
+            .iter()
+            .map(|f| crate::attrs::lower_attributes(&f.attributes, &mut self.diagnostics))
+            .collect();
+        crate::attrs::check_serialized_keys(
+            c.fields
+                .iter()
+                .zip(&field_attrs)
+                .map(|(f, attrs)| crate::attrs::SerializedMember {
+                    name: &f.name,
+                    name_span: f.name_span,
+                    alias: attrs.schema.alias.as_deref(),
+                    skip: attrs.skip,
+                }),
+            SerializedKeyContainer::Class,
+            &mut self.diagnostics,
+        );
+        let local_id = self.item_tree.alloc_class(c, attrs, field_attrs);
         let loc = ClassLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             c.name.clone(),
@@ -1537,11 +1556,29 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth -= 1;
         // Required signatures are the SAME item kind, just bodyless
         // (r-a's shape); no body walk, so no scope coverage needed.
-        method_ids.extend(
-            i.required_methods
-                .iter()
-                .map(|m| self.item_tree.alloc_function_signature(m)),
+        method_ids.extend(i.required_methods.iter().map(|m| {
+            crate::attrs::reject_attributes(
+                &m.attributes,
+                AttributePosition::Function,
+                &mut self.diagnostics,
+            );
+            self.item_tree.alloc_function_signature(m)
+        }));
+
+        // An interface is a contract, not a data type: neither it nor its
+        // fields take attributes.
+        crate::attrs::reject_attributes(
+            &i.attributes,
+            AttributePosition::Interface,
+            &mut self.diagnostics,
         );
+        for field in &i.fields {
+            crate::attrs::reject_attributes(
+                &field.attributes,
+                AttributePosition::InterfaceField,
+                &mut self.diagnostics,
+            );
+        }
 
         let local_id = self.item_tree.alloc_interface(i, method_ids);
         self.record_scope_owner(interface_scope, ItemScopeOwner::Interface(local_id));
@@ -1591,7 +1628,25 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_enum(&mut self, e: &ast::EnumDef) {
-        let local_id = self.item_tree.alloc_enum(e);
+        let attrs = crate::attrs::lower_attributes(&e.attributes, &mut self.diagnostics);
+        let variant_attrs: Vec<crate::item_tree::EnumVariantAttrs> = e
+            .variants
+            .iter()
+            .map(|v| crate::attrs::lower_attributes(&v.attributes, &mut self.diagnostics))
+            .collect();
+        crate::attrs::check_serialized_keys(
+            e.variants.iter().zip(&variant_attrs).map(|(v, attrs)| {
+                crate::attrs::SerializedMember {
+                    name: &v.name,
+                    name_span: v.name_span,
+                    alias: attrs.schema.alias.as_deref(),
+                    skip: attrs.skip,
+                }
+            }),
+            SerializedKeyContainer::Enum,
+            &mut self.diagnostics,
+        );
+        let local_id = self.item_tree.alloc_enum(e, attrs, variant_attrs);
         let loc = EnumLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             e.name.clone(),
@@ -1722,52 +1777,16 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn validate_item_phase1(&mut self, item: &ast::Item, is_builtin_file: bool) {
         match item {
             ast::Item::Function(function) => {
-                self.validate_function_phase1(function, is_builtin_file, "function");
+                self.validate_function_phase1(function, is_builtin_file);
             }
             ast::Item::Class(class) => {
-                self.validate_internal_attributes(
-                    &class.attributes,
-                    is_builtin_file,
-                    "class",
-                    false,
-                );
-                self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
-                    self.validate_stream_attributes(&field.attributes, is_builtin_file);
-                    self.validate_internal_attributes(
-                        &field.attributes,
-                        is_builtin_file,
-                        "class field",
-                        false,
-                    );
-                    self.validate_schema_attributes(&field.attributes);
                 }
-                self.validate_alias_collisions(
-                    class
-                        .fields
-                        .iter()
-                        .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
-                    SerializedKeyContainer::Class,
-                    is_builtin_file,
-                );
                 for method in &class.methods {
-                    self.validate_function_phase1(method, is_builtin_file, "method");
+                    self.validate_function_phase1(method, is_builtin_file);
                 }
-            }
-            ast::Item::Enum(enm) => {
-                self.validate_schema_attributes(&enm.attributes);
-                for variant in &enm.variants {
-                    self.validate_schema_attributes(&variant.attributes);
-                }
-                self.validate_alias_collisions(
-                    enm.variants
-                        .iter()
-                        .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
-                    SerializedKeyContainer::Enum,
-                    is_builtin_file,
-                );
             }
             ast::Item::TypeAlias(alias) => {
                 if let Some(type_expr) = &alias.type_expr {
@@ -1778,20 +1797,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    fn validate_function_phase1(
-        &mut self,
-        function: &ast::FunctionDef,
-        is_builtin_file: bool,
-        context: &'static str,
-    ) {
-        let is_host_bound = matches!(function.body, Some(ast::FunctionBodyDef::Builtin(_)));
-        self.validate_internal_attributes(
-            &function.attributes,
-            is_builtin_file,
-            context,
-            is_host_bound,
-        );
-
+    fn validate_function_phase1(&mut self, function: &ast::FunctionDef, is_builtin_file: bool) {
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
                 self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
@@ -1846,191 +1852,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    fn validate_internal_attributes(
-        &mut self,
-        attributes: &[ast::RawAttribute],
-        is_builtin_file: bool,
-        context: &'static str,
-        is_host_bound: bool,
-    ) {
-        for attr in attributes {
-            let name = attr.name.as_str();
-            if !name.starts_with("internal.") {
-                continue;
-            }
-
-            if !is_builtin_file {
-                self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
-                    feature: format!("@@{name}"),
-                    span: attr.span,
-                });
-                continue;
-            }
-
-            match name {
-                "internal.opaque" => {
-                    if context != "class" {
-                        self.diagnostics
-                            .push(Hir2Diagnostic::InvalidAttributeContext {
-                                attr_name: attr.name.clone(),
-                                context,
-                                allowed_contexts: "builtin classes",
-                                span: attr.span,
-                            });
-                    }
-                }
-                "internal.uses" => {
-                    if !matches!(context, "function" | "method") || !is_host_bound {
-                        self.diagnostics
-                            .push(Hir2Diagnostic::InvalidAttributeContext {
-                                attr_name: attr.name.clone(),
-                                context,
-                                allowed_contexts: "host-bound builtin functions and methods",
-                                span: attr.span,
-                            });
-                        continue;
-                    }
-                    if attr.args.len() != 1 {
-                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
-                            message: format!(
-                                "Attribute `@@{name}` expects exactly one argument: `vm` or `engine_ctx`"
-                            ),
-                            span: attr.span,
-                        });
-                        continue;
-                    }
-                    let value = attr.args[0].value.as_str();
-                    if value != "vm" && value != "engine_ctx" {
-                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
-                            message: format!(
-                                "Attribute `@@{name}` only accepts `vm` or `engine_ctx`, got `{value}`"
-                            ),
-                            span: attr.args[0].span,
-                        });
-                    }
-                }
-                "internal.panics" => {
-                    if !matches!(context, "function" | "method") || !is_host_bound {
-                        self.diagnostics
-                            .push(Hir2Diagnostic::InvalidAttributeContext {
-                                attr_name: attr.name.clone(),
-                                context,
-                                allowed_contexts: "host-bound builtin functions and methods",
-                                span: attr.span,
-                            });
-                        continue;
-                    }
-                    for arg in &attr.args {
-                        let value = arg.value.as_str();
-                        if value != "HostPanic" && value != "baml.errors.HostPanic" {
-                            self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                                diagnostic_id: DiagnosticId::InvalidAttributeArg,
-                                message: format!(
-                                    "Attribute `@@{name}` may only reference known builtin panic types; got `{value}`"
-                                ),
-                                span: arg.span,
-                            });
-                        }
-                    }
-                }
-                _ => {
-                    self.diagnostics
-                        .push(Hir2Diagnostic::UnknownInternalAttribute {
-                            attr_name: attr.name.clone(),
-                            span: attr.span,
-                            valid_attributes: vec![
-                                "internal.opaque",
-                                "internal.uses",
-                                "internal.panics",
-                            ],
-                        });
-                }
-            }
-        }
-    }
-
-    /// Validate `@description`, `@alias`, and `@skip` attribute usage.
-    ///
-    /// - `description` / `alias`: exactly 1 argument, must be a string literal
-    /// - `skip`: exactly 0 arguments
-    ///
-    /// Other attributes pass through; `@stream.*` names are checked by
-    /// `validate_stream_attributes`.
-    fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
-        // E0014: reject the same single-valued schema attribute appearing more
-        // than once on one declaration. `@alias`, `@description`, and `@skip`
-        // each take effect at most once — for valued attrs the last write
-        // silently wins and the earlier ones are dropped (Linear B-648) — so a
-        // repeat is always a mistake. Only these known single-valued attributes
-        // are checked; repeatable / pass-through attributes (`@stream.*`, etc.)
-        // are intentionally left alone. Occurrences are gathered in first-seen
-        // order so the emitted diagnostics are deterministic.
-        let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
-        for attr in attributes {
-            let name = attr.name.as_str();
-            let Some(spec) = baml_base::schema_attribute_spec(name) else {
-                continue;
-            };
-            if spec.repeatable {
-                continue;
-            }
-            if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
-                entry.1.push(attr.span);
-            } else {
-                occurrences.push((name, vec![attr.span]));
-            }
-        }
-        for (name, sites) in occurrences {
-            if sites.len() >= 2 {
-                self.diagnostics.push(Hir2Diagnostic::DuplicateAttribute {
-                    attr_name: name.to_string(),
-                    sites,
-                });
-            }
-        }
-
-        for attr in attributes {
-            let Some(spec) = baml_base::schema_attribute_spec(attr.name.as_str()) else {
-                // Unknown attributes pass through (e.g. user schema annotations read
-                // back through reflection).
-                continue;
-            };
-            match spec.arguments {
-                baml_base::SchemaAttributeArguments::String { .. } => {
-                    let attr_name = spec.name;
-                    if attr.args.len() != 1 {
-                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
-                            message: format!("`@{attr_name}` expects exactly one string argument"),
-                            span: attr.span,
-                        });
-                        continue;
-                    }
-                    let value = attr.args[0].value.as_str();
-                    if !is_string_literal(value) && !is_removed_hash_string(value) {
-                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
-                            message: format!(
-                                "`@{attr_name}` argument must be a string literal, got `{value}`"
-                            ),
-                            span: attr.args[0].span,
-                        });
-                    }
-                }
-                baml_base::SchemaAttributeArguments::None if !attr.args.is_empty() => {
-                    self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                        diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
-                        message: format!("`@{}` does not take any arguments", spec.name),
-                        span: attr.span,
-                    });
-                }
-                baml_base::SchemaAttributeArguments::None => {}
-            }
-        }
-    }
-
     /// Reject a class or enum whose members don't all serialize to distinct
     /// JSON keys.
     ///
@@ -2053,63 +1874,6 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
     /// to avoid double-reporting; this rule only fires when at least two
     /// *distinct* member names share a key.
-    fn validate_alias_collisions<'a>(
-        &mut self,
-        members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
-        container: SerializedKeyContainer,
-        is_builtin_file: bool,
-    ) {
-        // Builtin stdlib declarations carry no `@alias`, and type-level
-        // validation already skips them — stay consistent and avoid surprising
-        // the stdlib.
-        if is_builtin_file {
-            return;
-        }
-
-        let mut buckets: FxHashMap<String, Vec<(Name, TextRange)>> = FxHashMap::default();
-        for (name, name_span, attributes) in members {
-            let mut alias: Option<String> = None;
-            let mut skip = false;
-            for attr in attributes {
-                match attr.name.as_str() {
-                    "alias" if attr.args.len() == 1 => {
-                        // Last `@alias` wins, mirroring emit's `extract_schema_attrs`.
-                        if let Some(value) =
-                            ast::parse_string_attr_value(attr.args[0].value.as_str())
-                        {
-                            alias = Some(value);
-                        }
-                    }
-                    "skip" => skip = true,
-                    _ => {}
-                }
-            }
-            if skip {
-                continue;
-            }
-            let key = alias.unwrap_or_else(|| name.as_str().to_string());
-            buckets
-                .entry(key)
-                .or_default()
-                .push((name.clone(), name_span));
-        }
-
-        for (key, members) in buckets {
-            // Only a collision between two *distinct* member names is a new
-            // error; repeated identical names are already reported by the
-            // duplicate-definition checks.
-            let distinct = members.iter().any(|(name, _)| name != &members[0].0);
-            if members.len() >= 2 && distinct {
-                let sites = members.into_iter().map(|(_, span)| span).collect();
-                self.diagnostics.push(Hir2Diagnostic::DuplicateFieldAlias {
-                    key,
-                    sites,
-                    container,
-                });
-            }
-        }
-    }
-
     fn validate_type_expr_phase1(
         &mut self,
         type_expr: &ast::TypeExpr,
@@ -2125,28 +1889,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                 feature: "$rust_type".to_string(),
                 span,
             });
-        }
-    }
-
-    /// Reject a `@stream.*` field attribute outside [`KNOWN_STREAM_ATTRS`]. Other
-    /// unknown names pass through as user schema annotations.
-    fn validate_stream_attributes(
-        &mut self,
-        attributes: &[ast::RawAttribute],
-        is_builtin_file: bool,
-    ) {
-        if is_builtin_file {
-            return;
-        }
-        for attr in attributes {
-            let name = attr.name.as_str();
-            if name.starts_with("stream.") && !KNOWN_STREAM_ATTRS.contains(&name) {
-                self.diagnostics
-                    .push(Hir2Diagnostic::UnknownStreamAttribute {
-                        attr_name: attr.name.clone(),
-                        span: attr.span,
-                    });
-            }
         }
     }
 
@@ -2356,29 +2098,4 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExprKind::Infer => "_".to_string(),
         }
     }
-}
-
-/// Check if an attribute argument value is a valid quoted string literal.
-///
-/// Accepts double-quoted (`"text"`) and single-quoted (`'text'`) strings.
-fn is_string_literal(value: &str) -> bool {
-    // Double-quoted
-    if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
-        return true;
-    }
-    // Single-quoted
-    if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
-        return true;
-    }
-    false
-}
-
-fn is_removed_hash_string(value: &str) -> bool {
-    let hashes = value.bytes().take_while(|&b| b == b'#').count();
-    if hashes == 0 || value.len() < hashes * 2 + 2 {
-        return false;
-    }
-    let rest = &value[hashes..];
-    let closing = format!("\"{}", &value[..hashes]);
-    rest.starts_with('"') && rest.ends_with(&closing)
 }

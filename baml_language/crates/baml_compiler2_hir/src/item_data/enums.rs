@@ -1,7 +1,10 @@
 use baml_base::Name;
 use text_size::TextRange;
 
-use crate::{item_tree::Attribute, loc::EnumLoc};
+use crate::{
+    item_tree::{EnumAttrs, EnumVariantAttrs},
+    loc::EnumLoc,
+};
 
 /// Span-free semantic data for an `enum` declaration.
 ///
@@ -10,14 +13,16 @@ use crate::{item_tree::Attribute, loc::EnumLoc};
 pub struct EnumData {
     pub name: Name,
     pub variants: Vec<EnumVariantData>,
-    pub attributes: Vec<Attribute>,
+    /// The enum's lowered `@@` attributes.
+    pub attrs: EnumAttrs,
     pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumVariantData {
     pub name: Name,
-    pub attributes: Vec<Attribute>,
+    /// The variant's lowered `@` attributes.
+    pub attrs: EnumVariantAttrs,
     pub docstring: Option<String>,
 }
 
@@ -59,11 +64,11 @@ fn lower<'db>(db: &'db dyn crate::Db, item: EnumLoc<'db>) -> (EnumData, EnumSour
                 .iter()
                 .map(|variant| EnumVariantData {
                     name: variant.name.clone(),
-                    attributes: variant.attributes.clone(),
+                    attrs: variant.attrs.clone(),
                     docstring: variant.docstring.clone(),
                 })
                 .collect(),
-            attributes: data.attributes.clone(),
+            attrs: data.attrs.clone(),
             docstring: data.docstring.clone(),
         },
         EnumSourceMap {
