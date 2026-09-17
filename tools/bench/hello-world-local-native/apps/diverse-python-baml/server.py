@@ -1,8 +1,10 @@
+import gc as python_gc
 import json
 from pathlib import Path
 
 from baml_bridge.baml_py import BamlImage as Image
 from baml_sdk import (
+    force_gc_async,
     hello_world_async,
     image_base64_async,
     json_1m_async,
@@ -47,11 +49,22 @@ async def image(request):
     )
 
 
+async def gc(request):
+    await force_gc_async()
+    collected = python_gc.collect(2)
+    return Response(
+        "ok",
+        media_type="text/plain",
+        headers={**NO_STORE, "X-Python-GC-Collected": str(collected)},
+    )
+
+
 app = Starlette(
     routes=[
         Route("/hello", hello, methods=["GET"]),
         Route("/json-64k", json_64k, methods=["GET"]),
         Route("/json-1m", json_1m, methods=["GET"]),
         Route("/image", image, methods=["GET"]),
+        Route("/gc", gc, methods=["GET"]),
     ]
 )

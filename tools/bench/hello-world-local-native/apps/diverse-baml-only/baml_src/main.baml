@@ -33,8 +33,15 @@ function response(body: string, content_type: string) -> baml.http.Response {
     )
 }
 
+function collect_garbage_response() -> baml.http.Response {
+    baml.sys.collect_garbage();
+    response("ok", "text/plain; charset=utf-8")
+}
+
 function handle(req: baml.http.Request) -> baml.http.Response {
-    if (req.url == "/hello") {
+    if (req.method == "GET" && req.url == "/gc") {
+        collect_garbage_response()
+    } else if (req.url == "/hello") {
         response(hello_world(), "text/plain; charset=utf-8")
     } else if (req.url == "/json-64k") {
         response(baml.json.stringify(json_64k()), "application/json")

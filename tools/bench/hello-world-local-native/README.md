@@ -31,6 +31,8 @@ The diverse-workload runner compares fresh-process pure-BAML and Python-BAML tar
 ```sh
 python3 scripts/build.py --baml-source ../../../baml_language --diverse-image /path/to/image.png
 python3 scripts/run_diverse.py --rate 1000 --duration 60 --interval 1
+python3 scripts/run_diverse_cycled.py --rate 1000 --duration 60 --on-seconds 8 --off-seconds 2
+python3 scripts/run_diverse_cycled.py --rate 1000 --duration 60 --on-seconds 8 --off-seconds 2 --explicit-gc
 ```
 
 Each workload uses a fresh server process and runs sequentially. Use `--targets` or `--workloads` to select a subset. The runner stops a case when sampled `ri_phys_footprint` reaches `--max-phys-footprint-mib` (4096 by default); because sampling is periodic, the observed value can exceed that threshold before shutdown.

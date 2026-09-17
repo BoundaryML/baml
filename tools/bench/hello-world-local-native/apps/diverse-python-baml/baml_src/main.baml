@@ -21,3 +21,7 @@ function image_base64(value: image) -> string {
     let path = value.file() ?? baml.sys.panic("expected an image created with Image.from_file()");
     baml.fs.open(path, "r").bytes().to_base64()
 }
+
+function force_gc() -> null {
+    baml.sys.collect_garbage()
+}
