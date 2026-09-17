@@ -231,7 +231,7 @@ function playgroundArgsForPath(projectPath?: string): {
     }
     if (stat.isDirectory()) {
       return {
-        args: ['playground', '--from', projectPath],
+        args: ['playground', '--project', projectPath],
         cwd: projectPath,
       };
     }
@@ -239,7 +239,7 @@ function playgroundArgsForPath(projectPath?: string): {
     // Fall through to --from. The CLI will surface the real path error.
   }
 
-  return { args: ['playground', '--from', projectPath] };
+  return { args: ['playground', '--project', projectPath] };
 }
 
 function openPlaygroundInBrowserTerminal(projectPath?: string): void {
