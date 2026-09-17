@@ -214,10 +214,20 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
             (Literal::Bigint(b), BexExternalValue::Bigint(v)) => b == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
-            // `Literal::Float` stores the literal as a string for precision;
-            // match by tag (any float), mirroring
-            // `bex_engine::conversion::value_matches_type`.
-            (Literal::Float(_), BexExternalValue::Int(_) | BexExternalValue::Float(_)) => true,
+            // `Literal::Float` stores the literal as source text for
+            // precision. Integral host numbers still widen, but they must
+            // equal the declared literal after widening.
+            (Literal::Float(source), BexExternalValue::Int(value)) => {
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "deliberate host-language `float(int)` semantics — may round above 2^53"
+                )]
+                let widened = *value as f64;
+                float_literal_matches(widened, source)
+            }
+            (Literal::Float(source), BexExternalValue::Float(value)) => {
+                float_literal_matches(*value, source)
+            }
             _ => false,
         },
 
@@ -290,6 +300,12 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // appear as concrete host-callable return types in practice.
         _ => true,
     }
+}
+
+fn float_literal_matches(value: f64, source: &str) -> bool {
+    source
+        .parse::<f64>()
+        .is_ok_and(|expected| value.to_bits() == expected.to_bits())
 }
 
 /// Whether an external value is exactly in the recursive `baml.json.json`
@@ -584,6 +600,16 @@ mod tests {
         let lit5 = RuntimeTy::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
         assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(6), &lit5).is_err());
+
+        let lit1 = RuntimeTy::Literal(
+            Literal::Float("1.0".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        );
+        assert!(validate_host_return(&BexExternalValue::Int(1), &lit1).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(2), &lit1).is_err());
+        assert!(validate_host_return(&BexExternalValue::Float(1.0), &lit1).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Float(2.0), &lit1).is_err());
     }
 
     #[test]

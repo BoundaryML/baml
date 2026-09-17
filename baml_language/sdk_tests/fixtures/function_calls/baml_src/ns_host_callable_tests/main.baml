@@ -66,6 +66,10 @@ function call_float_callback(callback: () -> float) -> float {
     callback()
 }
 
+function call_float_bigint_union_callback(callback: () -> float | bigint) -> float | bigint {
+    callback()
+}
+
 class FloatSize {
     width float
 }

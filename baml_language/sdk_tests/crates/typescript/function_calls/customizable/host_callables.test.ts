@@ -9,6 +9,7 @@ import {
   call_callback_with_optional_args_all_set_async,
   call_callback_with_optional_args_all_unset_async,
   call_callback_with_optional_args_partially_set_async,
+  call_float_bigint_union_callback_async,
   call_float_callback_async,
   call_float_class_callback_async,
   call_int_callback_async,
@@ -52,6 +53,12 @@ describe("function_calls — generated SDK host callables", () => {
 
   it("host_callables_widens_integral_number_for_float_return", async () => {
     await expect(call_float_callback_async(() => 1)).resolves.toBe(1);
+  });
+
+  it("host_callables_preserves_number_kind_for_float_bigint_union", async () => {
+    const result = await call_float_bigint_union_callback_async(() => 1);
+    expect(result).toBe(1);
+    expect(typeof result).toBe("number");
   });
 
   it("host_callables_widens_integral_number_for_float_class_field", async () => {

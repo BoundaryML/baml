@@ -1257,6 +1257,7 @@ impl BexEngine {
             &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             None,
+            false,
         )
     }
 
@@ -1297,6 +1298,7 @@ impl BexEngine {
             dynamic_classes,
             dynamic_enums,
             Some(&named),
+            false,
         )
     }
 
@@ -1319,6 +1321,30 @@ impl BexEngine {
             &indexmap::IndexMap::new(),
             &indexmap::IndexMap::new(),
             None,
+            false,
+        )
+    }
+
+    /// Materialize a host-callable return using its declared return type.
+    ///
+    /// Unlike ordinary inbound argument coercion, an integral host number that
+    /// is admitted solely by a `float` union arm stays a float. This preserves
+    /// JavaScript's `number` / `bigint` distinction: the Node bridge uses the
+    /// `Bigint` wire tag for an actual JavaScript `bigint`.
+    pub(crate) fn convert_host_return_to_vm_value_with_ty(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: Option<&RuntimeTy>,
+    ) -> Result<Value, EngineError> {
+        self.convert_external_to_vm_value_with_ty_and_runtime(
+            holder,
+            external,
+            expected_ty,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            None,
+            true,
         )
     }
 
@@ -1340,9 +1366,14 @@ impl BexEngine {
             dynamic_classes,
             dynamic_enums,
             None,
+            false,
         )
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "conversion needs heap, schema, dynamic type, and host-boundary context"
+    )]
     fn convert_external_to_vm_value_with_ty_and_runtime(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
@@ -1351,14 +1382,10 @@ impl BexEngine {
         dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
         runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
+        is_host_return: bool,
     ) -> Result<Value, EngineError> {
-        // Host codecs may be value-shaped rather than schema-shaped. Apply
-        // numeric boundary coercion at the root too; recursive container and
-        // class conversion already does this for children. This is essential
-        // for JavaScript, where an integral `number` is encoded as `Int` even
-        // when the host callable's declared return type is `float`.
-        if let Some(expected_ty) = expected_ty {
-            external = coerce_numeric_to_declared_type(external, expected_ty)?;
+        if is_host_return && let Some(expected_ty) = expected_ty {
+            external = self.coerce_integral_host_number_to_float(external, expected_ty);
         }
 
         // A `baml.json.json` slot materializes containers with the alias as
@@ -1452,7 +1479,9 @@ impl BexEngine {
                     .into_iter()
                     .map(|v| {
                         let v = match declared_element_ty {
-                            Some(ty) => self.coerce_inbound_arg(v, ty)?,
+                            Some(ty) => {
+                                self.coerce_inbound_for_conversion(v, ty, is_host_return)?
+                            }
                             None => v,
                         };
                         self.convert_external_to_vm_value_with_ty_and_runtime(
@@ -1462,6 +1491,7 @@ impl BexEngine {
                             dynamic_classes,
                             dynamic_enums,
                             runtime_named_objects,
+                            is_host_return,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
@@ -1501,7 +1531,9 @@ impl BexEngine {
                     .into_iter()
                     .map(|(k, v)| {
                         let v = match declared_value_ty {
-                            Some(ty) => self.coerce_inbound_arg(v, ty)?,
+                            Some(ty) => {
+                                self.coerce_inbound_for_conversion(v, ty, is_host_return)?
+                            }
                             None => v,
                         };
                         self.convert_external_to_vm_value_with_ty_and_runtime(
@@ -1511,6 +1543,7 @@ impl BexEngine {
                             dynamic_classes,
                             dynamic_enums,
                             runtime_named_objects,
+                            is_host_return,
                         )
                         .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
@@ -1604,7 +1637,11 @@ impl BexEngine {
                     })?;
                     let field_ty = class_field.field_template.substitute_symbolic(&type_args);
                     let wire_field_ty = overlay_wire_ty(&field_ty)?;
-                    let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
+                    let field_value = self.coerce_inbound_for_conversion(
+                        ext.clone(),
+                        &wire_field_ty,
+                        is_host_return,
+                    )?;
                     values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
                         field_value,
@@ -1612,6 +1649,7 @@ impl BexEngine {
                         dynamic_classes,
                         dynamic_enums,
                         runtime_named_objects,
+                        is_host_return,
                     )?);
                 }
                 let realized_type_args = type_args
@@ -1672,7 +1710,8 @@ impl BexEngine {
                 // then materialize against it. This path also handles host
                 // throws, which have no declared parameter context.
                 let selected_type = metadata.selected_option;
-                let value = self.coerce_inbound_arg(*value, &selected_type)?;
+                let value =
+                    self.coerce_inbound_for_conversion(*value, &selected_type, is_host_return)?;
                 return self.convert_external_to_vm_value_with_ty_and_runtime(
                     holder,
                     value,
@@ -1680,6 +1719,7 @@ impl BexEngine {
                     dynamic_classes,
                     dynamic_enums,
                     runtime_named_objects,
+                    is_host_return,
                 );
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
@@ -1755,6 +1795,7 @@ impl BexEngine {
                         dynamic_classes,
                         dynamic_enums,
                         runtime_named_objects,
+                        is_host_return,
                     );
                 }
             }
@@ -1803,6 +1844,7 @@ impl BexEngine {
                         dynamic_classes,
                         dynamic_enums,
                         runtime_named_objects,
+                        is_host_return,
                     );
                 }
             }
@@ -4269,6 +4311,87 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 ///    engine-registered FQN supplied by the contextual type.
 /// 4. **Numeric / optional / union coercion:** see `coerce_numeric_to_declared_type`.
 impl BexEngine {
+    fn coerce_inbound_for_conversion(
+        &self,
+        value: BexExternalValue,
+        ty: &RuntimeTy,
+        is_host_return: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        let value = if is_host_return {
+            self.coerce_integral_host_number_to_float(value, ty)
+        } else {
+            value
+        };
+        self.coerce_inbound_arg(value, ty)
+    }
+
+    fn coerce_integral_host_number_to_float(
+        &self,
+        value: BexExternalValue,
+        ty: &RuntimeTy,
+    ) -> BexExternalValue {
+        let BexExternalValue::Int(integer) = value else {
+            return value;
+        };
+        if self.integral_host_number_uses_float_arm(integer, ty) {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "deliberate host-language `float(int)` semantics — may round above 2^53"
+            )]
+            let widened = integer as f64;
+            BexExternalValue::Float(widened)
+        } else {
+            BexExternalValue::Int(integer)
+        }
+    }
+
+    fn integral_host_number_uses_float_arm(&self, integer: i64, ty: &RuntimeTy) -> bool {
+        self.integral_host_number_uses_float_arm_at_depth(integer, ty, 0)
+    }
+
+    fn integral_host_number_uses_float_arm_at_depth(
+        &self,
+        integer: i64,
+        ty: &RuntimeTy,
+        depth: usize,
+    ) -> bool {
+        if depth > 64 {
+            return false;
+        }
+        if let RuntimeTy::TypeAlias(name, _) = ty
+            && !is_canonical_json_alias(name)
+            && let Some(expanded) = self.inbound_alias_view.get(name)
+        {
+            return self.integral_host_number_uses_float_arm_at_depth(integer, expanded, depth + 1);
+        }
+
+        match ty {
+            RuntimeTy::Float { .. } => true,
+            RuntimeTy::Literal(Literal::Float(source), _, _) => {
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "deliberate host-language `float(int)` semantics — may round above 2^53"
+                )]
+                let widened = integer as f64;
+                float_literal_matches(widened, source)
+            }
+            RuntimeTy::Union(members, _) => {
+                let integer_value = BexExternalValue::Int(integer);
+                !members.iter().any(|member| {
+                    value_matches_type_with_definitions(
+                        &integer_value,
+                        member,
+                        &self.inbound_alias_view,
+                        &self.inbound_class_view,
+                    )
+                }) && members.iter().any(|member| {
+                    self.integral_host_number_uses_float_arm_at_depth(integer, member, depth + 1)
+                })
+            }
+            _ => false,
+        }
+    }
+
     /// Apply the declared type to an inbound value while retaining access to
     /// this program's recursive-alias definitions. Alias references are
     /// nominal in `RuntimeTy`, but their payload shape must still participate

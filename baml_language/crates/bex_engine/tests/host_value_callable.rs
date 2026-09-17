@@ -452,6 +452,42 @@ async fn host_callable_widens_integral_class_field_to_float() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
+    let source = r#"
+        function measure(f: () -> float | bigint) -> float | bigint {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(1)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("an integral JavaScript number should select the float arm");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected union result")
+    };
+    assert_eq!(metadata.selected_option, RuntimeTy::float());
+    let BexExternalValue::Float(value) = *value else {
+        panic!("expected a float payload")
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same
