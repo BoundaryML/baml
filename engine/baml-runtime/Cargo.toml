@@ -226,6 +226,7 @@ criterion = "0.5.1"
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
+jsonschema = { version = "0.33.0", default-features = false }
 either = "1.8.1"
 rstest = "0.22.0"
 wasm-bindgen-test = "0.3.42"

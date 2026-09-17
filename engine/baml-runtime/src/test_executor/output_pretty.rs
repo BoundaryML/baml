@@ -493,7 +493,7 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
         &self,
         test_status_map: &TestExecutionStatusMap,
         selected_tests: &BTreeMap<(String, String), String>,
-    ) {
+    ) -> anyhow::Result<()> {
         {
             let mut bars = self.test_bars.borrow_mut();
             for pb in bars.values_mut() {
@@ -502,6 +502,7 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
         }
         self.summary_bar.finish_and_clear();
         self.print_final_results(test_status_map, selected_tests);
+        Ok(())
     }
 
     fn print_message(&self, msg: &str) {

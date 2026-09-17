@@ -1,4 +1,5 @@
 use colored::*;
+mod output_evalport;
 mod output_github;
 mod output_junit;
 mod output_pretty;
@@ -42,16 +43,22 @@ pub enum TestRunStatus {
 
 #[allow(async_fn_in_trait)]
 pub trait TestExecutor {
-    fn cli_list_tests(&self, args: &TestFilter) -> Result<()>;
+    fn cli_list_tests(
+        &self,
+        args: &TestFilter,
+        evalport_dir: Option<&std::path::Path>,
+        env_vars: &HashMap<String, String>,
+    ) -> Result<()>;
     async fn cli_run_tests(
         self: std::sync::Arc<Self>,
         args: &TestFilter,
         max_concurrency: usize,
         output_format: &crate::cli::testing::OutputFormat,
         junit_path: Option<&String>,
+        evalport_dir: Option<&std::path::Path>,
         env_vars: &HashMap<String, String>,
         cancel_notify: Option<Arc<tokio::sync::Notify>>,
-    ) -> TestRunStatus;
+    ) -> Result<TestRunStatus>;
 }
 
 /// Test status.
@@ -87,7 +94,7 @@ pub(super) trait RenderTestExecutionStatus {
         &self,
         test_status_map: &TestExecutionStatusMap,
         selected_tests: &BTreeMap<(String, String), String>,
-    );
+    ) -> Result<()>;
 
     /// Print a message that is visible even while progress bars are active.
     fn print_message(&self, msg: &str);
@@ -98,7 +105,11 @@ struct AggregateRenderer {
 }
 
 impl AggregateRenderer {
-    fn new(output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> Self {
+    fn new(
+        output_format: &crate::cli::testing::OutputFormat,
+        junit_path: Option<&String>,
+        evalport_renderer: Option<output_evalport::EvalPortRenderer>,
+    ) -> Self {
         let mut renderers: Vec<Box<dyn RenderTestExecutionStatus>> = match output_format {
             crate::cli::testing::OutputFormat::Pretty => vec![Box::new(
                 output_pretty::PrettyTestExecutionStatusRenderer::new(),
@@ -112,6 +123,10 @@ impl AggregateRenderer {
             renderers.push(Box::new(output_junit::JUnitXMLRenderer::new(
                 junit_path.as_str(),
             )));
+        }
+
+        if let Some(evalport_renderer) = evalport_renderer {
+            renderers.push(Box::new(evalport_renderer));
         }
 
         Self { renderers }
@@ -129,10 +144,11 @@ impl RenderTestExecutionStatus for AggregateRenderer {
         &self,
         test_status_map: &TestExecutionStatusMap,
         selected_tests: &BTreeMap<(String, String), String>,
-    ) {
+    ) -> Result<()> {
         for renderer in self.renderers.iter() {
-            renderer.render_final(test_status_map, selected_tests);
+            renderer.render_final(test_status_map, selected_tests)?;
         }
+        Ok(())
     }
 
     fn print_message(&self, msg: &str) {
@@ -156,39 +172,14 @@ fn file_reader_pinned(
 
 impl TestExecutor for BamlRuntime {
     #[allow(clippy::print_stdout)]
-    fn cli_list_tests(&self, args: &TestFilter) -> Result<()> {
-        let func_test_pairs = {
-            let ir = &self.ir;
-            // Regular LLM function tests
-            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
-                let (function_name, test_name) = node_pair.name();
-                if args.includes(function_name, test_name) {
-                    Some((function_name.to_string(), test_name.to_string()))
-                } else {
-                    None
-                }
-            });
-
-            // Expr function tests
-            let expr_fn_tests: Vec<(String, String)> = ir
-                .walk_expr_fns()
-                .flat_map(|f| {
-                    f.walk_tests()
-                        .filter_map(|node_pair| {
-                            let function_name = node_pair.function().name();
-                            let test_name = &node_pair.test_case().name;
-                            if args.includes(function_name, test_name) {
-                                Some((function_name.to_string(), test_name.to_string()))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect();
-
-            from_fn_tests.chain(expr_fn_tests).collect::<BTreeSet<_>>()
-        };
+    fn cli_list_tests(
+        &self,
+        args: &TestFilter,
+        evalport_dir: Option<&std::path::Path>,
+        env_vars: &HashMap<String, String>,
+    ) -> Result<()> {
+        let selected_tests = self.selected_tests(args);
+        let func_test_pairs = selected_tests.keys().cloned().collect::<BTreeSet<_>>();
 
         println!("Found {} tests", func_test_pairs.len());
 
@@ -206,6 +197,19 @@ impl TestExecutor for BamlRuntime {
             println!("{}", "baml-cli test [args]".blue());
         }
 
+        if let Some(evalport_dir) = evalport_dir.filter(|_| !selected_tests.is_empty()) {
+            output_evalport::EvalPortRenderer::new(
+                evalport_dir,
+                self,
+                &selected_tests
+                    .iter()
+                    .map(|(key, (location, _))| (key.clone(), location.clone()))
+                    .collect(),
+                env_vars,
+            )?
+            .write_suite()?;
+        }
+
         Ok(())
     }
 
@@ -216,67 +220,33 @@ impl TestExecutor for BamlRuntime {
         max_concurrency: usize,
         output_format: &crate::cli::testing::OutputFormat,
         junit_path: Option<&String>,
+        evalport_dir: Option<&std::path::Path>,
         env_vars: &HashMap<String, String>,
         cancel_notify: Option<Arc<tokio::sync::Notify>>,
-    ) -> TestRunStatus {
-        let renderer = AggregateRenderer::new(output_format, junit_path);
-        let selected_tests: BTreeMap<(String, String), (String, FunctionType)> = {
-            let ir = &self.ir;
-            // Regular LLM function tests
-            let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
-                let (function_name, test_name) = node_pair.name();
-                if args.includes(function_name, test_name) {
-                    node_pair.span().map(|s| {
-                        (
-                            (function_name.to_string(), test_name.to_string()),
-                            (
-                                format!("{}:{}", s.file.path(), s.line_and_column().0 .0 + 1),
-                                FunctionType::Llm,
-                            ),
-                        )
-                    })
-                } else {
-                    None
-                }
-            });
-
-            // Expr function tests
-            let expr_fn_tests: Vec<((String, String), (String, FunctionType))> = ir
-                .walk_expr_fns()
-                .flat_map(|f| {
-                    f.walk_tests()
-                        .filter_map(|node_pair| {
-                            let function_name = node_pair.function().name();
-                            let test_name = &node_pair.test_case().name;
-                            if args.includes(function_name, test_name) {
-                                node_pair.span().map(|s| {
-                                    (
-                                        (function_name.to_string(), test_name.to_string()),
-                                        (
-                                            format!(
-                                                "{}:{}",
-                                                s.file.path(),
-                                                s.line_and_column().0 .0 + 1
-                                            ),
-                                            FunctionType::Expr,
-                                        ),
-                                    )
-                                })
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect();
-
-            from_fn_tests.chain(expr_fn_tests).collect()
-        };
-
+    ) -> Result<TestRunStatus> {
+        let selected_tests = self.selected_tests(args);
         if selected_tests.is_empty() {
             println!("No tests selected");
-            return TestRunStatus::NoTests;
+            return Ok(TestRunStatus::NoTests);
         }
+        let selected_test_locations = selected_tests
+            .iter()
+            .map(|(key, (location, _))| (key.clone(), location.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let evalport_renderer = evalport_dir
+            .map(|dir| {
+                output_evalport::EvalPortRenderer::new(
+                    dir,
+                    &self,
+                    &selected_test_locations,
+                    env_vars,
+                )
+            })
+            .transpose()?;
+        if let Some(renderer) = &evalport_renderer {
+            renderer.write_suite()?;
+        }
+        let renderer = AggregateRenderer::new(output_format, junit_path, evalport_renderer);
 
         let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
@@ -435,9 +405,9 @@ impl TestExecutor for BamlRuntime {
             .iter()
             .map(|(key, (location, _))| (key.clone(), location.clone()))
             .collect();
-        renderer.render_final(&final_status, &selected_tests_for_render);
+        renderer.render_final(&final_status, &selected_tests_for_render)?;
 
-        match res {
+        Ok(match res {
             Ok(_) => {
                 let failed_count = final_status
                     .values()
@@ -450,7 +420,56 @@ impl TestExecutor for BamlRuntime {
                 }
             }
             Err(_) => TestRunStatus::Cancelled,
-        }
+        })
+    }
+}
+
+impl BamlRuntime {
+    fn selected_tests(
+        &self,
+        args: &TestFilter,
+    ) -> BTreeMap<(String, String), (String, FunctionType)> {
+        let ir = &self.ir;
+        let from_fn_tests = ir.walk_function_test_pairs().filter_map(|node_pair| {
+            let (function_name, test_name) = node_pair.name();
+            if args.includes(function_name, test_name) {
+                node_pair.span().map(|s| {
+                    (
+                        (function_name.to_string(), test_name.to_string()),
+                        (
+                            format!("{}:{}", s.file.path(), s.line_and_column().0 .0 + 1),
+                            FunctionType::Llm,
+                        ),
+                    )
+                })
+            } else {
+                None
+            }
+        });
+
+        let expr_fn_tests = ir.walk_expr_fns().flat_map(|f| {
+            f.walk_tests()
+                .filter_map(|node_pair| {
+                    let function_name = node_pair.function().name();
+                    let test_name = &node_pair.test_case().name;
+                    if args.includes(function_name, test_name) {
+                        node_pair.span().map(|s| {
+                            (
+                                (function_name.to_string(), test_name.to_string()),
+                                (
+                                    format!("{}:{}", s.file.path(), s.line_and_column().0 .0 + 1),
+                                    FunctionType::Expr,
+                                ),
+                            )
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+
+        from_fn_tests.chain(expr_fn_tests).collect()
     }
 }
 
@@ -458,7 +477,109 @@ impl TestExecutor for BamlRuntime {
 mod tests {
     use std::time::Duration;
 
+    use jsonschema::Resource;
+
     use super::*;
+
+    const EVALPORT_GRADER_SCHEMA: &str = include_str!("../../tests/evalport-schemas/grader.json");
+    const EVALPORT_TESTCASE_SCHEMA: &str =
+        include_str!("../../tests/evalport-schemas/testcase.json");
+    const EVALPORT_SUITE_SCHEMA: &str = include_str!("../../tests/evalport-schemas/suite.json");
+    const EVALPORT_RESULTSET_SCHEMA: &str =
+        include_str!("../../tests/evalport-schemas/resultset.json");
+
+    fn assert_valid_evalport_document(schema: &serde_json::Value, document: &serde_json::Value) {
+        let grader_schema = serde_json::from_str(EVALPORT_GRADER_SCHEMA).unwrap();
+        let testcase_schema = serde_json::from_str(EVALPORT_TESTCASE_SCHEMA).unwrap();
+        let validator = jsonschema::draft202012::options()
+            .with_resources(
+                [
+                    (
+                        "https://evalport.org/schema/grader.json",
+                        Resource::from_contents(grader_schema).unwrap(),
+                    ),
+                    (
+                        "https://evalport.org/schema/testcase.json",
+                        Resource::from_contents(testcase_schema).unwrap(),
+                    ),
+                ]
+                .into_iter(),
+            )
+            .should_validate_formats(true)
+            .build(schema)
+            .unwrap();
+        let errors = validator
+            .iter_errors(document)
+            .map(|error| error.to_string())
+            .collect::<Vec<_>>();
+        assert!(errors.is_empty(), "EvalPort schema errors: {errors:#?}");
+    }
+
+    #[tokio::test]
+    async fn evalport_export_matches_published_schemas() {
+        let baml_content = r#"
+            function Add(a: int, b: int) -> int {
+              a + b
+            }
+
+            test AddsNumbers {
+              functions [Add]
+              args {
+                a 1
+                b 2
+              }
+              @@assert(sum_is_three, {{ this == 3 }})
+              @@check(is_positive, {{ this > 0 }})
+            }
+        "#;
+        let runtime = Arc::new(
+            crate::BamlRuntime::from_file_content(
+                "baml_src",
+                &HashMap::from([("main.baml".to_string(), baml_content.to_string())]),
+                HashMap::<String, String>::new(),
+                internal_baml_core::FeatureFlags::new(),
+            )
+            .unwrap(),
+        );
+        let output_dir = tempfile::tempdir().unwrap();
+        let filter = TestFilter::from(std::iter::empty::<&str>(), std::iter::empty::<&str>());
+
+        let result = runtime
+            .cli_run_tests(
+                &filter,
+                1,
+                &crate::cli::testing::OutputFormat::Github,
+                None,
+                Some(output_dir.path()),
+                &HashMap::new(),
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(matches!(result, TestRunStatus::Passed));
+
+        let suite: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output_dir.path().join("suite.json")).unwrap())
+                .unwrap();
+        let result_set: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output_dir.path().join("results.json")).unwrap())
+                .unwrap();
+        let suite_schema = serde_json::from_str(EVALPORT_SUITE_SCHEMA).unwrap();
+        let resultset_schema = serde_json::from_str(EVALPORT_RESULTSET_SCHEMA).unwrap();
+
+        assert_valid_evalport_document(&suite_schema, &suite);
+        assert_valid_evalport_document(&resultset_schema, &result_set);
+        assert_eq!(suite["test_cases"][0]["id"], "Add::AddsNumbers");
+        assert_eq!(suite["test_cases"][0]["metadata"]["baml.args"]["a"], 1);
+        assert_eq!(result_set["results"][0]["actual_output"], "3");
+        assert_eq!(
+            result_set["results"][0]["grader_results"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+    }
 
     #[tokio::test]
     async fn cancel_notify_returns_cancelled() {
@@ -532,10 +653,12 @@ mod tests {
                 1,
                 &crate::cli::testing::OutputFormat::Pretty,
                 None,
+                None,
                 &HashMap::new(),
                 Some(notify),
             )
-            .await;
+            .await
+            .unwrap();
 
         // 5. Assert cancellation
         assert!(matches!(result, TestRunStatus::Cancelled));

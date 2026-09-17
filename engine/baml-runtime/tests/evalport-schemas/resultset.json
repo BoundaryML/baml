@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evalport.org/schema/resultset.json",
+  "title": "EvalPort ResultSet",
+  "description": "The output of running an eval suite — results and summary statistics.",
+  "type": "object",
+  "required": ["version", "suite_id", "run_id", "started_at", "results"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": {
+      "type": "string",
+      "description": "EvalPort specification version. Full semver 2.0.0 (https://semver.org): MAJOR.MINOR.PATCH with optional -PRERELEASE and +BUILD metadata, e.g. \"1.0.0\", \"1.0.0-draft\", \"1.0.0-rc.1\", \"1.1.0-beta.2+build.5\".",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "suite_id": {
+      "type": "string",
+      "description": "ID of the eval suite that was run.",
+      "minLength": 1
+    },
+    "suite_version": {
+      "type": "string",
+      "description": "Version of the eval suite that was run."
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Unique identifier for this run.",
+      "minLength": 1
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Run start timestamp (ISO 8601)."
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Run completion timestamp (ISO 8601)."
+    },
+    "provider": {
+      "type": "object",
+      "description": "Provider configuration used for the run.",
+      "properties": {
+        "model": { "type": "string" },
+        "api_base": { "type": "string" },
+        "temperature": { "type": "number" },
+        "max_tokens": { "type": "integer" },
+        "extra": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "runner": {
+      "type": "object",
+      "description": "Information about the runner.",
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "isolation": {
+      "type": "string",
+      "description": "Trial isolation mode for repeated attempts represented in this ResultSet's results (see attempt, below): whether repeats ran in fresh sessions/model instances or a shared session/context, which changes what a stability or flip-rate computation over those repeats can actually support statistically. An open string, not a closed enum -- \"fresh\" and \"shared\" are conventional values, not an exhaustive list, so a new isolation strategy never needs a spec change just to be nameable. Declared once per ResultSet, not per Result: a single ResultSet is one collection of evidence and should make one isolation claim; a producer whose repeats genuinely mix isolation modes SHOULD emit separate ResultSets rather than mix modes within one (see Extension Mechanism -> Repetition & Attempt Tracking). Absent means unknown/not declared -- existing ResultSets need no change."
+    },
+    "results": {
+      "type": "array",
+      "description": "One result per test case, or -- when using attempt -- multiple results per test case representing repeated trials of it.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["test_case_id", "grader_results", "passed"],
+        "properties": {
+          "test_case_id": {
+            "type": "string",
+            "description": "ID of the test case this result corresponds to.",
+            "minLength": 1
+          },
+          "actual_output": {
+            "type": "string",
+            "description": "The output produced by the LLM."
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-indexed repetition number for this test_case_id within this run_id; ascending values are observation order (attempt 2 was observed after attempt 1, etc.), giving consumers a documented ordering guarantee instead of having to infer one from completed_at or array position. Absent, or 1 with no sibling attempts, means a single-attempt result -- existing single-shot ResultSets need no change. Together with test_case_id and run_id this forms the join key for pairing repeated trials of the same case (e.g. LangSmith's num_repetitions, Promptfoo's per-test repeats, Inspect AI's epochs) for stability/flip-rate analysis; (test_case_id, run_id, attempt) MUST be unique across results when attempt is present -- see Validation Rules -> Uniqueness and Extension Mechanism -> Repetition & Attempt Tracking."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp this individual result was produced (ISO 8601). Optional; distinct from the ResultSet-level completed_at, which marks when the whole run finished. Lets a resumed or incrementally-written run establish a per-result tiebreaker when merging two partial ResultSets for the same run_id -- see Extension Mechanism -> Resumable Runs & Partial ResultSets."
+          },
+          "grader_results": {
+            "type": "array",
+            "description": "Results from each grader.",
+            "items": {
+              "type": "object",
+              "required": ["grader_id", "type", "score", "passed"],
+              "properties": {
+                "grader_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": { "type": "string" },
+                "score": {
+                  "type": ["number", "null"],
+                  "description": "Numeric score, typically 0.0-1.0. Null if skipped or errored.",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "passed": { "type": "boolean" },
+                "reason": { "type": "string" },
+                "metadata": { "type": "object", "additionalProperties": true }
+              },
+              "additionalProperties": false
+            }
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "Overall pass/fail (all graders passed)."
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "Execution time in milliseconds.",
+            "minimum": 0
+          },
+          "error": {
+            "type": "object",
+            "description": "Error details if the test case errored.",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["timeout", "provider_error", "runner_error"]
+              },
+              "message": { "type": "string" },
+              "code": { "type": ["string", "integer"] },
+              "retryable": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Free-form metadata (trace ID, cost, tokens).",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Aggregated statistics.",
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "pass_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "avg_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "by_grader": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "passed": { "type": "integer" },
+              "failed": { "type": "integer" },
+              "avg_score": { "type": "number" }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form metadata.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

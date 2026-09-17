@@ -30,7 +30,7 @@ impl RenderTestExecutionStatus for JUnitXMLRenderer {
         &self,
         test_status_map: &TestExecutionStatusMap,
         _selected_tests: &BTreeMap<(String, String), String>, // Not used for JUnit XML output
-    ) {
+    ) -> anyhow::Result<()> {
         let mut report = Report::new();
 
         // Group tests by function (using function name as the testsuite name)
@@ -101,7 +101,8 @@ impl RenderTestExecutionStatus for JUnitXMLRenderer {
             report.add_testsuite(suite);
         }
 
-        let file = File::create(&self.target_file).unwrap();
-        let _ = report.write_xml(file);
+        let file = File::create(&self.target_file)?;
+        report.write_xml(file)?;
+        Ok(())
     }
 }

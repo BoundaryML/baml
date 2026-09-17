@@ -17,6 +17,7 @@ baml-cli test [OPTIONS]
 | `--parallel <NUM>`        | Number of tests to run in parallel                               | `10`          |
 | `--pass-if-no-tests`      | Pass if no tests are selected                                    | `false`       |
 | `--require-human-eval`    | Fail if any tests need human evaluation                          | `true`        |
+| `--evalport <DIR>`        | Export selected tests and results as EvalPort JSON documents      | None          |
 | `--dotenv`                | Load environment variables from .env file                        | `true`        |
 | `--dotenv-path <PATH>`    | Path to custom .env file                                         | None          |
 
@@ -118,6 +119,18 @@ The `test` command returns different exit codes based on results:
 | `2`       | Tests require human evaluation |
 | `3`       | Test execution was cancelled   |
 | `4`       | No tests were found to run     |
+
+## EvalPort export
+
+Use `--evalport <DIR>` to export selected `.baml` test definitions and their results for eval dashboards, regression tools, or other EvalPort consumers:
+
+```bash
+baml-cli test --evalport ./evalport
+```
+
+The directory contains `suite.json`, an EvalPort `EvalSuite`, and `results.json`, an EvalPort `ResultSet`. With `--list`, BAML writes only `suite.json` and does not execute the tests.
+
+BAML exports each `Function::Test` pair as an EvalPort test case and each `@@assert` or `@@check` as a custom grader. Because EvalPort inputs are strings, the callable function and JSON-serialized BAML arguments are encoded in `input`; the original structured arguments, constraint expressions, constraint levels, labels, and source locations are also preserved under `baml.*` metadata or custom grader parameters. Export is intentionally one-way because arbitrary EvalPort graders cannot be translated losslessly into BAML/Jinja constraints.
 
 ## Examples
 

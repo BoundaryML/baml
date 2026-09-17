@@ -24,7 +24,7 @@ impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
         &self,
         test_status_map: &TestExecutionStatusMap,
         selected_tests: &BTreeMap<(String, String), String>,
-    ) {
+    ) -> anyhow::Result<()> {
         for ((function_name, test_name), status) in test_status_map.iter() {
             match status {
                 TestExecutionStatus::Pending => {
@@ -86,5 +86,6 @@ impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
             }
             println!("::endgroup::")
         }
+        Ok(())
     }
 }

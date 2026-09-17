@@ -75,6 +75,13 @@ pub struct TestArgs {
     #[arg(long, help = "JUnit XML output file, example: --junit-path=junit-report.xml", default_value_t = String::from("junit-report.xml"), hide = true)]
     junit_path: String,
 
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Export selected tests and results as EvalPort JSON documents"
+    )]
+    evalport: Option<PathBuf>,
+
     #[command(flatten)]
     dotenv: dotenv::DotenvArgs,
 }
@@ -153,7 +160,7 @@ impl TestArgs {
         );
 
         if self.list {
-            runtime.cli_list_tests(&test_execution_args)?;
+            runtime.cli_list_tests(&test_execution_args, self.evalport.as_deref(), &env_vars)?;
         } else {
             let TestArgs {
                 parallel,
@@ -162,6 +169,7 @@ impl TestArgs {
                 output_format,
                 junit,
                 junit_path,
+                evalport,
                 ..
             } = self;
 
@@ -171,10 +179,11 @@ impl TestArgs {
                     *parallel,
                     output_format,
                     if *junit { Some(junit_path) } else { None },
+                    evalport.as_deref(),
                     &env_vars,
                     cancel_notify,
                 )
-                .await
+                .await?
             {
                 crate::test_executor::TestRunStatus::NoTests => {
                     if *pass_if_no_tests {

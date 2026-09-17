@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evalport.org/schema/testcase.json",
+  "title": "EvalPort TestCase",
+  "description": "A single evaluation test case — the atomic unit of LLM evaluation.",
+  "type": "object",
+  "required": ["id", "input", "graders"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the test case within the suite.",
+      "minLength": 1
+    },
+    "input": {
+      "description": "The input prompt(s) sent to the LLM. String for single-turn, array for multi-turn.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      ]
+    },
+    "expected_output": {
+      "type": "string",
+      "description": "The reference/golden output for comparison graders."
+    },
+    "context": {
+      "type": "array",
+      "description": "Supplementary context (retrieved docs, conversation history, tool results).",
+      "items": { "type": "string" }
+    },
+    "retrieval_context": {
+      "type": "array",
+      "description": "Documents retrieved by a RAG system, separated from general context.",
+      "items": { "type": "string" }
+    },
+    "tools_called": {
+      "type": "array",
+      "description": "Names of tools called during execution (for agent evaluation).",
+      "items": { "type": "string" }
+    },
+    "expected_tools": {
+      "type": "array",
+      "description": "Names of tools that SHOULD be called (for agent evaluation).",
+      "items": { "type": "string" }
+    },
+    "graders": {
+      "type": "array",
+      "description": "IDs of graders to apply, or inline grader objects.",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1 },
+          { "$ref": "https://evalport.org/schema/grader.json" }
+        ]
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form metadata. Keys with 'openeval.' prefix are reserved.",
+      "additionalProperties": true
+    },
+    "tags": {
+      "type": "array",
+      "description": "Categorization tags for filtering and grouping.",
+      "items": { "type": "string" }
+    },
+    "provider": {
+      "type": "object",
+      "description": "Per-test-case provider override.",
+      "properties": {
+        "model": { "type": "string" },
+        "api_base": { "type": "string" },
+        "api_key_env": { "type": "string" },
+        "temperature": { "type": "number" },
+        "max_tokens": { "type": "integer", "minimum": 1 },
+        "extra": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "params": {
+      "type": "object",
+      "description": "Per-test-case generation parameters.",
+      "additionalProperties": true
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "description": "Maximum execution time in milliseconds.",
+      "minimum": 1
+    },
+    "weight": {
+      "type": "number",
+      "description": "Relative weight for score aggregation.",
+      "minimum": 0,
+      "default": 1.0
+    }
+  },
+  "additionalProperties": false
+}
