@@ -711,9 +711,10 @@ implement Marker for int {
 /// receiver constructors, while a package attempting to overlap a dependency's
 /// blanket impl is rejected by this same E0132 check before its blob is emitted.
 /// This makes user-vs-blob the only expressible load-time direction for valid
-/// mounted-package artifacts; an artifact whose OWN rows overlap is refused at
-/// the mount boundary (`ImportError::OverlappingImpls`), as malformed or
-/// tampered blobs are.
+/// mounted-package artifacts. An artifact whose OWN rows overlap is not the
+/// export of a checked package; the mount boundary refuses only the
+/// degenerate identity-level duplicate (`ImportError::DuplicateImpl`), so a
+/// served root's rows are trusted to be what its own compile checked.
 #[test]
 fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
     // Keep the argument executable: the rich fixture's blanket impl is exported

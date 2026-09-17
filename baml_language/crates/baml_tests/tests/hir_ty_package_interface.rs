@@ -439,36 +439,20 @@ implement Marker for Entry {
     );
 }
 
-#[test]
-fn overlapping_impl_rows_are_refused_before_installation() {
-    let blanket = forged_library_blob(|interface| {
-        let mut row = interface
-            .impls
-            .iter()
-            .find(|row| row.interface.name.name().as_str() == "Parent")
-            .expect("Entry implements Parent")
-            .clone();
-        let param = ParamTy::new(0, Name::new("T"));
-        row.for_ty_pattern = baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default());
-        row.generic_params = vec![param];
-        row.param_bounds = vec![Vec::new()];
-        row.origin = ExportedImplOrigin::OutOfBody;
-        interface.impls.push(row);
-    });
-    assert_eq!(
-        mount_refusal(blanket),
-        "the interface exports overlapping impl rows `implement app.Parent for app.Entry` and \
-         `implement app.Parent for #0`"
-    );
-}
-
 /// The identity is a spelling key: these two blocks have DISTINCT identities
 /// (union member order is part of the spelling) while coherence rejects the
-/// pair. The mount boundary judges the blob by coherence, not by identity,
-/// so the export of such a package is refused as overlapping rather than
-/// served with dispatch picking one of the two.
+/// pair. The mount boundary compares identities, not coherence — deciding
+/// that two distinct identities overlap needs the normalization oracle,
+/// which reads the root being imported — so this blob mounts and both rows
+/// are served.
+///
+/// A KNOWN GAP, pinned here so it cannot widen unnoticed and so the engine
+/// that closes it has an oracle ready: a served root's rows are trusted to
+/// be what its own compile checked (which, as the first assertion shows,
+/// rejects this pair), and only one overlap engine over one fact
+/// environment can judge them at the boundary.
 #[test]
-fn an_incoherent_package_with_distinct_identities_is_refused_as_overlapping() {
+fn overlap_between_distinct_identities_is_not_judged_at_the_mount_boundary() {
     const REORDERED: &str = r#"
 interface Marker {
     function mark(self) -> int throws never
@@ -526,11 +510,17 @@ implement Marker for Bar<string | int> {
         &export_interface(&db, app),
     )
     .expect("package interface serializes");
-    assert_eq!(
-        mount_refusal(blob),
-        "the interface exports overlapping impl rows `implement app.Marker for app.Bar<int | string>` \
-         and `implement app.Marker for app.Bar<string | int>`"
-    );
+    let mut consumer = ProjectDatabase::new();
+    consumer.workspace(std::path::Path::new(
+        "/hir-ty-package-interface-reordered-consumer",
+    ));
+    let served = consumer.mount("app", blob);
+    let marker_rows = package_interface(&consumer, served)
+        .impls
+        .iter()
+        .filter(|row| row.interface.name.name().as_str() == "Marker")
+        .count();
+    assert_eq!(marker_rows, 2, "both overlapping rows are served");
 }
 
 #[test]

@@ -283,8 +283,11 @@ pub fn mounted_interface_loc<'db>(
 /// with one identity are one impl (a duplicate: the degenerate overlap).
 /// Two identities may still overlap — `Bar<int | string>` against
 /// `Bar<string | int>`, an alias against its body — and only the overlap
-/// engine ([`crate::coherence`]) decides that: at the source compile
-/// (E0132) and at the mount boundary (`ImportError::OverlappingImpls`).
+/// engine ([`crate::coherence`]) decides that, at the source compile
+/// (E0132). Import does not re-judge a served root's rows for overlap:
+/// the identity is what the mount boundary can compare without the
+/// normalization oracle, and a duplicate is refused there
+/// (`ImportError::DuplicateImpl`).
 /// What the key guarantees is the other direction: it carries every input
 /// coherence discriminates on, so it never unifies two impls coherence
 /// separates.
