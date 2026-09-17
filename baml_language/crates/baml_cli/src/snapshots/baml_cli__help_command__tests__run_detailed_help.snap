@@ -50,7 +50,7 @@ Target options:
           passed once. Mutually exclusive with `<TARGET>` and `--expression`.
 
   -e, --expression <EXPRESSION>
-          Evaluate a BAML expression.
+          Evaluate a BAML expression with optional `--file` or project context.
 
           Use `-e @file` to read an expression from a file or `-e -` for standard input. Mutually
           exclusive with `<TARGET>` and `--function`.
@@ -62,7 +62,9 @@ Project options:
       --file <PATH>
           Load one standalone source file instead of discovering a project.
 
-          Runs its `main` function when no target is supplied. Mutually exclusive with `--project`.
+          With `--expression`, makes this file's declarations available to the expression.
+          Otherwise, runs its `main` function when no target is supplied. Mutually exclusive with
+          `--project`.
 
 Run output options:
       --output-format <FORMAT>
