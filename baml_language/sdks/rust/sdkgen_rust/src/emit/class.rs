@@ -11,7 +11,7 @@ use quote::quote;
 
 use super::function::{Receiver, doc_attrs, emit_method};
 use crate::{
-    SkipWarning, idents,
+    SkipKind, SkipWarning, idents,
     translate_ty::{self, TyCtx},
 };
 
@@ -90,6 +90,7 @@ pub(crate) fn emit(
         let field_name = prop.name.as_str();
         let field_ident = idents::ident(field_name);
         let field_ty = translate_ty::translate(&prop.ty, &field_ctx).map_err(|u| SkipWarning {
+            kind: SkipKind::Type,
             fqn: fqn.clone(),
             reason: format!(
                 "generator bug: analysis accepted field `{field_name}` but translation failed: {}",

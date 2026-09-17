@@ -612,6 +612,51 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     pool
 }
 
+/// Collect the concrete, non-generic implementors of each non-generic interface.
+///
+/// Interface declarations are intentionally absent from [`SymbolPool`]: most
+/// generators erase them or project them in language-specific ways. Generators
+/// that need a closed-world representation consume this side table and choose
+/// their own projection.
+pub fn build_interface_implementors(db: &ProjectDatabase) -> HashMap<cg::Name, Vec<cg::Ty>> {
+    let package_roots: std::collections::HashSet<_> = compiler2_all_files(db)
+        .into_iter()
+        .map(|source_file| file_package::file_package(db, source_file).root)
+        .collect();
+    let spelling = spelling(db);
+
+    let mut implementors: HashMap<cg::Name, Vec<cg::Ty>> = HashMap::new();
+    for package_root in package_roots {
+        let package = baml_compiler2_hir_ty::package_interface::package_interface(db, package_root);
+        for implementation in &package.impls {
+            if !implementation.generic_params.is_empty()
+                || !implementation.interface.generics.is_empty()
+                || !implementation.interface.associated_types.is_empty()
+            {
+                continue;
+            }
+
+            let interface_name = name_from_qtn(spelling, &implementation.interface.name);
+            let concrete = convert_tir_to_codegen_ty(
+                spelling,
+                &implementation.for_ty_pattern,
+                &HashMap::new(),
+                &std::collections::HashSet::new(),
+            );
+            implementors
+                .entry(interface_name)
+                .or_default()
+                .push(concrete);
+        }
+    }
+
+    for concrete_types in implementors.values_mut() {
+        concrete_types.sort_by_key(std::string::ToString::to_string);
+        concrete_types.dedup();
+    }
+    implementors
+}
+
 // ---------------------------------------------------------------------------
 // Type resolution
 // ---------------------------------------------------------------------------
