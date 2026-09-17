@@ -910,9 +910,11 @@ impl BamlClassLiteralType for PackageReflectImpl {
             baml_type::Literal::Int(n) => Ok(Value::int(n)),
             baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n)).map_err(Into::into),
             baml_type::Literal::Bool(b) => Ok(Value::bool(b)),
-            baml_type::Literal::Float(_) => {
-                unreachable!("source and reflected literal types do not include floats")
-            }
+            baml_type::Literal::Float(_) => Err(crate::errors::VmRustFnError::BamlError(
+                crate::errors::VmBamlError::InvalidArgument {
+                    message: "literal value has no public reflection representation".into(),
+                },
+            )),
         }
     }
 }
