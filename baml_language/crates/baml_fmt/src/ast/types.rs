@@ -673,12 +673,13 @@ impl UnionTypeMember {
             }
             SyntaxKind::STRING_LITERAL
             | SyntaxKind::INTEGER_LITERAL
+            | SyntaxKind::BIGINT_LITERAL
             | SyntaxKind::FLOAT_LITERAL => {
                 let string = Literal::from_cst(first)?;
                 Ok(UnionTypeMember::Literal(string))
             }
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "L_PAREN, WORD, STRING_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL"
+                expected_desc: "L_PAREN, WORD, STRING_LITERAL, INTEGER_LITERAL, BIGINT_LITERAL, or FLOAT_LITERAL"
                     .into(),
                 found,
                 at: first.text_range(),
