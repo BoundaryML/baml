@@ -211,6 +211,18 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_unquoted_object_value_retains_non_hierarchical_uris_after_comma,
+    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144" }
+);
+
+test_deserializer!(
     test_unquoted_object_value_retains_colon_text_after_phrase,
     r#"{reason:see docs,label:value}"#,
     baml_tyannotated!(Reason),

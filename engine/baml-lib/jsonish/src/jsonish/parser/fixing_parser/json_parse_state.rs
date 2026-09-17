@@ -422,13 +422,23 @@ impl JsonParseState {
         if !(first.is_alphanumeric() || matches!(first, '_' | '$')) {
             return false;
         }
+        let mut candidate = first.to_string();
 
         while let Some((_, c)) = lookahead.next() {
             match c {
                 // A slash immediately after the colon is value text such as
-                // `https://...`, not a compact object field.
-                ':' => return !matches!(lookahead.peek(), Some((_, '/'))),
-                c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => {}
+                // `https://...`, and common non-hierarchical URI schemes such
+                // as `mailto:` and `urn:` also belong to the preceding value.
+                ':' => {
+                    let is_uri_scheme = [
+                        "data", "file", "ftp", "ftps", "geo", "git", "http", "https", "magnet",
+                        "mailto", "sms", "ssh", "tel", "urn", "ws", "wss",
+                    ]
+                    .iter()
+                    .any(|scheme| candidate.eq_ignore_ascii_case(scheme));
+                    return !is_uri_scheme && !matches!(lookahead.peek(), Some((_, '/')));
+                }
+                c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => candidate.push(c),
                 _ => return false,
             }
         }
