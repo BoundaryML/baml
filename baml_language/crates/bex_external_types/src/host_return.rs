@@ -201,7 +201,13 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // the declared representation exactly — never silently reinterpreted (the
         // int→float/bigint conversions are boundary coercions, not subtyping).
         RuntimeTy::Int { .. } => matches!(value, BexExternalValue::Int(_)),
-        RuntimeTy::Float { .. } => matches!(value, BexExternalValue::Float(_)),
+        // Hosts whose encoders are value-shaped rather than schema-shaped
+        // emit integral numbers as ints (Python `7`, JS `Number.isInteger`),
+        // so a `float` slot accepts integral values.
+        RuntimeTy::Float { .. } => matches!(
+            value,
+            BexExternalValue::Float(_) | BexExternalValue::Int(_)
+        ),
         RuntimeTy::Bigint { .. } => matches!(value, BexExternalValue::Bigint(_)),
         RuntimeTy::String { .. } => matches!(value, BexExternalValue::String(_)),
         RuntimeTy::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
@@ -212,9 +218,9 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             (Literal::Bigint(b), BexExternalValue::Bigint(v)) => b == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
             // `Literal::Float` stores the literal as a string for precision;
-            // match by tag (any float), mirroring
+            // match by tag (any float or integral int), mirroring
             // `bex_engine::conversion::value_matches_type`.
-            (Literal::Float(_), BexExternalValue::Float(_)) => true,
+            (Literal::Float(_), BexExternalValue::Float(_) | BexExternalValue::Int(_)) => true,
             _ => false,
         },
 
@@ -510,10 +516,10 @@ mod tests {
     }
 
     #[test]
-    fn scalar_int_does_not_satisfy_float_and_vice_versa() {
-        // The core int≠float distinction.
+    fn scalar_int_satisfies_float_at_boundary() {
+        // Integral numbers from host languages (JS Number.isInteger) satisfy float
         assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::int()).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::float()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::float()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::float()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::int()).is_err());
     }
