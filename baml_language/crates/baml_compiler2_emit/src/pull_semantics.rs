@@ -36,7 +36,18 @@ pub(crate) trait PullSink<'db> {
     fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
 
+    /// Complete a binary operation after its operands have been pulled.
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
+    /// Complete a binary operation after its operands have been pulled. Typed
+    /// code generators can use the operands to select a specialized opcode.
+    fn binary_op_for_operands(
+        &mut self,
+        op: BinOp,
+        _left: &Operand<'db>,
+        _right: &Operand<'db>,
+    ) -> Result<(), Self::Error> {
+        self.binary_op(op)
+    }
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
@@ -372,7 +383,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
         Rvalue::BinaryOp { op, left, right } => {
             walk_operand_pull(sink, left)?;
             walk_operand_pull(sink, right)?;
-            sink.binary_op(*op)
+            sink.binary_op_for_operands(*op, left, right)
         }
         Rvalue::UnaryOp { op, operand } => {
             walk_operand_pull(sink, operand)?;

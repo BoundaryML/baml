@@ -1731,7 +1731,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.emit(Instruction::Copy(0));
         unwrap_infallible(self.load_field(*field, &name));
         self.emit_operand_pull(right);
-        self.emit(Self::binop_instruction(*op));
+        let instruction = self
+            .try_specialize_binary_op(*op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(*op));
+        self.emit(instruction);
         unwrap_infallible(self.store_field_value(*field, &name));
         true
     }
@@ -1788,15 +1791,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
             if self.try_emit_class_aggregate_field_copy_sets(name, type_arg_templates, fields) {
-                return;
-            }
-        }
-        // Specialize BinaryOp when both operand types are statically known.
-        if let Rvalue::BinaryOp { op, left, right } = rvalue {
-            if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
-                self.emit_operand_pull(left);
-                self.emit_operand_pull(right);
-                self.emit(specialized);
                 return;
             }
         }
@@ -3320,8 +3314,23 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
+    /// Emit the generic instruction for a binary operation.
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error> {
         self.emit(Self::binop_instruction(op));
+        Ok(())
+    }
+
+    /// Select a type-specialized binary instruction when operand types permit it.
+    fn binary_op_for_operands(
+        &mut self,
+        op: BinOp,
+        left: &Operand<'ctx>,
+        right: &Operand<'ctx>,
+    ) -> Result<(), Self::Error> {
+        let instruction = self
+            .try_specialize_binary_op(op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(op));
+        self.emit(instruction);
         Ok(())
     }
 
