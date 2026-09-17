@@ -122,12 +122,14 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
         &self.meta.flags
     }
 
-    /// Return every array-element error that was tolerated while building this value.
+    /// Return every real array-element error that was tolerated while building this value.
     ///
     /// Array coercion keeps parsing after a bad element so it can compare candidate
     /// shapes and produce partial streaming values. A completed parse must inspect
     /// these errors before erasing deserializer metadata, otherwise converting the
-    /// value silently shortens the array.
+    /// value silently shortens the array. Errors from coercing a non-array into an
+    /// implied singleton are excluded: an unparseable singleton is the established
+    /// representation for an absent list (not a discarded array element).
     pub fn array_item_parse_errors(&self) -> Vec<ParsingError> {
         let mut errors = Vec::new();
         self.collect_array_item_parse_errors(&mut errors);
@@ -135,16 +137,13 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     }
 
     fn collect_array_item_parse_errors(&self, errors: &mut Vec<ParsingError>) {
-        errors.extend(
-            self.meta
-                .flags
-                .flags()
-                .iter()
-                .filter_map(|flag| match flag {
-                    Flag::ArrayItemParseError(_, error) => Some(error.clone()),
-                    _ => None,
-                }),
-        );
+        let flags = self.meta.flags.flags();
+        if !flags.iter().any(|flag| matches!(flag, Flag::SingleToArray)) {
+            errors.extend(flags.iter().filter_map(|flag| match flag {
+                Flag::ArrayItemParseError(_, error) => Some(error.clone()),
+                _ => None,
+            }));
+        }
 
         match &self.value {
             BamlValue::Array(array) => {
