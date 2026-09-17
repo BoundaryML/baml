@@ -1415,9 +1415,12 @@ pub(crate) fn member_resolution_target<'db>(
         MemberResolution::Free {
             func: DeclRef::Source(func),
         } => Some(SymbolTarget::Item(Definition::Function(*func))),
-        // A served package's free function is a top-level ITEM, and `Item`
-        // carries source definitions only until the definition lane gains
-        // its own provenance-total ref.
+        // BUG: a served package's free function has no symbol — no hover,
+        // goto, or references — because it is a top-level ITEM and `Item`
+        // carries source definitions only. Closed when the definition lane
+        // gains its provenance-total ref (PR-4's `DefinitionRef`), which
+        // also gives served type names a target. Pinned by
+        // `mounted_package_tests::a_mounted_free_function_has_no_symbol_yet`.
         MemberResolution::Free {
             func: DeclRef::External(_),
         } => None,
@@ -1492,24 +1495,40 @@ fn constructor_field_at<'db>(
         let Ty::Class(ref qtn, _, _) = obj_ty else {
             return None;
         };
-
-        let pkg_id = qtn.root();
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
-        let def = pkg_items.lookup_type(qtn.namespace(), qtn.name())?;
-        let Definition::Class(class) = def else {
-            return None;
+        let class = constructed_class(db, qtn)?;
+        let field_index = match class {
+            DeclRef::Source(class) => item_data::class_data(db, class)
+                .fields
+                .iter()
+                .position(|f| f.name == field.name)?,
+            DeclRef::External(class) => {
+                baml_compiler2_hir_ty::extern_loc::extern_class_row(db, class)
+                    .fields
+                    .iter()
+                    .position(|(name, _, _)| *name == field.name)?
+            }
         };
-
-        let field_index = item_data::class_data(db, class)
-            .fields
-            .iter()
-            .position(|f| f.name == field.name)?;
-        return Some(SymbolTarget::Field {
-            class: DeclRef::Source(class),
-            field_index,
-        });
+        return Some(SymbolTarget::Field { class, field_index });
     }
     None
+}
+
+/// The class a constructor literal's type names, in whichever lane serves
+/// it: a served package's row — never its link stub, which would give the
+/// field a second identity split from the `Field { External }` every member
+/// access produces — else the source class.
+pub(crate) fn constructed_class<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    qtn: &baml_type::DeclName,
+) -> Option<baml_compiler2_hir_ty::extern_loc::ClassRef<'db>> {
+    if let Some(class) = baml_compiler2_hir_ty::extern_loc::mounted_class_loc(db, qtn) {
+        return Some(DeclRef::External(class));
+    }
+    let pkg_items = baml_compiler2_hir::package::package_items(db, qtn.root());
+    match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
+        Definition::Class(class) => Some(DeclRef::Source(class)),
+        _ => None,
+    }
 }
 
 // ── target_definition ────────────────────────────────────────────────────────

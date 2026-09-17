@@ -200,10 +200,12 @@ fn renameable(
     };
     let name = token.text().to_string();
 
-    // The cursor must address something with a declaration before the group
-    // is worth building.
-    let cursor_declaration = target_definition(db, target).ok_or(RenameError::NotASymbol)?;
+    // The group first: a served package's row member has no declaration
+    // location at all, and the group builder is where that is reported as
+    // what it is — a name outside the workspace — rather than as "no
+    // symbol here". Only then must the cursor's own declaration exist.
     let group = rename_group(db, file, target)?;
+    let cursor_declaration = target_definition(db, target).ok_or(RenameError::NotASymbol)?;
     debug_assert!(
         group.symbols.contains(&target),
         "a rename group always contains the symbol it was built for; \
@@ -1020,7 +1022,7 @@ function read(p: P, n: Named, s: Shows) -> string throws never {
             let mut db = baml_db::ProjectDatabase::default();
             let root = std::path::Path::new("/rename-check");
             db.workspace(root);
-            db.file(&root.join("test.baml"), &edited);
+            db.file(root.join("test.baml"), &edited);
             let errors: Vec<String> = baml_db::testing::check_user_files(&db)
                 .iter()
                 .filter(|diagnostic| {

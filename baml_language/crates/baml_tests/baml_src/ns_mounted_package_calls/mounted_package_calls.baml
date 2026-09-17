@@ -49,6 +49,10 @@ function mpc_library() -> reflect.Package {
                     }
                 }
 
+                interface Labeled {
+                    label string
+                }
+
                 class Widget {
                     x int
                     label string
@@ -56,6 +60,12 @@ function mpc_library() -> reflect.Package {
                     function get_x(self) -> int throws never {
                         self.x
                     }
+
+                    function origin() -> Widget throws never {
+                        Widget { x: 0, label: "origin" }
+                    }
+
+                    implements Labeled {}
 
                     implements Describable {
                         function describe(self) -> string throws never {
@@ -347,4 +357,32 @@ test "mounted impl methods as values and through qualified spellings" {
     assert.equal(interface_qualified_call(), "hi q");
     let written_qualifier_default = consumer.get_function<() -> string>("root.written_qualifier_default") ?? throw "missing root.written_qualifier_default";
     assert.equal(written_qualifier_default(), "hi dhi d")
+}
+
+// A mounted INTERFACE FIELD is read through an existential at runtime (the
+// virtual field road keyed on the row), and a mounted class's INHERENT
+// static resolves type-keyed on the class — neither goes through an impl.
+test "mounted interface fields read through an existential and inherent statics resolve" {
+    let app = mpc_library();
+    let consumer = reflect.Package.compile(
+        {
+            "main.baml": `
+                function read_label(l: app.Labeled) -> string throws never {
+                    l.label
+                }
+
+                function origin_x() -> int throws never {
+                    app.Widget.origin().x
+                }
+
+                function main() -> string throws never {
+                    read_label(app.Widget { x: 1, label: "lbl" }) + ":" + origin_x().to_string()
+                }
+            `,
+        },
+        packages = { "app": app },
+    );
+    assert.equal(consumer.diagnostics().length(), 0);
+    let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    assert.equal(main(), "lbl:0")
 }

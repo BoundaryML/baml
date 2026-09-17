@@ -592,8 +592,8 @@ pub struct AssocBindingExport {
 
 // ── Item records ─────────────────────────────────────────────────────────────
 
-/// The structural kind of an exported item, serialized exactly as the
-/// pre-rework surface layer spelled it.
+/// The structural kind of an exported item, in its wire spelling
+/// (`snake_case`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExportItemKind {

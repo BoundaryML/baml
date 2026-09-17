@@ -612,8 +612,8 @@ pub struct CallPlan<T = baml_type::Ty> {
     pub runtime_id: Option<ExprId>,
 }
 
-/// Hand-written: the derive would bound `T: Default`, which neither type
-/// vocabulary provides (or needs — no field holds a bare `T`).
+// Hand-written: the derive would bound `T: Default`, which neither type
+// vocabulary provides (or needs — no field holds a bare `T`).
 impl<T> Default for CallPlan<T> {
     fn default() -> Self {
         CallPlan {
@@ -8397,7 +8397,7 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// [`Self::register_call_bounds`] for a class instantiation: one
+    /// [`Self::register_callable_bounds`] for a class instantiation: one
     /// Implements obligation per declared bound of the class's generic
     /// frame (`class Holder<T extends Named & Sized>` registers BOTH
     /// conjuncts for `Holder<X> { .. }`) - rustc's ADT well-formedness
@@ -9443,7 +9443,7 @@ impl<'db> InferenceContext<'db> {
     /// one applies (the concrete-field backing link is not resolved yet -
     /// no entry rather than a wrong one).
     // A method for call-site symmetry with the other resolution writers.
-    #[allow(clippy::unused_self)]
+    #[expect(clippy::unused_self)]
     fn declarer_resolution(
         &self,
         declarer: &crate::method_resolution::MemberDeclarer<'db>,
@@ -13304,9 +13304,6 @@ fn bind_receiver(fn_ty: Ty) -> Ty {
     })
 }
 
-/// A resolved function as a first-class value: its signature instantiated
-/// into an interned function type. Shared by direct calls (turbofish-aware
-/// instantiation) and value-position references (fresh-var instantiation).
 impl<'db> InferenceContext<'db> {
     /// Inference finalize's exit through the
     /// [`baml_type::interned::ClosedTy`] boundary, TOTAL: a finalized

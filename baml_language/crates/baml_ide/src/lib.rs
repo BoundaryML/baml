@@ -77,11 +77,8 @@ pub use rename::{RenameError, prepare_rename, rename};
 pub use resolve::{Location, SymbolTarget, symbol_at, target_definition};
 pub use search::{SearchHit, SymbolInfo, search_ranked, search_symbols};
 pub use symbol_pool::build_symbol_pool;
-// `symbols::SymbolKind` (the legacy flat listing kind) stays module-qualified:
-// the unqualified name belongs to `describe::SymbolKind`, the payload-carrying
-// kind of a symbol description.
 pub use symbols::{
-    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Internals, Symbol,
+    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Internals,
     list_functions_with_metadata,
 };
 // Editor primitive: cursor-position token lookup. First-class API — callers

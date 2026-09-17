@@ -226,29 +226,6 @@ fn is_stdlib_internal(
         && declared_in.source_root(db).kind(db) == baml_base::SourceRootKind::Stdlib
 }
 
-/// Symbol kind — locally defined since v1 HIR is removed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolKind {
-    Function,
-    Class,
-    Enum,
-    TypeAlias,
-    Field,
-    EnumVariant,
-    Client,
-    Test,
-    Generator,
-}
-
-/// Information about a symbol in the project.
-#[derive(Debug, Clone)]
-pub struct Symbol {
-    pub name: String,
-    pub kind: SymbolKind,
-    pub file_path: std::path::PathBuf,
-    pub span: baml_db::Span,
-}
-
 /// Extended function metadata for the playground.
 #[derive(Debug, Clone)]
 pub struct FunctionSymbol {
@@ -543,7 +520,7 @@ mod tests {
             .canonicalize()
             .unwrap_or_else(|_| "/tmp".into());
         db.file(
-            &root.join("ns_demo/main.baml"),
+            root.join("ns_demo/main.baml"),
             "\n\nfunction transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
         );
 

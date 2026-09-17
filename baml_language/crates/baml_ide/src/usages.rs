@@ -452,14 +452,10 @@ fn find_member_usages(
                 }
             }
 
-            // Constructor-literal keys (fields only). A served class's
-            // literals are keyed on its exported row, which the key walk
-            // does not read yet — its member accesses are still found above.
-            if let SymbolTarget::Field {
-                class: DeclRef::Source(class),
-                ..
-            } = target
-            {
+            // Constructor-literal keys (fields only), in either lane: a
+            // served class's literals are keyed on its exported row, exactly
+            // as its member accesses are.
+            if let SymbolTarget::Field { class, .. } = target {
                 collect_constructor_key_usages(
                     db,
                     sf,
@@ -544,7 +540,7 @@ fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>
 fn collect_constructor_key_usages(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
-    class: baml_compiler2_hir::loc::ClassLoc<'_>,
+    class: baml_compiler2_hir_ty::extern_loc::ClassRef<'_>,
     field_name: &Name,
     expr_body: &ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
@@ -568,13 +564,7 @@ fn collect_constructor_key_usages(
             continue;
         };
 
-        let pkg_id = qtn.root();
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
-        let Some(Definition::Class(obj_class)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
-        else {
-            continue;
-        };
-        if obj_class != class {
+        if crate::resolve::constructed_class(db, qtn) != Some(class) {
             continue;
         }
 

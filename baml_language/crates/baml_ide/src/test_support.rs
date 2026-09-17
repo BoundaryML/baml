@@ -3,84 +3,12 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_base::{Name, SourceFile, SourceRoot, SourceRootKind};
-use baml_db::{ProjectDatabase, SourceRootSpec};
+use baml_base::{SourceFile, SourceRoot};
+use baml_db::ProjectDatabase;
+/// Root-aware fixture builders for a fresh [`ProjectDatabase`] — the one
+/// definition every test crate shares.
+pub(crate) use baml_db::testing::TestDbExt;
 use text_size::TextSize;
-
-/// Root-aware fixture builders for a fresh [`ProjectDatabase`].
-pub(crate) trait TestDbExt {
-    /// Load the stdlib and add the single `Workspace` root at `root`.
-    fn workspace(&mut self, root: &Path) -> SourceRoot;
-    /// Upsert `path` (which must lie under an existing root) with `text`.
-    fn file(&mut self, path: &Path, text: &str) -> SourceFile;
-    /// Install a `Dependency` root named `package` (its sources live under
-    /// `<builtin>/{package}`) and make the workspace depend on it.
-    fn dependency(&mut self, package: &str) -> SourceRoot;
-    /// Mount `blob` — an exported package interface — as the dependency
-    /// `alias`: served from its interface, with no source in this database.
-    fn mount(&mut self, alias: &str, blob: Vec<u8>) -> SourceRoot;
-}
-
-impl TestDbExt for ProjectDatabase {
-    fn workspace(&mut self, root: &Path) -> SourceRoot {
-        self.ensure_stdlib_sources();
-        self.add_source_root(SourceRootSpec::new(
-            root.to_path_buf(),
-            SourceRootKind::Workspace,
-        ))
-        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"))
-    }
-
-    fn file(&mut self, path: &Path, text: &str) -> SourceFile {
-        let root = self
-            .source_root_for_path(path)
-            .unwrap_or_else(|| unreachable!("test files live under an installed root"));
-        self.add_or_update_file_in(root, path, text)
-    }
-
-    fn dependency(&mut self, package: &str) -> SourceRoot {
-        let workspace = self
-            .workspace_root()
-            .unwrap_or_else(|| unreachable!("a dependency needs a workspace root to depend on it"));
-        let root = self
-            .add_source_root(
-                SourceRootSpec::new(format!("<builtin>/{package}"), SourceRootKind::Dependency)
-                    .named(Name::new(package)),
-            )
-            .unwrap_or_else(|e| unreachable!("fresh database accepts the dependency root: {e}"));
-        self.add_dependency(
-            workspace,
-            baml_base::Dependency {
-                name: Name::new(package),
-                root,
-            },
-        )
-        .unwrap_or_else(|e| unreachable!("the workspace can depend on `{package}`: {e}"));
-        root
-    }
-
-    fn mount(&mut self, alias: &str, blob: Vec<u8>) -> SourceRoot {
-        let workspace = self
-            .workspace_root()
-            .unwrap_or_else(|| unreachable!("a mount needs a workspace root to mount into"));
-        let root = self
-            .add_source_root(
-                SourceRootSpec::new(format!("<builtin>/{alias}"), SourceRootKind::Dynamic)
-                    .named(Name::new(alias))
-                    .served_from(blob),
-            )
-            .unwrap_or_else(|e| unreachable!("a well-formed interface blob mounts: {e}"));
-        self.add_dependency(
-            workspace,
-            baml_base::Dependency {
-                name: Name::new(alias),
-                root,
-            },
-        )
-        .unwrap_or_else(|e| unreachable!("the workspace can depend on `{alias}`: {e}"));
-        root
-    }
-}
 
 /// The exported interface of a package whose only source is `source`,
 /// encoded as the blob a consumer mounts — built in a throwaway database so

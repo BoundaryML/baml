@@ -273,7 +273,8 @@ pub fn function_signature_ty<'db>(
         .collect();
     let builtin_kind = match baml_compiler2_ppir::function_body(db, function).as_ref() {
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
-        _ => None,
+        baml_compiler2_hir::body::FunctionBody::Expr(_)
+        | baml_compiler2_hir::body::FunctionBody::Missing => None,
     };
     let return_type = sig.ret.clone();
     FunctionSignatureTy {
@@ -341,7 +342,6 @@ pub fn callable_builtin_kind(
     callable_signature(db, callable).builtin_kind
 }
 
-/// The callable's own short name, for diagnostics.
 /// The function a language package declares at `namespace.name`, whichever
 /// lane serves the package: the declaration when the package's source is
 /// present, its exported row when it is served from its interface. `None`
@@ -352,6 +352,8 @@ pub fn lang_function<'db>(
     namespace: &[&str],
     name: &str,
 ) -> Option<FunctionRef<'db>> {
+    use baml_compiler2_hir::contributions::Definition;
+
     let root = baml_compiler2_hir::package::lang_roots(db).get(package)?;
     let namespace: Vec<Name> = namespace.iter().copied().map(Name::new).collect();
     let name = Name::new(name);
@@ -360,10 +362,12 @@ pub fn lang_function<'db>(
             .map(DeclRef::External);
     }
     match baml_compiler2_ppir::package_items(db, root).lookup_value(&namespace, &name)? {
-        baml_compiler2_hir::contributions::Definition::Function(function) => {
-            Some(DeclRef::Source(function))
-        }
-        _ => None,
+        Definition::Function(function) => Some(DeclRef::Source(function)),
+        Definition::Class(_)
+        | Definition::Enum(_)
+        | Definition::Interface(_)
+        | Definition::TypeAlias(_)
+        | Definition::Let(_) => None,
     }
 }
 
@@ -396,6 +400,7 @@ pub fn lang_class_method<'db>(
         .map(DeclRef::Source)
 }
 
+/// The callable's own short name, for diagnostics and display.
 pub fn callable_display_name<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     callable: FunctionRef<'db>,
@@ -696,9 +701,9 @@ pub fn callable_owner_type(
     }
 }
 
-/// Every `ExternFunctionLoc` is a `FunctionRef::External`; the conversion
-/// exists so a consumer holding a row identity can ask the shared surface
-/// without naming the variant.
+// Every `ExternFunctionLoc` is a `FunctionRef::External`; the conversion
+// exists so a consumer holding a row identity can ask the shared surface
+// without naming the variant.
 impl<'db> From<ExternFunctionLoc<'db>> for FunctionRef<'db> {
     fn from(function: ExternFunctionLoc<'db>) -> Self {
         DeclRef::External(function)

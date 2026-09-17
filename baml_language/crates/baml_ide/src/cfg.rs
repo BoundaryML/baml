@@ -1193,6 +1193,65 @@ function observe_an_agent() -> string throws never {
         );
     }
 
+    /// An UNBOUND method call (`Task.run(task, runner)`) writes `self` as
+    /// its first argument, so its plan already indexes the full parameter
+    /// list; only a BOUND access's implicit receiver shifts the indices.
+    /// Mapping `runner` correctly is what lets the concrete `Agent.run`
+    /// body inline through the generic dispatch.
+    #[test]
+    fn unbound_method_calls_map_arguments_without_a_phantom_self() {
+        let (mut db, root) = test_db();
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new("/cfg-test/unbound.baml"),
+            r#"
+interface Runner<Input> {
+  function run(self, input: Input) -> string throws never
+}
+
+class Task {
+  function run<R extends Runner<Task>>(
+self,
+runner: R,
+  ) -> string throws never {
+//# Dispatch the task to its runner
+runner.run(self)
+  }
+}
+
+class Agent {
+  implements Runner<Task> {
+function run(self, input: Task) -> string throws never {
+  //# Run the agent
+  "done"
+}
+  }
+}
+
+function observe_unbound() -> string throws never {
+  let task = Task {};
+  Task.run(task, Agent {})
+}
+"#,
+        );
+        let graph =
+            build_graph(&db, "observe_unbound").expect("expected graph for observe_unbound");
+        let labels = graph
+            .nodes
+            .values()
+            .map(|node| node.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            labels.contains(&"Dispatch the task to its runner"),
+            "Task.run should be inlined through the unbound call; got {labels:?}"
+        );
+        assert!(
+            labels.contains(&"Run the agent"),
+            "the concrete Agent.run body should be inlined: `runner` maps to the second \
+             argument, not the third; got {labels:?}"
+        );
+    }
+
     #[test]
     fn recursive_callee_cache_is_scoped_by_active_expansions() {
         let (mut db, root) = test_db();

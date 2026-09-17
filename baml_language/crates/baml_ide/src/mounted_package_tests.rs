@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use baml_base::SourceFile;
+use baml_compiler2_hir::loc::DeclRef;
 use baml_db::ProjectDatabase;
 use text_size::TextSize;
 
@@ -13,8 +14,11 @@ use crate::{
     completion::{Completion, CompletionKind, completions},
     definition::definition_at,
     info::{TypeInfo, type_at},
+    rename::{RenameError, rename},
+    resolve::{SymbolTarget, symbol_at},
     test_support::{TestDbExt, export_blob},
     tokens::{SemanticTokenType, semantic_tokens},
+    usages::usages_at,
 };
 
 const LIBRARY: &str = r#"
@@ -46,10 +50,91 @@ function use_widget(w: app.Widget, g: app.Greeter) -> int throws never {
 }
 "#;
 
+/// A library whose rows carry what the IDE must render from rows alone: a
+/// field docstring, a generic class, an impl-provided method, a free
+/// function.
+const ROW_LIBRARY: &str = r#"
+class Widget {
+    /// How wide.
+    size int
+}
+
+class Box<T> {
+    value T
+
+    function get(self) -> T throws never {
+        self.value
+    }
+}
+
+interface Greeter {
+    function greet(self) -> string throws never {
+        "hi"
+    }
+}
+
+class Tagged {
+    implements Greeter {
+        function greet(self) -> string throws never {
+            "tagged"
+        }
+    }
+}
+
+function free_fn(x: int) -> int throws never {
+    x
+}
+
+enum Status {
+    Active
+    Retired
+}
+
+interface Labeled {
+    label string
+
+    function tag(self) -> string throws never
+}
+
+class Card {
+    label string
+
+    implements Labeled {
+        function tag(self) -> string throws never {
+            self.label
+        }
+    }
+}
+"#;
+
+/// A consumer over the enum, the interface field, and the required method.
+const MEMBER_CONSUMER: &str = r#"
+function pick(l: app.Labeled) -> string throws never {
+    let status = app.Status.Active;
+    l.tag()
+}
+"#;
+
+const ROW_CONSUMER: &str = r#"
+function build(n: int) -> app.Widget throws never {
+    app.Widget { size: n }
+}
+
+function use_all(w: app.Widget, b: app.Box<int>, t: app.Tagged) -> int throws never {
+    let n = app.free_fn(w.size);
+    let s = t.greet();
+    b.get() + n
+}
+"#;
+
 /// A workspace with the library MOUNTED as `app` from its exported
 /// interface (no source), plus one consumer file with `source`.
 fn mounted(source: &str) -> (ProjectDatabase, SourceFile) {
-    let blob = export_blob("app", LIBRARY);
+    mounted_with(LIBRARY, source)
+}
+
+fn mounted_with(library: &str, source: &str) -> (ProjectDatabase, SourceFile) {
+    let blob = export_blob("app", library);
     let mut db = ProjectDatabase::new();
     db.workspace(Path::new("/ide-mounted"));
     db.mount("app", blob);
@@ -147,6 +232,12 @@ fn goto_definition_on_a_mounted_member_navigates_nowhere() {
             "`{needle}` has no definition site in this database"
         );
     }
+    // Positive control: the rule is about rows, not about this database —
+    // a source symbol in the same file still navigates.
+    assert!(
+        definition_at(&db, file, inside(CONSUMER, "use_widget")).is_some(),
+        "the consumer's own function has a definition site"
+    );
 }
 
 #[test]
@@ -170,7 +261,67 @@ fn hover_on_a_mounted_method_renders_its_signature() {
             .is_some_and(|owner| owner.contains("Widget")),
         "the owning class: {owner:?}"
     );
-    assert_eq!(docstring, None, "rows carry no docstrings");
+    assert_eq!(docstring, None, "callable rows carry no docstrings");
+}
+
+#[test]
+fn completion_on_a_mounted_field_carries_its_docstring() {
+    let source = "function f(w: app.Widget) -> int throws never {\n    w.\n}\n";
+    let (db, file) = mounted_with(ROW_LIBRARY, source);
+    let offset = TextSize::from(u32::try_from(source.find("w.").unwrap() + 2).unwrap());
+    let items = completions(&db, file, offset);
+    let size = offered(&items, "size");
+    assert_eq!(
+        size.documentation.as_deref(),
+        Some("How wide."),
+        "a field row carries its declaration's docstring"
+    );
+}
+
+/// Hover owners render the same shape in both lanes: a class method under
+/// the class's own type, an impl-provided method under the implementor.
+#[test]
+fn hover_owner_of_a_mounted_method_matches_the_source_lane() {
+    let (db, file) = mounted_with(ROW_LIBRARY, ROW_CONSUMER);
+    let owner_of = |needle: &str| match type_at(&db, file, inside(ROW_CONSUMER, needle)) {
+        Some(TypeInfo::Symbol { owner, .. }) => owner,
+        other => panic!("`{needle}` hovers as a symbol, got {other:?}"),
+    };
+    assert_eq!(owner_of("get()").as_deref(), Some("app.Box<T>"));
+    assert_eq!(owner_of("greet()").as_deref(), Some("app.Tagged"));
+}
+
+/// BUG (pinned): a served package's free function has no symbol — `Item`
+/// carries source definitions only. Flips when the definition lane gains
+/// its provenance-total ref (PR-4's `DefinitionRef`); see `resolve.rs`.
+#[test]
+fn a_mounted_free_function_has_no_symbol_yet() {
+    let (db, file) = mounted_with(ROW_LIBRARY, ROW_CONSUMER);
+    assert!(symbol_at(&db, file, inside(ROW_CONSUMER, "free_fn")).is_none());
+}
+
+/// A constructor key of a served class is the same field every member
+/// access resolves to — the exported row's, never a link stub's — so
+/// references on the field find the key too.
+#[test]
+fn constructor_key_of_a_mounted_class_shares_the_field_identity() {
+    let (db, file) = mounted_with(ROW_LIBRARY, ROW_CONSUMER);
+    let key = inside(ROW_CONSUMER, "size: n");
+    assert!(
+        matches!(
+            symbol_at(&db, file, key),
+            Some(SymbolTarget::Field {
+                class: DeclRef::External(_),
+                field_index: 0,
+            })
+        ),
+        "the key resolves to the exported row's field"
+    );
+    let usages = usages_at(&db, file, inside(ROW_CONSUMER, "size)"));
+    assert!(
+        usages.iter().any(|location| location.range.contains(key)),
+        "references on the field include the constructor key: {usages:?}"
+    );
 }
 
 #[test]
@@ -189,5 +340,79 @@ fn hover_on_a_mounted_field_renders_its_type() {
             .as_deref()
             .is_some_and(|owner| owner.contains("Widget")),
         "the owning class: {owner:?}"
+    );
+}
+
+/// A mounted member cannot be renamed: its declaration lives in a row, not
+/// in a workspace file the server can rewrite.
+#[test]
+fn rename_on_a_mounted_member_is_refused_as_outside_the_workspace() {
+    let (db, file) = mounted(CONSUMER);
+    for needle in ["describe", "greet", "size"] {
+        assert!(
+            matches!(
+                rename(&db, file, inside(CONSUMER, needle), "renamed"),
+                Err(RenameError::NotInWorkspace { .. })
+            ),
+            "`{needle}` is a row member"
+        );
+    }
+}
+
+/// The runtime-mount lane also installs link stubs under the served root.
+/// A served root resolves through its interface even then: a constructor
+/// key still names the exported row's field, and goto never lands in a stub.
+#[test]
+fn a_served_root_with_link_stubs_still_resolves_through_its_rows() {
+    let blob = export_blob("app", ROW_LIBRARY);
+    let mut db = ProjectDatabase::new();
+    db.workspace(Path::new("/ide-mounted-stubbed"));
+    db.mount("app", blob);
+    db.file(
+        Path::new("<builtin>/app/runtime_mount_0_0.baml"),
+        "class Widget {\n  size int\n}\n",
+    );
+    let file = db.file(Path::new("/ide-mounted-stubbed/main.baml"), ROW_CONSUMER);
+    assert!(matches!(
+        symbol_at(&db, file, inside(ROW_CONSUMER, "size: n")),
+        Some(SymbolTarget::Field {
+            class: DeclRef::External(_),
+            field_index: 0,
+        })
+    ));
+    assert!(
+        definition_at(&db, file, inside(ROW_CONSUMER, "size)")).is_none(),
+        "a stub is never a navigation target"
+    );
+}
+
+/// Rows the earlier tests never touched: an enum variant, an interface
+/// field, and a REQUIRED (bodyless) method.
+#[test]
+fn mounted_enum_variants_interface_fields_and_required_methods_render_from_rows() {
+    let (db, file) = mounted_with(ROW_LIBRARY, MEMBER_CONSUMER);
+    let Some(TypeInfo::Symbol {
+        declaration, owner, ..
+    }) = type_at(&db, file, inside(MEMBER_CONSUMER, "Active"))
+    else {
+        panic!("a mounted enum variant hovers as a symbol");
+    };
+    assert_eq!(declaration, "Active: Status");
+    assert_eq!(owner.as_deref(), Some("app.Status"));
+
+    let source = "function f(l: app.Labeled) -> int throws never {\n    l.\n}\n";
+    let (db, file) = mounted_with(ROW_LIBRARY, source);
+    let offset = TextSize::from(u32::try_from(source.find("l.").unwrap() + 2).unwrap());
+    let items = completions(&db, file, offset);
+    let label = offered(&items, "label");
+    assert!(matches!(label.kind, CompletionKind::Field));
+    let tag = offered(&items, "tag");
+    assert!(matches!(tag.kind, CompletionKind::Method));
+    assert!(
+        tag.detail
+            .as_deref()
+            .is_some_and(|d| d.contains("-> string")),
+        "a required method completes with its signature: {:?}",
+        tag.detail
     );
 }

@@ -69,7 +69,7 @@ pub struct ImplLoc<'db> {
 /// A reference to a possibly-external declaration, algebraic over PROVENANCE.
 ///
 /// Every entity kind that can arrive from outside the compiling database's
-/// sources (functions, classes, enums, interfaces, type aliases, lets) is
+/// sources (functions, classes, enums, interfaces, impls, type aliases, lets) is
 /// referenced through this ONE shape rather than through partial
 /// `*Loc`-keyed maps whose live-only domain a reader cannot see. The variant
 /// determines which questions are even answerable:

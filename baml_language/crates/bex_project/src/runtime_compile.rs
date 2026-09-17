@@ -567,11 +567,12 @@ fn enrich_runtime_mount(
                         );
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
                         for (field, ty, attrs) in fields.iter() {
-                            // Source-backed lookup wins before the mounted
-                            // interface in HIR. Preserve every spellable field
-                            // type here so nested projections see the same ABI;
-                            // only genuinely hidden package names degrade to
-                            // `unknown` in the link-only source.
+                            // A served root resolves through its interface,
+                            // never through this stub; the stub exists for
+                            // LINK, whose emit reads these field types.
+                            // Preserve every spellable one so nested
+                            // projections see the same ABI; only genuinely
+                            // hidden package names degrade to `unknown`.
                             let ty = if viewpoint.hides_type(ty) {
                                 "unknown".to_string()
                             } else {

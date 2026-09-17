@@ -20,9 +20,8 @@
 //! so a cached external dependency served from its interface rides the same
 //! lane as a runtime mount. Nothing here consults `is_served_from_interface`
 //! either — that gate belongs to the resolution LADDER that decides which
-//! lane to ask first, and an interface derived from source is addressable
-//! too (the incomplete-impl recovery road reads a source interface's
-//! bodyless default through this lane).
+//! lane to ask first; the `mounted_*` twins below apply it for ladders that
+//! must never answer a source item with an extern loc.
 
 use std::borrow::Cow;
 
@@ -135,7 +134,8 @@ pub struct InterfaceRow<'db> {
 
 fn no_type_row(db: &dyn baml_compiler2_ppir::Db, kind: &str, head: &DeclName) -> ! {
     panic!(
-        "internal error: no exported {kind} row for `{}`; an extern type loc is minted only from          a row in the current revision's package interface",
+        "internal error: no exported {kind} row for `{}`; an extern type loc is minted only from \
+         a row in the current revision's package interface",
         head.spell(&Viewpoint::canonical(db))
     )
 }
@@ -159,7 +159,12 @@ pub fn extern_class_row<'db>(
             generic_params,
             generic_param_bounds,
         },
-        _ => no_type_row(db, "class", head),
+        Some(
+            ExportedType::Enum { .. }
+            | ExportedType::Interface { .. }
+            | ExportedType::TypeAlias { .. },
+        )
+        | None => no_type_row(db, "class", head),
     }
 }
 
@@ -171,7 +176,12 @@ pub fn extern_enum_row<'db>(
     let head = enum_loc.head(db);
     match type_row_at(db, head) {
         Some(ExportedType::Enum { qtn: _, variants }) => EnumRow { variants },
-        _ => no_type_row(db, "enum", head),
+        Some(
+            ExportedType::Class { .. }
+            | ExportedType::Interface { .. }
+            | ExportedType::TypeAlias { .. },
+        )
+        | None => no_type_row(db, "enum", head),
     }
 }
 
@@ -202,12 +212,15 @@ pub fn extern_interface_row<'db>(
             required_methods,
             default_methods,
         },
-        _ => no_type_row(db, "interface", head),
+        Some(
+            ExportedType::Class { .. } | ExportedType::Enum { .. } | ExportedType::TypeAlias { .. },
+        )
+        | None => no_type_row(db, "interface", head),
     }
 }
 
 /// The class `head` names, if its package exports one.
-pub fn extern_class_loc<'db>(
+fn extern_class_loc<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     head: &DeclName,
 ) -> Option<ExternClassLoc<'db>> {
@@ -216,7 +229,7 @@ pub fn extern_class_loc<'db>(
 }
 
 /// The enum `head` names, if its package exports one.
-pub fn extern_enum_loc<'db>(
+fn extern_enum_loc<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     head: &DeclName,
 ) -> Option<ExternEnumLoc<'db>> {
@@ -225,7 +238,7 @@ pub fn extern_enum_loc<'db>(
 }
 
 /// The interface `head` names, if its package exports one.
-pub fn extern_interface_loc<'db>(
+fn extern_interface_loc<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     head: &DeclName,
 ) -> Option<ExternInterfaceLoc<'db>> {
@@ -280,11 +293,11 @@ pub fn mounted_interface_loc<'db>(
 /// the name, and a written rename must not fork the identity, so every
 /// `TypeVar` is respelled by its frame index. Each parameter's bound
 /// conjunction is sorted by `ClosedInterface`'s `Ord` (a written reorder of
-/// `A + B` cannot fork it either). The TARGET's own associated pins are
-/// EXCLUDED — they are outputs of a match, not inputs to admissibility,
-/// and an impl header cannot carry one (`implement I<X = T> for …` is
-/// E0001; asserted where the identity is built) — while bound-side pins
-/// ride inside each bound, as inputs.
+/// `A + B` cannot fork it either). The implemented INTERFACE's associated
+/// bindings are EXCLUDED — they are outputs of a match, not inputs to
+/// admissibility, and an impl header cannot carry one (`implement I<X = T>
+/// for …` is E0001; asserted where the identity is built) — while the pins
+/// inside a bound-side interface ride along, as inputs.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, salsa::Update)]
 pub struct ImplIdentity {
     /// The implemented interface's head.
@@ -491,7 +504,7 @@ fn type_row_at<'db>(
 /// The row at `addr`, if the package exports one: the ONE name-keyed row
 /// read. `Option` is legitimate here and in the mint fns only — absence
 /// means "no such member"; every read through a minted loc is total.
-pub fn extern_row_at<'db>(
+fn extern_row_at<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     addr: &ExternRowAddr,
 ) -> Option<&'db ExportedFunction> {
@@ -603,7 +616,7 @@ pub(crate) fn spell_impl_identity(identity: &ImplIdentity, viewpoint: &Viewpoint
 /// this index is built for is a mounted one, so the collision is an
 /// invariant here, not an outcome.
 #[salsa::tracked(returns(ref))]
-pub fn package_impl_index(
+fn package_impl_index(
     db: &dyn baml_compiler2_ppir::Db,
     package: SourceRoot,
 ) -> FxHashMap<ImplIdentity, u32> {
@@ -706,7 +719,12 @@ pub fn extern_owner_generics<'db>(
                     Cow::Borrowed(generic_params.as_slice()),
                     Cow::Borrowed(generic_param_bounds.as_slice()),
                 ),
-                _ => panic!(
+                Some(
+                    ExportedType::Enum { .. }
+                    | ExportedType::Interface { .. }
+                    | ExportedType::TypeAlias { .. },
+                )
+                | None => panic!(
                     "internal error: the class row of {} is gone from the interface that minted \
                      the method row",
                     spell_addr(db, function.addr(db))
@@ -741,7 +759,12 @@ pub fn extern_owner_generics<'db>(
                     bounds.extend(param_bounds.iter().cloned());
                     (Cow::Owned(params), Cow::Owned(bounds))
                 }
-                _ => panic!(
+                Some(
+                    ExportedType::Class { .. }
+                    | ExportedType::Enum { .. }
+                    | ExportedType::TypeAlias { .. },
+                )
+                | None => panic!(
                     "internal error: the interface row of {} is gone from the interface that \
                      minted the method row",
                     spell_addr(db, function.addr(db))
@@ -777,8 +800,8 @@ fn mint_declared(
 // declared mints apply that gate (the same one `mounted_type_row` applies to
 // type rows), so a resolution ladder that consults them cannot answer a
 // source item with an extern loc. The ungated mints below are for callers
-// that hold a served-root head already, or that deliberately want the
-// export (the incomplete-impl recovery in `lookup_impl_member`).
+// that hold a served-root head already — every caller today sits behind a
+// served gate of its own.
 
 fn served(db: &dyn baml_compiler2_ppir::Db, root: SourceRoot) -> bool {
     baml_compiler2_hir::package::is_served_from_interface(db, root)

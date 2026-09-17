@@ -46,7 +46,7 @@ pub(super) fn member(
             (Some(signature), data.docstring.clone())
         }
         // A served package's row: its resolved signature, exactly as hover
-        // renders it. Rows carry no docstrings.
+        // renders it. A callable row carries no docstring.
         MemberDecl::Method(DeclRef::External(function)) => {
             let signature =
                 crate::render::FnSigParts::of_exported(extern_function_row(db, *function))
@@ -84,15 +84,16 @@ pub(super) fn member(
                     .and_then(|field| field.docstring.clone()),
             )
         }
+        // A field row carries its declaration's docstring (`ExportedFieldAttrs`).
         MemberDecl::ClassField {
             class: DeclRef::External(class),
             index,
         } => {
-            let ty = extern_class_row(db, *class)
-                .fields
-                .get(*index)
-                .map(|(_, ty, _)| crate::render::display_ty_canonical_for_file(db, file, ty));
-            (ty, None)
+            let field = extern_class_row(db, *class).fields.get(*index);
+            (
+                field.map(|(_, ty, _)| crate::render::display_ty_canonical_for_file(db, file, ty)),
+                field.and_then(|(_, _, attrs)| attrs.docstring.clone()),
+            )
         }
         MemberDecl::InterfaceField {
             interface: DeclRef::Source(interface),
@@ -107,9 +108,15 @@ pub(super) fn member(
             )
         }
         MemberDecl::InterfaceField {
-            interface: DeclRef::External(_),
-            ..
-        } => (None, None),
+            interface: DeclRef::External(interface),
+            index,
+        } => (
+            None,
+            baml_compiler2_hir_ty::extern_loc::extern_interface_row(db, *interface)
+                .fields
+                .get(*index)
+                .and_then(|(_, _, attrs)| attrs.docstring.clone()),
+        ),
     }
 }
 

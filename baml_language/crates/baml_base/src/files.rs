@@ -89,9 +89,9 @@ pub struct SourceRoot {
     /// instead of from source: a runtime mount, or a precompiled stdlib
     /// package in a runtime compile. When present it is the semantic
     /// authority for the package: consumers resolve the package's items
-    /// from it alone, and any `files` are link-only stubs that only the
-    /// package's own lowering reads (the mount as its own viewer, so a
-    /// stub's bare sibling names resolve while it is emitted).
+    /// from it alone, and any `files` are link-only stubs read by the
+    /// package's own lowering and by emit (the mount as its own viewer, so
+    /// a stub's bare sibling names resolve while it is emitted).
     #[returns(ref)]
     pub interface: Option<Vec<u8>>,
 

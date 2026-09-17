@@ -581,7 +581,9 @@ fn target_type_info(
             })
         }
         // A served package's rows, read whole: the resolved signature or
-        // field type, the owning head, no docstring (rows carry none).
+        // field type and the owner, rendered as the source lane renders its
+        // own. A callable row carries no docstring; a field row's rides
+        // completion (a field hover has no docstring slot in either lane).
         SymbolTarget::Field {
             class: DeclRef::External(class),
             field_index,
@@ -616,11 +618,7 @@ fn target_type_info(
                 reader,
                 hover_sig_style(),
             ),
-            owner: baml_compiler2_hir_ty::callable::callable_owner_type(
-                db,
-                DeclRef::External(func),
-            )
-            .map(|head| render::canonical_path(db, &head)),
+            owner: extern_owner_path(db, func),
             docstring: None,
         }),
         SymbolTarget::InterfaceField {
@@ -912,6 +910,38 @@ fn method_owner_path(
             Some(render::display_owner_ty(
                 db,
                 &facts.for_ty_pattern.to_plain(),
+            ))
+        }
+    }
+}
+
+/// The owner a served package's callable hovers under — the same shape
+/// [`method_owner_path`] renders for source: a class method under the
+/// class's own type (its declared generics as its params), an interface
+/// method under the interface, an impl-provided method under the
+/// IMPLEMENTOR (the impl's for-target), a free function under none.
+fn extern_owner_path(
+    db: &dyn baml_compiler2_ppir::Db,
+    func: baml_compiler2_hir_ty::extern_loc::ExternFunctionLoc<'_>,
+) -> Option<String> {
+    use baml_compiler2_hir_ty::{
+        callable::ExternalCallTarget,
+        extern_loc::{ExternRowAddr, extern_impl_row},
+        package_interface::mounted_type_row,
+    };
+    match func.addr(db) {
+        ExternRowAddr::Declared(ExternalCallTarget::Free { .. }) => None,
+        ExternRowAddr::Declared(ExternalCallTarget::Method { class, .. }) => Some(
+            render::display_owner_ty(db, &mounted_type_row(db, class)?.to_ty()),
+        ),
+        ExternRowAddr::Declared(ExternalCallTarget::Interface { interface, .. }) => {
+            Some(render::canonical_path(db, interface))
+        }
+        ExternRowAddr::ImplProvided { .. } => {
+            let block = func.impl_block(db)?;
+            Some(render::display_owner_ty(
+                db,
+                &extern_impl_row(db, block).for_ty_pattern,
             ))
         }
     }

@@ -1317,8 +1317,10 @@ fn extern_function_row_is_total_over_every_minted_row() {
 #[test]
 fn a_declared_mint_address_equals_the_row_target() {
     let db = mounted_consumer();
+    let mut rows = 0usize;
     for root in db.source_roots() {
         for (loc, row) in minted_rows(&db, root) {
+            rows += 1;
             match loc.addr(&db) {
                 ExternRowAddr::Declared(target) => assert_eq!(&row.target, target, "{}", row.name),
                 ExternRowAddr::ImplProvided { method, .. } => {
@@ -1332,6 +1334,7 @@ fn a_declared_mint_address_equals_the_row_target() {
             }
         }
     }
+    assert!(rows > 0, "the mounted library mints at least one row");
 }
 
 #[test]
@@ -1404,6 +1407,48 @@ fn impl_identity_agrees_between_a_source_block_and_its_exported_row() {
             assert!(extern_impl_block(&db, app, identity.clone()).is_some());
         }
     }
+}
+
+/// A written reorder of a parameter's bound conjunction (`A & B` vs
+/// `B & A`) does not fork the identity: each bound list is canonically
+/// sorted.
+#[test]
+fn impl_identity_ignores_bound_order() {
+    const TWO_BOUNDS: &str = r#"
+interface Marker<T> {
+    function mark(self) -> T throws never
+}
+
+interface Other {
+    function other(self) -> int throws never
+}
+
+class Pair<A, B> {
+    first A
+    second B
+}
+
+implement<L, R extends Marker<int> & Other> Marker<int> for Pair<L, R> {
+    function mark(self) -> int throws never {
+        self.second.mark() + self.second.other()
+    }
+}
+"#;
+    let db = dependency_db(TWO_BOUNDS);
+    let app = app_root(&db);
+    let row = &package_interface(&db, app).impls[0];
+    let bounded = row
+        .param_bounds
+        .iter()
+        .position(|bounds| bounds.len() >= 2)
+        .expect("`R` carries two bounds");
+    let mut reordered = row.clone();
+    reordered.param_bounds[bounded].reverse();
+    assert_ne!(reordered.param_bounds, row.param_bounds);
+    assert_eq!(
+        exported_impl_identity(&reordered),
+        exported_impl_identity(row)
+    );
 }
 
 #[test]

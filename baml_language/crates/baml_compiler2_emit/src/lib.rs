@@ -5933,8 +5933,8 @@ fn lower_seed_mirs<'db>(
 ///   (< W: classes/enums/interfaces from Passes 1–3, resolved through frozen
 ///   maps and the [`ClassFieldSnapshot`]) stay valid and every worker mint is
 ///   fragment-relative (>= W). Workers never touch `program.globals` — every
-///   `GlobalIndex` they embed is a Pass-1 slot read from the frozen `globals`
-///   map — so global operands are absolute in every worker and are never
+///   `GlobalIndex` they embed is a Pass-1 slot read from the frozen placement
+///   registry — so global operands are absolute in every worker and are never
 ///   rewritten at merge time.
 /// - **Stage C (serial merge, original order)**: splice each fragment into
 ///   the program pool (replaying cross-function `GenericFunction` interning —

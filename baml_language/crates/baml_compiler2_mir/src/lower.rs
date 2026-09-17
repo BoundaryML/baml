@@ -1387,18 +1387,6 @@ pub fn function_is_interface_body<'db>(
     }
 }
 
-/// The callable a member resolution links as, wherever it is declared —
-/// [`MemberResolution::callable`]: a free function, an inherent or
-/// impl-provided method, or, for a virtual slot, the interface's own
-/// declaration of the method (whose link name IS the slot's). Fields,
-/// variants, and virtual fields link no callable.
-fn resolution_callee<'db>(
-    db: &'db dyn crate::Db,
-    res: &crate::inference_provider::MemberResolution<'db>,
-) -> Option<FunctionRef<'db>> {
-    res.callable(db)
-}
-
 /// The name a callable links as, wherever it is declared: a source
 /// declaration by [`definition_link_name`]; a served package's row by its
 /// ADDRESS — its dispatch slot — never the heads the row's own `target`
@@ -3172,7 +3160,6 @@ impl<'db> LoweringContext<'db> {
     /// lowered in their own context, which runs this check when it builds —
     /// and so are the statements of `unlowered_block`, a desugared block the
     /// lowering replaced wholesale (a tagged template's static layout).
-    #[cfg(debug_assertions)]
     fn verify_bindings_recorded(
         &self,
         root_scope: FileScopeId,
@@ -5127,8 +5114,9 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        #[cfg(debug_assertions)]
-        self.verify_bindings_recorded(self.current_scope, None);
+        if cfg!(debug_assertions) {
+            self.verify_bindings_recorded(self.current_scope, None);
+        }
 
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
@@ -5251,8 +5239,9 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        #[cfg(debug_assertions)]
-        self.verify_bindings_recorded(self.current_scope, None);
+        if cfg!(debug_assertions) {
+            self.verify_bindings_recorded(self.current_scope, None);
+        }
 
         // Take the builder out and build the MirFunctionBody
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
@@ -5457,8 +5446,9 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        #[cfg(debug_assertions)]
-        self.verify_bindings_recorded(lambda_scope_id, None);
+        if cfg!(debug_assertions) {
+            self.verify_bindings_recorded(lambda_scope_id, None);
+        }
 
         // Build the lambda MirFunction.
         // First, collect any nested lambdas that were encountered while lowering
@@ -6030,8 +6020,9 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        #[cfg(debug_assertions)]
-        self.verify_bindings_recorded(lambda_scope_id, skipped_desugar);
+        if cfg!(debug_assertions) {
+            self.verify_bindings_recorded(lambda_scope_id, skipped_desugar);
+        }
 
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
@@ -6837,7 +6828,7 @@ impl<'db> LoweringContext<'db> {
                         // an empty frame).
                         let takes_self = callable_takes_self(self.db, *func_loc);
                         // Bound method reference: lower receiver and emit MakeBoundMethod.
-                        if let Some(item) = resolution_callee(self.db, resolution) {
+                        if let Some(item) = resolution.callable(self.db) {
                             if !takes_self {
                                 // TIR admitted the reference, so a missing
                                 // prefix type or dispatch view is an internal
@@ -6927,7 +6918,7 @@ impl<'db> LoweringContext<'db> {
                     ) => {
                         // Unbound inherent method or free function reference —
                         // a plain function constant.
-                        if let Some(item) = resolution_callee(self.db, resolution) {
+                        if let Some(item) = resolution.callable(self.db) {
                             self.builder.assign(
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -6963,7 +6954,7 @@ impl<'db> LoweringContext<'db> {
                         receiver: Receiver::Bound,
                     } => {
                         // Bound method reference via flat resolutions: emit MakeBoundMethod.
-                        if let Some(item) = resolution_callee(self.db, &resolution) {
+                        if let Some(item) = resolution.callable(self.db) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
                                 self.path_receiver_root(expr_id, &segments[0]).map_or_else(
@@ -7014,7 +7005,7 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::Free { .. } => {
                         // Unbound inherent method or free function reference —
                         // a plain function constant.
-                        if let Some(item) = resolution_callee(self.db, &resolution) {
+                        if let Some(item) = resolution.callable(self.db) {
                             self.builder.assign(
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
@@ -9446,10 +9437,7 @@ impl<'db> LoweringContext<'db> {
                         {
                             carried_owner_frame = Some(frame_type_args.clone());
                         }
-                        match resolution
-                            .as_ref()
-                            .and_then(|r| resolution_callee(self.db, r))
-                        {
+                        match resolution.as_ref().and_then(|r| r.callable(self.db)) {
                             Some(item) => Operand::Constant(Constant::Function(item)),
                             None => self.lower_normalized_callee_operand(callee, callee_expr),
                         }
@@ -9461,7 +9449,7 @@ impl<'db> LoweringContext<'db> {
                     // Non-self method or package function reference:
                     // e.g. Factory<int>.create(42), baml.Array.length(array).
                     // Resolve the callee as a plain function constant using
-                    // resolution_callee to avoid lower_member_access emitting
+                    // `MemberResolution::callable` to avoid lower_member_access emitting
                     // MakeBoundMethod (which would try to load the base type as a
                     // runtime value).
                     //
@@ -9485,10 +9473,7 @@ impl<'db> LoweringContext<'db> {
                         {
                             carried_owner_frame = Some(frame_type_args.clone());
                         }
-                        match resolution
-                            .as_ref()
-                            .and_then(|r| resolution_callee(self.db, r))
-                        {
+                        match resolution.as_ref().and_then(|r| r.callable(self.db)) {
                             Some(item) => Operand::Constant(Constant::Function(item)),
                             None => self.lower_normalized_callee_operand(callee, callee_expr),
                         }
@@ -9536,10 +9521,7 @@ impl<'db> LoweringContext<'db> {
                 {
                     carried_owner_frame = Some(frame_type_args.clone());
                 }
-                let callee_op = match method_resolution
-                    .as_ref()
-                    .and_then(|r| resolution_callee(self.db, r))
-                {
+                let callee_op = match method_resolution.as_ref().and_then(|r| r.callable(self.db)) {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
                 };
@@ -9609,10 +9591,7 @@ impl<'db> LoweringContext<'db> {
                 {
                     carried_owner_frame = Some(frame_type_args.clone());
                 }
-                let callee_op = match flat_resolution
-                    .as_ref()
-                    .and_then(|r| resolution_callee(self.db, r))
-                {
+                let callee_op = match flat_resolution.as_ref().and_then(|r| r.callable(self.db)) {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee),
                 };
@@ -10786,7 +10765,7 @@ impl<'db> LoweringContext<'db> {
         if let Some(item) = self
             .tir_path_final_resolution(key)
             .filter(|r| is_fn(r))
-            .and_then(|r| resolution_callee(self.db, r))
+            .and_then(|r| r.callable(self.db))
         {
             return Some(item);
         }
@@ -10794,7 +10773,7 @@ impl<'db> LoweringContext<'db> {
         if let Some(item) = self
             .tir_resolution(key)
             .filter(|r| is_fn(r))
-            .and_then(|r| resolution_callee(self.db, r))
+            .and_then(|r| r.callable(self.db))
         {
             return Some(item);
         }
@@ -11330,7 +11309,7 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                     // Bound method reference: lower receiver and emit MakeBoundMethod.
-                    let item = resolution_callee(self.db, &resolution);
+                    let item = resolution.callable(self.db);
                     if let Some(item) = item {
                         let receiver_op = self.lower_to_operand(base);
                         self.builder.assign(
@@ -11349,7 +11328,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 | MemberResolution::Free { .. } => {
                     // Unbound method or free function reference: emit a plain function constant.
-                    let item = resolution_callee(self.db, &resolution);
+                    let item = resolution.callable(self.db);
                     if let Some(item) = item {
                         self.builder.assign(
                             dest,
