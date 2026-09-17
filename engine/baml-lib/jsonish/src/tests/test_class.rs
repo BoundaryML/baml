@@ -55,6 +55,42 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_compact_unquoted_keys_retain_nested_array_entries,
+    r#"
+class PageRoute {
+  id string
+  schema_id string?
+  reason string
+}
+
+class PageRoutes {
+  routes PageRoute[]
+}
+"#,
+    r#"{routes:[{id:"001",schema_id:null,reason:"amount -1.617,98"}]}"#,
+    TypeIR::class("PageRoutes"),
+    {
+        "routes": [{
+            "id": "001",
+            "schema_id": null,
+            "reason": "amount -1.617,98"
+        }]
+    }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_decimal_comma,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:amount -1.617,98}"#,
+    TypeIR::class("Reason"),
+    { "reason": "amount -1.617,98" }
+);
+
+test_deserializer!(
   str_with_quotes,
   FOO_FILE,
   r#"{"foo": "[\"bar\"]"}"#,

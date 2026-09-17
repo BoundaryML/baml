@@ -210,7 +210,7 @@ impl JsonParseState {
     /// outer loop would re-process that character, causing duplication.
     fn should_close_unescaped_string(
         &mut self,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> CloseStringResult {
         let pos: Pos = if self.collection_stack.len() >= 2 {
             self.collection_stack
@@ -288,6 +288,11 @@ impl JsonParseState {
                                 !(current_value.contains(" ") || current_value.contains("("));
                             let is_possible_value =
                                 is_numeric || is_bool || is_null || is_identifier;
+
+                            if Self::starts_compact_unquoted_object_key(&next) {
+                                log::debug!("Closing due to: compact unquoted key after comma");
+                                return CloseStringResult::Close(idx, CompletionState::Complete);
+                            }
 
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
@@ -398,6 +403,34 @@ impl JsonParseState {
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
         }
+    }
+
+    /// Returns whether the characters immediately after a comma form a compact
+    /// unquoted object key such as `reason:`. This lookahead disambiguates an
+    /// object separator from commas that belong to an unquoted value, such as
+    /// the decimal comma in `amount -1.617,98`.
+    fn starts_compact_unquoted_object_key(
+        next: &Peekable<impl Iterator<Item = (usize, char)> + Clone>,
+    ) -> bool {
+        let mut lookahead = next.clone();
+        let Some((_, first)) = lookahead.peek().copied() else {
+            return false;
+        };
+        lookahead.next();
+
+        if !(first.is_alphabetic() || matches!(first, '_' | '$')) {
+            return false;
+        }
+
+        for (_, c) in lookahead {
+            match c {
+                ':' => return true,
+                c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => {}
+                _ => return false,
+            }
+        }
+
+        false
     }
 
     /// Determines whether a quoted string (double-quoted, single-quoted, or
@@ -522,7 +555,7 @@ impl JsonParseState {
     pub fn process_token(
         &mut self,
         token: char,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> Result<usize> {
         // println!("Processing: {:?}..{:?}", token, next.peek());
         match self.collection_stack.last() {
@@ -765,7 +798,7 @@ impl JsonParseState {
     fn find_any_starting_value(
         &mut self,
         token: char,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> Result<usize> {
         match token {
             '{' => {

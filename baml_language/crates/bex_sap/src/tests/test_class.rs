@@ -161,6 +161,43 @@ test_deserializer!(
     { "one": "a", "two": "b" }
 );
 
+// Regression for #4790: supported unquoted object keys must not depend on
+// whitespace around nested fields or silently drop the containing array item.
+test_deserializer!(
+    test_compact_unquoted_keys_retain_nested_array_entries,
+    r#"{routes:[{id:"001",schema_id:null,reason:"amount -1.617,98"}]}"#,
+    baml_tyannotated!(PageRoutes),
+    baml_db! {
+        class PageRoute {
+            id: string,
+            schema_id: (string | null) @class_completed_field_missing(null),
+            reason: string,
+        }
+        class PageRoutes {
+            routes: [PageRoute],
+        }
+    },
+    {
+        "routes": [{
+            "id": "001",
+            "schema_id": null,
+            "reason": "amount -1.617,98"
+        }]
+    }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_decimal_comma,
+    r#"{reason:amount -1.617,98}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "amount -1.617,98" }
+);
+
 // Regression for #4589: a valid optional class must not lose to its null arm
 // merely because the class contains omitted optional fields. This keeps the
 // reported required/present/explicit-null comparison in one coercion.
