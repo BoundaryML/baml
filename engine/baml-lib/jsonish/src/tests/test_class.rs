@@ -164,6 +164,19 @@ class NumericKey {
 );
 
 test_deserializer!(
+    test_compact_unquoted_key_with_punctuation,
+    r#"
+class PunctuationKey {
+  a string?
+  punctuation string @alias("key.with.punctuation/123")
+}
+"#,
+    r#"{a:null,key.with.punctuation/123:foo}"#,
+    TypeIR::class("PunctuationKey"),
+    { "a": null, "punctuation": "foo" }
+);
+
+test_deserializer!(
     test_compact_key_before_unquoted_unicode_value,
     r#"
 class UnicodeCompact {

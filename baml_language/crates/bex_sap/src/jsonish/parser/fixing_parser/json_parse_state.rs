@@ -399,21 +399,14 @@ impl<'s> JsonParseState<'s> {
     fn starts_compact_unquoted_object_key(
         next: &Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> bool {
-        let mut lookahead = next.clone();
-        let Some((_, first)) = lookahead.peek().copied() else {
-            return false;
-        };
-        lookahead.next();
-
-        if !(first.is_alphanumeric() || matches!(first, '_' | '$')) {
-            return false;
-        }
-
-        for (_, c) in lookahead {
+        for (_, c) in next.clone() {
             match c {
                 ':' => return true,
-                c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => {}
-                _ => return false,
+                // A structural delimiter before `:` means this is not a key.
+                ',' | '}' | ']' | '\n' => return false,
+                // Match the normal unquoted-key parser, which accepts all
+                // other characters until the separating colon.
+                _ => {}
             }
         }
 

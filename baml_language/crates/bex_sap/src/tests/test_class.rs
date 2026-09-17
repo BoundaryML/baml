@@ -272,6 +272,19 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_compact_unquoted_key_with_punctuation,
+    r#"{a:null,key.with.punctuation/123:foo}"#,
+    baml_tyannotated!(PunctuationKey),
+    baml_db! {
+        class PunctuationKey {
+            a: (string | null) @class_completed_field_missing(null),
+            punctuation: string @alias("key.with.punctuation/123"),
+        }
+    },
+    { "a": null, "punctuation": "foo" }
+);
+
+test_deserializer!(
     test_compact_key_before_unquoted_unicode_value,
     r#"{a:null,b:x😀}"#,
     baml_tyannotated!(UnicodeCompact),
