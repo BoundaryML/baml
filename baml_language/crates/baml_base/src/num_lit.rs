@@ -32,7 +32,7 @@ pub enum IntLitError {
         base: u32,
         positions: Vec<(usize, char)>,
     },
-    /// Magnitude exceeds `i64::MAX`. Never produced for bigints.
+    /// Magnitude exceeds the supported integer or bigint limit.
     TooLarge,
 }
 
