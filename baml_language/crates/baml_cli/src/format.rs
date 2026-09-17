@@ -5,7 +5,11 @@ use std::{
 };
 
 use anyhow::Result;
-use baml_db::discover_baml_files;
+use baml_db::{
+    ProjectDatabase, SourceRootKind, SourceRootSpec, baml_compiler_lexer, baml_compiler_parser,
+    baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
+    discover_baml_files,
+};
 use baml_fmt::FormatOptions;
 use clap::Args;
 
@@ -26,7 +30,10 @@ Examples:
     baml fmt baml_src/main.baml
 
   Preview formatted output:
-    baml fmt --dry-run")]
+    baml fmt --dry-run
+
+  Migrate removed hash strings without changing their values:
+    baml fmt --fix-removed-features")]
 pub struct FormatArgs {
     #[arg(
         help = "Specific files to format. If omitted, all `.baml` files in the project are formatted."
@@ -45,6 +52,14 @@ pub struct FormatArgs {
         help_heading = "Output options"
     )]
     pub dry_run: bool,
+
+    #[arg(
+        long,
+        help = "Rewrite removed non-template hash strings without changing their values",
+        long_help = "Rewrite removed non-template hash strings to render-equivalent quoted strings. Legacy Jinja prompts and template_string bodies require manual migration to backtick templates.",
+        default_value = "false"
+    )]
+    pub fix_removed_features: bool,
 }
 
 impl FormatArgs {
@@ -115,6 +130,21 @@ impl FormatArgs {
                     continue;
                 }
             };
+            let source = if self.fix_removed_features {
+                match migrate_removed_features(&source) {
+                    Ok(source) => source,
+                    Err(err) => {
+                        crate::reporter::print_error(format_args!(
+                            "migrating {}: {err}",
+                            path.display()
+                        ));
+                        num_failures += 1;
+                        continue;
+                    }
+                }
+            } else {
+                source
+            };
             let options = FormatOptions::default();
             match baml_fmt::format(&source, &options) {
                 Ok(formatted) => {
@@ -166,6 +196,120 @@ impl FormatArgs {
             Ok(crate::ExitCode::Success)
         }
     }
+}
+
+/// Rewrite removed non-template hash string literals to byte-equivalent quoted strings.
+///
+/// Compiler2 lowered ordinary hash-string bodies verbatim, without escape decoding or dedenting, so every character in the body must be escaped for the quoted-string decoder. Legacy Jinja prompt and `template_string` bodies are deliberately left untouched: quoted strings would make their interpolation inert, and migrating Jinja to BEP-049 templates requires a separate semantic transformation.
+fn migrate_removed_features(
+    source: &str,
+) -> std::result::Result<String, RemovedFeatureMigrationError> {
+    let mut db = ProjectDatabase::new();
+    let root = db
+        .add_source_root(SourceRootSpec::new(
+            "<fmt-migration>",
+            SourceRootKind::Workspace,
+        ))
+        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+    let source_file = db.add_or_update_file_in(
+        root,
+        &PathBuf::from("<fmt-migration>").join("file.baml"),
+        source,
+    );
+    let tokens = baml_compiler_lexer::lex_file(&db, source_file);
+    let (parsed, _errors) = baml_compiler_parser::parse_file(&tokens);
+    let cst = SyntaxNode::new_root(parsed);
+
+    let mut has_legacy_jinja_template = false;
+    let mut replacements = cst
+        .descendants()
+        .filter(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
+        .filter_map(|node| {
+            let start = node
+                .children_with_tokens()
+                .filter_map(SyntaxElement::into_token)
+                .find(|token| token.kind() == SyntaxKind::HASH)?
+                .text_range()
+                .start();
+            let start = usize::from(start);
+            let end = usize::from(node.text_range().end());
+            let replacement = hash_string_to_quoted(source.get(start..end)?)?;
+            if node.ancestors().skip(1).any(|ancestor| {
+                matches!(
+                    ancestor.kind(),
+                    SyntaxKind::PROMPT_FIELD | SyntaxKind::TEMPLATE_STRING_DEF
+                )
+            }) {
+                has_legacy_jinja_template = true;
+                return None;
+            }
+            Some((start..end, replacement))
+        })
+        .collect::<Vec<_>>();
+
+    if has_legacy_jinja_template {
+        return Err(RemovedFeatureMigrationError::LegacyJinjaTemplate);
+    }
+
+    // Apply from the end so earlier CST byte offsets remain valid.
+    replacements.sort_by_key(|(range, _)| range.start);
+    let mut migrated = source.to_string();
+    for (range, replacement) in replacements.into_iter().rev() {
+        migrated.replace_range(range, &replacement);
+    }
+    Ok(migrated)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RemovedFeatureMigrationError {
+    LegacyJinjaTemplate,
+}
+
+impl std::fmt::Display for RemovedFeatureMigrationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LegacyJinjaTemplate => write!(
+                f,
+                "legacy Jinja prompts and `template_string` bodies require manual migration to backtick templates with `${{...}}` interpolation"
+            ),
+        }
+    }
+}
+
+fn hash_string_to_quoted(raw: &str) -> Option<String> {
+    let hash_count = raw.bytes().take_while(|byte| *byte == b'#').count();
+    if hash_count == 0 || raw.as_bytes().get(hash_count) != Some(&b'"') {
+        return None;
+    }
+
+    let body_start = hash_count + 1;
+    let body_end = raw.len().checked_sub(hash_count + 1)?;
+    if body_end < body_start
+        || raw.as_bytes().get(body_end) != Some(&b'"')
+        || !raw[body_end + 1..].bytes().all(|byte| byte == b'#')
+    {
+        return None;
+    }
+
+    let body = raw.get(body_start..body_end)?;
+    let mut quoted = String::with_capacity(body.len() + 2);
+    quoted.push('"');
+    for ch in body.chars() {
+        match ch {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            '\0' => quoted.push_str("\\0"),
+            '\u{0008}' => quoted.push_str("\\b"),
+            '\u{000B}' => quoted.push_str("\\v"),
+            '\u{000C}' => quoted.push_str("\\f"),
+            other => quoted.push(other),
+        }
+    }
+    quoted.push('"');
+    Some(quoted)
 }
 
 fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
@@ -226,6 +370,7 @@ mod tests {
             paths: vec![baml_src],
             from: Some(tmp.path().to_path_buf()),
             dry_run: false,
+            fix_removed_features: false,
         };
         let exit_code = args.run().unwrap();
 
@@ -261,6 +406,132 @@ mod tests {
         ]);
 
         assert_eq!(expanded, vec![main, nested]);
+    }
+
+    #[test]
+    fn fix_removed_features_migrates_hash_strings_before_formatting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source_file = tmp.path().join("legacy.baml");
+        fs::write(
+            &source_file,
+            "function legacy() -> string {\n    #\"\n    first\n    second\n\"#\n}\n",
+        )
+        .unwrap();
+
+        let args = FormatArgs {
+            paths: vec![source_file.clone()],
+            from: None,
+            dry_run: false,
+            fix_removed_features: true,
+        };
+        let exit_code = args.run().unwrap();
+
+        assert!(matches!(exit_code, crate::ExitCode::Success));
+        let migrated = fs::read_to_string(source_file).unwrap();
+        assert!(migrated.contains("\"\\n    first\\n    second\\n\""));
+        assert!(!migrated.contains("#\""));
+    }
+
+    #[test]
+    fn hash_string_conversion_preserves_every_decoded_byte() {
+        let raw = "##\"a\\b\"# c\n    indented\tline\r\0\u{0008}\u{000B}\u{000C}\"##";
+        let quoted = hash_string_to_quoted(raw).expect("valid hash string");
+        let decoded = baml_db::escape::unescape_string_literal(&quoted[1..quoted.len() - 1]);
+
+        assert_eq!(
+            decoded,
+            "a\\b\"# c\n    indented\tline\r\0\u{0008}\u{000B}\u{000C}"
+        );
+    }
+
+    #[test]
+    fn migration_is_syntax_aware_and_handles_multiple_delimiters() {
+        let source = r####"// #"comment"#
+function legacy() -> string {
+    let prefix = "élève";
+    let untouched = `#"backtick text"#`;
+    let first = #"line one
+    line two"#;
+    let second = ##"contains "# and a `tick`"##;
+    first + second + untouched
+}
+"####;
+
+        let migrated = migrate_removed_features(source).unwrap();
+
+        assert!(migrated.starts_with("// #\"comment\"#\n"));
+        assert!(migrated.contains("let prefix = \"élève\";"));
+        assert!(migrated.contains("`#\"backtick text\"#`"));
+        assert!(migrated.contains("\"line one\\n    line two\""));
+        assert!(migrated.contains("\"contains \\\"# and a `tick`\""));
+        assert_eq!(migrate_removed_features(&migrated).unwrap(), migrated);
+    }
+
+    #[test]
+    fn migration_unblocks_formatter_without_backtick_dedent() {
+        let source = "function legacy() -> string {\n    #\"\n    line one\n    line two\n\"#\n}\n";
+        assert!(matches!(
+            baml_fmt::format(source, &FormatOptions::default()),
+            Err(baml_fmt::FormatterError::ParseErrors(_))
+        ));
+
+        let migrated = migrate_removed_features(source).unwrap();
+        let formatted = baml_fmt::format(&migrated, &FormatOptions::default())
+            .expect("migrated source should be valid and format normally");
+
+        assert!(formatted.contains("\"\\n    line one\\n    line two\\n\""));
+        assert!(!formatted.contains("#\""));
+        assert!(!formatted.contains('`'));
+    }
+
+    #[test]
+    fn migration_refuses_legacy_jinja_prompt_and_template_bodies() {
+        let source = r###"function Greet(name: string) -> string {
+    client: "openai/gpt-4o"
+    prompt: #"Hello {{ name }}"#
+}
+
+template_string Legacy(name: string) #"Hello {{ name }}"#
+"###;
+
+        assert_eq!(
+            migrate_removed_features(source),
+            Err(RemovedFeatureMigrationError::LegacyJinjaTemplate)
+        );
+    }
+
+    #[test]
+    fn fix_removed_features_does_not_rewrite_legacy_jinja_prompts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source_file = tmp.path().join("legacy_prompt.baml");
+        let source = r###"function Greet(name: string) -> string {
+    client: "openai/gpt-4o"
+    prompt: #"Hello {{ name }}"#
+}
+"###;
+        fs::write(&source_file, source).unwrap();
+
+        let args = FormatArgs {
+            paths: vec![source_file.clone()],
+            from: None,
+            dry_run: false,
+            fix_removed_features: true,
+        };
+
+        assert!(matches!(args.run().unwrap(), crate::ExitCode::Other));
+        assert_eq!(fs::read_to_string(source_file).unwrap(), source);
+    }
+
+    #[test]
+    fn malformed_hash_string_is_not_rewritten() {
+        let source = "function broken() -> string { #\"unclosed }\n";
+        assert_eq!(migrate_removed_features(source).unwrap(), source);
+    }
+
+    #[test]
+    fn malformed_jinja_hash_string_preserves_parser_diagnostics() {
+        let source = "function broken() -> string {\n    prompt: #\"unclosed\n}\n";
+        assert_eq!(migrate_removed_features(source).unwrap(), source);
     }
 
     #[test]
