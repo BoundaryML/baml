@@ -434,7 +434,14 @@ impl QuerySession {
         self.check_capabilities(&plan)?;
         self.check_value_authorization(&plan)?;
         let plan = match &self.adapter {
-            Some(adapter) => adapter.adapt(plan).await.map_err(|e| self.plan_error(e))?,
+            Some(adapter) => {
+                let plan = adapter.adapt(plan).await.map_err(|e| self.plan_error(e))?;
+                // The adapter may rewrite the plan; the gates hold for what
+                // executes, not only for what the user wrote.
+                self.check_capabilities(&plan)?;
+                self.check_value_authorization(&plan)?;
+                plan
+            }
             None => plan,
         };
         self.tracker.checkpoint()?;
