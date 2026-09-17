@@ -88,7 +88,9 @@ export async function classify(input: string): Promise<Category> {
 
 `@boundaryml/baml-bridge` does not expose the legacy host `Collector` API. Nightly 0.18.1 exported a compatibility `Collector`, but the runtime did not connect it to model calls, so its logs and usage always remained empty. The inactive API was removed in 0.19.0 instead of continuing to return misleading telemetry.
 
-When BAML code invokes a client directly through `ai.ModelTurn`, read `turn.usage` and `turn.calls` in BAML and return the fields your host application needs. This preserves provider-reported input, output, cached-input, and reasoning token counts when the provider supplies them. Do not pass a collector as an extra argument to `callFunction`; current bridge versions reject the removed TypeScript surface at compile time, and `callFunction` accepts the cancellation context as its fifth argument.
+For a direct client invocation, initialize the input conversation with `ai.Journal.new(spec)` and pass it in `ai.ModelTurnInput`. The returned `ai.ModelTurn` is the telemetry source: `turn.usage` contains provider-reported input, output, cached-input, and reasoning token counts, while `turn.calls` contains every retry or fallback exchange in order. Find the call whose `selected` field is true and read `call.timing.start_time_utc_ms`, `duration_ms`, and `ttft_ms`; a provider or failed exchange can leave individual fields null. The journal is input context and is not populated with telemetry by `client.invoke`, so return the turn fields your host application needs.
+
+Do not pass a collector as an extra argument to `callFunction`; current bridge versions reject the removed TypeScript surface at compile time, and `callFunction` accepts the cancellation context as its fifth argument.
 
 ## Streaming
 
