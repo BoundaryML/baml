@@ -696,7 +696,18 @@ fn enrich_runtime_mount(
                         stubs.push((export_namespace.clone(), export_name.clone(), source));
                     }
                 }
-                ExportedType::TypeAlias { .. } => {}
+                // Source-backed lookup wins over the mounted interface, so a
+                // signature that names an exported alias needs a declaration
+                // in the synthetic package just like a class or enum does.
+                ExportedType::TypeAlias { resolved, .. } => {
+                    if source_identifier(export_name)
+                        && export_namespace.iter().all(source_identifier)
+                    {
+                        let source =
+                            format!("type {export_name} = {}\n", stub_type(resolved, &viewpoint));
+                        stubs.push((export_namespace.clone(), export_name.clone(), source));
+                    }
+                }
             }
         }
     }
@@ -3052,6 +3063,54 @@ mod tests {
             source_of("Describable"),
             "interface Describable {\n  function describe(self) -> string throws never\n  \
              function shout(self) -> string throws never { $rust_function }\n}\n"
+        );
+    }
+
+    #[test]
+    fn runtime_mount_stubs_include_declared_type_aliases() {
+        use baml_compiler2_hir_ty::package_interface::ExportedType;
+
+        let mut types = IndexMap::new();
+        types.insert(
+            vec![Name::new("models")],
+            IndexMap::from([(
+                Name::new("Name"),
+                ExportedType::TypeAlias {
+                    qtn: baml_type::QualifiedTypeName::new(
+                        Name::new("app"),
+                        vec![Name::new("models")],
+                        Name::new("Name"),
+                    ),
+                    resolved: baml_type::Ty::string(),
+                },
+            )]),
+        );
+        let interface = PackageInterface {
+            types,
+            functions: IndexMap::new(),
+            throw_sets: FunctionThrowSets::default(),
+            namespaces: std::collections::BTreeSet::from([vec![Name::new("models")]]),
+            impls: Vec::new(),
+        };
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .expect("package interface encodes");
+        let package = RuntimePackageMount {
+            identity: bex_vm_types::RuntimePackageIdentity::synthetic(1),
+            interface_blob,
+            types: Vec::new(),
+        };
+
+        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
+            .expect("runtime mount enriches");
+
+        assert_eq!(
+            stubs,
+            vec![(
+                vec![Name::new("models")],
+                Name::new("Name"),
+                "type Name = string\n".to_string(),
+            )]
         );
     }
 

@@ -215,3 +215,31 @@ test "mounted generic return retains its concrete class type" {
     let main = consumer.get_function<() -> int>("root.main") ?? throw "missing root.main";
     assert.equal(main(), 42)
 }
+
+// Regression for B-1752: declaring an alias in a runtime-compiled package
+// must not prevent that package from being mounted by a later compile.
+test "mounted package supports declared type aliases" {
+    let app = reflect.Package.compile(
+        {
+            "lib.baml": `
+                type Name = string
+
+                function greet(name: Name) -> Name throws never {
+                    "Hello, " + name
+                }
+            `,
+        },
+    );
+    let consumer = reflect.Package.compile(
+        {
+            "main.baml": `
+                function main() -> string throws never {
+                    app.greet("Ada")
+                }
+            `,
+        },
+        packages = { "app": app },
+    );
+    let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    assert.equal(main(), "Hello, Ada")
+}
