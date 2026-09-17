@@ -603,9 +603,20 @@ impl<'a> AstGraphBuilder<'a> {
         ));
     }
 
-    // -- Call scope (leaf node — no recursion into the call's arguments) --
+    // -- Call scope --
 
     fn emit_call_scope(&mut self, call_expr: ast::ExprId, label: &str) {
+        let closure_bodies = match &self.body.exprs[call_expr] {
+            ast::Expr::Call { args, .. } | ast::Expr::OptionalCall { args, .. } => args
+                .iter()
+                .filter_map(|arg| match &self.body.exprs[arg.expr] {
+                    ast::Expr::Lambda(lambda) => lambda.body,
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        let parent_depth = self.frames.len();
         let callee_name = call_callee_name(self.body, call_expr);
         let ordinal = {
             let frame = self
@@ -637,7 +648,24 @@ impl<'a> AstGraphBuilder<'a> {
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
-        // Note: no frame push / recursion — call nodes are leaves.
+
+        if closure_bodies.is_empty() {
+            return;
+        }
+
+        // A closure passed to a call is executable workflow content. Keep its
+        // annotated control flow beneath the call node so wrappers such as
+        // `run.execute(() -> { ... })` do not hide their scripted steps.
+        // Lambda bodies share the enclosing expression arena, so their source
+        // IDs and spans remain valid in the resulting graph.
+        self.frames
+            .push(Frame::new(FrameEntry::OtherScope, node_id, Some(segment)));
+        let call_depth = self.frames.len();
+        for body in closure_bodies {
+            self.visit_expr(body);
+            self.pop_frames_to(call_depth);
+        }
+        self.pop_frames_to(parent_depth);
     }
 
     // -- Return leaf (terminal node for return statements) --

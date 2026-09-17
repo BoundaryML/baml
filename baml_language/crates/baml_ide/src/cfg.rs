@@ -1161,6 +1161,53 @@ function observe_an_agent() -> string throws never {
     }
 
     #[test]
+    fn scripted_workflow_annotations_inside_nested_closures_are_rendered() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let (mut db, root) = test_db();
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new("/cfg-test/scripted-workflow.baml"),
+            r#"
+class WorkflowRun {
+  function execute(self, body: () -> int) -> int { body() }
+  function inspect(self) -> int { 1 }
+  function focus(self) -> int { 2 }
+  function type_text(self) -> int { 3 }
+}
+
+function ScriptedWorkflow(run: WorkflowRun) -> int {
+  run.execute(() -> {
+    //# Inspect
+    let inspected = run.inspect();
+    run.execute(() -> {
+      //# Focus
+      let focused = run.focus();
+      //# Type
+      run.type_text();
+      focused
+    });
+    inspected
+  })
+}
+"#,
+        );
+
+        let graph = build_graph(&db, "ScriptedWorkflow").expect("expected scripted workflow graph");
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        let header_labels = prepared
+            .nodes
+            .values()
+            .filter(|node| node.node_type == NodeType::HeaderContextEnter)
+            .map(|node| node.label.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(header_labels, ["Inspect", "Focus", "Type"]);
+    }
+
+    #[test]
     fn recursive_callee_cache_is_scoped_by_active_expansions() {
         let (mut db, root) = test_db();
         db.add_or_update_file_in(
