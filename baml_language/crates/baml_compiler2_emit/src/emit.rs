@@ -3314,11 +3314,13 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
+    /// Emit the generic instruction for a binary operation.
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error> {
         self.emit(Self::binop_instruction(op));
         Ok(())
     }
 
+    /// Select a type-specialized binary instruction when operand types permit it.
     fn binary_op_for_operands(
         &mut self,
         op: BinOp,
