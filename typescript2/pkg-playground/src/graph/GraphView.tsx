@@ -59,6 +59,11 @@ interface GraphViewProps {
   onNodeClick: (nodeId: number) => void;
 }
 
+interface GraphViewInnerProps extends GraphViewProps {
+  expandMode: ExpandMode;
+  onExpandModeChange: (mode: ExpandMode) => void;
+}
+
 type LayoutDirection = 'horizontal' | 'vertical';
 
 /** How the graph decides which subgraphs to reveal vs. collapse. */
@@ -149,7 +154,9 @@ function GraphViewInner({
   customRenderers,
   selectedNodeId,
   onNodeClick,
-}: GraphViewProps) {
+  expandMode,
+  onExpandModeChange,
+}: GraphViewInnerProps) {
   const theme = useGraphTheme();
   const chrome = getChrome(theme);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
@@ -195,7 +202,6 @@ function GraphViewInner({
     () => maxNodeDepth(graphModel.rfNodes),
     [graphModel],
   );
-  const [expandMode, setExpandMode] = useState<ExpandMode>('click');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -225,11 +231,14 @@ function GraphViewInner({
   }, [graphModel, revealDepth, expanded]);
 
   // Switching modes clears manual expansions and refits to the new extent.
-  const selectExpandMode = useCallback((mode: ExpandMode) => {
-    setExpandMode(mode);
-    setExpanded(new Set());
-    refitAfterLayoutRef.current = true;
-  }, []);
+  const selectExpandMode = useCallback(
+    (mode: ExpandMode) => {
+      onExpandModeChange(mode);
+      setExpanded(new Set());
+      refitAfterLayoutRef.current = true;
+    },
+    [onExpandModeChange],
+  );
 
   // Click a collapsed node to reveal its subgraph; click again to collapse.
   const toggleExpanded = useCallback((nodeId: string) => {
@@ -849,11 +858,21 @@ function GraphViewInner({
 }
 
 export function GraphView(props: GraphViewProps) {
+  // Expand mode is a session-scoped view preference. Keep it outside the
+  // function-keyed inner graph so navigating between functions preserves the
+  // user's selection while a fresh Playground still defaults to Click.
+  const [expandMode, setExpandMode] = useState<ExpandMode>('click');
+
   return (
     <ReactFlowProvider>
       {/* Keyed per function so the remembered layout direction is re-read
           when the displayed function changes. */}
-      <GraphViewInner key={props.functionName ?? ''} {...props} />
+      <GraphViewInner
+        key={props.functionName ?? ''}
+        {...props}
+        expandMode={expandMode}
+        onExpandModeChange={setExpandMode}
+      />
     </ReactFlowProvider>
   );
 }
