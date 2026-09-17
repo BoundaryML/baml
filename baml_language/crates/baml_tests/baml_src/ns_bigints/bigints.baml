@@ -98,6 +98,23 @@ test "test_bigint_generic_method_class_type_arg" {
     assert.equal(bigint_box_caller(), 7n)
 }
 
+class BigintTimer {
+    elapsed bigint
+}
+
+function bigint_clock() -> bigint { 10n }
+
+function bigint_direct_field_subtraction() -> bigint {
+    let started = bigint_clock();
+    let timer = BigintTimer { elapsed: 0n };
+    timer.elapsed = bigint_clock() - started;
+    timer.elapsed
+}
+
+test "test_bigint_subtraction_assigned_directly_to_field" {
+    assert.equal(bigint_direct_field_subtraction(), 0n)
+}
+
 // ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
 
 function bigint_pick() -> int | bigint { 2n }

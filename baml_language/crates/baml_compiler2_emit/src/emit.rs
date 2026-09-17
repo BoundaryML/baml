@@ -1728,7 +1728,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.emit(Instruction::Copy(0));
         unwrap_infallible(self.load_field(*field, &name));
         self.emit_operand_pull(right);
-        self.emit(Self::binop_instruction(*op));
+        let instruction = self
+            .try_specialize_binary_op(*op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(*op));
+        self.emit(instruction);
         unwrap_infallible(self.store_field_value(*field, &name));
         true
     }
@@ -3789,6 +3792,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 }
 
 impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
+    fn pull_store_rvalue(&mut self, value: &Rvalue<'ctx>) -> Result<(), Self::Error> {
+        self.emit_rvalue_pull(value);
+        Ok(())
+    }
+
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
         let idx = self.emit(Instruction::StoreField(field));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
