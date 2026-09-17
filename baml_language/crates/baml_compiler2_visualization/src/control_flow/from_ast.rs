@@ -606,17 +606,6 @@ impl<'a> AstGraphBuilder<'a> {
     // -- Call scope --
 
     fn emit_call_scope(&mut self, call_expr: ast::ExprId, label: &str) {
-        let closure_bodies = match &self.body.exprs[call_expr] {
-            ast::Expr::Call { args, .. } | ast::Expr::OptionalCall { args, .. } => args
-                .iter()
-                .filter_map(|arg| match &self.body.exprs[arg.expr] {
-                    ast::Expr::Lambda(lambda) => lambda.body,
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
-            _ => Vec::new(),
-        };
-        let parent_depth = self.frames.len();
         let callee_name = call_callee_name(self.body, call_expr);
         let ordinal = {
             let frame = self
@@ -648,11 +637,30 @@ impl<'a> AstGraphBuilder<'a> {
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
+        self.visit_call_closures(call_expr, node_id, segment);
+    }
 
+    fn visit_call_closures(
+        &mut self,
+        call_expr: ast::ExprId,
+        node_id: NodeId,
+        segment: PathSegment,
+    ) {
+        let closure_bodies = match &self.body.exprs[call_expr] {
+            ast::Expr::Call { args, .. } | ast::Expr::OptionalCall { args, .. } => args
+                .iter()
+                .filter_map(|arg| match &self.body.exprs[arg.expr] {
+                    ast::Expr::Lambda(lambda) => lambda.body,
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
         if closure_bodies.is_empty() {
             return;
         }
 
+        let parent_depth = self.frames.len();
         // A closure passed to a call is executable workflow content. Keep its
         // annotated control flow beneath the call node so wrappers such as
         // `run.execute(() -> { ... })` do not hide their scripted steps.
@@ -662,6 +670,9 @@ impl<'a> AstGraphBuilder<'a> {
             .push(Frame::new(FrameEntry::OtherScope, node_id, Some(segment)));
         let call_depth = self.frames.len();
         for body in closure_bodies {
+            // Separate closure arguments are independent callbacks, not a
+            // sequence. Start each body's linear chain from the call scope.
+            self.frames[call_depth - 1].last_linear_child = None;
             self.visit_expr(body);
             self.pop_frames_to(call_depth);
         }
@@ -718,6 +729,9 @@ impl<'a> AstGraphBuilder<'a> {
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
+        if let Some(expr) = return_expr {
+            self.visit_call_closures(expr, node_id, segment);
+        }
     }
 
     /// Stop linear-flow edge chaining in the current frame: the next sibling

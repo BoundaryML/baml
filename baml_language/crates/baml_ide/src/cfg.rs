@@ -1173,6 +1173,10 @@ function observe_an_agent() -> string throws never {
             r#"
 class WorkflowRun {
   function execute(self, body: () -> int) -> int { body() }
+  function execute_pair(self, first: () -> int, second: () -> int) -> int {
+    let first_result = first();
+    second()
+  }
   function inspect(self) -> int { 1 }
   function focus(self) -> int { 2 }
   function type_text(self) -> int { 3 }
@@ -1192,6 +1196,26 @@ function ScriptedWorkflow(run: WorkflowRun) -> int {
     inspected
   })
 }
+
+function ReturnedWorkflow(run: WorkflowRun) -> int {
+  return run.execute(() -> {
+    //# Returned annotation
+    run.inspect()
+  });
+}
+
+function IndependentClosures(run: WorkflowRun) -> int {
+  run.execute_pair(
+    () -> {
+      //# First closure
+      run.inspect()
+    },
+    () -> {
+      //# Second closure
+      run.focus()
+    },
+  )
+}
 "#,
         );
 
@@ -1205,6 +1229,31 @@ function ScriptedWorkflow(run: WorkflowRun) -> int {
             .collect::<Vec<_>>();
 
         assert_eq!(header_labels, ["Inspect", "Focus", "Type"]);
+
+        let returned = build_graph(&db, "ReturnedWorkflow").expect("expected returned workflow");
+        assert!(returned.nodes.values().any(|node| {
+            node.node_type == NodeType::HeaderContextEnter && node.label == "Returned annotation"
+        }));
+
+        let independent =
+            build_graph(&db, "IndependentClosures").expect("expected multi-closure workflow");
+        let first = independent
+            .nodes
+            .values()
+            .find(|node| node.label == "First closure")
+            .expect("expected first closure annotation");
+        let second = independent
+            .nodes
+            .values()
+            .find(|node| node.label == "Second closure")
+            .expect("expected second closure annotation");
+        assert_eq!(first.parent_node_id, second.parent_node_id);
+        assert!(
+            !independent
+                .edges_by_src
+                .get(&first.id)
+                .is_some_and(|edges| edges.iter().any(|edge| edge.dst == second.id))
+        );
     }
 
     #[test]
