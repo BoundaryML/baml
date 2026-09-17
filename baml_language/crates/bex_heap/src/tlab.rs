@@ -158,6 +158,18 @@ impl Tlab {
         unsafe { self.heap.make_heap_ptr(ptr) }
     }
 
+    /// Assign a fresh telemetry identity without registering a weak reference.
+    /// Call-path creation registers the completed definition on first observation.
+    /// Like allocation, this requires the caller to exclude GC.
+    pub fn alloc_function(
+        &mut self,
+        mut function: Box<bex_vm_types::Function>,
+    ) -> Result<HeapPtr, btel_types::FunctionIdExhausted> {
+        function.telemetry_function_id = Some(self.heap.functions.allocate_id()?);
+        function.telemetry_registration = btel_types::FunctionRegistration::default();
+        Ok(self.alloc(Object::Function(function)))
+    }
+
     /// Allocate a float object.
     #[inline]
     pub fn alloc_float(&mut self, f: f64) -> HeapPtr {

@@ -129,6 +129,7 @@ pub struct BexHeap {
     /// Compile-time objects (never collected).
     /// These are permanent: functions, classes, enums, string literals.
     compile_time: Vec<Object>,
+    pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
 
     /// Gen0 nursery — all TLAB allocations land here.
     /// Uses ChunkedVec for stable pointers during concurrent access.
@@ -346,6 +347,7 @@ impl BexHeap {
 
         Self {
             compile_time: compile_time_objects,
+            functions: btel_types::FunctionLookup::default(),
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
             gen2: UnsafeCell::new(ChunkedVec::new()),
@@ -381,9 +383,21 @@ impl BexHeap {
         heap
     }
 
-    /// Freeze the heap behind the shared `Arc`. After this the compile-time
-    /// objects are immutable. See [`Self::build_unsealed`].
-    pub fn seal(self) -> Arc<Self> {
+    /// Freeze the heap behind the shared `Arc`. Compile-time slots can no
+    /// longer be replaced. See [`Self::build_unsealed`].
+    pub fn seal(mut self) -> Arc<Self> {
+        // Assign IDs only after all placeholders have been replaced. The Vec
+        // and its pointers remain stable for the lifetime of the sealed heap.
+        for index in 0..self.compile_time.len() {
+            let ptr = self.compile_time_ptr(index);
+            if let Object::Function(function) = &mut self.compile_time[index] {
+                function.telemetry_function_id = Some(
+                    self.functions
+                        .register_static(ptr, &function.telemetry_registration)
+                        .expect("compile-time functions exceed the FunctionId space"),
+                );
+            }
+        }
         Arc::new(self)
     }
 

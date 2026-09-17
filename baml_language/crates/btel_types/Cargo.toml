@@ -14,5 +14,8 @@ description = "Core types for BAML telemetry producers"
 [lib]
 doctest = false
 
+[dependencies]
+rustc-hash = { workspace = true }
+
 [lints]
 workspace = true

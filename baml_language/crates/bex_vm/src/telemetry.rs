@@ -239,14 +239,18 @@ impl TelemetryState {
         visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         callee: HeapPtr,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
     ) -> ThreadSpawnContext {
-        let spawn_call_path = self.resolve_call_path(CallPathKey {
-            parent: self.thread.active_call_path,
-            visible_caller,
-            caller_pc,
-            callee,
-            edge: CallPathEdge::Spawn,
-        });
+        let spawn_call_path = self.resolve_call_path(
+            CallPathKey {
+                parent: self.thread.active_call_path,
+                visible_caller,
+                caller_pc,
+                callee,
+                edge: CallPathEdge::Spawn,
+            },
+            register,
+        );
         ThreadSpawnContext {
             parent_id: self.thread.active_id,
             spawn_call_path,
@@ -255,6 +259,10 @@ impl TelemetryState {
     }
 
     #[inline(always)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "entry data plus a statically dispatched cold registration hook"
+    )]
     pub fn enter_bytecode(
         &mut self,
         function: &Function,
@@ -263,15 +271,24 @@ impl TelemetryState {
         caller_pc: u32,
         caller_is_observed: bool,
         args: &[Value],
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
     ) -> Option<FrameTelemetry> {
-        if !matches!(function.kind, FunctionKind::Bytecode) {
+        if function.telemetry_function_id.is_none()
+            || !matches!(function.kind, FunctionKind::Bytecode)
+        {
             return None;
         }
 
         let policy_id = function.telemetry_policy_id.load();
         let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
         if policy_id == btel_types::TelemetryPolicyId::NONE && !is_ai {
-            return Some(self.enter_timing(callee, visible_caller, caller_pc, caller_is_observed));
+            return Some(self.enter_timing(
+                callee,
+                visible_caller,
+                caller_pc,
+                caller_is_observed,
+                register,
+            ));
         }
 
         let policy = self.policy_by_id(policy_id);
@@ -290,13 +307,16 @@ impl TelemetryState {
         let call_path = if reentry {
             saved_call_path
         } else {
-            self.resolve_call_path(CallPathKey {
-                parent: saved_call_path,
-                visible_caller,
-                caller_pc,
-                callee,
-                edge: CallPathEdge::Synchronous,
-            })
+            self.resolve_call_path(
+                CallPathKey {
+                    parent: saved_call_path,
+                    visible_caller,
+                    caller_pc,
+                    callee,
+                    edge: CallPathEdge::Synchronous,
+                },
+                register,
+            )
         };
 
         let saved_parent_id = self.thread.active_id;
@@ -343,6 +363,7 @@ impl TelemetryState {
         visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         caller_is_observed: bool,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
     ) -> FrameTelemetry {
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
@@ -354,13 +375,16 @@ impl TelemetryState {
         let call_path = if reentry {
             saved_call_path
         } else {
-            self.resolve_call_path(CallPathKey {
-                parent: saved_call_path,
-                visible_caller,
-                caller_pc,
-                callee,
-                edge: CallPathEdge::Synchronous,
-            })
+            self.resolve_call_path(
+                CallPathKey {
+                    parent: saved_call_path,
+                    visible_caller,
+                    caller_pc,
+                    callee,
+                    edge: CallPathEdge::Synchronous,
+                },
+                register,
+            )
         };
         let flags = if reentry { REENTRY } else { 0 };
         let entered_at = self.clock.read();
@@ -491,6 +515,9 @@ impl TelemetryState {
         function: &Function,
         policy: TelemetryPolicy,
     ) -> Result<(), &'static str> {
+        if function.telemetry_function_id.is_none() {
+            return Err("telemetry is unsupported for this function");
+        }
         if !matches!(function.kind, FunctionKind::Bytecode) {
             return Err("native telemetry policies are immutable");
         }
@@ -498,23 +525,34 @@ impl TelemetryState {
     }
 
     #[inline(always)]
-    fn resolve_call_path(&mut self, key: CallPathKey) -> CallPathId {
+    fn resolve_call_path(
+        &mut self,
+        key: CallPathKey,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+    ) -> CallPathId {
         if let Some((cached_key, id)) = self.last_call_path
             && cached_key == key
         {
             return id;
         }
-        self.resolve_call_path_slow(key)
+        self.resolve_call_path_slow(key, register)
     }
 
     #[cold]
     #[inline(never)]
-    fn resolve_call_path_slow(&mut self, key: CallPathKey) -> CallPathId {
+    fn resolve_call_path_slow(
+        &mut self,
+        key: CallPathKey,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+    ) -> CallPathId {
         if let Some(id) = self.call_paths.get(&key) {
             let id = *id;
             self.last_call_path = Some((key, id));
             return id;
         }
+        // Registration precedes publishing any definition that references it.
+        // Existing paths return above without even loading a registration flag.
+        register(key.visible_caller, key.callee);
         let raw = NEXT_CALL_PATH_ID.fetch_add(1, Ordering::Relaxed);
         assert_ne!(raw, 0, "call-path identity space exhausted");
         let id = CallPathId::new_non_root(raw).expect("call-path identity is nonzero");
@@ -675,6 +713,12 @@ mod tests {
             real_local_count: 0,
             bytecode: bex_vm_types::Bytecode::default(),
             kind,
+            telemetry_function_id: Some(
+                btel_types::FunctionIdAllocator::default()
+                    .allocate()
+                    .unwrap(),
+            ),
+            telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -700,6 +744,38 @@ mod tests {
         }
     }
 
+    #[test]
+    fn unsupported_function_cannot_be_enabled_or_create_a_call_path() {
+        let mut function = function(FunctionKind::Bytecode, None);
+        function.telemetry_function_id = None;
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let policy = TelemetryPolicy {
+            span_from_entry: true,
+            ..TelemetryPolicy::NONE
+        };
+        assert!(state.set_policy(&function, policy).is_err());
+        // Even an incorrectly assigned policy cannot override capability.
+        state
+            .policies
+            .publish(&function.telemetry_policy_id, policy)
+            .unwrap();
+        assert!(
+            state
+                .enter_bytecode(
+                    &function,
+                    HeapPtr::null(),
+                    None,
+                    0,
+                    false,
+                    &[],
+                    |_, _| panic!("unsupported function tried to register")
+                )
+                .is_none()
+        );
+        assert!(state.events().is_empty());
+        assert!(state.call_paths.is_empty());
+    }
+
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn vm_frame_sizes_stay_within_budget() {
@@ -715,7 +791,7 @@ mod tests {
         state.start_thread();
         let thread_id = state.active_id();
         let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 7, false, &[])
+            .enter_bytecode(&function, HeapPtr::null(), None, 7, false, &[], |_, _| {})
             .unwrap();
 
         assert!(!frame.is_span());
@@ -748,7 +824,15 @@ mod tests {
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[Value::int(3)])
+            .enter_bytecode(
+                &function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[Value::int(3)],
+                |_, _| {},
+            )
             .unwrap();
         let span_id = state.active_id();
 
@@ -777,7 +861,7 @@ mod tests {
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
+            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {})
             .unwrap();
         let updater =
             TelemetryState::new_root(Arc::clone(&state.policies), Arc::clone(&state.clock));
@@ -826,7 +910,7 @@ mod tests {
         let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let mut outer = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
+            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {})
             .unwrap();
         let mut inner = state
             .enter_bytecode(
@@ -836,6 +920,7 @@ mod tests {
                 1,
                 true,
                 &[],
+                |_, _| {},
             )
             .unwrap();
         outer.add_await(ClockDuration::from_ticks(3));
@@ -899,7 +984,7 @@ mod tests {
                     };
                     state.set_policy(&function, policy(initial)).unwrap();
                     let frame = state
-                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[])
+                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {})
                         .unwrap();
                     // Updating to zero must not erase an entry requirement.
                     state
@@ -935,7 +1020,7 @@ mod tests {
     fn spawned_thread_has_explicit_parent_and_structural_call_path() {
         let mut parent = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         parent.start_thread();
-        let context = parent.spawn_context(None, 11, HeapPtr::null());
+        let context = parent.spawn_context(None, 11, HeapPtr::null(), |_, _| {});
 
         let mut child =
             TelemetryState::new_root(Arc::clone(&parent.policies), Arc::clone(&parent.clock));

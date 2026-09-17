@@ -1260,6 +1260,7 @@ dependencies = [
  "bex_vm_types",
  "bridge_ctypes",
  "btel_clock",
+ "btel_types",
  "futures",
  "indexmap",
  "libc",
@@ -1286,6 +1287,7 @@ version = "0.0.0-beta"
 dependencies = [
  "base64",
  "bex_vm_types",
+ "btel_types",
  "loom",
  "prost",
  "prost-build",
@@ -1318,6 +1320,7 @@ dependencies = [
  "bex_external_types",
  "bex_str",
  "bex_vm_types",
+ "btel_types",
  "indexmap",
  "num-bigint",
  "parking_lot",
@@ -1741,6 +1744,9 @@ dependencies = [
 [[package]]
 name = "btel_types"
 version = "0.0.0-beta"
+dependencies = [
+ "rustc-hash 2.1.2",
+]
 
 [[package]]
 name = "bumpalo"

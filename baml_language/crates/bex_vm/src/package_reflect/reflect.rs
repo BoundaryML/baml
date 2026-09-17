@@ -875,7 +875,10 @@ impl BamlClassPackage for PackageReflectImpl {
                 Object::TypeAlias(alias) => alias.owner = package_ptr,
                 _ => {}
             }
-            objects.push(vm.alloc(object));
+            match vm.alloc_runtime_object(object) {
+                Ok(pointer) => objects.push(pointer),
+                Err(error) => return VmRustFnError::InternalError(error).into(),
+            }
         }
         // Runtime identities are generative: remint before anything reads a
         // declaration's tag, so every downstream read sees the real identity.
@@ -1117,6 +1120,8 @@ impl BamlClassPackage for PackageReflectImpl {
         runtime.type_values = type_values;
         runtime.init = init;
 
+        // Linking is complete. First telemetry observation may now register
+        // owned definitions; imported functions keep their IDs and registration.
         let wrapper = copy::Package {
             _inner: Value::object(package_ptr),
         }
@@ -1931,7 +1936,7 @@ fn graft_session_submission(
             objects.push(pointer);
             continue;
         }
-        let pointer = vm.alloc(object.clone());
+        let pointer = vm.alloc_runtime_object(object.clone())?;
         objects.push(pointer);
         owned.push(pointer);
     }

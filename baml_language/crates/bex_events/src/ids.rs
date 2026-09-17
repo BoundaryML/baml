@@ -99,13 +99,7 @@ pub struct SourceSnapshotId(pub [u8; 32]);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BexThreadId(pub u64);
 
-/// Index into the engine's function metadata table
-/// (`bex_events::FunctionMetadataTable`) — 1-based sequential in object-pool
-/// walk order (0 = unassigned). NOT stable across recompiles: joins are
-/// valid only against the same artifact's header (cross-run joins use the
-/// FQN).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionId(pub u32);
+pub use btel_types::FunctionId;
 
 /// A logical thread scoped by its process and engine. Encodes to a
 /// reversible `baml_thread_1_…` string.
