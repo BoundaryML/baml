@@ -440,6 +440,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn completed_sap_parse_rejects_discarded_array_items() {
+        let output = run_test(
+            r#"
+            class Buchung {
+              datum string
+              betrag int
+            }
+
+            class Kontoauszug {
+              buchungen Buchung[]
+            }
+
+            function main() -> string {
+              let parsed = baml.sap.parse<Kontoauszug>(
+                `{"buchungen":[{"datum":null,"betrag":1},{"datum":"2026-09-17","betrag":2}]}`
+              ) catch (e) {
+                baml.errors.ParseError => e.message,
+                _ => "wrong error type",
+              };
+
+              if parsed is string {
+                parsed
+              } else {
+                "unexpected success"
+              }
+            }
+            "#,
+            "main",
+            IndexMap::new(),
+            OptLevel::One,
+        )
+        .await;
+
+        let Ok(BexExternalValue::String(message)) = output.result else {
+            panic!("expected parse error message, got {:?}", output.result);
+        };
+        assert!(
+            message.contains(
+                "Failed to parse 1 array item; refusing to silently discard model output"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("buchungen.0"), "{message}");
+    }
+
+    #[tokio::test]
     async fn bound_args_reject_argument_count_mismatch() {
         let program = compile_source_with_opt(
             "function main(x: int, y: int = 1) -> int { x + y }",
