@@ -57,6 +57,45 @@ test "roundtrip_simple" {
     assert.equal(roundtrip_simple_age(), 30)
 }
 
+class BigintRecord { id bigint  exact 42n }
+
+test "bigint_and_literal_bigint_json_roundtrip" {
+    let large = 123456789012345678901234567890n;
+    let encoded = baml.json.to_string(large);
+    assert.equal(encoded, "\"123456789012345678901234567890\"");
+    assert.equal(baml.json.from_string<bigint>(encoded), large);
+    assert.equal(baml.json.from_string<42n>("\"42\""), 42n);
+    let record = baml.json.from_string<BigintRecord>(
+        "{\"id\":\"123456789012345678901234567890\",\"exact\":\"42\"}",
+    );
+    assert.equal(record.id, large);
+    assert.equal(record.exact, 42n)
+}
+
+test "literal_bigint_json_rejects_wrong_value" {
+    {
+        let wrong: 42n = baml.json.from_string<42n>("\"43\"");
+        baml.sys.panic("expected literal bigint mismatch")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
+test "bigint_json_rejects_numbers_and_non_decimal_strings" {
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("42");
+        baml.sys.panic("expected bigint JSON number to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    };
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("\"12.5\"");
+        baml.sys.panic("expected non-decimal bigint string to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
 // ─── Composite generic ─────────────────────────────────────────────────────────
 
 class Container<T> { item T }

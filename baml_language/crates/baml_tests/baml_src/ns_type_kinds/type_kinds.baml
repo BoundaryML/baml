@@ -261,6 +261,20 @@ test "map_key_type_view_keeps_runtime_definitions" {
     assert.equal((key_enum.values().at(1) ?? throw "key rows").name, "SECOND")
 }
 
+test "literal_views_return_values_for_all_public_literal_kinds" {
+    let string_view = reflect.literal.new("line\nquoted \"text\"");
+    let int_view = reflect.Type.of<-42>().as_literal() ?? throw "int literal";
+    let bigint_view = reflect.Type.of<123456789012345678901234567890n>().as_literal() ?? throw "bigint literal";
+    let bool_view = reflect.Type.of<true>().as_literal() ?? throw "bool literal";
+
+    assert.equal(string_view.value(), "line\nquoted \"text\"");
+    assert.equal((reflect.Type.of<"fixed">().as_literal() ?? throw "static string literal").value(), "fixed");
+    assert.equal(int_view.value(), -42);
+    assert.equal(bigint_view.value(), 123456789012345678901234567890n);
+    assert.equal(bool_view.value(), true);
+    assert.equal(reflect.literal.new(123456789012345678901234567890n).value(), bigint_view.value())
+}
+
 test "nested_class_of_a_runtime_package_type_reads_back" {
     let package = reflect.Package.compile(
         { "schema.baml": `class Leaf { name string } class Root { leaf Leaf }` },
