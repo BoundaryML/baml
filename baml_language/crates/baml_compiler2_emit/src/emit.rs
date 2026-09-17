@@ -317,6 +317,10 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// fragment pool based at the shared watermark, so every index this
     /// codegen embeds is program-absolute either way.
     objects_base: usize,
+    /// String objects this function has minted, by content: a string
+    /// constant is minted once per function however many sites load it
+    /// (`string_object`). Strings compare by value, so sharing is unobservable.
+    string_objects: HashMap<String, usize>,
 
     /// Analysis results (classifications, def-use, etc.).
     analysis: AnalysisResult<'ctx>,
@@ -451,6 +455,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             class_fields: ctx.class_fields,
             objects: ctx.objects,
             objects_base: ctx.objects_base,
+            string_objects: HashMap::new(),
             analysis,
             local_slots: HashMap::with_capacity(body.locals.len()),
             real_local_count: 0,
@@ -491,6 +496,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn mint_object(&mut self, object: Object) -> usize {
         let idx = self.objects_base + self.objects.len();
         self.objects.push(object);
+        idx
+    }
+
+    /// The program-absolute index of the string object holding `value`,
+    /// minted on first use in this function and shared by every later load.
+    fn string_object(&mut self, value: &str) -> usize {
+        if let Some(&idx) = self.string_objects.get(value) {
+            return idx;
+        }
+        let idx = self.mint_object(Object::String(value.into()));
+        self.string_objects.insert(value.to_owned(), idx);
         idx
     }
 
@@ -952,6 +968,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // 4. Build exception table from the blocks' handler edges
         self.build_exception_table(mir);
+        self.build_shield_table(mir);
 
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
@@ -1438,13 +1455,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         let call_site_span = self.current_debug_span;
 
                         // 1. Push event name "$baml_log"
-                        let log_str_idx = self.mint_object(Object::String("$baml_log".into()));
+                        let log_str_idx = self.string_object(bex_vm_types::bytecode::LOG_EVENT);
                         let log_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(log_str_idx)));
                         let inst = self.emit(Instruction::LoadConst(log_const_idx));
                         self.set_operand(
                             inst,
-                            OperandMeta::Const(Self::display_string_operand("$baml_log")),
+                            OperandMeta::Const(Self::display_string_operand(
+                                bex_vm_types::bytecode::LOG_EVENT,
+                            )),
                         );
 
                         // 2. Push level value string
@@ -1454,7 +1473,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             LogLevel::Warn => "warn",
                             LogLevel::Error => "error",
                         };
-                        let level_val_idx = self.mint_object(Object::String(level_str.into()));
+                        let level_val_idx = self.string_object(level_str);
                         let level_val_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_val_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_val_const_idx));
@@ -1467,7 +1486,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
                         // 4. Push key "level"
-                        let level_key_idx = self.mint_object(Object::String("level".into()));
+                        let level_key_idx = self.string_object("level");
                         let level_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(level_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(level_key_const_idx));
@@ -1477,7 +1496,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         );
 
                         // 5. Push key "data"
-                        let data_key_idx = self.mint_object(Object::String("data".into()));
+                        let data_key_idx = self.string_object("data");
                         let data_key_const_idx = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(data_key_idx)));
                         let inst = self.emit(Instruction::LoadConst(data_key_const_idx));
@@ -2020,7 +2039,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::String(s) => {
                 let display = Self::display_string_operand(s);
-                let obj_idx = self.mint_object(Object::String(s.as_str().into()));
+                let obj_idx = self.string_object(s);
                 let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(display));
@@ -2752,6 +2771,34 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 });
         }
         self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
+    }
+
+    /// Build the bytecode's shield table from the blocks stamped `shielded`
+    /// (the bodies of `defer`s): one exact PC range per emitted block,
+    /// coalesced where the layout put them back-to-back, sorted by start.
+    fn build_shield_table(&mut self, mir: &MirFunctionBody<'ctx>) {
+        use bex_vm_types::bytecode::ShieldRange;
+
+        let mut ranges: Vec<(usize, usize)> = mir
+            .blocks
+            .iter()
+            .filter(|block| block.shielded)
+            .filter_map(|block| {
+                let &start = self.block_addresses.get(&block.id)?;
+                let &end = self.block_end_addresses.get(&block.id)?;
+                (start < end).then_some((start, end))
+            })
+            .collect();
+        ranges.sort_unstable();
+        for (start_pc, end_pc) in ranges {
+            match self.bytecode.shield_table.last_mut() {
+                Some(last) if start_pc <= last.end_pc => last.end_pc = last.end_pc.max(end_pc),
+                _ => self
+                    .bytecode
+                    .shield_table
+                    .push(ShieldRange { start_pc, end_pc }),
+            }
+        }
     }
 
     /// Where the VM lands for `handler`: its PC and the slots of its error
@@ -3665,7 +3712,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
     }
 
     fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
-        let object = self.mint_object(Object::String(package.into()));
+        let object = self.string_object(package);
         let constant = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(object)));
         let inst = self.emit(Instruction::LoadCurrentPackage(constant));
         self.set_operand(inst, OperandMeta::Const(package.to_string()));

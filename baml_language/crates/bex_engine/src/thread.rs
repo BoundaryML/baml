@@ -19,14 +19,13 @@ pub struct BexThread {
     pub vm: BexVm,
     pub name: Option<String>,
     pub cancel: CancellationToken,
+    /// The token the thread's in-flight sys-op observes — never `cancel`
+    /// itself: whether the thread is shielded is read only once `cancel`
+    /// fires, and a shielded thread's cleanup runs its sys-ops to
+    /// completion. Fired, and replaced, when cancellation is delivered to
+    /// an op in flight, so the abandoned op stops and later ops start clean.
+    pub sysop_cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
-    /// Whether `baml.panics.Cancelled` has been delivered into this thread's
-    /// VM. Cancellation is delivered once, at the first yield point that
-    /// observes the token, as a throw the body unwinds through (its `defer`
-    /// bodies run, a `catch` may handle it). From then on the thread is
-    /// shielded: later yield points no longer observe the token and sys-ops
-    /// no longer see it, so cleanup may suspend and complete.
-    pub cancel_injected: bool,
 }
 
 impl BexThread {
@@ -36,8 +35,8 @@ impl BexThread {
             vm,
             name: None,
             cancel,
+            sysop_cancel: CancellationToken::new(),
             settles_future: None,
-            cancel_injected: false,
         }
     }
 
@@ -52,8 +51,8 @@ impl BexThread {
             vm,
             name,
             cancel,
+            sysop_cancel: CancellationToken::new(),
             settles_future: Some(settles_future),
-            cancel_injected: false,
         }
     }
 
@@ -64,9 +63,70 @@ impl BexThread {
         self.settles_future
     }
 
+    /// Deliver cancellation to the sys-op in flight: fire its token so the
+    /// abandoned op stops, and give the ops that follow a fresh one.
+    pub fn vm_thread_abort_sysop(&mut self) {
+        std::mem::replace(&mut self.sysop_cancel, CancellationToken::new()).cancel();
+    }
+
     /// This thread's own cancellation token.
     pub fn vm_thread_cancel(&self) -> &CancellationToken {
         &self.cancel
+    }
+
+    /// Whether the VM is inside a `defer` body, at any depth of the call
+    /// stack. Each bytecode frame's function carries the PC ranges of its
+    /// `defer` bodies (`Bytecode::shield_table`); the innermost frame is
+    /// at `cur_pc`, and an outer frame is at its call instruction: the
+    /// saved instruction pointer is the end of that instruction, and the
+    /// block the call continues to may already lie outside the body
+    /// (`defer { f() }` continues after it), so the call itself decides.
+    /// A callee is shielded through its caller, so unwinding needs no
+    /// bookkeeping.
+    pub fn vm_thread_is_shielded(&self) -> bool {
+        let innermost = self
+            .vm
+            .frames
+            .iter()
+            .rposition(|frame| matches!(frame, bex_vm::Frame::Bytecode(_)));
+        self.vm
+            .frames
+            .iter()
+            .enumerate()
+            .rev()
+            .any(|(index, frame)| {
+                let bex_vm::Frame::Bytecode(frame) = frame else {
+                    return false;
+                };
+                let pc = if Some(index) == innermost {
+                    self.vm.cur_pc
+                } else {
+                    frame.instruction_ptr.checked_sub(1).unwrap_or_else(|| {
+                        unreachable!("an outer bytecode frame has executed its call instruction")
+                    })
+                };
+                let function = self.frame_function(frame.function);
+                match &function.bytecode.compact {
+                    Some(compact) => compact.pc_is_shielded(pc),
+                    None => function.bytecode.pc_is_shielded(pc),
+                }
+            })
+    }
+
+    /// The function a bytecode frame runs, resolved as the VM resolves it: a
+    /// function, a closure's or bound method's function, or the authored
+    /// function behind a generic-function value.
+    fn frame_function(&self, function: HeapPtr) -> &::bex_vm_types::types::Function {
+        use bex_vm::types::ObjectTrait as _;
+
+        let resolved = match self.vm.get_object(function) {
+            ::bex_vm_types::Object::GenericFunction(generic) => self
+                .vm
+                .generic_function_authored_ptr(generic)
+                .and_then(|authored| self.vm.get_object(authored).as_function()),
+            other => other.as_callable(),
+        };
+        resolved.unwrap_or_else(|err| unreachable!("a bytecode frame runs a callable: {err}"))
     }
 }
 

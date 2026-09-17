@@ -286,6 +286,12 @@ pub struct BasicBlock<'db> {
     pub handling: Option<BlockId>,
     /// Set on a handler block: what the VM lands here with.
     pub landing: Option<Landing>,
+    /// Whether this block is part of a `defer` body, which runs shielded from
+    /// cancellation: a thread executing here (or in a callee called from
+    /// here) is not delivered `Cancelled` at its yield points, so cleanup may
+    /// suspend. Fixed at creation, like `unwind`; the emitter derives the
+    /// bytecode's shield table from it.
+    pub shielded: bool,
 }
 
 impl BasicBlock<'_> {
@@ -300,6 +306,7 @@ impl BasicBlock<'_> {
             unwind: None,
             handling: None,
             landing: None,
+            shielded: false,
         }
     }
 

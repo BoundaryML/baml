@@ -39,7 +39,10 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// constant; canary/dev builds were covered by the `BUILD_FINGERPRINT`
 /// equality check, which is exactly the gap this constant exists to close
 /// for stable builds.)
-pub const FORMAT_VERSION: u32 = 7;
+///
+/// Version 8 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
+/// which run shielded from cancellation).
+pub const FORMAT_VERSION: u32 = 8;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.

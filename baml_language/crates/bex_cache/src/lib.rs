@@ -133,7 +133,10 @@ use sha2::{Digest, Sha256};
 /// that left those maps (version 11 removed interface-machinery bodies from
 /// them, so direct calls to interface bodies stopped dirtying their
 /// callers).
-pub const FORMAT_VERSION: u32 = 15;
+///
+/// Version 16: `Bytecode::shield_table` records the PC ranges of `defer`
+/// bodies, which run shielded from cancellation.
+pub const FORMAT_VERSION: u32 = 16;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

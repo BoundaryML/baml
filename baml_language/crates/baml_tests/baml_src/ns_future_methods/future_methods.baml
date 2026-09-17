@@ -46,10 +46,13 @@ test "methods_on_pending_future" {
     assert.equal(methods_on_pending_future(), baml.future.State.Pending)
 }
 
-// After f.cancel() on a pending future: state() returns Cancelled.
+// After f.cancel() on a pending future: the token fires, and the task settles
+// the future Cancelled when it observes the token at its next checkpoint —
+// here inside the sleep. Awaiting it observes that settlement.
 function methods_after_cancel() -> baml.future.State {
     let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
     let _ = f.cancel();
+    let _ = (await f) catch (e) { baml.panics.Cancelled => 0 };
     f.state()
 }
 

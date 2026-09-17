@@ -528,13 +528,26 @@ impl Future {
         }
     }
 
-    /// Record an explicit `f.cancel()` request, then attempt to cancel the
-    /// future if it is still pending. The flag remains set when an existing
-    /// terminal error wins the race.
+    /// Record an explicit `f.cancel()` request and fire the cancel token, so
+    /// the producer observes it at its next checkpoint. The state stays the
+    /// producer's to settle: `Pending` until its body unwinds with
+    /// `Cancelled`, throws, or — with no checkpoint left — completes with its
+    /// value. Returns `true` when this call fired the token: no earlier call
+    /// had requested cancellation and the future was still pending. The
+    /// request is recorded even when a terminal state has already won the
+    /// race (an unobserved error whose future was then cancelled reports as
+    /// a non-fatal cancellation).
     pub fn request_cancel(&self) -> bool {
-        self.flags
+        let previous = self
+            .flags
             .fetch_or(FUTURE_FLAG_CANCEL_REQUESTED, Ordering::AcqRel);
-        self.settle_cancelled()
+        if previous & FUTURE_FLAG_CANCEL_REQUESTED != 0
+            || !matches!(self.read(), FutureRead::Pending(_))
+        {
+            return false;
+        }
+        self.cancel.cancel();
+        true
     }
 
     /// Attempt to transition `Pending → InternalError`, carrying `err`

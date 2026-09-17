@@ -877,7 +877,8 @@ pub enum Instruction {
     ///
     /// The VM yields `VmExecState::Event { event_name, data }` so the engine
     /// can emit a `CustomEvent` with full span context. Execution resumes
-    /// after the engine processes the event.
+    /// after the engine processes the event. Names starting with `$baml_`
+    /// are reserved for the compiler ([`LOG_EVENT`]).
     SendEvent,
 
     // ── Operand-movement superinstructions (CPython-style) ────────────────
@@ -1917,6 +1918,28 @@ impl ExceptionTableEntry {
     }
 }
 
+/// The event a `log.*` call sends: `{ level, data }`.
+pub const LOG_EVENT: &str = "$baml_log";
+
+/// One PC range of code that runs shielded from cancellation: the body of a
+/// `defer`. A thread whose execution is inside such a range — in the frame
+/// itself, or in a callee whose caller's frame sits at a call inside it — is
+/// not delivered `Cancelled` at its yield points, so cleanup may suspend.
+/// Derived by the emitter from the blocks lowered shielded, like the
+/// exception table; sorted by `start_pc`, non-overlapping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct ShieldRange {
+    pub start_pc: usize,
+    /// Exclusive.
+    pub end_pc: usize,
+}
+
+/// Whether `pc` lies in one of `ranges` (sorted, non-overlapping).
+fn pc_in_ranges(ranges: &[ShieldRange], pc: usize) -> bool {
+    let next = ranges.partition_point(|range| range.start_pc <= pc);
+    next > 0 && pc < ranges[next - 1].end_pc
+}
+
 /// One handler-body PC range, for the BEP-042 cause-chain pre-walk.
 ///
 /// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
@@ -1996,6 +2019,9 @@ pub struct CompactCode {
     /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
     /// offsets. Parallel to `Bytecode::handler_context_table`.
     pub handler_context_table: Vec<HandlerContextEntry>,
+    /// Cancellation-shielded ranges with PCs translated to byte offsets.
+    /// Parallel to `Bytecode::shield_table`.
+    pub shield_table: Vec<ShieldRange>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -2035,6 +2061,11 @@ impl CompactCode {
             .iter()
             .filter(|e| pc >= e.start_pc && pc < e.end_pc)
             .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Whether the code at byte-offset `pc` runs shielded from cancellation.
+    pub fn pc_is_shielded(&self, pc: usize) -> bool {
+        pc_in_ranges(&self.shield_table, pc)
     }
 }
 
@@ -2098,6 +2129,10 @@ pub struct Bytecode {
     /// whether a throw happened "during handling of" another error.
     pub handler_context_table: Vec<HandlerContextEntry>,
 
+    /// PC ranges that run shielded from cancellation: the bodies of `defer`s.
+    /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
+    pub shield_table: Vec<ShieldRange>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -2124,6 +2159,7 @@ impl Bytecode {
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -2166,6 +2202,11 @@ impl Bytecode {
             .iter()
             .filter(|e| pc >= e.start_pc && pc < e.end_pc)
             .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Whether the instruction at index `pc` runs shielded from cancellation.
+    pub fn pc_is_shielded(&self, pc: usize) -> bool {
+        pc_in_ranges(&self.shield_table, pc)
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -2561,6 +2602,20 @@ impl Bytecode {
             })
             .collect();
 
+        let shield_table = self
+            .shield_table
+            .iter()
+            .map(|range| ShieldRange {
+                start_pc: index_to_offset[range.start_pc],
+                // `end_pc` may equal `instructions.len()` when a shielded block
+                // runs to the end of the function.
+                end_pc: index_to_offset
+                    .get(range.end_pc)
+                    .copied()
+                    .unwrap_or(code.len()),
+            })
+            .collect();
+
         CompactCode {
             code,
             call_layouts: self
@@ -2571,6 +2626,7 @@ impl Bytecode {
             line_table,
             exception_table,
             handler_context_table,
+            shield_table,
             jump_tables,
         }
     }
@@ -2775,6 +2831,7 @@ mod compact_tests {
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -3058,6 +3115,7 @@ mod compact_tests {
             ],
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         };
@@ -3090,6 +3148,7 @@ mod compact_tests {
                 error_slot: 0,
                 stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
             }],
+            shield_table: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,
                 end_pc: 3, // one past the last instruction → mapped to total byte length

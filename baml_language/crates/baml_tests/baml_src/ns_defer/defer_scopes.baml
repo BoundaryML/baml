@@ -777,11 +777,16 @@ test "a_trap_before_a_catch_expression_is_not_caught_by_it" {
 // reached hop by hop — the pad cascades to the catch it was armed under, and
 // a catch's arms unwind to the catch outside it.
 
+// Throws an int or a string, so both arms below are reachable.
+function nested_throw(an_int: bool) -> void throws int | string {
+    if (an_int) { throw 123 } else { throw "s" }
+}
+
 function nested_int_body(log: string[]) -> void {
     {
         {
             defer { log.push("left") }
-            throw 123
+            nested_throw(true)
         } catch (_) {
             int => { log.push("inner:int") }
         }
@@ -799,7 +804,7 @@ function nested_string_body(log: string[]) -> void {
     {
         {
             defer { log.push("left") }
-            throw "s"
+            nested_throw(false)
         } catch (_) {
             int => { log.push("inner:int") }
         }
@@ -817,7 +822,7 @@ function nested_throwing_defer_body(log: string[]) -> void {
     {
         {
             defer { log.push("left"); throw "from defer" }
-            throw 123
+            nested_throw(true)
         } catch (_) {
             int => { log.push("inner:int") }
         }

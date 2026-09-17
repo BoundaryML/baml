@@ -1738,6 +1738,7 @@ mod tests {
                 unwind: None,
                 handling: None,
                 landing: None,
+                shielded: false,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),

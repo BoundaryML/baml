@@ -24,13 +24,15 @@ enum State {
 }
 
 class Future<T, E> {
-    /// Request cancellation of the future. If the future is already
-    /// settled, this is a no-op and returns `false`. Otherwise the
-    /// future's cancel token fires; the spawned thread will throw
-    /// `baml.panics.Cancelled` at its next `await` point.
+    /// Request cancellation of the future: fires its cancel token, so the
+    /// spawned task throws `baml.panics.Cancelled` at its next checkpoint (an
+    /// `await` or an IO call) and at every one after that, outside a
+    /// `defer`. The task settles the future: `Cancelled` once it unwinds,
+    /// `Ready` with its value if it had no checkpoint left, or handled the
+    /// panic and completed. Until then the future stays `Pending`.
     ///
-    /// Returns `true` if a transition to the Cancelled state was
-    /// performed, `false` if the future was already settled.
+    /// Returns `true` if this call fired the token, `false` if the future was
+    /// already settled or cancellation was already requested.
     function cancel(self) -> bool throws never {
         $rust_function
     }
@@ -103,6 +105,10 @@ function all_settled<T, E>(
         for (let f in futures) {
             let value = (await f) catch_all_panics (e, context) {
                 let panic: baml.panics.Panic => {
+                    // An `await` of a future that has not settled throws only
+                    // for the collector's own cancellation, which this
+                    // catch-all would otherwise record as the input's outcome.
+                    if (!f.is_settled()) { throw e }
                     outcomes.push(baml.future.Panicked { panic: panic, context: context });
                     continue;
                 },

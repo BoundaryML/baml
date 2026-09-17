@@ -1439,6 +1439,14 @@ pub(crate) fn op_error_to_throw_value(
     }
 }
 
+/// How a park (`park`) ended.
+enum Park<T> {
+    /// The wait finished.
+    Done(T),
+    /// The thread's token fired while it was unshielded: deliver cancellation.
+    Cancelled,
+}
+
 /// Where a thread observed its cancellation: the yield point decides how the
 /// injected `baml.panics.Cancelled` enters the VM.
 #[derive(Clone, Copy)]
@@ -2632,34 +2640,6 @@ impl BexEngine {
             self.prof_emit_call_end(vm, call_id, status);
         }
         call_id.map(|call_id| (call_id, function_id))
-    }
-
-    /// §7 decision 2: terminated threads never strand open calls. Closes
-    /// every call frame still open in the suspended VM (innermost-first),
-    /// plus any armed-but-unclosed sysop pair, with `status` `EndFunction`s.
-    /// Called exactly once per terminated thread at cancellation blocks that
-    /// end it without unwinding the VM. Threads whose terminal panic unwound
-    /// VM-side already closed their frames in the unwinder, so those paths
-    /// must not also drain. Emits via the TLS ring lookup, so it is safe on
-    /// any OS thread regardless of the VM's ring snapshot (D5a).
-    fn prof_drain_open_calls(
-        &self,
-        vm: &mut bex_vm::BexVm,
-        status: bex_events::prof::record::FunctionEndStatus,
-    ) {
-        let pending_sysop_call_id = vm.pending_sysop_call_id.take();
-        vm.pending_sysop_function_id = None;
-        vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
-        if vm.prof_ring.is_none() {
-            return;
-        }
-        if let Some(call_id) = pending_sysop_call_id {
-            self.prof_emit_call_end(vm, call_id, status);
-        }
-        let open_call_ids: Vec<_> = vm.prof_open_call_ids().collect();
-        for call_id in open_call_ids {
-            self.prof_emit_call_end(vm, call_id, status);
-        }
     }
 
     /// Status for a sysop pair that ended in an op error, classified by
@@ -5650,12 +5630,51 @@ impl BexEngine {
             .await
     }
 
+    /// Release `thread` and park it on `wait`, racing the thread's token.
+    /// Cancellation is delivered only to an unshielded thread, and whether
+    /// the thread is shielded is read only once the token has fired — at
+    /// park time if it already has, otherwise when it fires during the
+    /// park; a parked VM's frames do not change, so the answer is the same.
+    /// A shielded thread ignores the firing and waits `wait` out. Runs the
+    /// heuristic GC check while parked (no permit dance needed: already
+    /// released).
+    async fn park<T>(
+        self: &Arc<Self>,
+        thread: ActiveHeapPermit<BexThread>,
+        cancel: &CancellationToken,
+        wait: impl std::future::Future<Output = T>,
+    ) -> (ActiveHeapPermit<BexThread>, Park<T>) {
+        let fired_at_park = cancel.is_cancelled();
+        let shielded_at_park = fired_at_park && thread.vm_thread_is_shielded();
+        let inactive = thread.release();
+        self.maybe_collect_garbage().await;
+        let mut wait = std::pin::pin!(wait);
+        let done = tokio::select! {
+            biased;
+            () = cancel.cancelled(), if !shielded_at_park => None,
+            value = &mut wait => Some(value),
+        };
+        let thread = inactive.acquire().await;
+        match done {
+            Some(value) => (thread, Park::Done(value)),
+            // Fired at park time on an unshielded thread (the walk already
+            // ran), or fired while parked: read the shield now.
+            None if fired_at_park || !thread.vm_thread_is_shielded() => (thread, Park::Cancelled),
+            None => {
+                let inactive = thread.release();
+                let value = wait.await;
+                (inactive.acquire().await, Park::Done(value))
+            }
+        }
+    }
+
     /// Deliver this thread's cancellation as a `baml.panics.Cancelled` throw
     /// injected into the VM's exception unwinder, so the body unwinds through
-    /// its `defer` bodies and a `catch` may handle it. Called at the first
-    /// yield point that observes the token, and only once: it latches
-    /// `cancel_injected`, after which the thread is shielded (see
-    /// [`BexThread::cancel_injected`]).
+    /// its `defer` bodies and a `catch` may handle it. Called at every yield
+    /// point that observes the fired token while the thread is not shielded
+    /// (see [`BexThread::vm_thread_is_shielded`]): catching the panic does
+    /// not un-cancel the task, the next unshielded yield point delivers it
+    /// again.
     ///
     /// Returns as [`Self::inject_sysop_throw`] does: `Ok(None)` when a handler
     /// caught the panic and execution continues there, `Ok(Some(outcome))`
@@ -5670,10 +5689,9 @@ impl BexEngine {
         call_capture: Option<&CallValueCaptureContext>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         debug_assert!(
-            !thread.cancel_injected,
-            "cancellation is delivered once; a shielded thread never observes the token"
+            !thread.vm_thread_is_shielded(),
+            "a shielded thread never observes the token"
         );
-        thread.cancel_injected = true;
         match site {
             CancelSite::SysOp(operation) => {
                 // The panic is the op's error: close its call span as
@@ -6307,17 +6325,11 @@ impl BexEngine {
                         guard.fulfill_future(future_id, value)?;
                         return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Fulfilled));
                     }
-                    // "Cancel wins" semantics: if cancellation races with a
-                    // completed VM step, report a cancellation panic rather
-                    // than returning a success value. A cancellation the
-                    // body already received (and handled, since it completed)
-                    // is not a race: the value stands.
-                    let cancelled = cancel.is_cancelled() && !thread.cancel_injected;
-
-                    if cancelled {
-                        return Err(cancelled_unhandled_throw());
-                    }
-
+                    // A body that reached completion had no checkpoint left
+                    // at which to observe a fired token (or handled the
+                    // cancellation it received): per BEP-034 it runs to
+                    // completion and its value stands, for a root call as
+                    // for a spawned child.
                     if let Some(capture) = root_capture.as_ref() {
                         self.capture_root_value(&thread, capture, value);
                     }
@@ -6378,18 +6390,13 @@ impl BexEngine {
                     // `Object::Future` is allocated and no `FutureManager`
                     // entry is created — the schedule/await dance would be
                     // pure overhead because the user never sees the future.
-                    #[allow(clippy::large_enum_variant)]
-                    enum SysOpOutcome {
-                        Cancelled,
-                        Result(Result<BexExternalValue, OpError>),
-                    }
 
                     // Honor an already-cancelled call before traversing and
                     // externalizing sys-op arguments. Host-call argument packs
                     // can contain arbitrarily large value trees; cancellation
                     // must remain an O(1) pre-check rather than paying that
                     // conversion cost for an operation that will never run.
-                    if cancel.is_cancelled() && !thread.cancel_injected {
+                    if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
                         if let Some(outcome) = self
                             .inject_cancellation(
                                 &mut thread,
@@ -6404,15 +6411,12 @@ impl BexEngine {
                         }
                         continue;
                     }
-                    // A shielded thread's cleanup runs its sys-ops to
-                    // completion: they never see the fired token.
-                    let shield;
-                    let op_cancel: &CancellationToken = if thread.cancel_injected {
-                        shield = CancellationToken::new();
-                        &shield
-                    } else {
-                        cancel
-                    };
+                    // The op observes the thread's sys-op token, never
+                    // `cancel` itself: whether this thread is shielded is
+                    // read only once `cancel` fires (`park`), and a delivery
+                    // fires the op's token then. A shielded thread's cleanup
+                    // runs its sys-ops to completion.
+                    let op_cancel = thread.sysop_cancel.clone();
 
                     let runtime_type_overlay =
                         self.runtime_type_overlay(&thread.vm, &args, thread.proof());
@@ -6516,7 +6520,7 @@ impl BexEngine {
                             &bex_args,
                             &runtime_type_overlay,
                             call_id,
-                            op_cancel,
+                            &op_cancel,
                             thread.proof(),
                             runtime_schema_overlay.as_ref(),
                         )
@@ -6536,15 +6540,8 @@ impl BexEngine {
                             } else {
                                 None
                             };
-                            let shielded = thread.cancel_injected;
-                            let inactive = thread.release();
-                            self.maybe_collect_garbage().await;
-                            let outcome = tokio::select! {
-                                biased;
-                                () = cancel.cancelled(), if !shielded => SysOpOutcome::Cancelled,
-                                r = fut => SysOpOutcome::Result(r),
-                            };
-                            thread = inactive.acquire().await;
+                            let parked;
+                            (thread, parked) = self.park(thread, cancel, fut).await;
                             if let Some((call_id, start_ticks)) = prof_await {
                                 let end_ticks = bex_events::prof::clock::now_ticks();
                                 self.prof_charge_await(
@@ -6559,8 +6556,11 @@ impl BexEngine {
                             // next loop-head refresh (inject_sysop_throw's unwind) push
                             // through this snapshot.
                             self.prof_refresh_vm_ring(&mut thread.vm);
-                            match outcome {
-                                SysOpOutcome::Cancelled => {
+                            match parked {
+                                Park::Cancelled => {
+                                    // The op is abandoned: stop it, and give
+                                    // the ops that follow a clean token.
+                                    thread.vm_thread_abort_sysop();
                                     if let Some(outcome) = self
                                         .inject_cancellation(
                                             &mut thread,
@@ -6575,7 +6575,7 @@ impl BexEngine {
                                     }
                                     continue;
                                 }
-                                SysOpOutcome::Result(r) => r,
+                                Park::Done(r) => r,
                             }
                         }
                     };
@@ -6768,8 +6768,11 @@ impl BexEngine {
                     // tracking. A `detach = true` spawn instead gets a fresh,
                     // independent token so the parent's cancellation (and
                     // unhandled-throw cascade) does NOT reach it — it behaves
-                    // like a top-level task.
-                    let child_cancel = if detach {
+                    // like a top-level task. So does a spawn from inside a
+                    // shield: cleanup that delegates must not hand its work a
+                    // token that has already fired; the child stays
+                    // cancellable through its own handle and token.
+                    let child_cancel = if detach || thread.vm_thread_is_shielded() {
                         CancellationToken::new()
                     } else {
                         cancel.child_token()
@@ -6895,7 +6898,7 @@ impl BexEngine {
                     // so the heap Future settles instead of leaking as
                     // Pending. Mirrors the `VmError::ThrownUnhandled`
                     // arm above for a Cancelled panic from the VM side.
-                    if cancel.is_cancelled() && !thread.cancel_injected {
+                    if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
                         if let Some(outcome) = self
                             .inject_cancellation(
                                 &mut thread,
@@ -6910,48 +6913,30 @@ impl BexEngine {
                         }
                         continue;
                     }
-                    #[allow(clippy::items_after_statements)]
-                    // Outcome of the SetOnce-vs-cancel race below. Inline
-                    // here because moving it to module scope just for
-                    // clippy's preference would split the readers'
-                    // attention across two files.
-                    enum AwaitOutcome {
-                        Cancelled,
-                        Done(Result<(), EngineError>),
-                    }
                     // Tightly-scoped guard so the proof's borrow on `vm`
                     // ends before we release the VM permit below.
                     let future = {
                         let mut g = self.futures.acquire(thread.proof()).await;
                         g.future_ready(future_id)?
                     };
-                    // Release the VM permit before the SetOnce wait — the
-                    // wait is the safepoint. Holding a permit through the
-                    // wait would deadlock concurrent GC park (which needs
-                    // every permit) against the spawned task that fulfils
-                    // this future (which needs a permit to write the heap).
+                    // The SetOnce wait is the safepoint: `park` releases the
+                    // VM permit for it. Holding a permit through the wait
+                    // would deadlock concurrent GC park (which needs every
+                    // permit) against the spawned task that fulfils this
+                    // future (which needs a permit to write the heap). The
+                    // wait races the thread's own cancel token so an
+                    // unrelated-future await doesn't hang when the thread
+                    // itself is cancelled (cascade only saves us when the
+                    // awaited future is a descendant whose token derives
+                    // from ours).
                     let prof_await = thread.vm.root_profiler.is_active().then(|| {
                         (
                             thread.vm.prof_current_call_id(),
                             bex_events::prof::clock::now_ticks(),
                         )
                     });
-                    let shielded = thread.cancel_injected;
-                    let inactive = thread.release();
-                    // While parked, run a heuristic-driven GC check (no
-                    // permit dance needed since we're already released).
-                    self.maybe_collect_garbage().await;
-                    // Race the SetOnce wait against the thread's own
-                    // cancel token so an unrelated-future await
-                    // doesn't hang when the thread itself is cancelled
-                    // (cascade only saves us when the awaited future is
-                    // a descendant whose token derives from ours).
-                    let outcome = tokio::select! {
-                        biased;
-                        () = cancel.cancelled(), if !shielded => AwaitOutcome::Cancelled,
-                        r = future => AwaitOutcome::Done(r),
-                    };
-                    thread = inactive.acquire().await;
+                    let parked;
+                    (thread, parked) = self.park(thread, cancel, future).await;
                     if let Some((call_id, start_ticks)) = prof_await {
                         let end_ticks = bex_events::prof::clock::now_ticks();
                         self.prof_charge_await(&mut thread.vm, call_id, start_ticks, end_ticks);
@@ -6961,8 +6946,8 @@ impl BexEngine {
                     // next loop-head refresh (inject_sysop_throw's unwind) push
                     // through this snapshot.
                     self.prof_refresh_vm_ring(&mut thread.vm);
-                    match outcome {
-                        AwaitOutcome::Cancelled => {
+                    match parked {
+                        Park::Cancelled => {
                             if let Some(outcome) = self
                                 .inject_cancellation(
                                     &mut thread,
@@ -6977,7 +6962,7 @@ impl BexEngine {
                             }
                             continue;
                         }
-                        AwaitOutcome::Done(r) => r?,
+                        Park::Done(r) => r?,
                     }
                 }
 
@@ -6993,7 +6978,7 @@ impl BexEngine {
                     // Fail-fast on our own cancellation, exactly as `Await`
                     // does: the next suspension point after the token fires
                     // must surface `Cancelled`.
-                    if cancel.is_cancelled() && !thread.cancel_injected {
+                    if cancel.is_cancelled() && !thread.vm_thread_is_shielded() {
                         if let Some(outcome) = self
                             .inject_cancellation(
                                 &mut thread,
@@ -7007,15 +6992,6 @@ impl BexEngine {
                             return Ok(outcome);
                         }
                         continue;
-                    }
-                    #[allow(clippy::items_after_statements)]
-                    enum AwaitAnyOutcome {
-                        Cancelled,
-                        /// Nothing can ever settle and the thread is
-                        /// shielded, so its cancellation cannot be delivered
-                        /// either: terminate rather than park forever.
-                        NeverSettles,
-                        Done(Result<(), EngineError>),
                     }
                     // Build one SetOnce waiter per pending input. Each waiter
                     // is self-contained (clones the future's `Arc<SetOnce>`),
@@ -7035,34 +7011,28 @@ impl BexEngine {
                             bex_events::prof::clock::now_ticks(),
                         )
                     });
-                    let shielded = thread.cancel_injected;
-                    let inactive = thread.release();
-                    self.maybe_collect_garbage().await;
-                    let outcome = if waiters.is_empty() {
-                        // Empty INPUT array: `future_ready` returns a waiter
-                        // for every id — already-settled inputs yield
-                        // immediately-ready waiters — so empty waiters ⟺
-                        // empty `future_ids`. Per BEP-034 (matching JS
-                        // `Promise.race([])`), racing an empty array never
-                        // settles: park on cancellation rather than busy-spin
-                        // or panic in `select_all` (which rejects an empty
-                        // iterator).
-                        if shielded {
-                            AwaitAnyOutcome::NeverSettles
-                        } else {
-                            cancel.cancelled().await;
-                            AwaitAnyOutcome::Cancelled
-                        }
+                    // Empty INPUT array: `future_ready` returns a waiter for
+                    // every id — already-settled inputs yield immediately-ready
+                    // waiters — so empty waiters ⟺ empty `future_ids`. Per
+                    // BEP-034 (matching JS `Promise.race([])`), racing an empty
+                    // array never settles: park on cancellation alone rather
+                    // than busy-spin or panic in `select_all` (which rejects an
+                    // empty iterator); a shielded thread parks for good, the
+                    // documented `race([])` outcome.
+                    let first_settled = if waiters.is_empty() {
+                        futures::future::Either::Left(
+                            std::future::pending::<Result<(), EngineError>>(),
+                        )
                     } else {
-                        let first_settled =
-                            futures::future::select_all(waiters.into_iter().map(Box::pin));
-                        tokio::select! {
-                            biased;
-                            () = cancel.cancelled(), if !shielded => AwaitAnyOutcome::Cancelled,
-                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
-                        }
+                        futures::future::Either::Right(async move {
+                            let (r, _idx, _rest) =
+                                futures::future::select_all(waiters.into_iter().map(Box::pin))
+                                    .await;
+                            r
+                        })
                     };
-                    thread = inactive.acquire().await;
+                    let parked;
+                    (thread, parked) = self.park(thread, cancel, first_settled).await;
                     if let Some((call_id, start_ticks)) = prof_await {
                         let end_ticks = bex_events::prof::clock::now_ticks();
                         self.prof_charge_await(&mut thread.vm, call_id, start_ticks, end_ticks);
@@ -7072,8 +7042,8 @@ impl BexEngine {
                     // next loop-head refresh (inject_sysop_throw's unwind) push
                     // through this snapshot.
                     self.prof_refresh_vm_ring(&mut thread.vm);
-                    match outcome {
-                        AwaitAnyOutcome::Cancelled => {
+                    match parked {
+                        Park::Cancelled => {
                             if let Some(outcome) = self
                                 .inject_cancellation(
                                     &mut thread,
@@ -7088,22 +7058,11 @@ impl BexEngine {
                             }
                             continue;
                         }
-                        AwaitAnyOutcome::NeverSettles => {
-                            self.prof_drain_open_calls(
-                                &mut thread.vm,
-                                bex_events::prof::record::FunctionEndStatus::Cancelled,
-                            );
-                            if let Some(future_id) = thread.vm_thread_settles_future() {
-                                self.settle_child_cancelled(&mut thread, future_id).await?;
-                                return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled));
-                            }
-                            return Err(cancelled_unhandled_throw());
-                        }
                         // Only an internal-error future surfaces here; normal
                         // BAML success/throw/cancel settles resolve the SetOnce
                         // with `Ok(())` and are observed when the VM re-reads
                         // the future (and the stdlib `await futures[i]` it).
-                        AwaitAnyOutcome::Done(r) => r?,
+                        Park::Done(r) => r?,
                     }
                 }
 
@@ -7112,7 +7071,7 @@ impl BexEngine {
                     data,
                     source_location,
                 } => {
-                    if event_name == "$baml_log" {
+                    if event_name == bex_vm_types::bytecode::LOG_EVENT {
                         self.capture_baml_log_event(
                             &thread,
                             log_capture.as_ref(),

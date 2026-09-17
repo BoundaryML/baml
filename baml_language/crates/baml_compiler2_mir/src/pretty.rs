@@ -154,6 +154,9 @@ fn write_block(f: &mut impl Write, block: &BasicBlock<'_>) -> fmt::Result {
     if let Some(handling) = block.handling {
         write!(f, " [handling {handling}]")?;
     }
+    if block.shielded {
+        write!(f, " [shielded]")?;
+    }
     writeln!(f, ": {{")?;
 
     for stmt in &block.statements {

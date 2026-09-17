@@ -2232,6 +2232,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -2254,6 +2255,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
             ],
             entry: BlockId(0),
@@ -2302,6 +2304,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -2330,6 +2333,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
             ],
             entry: BlockId(0),
@@ -2400,6 +2404,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -2416,6 +2421,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -2426,6 +2432,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(3),
@@ -2436,6 +2443,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 return_local_block(BlockId(4), destination),
             ],
@@ -2482,6 +2490,7 @@ mod tests {
             unwind: None,
             handling: None,
             landing: None,
+            shielded: false,
         }
     }
 
@@ -2518,6 +2527,7 @@ mod tests {
             unwind: None,
             handling: None,
             landing: None,
+            shielded: false,
         }
     }
 
@@ -3077,6 +3087,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3093,6 +3104,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3103,6 +3115,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 return_local_block(BlockId(3), destination),
             ],
@@ -3137,6 +3150,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3153,6 +3167,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3163,6 +3178,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(3),
@@ -3173,6 +3189,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 return_local_block(BlockId(4), destination),
             ],
@@ -3207,6 +3224,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3217,6 +3235,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 return_local_block(BlockId(2), destination),
             ],
@@ -3370,6 +3389,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3380,6 +3400,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3390,6 +3411,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
             ],
             Some("x"),
@@ -3435,6 +3457,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3445,6 +3468,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3455,6 +3479,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 return_local_block(BlockId(3), destination),
             ],
@@ -3502,6 +3527,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3521,6 +3547,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -3531,6 +3558,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
             ],
             entry: BlockId(0),
@@ -3573,6 +3601,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -3589,6 +3618,7 @@ mod tests {
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 },
             ],
             entry: BlockId(0),

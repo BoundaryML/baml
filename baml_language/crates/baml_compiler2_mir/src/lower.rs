@@ -3095,12 +3095,34 @@ impl<'db> LoweringContext<'db> {
                 break;
             }
             self.builder.transition_unwind(armed.unwind);
-            let tmp = self.builder.temp(RuntimeTy::Void {
-                attr: TyAttr::default(),
-            });
-            self.lower_expr(armed.body, Place::local(tmp));
+            self.lower_shielded_defer_body(armed.body);
         }
         self.builder.transition_unwind(exit_unwind);
+    }
+
+    /// Lower one copy of a `defer` body shielded from cancellation: its
+    /// blocks are stamped `shielded`, and the engine does not deliver
+    /// `Cancelled` to a thread executing inside them (or in a callee called
+    /// from them), so cleanup may suspend (BEP-034's shield, implicit for
+    /// `defer`). A throw out of the body simply leaves the shielded blocks.
+    fn lower_shielded_defer_body(&mut self, body: AstExprId) {
+        self.shielded(|this| {
+            let tmp = this.builder.temp(RuntimeTy::Void {
+                attr: TyAttr::default(),
+            });
+            this.lower_expr(body, Place::local(tmp));
+        });
+    }
+
+    /// Lower with `f` shielded from cancellation: the blocks it creates are
+    /// stamped `shielded`, and the shield closes when it returns, so a shield
+    /// is never opened without being closed, and nested ones close innermost
+    /// first.
+    fn shielded<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let shield = self.builder.enter_shield();
+        let result = f(self);
+        self.builder.leave_shield(shield);
+        result
     }
 
     /// Every binding HIR registered in the scopes this body lowers has a
@@ -5912,10 +5934,7 @@ impl<'db> LoweringContext<'db> {
             // body: a throw inside it is "during handling of" the in-flight
             // error.
             let out_of_line = self.builder.begin_out_of_line(pad, armed.unwind, Some(pad));
-            let tmp = self.builder.temp(RuntimeTy::Void {
-                attr: TyAttr::default(),
-            });
-            self.lower_expr(armed.body, Place::local(tmp));
+            self.lower_shielded_defer_body(armed.body);
             // A body that completes normally cascades explicitly.
             if !self.builder.is_current_terminated() {
                 let error = shared_error.expect("a defer pad implies a shared error local exists");
@@ -15566,6 +15585,7 @@ fn lower_function_impl<'db>(
                     unwind: None,
                     handling: None,
                     landing: None,
+                    shielded: false,
                 }],
                 entry: BlockId(0),
                 locals: (0..=arity)

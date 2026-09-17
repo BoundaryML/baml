@@ -56,14 +56,30 @@ pub(crate) struct MirBuilder<'db> {
     /// The innermost handler whose body is being lowered
     /// (`BasicBlock::handling`), stamped the same way.
     current_handling: Option<BlockId>,
+    /// How many `defer` bodies the current lowering position is inside; a
+    /// block is stamped `shielded` when this is non-zero
+    /// (`BasicBlock::shielded`), with the same fresh-block discipline as the
+    /// handler.
+    shield_depth: u32,
 }
 
 /// Where lowering was before it moved out of line to fill a handler block;
 /// [`MirBuilder::end_out_of_line`] returns there.
+#[must_use = "lowering returns by handing this back to `end_out_of_line`"]
 pub(crate) struct OutOfLine {
     block: BlockId,
     unwind: Option<BlockId>,
     handling: Option<BlockId>,
+}
+
+/// An open shield — a `defer` body being lowered. [`MirBuilder::enter_shield`]
+/// opens one; handing it back to [`MirBuilder::leave_shield`] closes it, so a
+/// shield cannot be closed twice, and one left open is a token never handed
+/// back.
+#[must_use = "a shield is closed by handing this back to `leave_shield`"]
+pub(crate) struct Shield {
+    /// The depth entered; shields close innermost first.
+    depth: u32,
 }
 
 // Some builder utilities are not yet used but will be needed as MIR 2 matures.
@@ -81,6 +97,7 @@ impl<'db> MirBuilder<'db> {
             current_source_span: None,
             current_unwind: None,
             current_handling: None,
+            shield_depth: 0,
         }
     }
 
@@ -194,6 +211,7 @@ impl<'db> MirBuilder<'db> {
         let mut block = BasicBlock::new(id);
         block.unwind = self.current_unwind;
         block.handling = self.current_handling;
+        block.shielded = self.shield_depth > 0;
         self.blocks.push(block);
         id
     }
@@ -298,6 +316,58 @@ impl<'db> MirBuilder<'db> {
         self.current_block = Some(fresh);
     }
 
+    /// Lower what follows inside a `defer` body: shielded from cancellation.
+    /// Nests; handing the returned [`Shield`] to [`Self::leave_shield`]
+    /// closes it. Live code that follows needs a block stamped shielded, so
+    /// the current block is left with a `goto` to a fresh one (an empty
+    /// block is restamped).
+    pub(crate) fn enter_shield(&mut self) -> Shield {
+        let depth = self.shield_depth + 1;
+        self.transition_shield(depth);
+        Shield { depth }
+    }
+
+    /// Close `shield`, the innermost one open.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the token is consumed so a shield cannot be closed twice"
+    )]
+    pub(crate) fn leave_shield(&mut self, shield: Shield) {
+        debug_assert_eq!(
+            shield.depth, self.shield_depth,
+            "shields close innermost first"
+        );
+        self.transition_shield(shield.depth - 1);
+    }
+
+    /// Make `depth` the shield depth. Nothing more if the current block is
+    /// terminated or already carries the new shield state; an empty current
+    /// block is restamped; otherwise it is left with a `goto` — emitted under
+    /// the old state, the block's own — to a fresh block created under the new.
+    fn transition_shield(&mut self, depth: u32) {
+        let shielded = depth > 0;
+        if self.is_current_terminated() {
+            self.shield_depth = depth;
+            return;
+        }
+        let current = self.current_block();
+        if self.blocks[current.0].shielded == shielded {
+            self.shield_depth = depth;
+            return;
+        }
+        if self.blocks[current.0].statements.is_empty() {
+            self.blocks[current.0].shielded = shielded;
+            self.shield_depth = depth;
+            return;
+        }
+        let fresh = BlockId(self.blocks.len());
+        self.set_terminator(Terminator::Goto { target: fresh });
+        self.shield_depth = depth;
+        let created = self.create_block();
+        debug_assert_eq!(created, fresh);
+        self.current_block = Some(fresh);
+    }
+
     /// Fill `block` (a handler created earlier) with `unwind` as its handler
     /// and `handling` as the handler body it is part of, leaving the current
     /// block where it is; the returned token brings lowering back to it.
@@ -347,13 +417,17 @@ impl<'db> MirBuilder<'db> {
         let id = self.current_block.expect("no current block set");
         let block = &self.blocks[id.0];
         assert!(
-            block.unwind == self.current_unwind && block.handling == self.current_handling,
-            "{id:?} was created unwinding to {:?} (handling {:?}) but code is being lowered \
-             into it unwinding to {:?} (handling {:?})",
+            block.unwind == self.current_unwind
+                && block.handling == self.current_handling
+                && block.shielded == (self.shield_depth > 0),
+            "{id:?} was created unwinding to {:?} (handling {:?}, shielded {}) but code is being \
+             lowered into it unwinding to {:?} (handling {:?}, shielded {})",
             block.unwind,
             block.handling,
+            block.shielded,
             self.current_unwind,
             self.current_handling,
+            self.shield_depth > 0,
         );
     }
 
@@ -851,10 +925,13 @@ impl<'db> MirBuilder<'db> {
 
     fn assert_regions_closed(&self) {
         assert!(
-            self.current_unwind.is_none() && self.current_handling.is_none(),
-            "a handler ({:?}, handling {:?}) is still in force at build",
+            self.current_unwind.is_none()
+                && self.current_handling.is_none()
+                && self.shield_depth == 0,
+            "a handler ({:?}, handling {:?}) or a shield (depth {}) is still in force at build",
             self.current_unwind,
             self.current_handling,
+            self.shield_depth,
         );
     }
 
