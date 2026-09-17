@@ -1595,6 +1595,17 @@ enum Expectation {
     Erroneous,
 }
 
+#[derive(Clone, Copy)]
+enum ExpectedAggregateKind {
+    List,
+    Map,
+}
+
+enum ExpectedAggregate {
+    List(Ty),
+    Map(Ty, Ty),
+}
+
 impl Expectation {
     /// The `Error` sentinel is never propagated as context. Top-level only
     /// (rust-analyzer's `Expectation::has_type` discipline): a nested
@@ -9830,34 +9841,70 @@ impl<'db> InferenceContext<'db> {
     /// multi-list union adopts nothing and the literal synthesizes.
     fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
         let shape = self.expectation_shape(expected)?;
-        match shape.kind() {
-            InferTy::List(element, _) => Some(element.clone()),
-            InferTy::Union(members, _) => {
-                let mut lists = members.iter().filter_map(|member| match member.kind() {
-                    InferTy::List(element, _) => Some(element.clone()),
-                    _ => None,
-                });
-                let first = lists.next()?;
-                lists.next().is_none().then_some(first)
-            }
-            _ => None,
+        match self
+            .unique_expected_aggregate(&shape, ExpectedAggregateKind::List, 8)
+            .ok()
+            .flatten()?
+        {
+            ExpectedAggregate::List(element) => Some(element),
+            ExpectedAggregate::Map(..) => None,
         }
     }
 
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
-        match shape.kind() {
-            InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-            InferTy::Union(members, _) => {
-                let mut maps = members.iter().filter_map(|member| match member.kind() {
-                    InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-                    _ => None,
-                });
-                let first = maps.next()?;
-                maps.next().is_none().then_some(first)
+        match self
+            .unique_expected_aggregate(&shape, ExpectedAggregateKind::Map, 8)
+            .ok()
+            .flatten()?
+        {
+            ExpectedAggregate::Map(key, value) => Some((key, value)),
+            ExpectedAggregate::List(..) => None,
+        }
+    }
+
+    /// Find a unique aggregate arm through nested unions and aliases. An
+    /// optional `json` expectation is `baml.json.json | null`, so resolving
+    /// only the outer union leaves the recursive JSON alias hiding its list
+    /// and map arms. Exhaustion is ambiguity: a partial search must not select
+    /// a shallow arm while another candidate may remain behind an alias.
+    fn unique_expected_aggregate(
+        &mut self,
+        ty: &Ty,
+        kind: ExpectedAggregateKind,
+        fuel: u8,
+    ) -> Result<Option<ExpectedAggregate>, ()> {
+        if fuel == 0 {
+            return Err(());
+        }
+        match (kind, ty.kind()) {
+            (ExpectedAggregateKind::List, InferTy::List(element, _)) => {
+                Ok(Some(ExpectedAggregate::List(element.clone())))
             }
-            _ => None,
+            (ExpectedAggregateKind::Map, InferTy::Map { key, value, .. }) => {
+                Ok(Some(ExpectedAggregate::Map(key.clone(), value.clone())))
+            }
+            (_, InferTy::TypeAlias(..)) => {
+                let expanded = self.expand_alias_ty(ty);
+                self.unique_expected_aggregate(&expanded, kind, fuel - 1)
+            }
+            (_, InferTy::Union(members, _)) => {
+                let members = members.to_vec();
+                let mut found = None;
+                for member in &members {
+                    if let Some(candidate) =
+                        self.unique_expected_aggregate(member, kind, fuel - 1)?
+                    {
+                        if found.is_some() {
+                            return Err(());
+                        }
+                        found = Some(candidate);
+                    }
+                }
+                Ok(found)
+            }
+            _ => Ok(None),
         }
     }
 
