@@ -123,6 +123,64 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     pub fn conditions(&self) -> &DeserializerConditions<'s, 'v, 't, N> {
         &self.meta.flags
     }
+
+    /// Return every real array-element error that was tolerated while building this value.
+    ///
+    /// Array coercion keeps parsing after a bad element so it can compare candidate
+    /// shapes and produce partial streaming values. A completed parse must inspect
+    /// these errors before erasing deserializer metadata, otherwise converting the
+    /// value silently shortens the array. Errors from coercing a non-array into an
+    /// implied singleton are excluded: an unparseable singleton is the established
+    /// representation for an absent list (not a discarded array element).
+    pub fn array_item_parse_errors(&self) -> Vec<ParsingError> {
+        let mut errors = Vec::new();
+        self.collect_array_item_parse_errors(&mut errors);
+        errors
+    }
+
+    fn collect_array_item_parse_errors(&self, errors: &mut Vec<ParsingError>) {
+        let flags = self.meta.flags.flags();
+        if !flags.iter().any(|flag| matches!(flag, Flag::SingleToArray)) {
+            errors.extend(flags.iter().filter_map(|flag| match flag {
+                Flag::ArrayItemParseError(_, error) => Some(error.clone()),
+                _ => None,
+            }));
+        }
+
+        match &self.value {
+            BamlValue::Array(array) => {
+                for item in &array.value {
+                    item.collect_array_item_parse_errors(errors);
+                }
+            }
+            BamlValue::Map(map) => {
+                for value in map.value.values() {
+                    value.collect_array_item_parse_errors(errors);
+                }
+            }
+            BamlValue::Class(class) => {
+                for value in class.value.values() {
+                    value.collect_array_item_parse_errors(errors);
+                }
+            }
+            BamlValue::StreamState(state) => {
+                let value = match state {
+                    crate::baml_value::BamlStreamState::Pending(value)
+                    | crate::baml_value::BamlStreamState::Incomplete(value)
+                    | crate::baml_value::BamlStreamState::Complete(value) => value,
+                };
+                value.collect_array_item_parse_errors(errors);
+            }
+            BamlValue::String(_)
+            | BamlValue::Int(_)
+            | BamlValue::Bigint(_)
+            | BamlValue::Float(_)
+            | BamlValue::Bool(_)
+            | BamlValue::Null(_)
+            | BamlValue::Media(_)
+            | BamlValue::Enum(_) => {}
+        }
+    }
 }
 
 impl<'s, 'v, 't, N: TypeIdent> From<BamlValueWithFlags<'s, 'v, 't, N>>

@@ -106,6 +106,21 @@ pub fn execute_sap_parse_final(
             LlmOpError::ParseResponseError("SAP parse returned no value when complete".to_string())
         })?;
 
+    let discarded_items = parsed.array_item_parse_errors();
+    if !discarded_items.is_empty() {
+        let count = discarded_items.len();
+        return Err(LlmOpError::SapError(
+            ::bex_sap::deserializer::coercer::ParsingError {
+                scope: Vec::new(),
+                reason: format!(
+                    "Failed to parse {count} array {}; refusing to silently discard model output",
+                    if count == 1 { "item" } else { "items" }
+                ),
+                causes: discarded_items,
+            },
+        ));
+    }
+
     // === Convert back to baml ===
     Ok(::bex_sap::to_external::baml_value_to_external(
         &parsed,
