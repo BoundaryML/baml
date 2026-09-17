@@ -13,6 +13,13 @@ use prost::Message as _;
 
 use crate::{BamlValue, Error, SdkError, capi, completion, decode, wire};
 
+/// Maximum encoded result envelope accepted from the engine.
+///
+/// This preserves the 32 MiB output ceiling of the former CLI subprocess
+/// boundary and prevents the callback boundary from copying an unbounded
+/// payload into the caller.
+pub const MAX_RESULT_BYTES: usize = 32 * 1024 * 1024;
+
 /// Initialize (or replace) the process-global runtime from the
 /// borsh-encoded bytecode a generated SDK embeds.
 ///
@@ -91,10 +98,9 @@ pub fn invoke_sync<R: BamlValue, E: BamlValue>(
     }
     let receiver = dispatch(fqn, kwargs, type_args).map_err(Error::Sdk)?;
     // Blocks until the engine delivers the result envelope via the callback.
-    // There is no timeout: the engine is contracted to complete every call
-    // (success, thrown error, or panic). A caller-facing timeout/cancellation
-    // path lands with the cancellation feature (`cancel_function_call`).
-    let bytes = receiver.wait_blocking();
+    // Synchronous calls wait for engine completion; async calls propagate
+    // future cancellation automatically.
+    let bytes = receiver.wait_blocking().map_err(Error::Sdk)?;
     decode::decode_result(&bytes)
 }
 
@@ -109,7 +115,7 @@ pub async fn invoke<R: BamlValue, E: BamlValue>(
     type_args: Vec<wire::BamlTyArg>,
 ) -> Result<R, Error<E>> {
     let receiver = dispatch(fqn, kwargs, type_args).map_err(Error::Sdk)?;
-    let bytes = receiver.wait().await;
+    let bytes = receiver.wait().await.map_err(Error::Sdk)?;
     decode::decode_result(&bytes)
 }
 
@@ -121,7 +127,8 @@ pub fn invoke_handle_sync<R: BamlValue, E: BamlValue>(
         return Err(Error::CalledSyncFromAsync);
     }
     let receiver = dispatch_handle(handle_key, kwargs).map_err(Error::Sdk)?;
-    decode::decode_result(&receiver.wait_blocking())
+    let bytes = receiver.wait_blocking().map_err(Error::Sdk)?;
+    decode::decode_result(&bytes)
 }
 
 pub async fn invoke_handle<R: BamlValue, E: BamlValue>(
@@ -129,7 +136,8 @@ pub async fn invoke_handle<R: BamlValue, E: BamlValue>(
     kwargs: Vec<wire::InboundMapEntry>,
 ) -> Result<R, Error<E>> {
     let receiver = dispatch_handle(handle_key, kwargs).map_err(Error::Sdk)?;
-    decode::decode_result(&receiver.wait().await)
+    let bytes = receiver.wait().await.map_err(Error::Sdk)?;
+    decode::decode_result(&bytes)
 }
 
 /// Encode the call and fire it through the C ABI. The registered
@@ -141,7 +149,6 @@ fn dispatch(
     type_args: Vec<wire::BamlTyArg>,
 ) -> Result<completion::Receiver, SdkError> {
     let api = capi::api()?;
-    let receiver = completion::register(api);
     // Host-callable dispatch must be installed before the engine can hold
     // a callable handle; every handle rides a call that passes through
     // here first.
@@ -149,6 +156,7 @@ fn dispatch(
     // SAFETY: takes no arguments; allocates an id inside the engine.
     #[expect(unsafe_code)]
     let call_id = unsafe { (api.new_function_call)() };
+    let receiver = completion::register(api, call_id);
     let args = wire::CallFunctionArgs {
         kwargs,
         call_id,
@@ -174,12 +182,12 @@ fn dispatch_handle(
         return Err(SdkError::new("cannot invoke a zero BAML function handle"));
     }
     let api = capi::api()?;
-    let receiver = completion::register(api);
     crate::host_value::ensure_callbacks_registered(api);
     // SAFETY: this ABI function takes no arguments and returns a fresh engine
     // call id; the loaded API table was layout-checked during initialization.
     #[expect(unsafe_code)]
     let call_id = unsafe { (api.new_function_call)() };
+    let receiver = completion::register(api, call_id);
     let args = wire::CallFunctionArgs {
         kwargs,
         call_id,
