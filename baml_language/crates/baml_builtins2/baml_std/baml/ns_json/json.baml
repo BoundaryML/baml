@@ -1,13 +1,13 @@
 /// An untyped JSON value.
 ///
-/// JSON's one number type splits into two arms here. `parse` reads a number as
-/// `int` when it is integral and fits BAML's 63-bit `int`, and as `float`
-/// otherwise. An integer too large to hold therefore arrives with
-/// double-precision rounding rather than as an error. Decoding into a declared
-/// `int` (`to<int>`, `from_string<int>`) is strict and rejects it instead.
+/// JSON's one number type splits into three arms here. `parse` reads an integral
+/// number as `int` when it fits BAML's 63-bit `int`, as `bigint` otherwise, and
+/// reads a number with a fraction or exponent as `float`. Decoding into a
+/// declared `int` (`to<int>`, `from_string<int>`) is strict and rejects values
+/// outside the `int` range instead.
 ///
 /// Reach an arm with `match`, or hand the value to `to<T>`.
-type json = null | bool | int | float | string | json[] | map<string, json>;
+type json = null | bool | int | bigint | float | string | json[] | map<string, json>;
 
 /// A JSON syntax error.
 ///
@@ -123,9 +123,8 @@ function to_json(value: unknown) -> json throws SerializationError {
 ///
 /// The json analog of `string.from`. Primitives, lists, and maps render to
 /// their natural json shape; a class instance becomes `{"field": value}`, an
-/// enum its variant name, media the tagged form. A `bigint` renders as a
-/// decimal *string*, since JSON numbers cannot carry it, and a non-finite
-/// `float` renders as `null`.
+/// enum its variant name, media the tagged form. A `bigint` renders as an
+/// arbitrary-precision JSON number, and a non-finite `float` renders as `null`.
 ///
 /// A value whose runtime class `implements baml.ToJson` routes through that
 /// override instead, and an override owns its whole subtree — the walk stops
@@ -157,8 +156,11 @@ function from<T>(value: T) -> json throws SerializationError {
 /// walk is a shape check rather than a coercion. A JSON string does not become
 /// an `int`, and a number outside BAML's 63-bit `int` is rejected rather than
 /// widened to `float`.
-/// A `bigint` is decoded from a numeric JSON string containing an optional sign
-/// and integer digits. A JSON number does not decode as `bigint`.
+/// A `bigint` is decoded from an integral JSON number without passing through
+/// floating point, matching its serialized form. This text entry point also
+/// accepts a JSON string containing an optional sign followed by ASCII decimal
+/// digits; leading zeroes and negative zero are normalized. Fractions,
+/// exponents, whitespace, and alternate-base spellings are rejected.
 ///
 /// `T` is delivered over the BEP-039 type-arg channel and read at runtime, so
 /// it need not be statically known at the call site. The text is parsed first,
@@ -172,8 +174,9 @@ function from<T>(value: T) -> json throws SerializationError {
 ///
 /// This is the *structural* text path, and the only one that fills
 /// `DecodeError.path` with a full location. `deserialize<T>` is the same job
-/// with `baml.FromJson` overrides honored; reach for that unless you
-/// specifically want overrides bypassed.
+/// with `baml.FromJson` overrides honored, except that numeric-string bigint
+/// decoding is deliberately limited to this function; reach for
+/// `deserialize<T>` unless you specifically want overrides bypassed.
 ///
 /// # Throws
 ///

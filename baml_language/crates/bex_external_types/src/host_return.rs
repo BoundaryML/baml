@@ -288,15 +288,15 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
 }
 
 /// Whether an external value is exactly in the recursive `baml.json.json`
-/// algebra. BAML extensions such as bigint, bytes, classes, enums, media,
-/// handles, and non-finite floats are intentionally rejected.
+/// algebra. BAML extensions such as bytes, classes, enums, media, handles, and
+/// non-finite floats are intentionally rejected.
 ///
 /// A sparse inbound `value_type` annotation (a transient
 /// `BexExternalValue::Union` with `is_inbound_type_annotation`, e.g. the
 /// Swift bridge annotates every json scalar leaf) is peeled — but only when
 /// the annotation itself stays within the JSON algebra, so a payload
-/// annotated as `bigint` or a class is still rejected. A genuine union
-/// carrier (a value produced from a declared union) is never JSON.
+/// annotated as a class is still rejected. A genuine union carrier (a value
+/// produced from a declared union) is never JSON.
 pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
     fn recurse(value: &BexExternalValue, depth: usize) -> bool {
         if depth > 256 {
@@ -305,6 +305,7 @@ pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
         match value {
             BexExternalValue::Null
             | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
             | BexExternalValue::Bool(_)
             | BexExternalValue::String(_) => true,
             BexExternalValue::Float(value) => value.is_finite(),
@@ -352,12 +353,17 @@ fn runtime_ty_within_json_algebra(ty: &RuntimeTy, depth: usize) -> bool {
         RuntimeTy::Null
         | RuntimeTy::Bool
         | RuntimeTy::Int
+        | RuntimeTy::Bigint
         | RuntimeTy::Float
         | RuntimeTy::String => true,
         RuntimeTy::TypeAlias(name) => is_canonical_json_alias(name),
         RuntimeTy::Literal(literal, _) => matches!(
             literal,
-            Literal::Bool(_) | Literal::Int(_) | Literal::String(_) | Literal::Float(_)
+            Literal::Bool(_)
+                | Literal::Int(_)
+                | Literal::Bigint(_)
+                | Literal::String(_)
+                | Literal::Float(_)
         ),
         RuntimeTy::List(inner) => runtime_ty_within_json_algebra(inner, depth + 1),
         RuntimeTy::Map { key, value, .. } => {
@@ -413,6 +419,7 @@ mod tests {
                     BexExternalValue::Null,
                     BexExternalValue::Bool(true),
                     BexExternalValue::Int(7),
+                    BexExternalValue::Bigint(123123123123123123123123_u128.into()),
                     BexExternalValue::Float(1.5),
                     BexExternalValue::String("ok".into()),
                 ],
@@ -425,7 +432,7 @@ mod tests {
         };
         assert!(validate_host_return(&valid, &json_ty()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(f64::NAN), &json_ty()).is_err());
-        assert!(validate_host_return(&BexExternalValue::Bigint(1.into()), &json_ty()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Bigint(1.into()), &json_ty()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Uint8Array(vec![1]), &json_ty()).is_err());
         assert!(
             validate_host_return(
@@ -461,14 +468,14 @@ mod tests {
         assert!(is_canonical_json_alias(&builtin));
         assert!(!is_canonical_json_alias(&shadow));
 
-        // The shadow alias must not inherit builtin JSON strictness: a bigint
-        // is rejected by the json algebra but passes the shadow alias through
-        // this layer's defensive accept-any tail (its body is validated
-        // engine-side, where alias definitions are available).
+        // The shadow alias must not inherit builtin JSON strictness: bytes are
+        // rejected by the json algebra but pass the shadow alias through this
+        // layer's defensive accept-any tail (its body is validated engine-side,
+        // where alias definitions are available).
         let shadow_ty = RuntimeTy::TypeAlias(shadow);
-        let bigint = BexExternalValue::Bigint(1.into());
-        assert!(validate_host_return(&bigint, &json_ty()).is_err());
-        assert!(validate_host_return(&bigint, &shadow_ty).is_ok());
+        let bytes = BexExternalValue::Uint8Array(vec![1]);
+        assert!(validate_host_return(&bytes, &json_ty()).is_err());
+        assert!(validate_host_return(&bytes, &shadow_ty).is_ok());
     }
 
     #[test]
@@ -498,7 +505,7 @@ mod tests {
 
         let annotated_bigint =
             BexExternalValue::typed(BexExternalValue::Bigint(1.into()), RuntimeTy::bigint());
-        assert!(validate_host_return(&annotated_bigint, &json_ty()).is_err());
+        assert!(validate_host_return(&annotated_bigint, &json_ty()).is_ok());
     }
 
     #[test]

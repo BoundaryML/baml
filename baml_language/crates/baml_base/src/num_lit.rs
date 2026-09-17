@@ -109,15 +109,53 @@ pub fn parse_int_literal(text: &str) -> Result<i64, IntLitError> {
 /// stripped (`42`, `0xFFFF_FFFF`). An optional leading `-` is accepted
 /// because type-level literals carry the sign in the text.
 pub fn parse_bigint_literal(text: &str) -> Result<BigInt, IntLitError> {
+    parse_bigint_literal_bounded(text, None)
+}
+
+/// Parse a `BIGINT_LITERAL` token's text while enforcing a maximum bit width.
+///
+/// The digit-count check rejects obviously oversized values before allocating
+/// the cleaned token or parsing a `BigInt`. It is deliberately conservative;
+/// values near the boundary are parsed and checked exactly afterward.
+pub fn parse_bigint_literal_with_max_bits(
+    text: &str,
+    max_bits: u64,
+) -> Result<BigInt, IntLitError> {
+    parse_bigint_literal_bounded(text, Some(max_bits))
+}
+
+fn parse_bigint_literal_bounded(text: &str, max_bits: Option<u64>) -> Result<BigInt, IntLitError> {
     let (negated, magnitude) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, text),
     };
     let (base, digits) = validate(magnitude)?;
+    if let Some(max_bits) = max_bits {
+        let significant_digits = digits
+            .chars()
+            .filter(|c| *c != '_')
+            .skip_while(|c| *c == '0')
+            .count();
+        let max_significant_digits = match base {
+            2 => max_bits,
+            8 => max_bits.saturating_add(2) / 3,
+            10 => max_bits.saturating_add(2) / 3,
+            16 => max_bits.saturating_add(3) / 4,
+            _ => unreachable!("validated integer literal has unsupported base {base}"),
+        };
+        if significant_digits > usize::try_from(max_significant_digits).unwrap_or(usize::MAX) {
+            return Err(IntLitError::TooLarge);
+        }
+    }
     let cleaned: String = digits.chars().filter(|c| *c != '_').collect();
     let value = BigInt::parse_bytes(cleaned.as_bytes(), base)
         .unwrap_or_else(|| unreachable!("validated bigint digits failed to parse: {text:?}"));
-    Ok(if negated { -value } else { value })
+    let value = if negated { -value } else { value };
+    if max_bits.is_some_and(|max_bits| value.bits() > max_bits) {
+        Err(IntLitError::TooLarge)
+    } else {
+        Ok(value)
+    }
 }
 
 /// Normalize a `FLOAT_LITERAL` token's text by stripping underscore
@@ -266,6 +304,30 @@ mod tests {
                 base: 2,
                 positions: vec![(2, '2')]
             })
+        );
+    }
+
+    #[test]
+    fn bounded_bigint() {
+        for text in ["255", "0xff", "0o377", "0b1111_1111", "-255"] {
+            assert_eq!(
+                parse_bigint_literal_with_max_bits(text, 8),
+                Ok(BigInt::from(if text.starts_with('-') { -255 } else { 255 }))
+            );
+        }
+        for text in ["256", "0x100", "0o400", "0b1_0000_0000", "-256"] {
+            assert_eq!(
+                parse_bigint_literal_with_max_bits(text, 8),
+                Err(IntLitError::TooLarge)
+            );
+        }
+        assert_eq!(
+            parse_bigint_literal_with_max_bits("0x0000_00ff", 8),
+            Ok(BigInt::from(255))
+        );
+        assert_eq!(
+            parse_bigint_literal_with_max_bits(&"9".repeat(10_000), 8),
+            Err(IntLitError::TooLarge)
         );
     }
 

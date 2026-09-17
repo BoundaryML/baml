@@ -3,6 +3,7 @@ package sdk_test
 import (
 	"context"
 	"math"
+	"math/big"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +11,15 @@ import (
 	"baml.local/sdk/baml_sdk"
 	baml_go "github.com/boundaryml/baml-go"
 )
+
+func testBigInt(t *testing.T, decimal string) *big.Int {
+	t.Helper()
+	value, ok := new(big.Int).SetString(decimal, 10)
+	if !ok {
+		t.Fatalf("invalid bigint test fixture %q", decimal)
+	}
+	return value
+}
 
 func canonicalJSONFixture() map[string]any {
 	return map[string]any{
@@ -40,6 +50,27 @@ func Test_canonical_json_round_trips_at_top_level_and_through_alias(t *testing.T
 			got, err := call(ctx, want)
 			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatalf("JSON round trip = %#v, %v; want %#v", got, err, want)
+			}
+		})
+	}
+}
+
+func Test_canonical_json_round_trips_bigints(t *testing.T) {
+	ctx := context.Background()
+	want := map[string]any{
+		"positive": testBigInt(t, "123123123123123123123123"),
+		"negative": testBigInt(t, "-987654321098765432109876543210"),
+		"nested":   []any{testBigInt(t, "340282366920938463463374607431768211456")},
+	}
+
+	for name, call := range map[string]func(context.Context, any) (any, error){
+		"canonical": baml_sdk.GoJsonTestsRoundTripJson,
+		"alias":     baml_sdk.GoJsonTestsRoundTripJsonAlias,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := call(ctx, want)
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("JSON bigint round trip = %#v, %v; want %#v", got, err, want)
 			}
 		})
 	}

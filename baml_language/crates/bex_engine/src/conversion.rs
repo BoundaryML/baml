@@ -5122,7 +5122,8 @@ mod union_container_selection_tests {
         };
         assert!(metadata.is_inbound_type_annotation);
 
-        // A leaf annotated outside the JSON algebra keeps the tree non-JSON.
+        // Bigint is a JSON leaf, including when a bridge supplies a sparse
+        // inbound annotation for it.
         let mut bigint_entries = indexmap::IndexMap::new();
         bigint_entries.insert(
             "huge".to_string(),
@@ -5136,7 +5137,7 @@ mod union_container_selection_tests {
             value_type: RuntimeTy::unknown(),
             entries: bigint_entries,
         };
-        assert!(!value_matches_type(&bigint_object, &json));
+        assert!(value_matches_type(&bigint_object, &json));
     }
 
     #[test]
