@@ -7,7 +7,7 @@
 // report the pipeline keeps turning away. Each finding names the issues that
 // support it, so a reader can check it.
 //
-// Rows live in `intuitions` (deploy/sql/intuitions.sql); a run retires the
+// Rows live in `intuitions` (schema applied in the dashboard); a run retires the
 // previous active set and writes a new one, and every cited issue's
 // timeline gets an "intuition" event. The pass is skipped when nothing
 // changed since the last one (cursor `intuition_fingerprint`).

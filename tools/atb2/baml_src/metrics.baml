@@ -1,6 +1,6 @@
 // Pipeline metrics: testsets that score the triage stages against known
 // answers (run_tests.sh metrics). The cases live in `triage_cases`
-// (eval/supabase/cases.sql) and, for local runs, in eval/cases.json
+// (`triage_cases`, schema applied in the dashboard) and, for local runs, in eval/cases.json
 // (ATB2_CASES_FILE); each case is one test, each testset is one metric.
 //
 //   dedup_catch          known duplicate pairs the dedup must catch      >= 90%

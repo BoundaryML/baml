@@ -38,7 +38,7 @@ written as a self-contained GitHub-style issue (environment, exact commands,
 verbatim output, expected, what works, hypothesis, impact), not a summary.
 
 A report becomes a **bug or a feature request** (`IssueKind`, the
-`kind` column, `deploy/sql/issues_kind.sql`). Both go through the same
+`kind` column on `issues`). Both go through the same
 stages: a feature request's repro is the desired usage, verified to NOT
 work on the latest nightly (one that already works is closed as
 supported), its ticket is a proposal, and `resolution_plan` holds the
@@ -109,9 +109,9 @@ key: `FEEDBACK_SUPABASE_URL`, `FEEDBACK_SUPABASE_ANON_KEY` (server-only variable
 reporter). Row level security: the anon role reads issues, runs,
 merge_rounds, events, intuitions and the views; `feedback` and `cursors`
 are service role only, so reporter identities never leave it. The DDL is
-applied in the Supabase dashboard and is not in the repo, except
-`deploy/sql/intuitions.sql`, which is the one table added after that rule
-and must be applied before the intuit stage can write.
+applied in the Supabase dashboard and is not in the repo (the `intuitions`
+table, the `issues.kind` column and the `triage_cases` metric table were
+added the same way; keep their statements with the other schema notes).
 
 ## Deploy
 
