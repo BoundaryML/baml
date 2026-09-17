@@ -9,6 +9,7 @@ mod common;
 
 use std::sync::Arc;
 
+use baml_db::{Name, ProjectDatabase, SourceRootKind, SourceRootSpec, assert_no_diagnostic_errors};
 use bex_engine::{BexEngine, BexExternalValue, CallId, CancellationToken};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -19,6 +20,31 @@ fn make_engine(source: &str) -> Arc<BexEngine> {
     Arc::new(
         BexEngine::new(
             snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    )
+}
+
+/// Build an engine for a manifest-named workspace, matching the package
+/// identity the playground passes to `collect_tests`.
+fn make_named_engine(package: &str, source: &str) -> Arc<BexEngine> {
+    let mut db = ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(
+            SourceRootSpec::new(".", SourceRootKind::Workspace).named(Name::new(package)),
+        )
+        .expect("fresh database accepts a named workspace root");
+    db.add_or_update_file_in(root, std::path::Path::new("main.baml"), source);
+    assert_no_diagnostic_errors(&db);
+    let program = db
+        .get_bytecode_unchecked(root)
+        .expect("named workspace should emit bytecode");
+    Arc::new(
+        BexEngine::new(
+            program,
             std::sync::Arc::new(sys_native::SysOps::native()),
             Vec::new(),
         )
@@ -48,6 +74,38 @@ async fn collect_tests_returns_registry_handle() {
     assert!(
         matches!(registry, BexExternalValue::Handle(_)),
         "expected Handle for project with tests, got: {registry:?}"
+    );
+}
+
+/// A manifest-named project must expose its package-qualified `$init_test`
+/// through the engine lookup table used by the playground.
+#[tokio::test]
+async fn collect_tests_returns_named_package_registry() {
+    let source = r#"
+        test "adds" {
+            assert.equal(1 + 2, 3)
+        }
+
+        testset "group" {
+            test "inner" {
+                assert.equal(2 + 2, 4)
+            }
+        }
+    "#;
+
+    let engine = make_named_engine("collect-repro", source);
+    let registry = engine
+        .collect_tests(
+            "collect-repro",
+            CallId::next(),
+            CancellationToken::default(),
+        )
+        .await
+        .expect("collect_tests should succeed");
+
+    assert!(
+        matches!(registry, BexExternalValue::Handle(_)),
+        "expected Handle for manifest-named project, got: {registry:?}"
     );
 }
 

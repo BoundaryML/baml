@@ -4682,10 +4682,25 @@ fn emit_file_group<'db>(
                 ..Bytecode::default()
             };
 
+            // The local (workspace) package's chainer is unprefixed — the
+            // same `Package::Local` classification the type layer uses.
+            let is_local_pkg = matches!(
+                baml_type::Package::from_name(baml_base::Name::new(pkg_name.as_str())),
+                baml_type::Package::Local
+            );
+            let chainer_name = if is_local_pkg {
+                "$init_test".to_string()
+            } else {
+                format!("{pkg_name}.$init_test")
+            };
+
             // Synthesized function uses Span::fake() — same pattern as
             // $init synthesis at compile_init_function (lib.rs:1085-1103).
             let chainer_fn = Function {
-                name: "$init_test".to_string(),
+                // Engine name lookup is rebuilt from `Function::name`, not
+                // `Program::function_indices`, so this must carry the same
+                // package qualification as the index key below.
+                name: chainer_name.clone(),
                 source_file: String::new(), // synthesized, no source file
                 docstring: None,
                 declared_name: None,
@@ -4721,18 +4736,6 @@ fn emit_file_group<'db>(
                 capture: FunctionCaptureProps::disabled(),
                 function_id: 0, // assigned at engine init (interim provider)
                 runtime_package: bex_vm_types::HeapPtr::null(),
-            };
-
-            // The local (workspace) package's chainer is unprefixed — the
-            // same `Package::Local` classification the type layer uses.
-            let is_local_pkg = matches!(
-                baml_type::Package::from_name(baml_base::Name::new(pkg_name.as_str())),
-                baml_type::Package::Local
-            );
-            let chainer_name = if is_local_pkg {
-                "$init_test".to_string()
-            } else {
-                format!("{pkg_name}.$init_test")
             };
 
             let fn_obj_idx = program.add_object(Object::Function(Box::new(chainer_fn)));
