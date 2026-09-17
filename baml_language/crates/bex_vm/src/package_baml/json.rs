@@ -1121,6 +1121,56 @@ pub(crate) fn read_media_value(
 
 // ─── Typed JSON deserialize ──────────────────────────────────────────────────
 
+/// Decode the decimal-string representation emitted for a BAML `bigint`.
+///
+/// JSON numbers cannot preserve arbitrary precision, so the serializer writes
+/// bigints as strings. Keep this decoder symmetric and reject JSON numbers
+/// rather than silently accepting an already-rounded value from an untyped
+/// producer. The length check also avoids parsing an input that cannot fit the
+/// runtime's bigint allocation cap.
+fn decode_bigint_string(
+    vm: &mut BexVm,
+    json: &serde_json::Value,
+    path: &str,
+) -> Result<num_bigint::BigInt, VmRustFnError> {
+    let serde_json::Value::String(text) = json else {
+        return Err(raise_decode(
+            vm,
+            "expected bigint as a decimal string",
+            path,
+        ));
+    };
+
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(raise_decode(vm, "invalid bigint decimal string", path));
+    }
+    if digits.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS {
+        return Err(raise_decode(
+            vm,
+            format!(
+                "bigint decimal string exceeds the {}-digit limit",
+                baml_type::MAX_BIGINT_DECIMAL_DIGITS
+            ),
+            path,
+        ));
+    }
+
+    let bigint = num_bigint::BigInt::parse_bytes(text.as_bytes(), 10)
+        .ok_or_else(|| raise_decode(vm, "invalid bigint decimal string", path))?;
+    if bigint.bits() > baml_type::MAX_BIGINT_BITS {
+        return Err(raise_decode(
+            vm,
+            format!(
+                "bigint value exceeds the {}-bit limit",
+                baml_type::MAX_BIGINT_BITS
+            ),
+            path,
+        ));
+    }
+    Ok(bigint)
+}
+
 /// Parse a JSON string and coerce it to a VM `Value` of the given runtime
 /// `RealizedTy`.
 ///
@@ -1172,12 +1222,10 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected integer", path)),
         },
 
-        // Bigint JSON decoding is not yet implemented (Phase 9+).
-        RealizedTy::Bigint { .. } => Err(raise_decode(
-            vm,
-            "bigint JSON decoding not yet implemented",
-            path,
-        )),
+        RealizedTy::Bigint { .. } => {
+            let bigint = decode_bigint_string(vm, json, path)?;
+            vm.try_alloc_bigint(Arc::new(bigint)).map_err(Into::into)
+        }
 
         RealizedTy::Float { .. } => match json {
             serde_json::Value::Number(n) => {
@@ -1308,12 +1356,13 @@ fn ty_serde_to_value(
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
             }
-            // Literal bigint decoding is not yet implemented (Phase 9+).
-            (baml_type::Literal::Bigint(_), _) => Err(raise_decode(
-                vm,
-                "literal bigint JSON decoding not yet implemented",
-                path,
-            )),
+            (baml_type::Literal::Bigint(expected), _) => {
+                let actual = decode_bigint_string(vm, json, path)?;
+                if &actual != expected {
+                    return Err(raise_decode(vm, "literal bigint mismatch", path));
+                }
+                vm.try_alloc_bigint(Arc::new(actual)).map_err(Into::into)
+            }
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 

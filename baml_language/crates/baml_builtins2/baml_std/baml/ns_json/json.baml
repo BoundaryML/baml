@@ -177,6 +177,8 @@ function from<T>(value: T) -> json throws SerializationError {
 ///
 /// - `baml.json.ParseError` if `s` is not valid JSON.
 /// - `baml.json.DecodeError` if the parsed JSON does not fit `T`.
+///   A `bigint` must use the decimal-string representation emitted by
+///   `to_string`; JSON numbers are rejected to avoid precision loss.
 //baml:mut_vm
 function from_string<T>(s: string) -> T throws ParseError | DecodeError {
     $rust_function
@@ -199,6 +201,8 @@ function from_string<T>(s: string) -> T throws ParseError | DecodeError {
 ///
 /// - `baml.json.DecodeError` if `j` does not fit `T`. Decoding an
 ///   already-parsed `json` never re-parses, so no `ParseError` arises here.
+///   A `bigint` must use the decimal-string representation emitted by
+///   `to_json`; JSON numbers are rejected to avoid precision loss.
 //baml:mut_vm
 //baml:may_yield
 function from_json<T>(j: json) -> T throws DecodeError {
