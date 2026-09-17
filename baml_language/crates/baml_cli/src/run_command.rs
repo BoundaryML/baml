@@ -185,6 +185,9 @@ pub struct RunArgs {
 
     /// Evaluate a BAML expression.
     ///
+    /// Optionally, combine with `--file` or `--project` to make existing BAML
+    /// functions available to the expression.
+    ///
     /// Use `-e @file` to read an expression from a file or `-e -` for standard
     /// input. Mutually exclusive with `<TARGET>` and `--function`.
     #[arg(
@@ -268,6 +271,15 @@ struct Compiled {
     package: SourceRoot,
     engine: BexEngine,
     /// Whether any source would change under `baml fmt`.
+    needs_format_hint: bool,
+}
+
+/// A standalone source loaded into its own workspace database.
+struct StandaloneSource {
+    db: ProjectDatabase,
+    package: SourceRoot,
+    file: PathBuf,
+    root: PathBuf,
     needs_format_hint: bool,
 }
 
@@ -410,17 +422,7 @@ impl RunArgs {
         // reject an explicit combination up front.
         validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
 
-        // Expression mode short-circuits before reaching project / file
-        // loading, so combining `-e` with surfaces that change *what* is
-        // loaded silently does nothing. Reject up front to avoid the
-        // footgun.
         if self.expression.is_some() {
-            if self.file.is_some() {
-                anyhow::bail!(
-                    "`-e` is not compatible with `--file`. Expression mode \
-                     evaluates inline source; remove one of the two."
-                );
-            }
             if self.list {
                 anyhow::bail!(
                     "`-e` is not compatible with `--list`. Expression mode \
@@ -967,21 +969,12 @@ impl RunArgs {
         reporter: &Reporter,
     ) -> Result<Compiled> {
         let display = file_path.display().to_string();
-        let canonical = resolve_standalone_file(file_path)?;
-        self.vlog(format_args!(
-            "Standalone mode: loading {}",
-            canonical.display()
-        ));
-
-        let content = std::fs::read_to_string(&canonical)
-            .with_context(|| format!("failed to read {}", canonical.display()))?;
-        let needs_format_hint = source_needs_format_hint(&content);
-
-        // Project root is the file's parent so relative imports resolve.
-        let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
-
-        let (mut db, package) = workspace_db(parent);
-        db.add_or_update_file_in(package, &canonical, &content);
+        let StandaloneSource {
+            db,
+            package,
+            needs_format_hint,
+            ..
+        } = self.load_standalone_source(file_path)?;
 
         // Keep standalone compilation quiet for `baml run`; diagnostics still
         // render through the reporter when needed.
@@ -1003,6 +996,32 @@ impl RunArgs {
         })
     }
 
+    /// Load one standalone source into a fresh workspace database.
+    fn load_standalone_source(&self, file_path: &Path) -> Result<StandaloneSource> {
+        let canonical = resolve_standalone_file(file_path)?;
+        self.vlog(format_args!(
+            "Standalone mode: loading {}",
+            canonical.display()
+        ));
+
+        let content = std::fs::read_to_string(&canonical)
+            .with_context(|| format!("failed to read {}", canonical.display()))?;
+        let needs_format_hint = source_needs_format_hint(&content);
+
+        // Project root is the file's parent so relative imports resolve.
+        let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
+
+        let (mut db, package) = workspace_db(parent);
+        db.add_or_update_file_in(package, &canonical, &content);
+        Ok(StandaloneSource {
+            db,
+            package,
+            root: parent.to_path_buf(),
+            file: canonical,
+            needs_format_hint,
+        })
+    }
+
     // ========================================================================
     // Expression mode (-e)
     // ========================================================================
@@ -1010,10 +1029,12 @@ impl RunArgs {
     /// Evaluate a BAML expression.
     ///
     /// Wraps the expression in a synthetic `function $expr_main() { <body> }`
-    /// and compiles/runs it. Expressions are first compiled with only the
-    /// standard library in scope, so unrelated project errors cannot block an
-    /// independent probe. If that fails and a project is available, retry with
-    /// project context so expressions can still reference project declarations.
+    /// and compiles/runs it. An explicit `--file` is compiled with the
+    /// expression as its standalone context. Otherwise, expressions are first
+    /// compiled with only the standard library in scope, so unrelated project
+    /// errors cannot block an independent probe. If that fails and a project is
+    /// available, retry with project context so expressions can reference its
+    /// declarations.
     ///
     /// `expr_body` is the resolved expression text — already de-referenced
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
@@ -1027,49 +1048,64 @@ impl RunArgs {
         // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
-        let discovered_root = find_project_root_from(self.from.as_deref())?;
-        let isolated_root = discovered_root
-            .clone()
+        // An explicit standalone file is always part of the expression's
+        // compilation context. Without one, preserve the isolation-first path
+        // that keeps unrelated project errors from blocking independent probes.
+        let standalone = self
+            .file
+            .as_deref()
+            .map(|file| self.load_standalone_source(file))
+            .transpose()?;
+        let discovered_root = if standalone.is_none() {
+            find_project_root_from(self.from.as_deref())?
+        } else {
+            None
+        };
+        let isolated_root = standalone
+            .as_ref()
+            .map(|standalone| standalone.root.clone())
+            .or_else(|| discovered_root.clone())
             .unwrap_or_else(|| std::env::temp_dir().join("baml_expr"));
-        if discovered_root.is_none() {
+        if standalone.is_none() && discovered_root.is_none() {
             std::fs::create_dir_all(&isolated_root).ok();
         }
 
-        // Fast and resilient path: most `-e` probes only need the standard
-        // library. Compiling them in an isolated database means neither loading
-        // nor diagnosing every project file, and therefore unrelated project
-        // errors cannot prevent evaluation.
-        let (mut isolated_db, isolated_workspace) = workspace_db(&isolated_root);
-        isolated_db.add_or_update_file_in(
-            isolated_workspace,
-            &isolated_root.join("__expr__.baml"),
-            &synthetic,
-        );
-        let isolated_diagnostics = baml_db::collect_diagnostics(&isolated_db);
-        let isolated_has_errors = isolated_diagnostics
+        let expression_path = match standalone.as_ref() {
+            Some(source) => {
+                synthetic_expression_path(&isolated_root, std::slice::from_ref(&source.file))
+            }
+            None => synthetic_expression_path(&isolated_root, &[]),
+        };
+        let (mut expression_db, expression_workspace) = match standalone {
+            Some(standalone) => (standalone.db, standalone.package),
+            None => workspace_db(&isolated_root),
+        };
+        expression_db.add_or_update_file_in(expression_workspace, &expression_path, &synthetic);
+        let expression_diagnostics = baml_db::collect_diagnostics(&expression_db);
+        let expression_has_errors = expression_diagnostics
             .iter()
             .any(|diagnostic| diagnostic.severity == Severity::Error);
 
-        let (db, package) = if isolated_has_errors {
+        let (db, package) = if expression_has_errors {
             if discovered_root.is_none() {
                 self.render_and_bail_on_errors(
-                    &isolated_diagnostics,
-                    &isolated_db,
+                    &expression_diagnostics,
+                    &expression_db,
                     "cannot evaluate expression: compilation errors",
                     reporter,
                 )?;
-                unreachable!("isolated expression diagnostics contain an error");
+                unreachable!("expression diagnostics contain an error");
             }
 
             // The expression may refer to project declarations. Preserve that
             // existing behavior by retrying with the surrounding project only
-            // when the isolated compile proves it is necessary.
+            // when the isolated compile proves it necessary.
             let mut project = load_project_or_default(self.from.as_deref())?;
             self.vlog(format_args!(
                 "Expression requires project context: loaded {} file(s)",
                 project.files.len()
             ));
-            let expr_path = project.root().join("__expr__.baml");
+            let expr_path = synthetic_expression_path(project.root(), &project.files);
             project
                 .db
                 .add_or_update_file_in(project.package, &expr_path, &synthetic);
@@ -1080,8 +1116,14 @@ impl RunArgs {
             )?;
             (project.db, project.package)
         } else {
-            self.vlog(format_args!("Expression compiled without project context"));
-            (isolated_db, isolated_workspace)
+            if self.file.is_some() {
+                self.vlog(format_args!(
+                    "Expression compiled with standalone file context"
+                ));
+            } else {
+                self.vlog(format_args!("Expression compiled without project context"));
+            }
+            (expression_db, expression_workspace)
         };
 
         // BEP-027 §"`baml.argv`": `argv[1]` for `-e` is "the expression
@@ -1789,6 +1831,23 @@ fn load_expression_source(source: &str) -> Result<String> {
     }
 }
 
+/// Choose a synthetic expression path that cannot replace a loaded source.
+fn synthetic_expression_path(root: &Path, occupied: &[PathBuf]) -> PathBuf {
+    let mut suffix = 0;
+    loop {
+        let filename = match suffix {
+            0 => "__expr__.baml".to_string(),
+            1 => "__baml_run_expr__.baml".to_string(),
+            suffix => format!("__baml_run_expr_{suffix}.baml"),
+        };
+        let candidate = root.join(filename);
+        if !occupied.iter().any(|path| path == &candidate) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -1981,6 +2040,36 @@ mod tests {
         assert!(!help.contains("Usage: baml-cli run"), "{help}");
     }
 
+    #[test]
+    fn test_run_help_documents_expression_file_context() {
+        let mut command = crate::commands::RuntimeCli::command();
+        command.build();
+        let mut run = command.find_subcommand("run").unwrap().clone();
+        let help = run.render_help().to_string();
+        let normalized_help = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            normalized_help.contains("Evaluate a BAML expression"),
+            "{help}"
+        );
+        assert!(
+            !help.contains("with optional `--file` or project context"),
+            "{help}"
+        );
+
+        let detailed_help = run.render_long_help().to_string();
+        let normalized_detailed_help = detailed_help
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            normalized_detailed_help.contains(
+                "Optionally, combine with `--file` or `--project` to make existing BAML functions available to the expression"
+            ),
+            "{detailed_help}"
+        );
+        assert!(!help.contains("not compatible with `--file`"), "{help}");
+    }
+
     /// BEP-027 Appendix A: the flag is `--output-format`, not `--output`.
     /// (`baml pack` uses `--output` for output path; `--output-format`
     /// names the serialization format on both verbs.)
@@ -2113,19 +2202,6 @@ mod tests {
         assert!(msg.contains("`<target>`"));
         assert!(msg.contains("`-f`"));
         assert!(msg.contains("`-e`"));
-    }
-
-    /// `-e` + `--file` is rejected — `-e` evaluates inline source so a
-    /// separate `--file` would be silently ignored.
-    #[test]
-    fn test_run_rejects_expression_plus_file() {
-        let mut args = run_args();
-        args.expression = Some("2 + 2".into());
-        args.file = Some(PathBuf::from("a.baml"));
-        let err = args.run().unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("`-e`"), "got: {msg}");
-        assert!(msg.contains("--file"), "got: {msg}");
     }
 
     /// `-e` + `--list` is rejected — `--list` enumerates project

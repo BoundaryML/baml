@@ -52,6 +52,9 @@ Target options:
   -e, --expression <EXPRESSION>
           Evaluate a BAML expression.
 
+          Optionally, combine with `--file` or `--project` to make existing BAML functions available
+          to the expression.
+
           Use `-e @file` to read an expression from a file or `-e -` for standard input. Mutually
           exclusive with `<TARGET>` and `--function`.
 

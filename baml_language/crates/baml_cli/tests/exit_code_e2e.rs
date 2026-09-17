@@ -1739,6 +1739,152 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
     );
 }
 
+/// `--file` supplies hermetic standalone context to `-e`, just as
+/// `--project` supplies project context.
+#[test]
+fn run_expr_picks_up_standalone_file_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("defines_foo.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "defines_foo.baml", "-e", "foo()"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for `run --file defines_foo.baml -e 'foo()'`, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// The synthetic expression source must not replace a selected standalone
+/// file that happens to use the same default filename.
+#[test]
+fn run_expr_preserves_standalone_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "__expr__.baml", "-e", "foo()"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected declarations from `__expr__.baml` to remain available\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// An explicitly selected standalone file is always compiled with the
+/// expression, even when the expression does not reference its declarations.
+#[test]
+fn run_expr_checks_standalone_file_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function broken() -> MissingType {\n  1\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "__expr__.baml", "-e", "2 + 2"],
+    );
+
+    assert!(
+        !output.status.success(),
+        "Expected the standalone file's error to fail expression evaluation\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("MissingType"),
+        "Expected diagnostics from the standalone file, got:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Project fallback must not replace a real root-level source file with the
+/// synthetic expression source when their default paths collide.
+#[test]
+fn run_expr_preserves_project_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "foo()", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected declarations from the project `__expr__.baml` to remain available\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// Diagnostics from a colliding root-level project source must also survive
+/// creation of the synthetic expression source.
+#[test]
+fn run_expr_checks_project_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function broken() -> MissingType {\n  1\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "broken()", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected the project file's error to fail expression evaluation\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("MissingType"),
+        "Expected diagnostics from the project file, got:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 /// B-359: an expression that only needs the standard library must not compile
 /// or diagnose the surrounding project. Unrelated project errors should not
 /// block `-e` from being used as an interactive probe.
