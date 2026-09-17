@@ -8,6 +8,7 @@ use baml_type::{
 use indexmap::IndexMap;
 
 use crate::{
+    CellId,
     builder::MirBuilder,
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, IntrinsicOp,
@@ -1458,9 +1459,9 @@ fn resolution_external_callable<'a>(
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
-    ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
-    TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
+    ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, LoopOrigin,
+    PatId as AstPatId, Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId,
+    TypeExpr as AstTypeExpr, TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -1468,7 +1469,7 @@ use baml_compiler2_hir::{
     loc::{FunctionLoc, LetLoc},
     package::{Spelling, is_precompiled_stdlib, lang_roots, package_items, spelling},
     resolve::{ResolvedName, resolve_name_at_in_scope},
-    scope::FileScopeId,
+    scope::{FileScopeId, ScopeKind},
     semantic_index::{
         BindingId, DefinitionSite, ExprMetadataKey, ExprMetadataScope as MetadataScope,
         PathResolution,
@@ -1865,8 +1866,14 @@ type PatMetadataKey = (MetadataScope, AstPatId);
 struct LoweringContext<'db> {
     db: &'db dyn crate::Db,
     builder: MirBuilder<'db>,
-    locals: HashMap<Name, Local>,
+    /// The local holding each HIR binding the body being lowered declares.
+    /// Written only by `declare_binding`, `declare_parameter`, and
+    /// `bind_existing_local`; `verify_bindings_recorded` checks at build time
+    /// that no binding was left out.
     binding_locals: HashMap<BindingId, Local>,
+    /// The `self` parameter of the method being lowered, for `default.<member>`
+    /// roots, which HIR does not resolve.
+    self_binding: Option<BindingId>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
     catch_rethrow_locals: Vec<Local>,
@@ -2017,8 +2024,8 @@ struct LoweringContext<'db> {
     /// `build_tagged_body_closure` assigns each. These are MIR-only locals — they
     /// have no HIR binding (the tag can't be resolved during the HIR walk), so
     /// `resolve_name_at_in_scope` returns `Unknown` for them. `lower_path_expr`
-    /// consults this map to resolve them: directly from `self.locals` when the
-    /// reference sits in the body closure itself, or — when a *nested* lambda
+    /// consults this map to resolve them: directly from `binding_locals` when
+    /// the reference sits in the body closure itself, or — when a *nested* lambda
     /// inside the interpolations references one — via a transitive capture keyed
     /// on the stored `BindingId` (HIR can't list it, so the standard capture path
     /// misses it). Saved/restored around each closure body so it stays scoped to
@@ -2253,7 +2260,6 @@ impl<'db> LoweringContext<'db> {
         body: AstExprId,
         iterable_view: InterfaceTypeView,
     ) {
-        let saved_locals = self.locals.clone();
         let coll_ty = self.expr_ty(collection);
         let coll_local = self.builder.temp(coll_ty);
         self.lower_expr(collection, Place::local(coll_local));
@@ -2338,20 +2344,7 @@ impl<'db> LoweringContext<'db> {
             Place::local(elem_local),
             Rvalue::Use(Operand::Copy(Place::Local(next_local))),
         );
-        self.bind_pattern_with_fresh_cells(elem_local, binding);
-        let names: Vec<Name> = self.body.patterns[binding]
-            .bound_names(&self.body.patterns)
-            .into_iter()
-            .cloned()
-            .collect();
-        for name in names {
-            if let Some(&local) = self.locals.get(&name)
-                && let Some(binding_id) =
-                    self.binding_id_for_statement_name(stmt_id, binding, &name)
-            {
-                self.binding_locals.insert(binding_id, local);
-            }
-        }
+        self.bind_pattern(elem_local, binding, DefinitionSite::Statement(stmt_id));
 
         let body_temp = self.builder.temp(RuntimeTy::Void);
         self.lower_expr(body, Place::local(body_temp));
@@ -2359,7 +2352,6 @@ impl<'db> LoweringContext<'db> {
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_header);
         }
-        self.restore_locals_after_scope(saved_locals);
 
         self.loop_context = prev_loop;
         self.builder.set_current_block(bb_exit);
@@ -2583,8 +2575,8 @@ impl<'db> LoweringContext<'db> {
         LoweringContext {
             db,
             builder: MirBuilder::new(func_name, arity),
-            locals: HashMap::new(),
             binding_locals: HashMap::new(),
+            self_binding: None,
             loop_context: None,
             catch_context: None,
             catch_rethrow_locals: Vec::new(),
@@ -2667,8 +2659,8 @@ impl<'db> LoweringContext<'db> {
         LoweringContext {
             db,
             builder: MirBuilder::new(let_name.clone(), 0),
-            locals: HashMap::new(),
             binding_locals: HashMap::new(),
+            self_binding: None,
             loop_context: None,
             catch_context: None,
             catch_rethrow_locals: Vec::new(),
@@ -2758,23 +2750,45 @@ impl<'db> LoweringContext<'db> {
         None
     }
 
-    fn any_pattern_binding_is_captured(&self, pattern: AstPatId, site: DefinitionSite) -> bool {
+    /// Whether a nested closure captures `binding`, per HIR's capture analysis.
+    /// That analysis is complete before MIR runs: a capture through any depth
+    /// of nesting marks the binding in its declaring scope.
+    fn binding_is_captured(&self, binding: BindingId) -> bool {
         let index = file_semantic_index(self.db, self.file);
-        for (scope_idx, bindings) in index.scope_bindings.iter().enumerate() {
-            let scope_id = FileScopeId::new(u32::try_from(scope_idx).expect("scope id overflow"));
-            if !Self::scope_is_descendant_or_self(index, scope_id, self.current_scope) {
-                continue;
-            }
-            for (binding_idx, binding) in bindings.bindings.iter().enumerate() {
-                if binding.site == site && binding.pattern == pattern {
-                    let binding_id = BindingId::local(scope_id, binding_idx);
-                    if bindings.captured_bindings.contains(&binding_id) {
-                        return true;
-                    }
-                }
-            }
+        index
+            .scope_bindings
+            .get(binding.scope.index() as usize)
+            .is_some_and(|scope| scope.captured_bindings.contains(&binding))
+    }
+
+    /// The place holding a binding's value: the local itself, or the cell
+    /// behind it when a closure captures the binding.
+    fn value_place(&self, local: Local) -> Place {
+        if self.builder.local_decl(local).is_captured {
+            Place::Deref(CellId::Local(local))
+        } else {
+            Place::Local(local)
         }
-        false
+    }
+
+    /// The local holding the method's `self` parameter, while lowering the
+    /// method's own frame.
+    // BUG: inside a nested lambda `self` is a capture rather than a local, so a
+    // `default.<member>` root there resolves to nothing and lowers to null.
+    fn self_local(&self) -> Option<Local> {
+        self.binding_locals.get(&self.self_binding?).copied()
+    }
+
+    /// [`Self::binding_is_captured`] for the binding `name` introduces in
+    /// `pattern` at `site`.
+    fn pattern_binding_is_captured(
+        &self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+        name: &Name,
+    ) -> bool {
+        self.binding_id_for_pattern_site_name(pattern, site, name)
+            .is_some_and(|binding_id| self.binding_is_captured(binding_id))
     }
 
     fn binding_id_for_statement_name(
@@ -2786,31 +2800,108 @@ impl<'db> LoweringContext<'db> {
         self.binding_id_for_pattern_site_name(pattern, DefinitionSite::Statement(stmt_id), name)
     }
 
-    fn record_pattern_binding_local(&mut self, pattern: AstPatId, name: &Name, local: Local) {
-        if let Some(binding_id) = self.binding_id_for_pattern_site_name(
-            pattern,
-            DefinitionSite::PatternBinding(pattern),
-            name,
-        ) {
-            self.binding_locals.insert(binding_id, local);
+    /// The captured locals among the bindings `stmt` declared (a `let`; any
+    /// other statement declares none). The statement must already be lowered.
+    fn captured_locals_of_statement(&self, stmt: AstStmtId) -> Vec<Local> {
+        let AstStmt::Let { pattern, .. } = self.body.stmts[stmt] else {
+            return Vec::new();
+        };
+        self.body.patterns[pattern]
+            .bound_names(&self.body.patterns)
+            .into_iter()
+            .filter_map(|name| self.binding_id_for_statement_name(stmt, pattern, name))
+            .filter_map(|binding_id| self.binding_locals.get(&binding_id).copied())
+            .filter(|&local| self.builder.local_decl(local).is_captured)
+            .collect()
+    }
+
+    fn recell_per_iteration(&mut self, locals: &[Local]) {
+        for &local in locals {
+            self.builder.recell_with_current_value(local);
         }
     }
 
-    // Catch-clause bindings (`catch (e, ctx)`) are registered in the semantic
-    // index under `DefinitionSite::CatchBinding`, not `PatternBinding`, so the
-    // catch-lowering paths must query with the matching site.
-    fn record_catch_binding_local(&mut self, pattern: AstPatId, name: &Name, local: Local) {
-        if let Some(binding_id) = self.binding_id_for_pattern_site_name(
-            pattern,
-            DefinitionSite::CatchBinding(pattern),
-            name,
-        ) {
-            self.binding_locals.insert(binding_id, local);
-        }
+    /// Declare the local that holds the binding `name` introduces in `pattern`
+    /// at `site`, creating its cell if a closure captures it.
+    ///
+    /// This is the one way to obtain a local for a user-visible name: it
+    /// resolves the binding's HIR identity, records the local under it so name
+    /// resolution finds it, and — when HIR's capture analysis says a closure
+    /// captures the binding — declares the local captured, which cells it
+    /// right here, where the binding is created (a declaration inside a loop
+    /// thereby hands each iteration's closures their own cell). Emit the
+    /// initializing store after this, never before.
+    ///
+    /// The site is the construct HIR registered the binding under — a `let`,
+    /// `for`, or `while let` statement, a match/if-let/catch-arm pattern, or a
+    /// catch clause's own bindings — and it is part of the binding's identity,
+    /// so a lookup under the wrong site finds nothing.
+    fn declare_binding(
+        &mut self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+        name: &Name,
+        ty: RuntimeTy,
+    ) -> Local {
+        let binding_id = self.binding_id_for_pattern_site_name(pattern, site, name);
+        debug_assert!(
+            binding_id.is_some(),
+            "no HIR binding for `{name}` at {site:?} within scope {:?}",
+            self.current_scope
+        );
+        let Some(binding_id) = binding_id else {
+            return self.builder.declare_local(Some(name.clone()), ty, None);
+        };
+        let local = if self.binding_is_captured(binding_id) {
+            self.builder
+                .declare_captured_local(Some(name.clone()), ty, None)
+        } else {
+            self.builder.declare_local(Some(name.clone()), ty, None)
+        };
+        self.binding_locals.insert(binding_id, local);
+        local
     }
 
-    fn catch_binding_is_captured(&self, pattern: AstPatId) -> bool {
-        self.any_pattern_binding_is_captured(pattern, DefinitionSite::CatchBinding(pattern))
+    /// Declare the local for parameter `param_idx` of the function or lambda
+    /// being lowered. A captured parameter is celled by the frame preamble
+    /// rather than here: the caller has already written its value into the
+    /// slot.
+    fn declare_parameter(&mut self, param_idx: usize, name: &Name, ty: RuntimeTy) -> Local {
+        let binding_id = BindingId::parameter(self.current_scope, param_idx);
+        let local = if self.binding_is_captured(binding_id) {
+            self.builder
+                .declare_captured_local(Some(name.clone()), ty, None)
+        } else {
+            self.builder.declare_local(Some(name.clone()), ty, None)
+        };
+        self.binding_locals.insert(binding_id, local);
+        local
+    }
+
+    /// Record that the binding `name` introduces in `pattern` at `site` is
+    /// held by `local`, a slot the runtime writes directly (a caught error or
+    /// its stack trace). Only for a binding no closure captures: a captured
+    /// binding owns a celled slot of its own, from `declare_binding`.
+    fn bind_existing_local(
+        &mut self,
+        pattern: AstPatId,
+        site: DefinitionSite,
+        name: &Name,
+        local: Local,
+    ) {
+        let binding_id = self.binding_id_for_pattern_site_name(pattern, site, name);
+        debug_assert!(
+            binding_id.is_some(),
+            "no HIR binding for `{name}` at {site:?} within scope {:?}",
+            self.current_scope
+        );
+        if let Some(binding_id) = binding_id {
+            debug_assert!(
+                !self.binding_is_captured(binding_id),
+                "`{name}` is captured; it needs its own local from `declare_binding`"
+            );
+            self.binding_locals.insert(binding_id, local);
+        }
     }
 
     fn path_resolution(&self, expr_id: AstExprId) -> Option<PathResolution> {
@@ -2853,20 +2944,40 @@ impl<'db> LoweringContext<'db> {
         self.binding_locals.get(&binding_id).copied()
     }
 
+    /// The type of a path root held by `local`, preferring what TIR inferred
+    /// for the root expression. When TIR knows a more specific type than the
+    /// local's `Unknown` declaration, the declaration is refined too, so the
+    /// emitter can resolve field names for display (`load_field .index`).
+    fn refined_root_local_ty(&mut self, expr_id: AstExprId, local: Local) -> RuntimeTy {
+        let Some(tir_root) = self.path_root_ty(expr_id) else {
+            return self.builder.local_ty(local);
+        };
+        if matches!(self.builder.local_ty(local), RuntimeTy::Unknown)
+            && !matches!(tir_root, RuntimeTy::Unknown | RuntimeTy::Void)
+        {
+            self.builder.set_local_ty(local, tir_root.clone());
+        }
+        tir_root
+    }
+
+    /// The place holding the value of the binding `name` resolves to at
+    /// `expr_id`: a local, or the value behind a cell for a captured binding
+    /// or a capture.
     fn place_for_path(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
         let binding_id = self.binding_id_for_path(expr_id, name)?;
         if let Some(&local) = self.binding_locals.get(&binding_id) {
-            return Some(Place::Local(local));
+            return Some(self.value_place(local));
         }
         if let Some(capture) = self
             .capture_indices
             .as_ref()
             .and_then(|captures| captures.get(&binding_id).copied())
         {
-            return Some(Place::Capture(capture));
+            return Some(Place::Deref(CellId::Capture(capture)));
         }
         if self.tagged_body_param_bindings.get(name) == Some(&binding_id) {
-            return Some(Place::Capture(self.ensure_transitive_capture(binding_id)));
+            let capture = self.ensure_transitive_capture(binding_id);
+            return Some(Place::Deref(CellId::Capture(capture)));
         }
         None
     }
@@ -2925,28 +3036,62 @@ impl<'db> LoweringContext<'db> {
         self.catch_context = saved_catch;
     }
 
-    fn restore_locals_after_scope(&mut self, saved_locals: HashMap<Name, Local>) {
-        self.locals = saved_locals;
-    }
-
-    fn restore_active_locals(&mut self, saved_locals: HashMap<Name, Local>) {
-        self.locals = saved_locals;
-    }
-
-    fn mark_captured_locals_in_scope_tree(&mut self, root_scope: FileScopeId) {
+    /// Every binding HIR registered in the scopes this body lowers has a
+    /// local: the tripwire for a declaration site that bypassed
+    /// `declare_binding`. Nested lambda subtrees are skipped — they are
+    /// lowered in their own context, which runs this check when it builds —
+    /// and so are the statements of `unlowered_block`, a desugared block the
+    /// lowering replaced wholesale (a tagged template's static layout).
+    #[cfg(debug_assertions)]
+    fn verify_bindings_recorded(
+        &self,
+        root_scope: FileScopeId,
+        unlowered_block: Option<AstExprId>,
+    ) {
         let index = file_semantic_index(self.db, self.file);
         let root = &index.scopes[root_scope.index() as usize];
-        let start = root_scope.index();
-        let end = root.descendants.end.index();
+        let scope_kind = |id: FileScopeId| &index.scopes[id.index() as usize].kind;
+        let parent = |id: &FileScopeId| index.scopes[id.index() as usize].parent;
+        let unlowered_stmts: &[AstStmtId] = match unlowered_block.map(|e| &self.body.exprs[e]) {
+            Some(AstExpr::Block { stmts, .. }) => stmts,
+            Some(_) => unreachable!("a desugared template body is a block"),
+            None => &[],
+        };
 
-        for raw_idx in start..end {
+        for raw_idx in root_scope.index()..root.descendants.end.index() {
             let scope_id = FileScopeId::new(raw_idx);
-            let Some(scope_bindings) = index.scope_bindings.get(scope_id.index() as usize) else {
+            let inside_nested_lambda = std::iter::successors(Some(scope_id), parent)
+                .take_while(|id| *id != root_scope)
+                .any(|id| matches!(scope_kind(id), ScopeKind::Lambda));
+            if inside_nested_lambda {
+                continue;
+            }
+            let Some(scope) = index.scope_bindings.get(raw_idx as usize) else {
                 continue;
             };
-            for binding_id in &scope_bindings.captured_bindings {
-                if let Some(&local) = self.binding_locals.get(binding_id) {
-                    self.builder.local_decl_mut(local).is_captured = true;
+            for (binding_idx, binding) in scope.bindings.iter().enumerate() {
+                if let DefinitionSite::Statement(stmt) = binding.site
+                    && unlowered_stmts.contains(&stmt)
+                {
+                    continue;
+                }
+                assert!(
+                    self.binding_locals
+                        .contains_key(&BindingId::local(scope_id, binding_idx)),
+                    "lowering {} gave no local to `{}` (registered by {:?} in scope {scope_id:?})",
+                    self.builder.name(),
+                    binding.name,
+                    binding.site,
+                );
+            }
+            if scope_id == root_scope {
+                for (name, param_idx) in &scope.params {
+                    assert!(
+                        self.binding_locals
+                            .contains_key(&BindingId::parameter(scope_id, *param_idx)),
+                        "lowering {} gave no local to parameter `{name}`",
+                        self.builder.name(),
+                    );
                 }
             }
         }
@@ -4570,12 +4715,10 @@ impl<'db> LoweringContext<'db> {
             } else {
                 self.lower_signature_runtime_ty(&param.ty, pkg_items, &pkg_info.namespace_path)
             };
-            let local = self
-                .builder
-                .declare_local(Some(param.name.clone()), param_ty, None);
-            self.locals.insert(param.name.clone(), local);
-            self.binding_locals
-                .insert(BindingId::parameter(self.current_scope, param_idx), local);
+            self.declare_parameter(param_idx, &param.name, param_ty);
+            if param.name.as_str() == "self" {
+                self.self_binding = Some(BindingId::parameter(self.current_scope, param_idx));
+            }
         }
 
         // Entry and exit blocks
@@ -4606,9 +4749,8 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        // Mark locals captured by nested lambdas. HIR stores this by binding
-        // identity, including block-owned bindings.
-        self.mark_captured_locals_in_scope_tree(self.current_scope);
+        #[cfg(debug_assertions)]
+        self.verify_bindings_recorded(self.current_scope, None);
 
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
@@ -4629,13 +4771,16 @@ impl<'db> LoweringContext<'db> {
         func_data: &baml_compiler2_hir::item_data::FunctionData,
         parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     ) {
-        for (index, param) in func_data.params.iter().enumerate() {
+        for index in 0..func_data.params.len() {
             let Some(default_ref) = parameter_defaults.param_default(index) else {
                 continue;
             };
 
-            let Some(&param_local) = self.locals.get(&param.name) else {
-                continue;
+            let Some(&param_local) = self
+                .binding_locals
+                .get(&BindingId::parameter(self.current_scope, index))
+            else {
+                unreachable!("every parameter is declared before the prologue")
             };
 
             let test_local = self.builder.temp(RuntimeTy::Bool);
@@ -4643,7 +4788,7 @@ impl<'db> LoweringContext<'db> {
                 Place::local(test_local),
                 Rvalue::BinaryOp {
                     op: BinOp::Eq,
-                    left: Operand::Copy(Place::local(param_local)),
+                    left: Operand::Copy(self.value_place(param_local)),
                     right: Operand::Constant(Constant::OmittedArg),
                 },
             );
@@ -4657,10 +4802,11 @@ impl<'db> LoweringContext<'db> {
             );
 
             self.builder.set_current_block(default_block);
+            let param_value = self.value_place(param_local);
             self.lower_default_expr(
                 default_ref.expr.expr(),
                 &parameter_defaults.defaults,
-                Place::local(param_local),
+                param_value,
             );
             if !self.builder.is_current_terminated() {
                 self.builder.goto(next_block);
@@ -4720,6 +4866,9 @@ impl<'db> LoweringContext<'db> {
         }
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
+
+        #[cfg(debug_assertions)]
+        self.verify_bindings_recorded(self.current_scope, None);
 
         // Take the builder out and build the MirFunctionBody
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
@@ -4808,7 +4957,6 @@ impl<'db> LoweringContext<'db> {
             &mut self.builder,
             MirBuilder::new(Name::new(&lambda_name), 0),
         );
-        let saved_locals = std::mem::take(&mut self.locals);
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
@@ -4903,12 +5051,7 @@ impl<'db> LoweringContext<'db> {
             let param_ty = self.convert_tir_ty_for_runtime(tir_ty);
             sig_param_types.push(sig_template(self, tir_ty));
             sig_display_param_types.push(tir_ty.render_with(&self.viewpoint()));
-            let local = self
-                .builder
-                .declare_local(Some(param.name.clone()), param_ty, None);
-            self.locals.insert(param.name.clone(), local);
-            self.binding_locals
-                .insert(BindingId::parameter(self.current_scope, param_idx), local);
+            self.declare_parameter(param_idx, &param.name, param_ty);
         }
         let sig_throws_type = sig_template(self, &throws_type);
 
@@ -4928,9 +5071,8 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        // Mark locals captured by nested lambdas. HIR stores this by binding
-        // identity, including block-owned bindings.
-        self.mark_captured_locals_in_scope_tree(lambda_scope_id);
+        #[cfg(debug_assertions)]
+        self.verify_bindings_recorded(lambda_scope_id, None);
 
         // Build the lambda MirFunction.
         // First, collect any nested lambdas that were encountered while lowering
@@ -4980,7 +5122,6 @@ impl<'db> LoweringContext<'db> {
         // Restore parent state.
         self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
-        self.locals = saved_locals;
         self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
@@ -5023,10 +5164,13 @@ impl<'db> LoweringContext<'db> {
             Vec::with_capacity(extended_hir_captures.len());
         for (_, binding_id) in &extended_hir_captures {
             if let Some(&local) = self.binding_locals.get(binding_id) {
-                // Mark the local as captured at the capture site — this is the
-                // definitive place where we know the exact Local being captured,
-                // even in the presence of shadowing.
-                self.builder.local_decl_mut(local).is_captured = true;
+                // The operand is the cell pointer, which the local holds only
+                // because HIR's capture analysis marked the binding when it
+                // was declared. A miss here is a HIR/MIR disagreement.
+                debug_assert!(
+                    self.builder.local_decl(local).is_captured,
+                    "closure captures {local}, which was not declared captured"
+                );
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
@@ -5337,7 +5481,6 @@ impl<'db> LoweringContext<'db> {
             &mut self.builder,
             MirBuilder::new(Name::new(&lambda_name), 0),
         );
-        let saved_locals = std::mem::take(&mut self.locals);
         let saved_binding_locals = std::mem::take(&mut self.binding_locals);
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
@@ -5352,7 +5495,7 @@ impl<'db> LoweringContext<'db> {
         self.current_scope = lambda_scope_id;
         self.current_metadata_scope = MetadataScope::Body(lambda_scope_id);
         self.capture_indices = Some(lambda_capture_indices);
-        // Body params resolve from `self.locals` (no HIR binding) — record each
+        // Body params have no HIR binding — record each
         // name with the synthetic `BindingId::parameter` it is given below (same
         // `self.current_scope` and index order as the declare loop), so
         // `lower_path_expr` resolves `${param}` interps to the locals and a nested
@@ -5372,11 +5515,13 @@ impl<'db> LoweringContext<'db> {
             .declare_local(Some(Name::new("_0")), RuntimeTy::Null, None);
 
         // Body params _1..=_n (the tag supplies their values when it calls body).
+        // Declared captured unconditionally: HIR has no binding for them to
+        // consult, and a nested lambda in an interpolation may capture one
+        // (one cell per param per template evaluation, a cold path).
         for (param_idx, (name, ty)) in body_params.iter().enumerate() {
             let local = self
                 .builder
-                .declare_local(Some(name.clone()), ty.clone(), None);
-            self.locals.insert(name.clone(), local);
+                .declare_captured_local(Some(name.clone()), ty.clone(), None);
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
         }
@@ -5387,6 +5532,9 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(entry);
 
         // ── Body: construct `baml.TaggedString { parts, values }`. ──
+        // The static layout stands in for the desugared `body` block, whose
+        // own statements are then never lowered.
+        let skipped_desugar = static_layout.is_some().then_some(body);
         match static_layout {
             Some((parts, value_exprs)) => {
                 let parts_ops: Vec<Operand<'db>> = parts
@@ -5474,7 +5622,8 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
-        self.mark_captured_locals_in_scope_tree(lambda_scope_id);
+        #[cfg(debug_assertions)]
+        self.verify_bindings_recorded(lambda_scope_id, skipped_desugar);
 
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
@@ -5492,7 +5641,6 @@ impl<'db> LoweringContext<'db> {
 
         // Restore parent state.
         self.builder = saved_builder;
-        self.locals = saved_locals;
         self.binding_locals = saved_binding_locals;
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
@@ -5518,7 +5666,10 @@ impl<'db> LoweringContext<'db> {
             Vec::with_capacity(extended_hir_captures.len());
         for (_, binding_id) in &extended_hir_captures {
             if let Some(&local) = self.binding_locals.get(binding_id) {
-                self.builder.local_decl_mut(local).is_captured = true;
+                debug_assert!(
+                    self.builder.local_decl(local).is_captured,
+                    "closure captures {local}, which was not declared captured"
+                );
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
@@ -5566,7 +5717,6 @@ impl<'db> LoweringContext<'db> {
         tail_expr: Option<AstExprId>,
         dest: Place,
     ) {
-        let saved_locals = self.locals.clone();
         let type_binding_scope_start = self.scoped_type_binding_params.len();
         let defer_depth = self.defer_stack.len();
 
@@ -5741,7 +5891,6 @@ impl<'db> LoweringContext<'db> {
         self.defer_stack.truncate(defer_depth);
         self.scoped_type_binding_params
             .truncate(type_binding_scope_start);
-        self.restore_locals_after_scope(saved_locals);
     }
 
     fn planned_call_args(
@@ -5995,8 +6144,15 @@ impl<'db> LoweringContext<'db> {
                 // being handled by the surrounding `catch`. This mirrors
                 // `AstStmt::Return`; `dest` is never written because we diverge.
                 let ret = Local(0); // _0 is always the return place
-                if let Some(e) = value {
-                    self.lower_expr(e, Place::local(ret));
+                match value {
+                    Some(e) => self.lower_expr(e, Place::local(ret)),
+                    // A bare `return` in a void function returns null. Write
+                    // it: the return place is defined by the IR, never by the
+                    // frame's zeroed slots.
+                    None => self.builder.assign(
+                        Place::local(ret),
+                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                    ),
                 }
                 // Run pending defers (LIFO) before jumping to the exit.
                 self.replay_defers_to_depth(0);
@@ -6705,30 +6861,24 @@ impl<'db> LoweringContext<'db> {
         let root_place = self.place_for_path(expr_id, &segments[0]);
         let (mut current_place, mut current_ty) = if let Some(place) = root_place {
             let ty = match place {
-                Place::Local(root_local) => {
-                    if let Some(tir_root) = self.path_root_ty(expr_id) {
-                        // If TIR inferred a more specific type for the root local,
-                        // update the MIR local's declared type so the emitter can
-                        // resolve field names for display (e.g. `load_field .index`).
-                        if matches!(self.builder.local_ty(root_local), RuntimeTy::Unknown)
-                            && !matches!(tir_root, RuntimeTy::Unknown | RuntimeTy::Void)
-                        {
-                            self.builder.local_decl_mut(root_local).ty = tir_root.clone();
-                        }
-                        tir_root
-                    } else {
-                        self.builder.local_ty(root_local)
-                    }
+                // The local itself, or the value in its cell: either way the
+                // root's type is the local's, refined by TIR.
+                Place::Local(root_local) | Place::Deref(CellId::Local(root_local)) => {
+                    self.refined_root_local_ty(expr_id, root_local)
                 }
-                Place::Capture(_) => self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown),
-                _ => unreachable!("path roots are locals or captures"),
+                Place::Deref(CellId::Capture(_)) => {
+                    self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown)
+                }
+                Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
+                    unreachable!("path roots are locals or the values in cells")
+                }
             };
             (place, ty)
         } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0]) {
             let ty = self.builder.local_ty(root_local);
             (Place::Local(root_local), ty)
         } else if self.is_default_receiver_root(expr_id, segments)
-            && let Some(&self_local) = self.locals.get(&Name::new("self"))
+            && let Some(self_local) = self.self_local()
         {
             // BEP-044 wf3 #4: `default.<field>` denotes the enclosing `self`
             // viewed at the declaring interface. TIR typed the root as
@@ -6736,7 +6886,7 @@ impl<'db> LoweringContext<'db> {
             // routing below resolve the field view (same path as
             // `self.as<I>.field`). Without this the `default` root is not a
             // local -> null -> `string + null` VM crash.
-            let place = Place::Local(self_local);
+            let place = self.value_place(self_local);
             let ty = self
                 .path_root_ty(expr_id)
                 .unwrap_or_else(|| self.builder.local_ty(self_local));
@@ -8011,7 +8161,7 @@ impl<'db> LoweringContext<'db> {
                         ))
                         .cloned()
                         .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or_else(|| RuntimeTy::Unknown);
+                        .unwrap_or(RuntimeTy::Unknown);
                     let recv_local = self.builder.temp(recv_ty);
                     self.lower_multi_segment_path_as_field_chain(
                         callee,
@@ -8158,7 +8308,7 @@ impl<'db> LoweringContext<'db> {
                         ))
                         .cloned()
                         .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or_else(|| RuntimeTy::Unknown);
+                        .unwrap_or(RuntimeTy::Unknown);
                     let recv_local = self.builder.temp(recv_ty);
                     self.lower_multi_segment_path_as_field_chain(
                         callee,
@@ -8613,7 +8763,7 @@ impl<'db> LoweringContext<'db> {
             {
                 let item_ref = def_to_item_ref(self.db, Definition::Function(default_loc));
                 let callee_op = Operand::Constant(Constant::Function(item_ref));
-                let Some(&self_local) = self.locals.get(&Name::new("self")) else {
+                let Some(self_local) = self.self_local() else {
                     return;
                 };
                 // Seed the default method's frame exactly as the runtime seeds
@@ -8665,7 +8815,7 @@ impl<'db> LoweringContext<'db> {
                 let frame_type_arg_ops = self.emit_frame_type_arg_ops(&frame_tys);
                 let ntypeargs = frame_type_arg_ops.len();
                 let mut all_args = frame_type_arg_ops;
-                all_args.push(Operand::Copy(Place::Local(self_local)));
+                all_args.push(Operand::Copy(self.value_place(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args));
                 let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
                 let target = self.builder.create_block();
@@ -9198,7 +9348,8 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Check if callee is a compiler intrinsic (log.*).
-        // Intrinsics are void side effects — emit as a statement, not a call.
+        // Intrinsics are void side effects — emit as a statement, not a call,
+        // and write the call's `null` result: `dest` may be the return place.
         if let Some(op) = self.check_intrinsic(callee) {
             self.builder.push_statement(
                 StatementKind::Intrinsic {
@@ -9207,6 +9358,8 @@ impl<'db> LoweringContext<'db> {
                 },
                 None,
             );
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
             self.builder.goto(target);
             self.builder.set_current_block(target);
             return;
@@ -9373,8 +9526,11 @@ impl<'db> LoweringContext<'db> {
             //     <args ...>
             //     SYS_OP g
             //     <store dest>
-            let dest_local = match dest {
-                Place::Local(l) => l,
+            // The terminator binds a local; any other destination (a field,
+            // an element, the value behind a cell) is written from a temp
+            // once the op has returned.
+            let dest_local = match &dest {
+                Place::Local(l) => *l,
                 _ => self.builder.temp(RuntimeTy::Null),
             };
             // For generic IO builtins (`$rust_io_function` with type params),
@@ -9398,6 +9554,15 @@ impl<'db> LoweringContext<'db> {
                 target,
                 unwind,
             );
+            if !matches!(dest, Place::Local(_)) {
+                self.builder.set_current_block(target);
+                let after = self.builder.create_block();
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Copy(Place::local(dest_local))));
+                self.builder.goto(after);
+                self.builder.set_current_block(after);
+                return;
+            }
         } else {
             // Call destinations must be Place::Local in MIR. If `dest` is a
             // projection (Field/Index) or a capture, call into a temp local
@@ -10527,13 +10692,15 @@ impl<'db> LoweringContext<'db> {
 
         // Then-branch: bind pattern locals, lower body, restore on exit.
         self.builder.set_current_block(bb_then);
-        let saved_locals = self.locals.clone();
-        self.bind_pattern(scrutinee_local, pattern);
+        self.bind_pattern(
+            scrutinee_local,
+            pattern,
+            DefinitionSite::PatternBinding(pattern),
+        );
         self.lower_expr(then_branch, dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
-        self.restore_locals_after_scope(saved_locals);
 
         // Else-branch: no bindings from the pattern, just lower the else
         // (or write Null if absent — same as plain `if` with no else).
@@ -11138,7 +11305,11 @@ impl<'db> LoweringContext<'db> {
         let expr = &self.body.exprs[expr_id];
         if let AstExpr::Path(segments) = expr {
             if segments.len() == 1 {
-                if let Some(local) = self.local_for_path(expr_id, &segments[0]) {
+                if let Some(local) = self.local_for_path(expr_id, &segments[0])
+                    // A captured local holds a cell pointer, not the value;
+                    // the caller copies the value through the cell instead.
+                    && !self.builder.local_decl(local).is_captured
+                {
                     return Some(local);
                 }
             }
@@ -11475,7 +11646,7 @@ impl<'db> LoweringContext<'db> {
             .tir_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
-            .unwrap_or_else(|| RuntimeTy::Unknown);
+            .unwrap_or(RuntimeTy::Unknown);
         if receiver_segments.len() == 1 {
             return self.operand_to_local(Operand::Copy(recv_root), recv_ty);
         }
@@ -12201,21 +12372,7 @@ impl LoweringContext<'_> {
                 // No saved/restored locals — these flow forward like a
                 // plain `let`.
                 self.builder.set_current_block(bb_match);
-                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false);
-
-                let names: Vec<Name> = self.body.patterns[pattern]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id));
             }
 
             AstStmt::Let {
@@ -12235,21 +12392,7 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false);
-
-                let names: Vec<Name> = self.body.patterns[pattern]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id));
             }
 
             AstStmt::Let {
@@ -12270,44 +12413,28 @@ impl LoweringContext<'_> {
                 let first_name = names.first().cloned();
 
                 let local_ty = self.pat_ty(pattern);
-                let local = self
-                    .builder
-                    .declare_local(first_name.clone(), local_ty.clone(), None);
+                let site = DefinitionSite::Statement(stmt_id);
+                let local = match &first_name {
+                    Some(name) => self.declare_binding(pattern, site, name, local_ty.clone()),
+                    // A nameless pattern still evaluates its initializer.
+                    None => self.builder.temp(local_ty.clone()),
+                };
 
+                let value = self.value_place(local);
                 if let Some(init) = initializer {
-                    self.lower_expr(init, Place::local(local));
+                    self.lower_expr(init, value);
                 } else {
-                    self.builder.assign(
-                        Place::local(local),
-                        Rvalue::Use(Operand::Constant(Constant::Null)),
-                    );
-                }
-
-                if let Some(first_name) = first_name {
-                    if let Some(binding_id) =
-                        self.binding_id_for_statement_name(stmt_id, pattern, &first_name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                    self.locals.insert(first_name, local);
+                    self.builder
+                        .assign(value, Rvalue::Use(Operand::Constant(Constant::Null)));
                 }
 
                 // Additional chain-link bindings get their own locals that
                 // copy from the first. `let x: let y` ⇒ y = x at runtime.
                 for extra in names.iter().skip(1) {
-                    let alias =
-                        self.builder
-                            .declare_local(Some(extra.clone()), local_ty.clone(), None);
-                    self.builder.assign(
-                        Place::local(alias),
-                        Rvalue::Use(Operand::Copy(Place::Local(local))),
-                    );
-                    if let Some(binding_id) =
-                        self.binding_id_for_statement_name(stmt_id, pattern, extra)
-                    {
-                        self.binding_locals.insert(binding_id, alias);
-                    }
-                    self.locals.insert(extra.clone(), alias);
+                    let alias = self.declare_binding(pattern, site, extra, local_ty.clone());
+                    let (alias_value, value) = (self.value_place(alias), self.value_place(local));
+                    self.builder
+                        .assign(alias_value, Rvalue::Use(Operand::Copy(value)));
                 }
             }
 
@@ -12315,7 +12442,7 @@ impl LoweringContext<'_> {
                 condition,
                 body,
                 after,
-                ..
+                origin,
             } => {
                 let bb_cond = self.builder.create_block();
                 let bb_body = self.builder.create_block();
@@ -12325,6 +12452,18 @@ impl LoweringContext<'_> {
                     bb_cond
                 };
                 let bb_exit = self.builder.create_block();
+
+                // A C-style header binding is per-iteration: the closures one
+                // iteration makes keep that iteration's value while the step
+                // advances the next one's (JS/Go). The header `let` ran once,
+                // before the loop; each captured binding it declared is
+                // re-celled, carrying its value, at the top of the step — the
+                // `continue` target too, so a skipped tail still gets its own
+                // cell.
+                let per_iteration_cells = match origin {
+                    LoopOrigin::For { init } => self.captured_locals_of_statement(init),
+                    LoopOrigin::While => Vec::new(),
+                };
 
                 let prev_loop = self.loop_context.take();
                 self.loop_context = Some(LoopContext {
@@ -12338,6 +12477,11 @@ impl LoweringContext<'_> {
                 }
 
                 self.builder.set_current_block(bb_cond);
+                if after.is_none() {
+                    // No step block: re-cell ahead of the test instead, at the
+                    // cost of one unused cell before the first test.
+                    self.recell_per_iteration(&per_iteration_cells);
+                }
                 self.lower_condition(condition, bb_body, bb_exit);
 
                 self.builder.set_current_block(bb_body);
@@ -12349,10 +12493,9 @@ impl LoweringContext<'_> {
                     self.builder.goto(bb_after);
                 }
 
-                if after.is_some() {
-                    self.builder.set_current_block(bb_after);
-                }
                 if let Some(after_stmt) = after {
+                    self.builder.set_current_block(bb_after);
+                    self.recell_per_iteration(&per_iteration_cells);
                     self.lower_stmt(after_stmt);
                 }
 
@@ -12408,33 +12551,16 @@ impl LoweringContext<'_> {
                 });
                 self.lower_pattern_test(scrutinee_local, pattern, bb_body, bb_exit);
 
-                // Body: bind pattern locals (scoped to the body, re-bound per
-                // iteration via fresh cells so a closure created each pass
-                // captures a distinct cell), record binding_locals for
-                // go-to-definition, lower the body (result discarded), then jump
-                // back to the header.
+                // Body: bind pattern locals (declared per pass, so a captured
+                // binding gives each pass's closures their own cell), lower
+                // the body (result discarded), then jump back to the header.
                 self.builder.set_current_block(bb_body);
-                let saved_locals = self.locals.clone();
-                self.bind_pattern_with_fresh_cells(scrutinee_local, pattern);
-                let names: Vec<Name> = self.body.patterns[pattern]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, pattern, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
+                self.bind_pattern(scrutinee_local, pattern, DefinitionSite::Statement(stmt_id));
                 let body_temp = self.builder.temp(RuntimeTy::Void);
                 self.lower_expr(body, Place::local(body_temp));
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(bb_header);
                 }
-                self.restore_locals_after_scope(saved_locals);
 
                 // Exit.
                 self.loop_context = prev_loop;
@@ -12464,8 +12590,14 @@ impl LoweringContext<'_> {
 
             AstStmt::Return(expr) => {
                 let ret = Local(0); // _0 is always the return place
-                if let Some(e) = expr {
-                    self.lower_expr(e, Place::local(ret));
+                match expr {
+                    Some(e) => self.lower_expr(e, Place::local(ret)),
+                    // A bare `return` in a void function returns null; see
+                    // `AstExpr::Return`.
+                    None => self.builder.assign(
+                        Place::local(ret),
+                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                    ),
                 }
                 // Run all pending defers (LIFO).
                 self.replay_defers_to_depth(0);
@@ -12634,10 +12766,15 @@ impl LoweringContext<'_> {
                             Place::Local(local) => self
                                 .path_root_ty(expr_id)
                                 .unwrap_or_else(|| self.builder.local_ty(local)),
-                            Place::Capture(_) => {
+                            Place::Deref(CellId::Local(local)) => self
+                                .path_root_ty(expr_id)
+                                .unwrap_or_else(|| self.builder.local_ty(local)),
+                            Place::Deref(CellId::Capture(_)) => {
                                 self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown)
                             }
-                            _ => unreachable!("path roots are locals or captures"),
+                            Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
+                                unreachable!("path roots are locals or the values in cells")
+                            }
                         };
                         (place, ty)
                     } else {
@@ -13221,13 +13358,11 @@ impl<'db> LoweringContext<'db> {
 
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
-                let saved_locals = self.locals.clone();
-                self.bind_pattern(scrutinee, pattern);
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern));
                 self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
-                self.restore_locals_after_scope(saved_locals);
             }
         }
 
@@ -13293,13 +13428,11 @@ impl<'db> LoweringContext<'db> {
                 self.builder.set_current_block(bb_wildcard_body);
             }
             let (pattern, body, _) = arms[idx];
-            let saved_locals = self.locals.clone();
-            self.bind_pattern(scrutinee, pattern);
+            self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern));
             self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
-            self.restore_locals_after_scope(saved_locals);
         } else {
             // No wildcard — decide what the otherwise block does.
             // Use `is_switch_exhaustive` (which may be inferred for TypeTag)
@@ -13390,11 +13523,16 @@ impl<'db> LoweringContext<'db> {
         backstop_last_arm: bool,
     ) {
         if arms.is_empty() {
-            // No more arms to test. Either a preceding wildcard/binding arm
-            // consumed all inputs (making this dead code), or the match is
-            // non-exhaustive and a runtime value could reach here. In both
-            // cases, jump to the join block so execution continues.
-            self.builder.goto(join);
+            // No more arms to test. An exhaustive match cannot get here — some
+            // arm matched — and says so, as the switch lowering's otherwise
+            // block does; the impossible edge must not reach the join, where
+            // `dest` is read without having been written. A non-exhaustive
+            // match can, and execution continues at the join.
+            if exhaustive {
+                self.builder.unreachable();
+            } else {
+                self.builder.goto(join);
+            }
             return;
         }
 
@@ -13431,13 +13569,15 @@ impl<'db> LoweringContext<'db> {
                 self.builder.unreachable();
                 self.builder.set_current_block(bb_body);
             }
-            let saved_locals = self.locals.clone();
-            self.bind_pattern(scrutinee, arm.pattern);
+            self.bind_pattern(
+                scrutinee,
+                arm.pattern,
+                DefinitionSite::PatternBinding(arm.pattern),
+            );
             self.lower_expr(arm.body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
-            self.restore_locals_after_scope(saved_locals);
             return;
         }
 
@@ -13454,8 +13594,13 @@ impl<'db> LoweringContext<'db> {
                 self.lower_pattern_test(scrutinee, part, bb_body, bb_alt_next);
 
                 self.builder.set_current_block(bb_body);
-                let saved_locals = self.locals.clone();
-                self.bind_pattern_inner(scrutinee, part, arm.pattern, part, false);
+                self.bind_pattern_inner(
+                    scrutinee,
+                    part,
+                    arm.pattern,
+                    part,
+                    DefinitionSite::PatternBinding(arm.pattern),
+                );
                 if let Some(guard) = arm.guard {
                     let bb_guarded = self.builder.create_block();
                     self.lower_condition(guard, bb_guarded, bb_next);
@@ -13465,7 +13610,6 @@ impl<'db> LoweringContext<'db> {
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
-                self.restore_locals_after_scope(saved_locals);
 
                 if idx + 1 < parts.len() {
                     self.builder.set_current_block(bb_alt_next);
@@ -13483,8 +13627,11 @@ impl<'db> LoweringContext<'db> {
         self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_next);
 
         self.builder.set_current_block(bb_body);
-        let saved_locals = self.locals.clone();
-        self.bind_pattern(scrutinee, arm.pattern);
+        self.bind_pattern(
+            scrutinee,
+            arm.pattern,
+            DefinitionSite::PatternBinding(arm.pattern),
+        );
         if let Some(guard) = arm.guard {
             let bb_guarded = self.builder.create_block();
             self.lower_condition(guard, bb_guarded, bb_next);
@@ -13494,7 +13641,6 @@ impl<'db> LoweringContext<'db> {
         if !self.builder.is_current_terminated() {
             self.builder.goto(join);
         }
-        self.restore_locals_after_scope(saved_locals);
 
         self.builder.set_current_block(bb_next);
         self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
@@ -14547,17 +14693,15 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
+    /// Bind the names `pat_id` introduces, registered under `site` — the
+    /// construct HIR registered them for.
+    fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId, site: DefinitionSite) {
         // Pass the root pat_id through recursion: HIR registers bindings
         // keyed by the OUTER pattern PatId (the let-stmt's pattern, the
         // match-arm's pattern, etc.), never by the inner Bind. To wire up
         // closure capture lookups correctly, we register the local against
         // that root.
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false);
-    }
-
-    fn bind_pattern_with_fresh_cells(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, site);
     }
 
     fn bind_pattern_inner(
@@ -14566,7 +14710,7 @@ impl<'db> LoweringContext<'db> {
         pat_id: AstPatId,
         root: AstPatId,
         narrow_root: AstPatId,
-        fresh_cell: bool,
+        site: DefinitionSite,
     ) {
         let scrutinee = self
             .tested_pattern_values
@@ -14597,20 +14741,16 @@ impl<'db> LoweringContext<'db> {
                         .map(|ty| self.runtime().convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
-                let local = self.builder.declare_local(Some(name.clone()), ty, None);
-                if fresh_cell {
-                    self.builder.fresh_cell(local);
-                }
+                let local = self.declare_binding(root, site, &name, ty);
+                let value = self.value_place(local);
                 self.builder.assign(
-                    Place::local(local),
+                    value,
                     Rvalue::Use(Operand::Copy(Place::Local(bound_scrutinee))),
                 );
-                self.record_pattern_binding_local(root, &name, local);
-                self.locals.insert(name, local);
                 // Recurse into the sub-pattern so inner bindings (e.g.
                 // `let x: let y` or `let x: Class { f }`) get emitted too.
                 if let Some(sp) = subpat {
-                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, fresh_cell);
+                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, site);
                 }
             }
             AstPattern::Or(parts) => {
@@ -14619,15 +14759,15 @@ impl<'db> LoweringContext<'db> {
                 if bindings.is_empty() {
                     return;
                 }
-                self.declare_or_pattern_bindings(pat_id, root, fresh_cell);
-                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
+                self.declare_or_pattern_bindings(pat_id, root, site);
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
             }
             AstPattern::Class { fields, .. } => {
                 for f in fields {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
                     {
-                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, fresh_cell);
+                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, site);
                     }
                 }
             }
@@ -14640,7 +14780,7 @@ impl<'db> LoweringContext<'db> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site);
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -14653,7 +14793,7 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, fresh_cell);
+                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, site);
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -14662,7 +14802,7 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site);
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
@@ -14709,18 +14849,19 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn declare_or_pattern_bindings(&mut self, pat_id: AstPatId, root: AstPatId, fresh_cell: bool) {
+    /// Declare every name an or-pattern binds, once, ahead of the
+    /// alternatives that each assign it.
+    fn declare_or_pattern_bindings(
+        &mut self,
+        pat_id: AstPatId,
+        root: AstPatId,
+        site: DefinitionSite,
+    ) {
         let mut bindings = Vec::new();
         self.collect_pattern_bindings(pat_id, &mut bindings);
         for (name, bind_pat) in bindings {
-            let local = self
-                .builder
-                .declare_local(Some(name.clone()), self.pat_ty(bind_pat), None);
-            if fresh_cell {
-                self.builder.fresh_cell(local);
-            }
-            self.record_pattern_binding_local(root, &name, local);
-            self.locals.insert(name, local);
+            let ty = self.pat_ty(bind_pat);
+            self.declare_binding(root, site, &name, ty);
         }
     }
 
@@ -14730,6 +14871,7 @@ impl<'db> LoweringContext<'db> {
         parts: &[AstPatId],
         root: AstPatId,
         narrow_root: AstPatId,
+        site: DefinitionSite,
     ) {
         if parts.is_empty() {
             self.builder.unreachable();
@@ -14749,7 +14891,7 @@ impl<'db> LoweringContext<'db> {
             self.lower_pattern_test(scrutinee, part, body, next);
 
             self.builder.set_current_block(body);
-            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root);
+            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root, site);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
@@ -14770,26 +14912,37 @@ impl<'db> LoweringContext<'db> {
         pat_id: AstPatId,
         root: AstPatId,
         narrow_root: AstPatId,
+        site: DefinitionSite,
     ) {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name, .. } => {
-                if let Some(&local) = self.locals.get(&name) {
-                    self.builder.assign(
-                        Place::local(local),
-                        Rvalue::Use(Operand::Copy(Place::Local(scrutinee))),
-                    );
-                    self.record_pattern_binding_local(root, &name, local);
-                }
+                let local = self
+                    .binding_id_for_pattern_site_name(root, site, &name)
+                    .and_then(|binding_id| self.binding_locals.get(&binding_id).copied());
+                let Some(local) = local else {
+                    unreachable!(
+                        "or-pattern binding `{name}` was not declared ahead of its alternatives"
+                    )
+                };
+                let value = self.value_place(local);
+                self.builder
+                    .assign(value, Rvalue::Use(Operand::Copy(Place::Local(scrutinee))));
             }
             AstPattern::Or(parts) => {
-                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
             }
             AstPattern::Class { fields, .. } => {
                 for field in fields {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, field.pat, &field.field)
                     {
-                        self.assign_pattern_to_existing(field_local, field.pat, root, field.pat);
+                        self.assign_pattern_to_existing(
+                            field_local,
+                            field.pat,
+                            root,
+                            field.pat,
+                            site,
+                        );
                     }
                 }
             }
@@ -14802,7 +14955,7 @@ impl<'db> LoweringContext<'db> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site);
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -14813,7 +14966,7 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat);
+                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat, site);
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -14822,7 +14975,7 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site);
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
@@ -14993,62 +15146,70 @@ impl LoweringContext<'_> {
     ) {
         use baml_compiler2_ast::CatchClauseKind;
 
-        #[derive(Clone)]
-        struct ClauseLocals {
-            binding_name: Option<Name>,
-            binding_local: Option<Local>,
-            binding_copy_local: Option<Local>,
-            stack_trace_name: Option<Name>,
-            stack_trace_payload: Option<Local>,
-            stack_trace_copy_local: Option<Local>,
+        /// A clause's own bindings — `catch (e)` / `catch (e, trace)` — by
+        /// name and the pattern HIR registered each under.
+        struct ClauseBindings {
+            error: Option<(Name, AstPatId)>,
+            stack_trace: Option<(Name, AstPatId)>,
         }
 
-        fn install_clause_locals(
+        /// Create one clause binding on entry to a handler arm. The runtime
+        /// wrote its value into `source`; an uncaptured binding is that slot
+        /// itself, a captured one gets a celled local of its own, copied from
+        /// it. Returns that own local.
+        fn install_binding(
+            ctx: &mut LoweringContext<'_>,
+            binding: Option<&(Name, AstPatId)>,
+            source: Option<Local>,
+        ) -> Option<Local> {
+            let (Some((name, pattern)), Some(source)) = (binding, source) else {
+                return None;
+            };
+            let site = DefinitionSite::CatchBinding(*pattern);
+            if !ctx.pattern_binding_is_captured(*pattern, site, name) {
+                ctx.bind_existing_local(*pattern, site, name, source);
+                return None;
+            }
+            let local = ctx.declare_binding(*pattern, site, name, RuntimeTy::Unknown);
+            let value = ctx.value_place(local);
+            ctx.builder
+                .assign(value, Rvalue::Use(Operand::Copy(Place::Local(source))));
+            Some(local)
+        }
+
+        /// Create a clause's bindings on entry to one of its arms, returning
+        /// the error binding's own local when it has one, so a `rethrow` in
+        /// the arm treats it as the caught error too.
+        fn install_clause_bindings(
             ctx: &mut LoweringContext<'_>,
             error_local: Local,
-            clause: &ClauseLocals,
-        ) {
-            if let (Some(name), Some(local)) = (&clause.binding_name, clause.binding_local) {
-                ctx.locals.insert(name.clone(), local);
-            }
-            if let Some(binding_copy_local) = clause.binding_copy_local {
-                ctx.builder.assign(
-                    Place::local(binding_copy_local),
-                    Rvalue::Use(Operand::Copy(Place::Local(error_local))),
-                );
-            }
-            if let (Some(name), Some(local)) =
-                (&clause.stack_trace_name, clause.stack_trace_copy_local)
-            {
-                ctx.locals.insert(name.clone(), local);
-            }
-            if let (Some(payload), Some(copy_local)) =
-                (clause.stack_trace_payload, clause.stack_trace_copy_local)
-                && payload != copy_local
-            {
-                ctx.builder.assign(
-                    Place::local(copy_local),
-                    Rvalue::Use(Operand::Copy(Place::Local(payload))),
-                );
-            }
+            stack_trace_local: Option<Local>,
+            clause: &ClauseBindings,
+        ) -> Option<Local> {
+            let error_copy = install_binding(ctx, clause.error.as_ref(), Some(error_local));
+            install_binding(ctx, clause.stack_trace.as_ref(), stack_trace_local);
+            error_copy
         }
 
-        let saved_catch_outer_locals = self.locals.clone();
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();
 
         // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
         // shows up in bytecode instead of an anonymous `_N` temp. Only do this
         // for single-clause catches with a non-captured binding.
-        let single_clause_binding_name = clauses.first().and_then(|c| {
-            if clauses.len() == 1 && !self.catch_binding_is_captured(c.binding) {
-                self.body.patterns[c.binding]
-                    .binding_name(&self.body.patterns)
-                    .cloned()
-            } else {
-                None
-            }
-        });
+        let single_clause_binding_name = match clauses {
+            [clause] => self.body.patterns[clause.binding]
+                .binding_name(&self.body.patterns)
+                .cloned()
+                .filter(|name| {
+                    !self.pattern_binding_is_captured(
+                        clause.binding,
+                        DefinitionSite::CatchBinding(clause.binding),
+                        name,
+                    )
+                }),
+            _ => None,
+        };
         let error_local =
             self.builder
                 .declare_local(single_clause_binding_name, RuntimeTy::Unknown, None);
@@ -15058,63 +15219,21 @@ impl LoweringContext<'_> {
             .any(|c| c.stack_trace_binding.is_some())
             .then(|| self.builder.declare_local(None, RuntimeTy::Unknown, None));
 
-        let mut clause_locals = Vec::with_capacity(clauses.len());
-        for clause in clauses {
-            let binding_name = self.body.patterns[clause.binding]
-                .binding_name(&self.body.patterns)
-                .cloned();
-            let binding_is_captured = self.catch_binding_is_captured(clause.binding);
-            let (binding_local, binding_copy_local) = match binding_name.clone() {
-                Some(name) if binding_is_captured => {
-                    let local =
-                        self.builder
-                            .declare_local(Some(name.clone()), RuntimeTy::Unknown, None);
-                    self.record_catch_binding_local(clause.binding, &name, local);
-                    (Some(local), Some(local))
+        let clause_bindings: Vec<ClauseBindings> = clauses
+            .iter()
+            .map(|clause| {
+                let name_of = |pattern: AstPatId| {
+                    self.body.patterns[pattern]
+                        .binding_name(&self.body.patterns)
+                        .cloned()
+                        .map(|name| (name, pattern))
+                };
+                ClauseBindings {
+                    error: name_of(clause.binding),
+                    stack_trace: clause.stack_trace_binding.and_then(name_of),
                 }
-                Some(name) => {
-                    self.record_catch_binding_local(clause.binding, &name, error_local);
-                    (Some(error_local), None)
-                }
-                None => (None, None),
-            };
-
-            let (stack_trace_name, stack_trace_copy_local) = if let (Some(st_pat), Some(payload)) =
-                (clause.stack_trace_binding, stack_trace_local)
-            {
-                let name = self.body.patterns[st_pat]
-                    .binding_name(&self.body.patterns)
-                    .cloned();
-                let is_captured = self.catch_binding_is_captured(st_pat);
-                match name.clone() {
-                    Some(name) if is_captured => {
-                        let local = self.builder.declare_local(
-                            Some(name.clone()),
-                            RuntimeTy::Unknown,
-                            None,
-                        );
-                        self.record_catch_binding_local(st_pat, &name, local);
-                        (Some(name), Some(local))
-                    }
-                    Some(name) => {
-                        self.record_catch_binding_local(st_pat, &name, payload);
-                        (Some(name), Some(payload))
-                    }
-                    None => (None, None),
-                }
-            } else {
-                (None, None)
-            };
-
-            clause_locals.push(ClauseLocals {
-                binding_name,
-                binding_local,
-                binding_copy_local,
-                stack_trace_name,
-                stack_trace_payload: stack_trace_local,
-                stack_trace_copy_local,
-            });
-        }
+            })
+            .collect();
 
         // Flatten all arms from all clauses (blocks created lazily below).
         let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool, usize)> = Vec::new();
@@ -15185,15 +15304,11 @@ impl LoweringContext<'_> {
         // body (the arms), captured into the catch region for the cause chain.
         let arm_blocks_lo = self.builder.num_blocks();
         self.builder.set_current_block(bb_handler);
-        if clauses.len() == 1 {
-            install_clause_locals(self, error_local, &clause_locals[0]);
-        }
         let switch_rethrow_mark = self.catch_rethrow_locals.len();
-        if clauses.len() == 1 {
+        if let [clause] = clause_bindings.as_slice() {
+            let error_copy = install_clause_bindings(self, error_local, stack_trace_local, clause);
             self.catch_rethrow_locals.push(error_local);
-            if let Some(local) = clause_locals[0].binding_copy_local {
-                self.catch_rethrow_locals.push(local);
-            }
+            self.catch_rethrow_locals.extend(error_copy);
         }
         let lowered_as_switch = clauses.len() == 1
             && self.try_lower_as_switch(
@@ -15213,7 +15328,6 @@ impl LoweringContext<'_> {
                 .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
                 .collect();
             self.builder.set_current_block(bb_join);
-            self.restore_active_locals(saved_catch_outer_locals);
             return;
         }
 
@@ -15254,28 +15368,31 @@ impl LoweringContext<'_> {
         // Lower each arm body.
         for &(ref arm, body_block, _, clause_idx) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
-            let saved_locals = self.locals.clone();
-            let clause = clause_locals[clause_idx].clone();
-            install_clause_locals(self, error_local, &clause);
-            self.bind_pattern(error_local, arm.pattern);
+            let error_copy = install_clause_bindings(
+                self,
+                error_local,
+                stack_trace_local,
+                &clause_bindings[clause_idx],
+            );
+            self.bind_pattern(
+                error_local,
+                arm.pattern,
+                DefinitionSite::PatternBinding(arm.pattern),
+            );
             let rethrow_mark = self.catch_rethrow_locals.len();
             self.catch_rethrow_locals.push(error_local);
-            if let Some(local) = clause.binding_copy_local {
-                self.catch_rethrow_locals.push(local);
-            }
+            self.catch_rethrow_locals.extend(error_copy);
             self.lower_expr(arm.body, dest.clone());
             self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
-            self.restore_locals_after_scope(saved_locals);
         }
 
         self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
             .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
             .collect();
         self.builder.set_current_block(bb_join);
-        self.restore_active_locals(saved_catch_outer_locals);
     }
 }
 

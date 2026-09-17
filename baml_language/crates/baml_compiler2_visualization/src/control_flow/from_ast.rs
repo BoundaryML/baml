@@ -510,7 +510,7 @@ impl<'a> AstGraphBuilder<'a> {
     fn visit_loop(&mut self, condition: ast::ExprId, body: ast::ExprId, origin: ast::LoopOrigin) {
         let keyword = match origin {
             ast::LoopOrigin::While => "while",
-            ast::LoopOrigin::For => "for",
+            ast::LoopOrigin::For { .. } => "for",
         };
         let label = format!(
             "{keyword} ({})",
@@ -1389,11 +1389,12 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let body_expr = exprs.alloc(ast::Expr::Null);
+            let init = stmts.alloc(ast::Stmt::Missing);
             let for_stmt = stmts.alloc(ast::Stmt::While {
                 condition: cond,
                 body: body_expr,
                 after: None,
-                origin: ast::LoopOrigin::For,
+                origin: ast::LoopOrigin::For { init },
             });
             Some(exprs.alloc(ast::Expr::Block {
                 stmts: vec![for_stmt],

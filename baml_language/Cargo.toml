@@ -168,6 +168,7 @@ crossbeam-channel = { version = "0.5" }
 crossbeam-utils = { version = "0.8" }
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
+dirs = "7.0.0"
 divan = { package = "codspeed-divan-compat", version = "*" }
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
@@ -284,6 +285,7 @@ jni = "0.21"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
+subenum = { version = "1.2.0" }
 pyo3 = { version = "0.28", default-features = false }
 pyo3-async-runtimes = { version = "0.28" }
 pyo3-build-config = "0.28"

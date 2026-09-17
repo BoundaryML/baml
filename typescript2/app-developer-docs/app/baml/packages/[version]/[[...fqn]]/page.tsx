@@ -4,9 +4,13 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 
 import { DocsShell } from '@/components/docs-shell';
-import { GeneratedReferenceContent } from '@/components/generated-reference';
+import {
+  GeneratedReferenceContent,
+  referencePageTableOfContents,
+} from '@/components/generated-reference';
 import { GeneratedVersionSwitcher } from '@/components/generated-version-switcher';
 import { readDocumentRoute } from '@/lib/generated-content/document-store';
+import { packageDocumentPath } from '@/lib/generated-content/routes';
 import { isPrereleaseVersion } from '@/lib/generated-content/versions';
 import { documentationMetadata } from '@/lib/metadata';
 
@@ -15,17 +19,15 @@ export const revalidate = 0;
 
 const loadDocument = cache(readDocumentRoute);
 
-function storedPath(fqn: readonly string[] | undefined): string {
-  return fqn?.length ? `baml/packages/${fqn.join('/')}` : 'baml/packages';
-}
-
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ fqn?: string[]; version: string }>;
 }): Promise<Metadata> {
   const { fqn, version } = await params;
-  const document = await loadDocument(version, storedPath(fqn));
+  const path = packageDocumentPath(fqn);
+  if (path === null) notFound();
+  const document = await loadDocument(version, path);
   if (!document) return {};
   return documentationMetadata({
     description: document.route_metadata.description,
@@ -41,7 +43,9 @@ export default async function PackageDocumentPage({
   params: Promise<{ fqn?: string[]; version: string }>;
 }) {
   const { fqn, version } = await params;
-  const document = await loadDocument(version, storedPath(fqn));
+  const path = packageDocumentPath(fqn);
+  if (path === null) notFound();
+  const document = await loadDocument(version, path);
   if (!document || document.route_metadata.surface !== 'packages') notFound();
   const block = document.content.blocks[0];
   const toc = document.content.headings.map((heading) => ({
@@ -120,7 +124,7 @@ export default async function PackageDocumentPage({
         />
       }
       title={document.content.title}
-      toc={toc}
+      toc={referencePageTableOfContents(block.page, block.namespacedChildren)}
       wideContent
     >
       <GeneratedReferenceContent

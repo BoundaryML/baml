@@ -1,0 +1,197 @@
+# Shared by Cargo CI and the docs-only path in ci.yaml. Compiler changes build
+# the CLI once for both compiler tests and documentation examples. Docs-only
+# changes build just the CLI and avoid the platform/SDK test matrix.
+name: Compiler and Documentation Tests (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      run-compiler-tests:
+        description: Run the compiler/CLI/snapshot suites as well as documentation examples
+        type: boolean
+        default: true
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
+      TRUNK_ORG_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  # Match Cargo CI: these binaries repeatedly execute the compiler, so opt-level
+  # 1 matters for runtime as well as sharing compiled dependencies in sccache.
+  CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+  CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  snapshot-tests:
+    name: "Compiler and documentation tests"
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: ${{ inputs.run-compiler-tests && 'sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest' || 'sccache direnv' }}
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        if: inputs.run-compiler-tests
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build tests and CLI binaries with --timings"
+        if: inputs.run-compiler-tests
+        # --bins includes the normal baml-pack-host executable, not just its
+        # unit-test harness. --tests unifies the test/dev-dependency features
+        # in the same build as both executables. Keep these packages/features
+        # identical to the nextest invocation below.
+        run: cargo build --tests --bins -p baml_tests -p baml_cli -p baml_pack_host --all-features --timings
+        working-directory: baml_language
+
+      - name: "Build the CLI for documentation-only changes"
+        if: ${{ !inputs.run-compiler-tests }}
+        run: cargo build -p baml_cli --bin baml-cli --all-features --timings
+        working-directory: baml_language
+
+      # This job owns glibc coverage of baml_tests, baml_cli and baml_pack_host.
+      # Keep the GNU job's --exclude list in sync. The musl job also runs
+      # pack_e2e, so both Linux libc variants exercise the ELF pack path.
+      # `cargo insta` takes no profile flag, hence NEXTEST_PROFILE.
+      - name: "Run compiler, CLI, and snapshot tests"
+        if: inputs.run-compiler-tests
+        id: snapshot-test
+        # The shared upload action gates this outcome (including a tokenless
+        # fallback on forks). Do not add a second raw-outcome gate: that would
+        # override Trunk's intentional quarantine handling.
+        continue-on-error: true
+        run: cargo insta test --test-runner nextest --dnd -p baml_tests -p baml_cli -p baml_pack_host --all-features --unreferenced=reject
+        working-directory: baml_language
+        env:
+          BAML_PACK_HOST_PREBUILT: "1"
+          NEXTEST_PROFILE: ci
+
+      - name: "Upload test results to Trunk"
+        if: ${{ !cancelled() && inputs.run-compiler-tests }}
+        uses: ./.github/actions/upload-test-results
+        with:
+          junit-path: baml_language/target/nextest/ci/junit.xml
+          # https://app.trunk.io/boundaryml/flaky-tests/collections/jgs6yJXj
+          collection: jgs6yJXj
+          normalize: nextest
+          cargo-manifest-path: baml_language/Cargo.toml
+          test-outcome: ${{ steps.snapshot-test.outcome }}
+          token: ${{ secrets.TRUNK_ORG_TOKEN }}
+
+      - name: "Check for snapshot changes"
+        if: inputs.run-compiler-tests
+        run: |
+          pathspecs=(
+            ':(glob)baml_language/**/*.snap'
+            ':(glob)baml_language/**/*.snap.new'
+          )
+          if [ -n "$(git status --porcelain -- "${pathspecs[@]}")" ]; then
+            echo "::error::Snapshot tests have uncommitted changes"
+            git diff -- "${pathspecs[@]}"
+            exit 1
+          fi
+
+      - name: "Upload snapshot failures"
+        if: ${{ failure() && inputs.run-compiler-tests }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapshot-failures
+          path: |
+            baml_language/**/*.snap
+            baml_language/**/*.snap.new
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node2
+      - name: Compile canonical documentation snippets
+        env:
+          # Require full diagnostics for both valid and intentionally invalid
+          # examples. Do not seed disposable projects during the check pass.
+          BAML_NO_BYTECODE_CACHE: "1"
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+        run: pnpm --filter app-developer-docs docs:snippets:validate
+        working-directory: typescript2
+      - name: Execute documentation behavior and inferred-signature assertions
+        env:
+          BAML_BINARY: ${{ github.workspace }}/baml_language/target/debug/baml-cli
+          # Content-addressed keys include the compiler fingerprint and project
+          # inputs. Reuse the stdlib across examples without writing into source.
+          BAML_CACHE_DIR: ${{ runner.temp }}/baml-documentation-cache
+        run: pnpm --filter app-developer-docs docs:book:validate
+        working-directory: typescript2
+      # The full baml_cli::baml_corpus test above already executes
+      # root.compiler.mounted_interface_diagnostics. Do not compile the corpus
+      # again just to select those three package-boundary assertions.
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-snapshot.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-snapshot
+          path: sccache-stats-snapshot.json
+          if-no-files-found: ignore
+
+      - name: "Rename cargo timings"
+        if: always()
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-snapshot.html
+        working-directory: baml_language
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-snapshot
+          path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
+          if-no-files-found: ignore
+

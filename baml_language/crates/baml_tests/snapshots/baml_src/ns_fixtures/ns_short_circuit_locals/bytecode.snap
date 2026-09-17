@@ -12,6 +12,82 @@ function fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) ->
     return
 }
 
+function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> bool {
+    load_type int
+    alloc_array 0
+    load_const 1
+    load_const "a"
+    load_type string
+    load_type int
+    alloc_map 1
+    init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
+    store_var box
+    load_var box
+    load_field .items
+    store_var items
+    load_var box
+    load_field .tags
+    store_var tags
+    load_var items
+    load_const null
+    cmp_op ==
+    pop_jump_if_true L0
+    load_var items
+    container_len
+    jump L1
+
+  L0:
+    load_const null
+
+  L1:
+    jump_if_not_null_or_pop L2
+    jump L3
+
+  L2:
+    store_var _8
+    jump L4
+
+  L3:
+    load_const -1
+    store_var _8
+
+  L4:
+    load_var tags
+    load_const null
+    cmp_op ==
+    pop_jump_if_true L5
+    load_var tags
+    container_len
+    jump L6
+
+  L5:
+    load_const null
+
+  L6:
+    jump_if_not_null_or_pop L7
+    jump L8
+
+  L7:
+    store_var _15
+    jump L9
+
+  L8:
+    load_const 0
+    store_var _15
+
+  L9:
+    load_var _8
+    load_const 0
+    cmp_int_op ==
+    jump_if_false_or_pop L10
+    load_var _15
+    load_const 1
+    cmp_int_op ==
+
+  L10:
+    return
+}
+
 function fixtures.short_circuit_locals.conditional_short_circuit(a: bool, b: bool, cond: bool) -> bool {
     load_const false
     store_var x

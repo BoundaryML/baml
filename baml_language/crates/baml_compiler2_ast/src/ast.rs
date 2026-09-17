@@ -1498,10 +1498,17 @@ impl FunctionMetadata {
     }
 }
 
+/// The source form a [`Stmt::While`] was written in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopOrigin {
     While,
-    For,
+    /// A C-style `for (init; cond; step)`. `init` is the `let` statement the
+    /// desugaring placed before the loop; its bindings are per-iteration
+    /// (each iteration's closures see their own copy, as in JS and Go), which
+    /// MIR lowering implements by re-celling them at the top of the step.
+    For {
+        init: StmtId,
+    },
 }
 
 /// Binary operators — matches those supported in `body.rs`.
