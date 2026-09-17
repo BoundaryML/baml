@@ -60,10 +60,16 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
 }
 
 fn run(binary: &Path, args: &[&str]) -> Output {
+    run_with_env(binary, args, &[])
+}
+
+fn run_with_env(binary: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut cmd = Command::new(binary);
     for arg in args {
         cmd.arg(arg);
     }
+    cmd.env_remove("BAML_LOG");
+    cmd.envs(env.iter().copied());
     cmd.output().expect("spawn packed binary")
 }
 
@@ -102,6 +108,55 @@ fn pack_e2e_root_main() {
         String::from_utf8_lossy(&out.stderr),
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
+}
+
+/// Packed binaries honor the same `BAML_LOG` threshold as `baml run` while
+/// remaining quiet by default.
+#[test]
+fn pack_e2e_baml_log_env_surfaces_filtered_logs() {
+    let built = common::ensure_built();
+    let (_tmp, bin) = pack_project(
+        built,
+        r#"
+function main() -> string {
+  log.debug("packed-debug");
+  log.info("packed-info");
+  log.warn("packed-warn");
+  log.error("packed-error");
+  "packed-result"
+}
+"#,
+        &["main"],
+    );
+
+    let quiet = run(&bin, &[]);
+    assert!(quiet.status.success());
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(
+        quiet_stdout.contains("packed-result"),
+        "stdout: {quiet_stdout}"
+    );
+    for unexpected in ["packed-debug", "packed-info", "packed-warn", "packed-error"] {
+        assert!(!quiet_stdout.contains(unexpected), "stdout: {quiet_stdout}");
+    }
+
+    let logged = run_with_env(&bin, &[], &[("BAML_LOG", "wArN")]);
+    assert!(
+        logged.status.success(),
+        "packed binary exited {:?}; stdout:\n{}\nstderr:\n{}",
+        logged.status.code(),
+        String::from_utf8_lossy(&logged.stdout),
+        String::from_utf8_lossy(&logged.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&logged.stdout);
+    assert!(stdout.contains("[WARN] packed-warn"), "stdout: {stdout}");
+    assert!(stdout.contains("[ERROR] packed-error"), "stdout: {stdout}");
+    assert!(!stdout.contains("packed-info"), "stdout: {stdout}");
+    assert!(!stdout.contains("packed-debug"), "stdout: {stdout}");
+    assert!(
+        stdout.find("[ERROR] packed-error") < stdout.find("\"packed-result\""),
+        "captured logs must be flushed before the return value: {stdout}"
+    );
 }
 
 /// The packed envelope carries the root's enriched `PackageInterface`, and the
