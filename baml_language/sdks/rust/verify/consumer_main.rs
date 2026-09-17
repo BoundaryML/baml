@@ -9,6 +9,12 @@
 //! are not implemented yet; the verifier grows to cover them as they land.
 
 fn main() {
+    // Public bridge types must come from the SDK's exact runtime dependency;
+    // consumers should not need a second, manually synchronized version pin.
+    let unset: baml_sdk::baml_bridge::OptionalArg<String> =
+        baml_sdk::baml_bridge::OptionalArg::Unset;
+    assert!(matches!(unset, baml_sdk::baml_bridge::OptionalArg::Unset));
+
     let sync = baml_sdk::rt_int(7).expect("sync rt_int call");
     assert_eq!(sync, 7, "sync roundtrip");
 
