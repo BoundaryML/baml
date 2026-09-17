@@ -871,15 +871,17 @@ enum PendingDiag<'db> {
         member: baml_type::Name,
     },
     /// An item projection's `Self` slot, judged once inference resolves it:
-    /// erased (existential/union) `Self` is object-safety-gated for receiver
-    /// methods and rejected for `self`-less ones. Pushed for EVERY item
-    /// projection; a concrete or typevar slot passes silently.
+    /// erased (existential/union) `Self` is admitted only where the method
+    /// can dispatch on it — its one `Self`-typed parameter, which must be
+    /// the first argument (the VM reads `Self` from the first value
+    /// argument). Pushed for EVERY item projection; a concrete or typevar
+    /// slot passes silently.
     ItemProjectionSelfSlot {
         expr: ExprId,
         var: Ty,
         interface: baml_type::interned::InferInterface,
         member: baml_type::Name,
-        takes_self: bool,
+        dispatch: crate::callable::SelfDispatch,
         /// Whether the reference is a VALUE (uncalled). A receiver method
         /// with an erased `Self` dispatches fine when CALLED (the receiver
         /// value carries the concrete type), but a reified value has no
@@ -7198,14 +7200,14 @@ impl<'db> InferenceContext<'db> {
         };
         // Guards on the `Self` slot, deferred until inference resolves it
         // (the inferred spelling only pins `Self` through the arguments):
-        // an ERASED `Self` — an interface-existential or a union — obeys the
-        // one-`Self` object-safety rule when the method takes a receiver
-        // (dispatch derives the concrete type from the value), and is
-        // rejected outright when it does not (type-keyed dispatch has no
-        // value to consult, and an erased type names no single impl).
-        // An UNRESOLVED `Self` is a hard error: rustc's E0790, whose fix is
-        // the fully-qualified spelling.
-        let takes_self = crate::callable::callable_takes_self(self.db, method);
+        // an ERASED `Self` — an interface-existential or a union — is
+        // admitted only where the one-`Self` rule lets the call dispatch on
+        // it (`callable_self_dispatch`): the one `Self`-typed parameter, in
+        // first position, from whose runtime type the VM derives `Self`.
+        // The receiver is not special here — `self` is just such a
+        // parameter. An UNRESOLVED `Self` is a hard error: rustc's E0790,
+        // whose fix is the fully-qualified spelling.
+        let dispatch = crate::callable::callable_self_dispatch(self.db, method);
         let iface_ref = InferInterface::new(
             iface_qtn,
             // The WRITTEN arguments: `Conv<int>` and `Conv<string>` are
@@ -7225,7 +7227,7 @@ impl<'db> InferenceContext<'db> {
                 var: self_slot.clone(),
                 interface: iface_ref,
                 member: member.clone(),
-                takes_self,
+                dispatch,
                 value_position: matches!(own, OwnArgs::Fresh),
             });
         if qself.is_none() {
@@ -11647,7 +11649,7 @@ impl<'db> InferenceContext<'db> {
                         var,
                         interface,
                         member,
-                        takes_self,
+                        dispatch,
                         value_position,
                     } => {
                         let slot = self.finalize_ty(&var);
@@ -11675,48 +11677,46 @@ impl<'db> InferenceContext<'db> {
                         if !matches!(slot.kind(), InferTy::Interface(..) | InferTy::Union(..)) {
                             continue;
                         }
-                        if !takes_self {
-                            (
-                                TirTypeError::SelflessMethodNeedsConcreteSelf {
-                                    interface_name: baml_type::Name::new(
-                                        self.qualified_interface_display(&interface),
-                                    ),
-                                    method_name: member,
-                                    self_ty: self.materialize_ty(&slot),
-                                },
-                                expr,
-                            )
-                        } else if let Some(position) =
-                            crate::method_resolution::declared_method_self_restriction(
-                                self.db,
-                                &self.facts,
-                                &interface,
-                                &member,
-                            )
-                        {
-                            (
+                        let interface_name =
+                            baml_type::Name::new(self.qualified_interface_display(&interface));
+                        match dispatch {
+                            crate::callable::SelfDispatch::Breaks(position) => (
                                 TirTypeError::InvalidSelfCallThroughInterface {
-                                    interface_name: baml_type::Name::new(
-                                        self.qualified_interface_display(&interface),
-                                    ),
+                                    interface_name,
                                     method_name: member,
                                     position,
                                 },
                                 expr,
-                            )
-                        } else if value_position {
-                            (
-                                TirTypeError::ErasedSelfMethodValue {
-                                    interface_name: baml_type::Name::new(
-                                        self.qualified_interface_display(&interface),
-                                    ),
+                            ),
+                            crate::callable::SelfDispatch::NoSelfParam => (
+                                TirTypeError::SelflessMethodNeedsConcreteSelf {
+                                    interface_name,
                                     method_name: member,
                                     self_ty: self.materialize_ty(&slot),
                                 },
                                 expr,
-                            )
-                        } else {
-                            continue;
+                            ),
+                            // A CALL dispatches off the first argument's
+                            // runtime type; a reified value has no
+                            // resolution moment.
+                            crate::callable::SelfDispatch::OnParam(0) if value_position => (
+                                TirTypeError::ErasedSelfMethodValue {
+                                    interface_name,
+                                    method_name: member,
+                                    self_ty: self.materialize_ty(&slot),
+                                },
+                                expr,
+                            ),
+                            crate::callable::SelfDispatch::OnParam(0) => continue,
+                            crate::callable::SelfDispatch::OnParam(index) => (
+                                TirTypeError::SelfDispatchParamNotFirst {
+                                    interface_name,
+                                    method_name: member,
+                                    index,
+                                    self_ty: self.materialize_ty(&slot),
+                                },
+                                expr,
+                            ),
                         }
                     }
                     PendingDiag::UninferredCtorParam { expr, var, name } => {

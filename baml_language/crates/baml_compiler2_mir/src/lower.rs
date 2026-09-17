@@ -4,8 +4,8 @@ use baml_base::{Name, TypePath};
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     callable::{
-        callable_display_name, callable_owner_type, callable_takes_self, lang_class_method,
-        lang_function,
+        SelfDispatch, callable_display_name, callable_owner_type, callable_self_dispatch,
+        callable_takes_self, lang_class_method, lang_function,
     },
     extern_loc::{
         EnumRef, ExternFunctionLoc, FunctionRef, InterfaceRef, extern_function_row,
@@ -1566,8 +1566,17 @@ enum InterfaceMember {
 /// How an interface method's frame divides — see
 /// [`MirLower::interface_method_shape`].
 struct InterfaceMethodShape {
-    /// Whether the method's first parameter is the `self` receiver.
+    /// Whether the method's first parameter is the `self` receiver — the
+    /// SUGAR question (may `a.m(..)` stand for `I.m(a, ..)`; may a value
+    /// reference bind a receiver), never the dispatch one.
     takes_self: bool,
+    /// Whether the method dispatches an erased `Self` from its first
+    /// argument — its one `Self`-typed parameter is the first
+    /// ([`SelfDispatch::OnParam`]`(0)`), the `self` receiver being one such
+    /// parameter. The checker admits an erased `Self` only for these, so
+    /// every other shape reaches lowering with a concrete `Self` and takes
+    /// the type-keyed road.
+    dispatches_on_first: bool,
     /// The interface's own declared generic parameter count.
     interface_generics: usize,
     /// Frame index where the method's OWN generics start:
@@ -3816,12 +3825,12 @@ impl<'db> LoweringContext<'db> {
                 let Some(shape) = self.interface_method_shape(interface, &method) else {
                     return false;
                 };
-                if shape.takes_self {
-                    // The receiver road derives `Self` from the value, so it
-                    // needs only the interface VIEW (the static frame
-                    // prefix); the method's own type args — scoped `type T =
-                    // …` slots included — are lowered by the virtual-call
-                    // machinery itself.
+                if shape.dispatches_on_first {
+                    // The receiver road derives `Self` from the first
+                    // argument's value, so it needs only the interface VIEW
+                    // (the static frame prefix); the method's own type args
+                    // — scoped `type T = …` slots included — are lowered by
+                    // the virtual-call machinery itself.
                     let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
                     else {
                         return false;
@@ -12064,6 +12073,10 @@ impl<'db> LoweringContext<'db> {
                         .params
                         .first()
                         .is_some_and(|param| param.name.as_str() == "self"),
+                    dispatches_on_first: matches!(
+                        callable_self_dispatch(self.db, DeclRef::Source(fn_loc)),
+                        SelfDispatch::OnParam(0)
+                    ),
                     interface_generics,
                     own_start,
                     frame_len,
@@ -12081,6 +12094,10 @@ impl<'db> LoweringContext<'db> {
                         .len();
                 Some(InterfaceMethodShape {
                     takes_self: callable_takes_self(self.db, DeclRef::External(method)),
+                    dispatches_on_first: matches!(
+                        callable_self_dispatch(self.db, DeclRef::External(method)),
+                        SelfDispatch::OnParam(0)
+                    ),
                     interface_generics,
                     own_start,
                     frame_len,

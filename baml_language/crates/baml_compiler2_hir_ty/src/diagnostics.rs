@@ -109,7 +109,8 @@ impl Spell for AssocContainer {
 /// interface-existential receiver — see [`TirTypeError::InvalidSelfCallThroughInterface`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelfCallPosition {
-    /// A non-receiver parameter typed with `Self`.
+    /// `Self` in more than one parameter (the `self` receiver counts), or
+    /// nested inside a parameter's type.
     Parameter,
     /// `Self` nested inside an invariant constructor in the return or throws type
     /// (e.g. `-> Self[]`, `-> Box<Self>`); a bare top-level `-> Self` is allowed.
@@ -596,26 +597,41 @@ pub enum TirTypeError {
         member_name: Name,
     },
 
-    /// An interface-existential (or union) receiver cannot call a method that uses
-    /// `Self` outside the receiver position: a non-receiver `Self` parameter (the
-    /// concrete implementor is unknown for those arguments), or `Self` nested inside
-    /// an invariant constructor in the return/throws type (`-> Self[]`, `-> Box<Self>`
-    /// — the impl returns a concretely-tagged container that is NOT a subtype of the
-    /// existential-tagged one; containers are invariant). A bare top-level `-> Self`
-    /// is fine (it collapses covariantly to the receiver). Rust `dyn Trait` parity.
+    /// An erased `Self` (an interface-existential or union) cannot call a
+    /// method that breaks the one-`Self` rule: `Self` in more than one
+    /// parameter or nested in a parameter (the concrete implementor is
+    /// unknown for those arguments), or `Self` nested inside an invariant
+    /// constructor in the return/throws type (`-> Self[]`, `-> Box<Self>` —
+    /// the impl returns a concretely-tagged container that is NOT a subtype
+    /// of the existential-tagged one; containers are invariant). A bare
+    /// top-level `-> Self` is fine (it collapses covariantly). The `self`
+    /// receiver is one `Self`-typed parameter like any other. Rust `dyn
+    /// Trait` parity.
     InvalidSelfCallThroughInterface {
         interface_name: Name,
         method_name: Name,
         position: SelfCallPosition,
     },
 
-    /// A `self`-less interface method referenced with an erased `Self` (an
-    /// interface-existential or union). There is no receiver value to derive
-    /// a concrete implementor from — dispatch is keyed on the `Self` TYPE —
-    /// and an erased type names no single impl.
+    /// An interface method with NO `Self`-typed parameter referenced with an
+    /// erased `Self` (an interface-existential or union). There is no value
+    /// to derive a concrete implementor from — dispatch is keyed on the
+    /// `Self` TYPE — and an erased type names no single impl.
     SelflessMethodNeedsConcreteSelf {
         interface_name: Name,
         method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
+    /// An object-safe method whose one `Self`-typed parameter is not the
+    /// FIRST, referenced with an erased `Self`. Dispatch on an erased `Self`
+    /// reads the first argument's runtime type; a `Self` elsewhere has no
+    /// dispatch road yet, so the call needs a concrete `Self`.
+    SelfDispatchParamNotFirst {
+        interface_name: Name,
+        method_name: Name,
+        /// Zero-based position of the `Self`-typed parameter.
+        index: usize,
         self_ty: baml_type::Ty,
     },
 
@@ -1855,9 +1871,23 @@ impl TirTypeError {
                     self_ty,
                 } => write!(
                     f,
-                    "method `{method_name}` on interface `{interface_name}` has no `self` receiver, \
-                 so `Self` must be a concrete implementor type — `{}` does not name one; \
-                 write `(SomeImplementor as {interface_name}).{method_name}`",
+                    "method `{method_name}` on interface `{interface_name}` has no `Self`-typed \
+                 parameter to dispatch on, so `Self` must be a concrete implementor type — \
+                 `{}` does not name one; write `(SomeImplementor as \
+                 {interface_name}).{method_name}`",
+                    self_ty.spell(vp)
+                ),
+                TirTypeError::SelfDispatchParamNotFirst {
+                    interface_name,
+                    method_name,
+                    index,
+                    self_ty,
+                } => write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` takes `Self` as \
+                 parameter {index} (counting from 0); an erased `Self` — `{}` — is dispatched \
+                 from the first argument only, so name a concrete `Self`: `(SomeImplementor as \
+                 {interface_name}).{method_name}(...)`",
                     self_ty.spell(vp)
                 ),
                 TirTypeError::InvalidSelfCallThroughInterface {
@@ -1866,7 +1896,9 @@ impl TirTypeError {
                     position,
                 } => {
                     let position = match position {
-                        SelfCallPosition::Parameter => "a parameter",
+                        SelfCallPosition::Parameter => {
+                            "more than one parameter, or nested in a parameter"
+                        }
                         SelfCallPosition::NestedInReturn => {
                             "its return/throws type, nested in a container (e.g. `Self[]`)"
                         }
@@ -1874,8 +1906,8 @@ impl TirTypeError {
                     write!(
                         f,
                         "method `{method_name}` on interface `{interface_name}` uses `Self` in \
-                     {position}, so it requires a concrete receiver, not an \
-                     interface-existential one"
+                     {position}, so it requires a concrete `Self`, not an erased one (an \
+                     interface-existential or union)"
                     )
                 }
                 TirTypeError::DefaultOnRequiredMethod {

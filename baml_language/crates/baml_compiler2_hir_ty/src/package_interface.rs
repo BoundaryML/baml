@@ -567,6 +567,10 @@ pub enum ImportError {
     /// An impl claims to be declared in the body of a class this package
     /// does not export.
     DanglingImplOrigin { interface: String, class: String },
+    /// An interface row frames `Self` as something other than slot 0 named
+    /// `Self` — the one convention every reader of a frame assumes (the
+    /// one-`Self` test, the projection tier, the owner frame).
+    InterfaceSelfParam { interface: String, claimed: String },
     /// Two impl rows have one identity — the degenerate overlap coherence
     /// rejects at the source compile, so the blob is not the export of a
     /// checked package; served, the identity would name no single row.
@@ -624,6 +628,11 @@ impl std::fmt::Display for ImportError {
             } => write!(
                 f,
                 "the interface exports impl rows {first} and {second} that cannot be proven disjoint"
+            ),
+            Self::InterfaceSelfParam { interface, claimed } => write!(
+                f,
+                "the interface row exported as `{interface}` frames `Self` as `{claimed}`; `Self` is \
+                 frame slot 0 in every lane"
             ),
             Self::DanglingImplOrigin { interface, class } => write!(
                 f,
@@ -771,6 +780,14 @@ fn validate_row_identities(
                     key: spell(&key),
                     params,
                     bound_lists,
+                });
+            }
+            if let ExportedType::Interface { self_param, .. } = row
+                && *self_param != ParamTy::new(0, Name::new("Self"))
+            {
+                return Err(ImportError::InterfaceSelfParam {
+                    interface: spell(&key),
+                    claimed: format!("`{}` at slot {}", self_param.as_str(), self_param.index()),
                 });
             }
             match row {
@@ -1251,7 +1268,9 @@ fn lower_interface_export<'db>(
         .expect("interface frame starts with Self");
     // The one-`Self` test over an exported signature
     // (`callable_breaks_one_self`) recognizes `Self` as frame slot 0 by
-    // this exact identity; a rename of the slot must be loud here.
+    // this exact identity; a rename of the slot must be loud here, and
+    // `import_interface` refuses a row that frames it otherwise
+    // (`ImportError::InterfaceSelfParam`), so a blob cannot smuggle one in.
     debug_assert_eq!(self_param, ParamTy::new(0, Name::new("Self")));
     let generic_params = crate::lower::interface_declared_params(db, interface_loc);
     let bounds = crate::lower::interface_scope_bounds(db, interface_loc);

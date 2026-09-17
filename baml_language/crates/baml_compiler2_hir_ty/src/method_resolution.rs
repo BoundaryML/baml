@@ -370,18 +370,12 @@ pub(crate) fn declared_method_self_restriction<'db>(
         })?;
         DeclRef::Source(method)
     };
-    callable_breaks_one_self(db, callable).then(|| {
-        if callable_signature(db, callable)
-            .params
-            .iter()
-            .skip(1)
-            .any(|param| self_occurs(&Ty::from_plain(&param.ty), false))
-        {
-            crate::diagnostics::SelfCallPosition::Parameter
-        } else {
-            crate::diagnostics::SelfCallPosition::NestedInReturn
+    match crate::callable::callable_self_dispatch(db, callable) {
+        crate::callable::SelfDispatch::Breaks(position) => Some(position),
+        crate::callable::SelfDispatch::OnParam(_) | crate::callable::SelfDispatch::NoSelfParam => {
+            None
         }
-    })
+    }
 }
 
 /// The concrete-receiver impl tier's AMBIGUITY verdict alone - consulted

@@ -320,7 +320,11 @@ pub fn callable_throws_of<'db>(
 /// Whether the callable declares a `self` receiver — an instance method
 /// rather than a static one. The receiver is an ordinary first parameter
 /// named `self` (there is no separate receiver slot), so this is the whole
-/// test, in both lanes.
+/// test, in both lanes. This is the SUGAR question only — whether
+/// `a.m(..)` may stand for `I.m(a, ..)`; a static is not a member of an
+/// instance. Whether an erased `Self` can be dispatched is
+/// [`callable_self_dispatch`], which treats the receiver as the parameter
+/// it is.
 pub fn callable_takes_self(db: &dyn baml_compiler2_ppir::Db, callable: FunctionRef<'_>) -> bool {
     callable_signature(db, callable)
         .params
@@ -541,28 +545,79 @@ pub fn instantiate_callable_signature<'db>(
     })
 }
 
-/// The one-`Self` rule (spec: object safety for existential receivers): a
-/// NON-self parameter containing bare `Self`, or `Self` nested inside an
-/// invariant constructor in the return/throws, makes the method uncallable
-/// through an existential (a bare top-level `-> Self` collapses covariantly
-/// and stays legal). `Self.Assoc` projections are exempt — the
-/// existential's pins make them one concrete type. `Self` is frame slot 0
-/// in both lanes (the export asserts it), so one test serves both.
+/// Where an erased `Self` (an interface-existential or a union) is
+/// dispatched from — the one-`Self` rule (spec, `Self`: "exactly one
+/// `Self`-typed parameter (including the `self` receiver)"), with the
+/// receiver treated as what it is: a parameter named `self` whose type is
+/// `Self`. A method is object-safe when exactly one parameter is typed
+/// bare `Self` and `Self` occurs nowhere else — not in a second parameter,
+/// not nested in any parameter, not nested inside an invariant constructor
+/// in the return/throws type (a bare top-level `-> Self` collapses
+/// covariantly and stays legal). `Self.Assoc` projections are exempt: the
+/// existential's pins make them one concrete type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelfDispatch {
+    /// Object-safe: the one bare-`Self` parameter is at this index, and an
+    /// erased `Self` is dispatched from that argument's runtime type.
+    OnParam(usize),
+    /// No parameter is typed `Self` (and `Self` occurs nowhere the rule
+    /// forbids): there is no value to consult, so a caller must name a
+    /// concrete `Self`.
+    NoSelfParam,
+    /// `Self` occurs where the rule forbids it: an erased `Self` names no
+    /// single implementation for the call.
+    Breaks(crate::diagnostics::SelfCallPosition),
+}
+
+/// [`SelfDispatch`] for a callable, in either lane. `Self` is frame slot 0
+/// in both — the export asserts it and the import refuses a row that frames
+/// it otherwise — so one test serves both.
+pub fn callable_self_dispatch(
+    db: &dyn baml_compiler2_ppir::Db,
+    callable: FunctionRef<'_>,
+) -> SelfDispatch {
+    use crate::diagnostics::SelfCallPosition;
+    let signature = callable_signature(db, callable);
+    // `self_occurs(_, true)` flags only NESTED occurrences; a bare
+    // top-level `Self` is what a dispatch parameter is made of.
+    let nested_self = |ty: &baml_type::Ty| {
+        crate::method_resolution::self_occurs(&baml_type::interned::Ty::from_plain(ty), true)
+    };
+    let bare_self = |ty: &baml_type::Ty| {
+        matches!(
+            baml_type::interned::Ty::from_plain(ty).kind(),
+            baml_type::interned::InferTy::TypeVar(param, _)
+                if param.index() == 0 && param.as_str() == "Self"
+        )
+    };
+    let mut dispatch_params = signature
+        .params
+        .iter()
+        .enumerate()
+        .filter(|(_, param)| bare_self(&param.ty))
+        .map(|(index, _)| index);
+    let first = dispatch_params.next();
+    let second = dispatch_params.next();
+    if second.is_some() || signature.params.iter().any(|param| nested_self(&param.ty)) {
+        return SelfDispatch::Breaks(SelfCallPosition::Parameter);
+    }
+    if nested_self(&signature.return_type) || nested_self(callable_throws_of(db, callable)) {
+        return SelfDispatch::Breaks(SelfCallPosition::NestedInReturn);
+    }
+    first.map_or(SelfDispatch::NoSelfParam, SelfDispatch::OnParam)
+}
+
+/// Whether the one-`Self` rule forbids dispatching this callable on an
+/// erased `Self` — [`SelfDispatch::Breaks`]. A method with no `Self`
+/// parameter does not break the rule; it merely has nothing to dispatch on.
 pub fn callable_breaks_one_self(
     db: &dyn baml_compiler2_ppir::Db,
     callable: FunctionRef<'_>,
 ) -> bool {
-    let signature = callable_signature(db, callable);
-    let self_in = |ty: &baml_type::Ty, top_ok: bool| {
-        crate::method_resolution::self_occurs(&baml_type::interned::Ty::from_plain(ty), top_ok)
-    };
-    signature
-        .params
-        .iter()
-        .skip(1)
-        .any(|param| self_in(&param.ty, false))
-        || self_in(&signature.return_type, true)
-        || self_in(callable_throws_of(db, callable), true)
+    matches!(
+        callable_self_dispatch(db, callable),
+        SelfDispatch::Breaks(_)
+    )
 }
 
 /// What declares a callable.

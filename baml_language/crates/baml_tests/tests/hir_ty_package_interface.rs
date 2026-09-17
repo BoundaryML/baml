@@ -533,6 +533,21 @@ implement Marker for Bar<string | int> {
     );
 }
 
+#[test]
+fn an_interface_row_framing_self_elsewhere_is_refused_before_installation() {
+    let renamed = forged_library_blob(|interface| {
+        let ExportedType::Interface { self_param, .. } = type_row_mut(interface, "Parent") else {
+            panic!("Parent is an interface row");
+        };
+        *self_param = ParamTy::new(0, Name::new("Me"));
+    });
+    assert_eq!(
+        mount_refusal(renamed),
+        "the interface row exported as `app.Parent` frames `Self` as ``Me` at slot 0`; `Self` is \
+         frame slot 0 in every lane"
+    );
+}
+
 /// A faithful export always re-imports: the validator that refuses forged
 /// rows never refuses a compiler-built blob, for the fixture, the mounted
 /// copy of it, and every stdlib package.

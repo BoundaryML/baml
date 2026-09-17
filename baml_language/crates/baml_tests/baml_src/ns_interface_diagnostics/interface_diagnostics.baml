@@ -1200,7 +1200,7 @@ test "multi_self_method_rejected_on_interface_typed_receiver" {
                 }
             `,
         },
-        "concrete receiver",
+        "requires a concrete `Self`",
     )
 }
 
