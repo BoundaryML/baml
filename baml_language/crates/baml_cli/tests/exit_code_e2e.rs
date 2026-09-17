@@ -417,8 +417,8 @@ fn run_valid_project_outputs_only_program_output() {
     );
 }
 
-/// `baml run` keeps logs silent by default and streams the selected levels
-/// before printing the target's return value when `--log` or `BAML_LOG` enables them.
+/// `baml run` defaults to INFO and streams the selected levels before printing
+/// the target's return value. `--log` and `BAML_LOG` override the default.
 #[test]
 fn run_log_sources_surface_filtered_logs_for_targets_and_expressions() {
     let built = &common::baml_cli();
@@ -462,10 +462,8 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
             "run",
             "--from",
             ".",
-            "--log",
-            "INFO",
             "-e",
-            r#"log.info("expression-detail"); 7"#,
+            r#"log.debug("expression-debug-detail"); log.info("expression-detail"); 7"#,
         ],
     );
     assert!(
@@ -477,6 +475,10 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     let stdout = String::from_utf8_lossy(&expression.stdout);
     assert!(
         stdout.contains("[INFO] expression-detail"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        !stdout.contains("expression-debug-detail"),
         "stdout: {stdout}"
     );
     let lines: Vec<_> = stdout.lines().collect();
@@ -491,6 +493,32 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     assert!(
         log_line < result_line,
         "expression logs must be flushed before the return value: {stdout}"
+    );
+
+    let quiet = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "--from",
+            ".",
+            "--log",
+            "OFF",
+            "-e",
+            r#"log.info("disabled-detail"); 8"#,
+        ],
+    );
+    assert!(
+        quiet.status.success(),
+        "explicitly disabled logs failed; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&quiet.stdout),
+        String::from_utf8_lossy(&quiet.stderr),
+    );
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(quiet_stdout.lines().any(|line| line.trim() == "8"));
+    assert!(
+        !quiet_stdout.contains("disabled-detail"),
+        "stdout: {quiet_stdout}"
     );
 
     let conversion = run_baml_cli_with_env(
