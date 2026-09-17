@@ -3257,10 +3257,12 @@ impl<'a> Parser<'a> {
             // This is a function type: wrap everything in FUNCTION_TYPE node
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
-            // Forward `consume_union` so that pattern-atom callers (which
-            // pass `false`) leave a trailing `|` to the surrounding
-            // `UNION_PATTERN` instead of swallowing it into the return type.
-            self.parse_type_with(consume_union); // return type
+            // Pattern-atom callers normally leave a trailing `|` to the
+            // surrounding `UNION_PATTERN`. A later top-level `throws`, however,
+            // can only belong to this function type, so use it as lookahead to
+            // keep the preceding union in the return type as well.
+            let consume_return_union = consume_union || self.return_type_is_followed_by_throws();
+            self.parse_type_with(consume_return_union); // return type
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
                     p.bump(); // throws
@@ -3286,6 +3288,19 @@ impl<'a> Parser<'a> {
             // 3. The type checker will catch invalid types anyway
             // For single unnamed type, this is just a parenthesized type - that's fine
         }
+    }
+
+    /// Whether parsing the complete return type at the current token leaves a
+    /// top-level `throws` clause for this function type.
+    ///
+    /// In pattern position, `(A) -> B | C` remains a union pattern whose first
+    /// alternative is a function type. With `(A) -> B | C throws E`, the
+    /// `throws` token cannot begin a pattern alternative, so it disambiguates
+    /// the pipe as part of the function's return type.
+    fn return_type_is_followed_by_throws(&self) -> bool {
+        let mut preview = Parser::new(&self.tokens[self.current..]);
+        preview.parse_type();
+        preview.at(TokenKind::Throws)
     }
 
     /// Parse a single function type parameter: either `name: type` or just `type`.
@@ -10542,6 +10557,134 @@ type Callback = (value: int) -> string throws Foo
             "expected function type throws clause text, got {:?}",
             throws.text().to_string()
         );
+    }
+
+    #[test]
+    fn pattern_function_type_union_return_binds_trailing_throws() {
+        let source = r#"
+function Demo(value: unknown) -> int {
+  if let f: (ScratchStep, image) -> MouseClickAction | ScratchNoAction throws unknown = value {
+    1
+  } else {
+    0
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let if_let = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let binding = if_let
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::BINDING_PATTERN)
+            .expect("expected typed binding pattern");
+        assert!(
+            binding
+                .descendants()
+                .all(|node| node.kind() != SyntaxKind::UNION_PATTERN),
+            "the return union must stay inside the function type"
+        );
+        assert!(
+            binding
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::THROWS_CLAUSE),
+            "the trailing throws clause must bind to the function type"
+        );
+    }
+
+    #[test]
+    fn pattern_function_type_parenthesized_union_return_binds_trailing_throws() {
+        let source = r#"
+function Demo(value: unknown) -> int {
+  if let f: (ScratchStep, image) -> (MouseClickAction | ScratchNoAction) throws unknown = value {
+    1
+  } else {
+    0
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let if_let = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::IF_LET_EXPR)
+            .expect("expected IF_LET_EXPR");
+        let binding = if_let
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::BINDING_PATTERN)
+            .expect("expected typed binding pattern");
+        assert!(
+            binding
+                .descendants()
+                .all(|node| node.kind() != SyntaxKind::UNION_PATTERN),
+            "the parenthesized return union must stay inside the function type"
+        );
+        assert!(
+            binding
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::THROWS_CLAUSE),
+            "the trailing throws clause must bind to the function type"
+        );
+    }
+
+    #[test]
+    fn pattern_function_type_without_throws_still_allows_union_chaining() {
+        let source = r#"
+function Demo(value: unknown) -> int {
+  if (value is (ScratchStep, image) -> MouseClickAction | ScratchNoAction) {
+    1
+  } else {
+    0
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let union = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected the bare pipe to remain a pattern union");
+        assert_eq!(
+            union
+                .children()
+                .filter(|node| node.kind() == SyntaxKind::TYPE_PATTERN)
+                .count(),
+            2,
+            "the pattern union should retain both alternatives"
+        );
+    }
+
+    #[test]
+    fn pattern_throws_text_in_string_alternative_does_not_change_precedence() {
+        let source = r#"
+function Quoted(value: unknown) -> int {
+  if (value is (int) -> int | "throws") { 1 } else { 0 }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let unions: Vec<_> = root
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::UNION_PATTERN)
+            .collect();
+        assert_eq!(unions.len(), 1, "the pipe must remain a pattern union");
+        assert!(unions.iter().all(|union| {
+            union
+                .children()
+                .filter(|node| node.kind() == SyntaxKind::TYPE_PATTERN)
+                .count()
+                == 2
+        }));
     }
 
     // ============ Pattern parsing ============

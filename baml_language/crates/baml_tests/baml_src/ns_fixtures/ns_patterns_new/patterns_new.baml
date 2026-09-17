@@ -81,6 +81,25 @@ function fn_return_widens(cb: (int) -> int throws never) -> int {
     }
 }
 
+// A trailing `throws` disambiguates the bare return union from pattern
+// chaining, so both this spelling and the explicitly parenthesized control
+// describe one function-type pattern.
+function if_let_fn_union_return(cb: (int) -> int | string throws unknown) -> bool {
+    if let f: (int) -> int | string throws unknown = cb {
+        true
+    } else {
+        false
+    }
+}
+
+function if_let_fn_parenthesized_union_return(cb: (int) -> (int | string) throws unknown) -> bool {
+    if let f: (int) -> (int | string) throws unknown = cb {
+        true
+    } else {
+        false
+    }
+}
+
 type Number = int | float
 function int_widens_to_alias(v: Number) -> int {
     match (v) {
