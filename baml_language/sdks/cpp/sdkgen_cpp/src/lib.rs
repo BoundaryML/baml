@@ -1563,16 +1563,12 @@ fn translate_ty(
                 };
                 return Translated::Cpp(format!("::baml::function_spec<{output}>"));
             }
-            if wire_name == "ai.stream.Stream" && args.len() == 2 {
-                let partial = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
+            if wire_name == "ai.stream.Stream" && args.len() == 1 {
+                let value = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
                     Translated::Cpp(ty) => ty,
                     other => return other,
                 };
-                let output = match translate_ty(pool, names, &args[1], emitted_types, boxed) {
-                    Translated::Cpp(ty) => ty,
-                    other => return other,
-                };
-                return Translated::Cpp(format!("::baml::stream<{partial}, {output}>"));
+                return Translated::Cpp(format!("::baml::stream<{value}>"));
             }
             // Type args occur only on generic-class instantiations, and
             // generic classes never emit this slice.

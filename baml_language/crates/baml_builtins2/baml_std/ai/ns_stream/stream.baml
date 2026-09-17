@@ -485,14 +485,17 @@ class TurnStream {
 /// The typed partial-value stream returned by an LLM function's `@stream`
 /// projection. This is the one canonical host-stream class; tagged handles carry
 /// its FQN across FFI so host bridges do not need to hardcode a namespace.
-class Stream<TStream, TFinal> {
+///
+/// Partial and final values share one type: a partial is the declared type parsed
+/// from the text received so far.
+class Stream<T> {
     _next_text: () -> string? throws root.errors.InvokeError,
-    _cache: baml.sap._ParseCache<TStream, TFinal>,
+    _cache: baml.sap._ParseCache<T>,
     _text: string,
     _finished: bool,
 
     /// Return the next parsed partial value, or Done after EOF.
-    function next(self) -> TStream | Done {
+    function next(self) -> T | Done {
         while (true) {
             if (self._finished) {
                 return Done {  };
@@ -504,10 +507,10 @@ class Stream<TStream, TFinal> {
                 },
                 let s: string => {
                     self._text = self._text + s;
-                    let parsed: TStream | baml.sap._NoYield = self._cache._parse_partial(self._text);
+                    let parsed: T | baml.sap._NoYield = self._cache._parse_partial(self._text);
                     match (parsed) {
                         baml.sap._NoYield => {},
-                        let p: TStream => {
+                        let p: T => {
                             return p;
                         },
                     }
@@ -518,7 +521,7 @@ class Stream<TStream, TFinal> {
     }
 
     /// Drain the stream and parse the accumulated text as the final value.
-    function final(self) -> TFinal {
+    function final(self) -> T {
         while (!self._finished) {
             match (self._next_text()) {
                 null => {
@@ -544,11 +547,11 @@ class Stream<TStream, TFinal> {
 /// non-streaming client fails at the call site; the spec's DEFAULT client is
 /// only checked at runtime (ai.errors.StreamingUnsupported when it cannot
 /// stream).
-function from_spec<TStream, TFinal>(
-    spec: root.FunctionSpec<TFinal>,
+function from_spec<T>(
+    spec: root.FunctionSpec<T>,
     client: StreamingClient? = null,
     on_event: ((root.events.Event) -> void)? = null,
-) -> Stream<TStream, TFinal> {
+) -> Stream<T> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
             message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
@@ -620,7 +623,7 @@ function from_spec<TStream, TFinal>(
                 _ => throw root.errors.normalize(e),
             }
         },
-        _cache: baml.sap._new_parse_cache<TStream, TFinal>(),
+        _cache: baml.sap._new_parse_cache<T>(),
         _text: "",
         _finished: false,
     }

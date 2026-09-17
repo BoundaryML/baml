@@ -41,7 +41,7 @@ pub(crate) struct TranslateCtx {
     /// runtime `.py` path, where callable types fall back to
     /// `typing.Callable[..., R]` (Protocol classes are stub-only).
     pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
-    /// Rewrite source `ai.stream.Stream<T, F>` to the underlying host
+    /// Rewrite source `ai.stream.Stream<T>` to the underlying host
     /// `_BamlStream` type. `Stream` is a host re-export rather than a normal
     /// generated class, so retaining the source spelling in annotations is
     /// not valid Python codegen.
@@ -89,10 +89,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         Ty::Class(name, args) => {
             if ctx.type_stream_accessors
                 && is_ai_stream_type(name)
-                && let [stream, final_value] = &**args
+                && let [value] = &**args
             {
-                let stream_type = translate_ty(stream, ctx);
-                let yield_type = translate_stream_yield_ty(stream, ctx);
+                let stream_type = translate_ty(value, ctx);
+                let yield_type = translate_stream_yield_ty(value, ctx);
                 let next_type = if ctx.include_stream_done {
                     let done = if ctx.current_leaf.segments == ["ai", "stream"] {
                         "Done"
@@ -107,7 +107,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                     "_BamlStream[{}, {}, {}]",
                     next_type,
                     yield_type,
-                    translate_ty(final_value, ctx),
+                    translate_ty(value, ctx),
                 );
             }
             let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();

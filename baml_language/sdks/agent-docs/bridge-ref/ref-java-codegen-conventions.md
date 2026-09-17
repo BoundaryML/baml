@@ -210,8 +210,7 @@ rules digest, not the rationale log).
   `baml_version::CANONICAL_VERSION`, mirroring `bridge_python`
   (`bridge_java/src/lib.rs:118`); a canonical-version mismatch surfaces as
   a Java exception.
-- **Streams** **[decided]** (OWNER, 2026-07-18; landed): `BamlStream<TPartial,
-  TFinal>` runtime wrapper (`baml_bridge`) with `next()` / `next_async()` /
+- **Streams** **[decided]** (OWNER, 2026-07-18; landed): `BamlStream<T>` runtime wrapper (`baml_bridge`) with `next()` / `next_async()` /
   `get_final()` / `get_final_async()`. Python spells the last pair `final()` /
   `final_async()`, but `final` is a Java reserved word — the getter is
   **`get_final`** (an explicit OWNER override of the `$`-escape default, i.e.

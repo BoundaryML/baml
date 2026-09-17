@@ -3690,7 +3690,7 @@ impl BexEngine {
         // bindings (source (b)); fold in source (a): class type args recovered
         // from a generic `self` receiver (instance methods). A generic instance
         // method called by name leaves its declared types with the class's type
-        // vars unsubstituted (e.g. `Stream.next`'s `TStream | Done`);
+        // vars unsubstituted (e.g. `Stream.next`'s `T | Done`);
         // the inbound `self` handle carries them concretely, so zipping the
         // declared `self` against the actual recovers the bindings. See
         // bridge-generics/streaming/04. `collect_type_var_bindings` only fills
@@ -4595,7 +4595,7 @@ impl BexEngine {
         // For a bound method on a generic class, substitute the declared return
         // type's class type vars from the receiver's concrete type args (seeded
         // above from the instance). Mirrors the named-entry path in
-        // `call_function_bound_args`; without it a generic method's `TStream`-like
+        // `call_function_bound_args`; without it a generic method's `T`-like
         // return arm stays an unsubstituted type var and host-return conversion
         // panics on a concrete value. See bridge-generics/streaming/04.
         if receiver.is_some() {

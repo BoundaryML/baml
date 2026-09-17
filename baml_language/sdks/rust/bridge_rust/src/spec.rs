@@ -302,13 +302,14 @@ impl<Output: BamlValue> __BamlValuePrivate for FunctionSpec<Output> {
     }
 }
 
-/// A live `ai.stream.Stream<Partial, Output>` capability.
-pub struct Stream<Partial, Output> {
+/// A live `ai.stream.Stream<T>` capability. A partial and the settled value
+/// share the one type: a partial is `T` parsed from the text received so far.
+pub struct Stream<T> {
     handle: Arc<CapabilityHandle>,
-    marker: PhantomData<fn() -> (Partial, Output)>,
+    marker: PhantomData<fn() -> T>,
 }
 
-impl<Partial, Output> Clone for Stream<Partial, Output> {
+impl<T> Clone for Stream<T> {
     fn clone(&self) -> Self {
         Self {
             handle: Arc::clone(&self.handle),
@@ -317,16 +318,16 @@ impl<Partial, Output> Clone for Stream<Partial, Output> {
     }
 }
 
-impl<Partial, Output> std::fmt::Debug for Stream<Partial, Output> {
+impl<T> std::fmt::Debug for Stream<T> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("Stream { .. }")
     }
 }
 
-impl<Partial: BamlValue, Output: BamlValue> Stream<Partial, Output> {
+impl<T: BamlValue> Stream<T> {
     /// Yield one partial, or `None` for the distinct `ai.stream.Done`
     /// sentinel. A nullable partial is therefore `Some(None)`, not done.
-    pub fn next(&self) -> Result<Option<Partial>, Error<Infallible>> {
+    pub fn next(&self) -> Result<Option<T>, Error<Infallible>> {
         let value: wire::BamlOutboundValue = crate::runtime::invoke_sync(
             "ai.stream.Stream.next",
             crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
@@ -335,7 +336,7 @@ impl<Partial: BamlValue, Output: BamlValue> Stream<Partial, Output> {
         decode_stream_item(value).map_err(Error::Decode)
     }
 
-    pub async fn next_async(&self) -> Result<Option<Partial>, Error<Infallible>> {
+    pub async fn next_async(&self) -> Result<Option<T>, Error<Infallible>> {
         let value: wire::BamlOutboundValue = crate::runtime::invoke(
             "ai.stream.Stream.next",
             crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
@@ -346,7 +347,7 @@ impl<Partial: BamlValue, Output: BamlValue> Stream<Partial, Output> {
     }
 
     /// Drain the stream and return its settled output.
-    pub fn final_(&self) -> Result<Output, Error<Infallible>> {
+    pub fn final_(&self) -> Result<T, Error<Infallible>> {
         crate::runtime::invoke_sync(
             "ai.stream.Stream.final",
             crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
@@ -354,7 +355,7 @@ impl<Partial: BamlValue, Output: BamlValue> Stream<Partial, Output> {
         )
     }
 
-    pub async fn final_async(&self) -> Result<Output, Error<Infallible>> {
+    pub async fn final_async(&self) -> Result<T, Error<Infallible>> {
         crate::runtime::invoke(
             "ai.stream.Stream.final",
             crate::encode::kwargs(vec![("self", Some(self.to_baml()))]),
@@ -364,9 +365,9 @@ impl<Partial: BamlValue, Output: BamlValue> Stream<Partial, Output> {
     }
 }
 
-fn decode_stream_item<Partial: BamlValue>(
+fn decode_stream_item<T: BamlValue>(
     value: wire::BamlOutboundValue,
-) -> Result<Option<Partial>, DecodeError> {
+) -> Result<Option<T>, DecodeError> {
     let unwrapped = crate::decode::unwrap(value.clone());
     if matches!(
         unwrapped.value,
@@ -374,11 +375,11 @@ fn decode_stream_item<Partial: BamlValue>(
     ) {
         Ok(None)
     } else {
-        Partial::from_baml(value).map(Some)
+        T::from_baml(value).map(Some)
     }
 }
 
-impl<Partial: BamlValue, Output: BamlValue> __BamlValuePrivate for Stream<Partial, Output> {
+impl<T: BamlValue> __BamlValuePrivate for Stream<T> {
     fn to_baml(&self) -> wire::InboundValue {
         self.handle.to_baml()
     }
@@ -395,10 +396,7 @@ impl<Partial: BamlValue, Output: BamlValue> __BamlValuePrivate for Stream<Partia
     }
 
     fn baml_ty() -> wire::BamlTy {
-        crate::baml_value::internal::class_ty(
-            "ai.stream.Stream",
-            vec![Partial::baml_ty(), Output::baml_ty()],
-        )
+        crate::baml_value::internal::class_ty("ai.stream.Stream", vec![T::baml_ty()])
     }
 }
 

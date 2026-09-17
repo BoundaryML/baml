@@ -22,7 +22,11 @@ function newFunctionCall(): bigint {
     return BigInt(nativeNewFunctionCall());
 }
 
-export class BamlStream<TStream, TFinal> {
+/**
+ * A live `ai.stream.Stream<T>`. A partial and the settled value share the one
+ * type: a partial is `T` parsed from the text received so far.
+ */
+export class BamlStream<T> {
     private _handle: BamlHandle;
     private _classFqn: string;
 
@@ -35,8 +39,8 @@ export class BamlStream<TStream, TFinal> {
     }
 
     /** Internal: produce a fresh BamlStream from a BamlHandle. Used by proto decode. */
-    static _fromHandle<TStream, TFinal>(handle: BamlHandle, classFqn: string): BamlStream<TStream, TFinal> {
-        return new BamlStream<TStream, TFinal>(handle, classFqn);
+    static _fromHandle<T>(handle: BamlHandle, classFqn: string): BamlStream<T> {
+        return new BamlStream<T>(handle, classFqn);
     }
 
     /** Internal: expose the inner BamlHandle for inbound encode. */
@@ -44,17 +48,17 @@ export class BamlStream<TStream, TFinal> {
         return this._handle;
     }
 
-    next(): TStream {
-        return this._callSync(`${this._classFqn}.next`) as TStream;
+    next(): T {
+        return this._callSync(`${this._classFqn}.next`) as T;
     }
-    async nextAsync(): Promise<TStream> {
-        return (await this._callAsync(`${this._classFqn}.next`)) as TStream;
+    async nextAsync(): Promise<T> {
+        return (await this._callAsync(`${this._classFqn}.next`)) as T;
     }
-    final(): TFinal {
-        return this._callSync(`${this._classFqn}.final`) as TFinal;
+    final(): T {
+        return this._callSync(`${this._classFqn}.final`) as T;
     }
-    async finalAsync(): Promise<TFinal> {
-        return (await this._callAsync(`${this._classFqn}.final`)) as TFinal;
+    async finalAsync(): Promise<T> {
+        return (await this._callAsync(`${this._classFqn}.final`)) as T;
     }
 
     private _callSync(fqn: string): unknown {

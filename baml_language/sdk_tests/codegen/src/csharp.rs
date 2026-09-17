@@ -163,9 +163,9 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
 
     for expected in [
         "BamlFunctionSpec<string> DeterministicSpec(",
-        "BamlStream<string, string> DeterministicStream(",
+        "BamlStream<string> DeterministicStream(",
         "BamlFunctionSpec<global::CsharpStreaming.StreamEnvelope> StructuredSpec(",
-        "BamlStream<global::CsharpStreaming.StreamEnvelope, global::CsharpStreaming.StreamEnvelope> StructuredStream(",
+        "BamlStream<global::CsharpStreaming.StreamEnvelope> StructuredStream(",
         "BamlGeneratedContract.CreateStream(",
         "BamlOptional<global::Baml.BamlValue> client = default",
     ] {

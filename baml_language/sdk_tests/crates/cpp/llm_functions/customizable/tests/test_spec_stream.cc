@@ -19,9 +19,9 @@ static_assert(std::is_same<string_spec, expected_string_spec>::value,
 
 using string_stream = decltype(baml_sdk::lorem::stream_e2e_extract_stream(
     std::declval<const std::string&>()));
-using expected_string_stream = baml::stream<std::string, std::string>;
+using expected_string_stream = baml::stream<std::string>;
 static_assert(std::is_same<string_stream, expected_string_stream>::value,
-              "Fn_stream must expose the partial type");
+              "Fn_stream must expose the streamed type");
 
 using async_string_spec =
     decltype(baml_sdk::lorem::stream_e2e_extract_spec_async(
@@ -50,8 +50,8 @@ static_assert(std::is_same<decltype(std::declval<const media_spec&>().prompt()),
 using doc = baml_sdk::lorem::StreamingDoc;
 using doc_stream = decltype(baml_sdk::lorem::stream_e2e_extract_doc_stream(
     std::declval<const std::string&>()));
-static_assert(std::is_same<doc_stream, baml::stream<doc, doc>>::value,
-              "a class-typed stream's partial type is the class itself");
+static_assert(std::is_same<doc_stream, baml::stream<doc>>::value,
+              "a class-typed stream streams the class itself");
 
 }  // namespace
 

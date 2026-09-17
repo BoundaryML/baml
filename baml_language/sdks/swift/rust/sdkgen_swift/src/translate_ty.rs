@@ -124,7 +124,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         Ty::Class(name, args) => {
             // `ai.FunctionSpec<Final>` is a live runtime capability, never a
             // generated value-model class. Streaming belongs to the separate
-            // `ai.stream.Stream<Partial, Final>` projection.
+            // `ai.stream.Stream<T>` projection.
             if name.to_string() == AI_FUNCTION_SPEC {
                 if args.len() != 1 {
                     return None;
@@ -140,16 +140,15 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 }
                 return Some("BamlPrompt".to_string());
             }
-            // `ai.stream.Stream<Partial, Final>` is runtime-owned: it
+            // `ai.stream.Stream<T>` is runtime-owned: it
             // translates to the BamlBridge `BamlStream` wrapper, never
             // a generated struct (its state is an engine handle).
             if name.to_string() == AI_STREAM_STREAM {
-                if args.len() != 2 {
+                let [value] = &**args else {
                     return None;
-                }
-                let partial = translate_ty(&args[0], ctx)?;
-                let final_ty = translate_ty(&args[1], ctx)?;
-                return Some(format!("BamlStream<{partial}, {final_ty}>"));
+                };
+                let value = translate_ty(value, ctx)?;
+                return Some(format!("BamlStream<{value}>"));
             }
             let path = TranslateCtx::named_ref(name, &ctx.supported_classes)?;
             if args.is_empty() {

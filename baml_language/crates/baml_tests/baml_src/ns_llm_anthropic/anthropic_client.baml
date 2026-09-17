@@ -142,7 +142,7 @@ function anth_invoke_label(cl: anthropic.Client, input: ai.ModelTurnInput) -> st
 }
 
 function anth_stream_value(cl: anthropic.Client) -> string {
-    let stream = ai.stream.from_spec<string, string>(
+    let stream = ai.stream.from_spec<string>(
         AnthMockAsk@spec("Say pong."),
         client = cl,
     );
@@ -1130,7 +1130,7 @@ function anth_live_answers() -> bool {
 }
 
 function anth_live_streams() -> bool {
-    let stream = ai.stream.from_spec<string, string>(AnthLiveAsk@spec("Say pong."));
+    let stream = ai.stream.from_spec<string>(AnthLiveAsk@spec("Say pong."));
     stream.final().trim().length() > 0
 }
 

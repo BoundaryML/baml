@@ -188,10 +188,9 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 let output = translate_inner(&args[0], ctx, true)?;
                 return Ok(quote! { ::baml_bridge::FunctionSpec<#output> });
             }
-            if builtin == "ai.stream.Stream" && args.len() == 2 {
-                let partial = translate_inner(&args[0], ctx, true)?;
-                let output = translate_inner(&args[1], ctx, true)?;
-                return Ok(quote! { ::baml_bridge::Stream<#partial, #output> });
+            if builtin == "ai.stream.Stream" && args.len() == 1 {
+                let value = translate_inner(&args[0], ctx, true)?;
+                return Ok(quote! { ::baml_bridge::Stream<#value> });
             }
             if builtin == "ai.Prompt" && args.is_empty() {
                 return Ok(quote! { ::baml_bridge::Prompt });

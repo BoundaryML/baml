@@ -1124,9 +1124,8 @@ fn collect_projected_codec_types(
         GoTy::FunctionSpec { output } => {
             collect_projected_codec_types(output, owner_package, pool, projection, collected);
         }
-        GoTy::Stream { partial, final_ } => {
-            collect_projected_codec_types(partial, owner_package, pool, projection, collected);
-            collect_projected_codec_types(final_, owner_package, pool, projection, collected);
+        GoTy::Stream { value } => {
+            collect_projected_codec_types(value, owner_package, pool, projection, collected);
         }
         GoTy::Function(key) => {
             collected
@@ -1354,9 +1353,7 @@ fn supported_go_type(ty: &GoTy, classes: &BTreeSet<Name>) -> bool {
                 && type_var_candidate_reifiable(member, classes)
         }),
         GoTy::FunctionSpec { output } => supported_go_type(output, classes),
-        GoTy::Stream { partial, final_ } => {
-            supported_go_type(partial, classes) && supported_go_type(final_, classes)
-        }
+        GoTy::Stream { value } => supported_go_type(value, classes),
         // Function values need direction-specific generated adapters. Classes,
         // aliases, and ordinary output positions use this bidirectional check
         // and therefore continue to omit them.
@@ -2385,10 +2382,9 @@ fn add_function_surface_imports(
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             add_function_surface_imports(output, surface_owner_package, context, imports);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            add_function_surface_imports(partial, surface_owner_package, context, imports);
-            add_function_surface_imports(final_, surface_owner_package, context, imports);
+            add_function_surface_imports(value, surface_owner_package, context, imports);
         }
         GoTy::Map { key, value } => {
             add_function_surface_imports(key, surface_owner_package, context, imports);
@@ -2481,10 +2477,9 @@ fn add_projected_type_imports(
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             add_projected_type_imports(output, context, imports, visited);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            add_projected_type_imports(partial, context, imports, visited);
-            add_projected_type_imports(final_, context, imports, visited);
+            add_projected_type_imports(value, context, imports, visited);
         }
         GoTy::Map { key, value } => {
             add_projected_type_imports(key, context, imports, visited);
@@ -2560,10 +2555,9 @@ fn add_projected_surface_imports(
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             add_projected_surface_imports(output, surface_owner_package, context, imports);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            add_projected_surface_imports(partial, surface_owner_package, context, imports);
-            add_projected_surface_imports(final_, surface_owner_package, context, imports);
+            add_projected_surface_imports(value, surface_owner_package, context, imports);
         }
         GoTy::Map { key, value } => {
             add_projected_surface_imports(key, surface_owner_package, context, imports);
@@ -2748,18 +2742,11 @@ fn render_projected_go_type(
                 type_vars,
             ),
         ),
-        GoTy::Stream { partial, final_ } => format!(
-            "{}.Stream[{}, {}]",
+        GoTy::Stream { value } => format!(
+            "{}.Stream[{}]",
             GeneratorIdent::RuntimePackage,
             render_projected_go_type(
-                partial,
-                current_baml_package,
-                current_package,
-                names,
-                type_vars,
-            ),
-            render_projected_go_type(
-                final_,
+                value,
                 current_baml_package,
                 current_package,
                 names,
@@ -3133,18 +3120,10 @@ fn projected_output_decoder(
                 type_vars,
             ),
         ),
-        GoTy::Stream { partial, final_ } => format!(
-            "{runtime}.DecodeStream({}, {})",
+        GoTy::Stream { value } => format!(
+            "{runtime}.DecodeStream({})",
             projected_output_decoder(
-                partial,
-                current_baml_package,
-                current_package,
-                names,
-                codecs,
-                type_vars,
-            ),
-            projected_output_decoder(
-                final_,
+                value,
                 current_baml_package,
                 current_package,
                 names,
@@ -3800,10 +3779,7 @@ fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
             .iter()
             .any(|argument| projected_contains_named_type_var(argument, parameter)),
         GoTy::FunctionSpec { output } => projected_contains_named_type_var(output, parameter),
-        GoTy::Stream { partial, final_ } => {
-            projected_contains_named_type_var(partial, parameter)
-                || projected_contains_named_type_var(final_, parameter)
-        }
+        GoTy::Stream { value } => projected_contains_named_type_var(value, parameter),
         GoTy::List(inner) | GoTy::Optional(inner) => {
             projected_contains_named_type_var(inner, parameter)
         }
@@ -4262,10 +4238,9 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
             "{runtime}.ClassBAMLType(\"ai.FunctionSpec\", {})",
             baml_type_descriptor(output, names),
         ),
-        GoTy::Stream { partial, final_ } => format!(
-            "{runtime}.ClassBAMLType(\"ai.stream.Stream\", {}, {})",
-            baml_type_descriptor(partial, names),
-            baml_type_descriptor(final_, names),
+        GoTy::Stream { value } => format!(
+            "{runtime}.ClassBAMLType(\"ai.stream.Stream\", {})",
+            baml_type_descriptor(value, names),
         ),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")

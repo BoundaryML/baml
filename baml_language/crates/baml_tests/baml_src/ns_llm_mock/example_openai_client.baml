@@ -9,7 +9,7 @@
 // the runner explicitly:
 //
 //   ai.Agent.new(client = cl).run(Fn@spec(args))        // non-streaming
-//   ai.stream.from_spec<Out, Out>(Fn@spec(args), client = cl)  // streaming
+//   ai.stream.from_spec<Out>(Fn@spec(args), client = cl)  // streaming
 //
 // which is exactly what a direct `Fn(args)` call desugars to
 // (crates/baml_compiler2_ast/src/lower_expr_body.rs:729, :819). `from_spec`
@@ -72,7 +72,7 @@ function example_openai_streaming() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string, string>(
+            let stream = ai.stream.from_spec<string>(
                 MockEcho@spec("Say pong."),
                 client = cl,
             );

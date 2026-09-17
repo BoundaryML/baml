@@ -370,7 +370,7 @@ When the AST layer encounters an LLM function, it expands it into the original f
 | `render_prompt` | `FuncName@render_prompt` | Same as parent | `ai.Prompt` | Renders the prompt |
 | `build_request` | `FuncName@build_request` | Parent's, plus its `client` override | `baml.http.Request` | Builds the provider request without sending it |
 | `parse` | `FuncName@parse` | `json: string` | Same as parent | Parses an existing reply |
-| `stream` | `FuncName@stream` | Parent's, with `client` narrowed to `ai.stream.StreamingClient?` | `ai.stream.Stream<Out, Out>` | One-turn streaming; not generated for functions that can hold tools |
+| `stream` | `FuncName@stream` | Parent's, with `client` narrowed to `ai.stream.StreamingClient?` | `ai.stream.Stream<Out>` | One-turn streaming; not generated for functions that can hold tools |
 
 **Implementation** (`baml_compiler2_ast/src/companions.rs`):
 

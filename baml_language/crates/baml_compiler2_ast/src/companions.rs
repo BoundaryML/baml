@@ -229,7 +229,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 /// Build the `<Fn>@stream` companion: one-turn streaming over the function's
-/// own spec, returning `ai.stream.Stream<Out, Out>`. It takes the parent's
+/// own spec, returning `ai.stream.Stream<Out>`. It takes the parent's
 /// parameters with the injected `client` narrowed to
 /// `ai.stream.StreamingClient?`. A function that can hold tools gets none:
 /// streaming does not run the tool loop.
@@ -246,7 +246,7 @@ fn llm_stream(
     let span = parent.span;
     // Partial and final values share the return type: there is no separate
     // stream-shaped type.
-    let type_args = vec![out.clone(), out];
+    let type_args = vec![out];
     let return_type = (TypeExprKind::Path {
         segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
         generic_args: type_args.clone(),

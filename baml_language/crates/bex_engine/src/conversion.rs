@@ -2225,9 +2225,9 @@ fn wrap_selected_union_member(
 ///
 /// Used to recover a generic method's class type arguments from the *actual*
 /// `self` value at a host call: the declared `self` type still mentions the
-/// class's type variables (e.g. `Stream<TStream, TFinal>`), while the inbound
-/// receiver carries them concretely (e.g. `Stream<null | string, string>`).
-/// Zipping the two yields `{TStream -> null | string, TFinal -> string}`, which
+/// class's type variables (e.g. `Stream<T>`), while the inbound
+/// receiver carries them concretely (e.g. `Stream<string>`).
+/// Zipping the two yields `{T -> string}`, which
 /// [`substitute_type_vars`] then applies to the method's declared return type so
 /// the host-return conversion sees concrete arms instead of bare type variables.
 pub(crate) fn collect_type_var_bindings<N: Clone>(
@@ -2331,9 +2331,9 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
 /// recursing through container/aggregate positions. Type variables absent from
 /// `bindings` (e.g. a method's own, unbound type params) are left as-is.
 ///
-/// This is the fix for the host-driven streaming `TStream`-typevar bug: a
+/// This is the fix for the host-driven streaming type-var bug: a
 /// generic method's declared return type (e.g. `Stream.next`'s
-/// `TStream | Done`) reaches the FFI return conversion with `TStream`
+/// `T | Done`) reaches the FFI return conversion with `T`
 /// unsubstituted, so a concrete partial value matched no union member and the
 /// conversion panicked. Substituting from the receiver's bound type args (see
 /// [`collect_type_var_bindings`]) makes the concrete arm present.
@@ -3223,8 +3223,8 @@ fn value_matches_type_with_definitions(
         // `Unknown` is the engine's "any value matches" sentinel
         // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::Unknown`).
         // Used by the stdlib generics hardcode in `baml_compiler2_mir::lower`
-        // so e.g. `Stream<TStream, TFinal>.next() -> TStream | Done`
-        // accepts any partial-stream payload as the `TStream` arm.
+        // so e.g. `Stream<T>.next() -> T | Done`
+        // accepts any partial-stream payload as the `T` arm.
         (_, RuntimeTy::Unknown) => true,
         (BexExternalValue::Null, RuntimeTy::Null) => true,
         (BexExternalValue::Null, RuntimeTy::Void) => true,

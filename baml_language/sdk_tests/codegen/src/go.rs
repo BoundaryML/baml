@@ -385,7 +385,7 @@ fn stage_package_edges(crate_dir: &std::path::Path) {
                     vec![BaseName::new("stream")],
                     BaseName::new("Stream"),
                 ),
-                vec![ty_string(), ty_string()],
+                vec![ty_string()],
             ),
             true,
         ),

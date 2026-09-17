@@ -17,7 +17,7 @@ import (
 
 var (
 	_ func(context.Context, string) (baml_go.FunctionSpec[baml_sdk.LoremResume], error)                                                                    = baml_sdk.LoremExtractResumeSpec
-	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeStreamOption) (baml_go.Stream[baml_sdk.LoremResume, baml_sdk.LoremResume], error) = baml_sdk.LoremExtractResumeStream
+	_ func(context.Context, string, ...baml_sdk.LoremExtractResumeStreamOption) (baml_go.Stream[baml_sdk.LoremResume], error) = baml_sdk.LoremExtractResumeStream
 )
 
 // SDK_PARITY_LINT(skip): pins the Go generator's typed option surface for flat stream controls.

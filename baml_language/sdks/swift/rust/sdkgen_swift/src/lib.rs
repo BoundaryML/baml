@@ -827,11 +827,8 @@ mod tests {
             vec![baml_base::Name::new("stream")],
             baml_base::Name::new("Stream"),
         );
-        let stream = Ty::Class(stream_name, Box::new([string(), string()]));
-        assert_eq!(
-            t(&stream).as_deref(),
-            Some("BamlStream<Swift.String, Swift.String>")
-        );
+        let stream = Ty::Class(stream_name, Box::new([string()]));
+        assert_eq!(t(&stream).as_deref(), Some("BamlStream<Swift.String>"));
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(
             t(&union(vec![int(), string(), null()])).as_deref(),

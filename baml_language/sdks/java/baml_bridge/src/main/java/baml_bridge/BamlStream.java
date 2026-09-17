@@ -14,8 +14,8 @@ import java.util.concurrent.CompletableFuture;
  * method FQNs derived from the tagged handle's carried class identity, passing
  * this wrapper as the {@code self} receiver — exactly like any codegen-emitted
  * instance method. The args encoder emits a {@code handle_value} for the
- * receiver (see {@code ProtoWriter}), the engine substitutes the generics
- * {@code TPartial} / {@code TFinal}, and the result decodes typed.
+ * receiver (see {@code ProtoWriter}), the engine substitutes the generic
+ * {@code T}, and the result decodes typed.
  *
  * <p>{@code get_final} / {@code get_final_async} escape Python's
  * {@code final} / {@code final_async}: {@code final} is a Java reserved word, so
@@ -26,15 +26,15 @@ import java.util.concurrent.CompletableFuture;
  * <p>Exhaustion contract (Python parity): {@link #next()} returns partial values
  * until it returns an {@link baml_sdk.ai.stream.Done} VALUE — no
  * {@code null} sentinel, no exception. Because Java generics cannot express
- * {@code TPartial | Done}, the declared return is {@code TPartial}
+ * {@code T | Done}, the declared return is {@code T}
  * (erased to {@code Object}); callers dispatch with
  * {@code if (v instanceof Done)} — the faithful port of Python's sentinel
  * duck-typing.
  *
- * @param <TPartial> the partial (in-flight) element type
- * @param <TFinal>   the final (completed) value type
+ * @param <T> the stream's value type: a partial is {@code T} parsed from the text
+ *     received so far, and the final value is the completed {@code T}
  */
-public final class BamlStream<TPartial, TFinal> {
+public final class BamlStream<T> {
     /** The single positional arg name for the receiver, mirroring Python's {@code {"self": self}}. */
     private static final String[] SELF_NAMES = {"self"};
 
@@ -55,7 +55,7 @@ public final class BamlStream<TPartial, TFinal> {
      * {@code ADT_TAGGED_HEAP_HANDLE} decode arm). The engine minted {@code handle}
      * as the streaming call's result; this wrapper now owns that row.
      */
-    public static BamlStream<?, ?> fromHandle(BamlHandle handle) {
+    public static BamlStream<?> fromHandle(BamlHandle handle) {
         return new BamlStream<>(handle);
     }
 
@@ -87,27 +87,27 @@ public final class BamlStream<TPartial, TFinal> {
      * {@code Done} is a registered runtime class.
      */
     @SuppressWarnings("unchecked")
-    public TPartial next() {
-        return (TPartial) BamlFfi.callSync(methodFqn("next"), SELF_NAMES, new Object[] {this}, null);
+    public T next() {
+        return (T) BamlFfi.callSync(methodFqn("next"), SELF_NAMES, new Object[] {this}, null);
     }
 
     /** Asynchronous sibling of {@link #next()}. */
     @SuppressWarnings("unchecked")
-    public CompletableFuture<TPartial> next_async() {
-        return (CompletableFuture<TPartial>) (CompletableFuture<?>)
+    public CompletableFuture<T> next_async() {
+        return (CompletableFuture<T>) (CompletableFuture<?>)
                 BamlFfi.callAsync(methodFqn("next"), SELF_NAMES, new Object[] {this}, null);
     }
 
     /** The stream's final (completed) value. */
     @SuppressWarnings("unchecked")
-    public TFinal get_final() {
-        return (TFinal) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null);
+    public T get_final() {
+        return (T) BamlFfi.callSync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null);
     }
 
     /** Asynchronous sibling of {@link #get_final()}. */
     @SuppressWarnings("unchecked")
-    public CompletableFuture<TFinal> get_final_async() {
-        return (CompletableFuture<TFinal>) (CompletableFuture<?>)
+    public CompletableFuture<T> get_final_async() {
+        return (CompletableFuture<T>) (CompletableFuture<?>)
                 BamlFfi.callAsync(methodFqn("final"), SELF_NAMES, new Object[] {this}, null);
     }
 }

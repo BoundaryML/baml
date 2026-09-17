@@ -164,14 +164,14 @@ as cancellation; an unrelated `OperationCanceledException` remains a fault.
 A compiler-declared stream companion is one cold synchronous factory:
 
 ```csharp
-static async Task<TFinal> ConsumeStreamAsync<TPartial, TFinal>(
-    BamlStream<TPartial, TFinal> stream,
-    Func<TPartial, Task> onPartial,
+static async Task<T> ConsumeStreamAsync<T>(
+    BamlStream<T> stream,
+    Func<T, Task> onPartial,
     CancellationToken cancellationToken)
 {
     await using (stream)
     {
-        await foreach (TPartial partial in
+        await foreach (T partial in
             stream.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             await onPartial(partial).ConfigureAwait(false);
@@ -239,7 +239,7 @@ Compiler-declared modular operations use the same owner and typed arguments:
 - `FunctionBuildRequest` / `FunctionBuildRequestAsync`
 - `FunctionBuildStreamRequest` / `FunctionBuildStreamRequestAsync`
 - `FunctionParseResponse` / `FunctionParseResponseAsync`
-- `FunctionParseStreamResponse`, returning `BamlStream<TPartial,TFinal>`
+- `FunctionParseStreamResponse`, returning `BamlStream<T>`
 
 The current BAML `baml.http.Request` value contains only method, URL, a
 single-value header map, and a UTF-8 string body. It does not carry the request

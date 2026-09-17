@@ -1214,12 +1214,10 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
         let done_name = cg_name("ai", &["stream"], "Done");
-        let partial_name = cg_name("boundary", &["id"], "Partial");
-        let final_name = cg_name("boundary", &["id"], "Final");
+        let value_name = cg_name("boundary", &["id"], "Value");
         pool.insert(stream_name.clone(), class(stream_name.clone()));
         pool.insert(done_name.clone(), class(done_name));
-        pool.insert(partial_name.clone(), class(partial_name.clone()));
-        pool.insert(final_name.clone(), class(final_name.clone()));
+        pool.insert(value_name.clone(), class(value_name.clone()));
         pool.insert(
             cg_name("boundary", &[], "id"),
             zero_arg_func("id", Ty::String, "core.baml", 0),
@@ -1228,10 +1226,7 @@ mod tests {
             cg_name("boundary", &["id"], "current"),
             zero_arg_func(
                 "current",
-                class_ty(
-                    stream_name,
-                    vec![class_ty(partial_name, vec![]), class_ty(final_name, vec![])],
-                ),
+                class_ty(stream_name, vec![class_ty(value_name, vec![])]),
                 "id.baml",
                 0,
             ),
@@ -1253,7 +1248,7 @@ mod tests {
             "from ...ai.stream import Done as _BamlStreamDone\nfrom baml_bridge import BamlStream as _BamlStream\n"
         ));
         assert!(pyi.contains(
-            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Partial, _BamlStreamDone], vendor.boundary.id.Partial, vendor.boundary.id.Final]: ...\n"
+            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Value, _BamlStreamDone], vendor.boundary.id.Value, vendor.boundary.id.Value]: ...\n"
         ));
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
@@ -1666,7 +1661,7 @@ mod tests {
         pool.insert(done_name.clone(), class(done_name));
 
         let mut f = bare_func("extract_resume_stream", "x.baml", 0);
-        f.return_type = class_ty(stream_name, vec![Ty::Int, Ty::String]);
+        f.return_type = class_ty(stream_name, vec![Ty::Int]);
         pool.insert(
             cg_name("user", &["lorem"], "extract_resume_stream"),
             Symbol::Function(f),
@@ -1677,7 +1672,7 @@ mod tests {
         assert!(stub.contains("from ..ai.stream import Done as _BamlStreamDone\n"));
         assert!(stub.contains("from baml_bridge import BamlStream as _BamlStream\n"));
         assert!(stub.contains(
-            "def extract_resume_stream(x: int) -> _BamlStream[typing.Union[int, _BamlStreamDone], int, str]:"
+            "def extract_resume_stream(x: int) -> _BamlStream[typing.Union[int, _BamlStreamDone], int, int]:"
         ));
         assert!(!stub.contains("ai.stream.Stream"));
     }

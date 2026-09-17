@@ -7,7 +7,7 @@
 //! in-process BAML server replaying a checked-in SSE recording, with the
 //! env-driven `StreamStub` client pointed at it:
 //!
-//!   * string `T` — `stream_e2e_extract(text) -> string` (Stream<null | string, string>)
+//!   * string `T` — `stream_e2e_extract(text) -> string` (Stream<string>)
 //!   * class  `T` — `stream_e2e_extract_doc(text) -> StreamingDoc { title, body, word_count }`
 //!
 //! The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
@@ -25,7 +25,7 @@
 use crate::replay_harness::{replay_server, replay_server_async};
 
 // ---------------------------------------------------------------------------
-// String-typed `T` — Stream<string, string>.
+// String-typed `T` — Stream<string>.
 // ---------------------------------------------------------------------------
 
 /// Sync `next()` yields a stream of partials and drains to `None`.
@@ -97,7 +97,7 @@ fn test_streaming_e2e_stream_collect_in_baml() {
 }
 
 // ---------------------------------------------------------------------------
-// Class-typed `T` — Stream<StreamingDoc, StreamingDoc>. The case the
+// Class-typed `T` — Stream<StreamingDoc>. The case the
 // plain-`string` tests above deliberately avoid; the regression guard for the
 // class-typed streaming bug (doc 00).
 // ---------------------------------------------------------------------------

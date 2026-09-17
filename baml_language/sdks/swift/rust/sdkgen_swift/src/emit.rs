@@ -288,7 +288,7 @@ pub(crate) fn render_callable(
 
     // The caller allocates a collision-safe Swift name for this scope.
     // The wire FQN keeps `@` verbatim; an `@stream` companion remains an
-    // ordinary function returning `ai.stream.Stream<P, F>` (→ BamlStream).
+    // ordinary function returning `ai.stream.Stream<T>` (→ BamlStream).
     let bare = binding_name;
 
     // Generic functions/methods: emit a Swift generic signature when

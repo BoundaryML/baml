@@ -275,15 +275,13 @@ internal static class PrimitiveProtocol
 
     internal static BamlStreamNativeHandle DecodeStreamHandle(
         ReadOnlySpan<byte> bytes,
-        ReadOnlySpan<byte> expectedPartialType,
-        ReadOnlySpan<byte> expectedFinalType,
+        ReadOnlySpan<byte> expectedStreamType,
         string bamlFunction,
         NativeApi api)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bamlFunction);
         ArgumentNullException.ThrowIfNull(api);
-        RequireExpectedStreamType(expectedPartialType, "partial");
-        RequireExpectedStreamType(expectedFinalType, "final");
+        RequireExpectedStreamType(expectedStreamType, "value");
         BamlOutboundResult envelope = ParseCallResult(bytes, "BAML stream handle result");
         using OutboundOwnershipScope ownership = OutboundOwnershipScope.Create(envelope, api);
         var budget = new BamlDecodeBudget();
@@ -313,21 +311,17 @@ internal static class PrimitiveProtocol
         if (wire.HandleType != BamlHandleType.AdtTaggedHeapHandle
             || wire.Ty?.TyCase != BamlTy.TyOneofCase.ClassTy
             || !StringComparer.Ordinal.Equals(wire.Ty.ClassTy.Name, StreamClassIdentity)
-            || wire.Ty.ClassTy.TypeArgs.Count != 2)
+            || wire.Ty.ClassTy.TypeArgs.Count != 1)
         {
             throw new BamlProtocolException(
                 "The native bridge returned an invalid BAML stream handle descriptor.",
-                $"Expected {StreamClassIdentity}<partial, final> as ADT_TAGGED_HEAP_HANDLE; received {wire.HandleType} / {wire.Ty?.TyCase}.");
+                $"Expected {StreamClassIdentity}<T> as ADT_TAGGED_HEAP_HANDLE; received {wire.HandleType} / {wire.Ty?.TyCase}.");
         }
 
         RequireStreamTypeMetadata(
-            expectedPartialType,
+            expectedStreamType,
             wire.Ty.ClassTy.TypeArgs[0],
-            "stream partial");
-        RequireStreamTypeMetadata(
-            expectedFinalType,
-            wire.Ty.ClassTy.TypeArgs[1],
-            "stream final");
+            "stream value");
         return new BamlStreamNativeHandle(
             ownership.Claim(wire),
             wire.Ty.ClassTy.Name);

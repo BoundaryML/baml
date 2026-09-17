@@ -94,7 +94,6 @@ struct FunctionSpec<'a> {
     wire_identity: String,
     variant: CallableVariant,
     result: Ty,
-    stream_partial: Option<Ty>,
     generic_params: Vec<GenericParamSpec<'a>>,
     namespace_requests: Vec<CSharpNameRequest>,
     holder_request: CSharpNameRequest,
@@ -138,7 +137,6 @@ struct MethodSpec<'a> {
     is_static: bool,
     variant: CallableVariant,
     result: Ty,
-    stream_partial: Option<Ty>,
     type_params: Vec<GenericParamSpec<'a>>,
     method_type_param_count: usize,
     method_request: CSharpNameRequest,
@@ -417,9 +415,6 @@ fn generate_program_inner(
     let mut all_types = BTreeSet::new();
     for function in &functions {
         collect_type_closure(&function.result, model, &mut all_types)?;
-        if let Some(partial) = &function.stream_partial {
-            collect_type_closure(partial, model, &mut all_types)?;
-        }
         for argument in &function.arguments {
             collect_argument_type_closure(&argument.ty, model, &mut all_types)?;
         }
@@ -432,9 +427,6 @@ fn generate_program_inner(
         }
         for method in &class.methods {
             collect_type_closure(&method.result, model, &mut all_types)?;
-            if let Some(partial) = &method.stream_partial {
-                collect_type_closure(partial, model, &mut all_types)?;
-            }
             for argument in &method.arguments {
                 collect_argument_type_closure(&argument.ty, model, &mut all_types)?;
             }
@@ -1168,25 +1160,30 @@ fn collect_methods<'a>(
         let identity = model.callable(&key).ok_or_else(|| {
             CSharpGenerationError::MissingCallable(format!("{owner}.{}", method.name))
         })?;
-        let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
+        // A stream callable's result is the stream's one type: partials and the
+        // settled value share it.
+        let result = if is_stream_callable_variant(identity.variant) {
             let Ty::Class(stream_name, stream_types) = &method.return_type else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return {AI_STREAM_STREAM}<TPartial, TFinal>",
+                    "C# stream companion `{owner}.{}` must return {AI_STREAM_STREAM}<T>",
                     method.name
                 )));
             };
-            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
+            let [stream_type] = &**stream_types else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>",
+                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<T>",
+                    method.name
+                )));
+            };
+            if stream_name.to_string() != AI_STREAM_STREAM {
+                return Err(CSharpGenerationError::Unsupported(format!(
+                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<T>",
                     method.name
                 )));
             }
-            (stream_types[1].clone(), Some(stream_types[0].clone()))
+            stream_type.clone()
         } else {
-            (
-                project_resource_method_result(owner, class, method, &method.return_type),
-                None,
-            )
+            project_resource_method_result(owner, class, method, &method.return_type)
         };
         let result_support = require_supported_type(
             &result,
@@ -1200,14 +1197,6 @@ fn collect_methods<'a>(
                 model,
                 &format!("result of method `{owner}.{}`", method.name),
             )?;
-        }
-        if let Some(partial) = &stream_partial {
-            let partial_support = require_supported_type(
-                partial,
-                model,
-                &format!("partial result of method `{owner}.{}`", method.name),
-            );
-            partial_support?;
         }
         let argument_support: Result<(), CSharpGenerationError> =
             method.arguments.iter().try_for_each(|argument| {
@@ -1372,7 +1361,6 @@ fn collect_methods<'a>(
             is_static,
             variant: identity.variant,
             result,
-            stream_partial,
             type_params,
             method_type_param_count: method.generic_params.len(),
             method_request,
@@ -1496,27 +1484,31 @@ fn collect_functions<'a>(
                 "C# generation expected a free function without a receiver for `{name}`"
             )));
         }
-        let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
+        // A stream callable's result is the stream's one type: partials and the
+        // settled value share it.
+        let result = if is_stream_callable_variant(identity.variant) {
             let Ty::Class(stream_name, stream_types) = &function.return_type else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return {AI_STREAM_STREAM}<TPartial, TFinal>"
+                    "C# stream companion `{name}` must return {AI_STREAM_STREAM}<T>"
                 )));
             };
-            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
+            let [stream_type] = &**stream_types else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>"
+                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<T>"
+                )));
+            };
+            if stream_name.to_string() != AI_STREAM_STREAM {
+                return Err(CSharpGenerationError::Unsupported(format!(
+                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<T>"
                 )));
             }
-            (stream_types[1].clone(), Some(stream_types[0].clone()))
+            stream_type.clone()
         } else {
-            (function.return_type.clone(), None)
+            function.return_type.clone()
         };
         require_supported_type(&result, model, &format!("result of `{name}`"))?;
         if name.package().as_str() == "user" {
             require_unambiguous_csharp_unions(&result, model, &format!("result of `{name}`"))?;
-        }
-        if let Some(partial) = &stream_partial {
-            require_supported_type(partial, model, &format!("partial result of `{name}`"))?;
         }
         let argument_support: Result<(), CSharpGenerationError> =
             function.arguments.iter().try_for_each(|argument| {
@@ -1636,7 +1628,6 @@ fn collect_functions<'a>(
             wire_identity: name.to_string(),
             variant: identity.variant,
             result,
-            stream_partial,
             generic_params,
             namespace_requests,
             holder_request,
@@ -2333,24 +2324,14 @@ fn render_functions(
             render_generic_argument_builder(render, function, &program)
         };
         if is_stream_callable_variant(function.variant) {
-            let partial = function
-                .stream_partial
-                .as_ref()
-                .expect("stream functions carry their partial result type");
-            let partial_source = render.type_source_for(partial, &function.generic_params);
-            let partial_type = if function.generic_params.is_empty() {
-                format!("{program}.{}", render.type_field(partial))
-            } else {
-                render_generic_type_token(render, function, partial, &program)
-            };
             let callable = if function.generic_params.is_empty() {
                 format!("{program}.{function_field}")
             } else {
                 bound_function.to_string()
             };
             source.push_str(&format!(
-                "    public static global::Baml.BamlStream<{partial_source}, {result}> {method}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {callable},\n            {partial_type},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
-                partial_option = csharp_string(&render.wire_option_name(partial)),
+                "    public static global::Baml.BamlStream<{result}> {method}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {callable},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
+                partial_option = csharp_string(&render.wire_option_name(&function.result)),
             ));
             continue;
         }
@@ -2855,20 +2836,14 @@ fn render_method(
     }
     let builder = render_method_argument_builder(render, class, method, program);
     if is_stream_callable_variant(method.variant) {
-        let partial = method
-            .stream_partial
-            .as_ref()
-            .expect("stream methods carry their partial result type");
-        let partial_source = render.type_source_for(partial, &method.type_params);
-        let partial_type = render_method_type_token(render, method, partial, program);
         let deferred_instance = allocated(
             render.names,
             &helper_request(&generated_program_fqn(), "DeferredProgram"),
         )
         .source();
         return format!(
-            "    public {modifier}global::Baml.BamlStream<{partial_source}, {result}> {method_name}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {bound_function},\n            {partial_type},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
-            partial_option = csharp_string(&render.wire_option_name(partial)),
+            "    public {modifier}global::Baml.BamlStream<{result}> {method_name}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {bound_function},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
+            partial_option = csharp_string(&render.wire_option_name(&method.result)),
         );
     }
     format!(
@@ -5108,7 +5083,7 @@ mod tests {
                         vec![BaseName::new("stream")],
                         BaseName::new("Stream"),
                     ),
-                    Box::new([primitive_string(), primitive_string()]),
+                    Box::new([primitive_string()]),
                 ),
             )),
         );
@@ -5351,10 +5326,7 @@ mod tests {
                 "@stream",
                 CallableVariant::Stream,
                 vec![("input", primitive_string())],
-                Ty::Class(
-                    stream_name,
-                    Box::new([primitive_string(), primitive_string()]),
-                ),
+                Ty::Class(stream_name, Box::new([primitive_string()])),
             ),
         ];
         let mut symbols = HashMap::new();
@@ -5790,7 +5762,7 @@ mod tests {
         let source = stream_contract_source();
         assert_eq!(
             source
-                .matches("public static global::Baml.BamlStream<string, string> EchoStream(")
+                .matches("public static global::Baml.BamlStream<string> EchoStream(")
                 .count(),
             1,
         );
@@ -5801,7 +5773,7 @@ mod tests {
         assert!(source.contains("\"stream\""));
         assert!(source.contains("BamlGeneratedContract.CreateStream("));
         assert!(source.contains(".DeferredProgram,"));
-        assert!(source.contains("global::Baml.BamlStream<string, string>"));
+        assert!(source.contains("global::Baml.BamlStream<string>"));
         assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
         assert!(source.contains("optional: true"));
         assert!(!source.contains("BamlGeneratedCodec<global::Baml.BamlStream"));
@@ -5814,9 +5786,7 @@ mod tests {
             source.contains("public static global::Baml.BamlFunctionSpec<string> ExtractSpec(")
         );
         assert!(source.contains("Task<global::Baml.BamlFunctionSpec<string>> ExtractSpecAsync("));
-        assert!(
-            source.contains("public static global::Baml.BamlStream<string, string> ExtractStream(")
-        );
+        assert!(source.contains("public static global::Baml.BamlStream<string> ExtractStream("));
         assert!(!source.contains("ExtractStreamAsync"));
         assert!(source.contains("\"user.modular_contract.Extract@spec\""));
         assert!(source.contains("\"user.modular_contract.Extract@stream\""));
@@ -6153,7 +6123,7 @@ mod tests {
                     vec![BaseName::new("stream")],
                     BaseName::new("Stream"),
                 ),
-                Box::new([primitive_int(), Ty::Class(owner.clone(), Box::new([]))]),
+                Box::new([Ty::Class(owner.clone(), Box::new([]))]),
             ),
             throws: None,
             watchers: vec![],
@@ -6223,7 +6193,7 @@ mod tests {
         assert!(source.contains("public static global::System.Threading.Tasks.Task<"));
         assert!(source.contains("\"user.only_methods.Counter.new\""));
         assert!(source.contains(
-            "public static global::Baml.BamlStream<long, global::OnlyMethods.Counter> NewStream("
+            "public static global::Baml.BamlStream<global::OnlyMethods.Counter> NewStream("
         ));
         assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
         assert!(!source.contains("NewStreamAsync"));

@@ -976,10 +976,10 @@ mod tests {
         let e = enum_ty(name("user", &["ipsum"], "Sentiment"));
         assert_eq!(tr(&e, TyPosition::TopLevel), "baml_sdk.ipsum.Sentiment");
 
-        let stream = class_ty(name("ai", &["stream"], "Stream"), vec![string(), string()]);
+        let stream = class_ty(name("ai", &["stream"], "Stream"), vec![string()]);
         assert_eq!(
             tr(&stream, TyPosition::TopLevel),
-            "baml_bridge.BamlStream<java.lang.String, java.lang.String>"
+            "baml_bridge.BamlStream<java.lang.String>"
         );
         let done = class_ty(name("ai", &["stream"], "Done"), vec![]);
         assert_eq!(tr(&done, TyPosition::TopLevel), "baml_sdk.ai.stream.Done");

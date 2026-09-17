@@ -620,13 +620,13 @@ The runtime-owned `Stream` is re-exported: `ai.stream.Stream` resolves to
 
 **Streaming calls / `Stream`**: **LANDED** (commit `a6e3ca99e`, the streaming
 capability). `baml_bridge/BamlStream.java` is a **real**
-`BamlStream<TPartial, TFinal>` wrapping the tagged-heap handle:
+`BamlStream<T>` wrapping the tagged-heap handle:
 `next()` / `get_final()` (and their `_async` siblings) re-enter the engine via
 ordinary `BamlFfi.callSync`/`callAsync`. Decode retains the tagged handle's
 concrete `ty.class_ty.name`; the wrapper derives `<FQN>.next` / `<FQN>.final`
 from that identity and passes `this` as the `self` receiver with a **`null`
 (wire-driven) descriptor**. Generated `_stream` bindings return
-`baml_bridge.BamlStream<TStream, TFinal>` directly. Exhaustion returns a
+`baml_bridge.BamlStream<T>` directly. Exhaustion returns a
 runtime-owned `baml_sdk.ai.stream.Done` **value** (no `null`, no exception),
 registered in the typemap under `ai.stream.Done`. Decode maps
 `ADT_TAGGED_HEAP_HANDLE` to `BamlStream.fromHandle` after retaining its class

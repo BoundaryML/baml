@@ -606,7 +606,7 @@ function oai_stream_text() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let stream = ai.stream.from_spec<string, string>(
+            let stream = ai.stream.from_spec<string>(
                 OaiEcho@spec("Say pong."),
                 client = cl,
             );
@@ -627,7 +627,7 @@ test "oai_stream_text" {
 // One streamed run to completion, as a plain call so a `catch_all` at the call
 // site is unambiguous.
 function _oai_stream_final(cl: openai.ResponsesClient) -> string {
-    let stream = ai.stream.from_spec<string, string>(
+    let stream = ai.stream.from_spec<string>(
         OaiEcho@spec("Say pong."),
         client = cl,
     );
@@ -1072,7 +1072,7 @@ function oai_live_answers() -> bool {
 }
 
 function oai_live_streams() -> bool {
-    let stream = ai.stream.from_spec<string, string>(
+    let stream = ai.stream.from_spec<string>(
         OaiEcho@spec("Say pong."),
         client = _oai_live_client(),
     );

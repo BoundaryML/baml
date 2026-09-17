@@ -125,7 +125,7 @@ Require(
     "FunctionSpec.build_request did not preserve the reusable prompt media");
 
 int requestsBefore = ReplayRequestCount();
-BamlStream<string, string> finalOnly = Functions.DeterministicStream("final-only");
+BamlStream<string> finalOnly = Functions.DeterministicStream("final-only");
 Require(
     ReplayRequestCount() == requestsBefore,
     "generated FunctionStream eagerly dispatched its native factory");
@@ -143,7 +143,7 @@ Require(
     "streamed request did not carry the request-time resolved api key");
 
 int requestsBeforeEarly = ReplayRequestCount();
-BamlStream<string, string> early = Functions.DeterministicStream("dispose-early");
+BamlStream<string> early = Functions.DeterministicStream("dispose-early");
 Require(
     ReplayRequestCount() == requestsBeforeEarly,
     "second generated FunctionStream was not cold");
@@ -160,7 +160,7 @@ Require(
     "early stream disposal changed its cancellation origin");
 
 int requestsBeforePartials = ReplayRequestCount();
-BamlStream<string, string> stream = Functions.DeterministicStream("ordered-partials");
+BamlStream<string> stream = Functions.DeterministicStream("ordered-partials");
 Require(
     ReplayRequestCount() == requestsBeforePartials,
     "partial-consuming generated FunctionStream was not cold");
@@ -200,7 +200,7 @@ Require(
 
 AssertGeneratedStructuredPropertyShapes();
 int requestsBeforeStructured = ReplayRequestCount();
-BamlStream<StreamEnvelope, StreamEnvelope> structured =
+BamlStream<StreamEnvelope> structured =
     Functions.StructuredStream("stream-attributes");
 Require(
     ReplayRequestCount() == requestsBeforeStructured,

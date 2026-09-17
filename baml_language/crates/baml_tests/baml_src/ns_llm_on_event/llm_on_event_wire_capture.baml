@@ -112,7 +112,7 @@ function _wire_stream_run(capture: bool) -> string {
                 base_url = mock.base_url(),
                 capture_wire = capture,
             );
-            let stream = ai.stream.from_spec<string, string>(
+            let stream = ai.stream.from_spec<string>(
                 WireEcho@spec("Say pong."),
                 client = cl,
                 on_event = cb,

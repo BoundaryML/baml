@@ -11,19 +11,19 @@
 // `StreamStub` client pointed at it:
 //
 //   * string `T` — stream_e2e_extract(text) -> string
-//                  (BamlStream<String, String>)
+//                  (BamlStream<String>)
 //   * class  `T` — stream_e2e_extract_doc(text) -> StreamingDoc
-//                  (BamlStream<StreamingDoc, StreamingDoc>)
+//                  (BamlStream<StreamingDoc>)
 //
 // The recordings stream many SSE chunks, so each next() yields >= 10 partials
 // before Done (asserted below).
 //
 // ===========================================================================
 // java-port notes on the streaming surface:
-//   * `BamlStream<TPartial, TFinal>` is the runtime wrapper (baml_bridge). Its
-//     `next()` is declared `TPartial` but callers bind the result to `Object`:
-//     it is either a `TPartial` partial or an `ai.stream.Done`
-//     sentinel — Java generics can't express the `TPartial | Done`
+//   * `BamlStream<T>` is the runtime wrapper (baml_bridge). Its
+//     `next()` is declared `T` but callers bind the result to `Object`:
+//     it is either a `T` partial or an `ai.stream.Done`
+//     sentinel — Java generics can't express the `T | Done`
 //     union, and the `if (v instanceof Done)` control flow must compile. This
 //     is the faithful port of Python's sentinel duck-typing (a sealed
 //     `StreamItem<T>` is a possible future shape).
@@ -58,7 +58,7 @@ import org.junit.jupiter.api.Timeout;
 class TestStreamingE2e {
 
     // -----------------------------------------------------------------------
-    // String-typed `T` — BamlStream<String, String>.
+    // String-typed `T` — BamlStream<String>.
     // -----------------------------------------------------------------------
 
     @Test
@@ -66,7 +66,7 @@ class TestStreamingE2e {
         // Sync `next()` yields a stream of partials and drains to `Done`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
             AtomicInteger events = new AtomicInteger();
-            BamlStream<String, String> stream =
+            BamlStream<String> stream =
                     Fns.stream_e2e_extract_stream(
                             "ignored-by-replay-server",
                             opts -> opts.on_event(event -> events.incrementAndGet()));
@@ -90,7 +90,7 @@ class TestStreamingE2e {
     void test_streaming_e2e_stream_async() throws Exception {
         // Async sibling over the CompletableFuture path: next_async() / get_final_async().
         try (ReplayHarness h = ReplayHarness.start("replay_extract_string")) {
-            BamlStream<String, String> stream =
+            BamlStream<String> stream =
                     Fns.stream_e2e_extract_stream_async("ignored-by-replay-server").join();
             int results = 0;
             while (true) {
@@ -125,7 +125,7 @@ class TestStreamingE2e {
     }
 
     // -----------------------------------------------------------------------
-    // Class-typed `T` — BamlStream<StreamingDoc, StreamingDoc>. The
+    // Class-typed `T` — BamlStream<StreamingDoc>. The
     // regression guard for the class-typed streaming bug (doc 00).
     // -----------------------------------------------------------------------
 
@@ -133,7 +133,7 @@ class TestStreamingE2e {
     void test_streaming_e2e_stream_doc() throws Exception {
         // Sync `next()` yields >= 10 doc partials; `get_final()` is a typed `StreamingDoc`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
-            BamlStream<StreamingDoc, StreamingDoc> stream =
+            BamlStream<StreamingDoc> stream =
                     Fns.stream_e2e_extract_doc_stream("ignored-by-replay-server");
             int results = 0;
             while (true) {
@@ -154,7 +154,7 @@ class TestStreamingE2e {
     void test_streaming_e2e_stream_doc_async() throws Exception {
         // Async sibling over the CompletableFuture path for a class `T`.
         try (ReplayHarness h = ReplayHarness.start("replay_extract_doc")) {
-            BamlStream<StreamingDoc, StreamingDoc> stream =
+            BamlStream<StreamingDoc> stream =
                     Fns.stream_e2e_extract_doc_stream_async("ignored-by-replay-server").join();
             int results = 0;
             while (true) {

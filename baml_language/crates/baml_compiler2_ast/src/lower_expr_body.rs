@@ -1142,11 +1142,11 @@ pub(crate) fn synthesize_spec_agent_run_body(
 /// function's own spec:
 ///
 /// ```baml
-/// ai.stream.from_spec<Out, Out>(Fn@spec(p1, p2), client = client)
+/// ai.stream.from_spec<Out>(Fn@spec(p1, p2), client = client)
 /// ```
 ///
-/// `type_args` is the explicit `<TStream, TFinal>` pair, so the stdlib
-/// reifies both types from its own frame via `reflect.Type.of`. `client` is
+/// `type_args` is the explicit `<Out>`, so the stdlib reifies the type from
+/// its own frame via `reflect.Type.of`. `client` is
 /// the companion's injected `ai.stream.StreamingClient? = null` override;
 /// `from_spec` falls back to the spec's default client when it is null.
 pub(crate) fn synthesize_spec_stream_body(
@@ -1180,7 +1180,7 @@ pub(crate) fn synthesize_spec_stream_body(
         span,
     );
 
-    // ai.stream.from_spec<TS, TF>(spec, client = client, on_event = on_event)
+    // ai.stream.from_spec<Out>(spec, client = client, on_event = on_event)
     let stream_spec_callee = ctx.alloc_expr(
         Expr::Path(vec![
             Name::new("ai"),

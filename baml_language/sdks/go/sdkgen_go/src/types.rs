@@ -41,9 +41,9 @@ pub(crate) enum GoTy {
     FunctionSpec {
         output: Box<Self>,
     },
+    /// `ai.stream.Stream<T>`: partials and the settled value share `value`.
     Stream {
-        partial: Box<Self>,
-        final_: Box<Self>,
+        value: Box<Self>,
     },
     /// A Go type parameter projected from the compiler-owned BAML `TypeVar`.
     TypeVar(BaseName),
@@ -279,10 +279,9 @@ impl<'a> GoTypeProjection<'a> {
                     GoTy::FunctionSpec {
                         output: Box::new(self.project_inner(&arguments[0], aliases)),
                     }
-                } else if name.to_string() == AI_STREAM_STREAM && arguments.len() == 2 {
+                } else if name.to_string() == AI_STREAM_STREAM && arguments.len() == 1 {
                     GoTy::Stream {
-                        partial: Box::new(self.project_inner(&arguments[0], aliases)),
-                        final_: Box::new(self.project_inner(&arguments[1], aliases)),
+                        value: Box::new(self.project_inner(&arguments[0], aliases)),
                     }
                 } else {
                     GoTy::Class(
@@ -568,10 +567,7 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
             }
         }
         GoTy::FunctionSpec { output } => collect_typed_unions(output, found),
-        GoTy::Stream { partial, final_ } => {
-            collect_typed_unions(partial, found);
-            collect_typed_unions(final_, found);
-        }
+        GoTy::Stream { value } => collect_typed_unions(value, found),
         GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_unions(inner, found),
         GoTy::Function(key) => {
             for param in key.params() {
@@ -607,10 +603,7 @@ fn collect_callback_options(ty: &GoTy, found: &mut BTreeSet<GoFunctionKey>) {
             }
         }
         GoTy::FunctionSpec { output } => collect_callback_options(output, found),
-        GoTy::Stream { partial, final_ } => {
-            collect_callback_options(partial, found);
-            collect_callback_options(final_, found);
-        }
+        GoTy::Stream { value } => collect_callback_options(value, found),
         GoTy::List(inner) | GoTy::Optional(inner) => collect_callback_options(inner, found),
         GoTy::Map { key, value } => {
             collect_callback_options(key, found);
@@ -630,9 +623,7 @@ fn contains_unsupported(ty: &GoTy) -> bool {
         GoTy::Unsupported => true,
         GoTy::Class(_, arguments) => arguments.iter().any(contains_unsupported),
         GoTy::FunctionSpec { output } => contains_unsupported(output),
-        GoTy::Stream { partial, final_ } => {
-            contains_unsupported(partial) || contains_unsupported(final_)
-        }
+        GoTy::Stream { value } => contains_unsupported(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_unsupported(inner),
         GoTy::Map { key, value } => contains_unsupported(key) || contains_unsupported(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -653,7 +644,7 @@ fn contains_type_var(ty: &GoTy) -> bool {
         GoTy::TypeVar(_) => true,
         GoTy::Class(_, arguments) => arguments.iter().any(contains_type_var),
         GoTy::FunctionSpec { output } => contains_type_var(output),
-        GoTy::Stream { partial, final_ } => contains_type_var(partial) || contains_type_var(final_),
+        GoTy::Stream { value } => contains_type_var(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_type_var(inner),
         GoTy::Map { key, value } => contains_type_var(key) || contains_type_var(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -681,7 +672,7 @@ fn contains_function(ty: &GoTy) -> bool {
         GoTy::Function(_) => true,
         GoTy::Class(_, arguments) => arguments.iter().any(contains_function),
         GoTy::FunctionSpec { output } => contains_function(output),
-        GoTy::Stream { partial, final_ } => contains_function(partial) || contains_function(final_),
+        GoTy::Stream { value } => contains_function(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_function(inner),
         GoTy::Map { key, value } => contains_function(key) || contains_function(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -697,9 +688,7 @@ fn contains_dynamic_union(ty: &GoTy) -> bool {
         GoTy::TypedUnion(key) => key.members().iter().any(contains_dynamic_union),
         GoTy::Class(_, arguments) => arguments.iter().any(contains_dynamic_union),
         GoTy::FunctionSpec { output } => contains_dynamic_union(output),
-        GoTy::Stream { partial, final_ } => {
-            contains_dynamic_union(partial) || contains_dynamic_union(final_)
-        }
+        GoTy::Stream { value } => contains_dynamic_union(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_dynamic_union(inner),
         GoTy::Map { key, value } => contains_dynamic_union(key) || contains_dynamic_union(value),
         GoTy::Function(key) => {

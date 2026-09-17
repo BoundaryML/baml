@@ -57,8 +57,8 @@ for (;;) {
 auto result = stream.final_();
 ```
 
-`FunctionSpec<Final>` carries the bound recipe's output type, while
-`Stream<Partial, Final>` carries the partial and final types. No callable
+`FunctionSpec<Final>` carries the bound recipe's output type, and
+`Stream<T>` carries the one type its partials and final value share. No callable
 `$spec`, `$stream`, `$parse`, `$render_prompt`, or `$build_request`
 declarations are generated.
 
