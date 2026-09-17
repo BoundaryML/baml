@@ -1399,13 +1399,24 @@ impl BexEngine {
             // gates the `bigint → int` FFI narrowing, whose `i64::try_from` only
             // bounds to the full i64 range.
             BexExternalValue::Int(i) => {
-                Value::try_int(i).ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "integer {i} is outside the BAML integer range [{}, {}]",
-                        Value::INT_MIN,
-                        Value::INT_MAX
-                    ),
-                })?
+                if let Some(
+                    RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _),
+                ) = expected_ty
+                {
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "deliberate host-language float(int) coercion"
+                    )]
+                    Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(i as f64)))
+                } else {
+                    Value::try_int(i).ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!(
+                            "integer {i} is outside the BAML integer range [{}, {}]",
+                            Value::INT_MIN,
+                            Value::INT_MAX
+                        ),
+                    })?
+                }
             }
             BexExternalValue::Bigint(bi) => {
                 // Defense-in-depth: every upstream decoder (FFI hex,
