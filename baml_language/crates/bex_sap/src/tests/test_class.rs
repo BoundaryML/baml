@@ -212,14 +212,14 @@ test_deserializer!(
 
 test_deserializer!(
     test_unquoted_object_value_retains_non_hierarchical_uris_after_comma,
-    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144}"#,
+    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com}"#,
     baml_tyannotated!(Reason),
     baml_db! {
         class Reason {
             reason: string,
         }
     },
-    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144" }
+    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com" }
 );
 
 test_deserializer!(
@@ -248,16 +248,16 @@ test_deserializer!(
 );
 
 test_deserializer!(
-    test_compact_key_after_unquoted_unicode_value,
-    r#"{a:x😀,b:y}"#,
+    test_compact_key_before_unquoted_unicode_value,
+    r#"{a:null,b:x😀}"#,
     baml_tyannotated!(UnicodeCompact),
     baml_db! {
         class UnicodeCompact {
-            a: string,
+            a: (string | null) @class_completed_field_missing(null),
             b: string,
         }
     },
-    { "a": "x😀", "b": "y" }
+    { "a": null, "b": "x😀" }
 );
 
 // Regression for #4589: a valid optional class must not lose to its null arm

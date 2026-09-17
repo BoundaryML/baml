@@ -289,7 +289,12 @@ impl JsonParseState {
                             let is_possible_value =
                                 is_numeric || is_bool || is_null || is_identifier;
 
-                            if is_possible_value && Self::starts_compact_unquoted_object_key(&next)
+                            // A compact separator is only unambiguous after a
+                            // complete JSON primitive. Arbitrary unquoted text
+                            // such as `docs,sip:user@example.com` can otherwise
+                            // be mistaken for another field.
+                            if (is_numeric || is_bool || is_null)
+                                && Self::starts_compact_unquoted_object_key(&next)
                             {
                                 log::debug!("Closing due to: compact unquoted key after comma");
                                 return CloseStringResult::Close(idx, CompletionState::Complete);
@@ -422,23 +427,11 @@ impl JsonParseState {
         if !(first.is_alphanumeric() || matches!(first, '_' | '$')) {
             return false;
         }
-        let mut candidate = first.to_string();
 
-        while let Some((_, c)) = lookahead.next() {
+        for (_, c) in lookahead {
             match c {
-                // A slash immediately after the colon is value text such as
-                // `https://...`, and common non-hierarchical URI schemes such
-                // as `mailto:` and `urn:` also belong to the preceding value.
-                ':' => {
-                    let is_uri_scheme = [
-                        "data", "file", "ftp", "ftps", "geo", "git", "http", "https", "magnet",
-                        "mailto", "sms", "ssh", "tel", "urn", "ws", "wss",
-                    ]
-                    .iter()
-                    .any(|scheme| candidate.eq_ignore_ascii_case(scheme));
-                    return !is_uri_scheme && !matches!(lookahead.peek(), Some((_, '/')));
-                }
-                c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => candidate.push(c),
+                ':' => return true,
+                c if c.is_alphanumeric() || matches!(c, '_' | '-' | '$') => {}
                 _ => return false,
             }
         }

@@ -109,9 +109,9 @@ class Reason {
   reason string
 }
 "#,
-    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144}"#,
+    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com}"#,
     TypeIR::class("Reason"),
-    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144" }
+    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com" }
 );
 
 test_deserializer!(
@@ -140,16 +140,16 @@ class NumericKey {
 );
 
 test_deserializer!(
-    test_compact_key_after_unquoted_unicode_value,
+    test_compact_key_before_unquoted_unicode_value,
     r#"
 class UnicodeCompact {
-  a string
+  a string?
   b string
 }
 "#,
-    r#"{a:x😀,b:y}"#,
+    r#"{a:null,b:x😀}"#,
     TypeIR::class("UnicodeCompact"),
-    { "a": "x😀", "b": "y" }
+    { "a": null, "b": "x😀" }
 );
 
 test_deserializer!(
