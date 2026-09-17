@@ -3939,6 +3939,81 @@ mod tests {
     }
 
     #[test]
+    fn stale_incompatible_unit_after_length_edit_falls_back_without_panicking() {
+        if cache_disabled() {
+            return;
+        }
+        let initial = [
+            (
+                "stable.baml",
+                "interface Speaker {\n  function speak(self) -> string throws never {\n    \"quiet\"\n  }\n}\n",
+            ),
+            (
+                "edited.baml",
+                "function edited() -> string {\n  \"before rebuild\"\n}\n",
+            ),
+            ("unrelated.baml", "function unrelated() -> int {\n  42\n}\n"),
+        ];
+        let edited = [
+            ("stable.baml", initial[0].1),
+            (
+                "edited.baml",
+                "function edited() -> string {\n  \"after\"\n}\n",
+            ),
+            ("unrelated.baml", initial[2].1),
+        ];
+        let root = bc_root();
+        let _ = compile_and_store_v1(&root, &initial);
+
+        let resolved = resolved(&root, &edited);
+        let (db, package) = crate::project_load::build_db_from_sources(&resolved, |_| {});
+        let ctx = CacheContext::open(&resolved).expect("cache reopens");
+        let mut plan = ctx
+            .plan_reuse(&db, package)
+            .expect("partial reuse available");
+        let stable = plan
+            .prev_units
+            .iter_mut()
+            .find(|unit| unit.source_file == "stable.baml")
+            .expect("stable unit is reused");
+        let mut poisoned = false;
+        for object in stable.interfaces.iter_mut().chain(stable.code.iter_mut()) {
+            bex_vm_types::relink::visit_object_operands(object, |operand| {
+                if !poisoned && let bex_vm_types::relink::IndexOperand::Object(index) = operand {
+                    *index = bex_vm_types::ObjectIndex::from_raw(usize::MAX / 2);
+                    poisoned = true;
+                }
+            });
+        }
+        assert!(
+            poisoned,
+            "the stable fixture must contain an object operand to poison"
+        );
+
+        let errors = baml_db::collect_diagnostics(&db)
+            .into_iter()
+            .filter(|diagnostic| {
+                diagnostic.severity == baml_db::baml_compiler_diagnostics::Severity::Error
+            })
+            .count();
+        assert_eq!(errors, 0, "the length-changing edit remains check-clean");
+
+        let compiled = compile_program_artifacts(&db, package, Some(&ctx), Some(&plan))
+            .expect("a stale cached unit must fall back to a fresh compile");
+        assert!(
+            matches!(compiled.units, CompiledUnits::Fresh(_)),
+            "an incompatible cached unit must be treated as a miss"
+        );
+        let honest = generate_project_bytecode(&db, package).expect("honest compile succeeds");
+        assert_eq!(
+            borsh::to_vec(&compiled.program).expect("fallback program serializes"),
+            borsh::to_vec(&honest).expect("honest program serializes"),
+            "the stale-unit fallback must reproduce an honest compile"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn test_discovery_load_degrades_on_undecodable_blob() {
         // Graceful degradation: an entry that decodes as a valid cache blob but
         // is NOT a valid `TestDiscovery` (wire skew) is a silent `None`, so the

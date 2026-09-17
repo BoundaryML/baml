@@ -2513,7 +2513,13 @@ fn decompose_units_after_prefix<'db>(
             rewrite_pool_operands(
                 object,
                 |target| {
-                    if target >= prefix_objects && obj_owner[target] == u {
+                    let owner = obj_owner.get(target).copied().ok_or_else(|| {
+                        LoweringError::Internal(format!(
+                            "object operand {target} points past the pool (len {})",
+                            obj_owner.len()
+                        ))
+                    })?;
+                    if target >= prefix_objects && owner == u {
                         Ok(flat_local(target))
                     } else {
                         let sym = object_symbol(program, target, &fn_obj_name, &slot_to_name)?;
@@ -3010,7 +3016,12 @@ fn object_symbol(
     fn_obj_name: &HashMap<usize, String>,
     slot_to_name: &[Option<String>],
 ) -> Result<Symbol, LoweringError> {
-    let obj = &program.objects[ObjectIndex::from_raw(target)];
+    let obj = program.objects.get(target).ok_or_else(|| {
+        LoweringError::Internal(format!(
+            "object operand {target} points past the pool (len {})",
+            program.objects.len()
+        ))
+    })?;
     match obj {
         Object::GenericFunction(gf) => {
             // A generic-function value (`foo<int>`) interned in another unit
@@ -6716,6 +6727,20 @@ mod tests {
     use salsa::Setter;
 
     use super::*;
+
+    #[test]
+    fn stale_object_operand_is_rejected_without_panicking() {
+        let program = Program::default();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            object_symbol(&program, 1, &HashMap::new(), &[])
+        }));
+        let resolved = result.expect("an out-of-range cached object operand must not panic");
+        let error = resolved.expect_err("an out-of-range cached object operand must be rejected");
+        assert!(
+            matches!(&error, LoweringError::Internal(message) if message.contains("object operand 1 points past the pool")),
+            "the rejection should identify the stale object operand: {error}"
+        );
+    }
 
     #[salsa::db]
     pub(crate) struct TestDb {
