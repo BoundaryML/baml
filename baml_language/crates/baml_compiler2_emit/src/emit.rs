@@ -1791,15 +1791,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
         }
-        // Specialize BinaryOp when both operand types are statically known.
-        if let Rvalue::BinaryOp { op, left, right } = rvalue {
-            if let Some(specialized) = self.try_specialize_binary_op(*op, left, right) {
-                self.emit_operand_pull(left);
-                self.emit_operand_pull(right);
-                self.emit(specialized);
-                return;
-            }
-        }
         if let Rvalue::MakeBoundMethod { func, receiver } = rvalue {
             // Emit the receiver onto the stack first.
             self.emit_operand_pull(receiver);
@@ -3346,6 +3337,19 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
+    fn binary_op_for_operands(
+        &mut self,
+        op: BinOp,
+        left: &Operand<'ctx>,
+        right: &Operand<'ctx>,
+    ) -> Result<(), Self::Error> {
+        let instruction = self
+            .try_specialize_binary_op(op, left, right)
+            .unwrap_or_else(|| Self::binop_instruction(op));
+        self.emit(instruction);
+        Ok(())
+    }
+
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error> {
         self.emit(Self::unaryop_instruction(op));
         Ok(())
@@ -3792,11 +3796,6 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 }
 
 impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
-    fn pull_store_rvalue(&mut self, value: &Rvalue<'ctx>) -> Result<(), Self::Error> {
-        self.emit_rvalue_pull(value);
-        Ok(())
-    }
-
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
         let idx = self.emit(Instruction::StoreField(field));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
