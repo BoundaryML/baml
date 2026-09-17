@@ -211,6 +211,19 @@ test_deserializer!(
     { "id": 1, "numeric": "foo" }
 );
 
+test_deserializer!(
+    test_compact_key_after_unquoted_unicode_value,
+    r#"{a:x😀,b:y}"#,
+    baml_tyannotated!(UnicodeCompact),
+    baml_db! {
+        class UnicodeCompact {
+            a: string,
+            b: string,
+        }
+    },
+    { "a": "x😀", "b": "y" }
+);
+
 // Regression for #4589: a valid optional class must not lose to its null arm
 // merely because the class contains omitted optional fields. This keeps the
 // reported required/present/explicit-null comparison in one coercion.

@@ -104,6 +104,19 @@ class NumericKey {
 );
 
 test_deserializer!(
+    test_compact_key_after_unquoted_unicode_value,
+    r#"
+class UnicodeCompact {
+  a string
+  b string
+}
+"#,
+    r#"{a:x😀,b:y}"#,
+    TypeIR::class("UnicodeCompact"),
+    { "a": "x😀", "b": "y" }
+);
+
+test_deserializer!(
   str_with_quotes,
   FOO_FILE,
   r#"{"foo": "[\"bar\"]"}"#,
