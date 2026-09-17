@@ -15,32 +15,16 @@ impl SapParseCache {
         self.types.db()
     }
 
-    pub fn ty(&self) -> &sap_model::AnnotatedTy<'_, DefKey> {
+    pub fn ty(&self) -> &sap_model::Ty<'_, DefKey> {
         self.types.ty()
     }
 
-    pub fn ty_resolved(
-        &self,
-    ) -> Result<
-        sap_model::TyWithMeta<
-            sap_model::TyResolvedRef<'_, DefKey>,
-            &sap_model::TypeAnnotations<'_, DefKey>,
-        >,
-        &DefKey,
-    > {
-        self.db().resolve_with_meta(self.ty().as_ref())
+    pub fn ty_resolved(&self) -> Result<sap_model::TyResolvedRef<'_, DefKey>, &DefKey> {
+        self.db().resolve(self.ty())
     }
 
-    pub fn stream_ty_resolved(
-        &self,
-    ) -> Result<
-        sap_model::TyWithMeta<
-            sap_model::TyResolvedRef<'_, DefKey>,
-            &sap_model::TypeAnnotations<'_, DefKey>,
-        >,
-        &DefKey,
-    > {
-        self.db().resolve_with_meta(self.types.stream_ty().as_ref())
+    pub fn stream_ty_resolved(&self) -> Result<sap_model::TyResolvedRef<'_, DefKey>, &DefKey> {
+        self.db().resolve(self.types.stream_ty())
     }
 }
 

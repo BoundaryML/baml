@@ -46,7 +46,7 @@ fn test_main_lorem_streaming_doc_class_shape() {
     let _ = StreamingDoc {
         title: "t".to_string(),
         body: None,
-        word_count: 0,
+        word_count: None,
     };
 }
 

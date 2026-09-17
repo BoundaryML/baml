@@ -12,7 +12,7 @@ use crate::{
     deserializer::types::BamlValueWithFlags,
     sap_model::{
         ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, StreamStateTy, Ty, TyResolvedRef,
-        TyWithMeta, TypeAnnotations, TypeRefDb, UnionTy,
+        TypeRefDb, UnionTy,
     },
 };
 
@@ -86,7 +86,7 @@ impl ToBamlTy for Ty<'_, DefKey> {
 
 impl ToBamlTy for ArrayTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        let inner = self.ty.ty.to_baml_ty(db);
+        let inner = self.ty.to_baml_ty(db);
         SapTy::List(Box::new(inner))
     }
 }
@@ -94,8 +94,8 @@ impl ToBamlTy for ArrayTy<'_, DefKey> {
 impl ToBamlTy for MapTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         SapTy::Map {
-            key: Box::new(self.key.ty.to_baml_ty(db)),
-            value: Box::new(self.value.ty.to_baml_ty(db)),
+            key: Box::new(self.key.to_baml_ty(db)),
+            value: Box::new(self.value.to_baml_ty(db)),
         }
     }
 }
@@ -121,7 +121,7 @@ impl ToBamlTy for EnumVariantTy<'_, DefKey> {
 
 impl ToBamlTy for UnionTy<'_, DefKey> {
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        let members: Vec<SapTy> = self.variants.iter().map(|v| v.ty.to_baml_ty(db)).collect();
+        let members: Vec<SapTy> = self.variants.iter().map(|v| v.to_baml_ty(db)).collect();
         SapTy::Union(members.into())
     }
 }
@@ -129,7 +129,7 @@ impl ToBamlTy for UnionTy<'_, DefKey> {
 impl ToBamlTy for StreamStateTy<'_, DefKey> {
     /// `StreamState` is a value-level concept; at the type level we return the inner type.
     fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        self.value.ty.to_baml_ty(db)
+        self.value.to_baml_ty(db)
     }
 }
 
@@ -174,12 +174,12 @@ pub fn baml_value_to_external(
     value: &BamlValueWithFlags<'_, '_, '_, DefKey>,
     db: &TypeRefDb<'_, DefKey>,
 ) -> BexExternalValue {
-    baml_value_inner_to_external(&value.value, &value.meta.ty, db)
+    baml_value_inner_to_external(&value.value, value.meta.ty, db)
 }
 
 fn baml_value_inner_to_external(
     value: &BamlValue<'_, '_, '_, DefKey>,
-    ty: &TyWithMeta<TyResolvedRef<'_, DefKey>, &TypeAnnotations<'_, DefKey>>,
+    ty: TyResolvedRef<'_, DefKey>,
     db: &TypeRefDb<'_, DefKey>,
 ) -> BexExternalValue {
     match value {
@@ -193,8 +193,8 @@ fn baml_value_inner_to_external(
             unimplemented!("Media value conversion to BexExternalValue is not yet implemented")
         }
         BamlValue::Array(arr) => {
-            let element_type = to_value_metadata_ty(&match ty.ty {
-                TyResolvedRef::Array(a) => a.ty.ty.to_baml_ty(db),
+            let element_type = to_value_metadata_ty(&match ty {
+                TyResolvedRef::Array(a) => a.ty.to_baml_ty(db),
                 _ => SapTy::unknown(),
             });
             let items: Vec<BexExternalValue> = arr
@@ -208,8 +208,8 @@ fn baml_value_inner_to_external(
             }
         }
         BamlValue::Map(map) => {
-            let (key_type, value_type) = match ty.ty {
-                TyResolvedRef::Map(m) => (m.key.ty.to_baml_ty(db), m.value.ty.to_baml_ty(db)),
+            let (key_type, value_type) = match ty {
+                TyResolvedRef::Map(m) => (m.key.to_baml_ty(db), m.value.to_baml_ty(db)),
                 _ => (SapTy::string(), SapTy::unknown()),
             };
             let (key_type, value_type) = (

@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
     baml_value::{BamlNull, BamlValue},
@@ -9,10 +7,7 @@ use crate::{
         types::{BamlValueWithFlags, DeserializerMeta},
     },
     jsonish::CompletionState,
-    sap_model::{
-        AttrLiteral, FromLiteral as _, NullTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
-        TypeIdent, UnionTy,
-    },
+    sap_model::{NullTy, TyResolvedRef, TypeIdent, UnionTy},
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for UnionTy<'t, N>
@@ -22,43 +17,25 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
-        let all_variants = &target.ty.variants;
+        let all_variants = &target.variants;
 
+        // A union is partial when its matching member is; members without a partial parse
+        // yield `None` below and drop out.
         let mut add_flags = Vec::new();
-        match (value.completion_state(), target.meta.in_progress.as_ref()) {
-            // Incomplete value with `in_progress = never`, ignore
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return Ok(None),
-            // Incomplete value with `in_progress = <value>`, use that value
-            (CompletionState::Incomplete, Some(lit)) => {
-                let ret = target.ty.from_literal(lit, ctx)?;
-                return Ok(Some(BamlValueWithFlags::new(
-                    ret,
-                    DeserializerMeta {
-                        flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                        ty: target.map_ty(TyResolvedRef::Union),
-                    },
-                )));
-            }
-            // No `in_progress`, use partial value
-            (CompletionState::Incomplete, None) => {
-                add_flags.push(Flag::Incomplete);
-            }
-            // Complete value, don't worry about in_progress
-            (CompletionState::Complete, _) => {}
+        if value.completion_state() == &CompletionState::Incomplete {
+            add_flags.push(Flag::Incomplete);
         }
 
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // This helps with arrays of unions where elements are typically homogeneous.
         if let Some(hint_idx) = ctx.union_variant_hint
             && let Some(hinted_option) = all_variants.get(hint_idx)
-            && let Ok(resolved) = ctx.db.resolve_with_meta(hinted_option.as_ref())
+            && let Ok(resolved) = ctx.db.resolve(hinted_option)
         {
-            let resolved_ref = TyWithMeta::new(resolved.ty, resolved.meta);
-            let result = TyResolvedRef::coerce(ctx, resolved_ref, value);
+            let result = TyResolvedRef::coerce(ctx, resolved, value);
 
             if let Ok(Some(mut val)) = result
                 && val.score() == 0
@@ -75,24 +52,14 @@ where
             Vec::new();
 
         for (i, option) in all_variants.iter().enumerate() {
-            // When parse_without_null is set, skip null variants entirely —
-            // they should not be used as a fallback when other variants fail.
-            if target.meta.parse_without_null {
-                if let Ok(ty) = ctx.db.resolve_with_meta(option.as_ref()) {
-                    if matches!(ty.ty, TyResolvedRef::Null(_)) {
-                        continue;
-                    }
-                }
-            }
-
             let parsed = ctx
                 .db
-                .resolve_with_meta(option.as_ref())
+                .resolve(option)
                 .map_err(|ident| ctx.error_type_resolution(ident))
                 .and_then(|ty| TyResolvedRef::coerce(ctx, ty, value));
             match parsed {
                 Ok(None) => {
-                    // Variant type with `in_progress = never` means we ignore this variant until it is complete.
+                    // The member has no partial parse for this incomplete value.
                     variants.push(Ok(None));
                 }
                 Ok(Some(mut val)) => {
@@ -111,62 +78,36 @@ where
             }
         }
 
-        let best = array_helper::pick_best(
-            ctx,
-            TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
-            variants,
-        );
+        let best = array_helper::pick_best(ctx, TyResolvedRef::Union(target), variants);
         best.map(|v| v.map(|v| v.with_flags(add_flags)))
     }
 
     fn try_cast(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>> {
-        if target.meta.parse_without_null && matches!(value, crate::jsonish::Value::Null) {
-            return None;
-        }
-
-        let flags = match (value.completion_state(), target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        BamlValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                                ty: TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
+        let flags = match value.completion_state() {
+            CompletionState::Incomplete => {
                 DeserializerConditions::new().with_flag(Flag::Incomplete)
             }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
+            CompletionState::Complete => DeserializerConditions::new(),
         };
 
-        if matches!(value, crate::jsonish::Value::Null) && target.ty.is_optional(ctx.db) {
+        if matches!(value, crate::jsonish::Value::Null) && target.is_optional(ctx.db) {
             return Some(BamlValueWithFlags::new(
                 BamlValue::Null(BamlNull),
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
+                    ty: TyResolvedRef::Null(NullTy),
                 },
             ));
         }
 
-        let variants: Vec<_> = target
-            .ty
+        let variants: Vec<TyResolvedRef<'t, N>> = target
             .variants
             .iter()
-            .map(|v| ctx.db.resolve_with_meta(v.as_ref()))
+            .map(|v| ctx.db.resolve(v))
             .collect::<Result<_, _>>()
             .ok()?;
 
@@ -175,30 +116,25 @@ where
         let all_options: Vec<_> = variants
             .iter()
             .enumerate()
-            .filter(|(_, v)| !matches!(v.ty, TyResolvedRef::Null(_)))
+            .filter(|(_, v)| !matches!(v, TyResolvedRef::Null(_)))
             .collect();
 
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // The hint index is in the original (unfiltered) index space, so look it up in `variants`.
-        if let Some(hint_idx) = ctx.union_variant_hint {
-            if let Some(hint_variant) = variants.get(hint_idx) {
-                if !matches!(hint_variant.ty, TyResolvedRef::Null(_)) {
-                    let opt_ref = TyWithMeta::new(hint_variant.ty, hint_variant.meta);
-                    if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, opt_ref, value) {
-                        if cast_result.score() == 0 {
-                            cast_result.add_flag(Flag::UnionMatch(hint_idx, vec![]));
-                            return Some(cast_result);
-                        }
-                    }
-                }
-            }
+        if let Some(hint_idx) = ctx.union_variant_hint
+            && let Some(hint_variant) = variants.get(hint_idx)
+            && !matches!(hint_variant, TyResolvedRef::Null(_))
+            && let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, *hint_variant, value)
+            && cast_result.score() == 0
+        {
+            cast_result.add_flag(Flag::UnionMatch(hint_idx, vec![]));
+            return Some(cast_result);
         }
 
         // Collect try_cast results, short-circuit if we find a perfect match (score 0)
         let mut filtered_options: Vec<(usize, BamlValueWithFlags<'s, 'v, 't, N>)> = Vec::new();
         for &(orig_idx, opt) in &all_options {
-            let opt_ref = TyWithMeta::new(opt.ty, opt.meta);
-            if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, opt_ref, value) {
+            if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, *opt, value) {
                 let score = cast_result.score();
                 // Perfect match - no need to try other options
                 if score == 0 {
@@ -222,7 +158,7 @@ where
             // pick_best will see the existing UnionMatch flag and won't add a duplicate
             _ => array_helper::pick_best(
                 ctx,
-                TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
+                TyResolvedRef::Union(target),
                 filtered_options
                     .into_iter()
                     .map(|(_, v)| Ok(Some(v)))

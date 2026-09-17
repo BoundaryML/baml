@@ -2,7 +2,7 @@ use ouroboros::self_referencing;
 use sys_types::DefKey;
 
 pub use crate::jsonish::parse;
-use crate::sap_model::{AnnotatedTy, TypeRefDb};
+use crate::sap_model::{Ty, TypeRefDb};
 
 pub mod baml_value;
 pub mod deserializer;
@@ -19,7 +19,7 @@ pub enum StreamingMode {
 }
 
 /// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`sys_types::SapTy`]
-/// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
+/// for the parse target, and borrows `TypeRefDb` + `Ty` from them.
 pub struct CompiledSapModel {
     inner: CompiledSapModelInner,
 }
@@ -58,11 +58,11 @@ impl CompiledSapModel {
         self.inner.borrow_db()
     }
 
-    pub fn ty(&self) -> &AnnotatedTy<'_, DefKey> {
+    pub fn ty(&self) -> &Ty<'_, DefKey> {
         self.inner.borrow_ty()
     }
 
-    pub fn stream_ty(&self) -> &AnnotatedTy<'_, DefKey> {
+    pub fn stream_ty(&self) -> &Ty<'_, DefKey> {
         self.inner.borrow_stream_ty()
     }
 }
@@ -78,8 +78,8 @@ struct CompiledSapModelInner {
     pub db: TypeRefDb<'this, DefKey>,
     #[borrows(type_ctx, parse_ty)]
     #[covariant]
-    pub ty: AnnotatedTy<'this, DefKey>,
+    pub ty: Ty<'this, DefKey>,
     #[borrows(type_ctx, parse_stream_ty)]
     #[covariant]
-    pub stream_ty: AnnotatedTy<'this, DefKey>,
+    pub stream_ty: Ty<'this, DefKey>,
 }

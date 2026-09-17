@@ -5,10 +5,12 @@ class Resume {
 }
 
 // The multi-field class return type for class-typed streaming coverage.
+// `word_count` is nullable so the class has a partial parse while it streams: an
+// `int` field has no default (BEP-075), and the model emits it last.
 class StreamingDoc {
   title string
   body string?
-  word_count int
+  word_count int?
 }
 
 // Static host model used only as a same-name trap for HS-7. The runtime test
