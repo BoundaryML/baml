@@ -364,6 +364,16 @@ impl JsonParseState {
                                         }
                                     }
                                     _ => {
+                                        // A numeric value followed by ",<digit>" is likely a
+                                        // thousands/decimal separator (for example -2,000.00),
+                                        // so keep it as part of the unquoted value.
+                                        let comma_in_number = is_numeric && next_c.is_ascii_digit();
+                                        if is_possible_value && !comma_in_number {
+                                            return CloseStringResult::Close(
+                                                idx,
+                                                CompletionState::Complete,
+                                            );
+                                        }
                                         let _ = self.consume(c);
                                     }
                                 }
