@@ -292,6 +292,7 @@ fn enrich_runtime_mount(
         },
     };
 
+    /// Whether `name` can appear as an unquoted declaration identifier in a stub.
     fn source_identifier(name: &Name) -> bool {
         let mut chars = name.as_str().chars();
         chars
@@ -300,6 +301,7 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
+    /// Copy a declaration docstring into generated source at `indent`.
     fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
         let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
             return;
@@ -323,6 +325,7 @@ fn enrich_runtime_mount(
             && source_identifier(&function.name)
     }
 
+    /// Render a type from its stub namespace, widening unresolvable package names.
     fn stub_type(
         ty: &baml_type::Ty<TypeName>,
         viewpoint: &StubViewpoint<'_>,
@@ -338,6 +341,7 @@ fn enrich_runtime_mount(
         }
     }
 
+    /// Render a spellable interface constraint from its stub namespace.
     fn stub_interface(
         interface: &baml_type::Interface<TypeName>,
         viewpoint: &StubViewpoint<'_>,
