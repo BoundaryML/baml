@@ -18,6 +18,7 @@ pub mod heap_ptr;
 pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
+pub mod limit;
 pub mod link;
 pub mod relink;
 mod roots;
@@ -33,6 +34,7 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
@@ -158,11 +160,12 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, ConstValue,
-    DeclarationName, Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
-    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, ImplCoherenceKey, Instance,
-    InterfaceBound, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard,
-    MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta,
-    SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    DeclarationName, Enum, EnumVariant, ExecutionMisuse, ExecutionPhase, ExecutionState, Function,
+    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
+    GenericFunction, HostClosure, ImplCoherenceKey, Instance, InterfaceBound, LockedContainer,
+    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
+    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SpawnPlanData, SysOp,
+    SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
     Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
     sys_op_for_path, type_tags,
 };

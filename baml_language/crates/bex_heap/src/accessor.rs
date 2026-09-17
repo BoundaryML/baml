@@ -578,6 +578,7 @@ fn convert_object(
         Object::TypeAlias(..) => unconvertible("type alias"),
         Object::Future(..) => unconvertible("future"),
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
+        Object::SpawnPlan(..) => unconvertible("spawn_plan"),
 
         Object::String(s) => Ok(BexExternalValue::String(s.clone())),
         // Deep-copy path for trace payloads: no declared type is available here,

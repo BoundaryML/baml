@@ -550,6 +550,7 @@ impl EqualsDriver {
             | (Object::Enum(_), Object::Enum(_))
             | (Object::TypeAlias(_), Object::TypeAlias(_))
             | (Object::UnscheduledFuture(_), Object::UnscheduledFuture(_))
+            | (Object::SpawnPlan(_), Object::SpawnPlan(_))
             | (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
             (
                 Object::Function(_)
@@ -561,6 +562,7 @@ impl EqualsDriver {
                 | Object::Enum(_)
                 | Object::TypeAlias(_)
                 | Object::UnscheduledFuture(_)
+                | Object::SpawnPlan(_)
                 | Object::RustData(_),
                 _,
             ) => Cmp::NotEqual,

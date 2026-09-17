@@ -150,6 +150,10 @@ macro_rules! walk_object_heads {
                     fut.returns.$visit(f);
                     fut.throws.$visit(f);
                 }
+                Object::SpawnPlan(plan) => {
+                    plan.returns.$visit(f);
+                    plan.throws.$visit(f);
+                }
                 Object::Future(fut) => fut.$visit(f),
                 Object::Array(array) => array.element_ty.$visit(f),
                 Object::Map(map) => {

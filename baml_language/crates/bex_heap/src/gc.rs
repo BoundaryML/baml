@@ -671,6 +671,7 @@ impl BexHeap {
                 }
                 worklist.push(future.closure);
             }
+            Object::SpawnPlan(plan) => worklist.extend(plan.heap_refs()),
             Object::Package(package) => {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
@@ -915,6 +916,11 @@ impl BexHeap {
                     future.closure = new_ptr;
                 }
             }
+            Object::SpawnPlan(plan) => plan.forward_heap_refs(|ptr| {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }),
             Object::Package(package) => {
                 for ptr in package
                     .classes
@@ -1321,6 +1327,10 @@ impl BexHeap {
                     worklist.push(future.closure);
                 }
             }
+            Object::SpawnPlan(plan) => worklist.extend(
+                plan.heap_refs()
+                    .filter(|&ptr| self.generation_of(ptr).is_young()),
+            ),
             Object::Package(package) => {
                 let refs = package
                     .classes
@@ -3296,7 +3306,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TyAttr, TypeName};
         use bex_vm_types::{
-            Class, Enum, UnscheduledFuture,
+            Class, Enum, SpawnPlanData, UnscheduledFuture,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -3388,6 +3398,21 @@ mod tests {
             index: 0,
         }));
 
+        // --- Container: Object::SpawnPlan ---
+        // Leaf strings stand in for the name, the body closure, and a layer.
+        let leaf_for_plan_name = tlab.alloc_string("plan_name".to_string());
+        let leaf_for_plan_body = tlab.alloc_string("plan_body".to_string());
+        let leaf_for_plan_layer = tlab.alloc_string("plan_layer".to_string());
+        let plan_container = tlab.alloc(Object::SpawnPlan(Box::new(
+            SpawnPlanData::new(
+                Some(leaf_for_plan_name),
+                leaf_for_plan_body,
+                RealizedTy::int(),
+                RealizedTy::never(),
+            )
+            .wrapped(leaf_for_plan_layer, RealizedTy::int(), RealizedTy::never()),
+        )));
+
         // Roots are the containers only (plus the class and enum which are
         // referenced by containers but we root them independently for clarity).
         let roots = vec![
@@ -3398,19 +3423,22 @@ mod tests {
             future_container,
             instance_container,
             variant_container,
+            plan_container,
         ];
 
         let (stats, new_roots, _fwd) = unsafe { heap.collect_garbage(&roots) };
 
         // All transitively reachable objects must survive.
-        // Containers: Array, Map, Closure, Cell, Future, Instance, Variant = 7
+        // Containers: Array, Map, Closure, Cell, Future, Instance, Variant,
+        //   SpawnPlan = 8
         // Leaves referenced by containers (some shared):
         //   leaf_for_array, leaf_for_map, leaf_for_closure_cap, leaf_func,
-        //   leaf_for_cell, leaf_for_future, leaf_string, class_ptr, enum_ptr = 9
-        // Total = 7 + 9 = 16, but >= 11 is the conservative bound.
+        //   leaf_for_cell, leaf_for_future, leaf_string, class_ptr, enum_ptr,
+        //   leaf_for_plan_name, leaf_for_plan_body, leaf_for_plan_layer = 12
+        // Total = 8 + 12 = 20, but >= 14 is the conservative bound.
         assert!(
-            stats.live_count >= 11,
-            "expected at least 11 live objects; got {}",
+            stats.live_count >= 14,
+            "expected at least 14 live objects; got {}",
             stats.live_count
         );
 
@@ -3494,5 +3522,20 @@ mod tests {
             panic!("variant.enm not Enum")
         };
         assert_eq!(e.name.item_name().as_str(), "E");
+
+        // SpawnPlan: name, body, and layer should be the (forwarded) leaf strings.
+        let Object::SpawnPlan(plan) = (unsafe { new_roots[7].get() }) else {
+            panic!("new_roots[7] not SpawnPlan")
+        };
+        let forwarded_leaves: Vec<String> = plan
+            .heap_refs()
+            .map(|ptr| {
+                let Object::String(s) = (unsafe { ptr.get() }) else {
+                    panic!("plan leaf not String")
+                };
+                s.to_string()
+            })
+            .collect();
+        assert_eq!(forwarded_leaves, ["plan_name", "plan_body", "plan_layer"]);
     }
 }
