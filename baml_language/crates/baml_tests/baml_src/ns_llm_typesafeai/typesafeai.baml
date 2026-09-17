@@ -303,7 +303,13 @@ test "typesafeai native API covers structured state and all questions" {
         .url catch_all (e) {
         _ => e.to_string()
     };
-    assert.is_true(invalid.includes("at least two levels"))
+    assert.is_true(invalid.includes("at least two levels"));
+    let invalid_choice = ts_client
+        .build_system_one_request("hello", { "bad": typesafeai.choice("Choose", { "only": null }) })
+        .url catch_all (e) {
+        _ => e.to_string()
+    };
+    assert.is_true(invalid_choice.includes("at least two choices"))
 }
 
 test "typesafeai models endpoint request" {
@@ -319,7 +325,16 @@ test "typesafeai rejects an unresolved base URL" {
     let error = ts_client.build_list_models_request().url catch_all (e) {
         _ => e.to_string()
     };
-    assert.is_true(error.includes("base_url did not resolve"))
+    assert.is_true(error.includes("base_url did not resolve"));
+    let insecure_client = typesafeai.Client.new(base_url = "http://example.com");
+    let insecure_models = insecure_client.build_list_models_request().url catch_all (e) {
+        _ => e.to_string()
+    };
+    assert.is_true(insecure_models.includes("base_url must be an HTTPS origin"));
+    let insecure_system_one = insecure_client.build_system_one_request("hello", { "urgent": typesafeai.noul("Urgent?") }).url catch_all (e) {
+        _ => e.to_string()
+    };
+    assert.is_true(insecure_system_one.includes("base_url must be an HTTPS origin"))
 }
 
 test "typesafeai honors class and enum aliases" {

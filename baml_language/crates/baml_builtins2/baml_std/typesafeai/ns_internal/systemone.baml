@@ -243,6 +243,9 @@ function _origin(c: root.Client) -> string {
     if (base.trim() == "") {
         throw _invalid("base_url must not be empty");
     }
+    if (!base.starts_with("https://") || base == "https://") {
+        throw _invalid("base_url must be an HTTPS origin");
+    }
     if (base.ends_with("/")) {
         base.slice(0, -1)
     } else {
@@ -282,6 +285,14 @@ function system_one_request(
         };
         if (question.type != "noul" && question.criteria == null) {
             throw _invalid(`${question.type} question ${key} requires criteria`);
+        }
+        if (question.type == "choice") {
+            let choices = baml.json.to<map<string, baml.json.json>>(question.criteria) catch_all (e) {
+                _ => throw _invalid(`choice question ${key} requires an object of choices`),
+            };
+            if (choices.keys().length() < 2) {
+                throw _invalid(`choice question ${key} requires at least two choices`);
+            }
         }
         if (question.type == "score") {
             let levels = baml.json.to<string[]>(question.criteria) catch_all (e) {
