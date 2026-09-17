@@ -48,7 +48,9 @@ primary_region = "sjc"
   ATB2_POSTHOG_PROJECT_ID = "490278"
   ATB2_POLL_S = "60"
   INFISICAL_PROJECT_ID = "bdd280e2-259c-4750-9b16-a8597a67214c"
-  INFISICAL_ENV = "prod"
+  # prod holds the store, Slack and PostHog settings; prod-atb2 the bammy
+  # GitHub App (BAMMY_GITHUB_APP_*), whose bot identity opens every PR.
+  INFISICAL_ENV = "prod,prod-atb2"
 
 [processes]
   # The stage list lives in ATB2_STAGES under [env] (Fly strips quotes from

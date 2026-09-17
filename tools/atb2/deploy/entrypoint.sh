@@ -13,7 +13,14 @@ cli="$runner_home/target/debug/baml-cli"
 # gh + git use the token the way handle_issue expects (sandbox_env passes GH_TOKEN
 # to gh; git pushes go through gh's credential helper); the old bot's token
 # serves as GH_TOKEN when no GH_TOKEN is set
-export GH_TOKEN="${GH_TOKEN:-${ATB_GITHUB_TOKEN:-}}"
+# With the bammy GitHub App configured, git's credential helper gets a fresh
+# installation token (the App's bot identity); otherwise the legacy tokens.
+if [ -n "${BAMMY_GITHUB_APP_CLIENT_ID:-}" ]; then
+  GH_TOKEN="$(/usr/bin/python3 -I /usr/local/lib/atb2/github-app-token.py || true)"
+  export GH_TOKEN
+else
+  export GH_TOKEN="${GH_TOKEN:-${ATB_GITHUB_TOKEN:-}}"
+fi
 if [ -n "${GH_TOKEN:-}" ]; then
   git config --global credential.helper '!gh auth git-credential'
   git config --global user.name "${ATB2_GIT_USER:-atb2}"

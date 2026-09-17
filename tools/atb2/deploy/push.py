@@ -45,6 +45,13 @@ def push_failure(error):
 
 
 def github_token():
+    # The bammy GitHub App, when configured, is the only identity that pushes.
+    if os.environ.get('BAMMY_GITHUB_APP_CLIENT_ID'):
+        minted = subprocess.run(['/usr/bin/python3', '-I', str(Path(__file__).with_name('github-app-token.py'))],
+                                capture_output=True, text=True, timeout=60)
+        token = minted.stdout.strip() if minted.returncode == 0 else ''
+        if not token: raise PushFailure('GitHub App token could not be minted', 77)
+        return token
     token = (os.environ.get('ATB2_GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
              or os.environ.get('ATB_GITHUB_TOKEN') or os.environ.get('GITHUB_TOKEN'))
     if not token: raise PushFailure('GitHub push credential is missing', 77)

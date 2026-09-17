@@ -173,3 +173,30 @@ class LauncherTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BammyGithubApp(unittest.TestCase):
+    source = {"INFISICAL_TOKEN": "machine-placeholder", "INFISICAL_PROJECT_ID": "p", "INFISICAL_ENV": "prod,prod-atb2"}
+
+    @staticmethod
+    def export(rows):
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(rows))
+
+    def test_both_infisical_envs_are_read_and_the_app_replaces_personal_tokens(self):
+        prod = [{"key": "FEEDBACK_SUPABASE_KEY", "value": "k"}, {"key": "ATB2_GITHUB_TOKEN", "value": "ghp_person"}, {"key": "ATB_GITHUB_TOKEN", "value": "ghp_legacy"}]
+        app = [{"key": "BAMMY_GITHUB_APP_CLIENT_ID", "value": "Iv1.x"}, {"key": "BAMMY_GITHUB_APP_PRIVATE_KEY", "value": "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----"}, {"key": "BAMMY_GITHUB_APP_CLIENT_SECRET", "value": "never-needed"}]
+        with patch.object(launcher.subprocess, "run", side_effect=[self.export(prod), self.export(app)]) as run:
+            env = launcher.runtime_environment(dict(self.source))
+        envs = [next(a for a in call.args[0] if a.startswith("--env=")) for call in run.call_args_list]
+        self.assertEqual(envs, ["--env=prod", "--env=prod-atb2"])
+        self.assertEqual(env["FEEDBACK_SUPABASE_KEY"], "k")
+        self.assertEqual(env["BAMMY_GITHUB_APP_CLIENT_ID"], "Iv1.x")
+        self.assertIn("PRIVATE KEY", env["BAMMY_GITHUB_APP_PRIVATE_KEY"])
+        for key in ("ATB2_GITHUB_TOKEN", "ATB_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "BAMMY_GITHUB_APP_CLIENT_SECRET"):
+            self.assertNotIn(key, env)
+
+    def test_without_the_app_the_dedicated_token_still_serves_gh(self):
+        prod = [{"key": "ATB2_GITHUB_TOKEN", "value": "ghp_person"}]
+        with patch.object(launcher.subprocess, "run", return_value=self.export(prod)):
+            env = launcher.runtime_environment({**self.source, "INFISICAL_ENV": "prod"})
+        self.assertEqual(env["GH_TOKEN"], "ghp_person")

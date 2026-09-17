@@ -19,6 +19,7 @@ ATB2_SLACK_SIGNING_SECRET ATB_SLACK_SIGNING_SECRET
 ATB2_POSTHOG_API_KEY ATB2_POSTHOG_PROJECT_ID ATB2_POSTHOG_HOST
 ATB_POSTHOG_API_KEY ATB_POSTHOG_PROJECT_ID ATB_POSTHOG_HOST
 ATB2_GITHUB_TOKEN ATB_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN FEEDBACK_SUPABASE_KEY FEEDBACK_SUPABASE_ANON_KEY FEEDBACK_SUPABASE_URL
+BAMMY_GITHUB_APP_CLIENT_ID BAMMY_GITHUB_APP_PRIVATE_KEY
 BAML_VERSION HOSTNAME ATB2_SLACK_OFF ATB2_STAGES BAML_LOG
 """.split())
 FIXED_ENV = {
@@ -86,29 +87,38 @@ def runtime_environment(source):
             export_env["INFISICAL_TOKEN"] = token
         else:
             export_env["INFISICAL_TOKEN"] = source["INFISICAL_TOKEN"]
-        result = subprocess.run(
-            ["/usr/local/bin/infisical", "export", "--format=json", "--silent",
-             "--telemetry=false", "--expand=false", "--projectId=" + project,
-             "--env=" + source.get("INFISICAL_ENV", "prod")],
-            env=export_env, cwd="/", stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, timeout=120,
-        )
-        if result.returncode:
-            # Exporter diagnostics may contain secrets; do not relay them.
-            raise ValueError("Infisical export failed")
-        rows = json.loads(result.stdout)
-        if not isinstance(rows, list):
-            raise ValueError("invalid Infisical export")
-        for row in rows:
-            if not isinstance(row, dict) or not isinstance(row.get("key"), str):
-                raise ValueError("invalid Infisical export row")
-            key = row["key"]
-            if key in RUNTIME_KEYS:
-                value = row.get("value")
-                if not isinstance(value, str) or "\0" in value:
-                    raise ValueError("invalid runtime secret value")
-                env[key] = value
-    if env.get("ATB2_GITHUB_TOKEN"):
+        # INFISICAL_ENV names one environment or several, comma separated
+        # ("prod,prod-atb2"); later ones override earlier ones.
+        for infisical_env in [e.strip() for e in source.get("INFISICAL_ENV", "prod").split(",") if e.strip()]:
+            result = subprocess.run(
+                ["/usr/local/bin/infisical", "export", "--format=json", "--silent",
+                 "--telemetry=false", "--expand=false", "--projectId=" + project,
+                 "--env=" + infisical_env],
+                env=export_env, cwd="/", stdin=subprocess.DEVNULL,
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode:
+                # Exporter diagnostics may contain secrets; do not relay them.
+                raise ValueError("Infisical export failed")
+            rows = json.loads(result.stdout)
+            if not isinstance(rows, list):
+                raise ValueError("invalid Infisical export")
+            for row in rows:
+                if not isinstance(row, dict) or not isinstance(row.get("key"), str):
+                    raise ValueError("invalid Infisical export row")
+                key = row["key"]
+                if key in RUNTIME_KEYS:
+                    value = row.get("value")
+                    if not isinstance(value, str) or "\0" in value:
+                        raise ValueError("invalid runtime secret value")
+                    env[key] = value
+    if env.get("BAMMY_GITHUB_APP_CLIENT_ID") and "PRIVATE KEY" in env.get("BAMMY_GITHUB_APP_PRIVATE_KEY", ""):
+        # The bammy GitHub App is the runner's identity: installation tokens are
+        # minted on demand (github-app-token.py), and no personal token reaches
+        # the runtime, so nothing it does can appear under a person's name.
+        for key in ("ATB2_GITHUB_TOKEN", "ATB_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
+            env.pop(key, None)
+    elif env.get("ATB2_GITHUB_TOKEN"):
         env["GH_TOKEN"] = env["ATB2_GITHUB_TOKEN"]
     env.update(FIXED_ENV)
     return env

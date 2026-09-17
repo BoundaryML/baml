@@ -21,3 +21,4 @@
 !deploy/traces.py
 
 !deploy/stamp-cli.py
+!deploy/github-app-token.py

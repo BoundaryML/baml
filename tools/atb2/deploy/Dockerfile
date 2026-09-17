@@ -64,7 +64,7 @@ COPY deploy/traces.py /usr/local/lib/atb2/
 RUN mkdir -p /usr/local/lib/atb2/traced-bin \
     && printf '#!/bin/sh\nexec /usr/bin/python3 -I /usr/local/lib/atb2/traces.py "$@"\n' > /usr/local/lib/atb2/traced-bin/claude \
     && chmod 755 /usr/local/lib/atb2/traced-bin/claude
-COPY deploy/sandbox.py deploy/push.py deploy/push-scan.py /usr/local/lib/atb2/
+COPY deploy/sandbox.py deploy/push.py deploy/push-scan.py deploy/github-app-token.py /usr/local/lib/atb2/
 COPY deploy/entrypoint.sh /usr/local/bin/atb2-entrypoint
 COPY deploy/build-cli.sh /usr/local/bin/atb2-build-cli
 COPY deploy/bootstrap.sh /usr/local/bin/atb2-bootstrap
