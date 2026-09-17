@@ -1,0 +1,5 @@
+[package]
+name = "chess-perft-benchmark"
+
+[toolchain]
+version = "0.17.1-nightly.20260824.b"
