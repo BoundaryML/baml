@@ -221,11 +221,15 @@ test "mounted generic return retains its concrete class type" {
 test "mounted package supports declared type aliases" {
     let app = reflect.Package.compile(
         {
-            "lib.baml": `
-                type Name = string
+            "ns_models/lib.baml": `
+                class Person {
+                    name string
+                }
 
-                function greet(name: Name) -> Name throws never {
-                    "Hello, " + name
+                type PersonAlias = Person
+
+                function make_person(name: string) -> PersonAlias throws never {
+                    Person { name: name }
                 }
             `,
         },
@@ -234,7 +238,7 @@ test "mounted package supports declared type aliases" {
         {
             "main.baml": `
                 function main() -> string throws never {
-                    app.greet("Ada")
+                    "Hello, " + app.models.make_person("Ada").name
                 }
             `,
         },

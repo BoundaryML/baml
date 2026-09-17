@@ -177,6 +177,34 @@ impl StubViewpoint<'_> {
     }
 }
 
+/// Render a type from the namespace containing its synthetic stub.
+/// Local wire names are package-relative, while source lookup is
+/// namespace-relative: same-namespace declarations are bare and every other
+/// local declaration needs the absolute `root` spelling.
+struct StubTyRender<'a> {
+    namespace: &'a [Name],
+}
+
+impl baml_type::TyRenderStrategy<TypeName> for StubTyRender<'_> {
+    fn qtn(&self, qtn: &TypeName) -> String {
+        if !qtn.is_local() {
+            return qtn.render_dotted(false);
+        }
+        if qtn.namespace().as_slice() == self.namespace {
+            return qtn.name().to_string();
+        }
+        std::iter::once(baml_type::ADDRESSABLE_USER_PACKAGE)
+            .chain(qtn.namespace().iter().map(Name::as_str))
+            .chain(std::iter::once(qtn.name().as_str()))
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        name.to_string()
+    }
+}
+
 /// The packages a mount's interface names besides itself and the stdlib —
 /// the sibling mounts it must reach, under the aliases it spells them by.
 fn mount_references(own_aliases: &[Name], blob: &[u8]) -> Result<Vec<Name>, String> {
@@ -295,29 +323,37 @@ fn enrich_runtime_mount(
             && source_identifier(&function.name)
     }
 
-    fn stub_type(ty: &baml_type::Ty<TypeName>, viewpoint: &StubViewpoint<'_>) -> String {
+    fn stub_type(
+        ty: &baml_type::Ty<TypeName>,
+        viewpoint: &StubViewpoint<'_>,
+        namespace: &[Name],
+    ) -> String {
         // Hide a type only when its source spelling would name a package this
         // compile world cannot resolve and so produce diagnostics in a
         // phantom `runtime_mount_*` file.
         if viewpoint.hides_type(ty) {
             "unknown".to_string()
         } else {
-            ty.to_string()
+            ty.render_with(&StubTyRender { namespace })
         }
     }
 
     fn stub_interface(
         interface: &baml_type::Interface<TypeName>,
         viewpoint: &StubViewpoint<'_>,
+        namespace: &[Name],
     ) -> Option<String> {
         (!viewpoint.hides_interface(interface)).then(|| {
-            baml_type::Ty::Interface(
-                interface.name.clone(),
-                interface.generics.clone(),
-                interface.associated_types.clone(),
-                baml_type::TyAttr::default(),
+            stub_type(
+                &baml_type::Ty::Interface(
+                    interface.name.clone(),
+                    interface.generics.clone(),
+                    interface.associated_types.clone(),
+                    baml_type::TyAttr::default(),
+                ),
+                viewpoint,
+                namespace,
             )
-            .to_string()
         })
     }
 
@@ -329,6 +365,7 @@ fn enrich_runtime_mount(
         generic_params: &[baml_type::ParamTy],
         generic_param_bounds: &[Vec<baml_type::Interface<TypeName>>],
         viewpoint: &StubViewpoint<'_>,
+        namespace: &[Name],
         spell_bounds: bool,
     ) -> String {
         let generics = generic_params
@@ -341,7 +378,7 @@ fn enrich_runtime_mount(
                         .get(index)
                         .into_iter()
                         .flatten()
-                        .filter_map(|bound| stub_interface(bound, viewpoint))
+                        .filter_map(|bound| stub_interface(bound, viewpoint, namespace))
                         .collect::<Vec<_>>()
                 } else {
                     Vec::new()
@@ -366,12 +403,14 @@ fn enrich_runtime_mount(
     fn stub_generics(
         function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
+        namespace: &[Name],
         spell_bounds: bool,
     ) -> String {
         stub_generic_params(
             &function.generic_params,
             &function.generic_param_bounds,
             viewpoint,
+            namespace,
             spell_bounds,
         )
     }
@@ -404,7 +443,7 @@ fn enrich_runtime_mount(
                 namespace
             }
         };
-        let generics = stub_generics(function, viewpoint, false);
+        let generics = stub_generics(function, viewpoint, &namespace, false);
         let params = function
             .params
             .iter()
@@ -429,7 +468,7 @@ fn enrich_runtime_mount(
             " throws unknown".to_string()
         };
         // Mounted inference owns the real return type.
-        let return_type = stub_type(&function.return_type, viewpoint);
+        let return_type = stub_type(&function.return_type, viewpoint, &namespace);
         let source = format!(
             "function {name}{generics}({params}) -> {return_type}{throws} {{ $rust_function }}\n"
         );
@@ -461,13 +500,14 @@ fn enrich_runtime_mount(
     fn method_stub(
         function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
+        namespace: &[Name],
         kind: MethodStubKind,
     ) -> Option<String> {
         if !stubbable(function) {
             return None;
         }
         let name = &function.name;
-        let generics = stub_generics(function, viewpoint, true);
+        let generics = stub_generics(function, viewpoint, namespace, true);
         let params = function
             .params
             .iter()
@@ -486,13 +526,13 @@ fn enrich_runtime_mount(
                     .as_ref()
                     .filter(|name| source_identifier(name))
                     .map_or_else(|| format!("arg{index}"), ToString::to_string);
-                let ty = stub_type(&param.ty, viewpoint);
+                let ty = stub_type(&param.ty, viewpoint, namespace);
                 let default = if param.is_optional() { " = null" } else { "" };
                 format!("{param_name}: {ty}{default}")
             })
             .collect::<Vec<_>>()
             .join(", ");
-        let return_type = stub_type(&function.return_type, viewpoint);
+        let return_type = stub_type(&function.return_type, viewpoint, namespace);
         // `callable_throws` is the one effective contract (declared when
         // written, inferred otherwise) - the stub spells it exactly, ALWAYS:
         // a required interface method's signature and a `$rust_function`
@@ -502,7 +542,7 @@ fn enrich_runtime_mount(
         // whole clause to `unknown`.
         let throws = format!(
             " throws {}",
-            stub_type(&function.callable_throws, viewpoint)
+            stub_type(&function.callable_throws, viewpoint, namespace)
         );
         let body = match kind {
             MethodStubKind::InterfaceRequired => "",
@@ -563,6 +603,7 @@ fn enrich_runtime_mount(
                             generic_params,
                             generic_param_bounds,
                             &viewpoint,
+                            export_namespace,
                             true,
                         );
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
@@ -572,11 +613,7 @@ fn enrich_runtime_mount(
                             // type here so nested projections see the same ABI;
                             // only genuinely hidden package names degrade to
                             // `unknown` in the link-only source.
-                            let ty = if viewpoint.hides_type(ty) {
-                                "unknown".to_string()
-                            } else {
-                                ty.to_string()
-                            };
+                            let ty = stub_type(ty, &viewpoint, export_namespace);
                             write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                             writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
@@ -589,8 +626,12 @@ fn enrich_runtime_mount(
                         // take — without that namespace shadowing the class.
                         for method in methods.iter() {
                             if let ExternalCallTarget::Method { .. } = method.target
-                                && let Some(stub) =
-                                    method_stub(method, &viewpoint, MethodStubKind::ClassMethod)
+                                && let Some(stub) = method_stub(
+                                    method,
+                                    &viewpoint,
+                                    export_namespace,
+                                    MethodStubKind::ClassMethod,
+                                )
                             {
                                 source.push_str(&stub);
                             }
@@ -618,11 +659,16 @@ fn enrich_runtime_mount(
                 } => {
                     let namespace = qtn.namespace().clone();
                     let name = qtn.name().clone();
-                    let generic_suffix =
-                        stub_generic_params(generic_params, param_bounds, &viewpoint, true);
+                    let generic_suffix = stub_generic_params(
+                        generic_params,
+                        param_bounds,
+                        &viewpoint,
+                        &namespace,
+                        true,
+                    );
                     let requires = requires
                         .iter()
-                        .filter_map(|required| stub_interface(required, &viewpoint))
+                        .filter_map(|required| stub_interface(required, &viewpoint, &namespace))
                         .collect::<Vec<_>>();
                     let requires_suffix = if requires.is_empty() {
                         String::new()
@@ -635,14 +681,14 @@ fn enrich_runtime_mount(
                         let bound = associated
                             .bound
                             .as_ref()
-                            .and_then(|bound| stub_interface(bound, &viewpoint))
+                            .and_then(|bound| stub_interface(bound, &viewpoint, &namespace))
                             .map_or_else(String::new, |bound| format!(" extends {bound}"));
                         // An unspellable default still means the binding is
                         // optional. Widen only that value to `unknown`, just as
                         // field/method slots do, rather than turning a valid
                         // mounted impl into a false "missing binding" error.
                         let default = associated.default.as_ref().map_or_else(String::new, |ty| {
-                            format!(" = {}", stub_type(ty, &viewpoint))
+                            format!(" = {}", stub_type(ty, &viewpoint, &namespace))
                         });
                         writeln!(&mut source, "  type {}{bound}{default}", associated.name)
                             .expect("writing to String is infallible");
@@ -651,11 +697,7 @@ fn enrich_runtime_mount(
                         // Keep ordinary source-spellable ABI intact, but avoid
                         // spelling a package this world cannot resolve from any
                         // nested type.
-                        let ty = if viewpoint.hides_type(ty) {
-                            "unknown".to_string()
-                        } else {
-                            ty.to_string()
-                        };
+                        let ty = stub_type(ty, &viewpoint, &namespace);
                         write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                         writeln!(&mut source, "  {field}: {ty}")
                             .expect("writing to String is infallible");
@@ -666,16 +708,22 @@ fn enrich_runtime_mount(
                     // is slotted under the interface-qualified name the
                     // runtime linker resolves to the dependency's body.
                     for method in required_methods.iter() {
-                        if let Some(stub) =
-                            method_stub(method, &viewpoint, MethodStubKind::InterfaceRequired)
-                        {
+                        if let Some(stub) = method_stub(
+                            method,
+                            &viewpoint,
+                            &namespace,
+                            MethodStubKind::InterfaceRequired,
+                        ) {
                             source.push_str(&stub);
                         }
                     }
                     for method in default_methods.iter() {
-                        if let Some(stub) =
-                            method_stub(method, &viewpoint, MethodStubKind::InterfaceDefault)
-                        {
+                        if let Some(stub) = method_stub(
+                            method,
+                            &viewpoint,
+                            &namespace,
+                            MethodStubKind::InterfaceDefault,
+                        ) {
                             source.push_str(&stub);
                         }
                     }
@@ -703,8 +751,10 @@ fn enrich_runtime_mount(
                     if source_identifier(export_name)
                         && export_namespace.iter().all(source_identifier)
                     {
-                        let source =
-                            format!("type {export_name} = {}\n", stub_type(resolved, &viewpoint));
+                        let source = format!(
+                            "type {export_name} = {}\n",
+                            stub_type(resolved, &viewpoint, export_namespace)
+                        );
                         stubs.push((export_namespace.clone(), export_name.clone(), source));
                     }
                 }
@@ -832,11 +882,7 @@ fn enrich_runtime_mount(
                 );
                 writeln!(&mut source, "class {name} {{").expect("writing to String is infallible");
                 for (field, ty, attrs) in fields {
-                    let ty = if viewpoint.hides_type(ty) {
-                        "unknown".to_string()
-                    } else {
-                        ty.to_string()
-                    };
+                    let ty = stub_type(ty, &viewpoint, &[]);
                     write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                     writeln!(&mut source, "  {field} {ty}")
                         .expect("writing to String is infallible");
@@ -934,11 +980,7 @@ fn enrich_runtime_mount(
                             .expect("writing to String is infallible");
                         for (field, ty, attrs) in fields {
                             write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
-                            let ty = if viewpoint.hides_type(ty) {
-                                "unknown".to_string()
-                            } else {
-                                ty.to_string()
-                            };
+                            let ty = stub_type(ty, &viewpoint, &[]);
                             writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
@@ -3069,19 +3111,41 @@ mod tests {
     #[test]
     fn runtime_mount_stubs_include_declared_type_aliases() {
         use baml_compiler2_hir_ty::package_interface::ExportedType;
+        use baml_type::{Ty, TyAttr};
 
+        let models = vec![Name::new("models")];
+        let local_models_type = |name: &str| {
+            baml_type::QualifiedTypeName::new(Name::new("user"), models.clone(), Name::new(name))
+        };
         let mut types = IndexMap::new();
         types.insert(
-            vec![Name::new("models")],
+            models.clone(),
             IndexMap::from([(
-                Name::new("Name"),
+                Name::new("Tree"),
                 ExportedType::TypeAlias {
                     qtn: baml_type::QualifiedTypeName::new(
                         Name::new("app"),
-                        vec![Name::new("models")],
-                        Name::new("Name"),
+                        models.clone(),
+                        Name::new("Tree"),
                     ),
-                    resolved: baml_type::Ty::string(),
+                    resolved: Ty::Union(
+                        Box::new([
+                            Ty::Class(local_models_type("Node"), Box::new([]), TyAttr::default()),
+                            Ty::List(
+                                Box::new(Ty::TypeAlias(
+                                    local_models_type("Tree"),
+                                    TyAttr::default(),
+                                )),
+                                TyAttr::default(),
+                            ),
+                            Ty::Class(
+                                baml_type::QualifiedTypeName::local(Name::new("RootNode")),
+                                Box::new([]),
+                                TyAttr::default(),
+                            ),
+                        ]),
+                        TyAttr::default(),
+                    ),
                 },
             )]),
         );
@@ -3089,7 +3153,7 @@ mod tests {
             types,
             functions: IndexMap::new(),
             throw_sets: FunctionThrowSets::default(),
-            namespaces: std::collections::BTreeSet::from([vec![Name::new("models")]]),
+            namespaces: std::collections::BTreeSet::from([models.clone()]),
             impls: Vec::new(),
         };
         let interface_blob =
@@ -3107,9 +3171,9 @@ mod tests {
         assert_eq!(
             stubs,
             vec![(
-                vec![Name::new("models")],
-                Name::new("Name"),
-                "type Name = string\n".to_string(),
+                models,
+                Name::new("Tree"),
+                "type Tree = Node | Tree[] | root.RootNode\n".to_string(),
             )]
         );
     }
