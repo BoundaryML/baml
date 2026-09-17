@@ -127,6 +127,30 @@ class Reason {
 );
 
 test_deserializer!(
+    test_unquoted_object_value_retains_uppercase_boolean_text,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:TRUE,label:value}"#,
+    TypeIR::class("Reason"),
+    { "reason": "TRUE,label:value" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_non_finite_number_text,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:NaN,label:value}"#,
+    TypeIR::class("Reason"),
+    { "reason": "NaN,label:value" }
+);
+
+test_deserializer!(
     test_compact_numeric_unquoted_key,
     r#"
 class NumericKey {

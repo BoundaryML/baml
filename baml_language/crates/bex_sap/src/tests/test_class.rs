@@ -235,6 +235,30 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_unquoted_object_value_retains_uppercase_boolean_text,
+    r#"{reason:TRUE,label:value}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "TRUE,label:value" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_non_finite_number_text,
+    r#"{reason:NaN,label:value}"#,
+    baml_tyannotated!(Reason),
+    baml_db! {
+        class Reason {
+            reason: string,
+        }
+    },
+    { "reason": "NaN,label:value" }
+);
+
+test_deserializer!(
     test_compact_numeric_unquoted_key,
     r#"{id:001,1:foo}"#,
     baml_tyannotated!(NumericKey),

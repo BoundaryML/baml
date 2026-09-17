@@ -288,12 +288,20 @@ impl JsonParseState {
                                 !(current_value.contains(" ") || current_value.contains("("));
                             let is_possible_value =
                                 is_numeric || is_bool || is_null || is_identifier;
+                            let trimmed_value = current_value.trim();
+                            let is_complete_json_primitive =
+                                matches!(trimmed_value, "true" | "false" | "null")
+                                    || trimmed_value
+                                        .parse::<f64>()
+                                        .ok()
+                                        .and_then(serde_json::Number::from_f64)
+                                        .is_some();
 
                             // A compact separator is only unambiguous after a
                             // complete JSON primitive. Arbitrary unquoted text
                             // such as `docs,sip:user@example.com` can otherwise
                             // be mistaken for another field.
-                            if (is_numeric || is_bool || is_null)
+                            if is_complete_json_primitive
                                 && Self::starts_compact_unquoted_object_key(&next)
                             {
                                 log::debug!("Closing due to: compact unquoted key after comma");
