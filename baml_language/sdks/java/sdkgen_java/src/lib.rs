@@ -393,8 +393,29 @@ fn to_source_code_internal(
             wires.join(", ")
         ));
     }
+    // Java limits each method, including a static initializer, to 64 KB of
+    // bytecode. Split large registries into small helper methods.
+    let mut registration_methods = String::new();
+    let mut registration_calls = String::new();
+    let statements: Vec<&str> = registrations.lines().collect();
+    for (index, chunk) in statements.chunks(16).enumerate() {
+        registration_calls.push_str(&format!("        registerTypes{index}();\n"));
+        registration_methods.push_str(&format!(
+            "    private static void registerTypes{index}() {{\n"
+        ));
+        for statement in chunk {
+            registration_methods.push_str(statement);
+            registration_methods.push('\n');
+        }
+        registration_methods.push_str("    }\n\n");
+    }
+    let registrations = registration_calls;
     let anchor_body = format!(
         "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class {anchor_ident} {{\n    private {anchor_ident}() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = {anchor_ident}.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
+    );
+    let anchor_body = anchor_body.replace(
+        "    /** Forces class initialization",
+        &format!("{registration_methods}    /** Forces class initialization"),
     );
     let anchor_body = if embedded_baml_toml.is_some() {
         anchor_body.replace(
@@ -839,6 +860,23 @@ mod tests {
         assert!(anchor.starts_with("// ---"));
         assert!(anchor.contains("package baml_sdk;"));
         assert!(anchor.contains("public final class Baml {"));
+    }
+
+    #[test]
+    fn large_registry_splits_static_initialization() {
+        let mut pool = SymbolPool::new();
+        for i in 0..17 {
+            let n = name("user", &["many"], &format!("Class{i}"));
+            pool.insert(n.clone(), class_sym_with_props(&n, &[], vec![], i));
+        }
+
+        let out = emit_sdk(&pool);
+        let anchor = &out[&PathBuf::from("Baml.java")];
+        assert!(anchor.contains("registerTypes0();"));
+        assert!(anchor.contains("registerTypes1();"));
+        assert!(anchor.contains("private static void registerTypes0()"));
+        assert!(anchor.contains("private static void registerTypes1()"));
+        assert_eq!(anchor.matches("TypeRegistry.registerClass(").count(), 17);
     }
 
     #[test]
