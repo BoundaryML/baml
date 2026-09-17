@@ -6557,7 +6557,7 @@ impl BexEngine {
                                 // / projection / whatever the surrounding
                                 // expression expected — no implicit await.
                                 let value = if operation == SysOp::BamlHostCallHostValue {
-                                    self.convert_external_to_vm_value_with_ty(
+                                    self.convert_host_return_to_vm_value_with_ty(
                                         &mut thread,
                                         external,
                                         host_ret_ty.as_ref(),
