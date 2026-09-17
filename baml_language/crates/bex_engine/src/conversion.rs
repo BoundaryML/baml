@@ -1352,6 +1352,15 @@ impl BexEngine {
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
         runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
     ) -> Result<Value, EngineError> {
+        // Host codecs may be value-shaped rather than schema-shaped. Apply
+        // numeric boundary coercion at the root too; recursive container and
+        // class conversion already does this for children. This is essential
+        // for JavaScript, where an integral `number` is encoded as `Int` even
+        // when the host callable's declared return type is `float`.
+        if let Some(expected_ty) = expected_ty {
+            external = coerce_numeric_to_declared_type(external, expected_ty)?;
+        }
+
         // A `baml.json.json` slot materializes containers with the alias as
         // their element/value type, exactly like BAML-born `baml.json.parse`
         // values (`serde_to_value`), so runtime type tests (`match (j) { let
@@ -3641,7 +3650,8 @@ impl BexEngine {
     /// This is the engine-side complement to the bridges' shared
     /// `bex_external_types::validate_host_return` guard. The shared guard runs
     /// at the FFI boundary and enforces everything checkable without a schema
-    /// (scalar discrimination including `int` ≠ `float`, container recursion,
+    /// (scalar discrimination including host-boundary `int` → `float`
+    /// widening, container recursion,
     /// enum identity, class-*name* identity). This method adds the one check
     /// the shared guard cannot perform — class *field types* — by resolving
     /// the declared class against the engine's compiled schema
@@ -3880,7 +3890,8 @@ impl BexEngine {
             }
 
             // Scalars and everything else: defer to the schema-free shape
-            // check (int ≠ float, exact tags, literal equality, media).
+            // check (including int → float widening, otherwise exact tags,
+            // literal equality, and media).
             _ => {
                 bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
             }

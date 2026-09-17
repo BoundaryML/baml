@@ -373,6 +373,85 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_widens_integral_return_to_float() {
+    let source = r#"
+        function measure(f: () -> float) -> float {
+            return f();
+        }
+    "#;
+
+    // Value-shaped host encoders (notably JavaScript's) encode an integral
+    // number with the int wire tag even when the callback contract is float.
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(1)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral host number should satisfy a float return contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(1.0), got {other:?}"),
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_widens_integral_class_field_to_float() {
+    let source = r#"
+        class Size {
+            width float
+        }
+        function measure(f: () -> Size) -> float {
+            return f().width;
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| {
+        let mut fields = IndexMap::new();
+        fields.insert("width".to_string(), BexExternalValue::Int(612));
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Size".to_string(),
+            type_args: vec![],
+            fields,
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral class field should satisfy its float contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(612.0), got {other:?}"),
+    };
+    assert!((value - 612.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same

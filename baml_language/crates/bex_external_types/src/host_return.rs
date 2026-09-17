@@ -6,8 +6,8 @@
 //! the engine and must be type-checked against the declared return type `R`
 //! before it is materialized on the VM heap. Skipping this check lets a buggy
 //! or malicious host inject a value that violates `R` — a string where an
-//! `int` is declared, a `Variant` of the wrong enum, an `int` for a `float`,
-//! and so on — corrupting later type-directed VM operations.
+//! `int` is declared, a `Variant` of the wrong enum, and so on — corrupting
+//! later type-directed VM operations.
 //!
 //! # Layering
 //!
@@ -16,7 +16,7 @@
 //! everything that can be checked from the value tree + the declared [`RuntimeTy`]
 //! alone:
 //!
-//! - scalar discrimination (`Int` does *not* satisfy `Float` and vice-versa);
+//! - scalar discrimination (including host-boundary `Int` → `Float` widening);
 //! - `String` / `Bool` / `Uint8Array` exact tags;
 //! - `Literal` value equality;
 //! - container recursion (`List` element types, `Map` value types);
@@ -196,12 +196,15 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             matches!(value, BexExternalValue::Null)
         }
         RuntimeTy::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
-        // `Int` and `Float` are distinct: an `Int` value does NOT satisfy
-        // `Float`, nor a `Float` value `Int`. A host-returned wire tag must match
-        // the declared representation exactly — never silently reinterpreted (the
-        // int→float/bigint conversions are boundary coercions, not subtyping).
+        // Hosts with value-shaped encoders cannot always preserve the declared
+        // numeric type. In particular, JavaScript has one `number` type and the
+        // Node bridge tags every integral number as `Int`. Admit `Int` in a
+        // `Float` slot so the engine can apply its existing boundary widening;
+        // the reverse remains invalid.
         RuntimeTy::Int { .. } => matches!(value, BexExternalValue::Int(_)),
-        RuntimeTy::Float { .. } => matches!(value, BexExternalValue::Float(_)),
+        RuntimeTy::Float { .. } => {
+            matches!(value, BexExternalValue::Int(_) | BexExternalValue::Float(_))
+        }
         RuntimeTy::Bigint { .. } => matches!(value, BexExternalValue::Bigint(_)),
         RuntimeTy::String { .. } => matches!(value, BexExternalValue::String(_)),
         RuntimeTy::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
@@ -214,7 +217,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             // `Literal::Float` stores the literal as a string for precision;
             // match by tag (any float), mirroring
             // `bex_engine::conversion::value_matches_type`.
-            (Literal::Float(_), BexExternalValue::Float(_)) => true,
+            (Literal::Float(_), BexExternalValue::Int(_) | BexExternalValue::Float(_)) => true,
             _ => false,
         },
 
@@ -510,12 +513,21 @@ mod tests {
     }
 
     #[test]
-    fn scalar_int_does_not_satisfy_float_and_vice_versa() {
-        // The core int≠float distinction.
+    fn scalar_int_widens_to_float_but_float_does_not_narrow_to_int() {
         assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::int()).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::float()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::float()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::float()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::int()).is_err());
+    }
+
+    #[test]
+    fn int_to_float_widening_is_recursive() {
+        let floats = RuntimeTy::list(RuntimeTy::float());
+        let values = BexExternalValue::Array {
+            element_type: RuntimeTy::int(),
+            items: vec![BexExternalValue::Int(1), BexExternalValue::Float(2.5)],
+        };
+        assert!(validate_host_return(&values, &floats).is_ok());
     }
 
     #[test]
