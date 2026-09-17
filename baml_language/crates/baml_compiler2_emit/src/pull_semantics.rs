@@ -132,6 +132,16 @@ pub(crate) trait PullSink<'db> {
 
 /// Stack-effect callbacks for statement/terminator helpers.
 pub(crate) trait StackEffectSink<'db>: PullSink<'db> {
+    /// Pull the value for a projection store. Bytecode emission overrides this
+    /// hook so rvalue-specific optimizations (including typed numeric opcodes)
+    /// apply without changing the shared base/index/value evaluation order.
+    fn pull_store_rvalue(&mut self, value: &Rvalue<'db>) -> Result<(), Self::Error>
+    where
+        Self: Sized,
+    {
+        walk_rvalue_pull(self, value)
+    }
+
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
@@ -203,14 +213,14 @@ pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
         Place::Field { base, field } => {
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
-            walk_rvalue_pull(sink, value)?;
+            sink.pull_store_rvalue(value)?;
             sink.store_field_value(*field, &name)?;
             Ok(true)
         }
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;
             walk_place_pull(sink, &Place::Local(*index))?;
-            walk_rvalue_pull(sink, value)?;
+            sink.pull_store_rvalue(value)?;
             sink.store_index_value(*kind)?;
             Ok(true)
         }
