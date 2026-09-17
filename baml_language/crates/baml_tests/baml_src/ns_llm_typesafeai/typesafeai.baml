@@ -320,6 +320,15 @@ test "typesafeai models endpoint request" {
     assert.equal(request.headers.get("authorization"), null)
 }
 
+test "typesafeai trims a configured base URL" {
+    let ts_client = typesafeai.Client.new(base_url = "  https://example.com/  ");
+    assert.equal(ts_client.build_list_models_request().url, "https://example.com/v1/models");
+    assert.equal(
+        ts_client.build_system_one_request("hello", { "urgent": typesafeai.noul("Urgent?") }).url,
+        "https://example.com/v1/systemone",
+    )
+}
+
 test "typesafeai rejects an unresolved base URL" {
     let ts_client = typesafeai.Client.new(base_url = env.TYPESAFE_TEST_UNSET_BASE_URL);
     let error = ts_client.build_list_models_request().url catch_all (e) {

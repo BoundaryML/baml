@@ -239,8 +239,8 @@ function _origin(c: root.Client) -> string {
     if (c.base_url != null && resolved == null) {
         throw _invalid(`base_url did not resolve: ${ai.wire.credential_sources(c.base_url, null)}`);
     }
-    let base = resolved ?? "https://api.typesafe.ai";
-    if (base.trim() == "") {
+    let base = (resolved ?? "https://api.typesafe.ai").trim();
+    if (base == "") {
         throw _invalid("base_url must not be empty");
     }
     if (!base.starts_with("https://") || base == "https://") {
