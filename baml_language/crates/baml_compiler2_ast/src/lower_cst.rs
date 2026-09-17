@@ -917,6 +917,7 @@ pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
     ("bedrock", "aws", "BedrockClient"),
     ("ai-gateway-images", "vercel", "AiGatewayImageClient"),
     ("claude-code", "claude_code", "ClaudeCodeClient"),
+    ("typesafeai", "typesafeai", "Client"),
 ];
 
 /// The provider a `"provider/model"` literal names, as `(package, class)`.

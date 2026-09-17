@@ -121,6 +121,7 @@ pub const MANIFESTS: &[BuiltinManifest] = &[
     manifest!("anthropic"),
     manifest!("google"),
     manifest!("claude_code"),
+    manifest!("typesafeai"),
     manifest!("aws"),
     manifest!("vercel"),
 ];
@@ -265,6 +266,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("vercel", "ns_internal/images.baml"),
     builtin!("claude_code", "cli.baml"),
     builtin!("claude_code", "ns_internal/cli.baml"),
+    builtin!("typesafeai", "client.baml"),
+    builtin!("typesafeai", "systemone.baml"),
+    builtin!("typesafeai", "ns_internal/systemone.baml"),
     // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
     builtin!("ai", "ns_mcp/mcp.baml"),
     builtin!("ai", "ns_internal/mcp.baml"),
