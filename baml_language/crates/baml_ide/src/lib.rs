@@ -74,7 +74,7 @@ pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use rename::{RenameError, prepare_rename, rename};
 pub use resolve::{Location, SymbolTarget, symbol_at, target_definition};
 pub use search::{SearchHit, SymbolInfo, search_ranked, search_symbols};
-pub use symbol_pool::build_symbol_pool;
+pub use symbol_pool::{build_interface_implementors, build_symbol_pool};
 // `symbols::SymbolKind` (the legacy flat listing kind) stays module-qualified:
 // the unqualified name belongs to `describe::SymbolKind`, the payload-carrying
 // kind of a symbol description.

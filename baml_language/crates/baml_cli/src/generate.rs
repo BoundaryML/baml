@@ -392,6 +392,7 @@ impl GenerateArgs {
 
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_ide::build_symbol_pool(&db);
+        let interface_implementors = baml_ide::build_interface_implementors(&db);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
@@ -502,8 +503,9 @@ impl GenerateArgs {
                     .collect()
                 }
                 OutputType::Rust => {
-                    let generated = sdkgen_rust::to_source_code_with_bytecode_and_metadata(
+                    let generated = sdkgen_rust::to_source_code_with_bytecode_and_metadata_and_interface_implementors(
                         &pool,
+                        &interface_implementors,
                         &baml_bytecode,
                         &embedded_baml_toml,
                         &sdkgen_rust::RustGenOptions {
@@ -518,6 +520,24 @@ impl GenerateArgs {
                     );
                     for warning in &generated.warnings {
                         reporter.warning(format!("skipped `{}`: {}", warning.fqn, warning.reason));
+                    }
+                    let skipped_user_callables = generated
+                        .warnings
+                        .iter()
+                        .filter(|warning| {
+                            warning.kind == sdkgen_rust::SkipKind::Callable
+                                && warning.fqn.starts_with("user.")
+                                && !warning.fqn.contains('@')
+                        })
+                        .count();
+                    if skipped_user_callables > 0 {
+                        reporter.abandon();
+                        crate::reporter::print_error(format!(
+                            "Rust SDK generator `{}` skipped {skipped_user_callables} user callable(s); output `{}` was not written",
+                            generator.name,
+                            output_dir.display(),
+                        ));
+                        return Ok(crate::ExitCode::Other);
                     }
                     generated
                         .files

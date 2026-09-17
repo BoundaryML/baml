@@ -213,8 +213,14 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path) {
         edition: GENERATED_EDITION.to_string(),
     };
     let pool = loaded.pool;
+    let interface_implementors = loaded.interface_implementors;
     let baml_bytecode = loaded.baml_bytecode;
-    let output = sdkgen_rust::to_source_code_with_bytecode(&pool, &baml_bytecode, &options);
+    let output = sdkgen_rust::to_source_code_with_bytecode_and_interface_implementors(
+        &pool,
+        &interface_implementors,
+        &baml_bytecode,
+        &options,
+    );
     // Skipped symbols are the expected state while the generator's type
     // coverage grows, so summarize instead of one line per symbol (stdlib
     // pools alone would produce dozens per fixture).
