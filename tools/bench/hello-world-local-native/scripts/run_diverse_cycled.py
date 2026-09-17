@@ -8,6 +8,7 @@ import os
 import shutil
 import statistics
 import subprocess
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -78,6 +79,35 @@ def time_weighted_cpu(samples, warmup_seconds):
     )
 
 
+def gc_summary(requests, elapsed_seconds, explicit_gc, interval_seconds):
+    latencies = [request["elapsed_seconds"] for request in requests]
+    successful = sum(request["ok"] for request in requests)
+    return {
+        "mode": (
+            "fixed-interval"
+            if interval_seconds is not None
+            else "after-burst"
+            if explicit_gc
+            else "automatic"
+        ),
+        "interval_seconds": interval_seconds,
+        "target_requests_per_second": None
+        if interval_seconds is None
+        else 1 / interval_seconds,
+        "attempts": len(requests),
+        "successful": successful,
+        "failed": len(requests) - successful,
+        "achieved_attempts_per_second": len(requests) / elapsed_seconds
+        if elapsed_seconds
+        else None,
+        "latency_seconds": {
+            "median": statistics.median(latencies) if latencies else None,
+            "p95": harness.percentile(latencies, 0.95),
+            "maximum": max(latencies) if latencies else None,
+        },
+    }
+
+
 def run_one(target, workload, args, expected, result_root):
     run_dir = result_root / "runs" / f"{target}-{workload}"
     run_dir.mkdir(parents=True)
@@ -124,6 +154,40 @@ def run_one(target, workload, args, expected, result_root):
     preflight = {"ok": False, "error": "not run"}
     postflight = {"ok": False, "error": "not run"}
     started = None
+    gc_stop = threading.Event()
+    gc_thread = None
+    current_phase = {"phase": "startup", "cycle": 0}
+
+    def run_fixed_interval_gc():
+        sequence = 0
+        next_at = started + args.gc_interval
+        while True:
+            if gc_stop.wait(max(0, next_at - time.monotonic())):
+                return
+            scheduled_at = next_at
+            request_started = time.monotonic()
+            phase = dict(current_phase)
+            result = request_gc(harness.PORTS[target], args.gc_timeout)
+            completed_at = time.monotonic()
+            result.update(
+                {
+                    "sequence": sequence,
+                    "scheduled_seconds": scheduled_at - started,
+                    "started_seconds": request_started - started,
+                    "completed_seconds": completed_at - started,
+                    "schedule_lag_seconds": request_started - scheduled_at,
+                    "phase": phase["phase"],
+                    "cycle": phase["cycle"],
+                    "process_after": harness.process_stats(server.pid),
+                }
+            )
+            gc_requests.append(result)
+            sequence += 1
+            next_at += args.gc_interval
+            if next_at < completed_at:
+                skipped = int((completed_at - next_at) / args.gc_interval) + 1
+                result["skipped_intervals_after"] = skipped
+                next_at += skipped * args.gc_interval
 
     def sample(sample_file, phase, cycle):
         nonlocal previous, previous_at, stopped_reason
@@ -196,9 +260,17 @@ def run_one(target, workload, args, expected, result_root):
         end = started + args.duration
         next_sample = started
         cycle = 0
+        if args.explicit_gc and args.gc_interval is not None:
+            gc_thread = threading.Thread(
+                target=run_fixed_interval_gc,
+                name=f"gc-{target}-{workload}",
+                daemon=True,
+            )
+            gc_thread.start()
         with (run_dir / "samples.jsonl").open("w") as sample_file:
             while time.monotonic() < end and stopped_reason is None:
                 cycle += 1
+                current_phase.update({"phase": "on", "cycle": cycle})
                 on_started = time.monotonic()
                 on_deadline = min(end, on_started + args.on_seconds)
                 attack = attacks_dir / f"{cycle:03d}.gob"
@@ -248,7 +320,7 @@ def run_one(target, workload, args, expected, result_root):
                 )
                 load = None
 
-                if args.explicit_gc:
+                if args.explicit_gc and args.gc_interval is None:
                     gc_result = request_gc(harness.PORTS[target], args.gc_timeout)
                     gc_result.update(
                         {"cycle": cycle, "at_seconds": time.monotonic() - started}
@@ -260,6 +332,7 @@ def run_one(target, workload, args, expected, result_root):
 
                 if stopped_reason is not None or time.monotonic() >= end:
                     break
+                current_phase.update({"phase": "off", "cycle": cycle})
                 off_started = time.monotonic()
                 off_deadline = min(end, off_started + args.off_seconds)
                 off_phase = {
@@ -277,12 +350,24 @@ def run_one(target, workload, args, expected, result_root):
 
             if samples and stopped_reason is None:
                 sample(sample_file, "final", cycle)
+        current_phase.update({"phase": "stopped", "cycle": cycle})
+        gc_stop.set()
+        if gc_thread is not None:
+            gc_thread.join(timeout=args.gc_timeout + 1)
+            if gc_thread.is_alive():
+                stopped_reason = stopped_reason or "GC scheduler did not stop"
         elapsed = time.monotonic() - started
+        with (run_dir / "gc-requests.jsonl").open("w") as gc_file:
+            for result in gc_requests:
+                gc_file.write(json.dumps(result) + "\n")
         time.sleep(0.25)
         postflight = harness.probe(
             harness.PORTS[target], harness.WORKLOAD_PATHS[workload], expected
         )
     finally:
+        gc_stop.set()
+        if gc_thread is not None and gc_thread.is_alive():
+            gc_thread.join(timeout=args.gc_timeout + 1)
         harness.terminate(load)
         harness.terminate(server)
         server_log.close()
@@ -316,6 +401,7 @@ def run_one(target, workload, args, expected, result_root):
         "target": target,
         "workload": workload,
         "explicit_gc": args.explicit_gc,
+        "gc_interval_seconds": args.gc_interval,
         "offered_rps_during_on": args.rate,
         "elapsed_seconds": elapsed,
         "scheduled_on_seconds": scheduled_on_seconds,
@@ -342,6 +428,9 @@ def run_one(target, workload, args, expected, result_root):
         "sample_count": len(samples),
         "phases": phases,
         "gc_requests": gc_requests,
+        "gc_summary": gc_summary(
+            gc_requests, elapsed, args.explicit_gc, args.gc_interval
+        ),
         "cpu_percent_after_warmup": {
             "time_weighted_mean": time_weighted_cpu(samples, args.warmup),
             "mean": statistics.fmean(cpu_values) if cpu_values else None,
@@ -383,6 +472,11 @@ def main():
     parser.add_argument("--max-phys-footprint-mib", type=float, default=4096)
     parser.add_argument("--explicit-gc", action="store_true")
     parser.add_argument(
+        "--gc-interval",
+        type=float,
+        help="Continuously request non-overlapping explicit collections at this interval; implies --explicit-gc",
+    )
+    parser.add_argument(
         "--keep-attack-results",
         action="store_true",
         help="Retain Vegeta gob files, including every response body",
@@ -401,6 +495,8 @@ def main():
     )
     parser.add_argument("--results-dir", type=Path)
     args = parser.parse_args()
+    if args.gc_interval is not None:
+        args.explicit_gc = True
     if (
         any(
             value <= 0
@@ -415,6 +511,7 @@ def main():
                 args.max_phys_footprint_mib,
             )
         )
+        or (args.gc_interval is not None and args.gc_interval <= 0)
         or args.warmup < 0
         or args.cooldown < 0
     ):
@@ -431,7 +528,10 @@ def main():
     image_path = harness.BUILD / "apps/diverse-baml-only/benchmark-image.png"
     expected = harness.expected_responses(image_path)
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    suffix = "explicit-gc" if args.explicit_gc else "automatic-gc"
+    if args.gc_interval is not None:
+        suffix = f"explicit-gc-{1 / args.gc_interval:g}hz"
+    else:
+        suffix = "explicit-gc" if args.explicit_gc else "automatic-gc"
     result_root = (
         (
             args.results_dir
@@ -452,6 +552,7 @@ def main():
         "off_seconds": args.off_seconds,
         "duty_cycle": args.on_seconds / (args.on_seconds + args.off_seconds),
         "explicit_gc": args.explicit_gc,
+        "gc_interval_seconds": args.gc_interval,
         "python_gc": "BAML full GC followed by CPython generation-2 GC"
         if args.explicit_gc
         else None,
@@ -508,6 +609,7 @@ def main():
         "rate_during_on": args.rate,
         "duty_cycle": args.on_seconds / (args.on_seconds + args.off_seconds),
         "explicit_gc": args.explicit_gc,
+        "gc_interval_seconds": args.gc_interval,
         "duration_seconds_per_run": args.duration,
         "run_count": len(runs),
         "failed_runs": failed,
