@@ -290,6 +290,54 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
 }
 
 #[test]
+fn generate_rust_skipped_user_declaration_returns_nonzero_exit_code() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function Vision(page: image) -> string {\n  \"control\"\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust_client]\n\
+         output_type = \"rust\"\n\
+         output_dir = \"generated\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "Rust generation must fail instead of installing a partial client:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("skipped `user.Vision`: argument `page`: unsupported type: media (image)"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "Rust generator `rust_client` skipped 1 user-declared symbol; refusing to write a partial client"
+        ),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("Generated rust_client"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        !tmp.path().join("generated/baml_sdk/Cargo.toml").exists(),
+        "a failed generation must not install a partial client"
+    );
+}
+
+#[test]
 fn generate_go_writes_sdk_through_cli() {
     if !gofmt_is_available() {
         return;
