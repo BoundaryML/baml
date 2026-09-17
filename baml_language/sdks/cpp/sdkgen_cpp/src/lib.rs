@@ -454,6 +454,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/baml.h"),
     ),
     (
+        "include/baml/bigint.h",
+        include_str!("../../bridge_cpp/include/baml/bigint.h"),
+    ),
+    (
         "include/baml/box.h",
         include_str!("../../bridge_cpp/include/baml/box.h"),
     ),
@@ -1450,9 +1454,7 @@ fn translate_ty(
         Ty::RustType => {
             return Translated::Unsupported("handle type (post-step-8)".to_string());
         }
-        Ty::Bigint => {
-            return Translated::Unsupported("bigint (post-step-8)".to_string());
-        }
+        Ty::Bigint => "::baml::bigint".to_string(),
         Ty::Media(kind) => match kind {
             baml_base::MediaKind::Image => "::baml::image".to_string(),
             baml_base::MediaKind::Audio => "::baml::audio".to_string(),

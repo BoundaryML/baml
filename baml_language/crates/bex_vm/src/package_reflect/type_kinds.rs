@@ -897,7 +897,7 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
 impl BamlClassLiteralType for PackageReflectImpl {
     fn value(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Literal)?;
-        let bex_vm_types::RealizedTy::Literal(literal, _, _) = ty else {
+        let bex_vm_types::RealizedTy::Literal(literal, _) = ty else {
             unreachable!("a Literal-classified type is RealizedTy::Literal")
         };
         match literal {

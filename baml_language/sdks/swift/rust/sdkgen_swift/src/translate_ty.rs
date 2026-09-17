@@ -73,6 +73,7 @@ pub(crate) fn swift_type_path(name: &Name) -> String {
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     match ty {
         Ty::Int => Some("Swift.Int".to_string()),
+        Ty::Bigint => Some("BamlBigInt".to_string()),
         // BAML float is f64.
         Ty::Float => Some("Swift.Double".to_string()),
         Ty::String => Some("Swift.String".to_string()),
@@ -104,8 +105,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             match lit {
                 baml_base::Literal::String(_) => "Swift.String",
                 baml_base::Literal::Int(_) => "Swift.Int",
+                baml_base::Literal::Bigint(_) => "BamlBigInt",
                 baml_base::Literal::Bool(_) => "Swift.Bool",
-                // Bigint / float literals: unsupported for now.
+                // Float literals are unsupported for now.
                 _ => return None,
             }
             .to_string(),

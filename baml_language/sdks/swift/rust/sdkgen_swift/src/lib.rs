@@ -770,6 +770,9 @@ mod tests {
     fn int() -> Ty {
         Ty::Int
     }
+    fn bigint() -> Ty {
+        Ty::Bigint
+    }
     fn float() -> Ty {
         Ty::Float
     }
@@ -805,6 +808,7 @@ mod tests {
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
         assert_eq!(t(&int()).as_deref(), Some("Swift.Int"));
+        assert_eq!(t(&bigint()).as_deref(), Some("BamlBigInt"));
         assert_eq!(t(&float()).as_deref(), Some("Swift.Double"));
         assert_eq!(t(&list(int())).as_deref(), Some("[Swift.Int]"));
         assert_eq!(

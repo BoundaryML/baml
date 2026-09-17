@@ -124,16 +124,9 @@ pub fn lower_bigint_literal(
     let digits = text
         .strip_suffix('n')
         .unwrap_or_else(|| unreachable!("BIGINT_LITERAL missing 'n' suffix: {text:?}"));
-    match baml_base::num_lit::parse_bigint_literal(digits) {
-        Ok(v) if v.bits() <= baml_type::MAX_BIGINT_BITS => v,
-        Ok(_) => {
-            push_num_lit_error(
-                baml_base::num_lit::IntLitError::TooLarge,
-                token_range,
-                diags,
-            );
-            num_bigint::BigInt::from(0)
-        }
+    match baml_base::num_lit::parse_bigint_literal_with_max_bits(digits, baml_type::MAX_BIGINT_BITS)
+    {
+        Ok(v) => v,
         Err(e) => {
             push_num_lit_error(e, token_range, diags);
             num_bigint::BigInt::from(0)

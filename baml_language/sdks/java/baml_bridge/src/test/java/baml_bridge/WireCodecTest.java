@@ -61,6 +61,12 @@ class WireCodecTest {
         return w.toByteArray();
     }
 
+    private static byte[] ovBigint(BigInteger v) {
+        WireWriter w = new WireWriter();
+        w.writeString(OV_BIGINT, v.toString(16));
+        return w.toByteArray();
+    }
+
     @Test
     void decode_ok_int() {
         assertEquals(42L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(42))));
@@ -69,6 +75,12 @@ class WireCodecTest {
     @Test
     void decode_ok_negative_int() {
         assertEquals(-7L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(-7))));
+    }
+
+    @Test
+    void bigint_type_token_matches_only_bigint_values() {
+        assertTrue(ProtoReader.armMatchesValue(BamlType.BIGINT, ovBigint(BigInteger.TEN)));
+        assertFalse(ProtoReader.armMatchesValue(BamlType.BIGINT, ovString("10")));
     }
 
     @Test

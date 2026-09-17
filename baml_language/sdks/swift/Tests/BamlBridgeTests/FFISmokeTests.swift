@@ -32,6 +32,21 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == true)
     }
 
+    func testBigIntPreservesArbitraryPrecisionWireValues() throws {
+        let value = try BamlBigInt(hexadecimal: "18ee90ff6c373e0ee4e3f0ad2")
+        let encoded = value._bamlEncode().raw
+        XCTAssertEqual(encoded.bigintValue, value.hexadecimal)
+        XCTAssertEqual(BamlBigInt._bamlType?.raw.primitive.kind, .bamlTyPrimitiveBigint)
+
+        var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+        raw.bigintValue = value.hexadecimal
+        XCTAssertEqual(try BamlBigInt._bamlDecode(BamlOutboundValue(raw)), value)
+        XCTAssertThrowsError(try BamlBigInt(hexadecimal: "+a"))
+        XCTAssertThrowsError(try BamlBigInt(hexadecimal: "00"))
+        XCTAssertThrowsError(try BamlBigInt(hexadecimal: "-0"))
+        XCTAssertThrowsError(try BamlBigInt(hexadecimal: "A"))
+    }
+
     func testPromptJSONRejectsDuplicateMapKeys() {
         var value = BamlBridge_Cffi_V1_BamlOutboundValue()
         value.stringValue = "value"

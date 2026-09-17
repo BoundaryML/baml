@@ -42,6 +42,7 @@ function MatchJson(j: json) -> string {
     null => "null",
     let b: bool => "bool",
     let i: int => "int",
+    let bi: bigint => "bigint",
     let f: float => "float",
     let s: string => "string",
     let arr: json[] => "array",
