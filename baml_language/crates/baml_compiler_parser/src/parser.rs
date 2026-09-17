@@ -2866,7 +2866,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse the `@attr`s trailing a field, enum variant, or config item.
+    /// Parse the `@attr`s trailing a field or enum variant.
     ///
     /// Attributes attach to declarations, never to types: a type parse stops
     /// at `@` and leaves the attributes to the declaration that owns them.
@@ -7879,8 +7879,11 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                // Block attributes (e.g. `@@some_attr(...)`) inside config blocks
+                // Attributes belong to class, enum, interface, and function
+                // declarations; a config block has none. Parse it for
+                // recovery, then reject it rather than drop it silently.
                 if p.at(TokenKind::AtAt) {
+                    p.error_here("attributes are not allowed in a config block".to_string());
                     p.parse_atat_attribute();
                 } else {
                     p.parse_config_item();
@@ -7952,8 +7955,11 @@ impl<'a> Parser<'a> {
                 p.parse_config_value();
             }
 
-            // Optional attributes after config value (e.g., args { ... } @some_attr(...))
-            p.parse_trailing_attributes();
+            // Attributes belong to declarations, never to config values.
+            while p.at(TokenKind::At) {
+                p.error_here("a config value does not take attributes".to_string());
+                p.parse_at_attribute();
+            }
         });
     }
 
@@ -9482,6 +9488,24 @@ enum E {
                         .parent()
                         .is_none_or(|parent| parent.kind() != SyntaxKind::TYPE_EXPR)),
                 "an attribute was parsed as part of a type in:\n{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn attributes_in_config_blocks_are_parse_errors() {
+        // Attributes belong to declarations. A config block has none, so the
+        // parser rejects them instead of accepting and dropping them.
+        for source in [
+            "client<llm> C {\n  @@description(\"x\")\n  provider openai\n}\n",
+            "client<llm> C {\n  provider openai @alias(\"p\")\n}\n",
+            "client<llm> C {\n  options {\n    model \"gpt-4o\" @description(\"m\")\n    @@stream.done\n  }\n}\n",
+            "retry_policy R {\n  max_retries 3 @alias(\"n\")\n}\n",
+        ] {
+            let (_root, errors) = parse_source(source);
+            assert!(
+                !errors.is_empty(),
+                "an attribute in a config block parsed without errors:\n{source}"
             );
         }
     }
