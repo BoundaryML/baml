@@ -903,6 +903,9 @@ fn enrich_runtime_mount(
             | ExportedType::TypeAlias { .. } => {}
         }
     }
+    // The witness rows each nominal root has contributed, by its item name:
+    // a declaration reached under two export names is witnessed ONCE.
+    let mut witnessed: IndexMap<Name, Vec<ExportedImpl<TypeName>>> = IndexMap::new();
     for mount in package.types.drain(..) {
         let root_ty = baml_type::Ty::from(&mount.ty);
         // The export name is one more spelling of the mounted type, never a
@@ -925,11 +928,11 @@ fn enrich_runtime_mount(
                         details: None,
                     });
                 }
-                Some(qtn.name())
+                Some(qtn.name().clone())
             }
             _ => None,
         };
-        if root_item != Some(&mount.export_name) {
+        if root_item.as_ref() != Some(&mount.export_name) {
             let root_types = interface.types.entry(Vec::new()).or_default();
             if root_types.contains_key(&mount.export_name) {
                 return Err(RuntimeCompileDiagnostic {
@@ -950,17 +953,40 @@ fn enrich_runtime_mount(
             );
         }
 
-        for (witness, field_links) in mount.witnesses {
-            interface.impls.push(ExportedImpl {
-                interface: witness.clone(),
+        let rows: Vec<ExportedImpl<TypeName>> = mount
+            .witnesses
+            .into_iter()
+            .map(|(witness, field_links)| ExportedImpl {
+                associated_types: witness.associated_types.to_vec(),
+                interface: witness,
                 for_ty_pattern: root_ty.clone(),
                 generic_params: Vec::new(),
                 param_bounds: Vec::new(),
-                associated_types: witness.associated_types.to_vec(),
                 field_links,
                 origin: ExportedImplOrigin::OutOfBody,
                 methods: Vec::new(),
-            });
+            })
+            .collect();
+        // A witness is a fact about the DECLARATION, and the export name is
+        // not part of a row, so a declaration reached under two names (`{
+        // "Alias": t, "Twin": t }`) contributes its rows once; a second copy
+        // would be the same identity twice, which the import refuses as a
+        // duplicate impl. Every mount of one declaration reads the same
+        // witnesses off the class's own impl rules, which the assertion pins.
+        match root_item {
+            Some(root) => match witnessed.entry(root) {
+                indexmap::map::Entry::Occupied(seen) => debug_assert_eq!(
+                    seen.get(),
+                    &rows,
+                    "two mounts of one declaration carry one witness list"
+                ),
+                indexmap::map::Entry::Vacant(slot) => {
+                    interface.impls.extend(rows.iter().cloned());
+                    slot.insert(rows);
+                }
+            },
+            // Witnesses are read off a class; a structural root has none.
+            None => debug_assert!(rows.is_empty(), "a structural root carries no witnesses"),
         }
     }
     stubs.sort();
