@@ -278,12 +278,12 @@ namespace baml.sap:
   function parse<T>
   function parse_type
 namespace baml.spawn:
-  class CancelToken { methods: [new, any, cancel, is_cancelled, link] }
+  class CancelToken { methods: [new, any, cancel, is_cancelled] }
   class Execution<T, E> { methods: [run, name] }
-  class Limit { methods: [new, capacity, active_count, queued_count, admit] }
+  class Limit { methods: [new, capacity, active_count, queued_count] }
   type Modifier
   class Plan<T, E> { methods: [new, wrap, with, name] }
-  class Root { methods: [new, reparent] }
+  class Root { methods: [new] }
   function __spawn<T, E>
 namespace baml.sys:
   class Process { methods: [wait, kill, close] }

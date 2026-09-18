@@ -6,7 +6,8 @@
 ///
 /// Using one as a spawn modifier links it into the task's own token: once
 /// fired, the task's next checkpoint (an `await` or an IO call) panics with
-/// `baml.panics.Cancelled`. Once cancelled, a token stays cancelled forever.
+/// `baml.panics.Cancelled`. Once cancelled, a token stays cancelled forever,
+/// and a task spawned with it after that starts cancelled.
 ///
 /// # Examples
 ///
@@ -45,14 +46,6 @@ class CancelToken {
     /// `true` if this token has been cancelled.
     //baml:vm
     function is_cancelled(self) -> bool throws never {
-        $rust_function
-    }
-
-    /// Returns `plan` with this token linked in: once it fires, the task is
-    /// cancelled. A task spawned from the plan after that starts cancelled.
-    //baml:mut_vm
-    //baml:fallible
-    function link<T, E>(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
         $rust_function
     }
 }
@@ -166,7 +159,8 @@ class Execution<T, E> {
 /// Tasks over the cap wait in line; the `spawn` still returns its `Future` at
 /// once. A waiting task can be cancelled. A task spawned with several limits
 /// starts once every one of them has room, and holds none of them while it
-/// waits. Two spawns share a cap only if they use the same `Limit` value.
+/// waits. Two spawns share a cap only if they use the same `Limit` value, and
+/// a spawn that lists the same limit twice takes one slot.
 ///
 /// # Examples
 ///
@@ -204,14 +198,6 @@ class Limit {
     function queued_count(self) -> int throws never {
         $rust_function
     }
-
-    /// Returns `plan` admitted through this limit as well. Applying the same
-    /// limit again changes nothing.
-    //baml:mut_vm
-    //baml:fallible
-    function admit<T, E>(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        $rust_function
-    }
 }
 
 /// Spawns a task whose cancellation parent is the runtime, not the spawning
@@ -224,30 +210,29 @@ class Root {
     function new() -> Root throws never {
         Root {}
     }
+}
 
-    /// Returns `plan` with the runtime as its cancellation parent.
+implements<T, E> Modifier<T, E> for Limit {
     //baml:mut_vm
     //baml:fallible
-    function reparent<T, E>(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+    function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
         $rust_function
     }
 }
 
-implements<T, E> Modifier<T, E> for Limit {
-    function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        self.admit(plan)
-    }
-}
-
 implements<T, E> Modifier<T, E> for Root {
+    //baml:mut_vm
+    //baml:fallible
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        self.reparent(plan)
+        $rust_function
     }
 }
 
 implements<T, E> Modifier<T, E> for CancelToken {
+    //baml:mut_vm
+    //baml:fallible
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        self.link(plan)
+        $rust_function
     }
 }
 

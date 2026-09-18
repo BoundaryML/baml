@@ -22,8 +22,10 @@ use bex_vm_types::{
 };
 
 use super::{
-    BamlClassSpawnCancelToken, BamlClassSpawnExecution, BamlClassSpawnLimit, BamlClassSpawnPlan,
-    BamlClassSpawnRoot, BamlNamespaceSpawn, Continuation, NativeCallResult, PackageBamlImpl, view,
+    BamlClassSpawnCancelToken, BamlClassSpawnExecution, BamlClassSpawnLimit,
+    BamlClassSpawnModifier_T__E__for_CancelToken, BamlClassSpawnModifier_T__E__for_Limit,
+    BamlClassSpawnModifier_T__E__for_Root, BamlClassSpawnPlan, BamlNamespaceSpawn, Continuation,
+    NativeCallResult, PackageBamlImpl, view,
 };
 use crate::{
     BexVm,
@@ -104,8 +106,11 @@ impl BamlClassSpawnCancelToken for PackageBamlImpl {
     fn is_cancelled(vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> bool {
         canceltoken._handle::<CancellationToken>(vm).is_cancelled()
     }
+}
 
-    fn link(vm: &mut BexVm, canceltoken: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
+impl BamlClassSpawnModifier_T__E__for_CancelToken for PackageBamlImpl {
+    /// Links the token into the plan: once it fires, the task is cancelled.
+    fn apply(vm: &mut BexVm, canceltoken: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
         let token =
             as_cancellation_token(vm, *canceltoken).ok_or_else(|| VmInternalError::TypeError {
                 expected: ObjectType::RustData.into(),
@@ -377,16 +382,21 @@ impl BamlClassSpawnLimit for PackageBamlImpl {
     fn queued_count(vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
         clamp_to_i64(limit._handle::<LimitInner>(vm).queued_count())
     }
+}
 
-    fn admit(vm: &mut BexVm, limit: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
+impl BamlClassSpawnModifier_T__E__for_Limit for PackageBamlImpl {
+    /// Admits the plan through the limit as well; the same limit again changes
+    /// nothing.
+    fn apply(vm: &mut BexVm, limit: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
         let limit = limit_inner(vm, *limit)?;
         let admitted = plan_data(vm, *plan)?.with_limit(&limit);
         Ok(alloc_plan(vm, admitted))
     }
 }
 
-impl BamlClassSpawnRoot for PackageBamlImpl {
-    fn reparent(vm: &mut BexVm, _root: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
+impl BamlClassSpawnModifier_T__E__for_Root for PackageBamlImpl {
+    /// Makes the runtime the plan's cancellation parent.
+    fn apply(vm: &mut BexVm, _root: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
         let rooted = plan_data(vm, *plan)?.rooted();
         Ok(alloc_plan(vm, rooted))
     }
