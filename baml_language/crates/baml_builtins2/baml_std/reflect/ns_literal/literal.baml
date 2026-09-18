@@ -19,10 +19,12 @@ class Type {
         }
     }
 
-    /// Returns the value represented by this literal type.
+    /// Returns the string, int, bigint, bool, or enum variant represented by this literal type.
+    /// The return type is unknown because enum variants can belong to any enum.
+    /// This API cannot return class values today.
     //baml:mut_vm
     //baml:fallible
-    function value(self) -> string | int | bigint | bool throws baml.errors.InvalidArgument {
+    function value(self) -> unknown throws never {
         $rust_function
     }
 }

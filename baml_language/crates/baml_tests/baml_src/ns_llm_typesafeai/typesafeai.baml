@@ -58,49 +58,103 @@ class InvalidSkipped {
 
 function SkipFields(message: string) -> WithSkipped {
     client: "typesafeai/jev-latest"
-    prompt: `${message}`
+    prompt: `
+        ${message}
+    `
 }
 
 type Tree = Tree[] | Team;
 
 function Urgent(message: string) -> bool {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}Does this ticket require immediate attention?${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        Does this ticket require immediate attention?
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function Probability(message: string) -> float {
     client: typesafeai.Client.new()
-    prompt: `${role("instructions")}How likely is urgency?${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        How likely is urgency?
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function Route(message: string) -> Team {
     client: "typesafeai/jev-latest"
-    prompt: `${message}`
+    prompt: `
+        ${message}
+    `
 }
 
 function Assess(message: string) -> Report {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}You are triaging support tickets.${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        You are triaging support tickets.
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function Generic(message: string) -> Judged<Team> {
     client: "typesafeai/jev-latest"
-    prompt: `${message}`
+    prompt: `
+        ${message}
+    `
 }
 
 function Optional(message: string) -> Team? {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}Pick a team, if any.${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        Pick a team, if any.
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function Collide(message: string) -> Team | "tech" {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}Pick an option.${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        Pick an option.
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function CollideReversed(message: string) -> "tech" | Team {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}Pick an option.${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        Pick an option.
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function input(ty: reflect.Type, instructions: bool = true) -> ai.ModelTurnInput {
@@ -120,7 +174,9 @@ function input(ty: reflect.Type, instructions: bool = true) -> ai.ModelTurnInput
 
 function Bare(message: string) -> bool {
     client: "typesafeai/jev-latest"
-    prompt: `${message}`
+    prompt: `
+        ${message}
+    `
 }
 
 function noul_body(n: float) -> string {
@@ -256,6 +312,25 @@ function literal_decode(ty: reflect.Type, key: string) -> unknown {
     })
 }
 
+test "client defaults keep a lazy credential and the TypeSafe base URL" {
+    let cl = typesafeai.Client.new();
+    let credential: baml.env.Ref = cl.api_key else {
+        throw "expected an environment credential reference"
+    };
+    assert.equal(credential.name, "TYPESAFE_API_KEY");
+    assert.equal(cl.base_url, "https://api.typesafe.ai/v1");
+    let request = cl.render(input(reflect.Type.of<bool>()));
+    assert.equal(request.url, "https://api.typesafe.ai/v1/systemone");
+    assert.equal(request.headers.get("authorization"), null)
+}
+
+test "client constructor keeps explicit credentials and endpoint overrides" {
+    let cl = typesafeai.Client.new(api_key = "test-key", base_url = "http://localhost:1234");
+    assert.equal(cl.api_key, "test-key");
+    assert.equal(cl.base_url, "http://localhost:1234");
+    assert.equal(cl.render(input(reflect.Type.of<bool>())).url, "http://localhost:1234/systemone")
+}
+
 test "int literal union" {
     assert.equal(literal_decode(reflect.Type.of<1 | 2 | 3>(), "2"), 2)
 }
@@ -305,7 +380,9 @@ class ExactChoice {
 
 function ExactChoiceResult(message: string) -> ExactChoice {
     client: "typesafeai/jev-latest"
-    prompt: `${message}`
+    prompt: `
+        ${message}
+    `
 }
 
 function exact_class_choice(key: string) -> Team | "Technical" {
@@ -327,7 +404,15 @@ test "class JSON reconstruction currently resolves ambiguous strings to enums" {
 
 function MediaInput(media: image | audio | video | pdf) -> bool {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}Is it urgent?${role("user")}${media}`
+    prompt: `
+        ${role("instructions")}
+
+        Is it urgent?
+
+        ${role("user")}
+
+        ${media}
+    `
 }
 
 function rejects_media(media: image | audio | video | pdf) -> bool {
@@ -485,7 +570,15 @@ class BigintReport {
 
 function BigintClassResult(message: string) -> BigintReport {
     client: "typesafeai/jev-latest"
-    prompt: `${role("instructions")}Choose the matching identifier.${role("user")}${message}`
+    prompt: `
+        ${role("instructions")}
+
+        Choose the matching identifier.
+
+        ${role("user")}
+
+        ${message}
+    `
 }
 
 function bigint_class_choice(key: string) -> BigintChoice {

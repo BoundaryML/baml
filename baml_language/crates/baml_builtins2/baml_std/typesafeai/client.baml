@@ -14,8 +14,8 @@ class Client {
     /// TYPESAFE_API_KEY unless an explicit credential is provided.
     function new(
         model: string = "jev-latest",
-        api_key: ai.Credential? = null,
-        base_url: ai.Credential? = null,
+        api_key: ai.Credential? = env.TYPESAFE_API_KEY,
+        base_url: ai.Credential? = "https://api.typesafe.ai/v1",
         request_timeout_ms: int? = null,
         capture_wire: bool = true,
     ) -> Client {
