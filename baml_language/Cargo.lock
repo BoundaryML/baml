@@ -1432,6 +1432,7 @@ dependencies = [
  "bex_str",
  "bex_vm_types",
  "btel_clock",
+ "btel_records",
  "btel_types",
  "chacha20poly1305",
  "console",
@@ -1739,6 +1740,14 @@ dependencies = [
  "btel_types",
  "quanta",
  "web-time",
+]
+
+[[package]]
+name = "btel_records"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_types",
 ]
 
 [[package]]

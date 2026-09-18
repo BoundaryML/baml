@@ -1,7 +1,7 @@
 //! VM-side telemetry producer state.
 //!
 //! This module intentionally stops at logical events. Production builds consume
-//! and discard those values; the record buffer and transport are a later layer.
+//! and discard the two record types; buffer/processor integration is next.
 
 #![allow(unsafe_code)]
 #![allow(
@@ -104,67 +104,14 @@ impl FrameTelemetry {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum ProducerEvent {
-    ThreadStarted {
-        clock: Arc<ClockEpoch>,
-        id: TelemetryId,
-        parent_id: Option<TelemetryId>,
-        spawn_call_path: CallPathId,
-        started_at: ClockInstant,
-    },
-    ThreadCompleted {
-        id: TelemetryId,
-        started_at: ClockInstant,
-        completed_at: ClockInstant,
-        outcome: InvocationOutcome,
-    },
-    SpanStarted {
-        id: TelemetryId,
-        parent_id: TelemetryId,
-        call_path: CallPathId,
-        entered_at: ClockInstant,
-        captured_inputs: Box<[Value]>,
-    },
-    Timing {
-        call_path: CallPathId,
-        entered_at: ClockInstant,
-        exited_at: ClockInstant,
-        await_time: AwaitDuration,
-        outcome: InvocationOutcome,
-        reentry: bool,
-    },
-    Span {
-        id: TelemetryId,
-        parent_id: TelemetryId,
-        call_path: CallPathId,
-        entered_at: ClockInstant,
-        exited_at: ClockInstant,
-        await_time: AwaitDuration,
-        outcome: InvocationOutcome,
-        reentry: bool,
-        captured_value: Option<Value>,
-    },
-    LateSpan {
-        id: TelemetryId,
-        parent_id: TelemetryId,
-        call_path: CallPathId,
-        entered_at: ClockInstant,
-        exited_at: ClockInstant,
-        await_time: AwaitDuration,
-        outcome: InvocationOutcome,
-        reentry: bool,
-        captured_value: Option<Value>,
-    },
-    CallPathDefined {
-        call_path: CallPathId,
-        parent_call_path: CallPathId,
-        visible_caller: Option<FunctionId>,
-        caller_pc: u32,
-        callee: FunctionId,
-        edge: CallPathEdge,
-    },
-}
+pub use btel_records::{SpanRecord, TimingRecord};
+
+/// Shallow VM-backed captures, NOT independent snapshots. Retained test records
+/// are rooted/forwarded with the VM and may migrate with it. A background
+/// processor must instantiate `SpanRecord` with owned snapshot handles instead.
+type VmSpanRecord = SpanRecord<[Value], Value>;
+const _: () = assert!(size_of::<TimingRecord>() <= 32);
+const _: () = assert!(size_of::<VmSpanRecord>() <= 56);
 
 #[derive(Debug)]
 pub struct ThreadTelemetry {
@@ -186,7 +133,9 @@ pub struct TelemetryState {
     policies: Arc<TelemetryPolicies>,
     clock: Arc<ClockEpoch>,
     #[cfg(test)]
-    events: Vec<ProducerEvent>,
+    timing_records: Vec<TimingRecord>,
+    #[cfg(test)]
+    span_records: Vec<VmSpanRecord>,
 }
 
 impl TelemetryState {
@@ -211,7 +160,9 @@ impl TelemetryState {
             policies,
             clock,
             #[cfg(test)]
-            events: Vec::new(),
+            timing_records: Vec::new(),
+            #[cfg(test)]
+            span_records: Vec::new(),
         }
     }
 
@@ -231,7 +182,7 @@ impl TelemetryState {
             return;
         }
         self.thread.started = true;
-        self.emit(ProducerEvent::ThreadStarted {
+        self.write_span(SpanRecord::ThreadSpanAnnouncement {
             clock: Arc::clone(&self.clock),
             id: self.thread.id,
             parent_id: self.thread.parent_id,
@@ -348,12 +299,12 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             let id = allocate_telemetry_id();
             self.thread.active_id = id;
-            self.emit(ProducerEvent::SpanStarted {
+            self.write_span(SpanRecord::FunctionSpanAnnouncement {
                 id,
                 parent_id: saved_parent_id,
                 call_path,
                 entered_at,
-                captured_inputs: captured_inputs.unwrap_or_default(),
+                captured_inputs,
             });
         }
         self.thread.active_call_path = call_path;
@@ -421,7 +372,7 @@ impl TelemetryState {
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
-            self.emit(ProducerEvent::Timing {
+            self.write_timing(TimingRecord::FunctionTimingCompletion {
                 call_path,
                 entered_at: telemetry.entered_at,
                 exited_at,
@@ -451,7 +402,7 @@ impl TelemetryState {
 
         if telemetry.is_span() {
             let id = self.thread.active_id;
-            self.emit(ProducerEvent::Span {
+            self.write_span(SpanRecord::FunctionSpanCompletion {
                 id,
                 parent_id: telemetry.saved_parent_id,
                 call_path,
@@ -460,11 +411,11 @@ impl TelemetryState {
                 await_time: telemetry.await_duration,
                 outcome,
                 reentry: telemetry.is_reentry(),
-                captured_value: capture_value,
+                captured_value: capture_value.map(Box::new),
             });
             self.thread.active_id = telemetry.saved_parent_id;
         } else if policy.promotes(elapsed, outcome, self.clock.domain()) {
-            self.emit(ProducerEvent::LateSpan {
+            self.write_span(SpanRecord::LateFunctionSpanCompletion {
                 id: allocate_telemetry_id(),
                 parent_id: telemetry.saved_parent_id,
                 call_path,
@@ -473,10 +424,10 @@ impl TelemetryState {
                 await_time: telemetry.await_duration,
                 outcome,
                 reentry: telemetry.is_reentry(),
-                captured_value: capture_value,
+                captured_value: capture_value.map(Box::new),
             });
         } else {
-            self.emit(ProducerEvent::Timing {
+            self.write_timing(TimingRecord::FunctionTimingCompletion {
                 call_path,
                 entered_at: telemetry.entered_at,
                 exited_at,
@@ -494,8 +445,11 @@ impl TelemetryState {
         }
         self.start_thread();
         self.thread.completed = true;
-        self.emit(ProducerEvent::ThreadCompleted {
+        self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
+            parent_id: self.thread.parent_id,
+            spawn_call_path: self.thread.spawn_call_path,
+            clock: Arc::clone(&self.clock),
             started_at: self.thread.started_at,
             completed_at: self.clock.read(),
             outcome,
@@ -568,7 +522,7 @@ impl TelemetryState {
         self.call_paths.insert(key, id);
         self.call_path_keys.insert(id, key);
         self.last_call_path = Some((key, id));
-        self.emit(ProducerEvent::CallPathDefined {
+        self.write_span(SpanRecord::CallPathDefined {
             call_path: id,
             parent_call_path: key.parent,
             visible_caller,
@@ -579,22 +533,42 @@ impl TelemetryState {
         id
     }
 
-    #[cfg(test)]
+    // Transport integration is the next step. Production still discards records;
+    // tests retain each concrete stream separately, without an umbrella enum.
+    #[cfg_attr(
+        not(test),
+        allow(
+            clippy::needless_pass_by_value,
+            reason = "writes transfer record ownership; production buffering is the next step"
+        )
+    )]
     #[inline(always)]
-    fn emit(&mut self, event: ProducerEvent) {
-        self.events.push(event);
+    fn write_timing(&mut self, record: TimingRecord) {
+        #[cfg(test)]
+        self.timing_records.push(record);
+        #[cfg(not(test))]
+        let _ = (self, record);
     }
 
-    #[cfg(not(test))]
     #[inline(always)]
-    fn emit(&mut self, event: ProducerEvent) {
-        let _ = self;
-        drop(event);
+    fn write_span(&mut self, record: VmSpanRecord) {
+        #[cfg(test)]
+        self.span_records.push(record);
+        #[cfg(not(test))]
+        {
+            let _ = self;
+            drop(record);
+        }
     }
 
     #[cfg(test)]
-    pub(crate) fn events(&self) -> &[ProducerEvent] {
-        &self.events
+    pub(crate) fn timing_records(&self) -> &[TimingRecord] {
+        &self.timing_records
+    }
+
+    #[cfg(test)]
+    pub(crate) fn span_records(&self) -> &[VmSpanRecord] {
+        &self.span_records
     }
 
     pub(crate) fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
@@ -603,19 +577,28 @@ impl TelemetryState {
             roots.push(key.callee);
         }
         #[cfg(test)]
-        for event in &self.events {
+        for event in &self.span_records {
             match event {
-                ProducerEvent::SpanStarted {
+                SpanRecord::FunctionSpanAnnouncement {
                     captured_inputs, ..
-                } => roots.extend(captured_inputs.iter().filter_map(Value::as_object_ptr)),
-                ProducerEvent::Span { captured_value, .. }
-                | ProducerEvent::LateSpan { captured_value, .. } => {
-                    roots.extend(captured_value.iter().filter_map(Value::as_object_ptr));
+                } => roots.extend(
+                    captured_inputs
+                        .iter()
+                        .flat_map(|capture| capture.iter())
+                        .filter_map(Value::as_object_ptr),
+                ),
+                SpanRecord::FunctionSpanCompletion { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletion { captured_value, .. } => {
+                    roots.extend(
+                        captured_value
+                            .iter()
+                            .filter_map(|capture| capture.as_object_ptr()),
+                    );
                 }
-                ProducerEvent::CallPathDefined { .. }
-                | ProducerEvent::ThreadStarted { .. }
-                | ProducerEvent::ThreadCompleted { .. }
-                | ProducerEvent::Timing { .. } => {}
+                SpanRecord::CallPathDefined { .. }
+                | SpanRecord::ThreadSpanAnnouncement { .. }
+                | SpanRecord::ThreadSpanCompletion { .. }
+                | SpanRecord::ThreadSelected { .. } => {}
             }
         }
     }
@@ -639,25 +622,27 @@ impl TelemetryState {
             (key, id)
         });
         #[cfg(test)]
-        for event in &mut self.events {
+        for event in &mut self.span_records {
             match event {
-                ProducerEvent::SpanStarted {
+                SpanRecord::FunctionSpanAnnouncement {
                     captured_inputs, ..
                 } => {
-                    for value in captured_inputs {
-                        forward_value(value, roots);
+                    if let Some(capture) = captured_inputs {
+                        for value in capture {
+                            forward_value(value, roots);
+                        }
                     }
                 }
-                ProducerEvent::Span { captured_value, .. }
-                | ProducerEvent::LateSpan { captured_value, .. } => {
+                SpanRecord::FunctionSpanCompletion { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletion { captured_value, .. } => {
                     if let Some(value) = captured_value {
                         forward_value(value, roots);
                     }
                 }
-                ProducerEvent::CallPathDefined { .. }
-                | ProducerEvent::ThreadStarted { .. }
-                | ProducerEvent::ThreadCompleted { .. }
-                | ProducerEvent::Timing { .. } => {}
+                SpanRecord::CallPathDefined { .. }
+                | SpanRecord::ThreadSpanAnnouncement { .. }
+                | SpanRecord::ThreadSpanCompletion { .. }
+                | SpanRecord::ThreadSelected { .. } => {}
             }
         }
     }
@@ -748,10 +733,10 @@ mod tests {
 
         let definitions = |state: &TelemetryState| {
             state
-                .events()
+                .span_records()
                 .iter()
                 .filter_map(|event| match event {
-                    ProducerEvent::CallPathDefined {
+                    SpanRecord::CallPathDefined {
                         call_path,
                         parent_call_path,
                         visible_caller,
@@ -820,6 +805,67 @@ mod tests {
         assert!(vm.heap.function_metadata(vm.proof(), caller_id).is_none());
         assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_none());
         assert_eq!(definitions(&state), before);
+    }
+
+    #[test]
+    fn retained_span_captures_remain_gc_roots_after_record_split() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let function = function(
+            FunctionKind::Bytecode,
+            Some(FunctionMeta::Llm {
+                client: "test".into(),
+            }),
+        );
+        let input = vm.tlab.alloc_string("input");
+        let output = vm.tlab.alloc_string("output");
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let frame = state
+            .enter_bytecode(
+                &function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[Value::object(input)],
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+            .unwrap();
+        state.complete_invocation(
+            frame,
+            &function,
+            InvocationOutcome::Ok,
+            Some(Value::object(output)),
+        );
+        // Isolate capture roots from the separate executable call-path cache.
+        state.call_paths.clear();
+        state.call_path_keys.clear();
+        state.last_call_path = None;
+        let mut roots = Vec::new();
+        state.collect_roots(&mut roots);
+        assert_eq!(roots, [input, output]);
+        // SAFETY: exclusive test heap, and the retained captures are its only
+        // live objects. No bytecode or other VM/heap mutation runs concurrently.
+        let (_, _, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
+        };
+        state.forward_roots(&forwarding);
+        roots.clear();
+        state.collect_roots(&mut roots);
+        assert_eq!(roots, [forwarding[&input], forwarding[&output]]);
+        assert!(state.span_records().iter().any(|record| matches!(record,
+            SpanRecord::FunctionSpanAnnouncement { captured_inputs: Some(capture), .. }
+            if capture[0] == Value::object(forwarding[&input]))));
+        assert!(state.span_records().iter().any(|record| matches!(record,
+            SpanRecord::FunctionSpanCompletion { captured_value: Some(capture), .. }
+            if **capture == Value::object(forwarding[&output]))));
+        drop(state);
+        // SAFETY: dropping the record owner removed all remaining roots.
+        let (stats, _, _) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
+        };
+        assert_eq!(stats.live_count, 0);
     }
 
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
@@ -891,7 +937,8 @@ mod tests {
                 )
                 .is_none()
         );
-        assert!(state.events().is_empty());
+        assert!(state.span_records().is_empty());
+        assert!(state.timing_records().is_empty());
         assert!(state.call_paths.is_empty());
     }
 
@@ -921,15 +968,16 @@ mod tests {
 
         assert_eq!(
             state
-                .events()
+                .timing_records()
                 .iter()
-                .filter(|event| matches!(event, ProducerEvent::Timing { .. }))
+                .filter(|event| matches!(event, TimingRecord::FunctionTimingCompletion { .. }))
                 .count(),
             1
         );
-        assert!(!state.events().iter().any(|event| matches!(
+        assert!(!state.span_records().iter().any(|event| matches!(
             event,
-            ProducerEvent::Span { .. } | ProducerEvent::LateSpan { .. }
+            SpanRecord::FunctionSpanCompletion { .. }
+                | SpanRecord::LateFunctionSpanCompletion { .. }
         )));
     }
 
@@ -961,17 +1009,17 @@ mod tests {
         assert_ne!(span_id, parent_id);
         state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(5)));
         assert_eq!(state.active_id(), parent_id);
-        assert!(state.events().iter().any(|event| matches!(
+        assert!(state.span_records().iter().any(|event| matches!(
             event,
-            ProducerEvent::SpanStarted { id, parent_id: parent, captured_inputs, .. }
+            SpanRecord::FunctionSpanAnnouncement { id, parent_id: parent, captured_inputs, .. }
                 if *id == span_id
                     && *parent == parent_id
-                    && captured_inputs.as_ref() == [Value::int(3)]
+                    && captured_inputs.as_ref().is_some_and(|capture| capture.as_ref() == [Value::int(3)])
         )));
-        assert!(state.events().iter().any(|event| matches!(
+        assert!(state.span_records().iter().any(|event| matches!(
             event,
-            ProducerEvent::Span { id, captured_value: Some(value), .. }
-                if *id == span_id && *value == Value::int(5)
+            SpanRecord::FunctionSpanCompletion { id, captured_value: Some(value), .. }
+                if *id == span_id && **value == Value::int(5)
         )));
     }
 
@@ -1011,19 +1059,19 @@ mod tests {
         state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(9)));
 
         assert_eq!(state.active_id(), parent_id);
-        assert!(state.events().iter().any(|event| matches!(
+        assert!(state.span_records().iter().any(|event| matches!(
             event,
-            ProducerEvent::LateSpan {
+            SpanRecord::LateFunctionSpanCompletion {
                 parent_id: parent,
                 captured_value: Some(value),
                 ..
-            } if *parent == parent_id && *value == Value::int(9)
+            } if *parent == parent_id && **value == Value::int(9)
         )));
         assert!(
             !state
-                .events()
+                .timing_records()
                 .iter()
-                .any(|event| matches!(event, ProducerEvent::Timing { .. }))
+                .any(|event| matches!(event, TimingRecord::FunctionTimingCompletion { .. }))
         );
     }
 
@@ -1055,15 +1103,15 @@ mod tests {
         state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
 
         let measurements: Vec<_> = state
-            .events()
+            .timing_records()
             .iter()
             .filter_map(|event| match event {
-                ProducerEvent::Timing {
+                TimingRecord::FunctionTimingCompletion {
                     await_time,
                     reentry,
                     ..
                 } => Some((await_time.get().get(), *reentry)),
-                _ => None,
+                TimingRecord::ThreadSelected { .. } => None,
             })
             .collect();
         // Completion must carry each invocation's own wait, without rolling
@@ -1125,17 +1173,17 @@ mod tests {
                         )
                         .unwrap();
                     state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
-                    let Some(ProducerEvent::Span {
+                    let Some(SpanRecord::FunctionSpanCompletion {
                         captured_value,
                         outcome: recorded,
                         ..
-                    }) = state.events().last()
+                    }) = state.span_records().last()
                     else {
                         panic!("an entry-selected span must remain a span");
                     };
                     assert_eq!(*recorded, outcome);
                     assert_eq!(
-                        *captured_value,
+                        captured_value.as_ref().map(|capture| **capture),
                         (initial || current).then_some(Value::int(7))
                     );
                 }
@@ -1159,9 +1207,9 @@ mod tests {
         child.start_thread();
 
         assert_ne!(child_id, context.parent_id);
-        assert!(child.events().iter().any(|event| matches!(
+        assert!(child.span_records().iter().any(|event| matches!(
             event,
-            ProducerEvent::ThreadStarted {
+            SpanRecord::ThreadSpanAnnouncement {
                 id,
                 parent_id: Some(parent_id),
                 spawn_call_path,
@@ -1170,5 +1218,15 @@ mod tests {
                 && *parent_id == context.parent_id
                 && *spawn_call_path == context.spawn_call_path
         )));
+        child.complete_thread(InvocationOutcome::Errored);
+        child
+            .span_records
+            .retain(|record| !matches!(record, SpanRecord::ThreadSpanAnnouncement { .. }));
+        assert!(
+            matches!(child.span_records(), [SpanRecord::ThreadSpanCompletion {
+            id, parent_id: Some(parent_id), spawn_call_path, clock, outcome: InvocationOutcome::Errored, ..
+        }] if *id == child_id && *parent_id == context.parent_id
+            && *spawn_call_path == context.spawn_call_path && Arc::ptr_eq(clock, &context.clock))
+        );
     }
 }

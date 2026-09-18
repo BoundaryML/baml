@@ -464,7 +464,7 @@ pub(crate) mod tests {
 
     #[test]
     fn hidden_native_execution_has_only_thread_events() {
-        use crate::telemetry::{InvocationOutcome, ProducerEvent};
+        use crate::telemetry::{InvocationOutcome, SpanRecord};
 
         let (mut vm, native_ptr) = vm_with_native_entry();
         vm.set_entry_point(native_ptr, &[]);
@@ -476,11 +476,12 @@ pub(crate) mod tests {
             matches!(vm.exec().unwrap(), VmExecState::Complete(value) if value == Value::int(42))
         );
         vm.finish_telemetry(InvocationOutcome::Ok);
+        assert!(vm.telemetry.timing_records().is_empty());
         assert!(matches!(
-            vm.telemetry.events(),
+            vm.telemetry.span_records(),
             [
-                ProducerEvent::ThreadStarted { .. },
-                ProducerEvent::ThreadCompleted {
+                SpanRecord::ThreadSpanAnnouncement { .. },
+                SpanRecord::ThreadSpanCompletion {
                     outcome: InvocationOutcome::Ok,
                     ..
                 }
@@ -493,7 +494,7 @@ pub(crate) mod tests {
     fn hidden_native_callbacks_preserve_visible_paths_and_reentry() {
         use crate::{
             package_baml::{Continuation, PassThroughContinuation},
-            telemetry::ProducerEvent,
+            telemetry::{SpanRecord, TimingRecord},
         };
 
         struct Again(HeapPtr);
@@ -556,13 +557,13 @@ pub(crate) mod tests {
         }
         let timings: Vec<_> = vm
             .telemetry
-            .events()
+            .timing_records()
             .iter()
             .filter_map(|event| match event {
-                ProducerEvent::Timing {
+                TimingRecord::FunctionTimingCompletion {
                     call_path, reentry, ..
                 } => Some((*call_path, *reentry)),
-                _ => None,
+                TimingRecord::ThreadSelected { .. } => None,
             })
             .collect();
         assert_eq!(
@@ -586,8 +587,8 @@ pub(crate) mod tests {
         );
         assert!(timings[3..].iter().all(|(_, reentry)| !reentry));
         let mut named_paths = HashMap::new();
-        for event in vm.telemetry.events() {
-            if let ProducerEvent::CallPathDefined {
+        for event in vm.telemetry.span_records() {
+            if let SpanRecord::CallPathDefined {
                 call_path,
                 visible_caller,
                 callee,
@@ -619,7 +620,7 @@ pub(crate) mod tests {
     fn await_and_async_sysop_start_waits_at_their_semantic_boundaries() {
         use bex_vm_types::{Future, RealizedTy, types::FutureId};
 
-        use crate::telemetry::{ClockDuration, ProducerEvent};
+        use crate::telemetry::{ClockDuration, TimingRecord};
 
         for sysop in [false, true] {
             for pending in [false, true] {
@@ -691,10 +692,10 @@ pub(crate) mod tests {
                 assert!(vm.pending_telemetry_wait.is_none());
                 let waits: Vec<_> = vm
                     .telemetry
-                    .events()
+                    .timing_records()
                     .iter()
                     .filter_map(|event| {
-                        if let ProducerEvent::Timing { await_time, .. } = event {
+                        if let TimingRecord::FunctionTimingCompletion { await_time, .. } = event {
                             Some(await_time.get().get())
                         } else {
                             None

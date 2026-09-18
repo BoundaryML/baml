@@ -121,6 +121,7 @@ bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }
+btel_records = { path = "crates/btel_records" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
