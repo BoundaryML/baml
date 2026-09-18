@@ -76,7 +76,7 @@ cargo nextest run -p baml_cli --test baml_corpus
 
 The golden tree still mirrors source paths, but it is deliberately sparse:
 
-- 6 PPIR examples: selected source files.
+- 6 HIR examples: selected source files.
 - 8 MIR examples: selected functions, ordered by source position.
 - 9 bytecode examples: exact emitted function names, not growing namespaces.
 - 12 formatter goldens: representative syntax; all other files retain

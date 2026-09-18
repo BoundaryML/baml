@@ -1232,7 +1232,7 @@ class WireCodecTest {
                 101L,
                 ADT_TAGGED_HEAP_HANDLE,
                 tyClass("ai.stream.Stream", tyPrimitive(PRIM_STRING), tyPrimitive(PRIM_STRING)))));
-        BamlStream<?, ?> stream = assertInstanceOf(BamlStream.class, decoded);
+        BamlStream<?> stream = assertInstanceOf(BamlStream.class, decoded);
         assertEquals("ai.stream.Stream", stream.bamlClassFqn());
         assertEquals("ai.stream.Stream.next", stream.methodFqn("next"));
         assertEquals("ai.stream.Stream.final", stream.methodFqn("final"));

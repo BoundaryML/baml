@@ -366,9 +366,9 @@ fn .<lambda(QuotedPrompt@spec, 1)>(prefix: string, model: string) -> null | ai.C
     }
 }
 
-fn user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string> {
     // Locals:
-    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _0: ai.stream.Stream<string> // _0 // return
     let _1: string // topic // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
@@ -376,7 +376,6 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: nu
     let _5: bool
     let _6: ai.FunctionSpec<string>
     let _7: reflect.Type
-    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -403,9 +402,8 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: nu
     }
 
     bb5: {
-        _7 = load_type(string | null);
-        _8 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+        _7 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
@@ -830,9 +828,9 @@ fn .<lambda(BacktickPrompt@spec, 1)>(prefix: string, model: string) -> null | ai
     }
 }
 
-fn user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string> {
     // Locals:
-    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _0: ai.stream.Stream<string> // _0 // return
     let _1: string // topic // param
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
@@ -840,7 +838,6 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: 
     let _5: bool
     let _6: ai.FunctionSpec<string>
     let _7: reflect.Type
-    let _8: reflect.Type
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -867,9 +864,8 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: 
     }
 
     bb5: {
-        _7 = load_type(string | null);
-        _8 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+        _7 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7>(copy _6, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {

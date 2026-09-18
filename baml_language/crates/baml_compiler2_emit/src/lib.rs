@@ -13,7 +13,17 @@ use std::collections::{HashMap, HashSet};
 
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
-use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
+use baml_compiler2_ast::TypeExpr;
+// HIR item-data firewall — enumeration + lookup queries in place of the raw
+// item tree.
+use baml_compiler2_hir::{
+    body::function_body,
+    item_data::{
+        GenericParamData, class_data, enum_data, file_classes, file_enums, file_functions,
+        file_impls, file_interfaces, file_lets, function_data, function_llm_meta, impl_block_data,
+        interface_data,
+    },
+};
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
@@ -29,17 +39,7 @@ use baml_compiler2_mir::{
     memory::{self, CellId},
     native_key_for,
 };
-// PPIR item-data firewall (canonical / post-expansion view, including synthetic
-// `*$stream` items) — enumeration + lookup queries in place of the raw item tree.
-use baml_compiler2_ppir::{
-    function_body,
-    item_data::{
-        GenericParamData, class_data, enum_data, file_classes, file_enums, file_functions,
-        file_impls, file_interfaces, file_lets, function_data, function_llm_meta, impl_block_data,
-        interface_data,
-    },
-};
-use baml_type::{ParamTy, RuntimeTy, TyAttr};
+use baml_type::{ParamTy, RuntimeTy};
 use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
     FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
@@ -99,8 +99,10 @@ fn build_interface_def(
     type_tag: baml_type::typetag::TypeTag,
     resolved: &RuntimeLowering<'_>,
 ) -> bex_vm_types::types::InterfaceDef {
-    use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
-    use baml_compiler2_ppir::item_data::{FunctionParamData, function_data, interface_data};
+    use baml_compiler2_hir::{
+        item_data::{FunctionParamData, function_data, interface_data},
+        type_ref::{TypeRefId, TypeRefStore},
+    };
     use baml_type::RuntimeInterface;
     use bex_vm_types::types::{InterfaceDef, InterfaceFieldDef, InterfaceMethodDef};
 
@@ -154,7 +156,7 @@ fn build_interface_def(
             id,
             baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
         ));
-        let baml_type::Ty::Interface(qtn, args, assoc, _) = lowered else {
+        let baml_type::Ty::Interface(qtn, args, assoc) = lowered else {
             return None;
         };
         let to_runtime = |t: &baml_type::Ty| {
@@ -189,12 +191,8 @@ fn build_interface_def(
      -> InterfaceMethodDef {
         // An untyped parameter is a syntax-level error, so it cannot reach
         // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || bex_vm_types::RuntimeTy::Unknown {
-            attr: TyAttr::default(),
-        };
-        let void = || bex_vm_types::RuntimeTy::Void {
-            attr: TyAttr::default(),
-        };
+        let unannotated = || bex_vm_types::RuntimeTy::Unknown;
+        let void = || bex_vm_types::RuntimeTy::Void;
         let mut args = Vec::new();
         let mut kwargs = Vec::new();
         for p in params {
@@ -553,7 +551,7 @@ fn split_interface(
     resolved: &RuntimeLowering<'_>,
     generics: &[ParamTy],
 ) -> Option<IfaceParts> {
-    let baml_type::Ty::Interface(qtn, args, assoc, _) = iface_ty else {
+    let baml_type::Ty::Interface(qtn, args, assoc) = iface_ty else {
         return None;
     };
     let arg_templates = args
@@ -633,7 +631,7 @@ fn impl_rule_target<'db>(
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
     resolved: &RuntimeLowering<'_>,
 ) -> Option<ImplRuleTarget> {
-    let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+    let block = baml_compiler2_hir::item_data::impl_block_data(db, impl_loc);
     let store = &block.type_refs;
     let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
     let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
@@ -661,7 +659,7 @@ fn impl_rule_target<'db>(
     ));
     // Fail closed on a bound the LOWERING dropped (doc above).
     let (declared_generics, _) =
-        baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
+        baml_compiler2_hir::item_data::impl_declared_generics(db, impl_loc);
     let declared_bound_count: usize = declared_generics.iter().map(|g| g.bounds.len()).sum();
     let lowered_bound_count: usize = impl_params
         .iter()
@@ -724,9 +722,11 @@ fn build_packages<'db>(
     metadata: &PackageBuildMetadata<'_, 'db>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) -> Vec<InterfaceDefaultBackfill> {
-    use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
+    use baml_compiler2_hir::{
+        item_data::AssociatedTypeBindingData,
+        type_ref::{TypeRefId, TypeRefStore},
+    };
     use baml_compiler2_hir_ty::lower::qualify_def;
-    use baml_compiler2_ppir::item_data::AssociatedTypeBindingData;
     use baml_type as ty;
     use bex_vm_types::{
         ObjectIndex,
@@ -949,7 +949,7 @@ fn build_packages<'db>(
 
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let _pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
         let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
         // Lower a type ref (in the owner's `TypeRefStore`) in this file's
         // namespace, discarding diagnostics (these targets were already validated
@@ -1055,7 +1055,7 @@ fn build_packages<'db>(
                 &impl_bounds,
             ));
             let iface_arg_tys = match &iface_ty {
-                ty::Ty::Interface(_, args, _, _) => args.clone(),
+                ty::Ty::Interface(_, args, _) => args.clone(),
                 _ => unreachable!("split_interface matched an interface"),
             };
             complete_interface_assoc(
@@ -1130,7 +1130,7 @@ fn build_packages<'db>(
             // fail-closed rule-drop convention above.
             let field_links: Option<Box<[u32]>> = match (
                 iface_field_decls.get(&iface_tn),
-                baml_compiler2_ppir::item_data::impl_enclosing_class(db, impl_loc),
+                baml_compiler2_hir::item_data::impl_enclosing_class(db, impl_loc),
             ) {
                 (None, _) => Some(Box::default()),
                 (Some(_), None) => {
@@ -1488,64 +1488,6 @@ impl std::error::Error for MountedPackageLinkError {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-struct SchemaAttrs {
-    description: Option<String>,
-    alias: Option<String>,
-    docstring: Option<String>,
-    other: indexmap::IndexMap<String, String>,
-    skip: bool,
-}
-
-/// Extract schema metadata from span-free HIR attributes and docstrings.
-fn extract_schema_attrs(
-    attrs: &[baml_compiler2_hir::item_tree::Attribute],
-    docstring: Option<&str>,
-) -> SchemaAttrs {
-    let mut result = SchemaAttrs {
-        docstring: docstring.map(str::to_owned),
-        ..SchemaAttrs::default()
-    };
-    for attr in attrs {
-        match attr.name.as_str() {
-            "description" | "alias" if attr.args.len() == 1 => {
-                let raw = attr.args[0].value.as_str();
-                let value = parse_string_attr_value(raw);
-                if attr.name.as_str() == "description" {
-                    result.description = value;
-                } else {
-                    result.alias = value;
-                }
-            }
-            "description" | "alias" => {}
-            "skip" => {
-                result.skip = true;
-            }
-            _ => {
-                let value = match attr.args.as_slice() {
-                    [] => "true".to_string(),
-                    [arg] if arg.key.is_none() => {
-                        parse_string_attr_value(&arg.value).unwrap_or_else(|| arg.value.clone())
-                    }
-                    args => args
-                        .iter()
-                        .map(|arg| {
-                            let value = parse_string_attr_value(&arg.value)
-                                .unwrap_or_else(|| arg.value.clone());
-                            arg.key
-                                .as_ref()
-                                .map_or(value.clone(), |key| format!("{}={value}", key.as_str()))
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                };
-                result.other.insert(attr.name.to_string(), value);
-            }
-        }
-    }
-    result
-}
-
 pub use bex_vm_types::Program as ProgramAlias;
 
 /// One entry in the emitted runtime field list for a class. The field type is a
@@ -1553,7 +1495,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 type MergedFieldEntry = (
     String,
     baml_compiler2_hir::type_ref::TypeRefId,
-    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    baml_compiler2_hir::item_tree::ClassFieldAttrs,
     Option<String>,
     Vec<Name>,
     Vec<Name>,
@@ -1563,7 +1505,7 @@ type MergedFieldEntry = (
 /// class fields, so they never add qualified runtime slots.
 fn collect_class_fields_with_implements(
     pkg_ns: &[Name],
-    class: &baml_compiler2_ppir::item_data::ClassData,
+    class: &baml_compiler2_hir::item_data::ClassData,
 ) -> Vec<MergedFieldEntry> {
     let mut out: Vec<MergedFieldEntry> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -1576,7 +1518,7 @@ fn collect_class_fields_with_implements(
         out.push((
             name,
             field.type_ref,
-            field.attributes.clone(),
+            field.attrs.clone(),
             field.docstring.clone(),
             class
                 .generic_params
@@ -2175,8 +2117,8 @@ fn decompose_units_after_prefix<'db>(
         0
     };
     for (fi, file) in all_files.iter().enumerate().skip(prefix_files) {
-        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, *file) {
-            let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+        for &alias_loc in baml_compiler2_hir::item_data::file_type_aliases(db, *file) {
+            let alias_data = baml_compiler2_hir::item_data::type_alias_data(db, alias_loc);
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(
                 db,
                 Definition::TypeAlias(alias_loc),
@@ -2202,7 +2144,7 @@ fn decompose_units_after_prefix<'db>(
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
             let fq = interface_body_link_key(db, func_loc);
@@ -2721,7 +2663,7 @@ fn decompose_units_after_prefix<'db>(
         let mut rule_owners: HashMap<usize, Vec<RuleOwner>> = HashMap::new();
         for (fi, file) in all_files.iter().enumerate() {
             let resolved = &runtime_lowering(db, &alias_caches, file_package(db, *file).root);
-            for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, *file) {
+            for &impl_loc in baml_compiler2_hir::item_data::file_impls(db, *file) {
                 let Some(target) = impl_rule_target(db, *file, impl_loc, resolved) else {
                     continue;
                 };
@@ -3339,7 +3281,7 @@ fn inject_clean_slots(
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
             // Interface bodies never enter the runtime name maps; their
@@ -3389,7 +3331,7 @@ fn inject_clean_object_placeholders<'db>(
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
             if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
@@ -3632,7 +3574,7 @@ fn generate_impl<'db>(
             let mut slot = 0usize;
             for file in builtin_files {
                 for &func_loc in file_functions(db, *file) {
-                    if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                    if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                         continue;
                     }
                     if matches!(
@@ -3930,7 +3872,7 @@ fn spliced_throws_match(
     for &func_loc in file_functions(db, file) {
         // Required interface methods are signature-only items: nothing
         // to compile or index (mirrors their pre-item invisibility here).
-        if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+        if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
             continue;
         }
         // Mirror Pass 4's skip set: these never become callable objects.
@@ -4012,7 +3954,7 @@ fn emit_file_group<'db>(
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
             // Skip intrinsic and await-any functions — they are never called via
@@ -4100,7 +4042,7 @@ fn emit_file_group<'db>(
 
     for file in files {
         let pkg_info = file_package(db, *file);
-        let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+        let _pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
         let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
         for &class_loc in file_classes(db, *file) {
             let class = class_data(db, class_loc);
@@ -4160,21 +4102,22 @@ fn emit_file_group<'db>(
                         (resolved_ty, template)
                     }
                 };
-                let meta = extract_schema_attrs(attrs.as_slice(), docstring.as_deref());
                 fields.push(ClassField {
                     name: name.clone(),
                     field_type: bex_vm_types::anchor_runtime_ty(&field_type),
                     field_template,
-                    description: meta.description,
-                    alias: meta.alias,
-                    docstring: meta.docstring,
-                    other: meta.other,
-                    skip: meta.skip,
+                    description: attrs.schema.description.clone(),
+                    alias: attrs.schema.alias.clone(),
+                    docstring: docstring.clone(),
+                    // Source attributes are a fixed vocabulary, all of it
+                    // typed; `other` is the runtime class builder's.
+                    other: indexmap::IndexMap::new(),
+                    skip: attrs.skip,
+                    stream_done: attrs.stream_done,
+                    must_exist: attrs.must_exist,
                     runtime_type: None,
                 });
             }
-
-            let class_meta = extract_schema_attrs(&class.attributes, class.docstring.as_deref());
 
             let type_tag = claim_type_tag(type_tags, &fq_name)?;
 
@@ -4217,12 +4160,12 @@ fn emit_file_group<'db>(
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
                 fields,
-                description: class_meta.description,
-                alias: class_meta.alias,
-                docstring: class_meta.docstring,
-                other: class_meta.other,
+                description: class.attrs.schema.description.clone(),
+                alias: class.attrs.schema.alias.clone(),
+                docstring: class.docstring.clone(),
+                other: indexmap::IndexMap::new(),
+                stream_done: class.attrs.stream_done,
                 type_tag,
-                ty_attr: TyAttr::default(),
                 has_cleanup,
                 generic_param_count: class.generic_params.len(),
                 owner: bex_vm_types::HeapPtr::null(),
@@ -4297,29 +4240,25 @@ fn emit_file_group<'db>(
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
             for (idx, variant) in enm.variants.iter().enumerate() {
-                let meta = extract_schema_attrs(&variant.attributes, variant.docstring.as_deref());
                 variant_map.insert(variant.name.to_string(), idx);
                 variants.push(EnumVariant {
                     name: variant.name.to_string(),
-                    description: meta.description,
-                    alias: meta.alias,
-                    docstring: meta.docstring,
-                    other: meta.other,
-                    skip: meta.skip,
+                    description: variant.attrs.schema.description.clone(),
+                    alias: variant.attrs.schema.alias.clone(),
+                    docstring: variant.docstring.clone(),
+                    other: indexmap::IndexMap::new(),
+                    skip: variant.attrs.skip,
                 });
             }
-
-            let enum_meta = extract_schema_attrs(&enm.attributes, enm.docstring.as_deref());
 
             let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
                 name: bex_vm_types::DeclarationName::Declared(fq_to_type_name(&fq_name)),
                 type_tag: claim_type_tag(type_tags, &fq_name)?,
                 variants,
-                description: enum_meta.description,
-                alias: enum_meta.alias,
-                docstring: enum_meta.docstring,
-                other: enum_meta.other,
-                ty_attr: TyAttr::default(),
+                description: enm.attrs.schema.description.clone(),
+                alias: enm.attrs.schema.alias.clone(),
+                docstring: enm.docstring.clone(),
+                other: indexmap::IndexMap::new(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
@@ -4348,8 +4287,8 @@ fn emit_file_group<'db>(
     for file in files {
         let pkg_info = file_package(db, *file);
         let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
-        for &iface_loc in baml_compiler2_ppir::item_data::file_interfaces(db, *file) {
-            let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        for &iface_loc in baml_compiler2_hir::item_data::file_interfaces(db, *file) {
+            let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
             let iface_tn = baml_compiler2_hir_ty::lower::qualify_def(
                 db,
                 Definition::Interface(iface_loc),
@@ -4405,8 +4344,8 @@ fn emit_file_group<'db>(
     for file in files {
         let pkg_info = file_package(db, *file);
         let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
-        for &alias_loc in baml_compiler2_ppir::item_data::file_type_aliases(db, *file) {
-            let alias_data = baml_compiler2_ppir::item_data::type_alias_data(db, alias_loc);
+        for &alias_loc in baml_compiler2_hir::item_data::file_type_aliases(db, *file) {
+            let alias_data = baml_compiler2_hir::item_data::type_alias_data(db, alias_loc);
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(
                 db,
                 Definition::TypeAlias(alias_loc),
@@ -4619,7 +4558,7 @@ fn emit_file_group<'db>(
             for &func_loc in file_functions(db, *file) {
                 // Required interface methods are signature-only items: nothing
                 // to compile or index (mirrors their pre-item invisibility here).
-                if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                     continue;
                 }
                 let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
@@ -4627,9 +4566,9 @@ fn emit_file_group<'db>(
                 // `synthesize_init_test_function`. The trailing underscore in the
                 // filter is intentional: all real files produce a path-derived
                 // suffix. The no-path branch in lower_cst.rs produces bare
-                // `$init_test` (no suffix), but that only runs in unit tests, PPIR
-                // intermediate processing, and codegen — none of which produce
-                // functions that reach program.function_indices at emit time. So
+                // `$init_test` (no suffix), but that only runs in unit tests and
+                // codegen — neither of which produces functions that reach
+                // program.function_indices at emit time. So
                 // `contains("$init_test_")` safely matches only per-file functions
                 // without risk of collision with the chainer name we're about to
                 // synthesize.
@@ -4699,21 +4638,15 @@ fn emit_file_group<'db>(
                 local_names: vec![String::new(), "registry".to_string()],
                 debug_locals: Vec::new(),
                 span: Span::fake(),
-                return_type: bex_vm_types::TyTemplate::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
+                return_type: bex_vm_types::TyTemplate::Null,
                 param_names: vec!["registry".to_string()],
-                param_types: vec![bex_vm_types::TyTemplate::Unknown {
-                    attr: baml_type::TyAttr::default(),
-                }], // type not needed for chainer dispatch
+                param_types: vec![bex_vm_types::TyTemplate::Unknown], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
                 display_return_type: "null".to_string(),
-                throws_type: bex_vm_types::TyTemplate::Never {
-                    attr: baml_type::TyAttr::default(),
-                },
+                throws_type: bex_vm_types::TyTemplate::Never,
                 origin: FunctionOrigin::Internal,
                 is_interface_body: false,
                 native_key: None,
@@ -4776,9 +4709,7 @@ fn compute_throws_type(
     frame_params: &[baml_type::ParamTy],
 ) -> baml_type::TyTemplate {
     // An empty throw set is `never` — the empty error set — not an absent one.
-    let never = || baml_type::TyTemplate::Never {
-        attr: baml_type::TyAttr::default(),
-    };
+    let never = || baml_type::TyTemplate::Never;
     let pkg_info = file_package(db, file);
     let pkg_id = pkg_info.root;
     let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
@@ -4803,7 +4734,7 @@ fn compute_throws_type(
     if converted.len() == 1 {
         converted.into_iter().next().unwrap()
     } else {
-        baml_type::TyTemplate::Union(converted.into(), baml_type::TyAttr::default())
+        baml_type::TyTemplate::Union(converted.into())
     }
 }
 
@@ -4856,7 +4787,6 @@ fn type_expr_for_name(name: Name) -> TypeExpr {
         segments: vec![name],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
-        attrs: Vec::new(),
     }
     .at(baml_compiler2_ast::TextRange::default())
 }
@@ -4875,7 +4805,6 @@ fn type_expr_for_name_with_generic_args(
             .map(|param| type_expr_for_name(param.name.clone()))
             .collect(),
         associated_type_bindings: Vec::new(),
-        attrs: Vec::new(),
     }
     .at(baml_compiler2_ast::TextRange::default())
 }
@@ -4893,9 +4822,11 @@ fn compute_function_metadata<'db>(
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &RuntimeLowering<'_>,
 ) -> baml_compiler2_mir::RuntimeSignature {
-    use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
+    use baml_compiler2_hir::{
+        item_data::{MethodOwner, method_owner},
+        type_ref::{TypeRefId, TypeRefStore},
+    };
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
-    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
     use baml_type::{Ty, unify::substitute_ty};
 
     /// One in-scope type variable's declared bound conjunction, as `(store, id)`
@@ -4939,7 +4870,7 @@ fn compute_function_metadata<'db>(
 
     let pkg_info = file_package(db, file);
     let pkg_id = pkg_info.root;
-    let _pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let _pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
     // The item this method belongs to, via the firewall (mirrors MIR's enclosing
     // lookups; replaces the removed `method_owners`/`implements_for` flat fields).
@@ -4961,7 +4892,7 @@ fn compute_function_metadata<'db>(
         let (mut names, mut bounds) = match owner {
             Some(MethodOwner::Impl(impl_loc)) => {
                 let (params, store) =
-                    baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
+                    baml_compiler2_hir::item_data::impl_declared_generics(db, impl_loc);
                 split_declared(params, store)
             }
             Some(MethodOwner::Interface(_)) => {
@@ -5008,7 +4939,6 @@ fn compute_function_metadata<'db>(
             self_param
                 .clone()
                 .expect("interface method environment contains Self"),
-            baml_type::TyAttr::default(),
         )
     };
     let interface_signature_bindings: rustc_hash::FxHashMap<ParamTy, Ty> = match enclosing_interface
@@ -5016,12 +4946,7 @@ fn compute_function_metadata<'db>(
         Some(_) => {
             let mut bindings: rustc_hash::FxHashMap<ParamTy, Ty> = enclosing_generics
                 .iter()
-                .map(|p| {
-                    (
-                        p.clone(),
-                        Ty::TypeVar(p.clone(), baml_type::TyAttr::default()),
-                    )
-                })
+                .map(|p| (p.clone(), Ty::TypeVar(p.clone())))
                 .collect();
             // Associated types are not frame params: signature references to
             // them already lower as `Self.X` projections, so only `Self` and
@@ -5228,9 +5153,7 @@ fn compute_function_metadata<'db>(
                 .collect()
         })
         .collect();
-    let null_template = || baml_type::TyTemplate::Null {
-        attr: baml_type::TyAttr::default(),
-    };
+    let null_template = || baml_type::TyTemplate::Null;
 
     // Runtime parameter templates come from the ELABORATED signature — the one
     // the checker types calls against. Only the effect differs from the raw
@@ -5240,7 +5163,7 @@ fn compute_function_metadata<'db>(
     // boundary accepts opaquely), whereas the raw lowering falls back to
     // `never` — the spelling of an EXPLICIT `throws never`, a closed contract
     // the boundary enforces. Display keeps the raw spelling the user wrote.
-    let elaborated = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
+    let elaborated = baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc);
     debug_assert_eq!(elaborated.params.len(), func.params.len());
     let mut param_types = Vec::with_capacity(func.params.len());
     let mut display_param_types = Vec::with_capacity(func.params.len());
@@ -5331,7 +5254,7 @@ fn build_line_starts(text: &str) -> Vec<u32> {
 /// Topological sort of packages: dependencies come before dependents.
 /// Falls back to alphabetical order for packages at the same depth.
 fn topological_sort_packages(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_names: &[baml_base::Name],
 ) -> Vec<baml_base::Name> {
     use std::collections::{HashMap, VecDeque};
@@ -5476,9 +5399,7 @@ struct LambdaCaptureInfo {
 }
 
 fn unknown_capture_ty() -> RuntimeTy {
-    RuntimeTy::Unknown {
-        attr: TyAttr::default(),
-    }
+    RuntimeTy::Unknown
 }
 
 fn resolve_capture_operand_type<'db>(
@@ -5612,7 +5533,7 @@ fn emit_functions_serial<'db>(
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
             let mir = lower_function(db, func_loc, opt);
@@ -5898,7 +5819,7 @@ fn emit_functions_parallel<'db>(
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
-            if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+            if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
             seeds.push(FnSeed {
@@ -6200,9 +6121,7 @@ fn builtin_emit_function(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),
-        return_type: bex_vm_types::TyTemplate::Null {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: bex_vm_types::TyTemplate::Null,
         param_names: Vec::new(),
         param_types: Vec::new(),
         param_has_default: Vec::new(),
@@ -6210,9 +6129,7 @@ fn builtin_emit_function(
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: bex_vm_types::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Builtin,
         is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
@@ -6238,7 +6155,8 @@ fn attach_function_metadata<'db>(
 ) {
     let func = function_data(db, func_loc);
     // Set function metadata from signature
-    let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+    let parameter_defaults =
+        baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
@@ -6248,9 +6166,9 @@ fn attach_function_metadata<'db>(
     //
     // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
     // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
-    // The stream return type is now carried by the synthesized `$stream` companion's
-    // own `return_type` (see ppir's `companion_stream_return_type`), so the old
-    // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+    // The stream return type is now carried by the `@stream` companion's own
+    // `return_type` (see `baml_compiler2_ast`'s `companions::llm_stream`), so the
+    // old emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
     // of `ctx.output_format()` should be re-verified against canary's streaming.
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
@@ -6537,9 +6455,7 @@ fn compile_init_function<'db>(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
-                    return_type: bex_vm_types::TyTemplate::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
+                    return_type: bex_vm_types::TyTemplate::Null,
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
@@ -6547,9 +6463,7 @@ fn compile_init_function<'db>(
                     generic_param_bounds: Vec::new(),
                     display_param_types: Vec::new(),
                     display_return_type: "null".to_string(),
-                    throws_type: bex_vm_types::TyTemplate::Never {
-                        attr: baml_type::TyAttr::default(),
-                    },
+                    throws_type: bex_vm_types::TyTemplate::Never,
                     origin: FunctionOrigin::Internal,
                     is_interface_body: false,
                     native_key: None,
@@ -6618,9 +6532,7 @@ fn compile_init_function<'db>(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        return_type: bex_vm_types::TyTemplate::Null {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: bex_vm_types::TyTemplate::Null,
         param_names: Vec::new(),
         param_types: Vec::new(),
         param_has_default: Vec::new(),
@@ -6628,9 +6540,7 @@ fn compile_init_function<'db>(
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: "null".to_string(),
-        throws_type: bex_vm_types::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Internal,
         is_interface_body: false,
         native_key: None,
@@ -6650,7 +6560,7 @@ mod tests {
     };
 
     use baml_base::{FileId, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
-    use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
+    use baml_compiler2_ast::parse_string_attr_value;
     use salsa::Setter;
 
     use super::*;
@@ -6723,9 +6633,6 @@ mod tests {
             self.roots.expect("root table present from construction")
         }
     }
-
-    #[salsa::db]
-    impl baml_compiler2_ppir::Db for TestDb {}
 
     #[salsa::db]
     impl baml_compiler2_mir::Db for TestDb {}
@@ -6808,11 +6715,11 @@ mod tests {
             "function f(required: int, with_default: int = 1, also_required: int) -> int { 1 }",
         );
 
-        let func_loc = baml_compiler2_ppir::item_data::file_functions(&db, file)
+        let func_loc = baml_compiler2_hir::item_data::file_functions(&db, file)
             .iter()
             .copied()
             .find(|&loc| {
-                baml_compiler2_ppir::item_data::function_data(&db, loc)
+                baml_compiler2_hir::item_data::function_data(&db, loc)
                     .name
                     .as_str()
                     == "f"
@@ -6843,11 +6750,11 @@ mod tests {
         let mut db = TestDb::default();
         let file = db.add_file("test.baml", source);
 
-        let iface_loc = baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+        let iface_loc = baml_compiler2_hir::item_data::file_interfaces(&db, file)
             .iter()
             .copied()
             .find(|&loc| {
-                baml_compiler2_ppir::item_data::interface_data(&db, loc)
+                baml_compiler2_hir::item_data::interface_data(&db, loc)
                     .name
                     .as_str()
                     == name
@@ -6928,7 +6835,7 @@ mod tests {
             "the `self` receiver drops, the other three stay: {:?}",
             put.args
         );
-        assert!(matches!(put.args[2], baml_type::RuntimeTy::Int { .. }));
+        assert!(matches!(put.args[2], baml_type::RuntimeTy::Int));
     }
 
     /// A `requires` clause is recorded even when it projects through `Self`.
@@ -6953,99 +6860,5 @@ mod tests {
             "the `requires` clause must survive lowering: {:?}",
             def.requires
         );
-    }
-
-    // ── extract_schema_attrs ────────────────────────────────────────────
-
-    fn mk_attr(name: &str, args: &[&str]) -> Attribute {
-        Attribute {
-            name: baml_base::Name::new(name),
-            args: args
-                .iter()
-                .map(|v| AttributeArg {
-                    key: None,
-                    value: v.to_string(),
-                })
-                .collect(),
-        }
-    }
-
-    #[test]
-    fn extract_description_and_alias() {
-        let attrs = vec![
-            mk_attr("description", &[r#""A field""#]),
-            mk_attr("alias", &[r#""myField""#]),
-        ];
-        let meta = extract_schema_attrs(&attrs, Some("docs"));
-        assert_eq!(meta.description, Some("A field".to_string()));
-        assert_eq!(meta.alias, Some("myField".to_string()));
-        assert_eq!(meta.docstring, Some("docs".to_string()));
-        assert!(!meta.skip);
-    }
-
-    #[test]
-    fn extract_skip() {
-        let attrs = vec![mk_attr("skip", &[])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-        assert_eq!(meta.alias, None);
-        assert!(meta.skip);
-    }
-
-    #[test]
-    fn extract_custom_attrs_into_other() {
-        let attrs = vec![
-            mk_attr("stream.done", &["true"]),
-            mk_attr("internal.opaque", &[]),
-            mk_attr("description", &[r#""kept""#]),
-        ];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("kept".to_string()));
-        assert_eq!(meta.other["stream.done"], "true");
-        assert_eq!(meta.other["internal.opaque"], "true");
-    }
-
-    #[test]
-    fn extract_non_string_arg_ignored() {
-        let attrs = vec![mk_attr("description", &["42"])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-    }
-
-    #[test]
-    fn extract_wrong_arg_count_ignored() {
-        let attrs = vec![mk_attr("description", &[])]; // 0 args
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-    }
-
-    #[test]
-    fn extract_duplicate_last_wins() {
-        let attrs = vec![
-            mk_attr("description", &[r#""first""#]),
-            mk_attr("description", &[r#""second""#]),
-        ];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("second".to_string()));
-    }
-
-    #[test]
-    fn removed_hash_string_attr_is_ignored() {
-        let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, None);
-    }
-
-    #[test]
-    fn extract_regular_string_attr_decodes_escapes() {
-        let attrs = vec![mk_attr("description", &[r#""a\nb\tc\\d\"e""#])];
-        let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("a\nb\tc\\d\"e".to_string()));
-    }
-
-    #[test]
-    fn extract_no_attrs() {
-        let meta = extract_schema_attrs(&[], None);
-        assert_eq!(meta, SchemaAttrs::default());
     }
 }

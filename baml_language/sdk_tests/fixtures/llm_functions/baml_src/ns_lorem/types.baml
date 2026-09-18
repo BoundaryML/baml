@@ -4,15 +4,13 @@ class Resume {
   email string?
 }
 
-// `StreamingDoc` exists to force an always-different `$stream` branch:
-// the optional `body` proxies a stream-state-altering field, so the
-// synthesized `StreamingDoc$stream` class differs from the source
-// class. Pins the `stream_types/lorem` leaf emission — the
-// conditional-emit rule guarantees this companion shows up.
+// The multi-field class return type for class-typed streaming coverage.
+// `word_count` is nullable so the class has a partial parse while it streams: an
+// `int` field has no default (BEP-075), and the model emits it last.
 class StreamingDoc {
   title string
   body string?
-  word_count int
+  word_count int?
 }
 
 // Static host model used only as a same-name trap for HS-7. The runtime test
@@ -23,13 +21,13 @@ class Hs7Collision {
 }
 
 // Return shape for `stream_e2e_collect`: every value produced by
-// `stream.next()` (the `S` side of `Stream<T, S>` — `null | string` for
-// the `stream_e2e_extract$stream` instantiation) plus the single `T`
-// value from `stream.final()`. The class is concrete (no generics) so
-// the FFI boundary doesn't depend on the engine's `Stream<T, S>`
-// type-var substitution.
+// `stream.next()` (`string` for the `stream_e2e_extract@stream`
+// instantiation of `Stream<T>`) plus the single final
+// value from `stream.final()`. The class is concrete (no generics) so the
+// FFI boundary doesn't depend on the engine's `Stream<T>` type-var
+// substitution.
 class StreamE2ECollectResult {
-  next_calls (null | string)[]
+  next_calls string[]
   final_call string
 }
 

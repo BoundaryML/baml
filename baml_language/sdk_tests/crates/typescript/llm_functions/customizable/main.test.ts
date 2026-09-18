@@ -9,8 +9,6 @@
 // - user.lorem.Resume + ExtractResume (with flat Spec/Stream projections)
 // - user.lorem.StreamingDoc + StreamingExtract
 // - user.ipsum.Sentiment (enum) + ClassifySentiment
-// - lorem leaf hosts PPIR `$stream` partial classes beside their base type
-//   (spec2: `$` is a valid TS identifier char, so no `stream_types/` leaf)
 //
 import { describe, it, expect } from "vitest";
 
@@ -158,14 +156,5 @@ describe("llm_functions — FunctionSpec", () => {
     const secondPrompt = spec.prompt();
     expect(secondPrompt.text()).toBe(text);
     expect(secondPrompt.messages()[0].parts[1]).toBeInstanceOf(Image);
-  });
-});
-
-describe("llm_functions — stream companion classes in lorem leaf", () => {
-  it("main_lorem_exposes_the_stream_companion_classes_beside_their_base_type", () => {
-    const hasAny = ["Resume$stream", "StreamingDoc$stream"].some(
-      (name) => name in lorem,
-    );
-    expect(hasAny).toBe(true);
   });
 });

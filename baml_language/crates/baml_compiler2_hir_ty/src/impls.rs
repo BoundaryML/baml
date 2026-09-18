@@ -77,11 +77,11 @@ pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
 ///
 /// Expansion reads alias definitions only, so this cannot re-enter the impl
 /// resolver that asks for it.
-fn subject_head_is_implementor(db: &dyn baml_compiler2_ppir::Db, ty: &baml_type::Ty) -> bool {
+fn subject_head_is_implementor(db: &dyn baml_compiler2_hir::Db, ty: &baml_type::Ty) -> bool {
     let mut head = ty.clone();
     // Bounded: a cyclic alias is rejected at its declaration (E0068).
     for _ in 0..64 {
-        let baml_type::Ty::TypeAlias(name, _) = &head else {
+        let baml_type::Ty::TypeAlias(name) = &head else {
             break;
         };
         match crate::facts::uncached_alias_def(db, name) {
@@ -218,11 +218,11 @@ partial_eq_salsa_update!(ImplHeaderResolution);
 /// validity decision ([`ImplHeaderResolution`]).
 #[salsa::tracked(returns(ref))]
 pub fn impl_facts<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     block: ImplLoc<'db>,
 ) -> ImplHeaderResolution<'db> {
-    use baml_compiler2_ppir::item_data::ImplSubjectData;
-    let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+    use baml_compiler2_hir::item_data::ImplSubjectData;
+    let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
     let file = block.file(db);
 
     // Set when the written for-target is not an implementor (E0138); the
@@ -233,7 +233,7 @@ pub fn impl_facts<'db>(
         match &data.subject {
             ImplSubjectData::InClass { class, .. } => {
                 let frame = crate::lower::class_generic_frame(db, *class);
-                let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
+                let class_data = baml_compiler2_hir::item_data::class_data(db, *class);
                 let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
                 let bounds = class_data
                     .generic_params
@@ -383,17 +383,12 @@ pub fn impl_facts<'db>(
         // progressively pinned bound. Lowering with the concrete receiver here
         // loses that bound for blanket impls (`for T`) and makes an explicitly
         // qualified `(Self as dep.I).Item` re-enter impl selection on itself.
-        let self_var = baml_type::Ty::TypeVar(self_param.clone(), baml_type::TyAttr::default());
+        let self_var = baml_type::Ty::TypeVar(self_param.clone());
         let mut value_scope = params.clone();
         value_scope.push(self_param.clone());
         let mut value_bindings: baml_type::unify::TypeBindings = params
             .iter()
-            .map(|param| {
-                (
-                    param.clone(),
-                    baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()),
-                )
-            })
+            .map(|param| (param.clone(), baml_type::Ty::TypeVar(param.clone())))
             .collect();
         value_bindings.insert(self_param.clone(), for_ty.clone());
         let mut resolved_pins: Vec<(Name, baml_type::Ty)> = Vec::new();
@@ -490,7 +485,7 @@ pub fn impl_facts<'db>(
 /// program from resolving arbitrarily).
 #[salsa::tracked(returns(ref))]
 pub fn package_impl_locs(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
 ) -> Vec<ImplLoc<'_>> {
     let mut out = Vec::new();
@@ -498,7 +493,7 @@ pub fn package_impl_locs(
     // set never invalidate this query.
     for file in package.files(db) {
         out.extend(
-            baml_compiler2_ppir::item_data::file_impls(db, *file)
+            baml_compiler2_hir::item_data::file_impls(db, *file)
                 .iter()
                 .copied(),
         );
@@ -518,11 +513,11 @@ pub fn package_impl_locs(
 /// blocks, so their impls are not listed.
 #[salsa::tracked(returns(ref))]
 pub fn impls_naming_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
-    let name = &baml_compiler2_ppir::item_data::interface_data(db, interface).name;
+    let name = &baml_compiler2_hir::item_data::interface_data(db, interface).name;
     let target = crate::lower::qualify_def(
         db,
         baml_compiler2_hir::contributions::Definition::Interface(interface),
@@ -548,21 +543,21 @@ pub fn impls_naming_interface<'db>(
 /// termination argument (a fact-rich context would let the matcher
 /// re-enter the resolver that called it).
 pub(crate) struct AliasOnlyFacts<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     memoized: Option<crate::facts::Facts<'db>>,
 }
 
 impl<'db> AliasOnlyFacts<'db> {
     /// A one-shot alias/enum context. Use [`Self::memoized`] when the same
     /// context spans a candidate scan and will see repeated type heads.
-    pub(crate) fn new(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
+    pub(crate) fn new(db: &'db dyn baml_compiler2_hir::Db) -> AliasOnlyFacts<'db> {
         AliasOnlyFacts { db, memoized: None }
     }
 
     /// A scan-local alias/enum context. A memo must not outlive one query
     /// execution - it would serve rows from a stale revision and suppress the
     /// dependency reads a later execution needs.
-    fn memoized(db: &'db dyn baml_compiler2_ppir::Db) -> AliasOnlyFacts<'db> {
+    fn memoized(db: &'db dyn baml_compiler2_hir::Db) -> AliasOnlyFacts<'db> {
         AliasOnlyFacts {
             db,
             memoized: Some(crate::facts::Facts::new(db)),
@@ -623,20 +618,20 @@ pub(crate) fn is_concrete_receiver(ty: &Ty) -> bool {
         ty.kind(),
         InferTy::Class(..)
             | InferTy::Enum(..)
-            | InferTy::Int { .. }
-            | InferTy::Bigint { .. }
-            | InferTy::Float { .. }
-            | InferTy::String { .. }
-            | InferTy::Bool { .. }
-            | InferTy::Null { .. }
-            | InferTy::Uint8Array { .. }
+            | InferTy::Int
+            | InferTy::Bigint
+            | InferTy::Float
+            | InferTy::String
+            | InferTy::Bool
+            | InferTy::Null
+            | InferTy::Uint8Array
             | InferTy::Media(..)
             | InferTy::List(..)
             | InferTy::Map { .. }
             | InferTy::Future(..)
-            | InferTy::Type { .. }
-            | InferTy::Resource { .. }
-            | InferTy::PromptAst { .. }
+            | InferTy::Type
+            | InferTy::Resource
+            | InferTy::PromptAst
     )
 }
 
@@ -813,14 +808,14 @@ impl ResolvedImpl<'_> {
     /// dispatch keys on.
     pub fn implemented_view(
         &self,
-        db: &dyn baml_compiler2_ppir::Db,
+        db: &dyn baml_compiler2_hir::Db,
         self_ty: &Ty,
     ) -> InferInterface {
         let header = self.implemented();
         let declared: Vec<baml_type::Name> = {
             match crate::facts::definition_of(db, &header.name) {
                 Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => {
-                    baml_compiler2_ppir::item_data::interface_data(db, loc)
+                    baml_compiler2_hir::item_data::interface_data(db, loc)
                         .associated_types
                         .iter()
                         .map(|assoc| assoc.name.clone())
@@ -853,7 +848,7 @@ impl<'db> ResolvedImpl<'db> {
     /// a method or adopts the default; there is no override relation).
     pub fn provided_method(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         name: &Name,
     ) -> Option<ProvidedMethod<'db, '_>> {
         match &self.origin {
@@ -861,7 +856,7 @@ impl<'db> ResolvedImpl<'db> {
                 .iter()
                 .copied()
                 .find(|&method| {
-                    baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+                    baml_compiler2_hir::item_data::function_data(db, method).name == *name
                 })
                 .map(|func| ProvidedMethod::Source {
                     block: *block,
@@ -891,7 +886,7 @@ impl<'db> ResolvedImpl<'db> {
 /// default realized at the receiver - rustc's `leaf_def` walk (the
 /// default fills only when the impl omits the binding).
 pub(crate) fn resolved_pin(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     resolved: &ResolvedImpl<'_>,
     self_ty: &Ty,
     member: &Name,
@@ -918,7 +913,7 @@ pub(crate) fn resolved_pin(
 /// a rigid projection never reduces to a trait-definition default; in
 /// BAML the written reference itself fixes omitted defaulted members.
 pub(crate) fn realized_assoc_default(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     target: &InferInterface,
     self_ty: &Ty,
     member: &Name,
@@ -977,7 +972,7 @@ pub(crate) fn eq_admitted(a: &Ty, b: &Ty, eq: &impl TypeContext) -> bool {
 /// boundary — closed inputs substituted into declaration-side (var-free)
 /// bounds realize to a closed bound, so the closure cannot fail.
 pub(crate) fn realized_assoc_bound_plain(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     target: &baml_type::Interface,
     self_ty: &baml_type::Ty,
     member: &Name,
@@ -993,7 +988,7 @@ pub(crate) fn realized_assoc_bound_plain(
 }
 
 pub(crate) fn realized_assoc_bound(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     target: &InferInterface,
     self_ty: &Ty,
     member: &Name,
@@ -1018,7 +1013,6 @@ pub(crate) fn realized_assoc_bound(
                 .iter()
                 .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                 .collect(),
-            baml_type::TyAttr::default(),
         ));
         return Some(crate::lower::substitute_params(&bound_ty, &instantiation));
     }
@@ -1040,11 +1034,11 @@ pub(crate) fn realized_assoc_bound(
 /// [`crate::method_resolution::interface_instantiation`], which owns the
 /// single arity gate (and its construction-bug assert).
 fn assoc_realization_env<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     target: &InferInterface,
 ) -> Option<(
     baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    &'db baml_compiler2_ppir::item_data::InterfaceData<'db>,
+    &'db baml_compiler2_hir::item_data::InterfaceData<'db>,
 )> {
     let facts = crate::facts::Facts::new(db);
     let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
@@ -1052,7 +1046,7 @@ fn assoc_realization_env<'db>(
     else {
         return None;
     };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let data = baml_compiler2_hir::item_data::interface_data(db, interface);
     Some((interface, data))
 }
 
@@ -1104,7 +1098,7 @@ pub(crate) fn mounted_interface_instantiation(
 /// closed receiver are closed; rigid type variables are not inference
 /// variables).
 pub fn impl_views_for_type(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
 ) -> Vec<baml_type::Interface> {
@@ -1134,7 +1128,7 @@ pub const REQUIRES_CLOSURE_FUEL: u32 = 64;
 /// [`direct_requires_closure`]'s PLAIN entry, same boundary discipline as
 /// [`impl_views_for_type`].
 pub fn direct_requires_closure_plain(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     root: &baml_type::Interface,
     self_ty: &baml_type::Ty,
     fuel: u32,
@@ -1163,7 +1157,7 @@ pub fn direct_requires_closure_plain(
 /// bindings are the CALLER's to discharge against its param env
 /// (`lookup_impl_member` does).
 pub fn impls_for_type<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
 ) -> Vec<ResolvedImpl<'db>> {
@@ -1178,11 +1172,9 @@ pub fn impls_for_type<'db>(
     //
     // Widen BEFORE the memo key is built, so both spellings share one
     // cache entry instead of the literal interning a second, empty one.
-    if let baml_type::Ty::Literal(literal, _, attr) = concrete {
-        let widened = baml_type::Ty::from_primitive(
-            baml_type::PrimitiveType::from_literal(literal),
-            attr.clone(),
-        );
+    if let baml_type::Ty::Literal(literal, _) = concrete {
+        let widened =
+            baml_type::Ty::from_primitive(baml_type::PrimitiveType::from_literal(literal));
         return impls_for_type(db, viewer, &widened);
     }
     impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
@@ -1259,7 +1251,7 @@ pub(crate) fn provides_concrete_members(lang: baml_base::LangRoots, interface: &
 /// the derived interface excludes (for example, `map.get` resolving to
 /// `AnyClass.get`).
 fn derived_impl_allows(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     concrete: &Ty,
     interface: &DeclName,
 ) -> bool {
@@ -1291,7 +1283,7 @@ struct ImplTypeKey<'db> {
 /// A recursive obligation can re-enter candidate assembly through
 /// `bounds_hold`; inductive impl cycles contribute no candidates.
 fn impls_for_type_cycle_result<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    _db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
     _type_key: ImplTypeKey<'db>,
 ) -> Vec<CachedResolvedImpl<'db>> {
@@ -1306,7 +1298,7 @@ fn impls_for_type_cycle_result<'db>(
 /// same receiver type.
 #[salsa::tracked(returns(ref), cycle_result = impls_for_type_cycle_result)]
 fn impls_for_type_cached<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     type_key: ImplTypeKey<'db>,
 ) -> Vec<CachedResolvedImpl<'db>> {
     // The matcher's working vocabulary is interned: the plain key and each
@@ -1335,7 +1327,7 @@ fn impls_for_type_cached<'db>(
                 .map(|(param, _)| param.clone())
                 .collect();
             // Bare-blanket guard, as in `match_impl_head`.
-            if let InferTy::TypeVar(param, _) = pattern.kind()
+            if let InferTy::TypeVar(param) = pattern.kind()
                 && params.contains(param)
                 && !is_concrete_receiver(&concrete)
             {
@@ -1403,7 +1395,7 @@ fn impls_for_type_cached<'db>(
 }
 
 fn package_impl_candidates(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
 ) -> impl Iterator<Item = (ResolvedImplOrigin<'_>, ResolvedImplFacts<'_>)> + '_ {
     let source = package_impl_locs(db, package)
@@ -1491,7 +1483,7 @@ fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedI
 /// fact value and record the live package-interface dependency.
 #[salsa::tracked(returns(ref))]
 fn precompiled_impl_facts(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
     row: u32,
 ) -> Option<MountedImplFacts> {
@@ -1509,7 +1501,7 @@ fn precompiled_impl_facts(
 /// for a goal that may still carry inference variables). The orphan
 /// rule makes these roots complete, exactly as in `search_roots`.
 pub(crate) fn impl_candidates<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     goal: &Ty,
     interface_name: &DeclName,
 ) -> Vec<&'db ImplFacts<'db>> {
@@ -1536,7 +1528,7 @@ pub(crate) fn impl_candidates<'db>(
 /// filter applies - every visible package, the same walk the ground
 /// registry (`impls_for_type`) does.
 pub(crate) fn all_impl_facts(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
 ) -> Vec<&ImplFacts<'_>> {
     let mut out = Vec::new();
@@ -1557,7 +1549,7 @@ pub(crate) fn all_impl_facts(
 /// Unrealized inputs answer `false` - the conservative direction; the
 /// symbolic resolvers join with I4.
 pub fn implements_interface(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     concrete: &Ty,
     interface: &InferInterface,
 ) -> bool {
@@ -1567,7 +1559,7 @@ pub fn implements_interface(
 /// The unique impl by which realized `concrete` implements realized
 /// `interface`, with bindings.
 pub fn resolve_impl<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     concrete: &Ty,
     interface: &InferInterface,
 ) -> Option<ResolvedImpl<'db>> {
@@ -1590,8 +1582,8 @@ pub fn resolve_impl<'db>(
     // A literal-typed value implements what its base primitive does
     // (the receiver-class rule applied to impl goals): `1` proves
     // `GrptChild<int>` through `implements GrptChild<int> for int`.
-    if let InferTy::Literal(literal, _, attr) = concrete.kind() {
-        let widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
+    if let InferTy::Literal(literal, _) = concrete.kind() {
+        let widened = Ty::intern(crate::infer::literal_base(literal));
         return resolve_impl(db, &widened, interface);
     }
     resolve_within_depth(
@@ -1608,7 +1600,7 @@ fn is_realized(ty: &Ty) -> bool {
 }
 
 fn resolve_within_depth<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     concrete: &Ty,
     interface: &InferInterface,
     depth: u32,
@@ -1657,7 +1649,7 @@ fn resolve_within_depth<'db>(
 /// Every package a qualified name on either side points into - the
 /// orphan rule guarantees the impl lives in one of them.
 fn search_roots(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     concrete: &Ty,
     interface: &InferInterface,
 ) -> Vec<baml_base::SourceRoot> {
@@ -1676,21 +1668,21 @@ fn collect_packages(lang: baml_base::LangRoots, ty: &Ty, out: &mut Vec<baml_base
     match ty.kind() {
         InferTy::Class(qtn, ..)
         | InferTy::Interface(qtn, ..)
-        | InferTy::Enum(qtn, _)
+        | InferTy::Enum(qtn)
         | InferTy::EnumVariant(qtn, ..)
-        | InferTy::TypeAlias(qtn, _) => out.push(qtn.root()),
+        | InferTy::TypeAlias(qtn) => out.push(qtn.root()),
         _ => {}
     }
     // Primitives and structural types live in the stdlib package.
     if matches!(
         ty.kind(),
-        InferTy::Int { .. }
-            | InferTy::Bigint { .. }
-            | InferTy::Float { .. }
-            | InferTy::String { .. }
-            | InferTy::Bool { .. }
-            | InferTy::Null { .. }
-            | InferTy::Uint8Array { .. }
+        InferTy::Int
+            | InferTy::Bigint
+            | InferTy::Float
+            | InferTy::String
+            | InferTy::Bool
+            | InferTy::Null
+            | InferTy::Uint8Array
             | InferTy::Media(..)
             | InferTy::List(..)
             | InferTy::Map { .. }
@@ -1712,7 +1704,7 @@ fn collect_packages(lang: baml_base::LangRoots, ty: &Ty, out: &mut Vec<baml_base
 /// for-target and every interface arg against ONE shared binding set,
 /// then the associated-pin gate. Declared bounds are NOT checked here.
 fn match_impl_head(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     facts: &ResolvedImplFacts<'_>,
     concrete: &Ty,
     interface: &InferInterface,
@@ -1726,7 +1718,7 @@ fn match_impl_head(
     let pattern = facts.for_ty_pattern();
     // Bare-blanket guard: `implement<T> I for T` applies only to
     // concrete receivers - never existentials, unions, or vars.
-    if let InferTy::TypeVar(param, _) = pattern.kind()
+    if let InferTy::TypeVar(param) = pattern.kind()
         && facts.generic_params().iter().any(|(p, _)| p == param)
         && !is_concrete_receiver(concrete)
     {
@@ -1797,7 +1789,7 @@ fn match_impl_head(
 /// plain (closed) input interns on the way in, and the reduced ground
 /// result exits through the closed boundary.
 pub(crate) fn reduce_ground_projections_plain(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     ty: &baml_type::Ty,
     fuel: u32,
 ) -> baml_type::Ty {
@@ -1806,11 +1798,7 @@ pub(crate) fn reduce_ground_projections_plain(
         .to_plain()
 }
 
-pub(crate) fn reduce_ground_projections(
-    db: &dyn baml_compiler2_ppir::Db,
-    ty: &Ty,
-    fuel: u32,
-) -> Ty {
+pub(crate) fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel: u32) -> Ty {
     if fuel == 0 || !ty.has_projection() || ty.has_infer() {
         return ty.clone();
     }
@@ -1864,7 +1852,7 @@ fn match_pattern(
     bindings: &mut FxHashMap<ParamTy, Ty>,
     eq: &AliasOnlyFacts<'_>,
 ) -> bool {
-    if let InferTy::TypeVar(param, _) = pattern.kind()
+    if let InferTy::TypeVar(param) = pattern.kind()
         && params.contains(param)
     {
         return match bindings.get(param) {
@@ -1888,7 +1876,7 @@ fn match_pattern(
         }
     }
     match (pattern.kind(), target.kind()) {
-        (InferTy::Class(a, a_args, _), InferTy::Class(b, b_args, _)) => {
+        (InferTy::Class(a, a_args), InferTy::Class(b, b_args)) => {
             a == b
                 && a_args.len() == b_args.len()
                 && a_args
@@ -1896,7 +1884,7 @@ fn match_pattern(
                     .zip(b_args.iter())
                     .all(|(p, t)| match_pattern(p, t, params, bindings, eq))
         }
-        (InferTy::Interface(a, a_args, a_pins, _), InferTy::Interface(b, b_args, b_pins, _)) => {
+        (InferTy::Interface(a, a_args, a_pins), InferTy::Interface(b, b_args, b_pins)) => {
             a == b
                 && a_args.len() == b_args.len()
                 && a_args
@@ -1912,7 +1900,7 @@ fn match_pattern(
                     })
                 })
         }
-        (InferTy::List(p, _), InferTy::List(t, _)) => match_pattern(p, t, params, bindings, eq),
+        (InferTy::List(p), InferTy::List(t)) => match_pattern(p, t, params, bindings, eq),
         (
             InferTy::Map {
                 key: pk, value: pv, ..
@@ -1924,11 +1912,11 @@ fn match_pattern(
             match_pattern(pk, tk, params, bindings, eq)
                 && match_pattern(pv, tv, params, bindings, eq)
         }
-        (InferTy::Future(pv, pe, _), InferTy::Future(tv, te, _)) => {
+        (InferTy::Future(pv, pe), InferTy::Future(tv, te)) => {
             match_pattern(pv, tv, params, bindings, eq)
                 && match_pattern(pe, te, params, bindings, eq)
         }
-        (InferTy::Union(p_members, _), InferTy::Union(t_members, _)) => {
+        (InferTy::Union(p_members), InferTy::Union(t_members)) => {
             match_union_members(p_members, t_members, params, bindings, eq)
         }
         (
@@ -1954,12 +1942,12 @@ fn match_pattern(
         }
         // Widenings: a literal target matches its base primitive; an
         // enum-variant target matches its enum.
-        (InferTy::Int { .. }, InferTy::Literal(baml_type::Literal::Int(_), ..))
-        | (InferTy::Bigint { .. }, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
-        | (InferTy::Float { .. }, InferTy::Literal(baml_type::Literal::Float(_), ..))
-        | (InferTy::String { .. }, InferTy::Literal(baml_type::Literal::String(_), ..))
-        | (InferTy::Bool { .. }, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
-        (InferTy::Enum(p, _), InferTy::EnumVariant(t, ..)) => p == t,
+        (InferTy::Int, InferTy::Literal(baml_type::Literal::Int(_), ..))
+        | (InferTy::Bigint, InferTy::Literal(baml_type::Literal::Bigint(_), ..))
+        | (InferTy::Float, InferTy::Literal(baml_type::Literal::Float(_), ..))
+        | (InferTy::String, InferTy::Literal(baml_type::Literal::String(_), ..))
+        | (InferTy::Bool, InferTy::Literal(baml_type::Literal::Bool(_), ..)) => true,
+        (InferTy::Enum(p), InferTy::EnumVariant(t, ..)) => p == t,
         _ => false,
     }
 }
@@ -2020,7 +2008,7 @@ fn pattern_fully_bound(
     bindings: &FxHashMap<ParamTy, Ty>,
 ) -> bool {
     fn walk(ty: &Ty, params: &[ParamTy], bindings: &FxHashMap<ParamTy, Ty>, out: &mut bool) {
-        if let InferTy::TypeVar(param, _) = ty.kind()
+        if let InferTy::TypeVar(param) = ty.kind()
             && params.contains(param)
             && !bindings.contains_key(param)
         {
@@ -2067,7 +2055,7 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     if !ty.has_typevar() {
         return ty.clone();
     }
-    if let InferTy::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param) = ty.kind()
         && let Some(bound) = bindings.get(param)
     {
         return bound.clone();
@@ -2082,7 +2070,7 @@ pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
 /// Unbound or still-symbolic bounds are vacuous (the caller's
 /// obligation); realized ones recurse with the budget.
 fn bounds_hold(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     facts: &ResolvedImplFacts<'_>,
     bindings: &FxHashMap<ParamTy, Ty>,
     depth: u32,
@@ -2112,7 +2100,7 @@ fn bounds_hold(
 /// root (the language's requires-cycle-by-name rule), so each caller
 /// re-prepended it; spelled once here.
 pub(crate) fn requires_heads(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     root: &InferInterface,
     self_ty: &Ty,
     fuel: u32,
@@ -2160,7 +2148,7 @@ pub(crate) fn head_matches(
 /// that instead ASKS "does this reference discharge that requirement" wants
 /// this one.
 pub(crate) fn head_satisfies(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     have: &InferInterface,
     want: &InferInterface,
     eq: &AliasOnlyFacts<'_>,
@@ -2197,7 +2185,7 @@ pub(crate) fn head_satisfies(
 /// it). One subject threads the whole closure: whoever implements the
 /// root implements every required interface (the requires contract).
 pub fn direct_requires_closure(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     root: &InferInterface,
     self_ty: &Ty,
     fuel: u32,
@@ -2225,7 +2213,7 @@ pub fn direct_requires_closure(
 /// sibling associated names resolve), realized by the shared positional
 /// instantiation.
 fn direct_requires(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     of: &InferInterface,
     self_ty: &Ty,
 ) -> Vec<InferInterface> {
@@ -2312,7 +2300,7 @@ fn direct_requires(
 /// realized args) requires `sup`, for subject `self_ty` (heads compare
 /// by name + args; pins are outputs, not part of the relation).
 pub fn interface_requires(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     sub: &InferInterface,
     sup: &InferInterface,
     self_ty: &Ty,
@@ -2322,7 +2310,7 @@ pub fn interface_requires(
 }
 
 fn interface_requires_inner(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     sub: &InferInterface,
     sup: &InferInterface,
     self_ty: &Ty,

@@ -22,22 +22,20 @@ interface Marker {
 /// Person docs
 class Person {
     /// Name docs
-    name: string @alias("full_name") @description("Name description") @custom("field-extra"),
+    name: string @alias("full_name") @description("Name description"),
 
     @@alias("PersonAlias")
     @@description("Person description")
-    @@custom("class-extra")
 }
 
 /// Color docs
 enum Color {
     /// Red docs
-    Red @alias("rouge") @description("Red description") @custom("variant-extra"),
+    Red @alias("rouge") @description("Red description"),
     Blue,
 
     @@alias("ColorAlias")
     @@description("Color description")
-    @@custom("enum-extra")
 }
 
 type Callback = (x: int, label: string) -> bool throws string;
@@ -198,22 +196,18 @@ test "class_and_enum_readback_preserves_schema_metadata" {
     assert.equal(class_meta.alias, "PersonAlias");
     assert.equal(class_meta.description, "Person description");
     assert.equal(class_meta.docstring, "Person docs");
-    assert.equal(class_meta.other.get("custom"), "class-extra");
     assert.equal(field.name, "name");
     assert.equal(field.type, reflect.Type.of<string>());
     assert.equal(field.meta.alias, "full_name");
     assert.equal(field.meta.description, "Name description");
     assert.equal(field.meta.docstring, "Name docs");
-    assert.equal(field.meta.other.get("custom"), "field-extra");
     assert.equal(enum_meta.alias, "ColorAlias");
     assert.equal(enum_meta.description, "Color description");
     assert.equal(enum_meta.docstring, "Color docs");
-    assert.equal(enum_meta.other.get("custom"), "enum-extra");
     assert.equal(red.name, "Red");
     assert.equal(red.meta.alias, "rouge");
     assert.equal(red.meta.description, "Red description");
-    assert.equal(red.meta.docstring, "Red docs");
-    assert.equal(red.meta.other.get("custom"), "variant-extra")
+    assert.equal(red.meta.docstring, "Red docs")
 }
 
 test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {

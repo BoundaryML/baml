@@ -1,9 +1,9 @@
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 test_deserializer!(
     test_list,
     r#"["a", "b"]"#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["a", "b"]
 );
@@ -11,7 +11,7 @@ test_deserializer!(
 test_deserializer!(
     test_list_with_quotes,
     r#"["\"a\"", "\"b\""]"#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["\"a\"", "\"b\""]
 );
@@ -19,7 +19,7 @@ test_deserializer!(
 test_deserializer!(
     test_list_with_extra_text,
     r#"["a", "b"] is the output."#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["a", "b"]
 );
@@ -27,7 +27,7 @@ test_deserializer!(
 test_deserializer!(
     test_list_with_invalid_extra_text,
     r#"[a, b] is the output."#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["a", "b"]
 );
@@ -35,7 +35,7 @@ test_deserializer!(
 test_deserializer!(
     test_list_object_from_string,
     r#"[{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]"#,
-    baml_tyannotated!([Foo]),
+    baml_ty!([Foo]),
     baml_db!{
         class Foo {
             a: int,
@@ -81,7 +81,7 @@ test_deserializer!(
     }
   ]
     "#,
-    baml_tyannotated!([ListClass]),
+    baml_ty!([ListClass]),
     baml_db!{
         class ListClass {
             date: string,
@@ -124,58 +124,57 @@ test_deserializer!(
       ]
 );
 
+// The trailing number may still grow, so it has no partial parse yet.
 test_partial_deserializer!(
     test_list_streaming,
     r#"[1234, 5678"#,
-    baml_tyannotated!([int]),
+    baml_ty!([int]),
     baml_db! {},
-    [1234, 5678]
+    [1234]
 );
 
 test_partial_deserializer!(
     test_list_streaming_2,
     r#"[1234"#,
-    baml_tyannotated!([int]),
+    baml_ty!([int]),
     baml_db! {},
-    [1234]
+    []
 );
 
 test_partial_deserializer!(
     test_list_streaming_inside_json_block,
     r#"```json
 ["a","#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["a"]
 );
 
 // ============================================================================
-// Array parse_as tests
+// Arrays with nullable elements
 // ============================================================================
 
-// Array parse_as with narrower element type
 test_deserializer!(
-    test_array_parse_as_narrower_element,
+    test_array_nullable_element,
     r#"[1, 2, 3]"#,
-    baml_tyannotated!([(int | null) @parse_without_null]),
+    baml_ty!([(int | null)]),
     baml_db! {},
     [1, 2, 3]
 );
 
-// Partial array through parse_as
+// An incomplete number has no partial parse and `null` is not one either: the item waits.
 test_partial_deserializer!(
-    test_array_parse_as_partial,
+    test_array_nullable_element_partial_item_dropped,
     r#"[1, 2"#,
-    baml_tyannotated!([(int | null) @parse_without_null]),
+    baml_ty!([(int | null)]),
     baml_db! {},
-    [1, 2]
+    [1]
 );
 
-// null element rejected by parse_as([int]) - array drops the failed element
 test_deserializer!(
-    test_array_parse_as_rejects_null_element,
+    test_array_nullable_element_accepts_null,
     r#"[1, null, 3]"#,
-    baml_tyannotated!([(int | null) @parse_without_null]),
+    baml_ty!([(int | null)]),
     baml_db! {},
-    [1, 3]
+    [1, null, 3]
 );

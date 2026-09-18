@@ -188,9 +188,6 @@ pub enum DiagnosticId {
     MissingConfigKey,
     MalformedAttribute,
 
-    // Attribute disambiguation (E0106)
-    FieldAttributeInTypePosition,
-
     // Byte string literal errors (E0109)
     InvalidByteStringEscape,
 
@@ -534,9 +531,6 @@ impl DiagnosticId {
             DiagnosticId::MissingConfigBlock => "E0103",
             DiagnosticId::MissingConfigKey => "E0104",
             DiagnosticId::MalformedAttribute => "E0105",
-
-            // Attribute disambiguation
-            DiagnosticId::FieldAttributeInTypePosition => "E0106",
 
             // Byte string literal errors
             DiagnosticId::InvalidByteStringEscape => "E0109",

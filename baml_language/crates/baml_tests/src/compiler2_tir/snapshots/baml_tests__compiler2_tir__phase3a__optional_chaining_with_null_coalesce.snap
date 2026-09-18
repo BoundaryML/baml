@@ -10,6 +10,3 @@ function user.f(u: user.User | null, fallback: string) -> string throws never {
     u?.name ?? fallback : string
   }
 }
-class user.User$stream {
-  name: string | null
-}

@@ -66,8 +66,9 @@ impl BexVm {
                 alias: class.metadata.alias.clone(),
                 docstring: class.metadata.docstring.clone(),
                 other: class.metadata.other.clone(),
+                // Host type definitions carry no streaming behaviour.
+                stream_done: false,
                 type_tag,
-                ty_attr: baml_type::TyAttr::default(),
                 has_cleanup: false,
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::HeapPtr::null(),
@@ -98,7 +99,6 @@ impl BexVm {
                 docstring: enm.metadata.docstring.clone(),
                 other: enm.metadata.other.clone(),
                 type_tag,
-                ty_attr: baml_type::TyAttr::default(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));
             declared.insert(enm.name.clone(), bex_vm_types::TypeHead::new(ptr, type_tag));
@@ -146,6 +146,8 @@ impl BexVm {
                     docstring: field.metadata.docstring.clone(),
                     other: field.metadata.other.clone(),
                     skip: field.skip,
+                    stream_done: false,
+                    must_exist: false,
                     runtime_type: None,
                 });
             }
@@ -242,7 +244,7 @@ pub(super) fn validate_class_witnesses(
             let present = witnesses.iter().any(|candidate| {
                 matches!(
                     &candidate.interface_ty,
-                    bex_vm_types::RealizedTy::Interface(name, _, _, _)
+                    bex_vm_types::RealizedTy::Interface(name, _, _)
                         if name == &required.name
                 )
             });
@@ -317,7 +319,7 @@ pub(super) fn validate_class_witnesses(
             physical_links.push(u32::try_from(slot).expect("class field count fits u32"));
         }
         let (interface_args, interface_assoc) = match &witness.interface_ty {
-            bex_vm_types::RealizedTy::Interface(_, args, assoc, _) => (args.clone(), assoc.clone()),
+            bex_vm_types::RealizedTy::Interface(_, args, assoc) => (args.clone(), assoc.clone()),
             _ => unreachable!("implementation() only creates interface witnesses"),
         };
         validated.push(ValidatedClassWitness {
@@ -503,6 +505,8 @@ impl BamlNamespaceClass for PackageReflectImpl {
                 docstring: row.docstring,
                 other: row.other,
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: Some(row.type_value),
             });
         }
@@ -523,8 +527,8 @@ impl BamlNamespaceClass for PackageReflectImpl {
             alias: None,
             docstring: None,
             other: IndexMap::new(),
+            stream_done: false,
             type_tag,
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -535,7 +539,6 @@ impl BamlNamespaceClass for PackageReflectImpl {
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
             Box::new([]),
-            baml_type::TyAttr::default(),
         );
         let rules = prepare_class_witnesses(vm, &ty, witnesses).map_err(|diagnostic| {
             crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
@@ -726,13 +729,9 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             docstring: None,
             other: IndexMap::new(),
             type_tag,
-            ty_attr: baml_type::TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
-        let ty = bex_vm_types::RealizedTy::Enum(
-            bex_vm_types::TypeHead::new(enum_ptr, type_tag),
-            baml_type::TyAttr::default(),
-        );
+        let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({
             let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
             alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
@@ -825,7 +824,7 @@ impl BamlNamespaceInterface for PackageReflectImpl {
         let Some(interface_ty) = vm.current_call_type_args().first().cloned() else {
             unreachable!("implementation<I> receives one runtime type argument")
         };
-        let bex_vm_types::RealizedTy::Interface(interface_head, _, _, _) = &interface_ty else {
+        let bex_vm_types::RealizedTy::Interface(interface_head, _, _) = &interface_ty else {
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
@@ -888,11 +887,7 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
         alloc_runtime_composite(
             vm,
             baml_type::type_kind::TypeKind::Literal,
-            bex_vm_types::RealizedTy::Literal(
-                literal,
-                baml_type::Freshness::Regular,
-                baml_type::TyAttr::default(),
-            ),
+            bex_vm_types::RealizedTy::Literal(literal, baml_type::Freshness::Regular),
         )
     }
 }
@@ -906,7 +901,6 @@ impl BamlNamespaceMap for PackageReflectImpl {
             bex_vm_types::RealizedTy::Map {
                 key: Box::new(key.ty),
                 value: Box::new(value.ty),
-                attr: baml_type::TyAttr::default(),
             },
         )
     }
@@ -927,7 +921,7 @@ impl BamlNamespaceUnion for PackageReflectImpl {
         Ok(alloc_runtime_composite(
             vm,
             baml_type::type_kind::TypeKind::Union,
-            bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default()),
+            bex_vm_types::RealizedTy::Union(members),
         ))
     }
 }
@@ -951,7 +945,7 @@ fn realize_witness_field_type(
     interface: &InterfaceDef,
     witnessed: &bex_vm_types::RealizedTy,
 ) -> Result<bex_vm_types::RealizedTy, String> {
-    let bex_vm_types::RealizedTy::Interface(head, args, assoc, _) = witnessed else {
+    let bex_vm_types::RealizedTy::Interface(head, args, assoc) = witnessed else {
         unreachable!("implementation() only captures interface types")
     };
     if head.tag() != interface.type_tag {
@@ -971,7 +965,7 @@ fn substitute_witness_field_type(
     use bex_vm_types::RuntimeTy;
 
     match ty {
-        RuntimeTy::TypeVar(param, _) => {
+        RuntimeTy::TypeVar(param) => {
             let Some((index, _)) = interface
                 .args
                 .iter()
@@ -990,7 +984,7 @@ fn substitute_witness_field_type(
             interface: projection_interface,
             member,
             ..
-        } if matches!(&**base, RuntimeTy::TypeVar(param, _) if param.as_str() == "Self")
+        } if matches!(&**base, RuntimeTy::TypeVar(param) if param.as_str() == "Self")
             && projection_interface.name.tag() == interface.type_tag =>
         {
             assoc
@@ -999,35 +993,29 @@ fn substitute_witness_field_type(
                 .map(|(_, ty)| RuntimeTy::from(ty.clone()))
                 .ok_or_else(|| format!("is missing associated binding `{member}`"))
         }
-        RuntimeTy::List(inner, attr) => Ok(RuntimeTy::List(
-            Box::new(substitute_witness_field_type(
-                inner, interface, args, assoc,
-            )?),
-            attr.clone(),
-        )),
-        RuntimeTy::Map { key, value, attr } => Ok(RuntimeTy::Map {
+        RuntimeTy::List(inner) => Ok(RuntimeTy::List(Box::new(substitute_witness_field_type(
+            inner, interface, args, assoc,
+        )?))),
+        RuntimeTy::Map { key, value } => Ok(RuntimeTy::Map {
             key: Box::new(substitute_witness_field_type(key, interface, args, assoc)?),
             value: Box::new(substitute_witness_field_type(
                 value, interface, args, assoc,
             )?),
-            attr: attr.clone(),
         }),
-        RuntimeTy::Union(members, attr) => Ok(RuntimeTy::Union(
+        RuntimeTy::Union(members) => Ok(RuntimeTy::Union(
             members
                 .iter()
                 .map(|member| substitute_witness_field_type(member, interface, args, assoc))
                 .collect::<Result<Box<[_]>, _>>()?,
-            attr.clone(),
         )),
-        RuntimeTy::Class(name, type_args, attr) => Ok(RuntimeTy::Class(
+        RuntimeTy::Class(name, type_args) => Ok(RuntimeTy::Class(
             *name,
             type_args
                 .iter()
                 .map(|arg| substitute_witness_field_type(arg, interface, args, assoc))
                 .collect::<Result<Box<[_]>, _>>()?,
-            attr.clone(),
         )),
-        RuntimeTy::Interface(name, type_args, bindings, attr) => Ok(RuntimeTy::Interface(
+        RuntimeTy::Interface(name, type_args, bindings) => Ok(RuntimeTy::Interface(
             *name,
             type_args
                 .iter()
@@ -1042,13 +1030,11 @@ fn substitute_witness_field_type(
                     ))
                 })
                 .collect::<Result<Box<[_]>, String>>()?,
-            attr.clone(),
         )),
         RuntimeTy::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ok(RuntimeTy::Function {
             params: params
                 .iter()
@@ -1064,22 +1050,19 @@ fn substitute_witness_field_type(
             throws: Box::new(substitute_witness_field_type(
                 throws, interface, args, assoc,
             )?),
-            attr: attr.clone(),
         }),
-        RuntimeTy::Future(value, error, attr) => Ok(RuntimeTy::Future(
+        RuntimeTy::Future(value, error) => Ok(RuntimeTy::Future(
             Box::new(substitute_witness_field_type(
                 value, interface, args, assoc,
             )?),
             Box::new(substitute_witness_field_type(
                 error, interface, args, assoc,
             )?),
-            attr.clone(),
         )),
         RuntimeTy::AssociatedTypeProjection {
             base,
             interface: projection_interface,
             member,
-            attr,
         } => Ok(RuntimeTy::AssociatedTypeProjection {
             base: Box::new(substitute_witness_field_type(base, interface, args, assoc)?),
             interface: Box::new(bex_vm_types::RuntimeInterface::new(
@@ -1101,7 +1084,6 @@ fn substitute_witness_field_type(
                     .collect::<Result<Box<[_]>, String>>()?,
             )),
             member: member.clone(),
-            attr: attr.clone(),
         }),
         // If the full subtree contains no symbolic positions, preserve it
         // exactly (including attributes) without rebuilding every realized leaf.
@@ -1318,7 +1300,7 @@ fn reflected_class(
     let Object::Type(type_value) = vm.get_object(ptr) else {
         unreachable!("view_type_value returns an Object::Type")
     };
-    let bex_vm_types::RealizedTy::Class(head, args, _) = &type_value.ty else {
+    let bex_vm_types::RealizedTy::Class(head, args) = &type_value.ty else {
         unreachable!("a Class-classified type is RealizedTy::Class")
     };
     debug_assert!(head.is_resolved());
@@ -1339,7 +1321,7 @@ fn reflected_enum(
     let Object::Type(type_value) = vm.get_object(ptr) else {
         unreachable!("view_type_value returns an Object::Type")
     };
-    let bex_vm_types::RealizedTy::Enum(head, _) = &type_value.ty else {
+    let bex_vm_types::RealizedTy::Enum(head) = &type_value.ty else {
         unreachable!("an Enum-classified type is RealizedTy::Enum")
     };
     debug_assert!(head.is_resolved());
@@ -1554,7 +1536,6 @@ fn alloc_compilation_error_with_span(
         vm.declaration_head(&diagnostic_qtn)
             .unwrap_or_else(|| unreachable!("`reflect.Diagnostic` is declared by the stdlib")),
         Box::new([]),
-        baml_type::TyAttr::default(),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));
     let message = Value::object(vm.alloc_string(message));
@@ -1746,7 +1727,7 @@ impl BamlClassUnionType for PackageReflectImpl {
         r#type: &Value,
     ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Union)?;
-        let bex_vm_types::RealizedTy::Union(members, _) = ty else {
+        let bex_vm_types::RealizedTy::Union(members) = ty else {
             unreachable!("a Union-classified type is RealizedTy::Union")
         };
         Ok(members
@@ -1759,7 +1740,7 @@ impl BamlClassUnionType for PackageReflectImpl {
 impl BamlClassArrayType for PackageReflectImpl {
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Array)?;
-        let bex_vm_types::RealizedTy::List(element, _) = ty else {
+        let bex_vm_types::RealizedTy::List(element) = ty else {
             unreachable!("an Array-classified type is RealizedTy::List")
         };
         Ok(Value::object(
@@ -1956,7 +1937,7 @@ class Fresh {}
     }
 
     fn class_ty(head: TypeHead) -> RealizedTy {
-        RealizedTy::Class(head, Box::new([]), baml_type::TyAttr::default())
+        RealizedTy::Class(head, Box::new([]))
     }
 
     #[test]

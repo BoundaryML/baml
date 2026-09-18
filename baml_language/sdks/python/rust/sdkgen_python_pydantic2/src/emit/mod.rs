@@ -80,7 +80,7 @@ pub(crate) fn build_emitted(
     let mut out: Vec<(LeafPath, EmittedSymbol, SortKey)> = Vec::new();
 
     for (key, symbol) in entries {
-        let leaf = names.route(key, symbol);
+        let leaf = names.route(key);
         let bare = names.symbol(key).into_owned();
 
         match symbol {
@@ -200,11 +200,11 @@ pub(crate) fn build_emitted(
 
 fn is_nullable(ty: &Ty, aliases: &BTreeMap<Name, Ty>, visiting: &mut BTreeSet<Name>) -> bool {
     match ty {
-        Ty::Null { .. } => true,
-        Ty::Union(items, _) => items
+        Ty::Null => true,
+        Ty::Union(items) => items
             .iter()
             .any(|item| is_nullable(item, aliases, visiting)),
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             let Some(resolved) = aliases.get(name) else {
                 return false;
             };
@@ -309,13 +309,13 @@ fn collect_raises_names(
 
     fn walk(ty: &Ty, names: &PythonNames, out: &mut Vec<String>) {
         match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
                 let n = names.symbol(name).into_owned();
                 if !out.contains(&n) {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, names, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, names, out)),
             _ => {}
         }
     }
