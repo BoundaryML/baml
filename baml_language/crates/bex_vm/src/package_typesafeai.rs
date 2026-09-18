@@ -54,31 +54,6 @@ fn type_arg(vm: &BexVm, value: Value) -> Result<RealizedTy, VmRustFnError> {
 }
 
 impl BamlNamespaceInternal for PackageTypesafeaiImpl {
-    fn constant_value(vm: &mut BexVm, ty: &Value) -> Result<Value, VmRustFnError> {
-        match type_arg(vm, *ty)? {
-            RealizedTy::Null { .. } => Ok(Value::NULL),
-            RealizedTy::Literal(literal, _) => match literal {
-                baml_type::Literal::String(s) => Ok(Value::object(vm.alloc_string(s))),
-                baml_type::Literal::Int(n) => Ok(Value::int(n)),
-                baml_type::Literal::Bool(b) => Ok(Value::bool(b)),
-                baml_type::Literal::Bigint(n) => Ok(vm.try_alloc_bigint(std::sync::Arc::new(n))?),
-                baml_type::Literal::Float(_) => Err(invalid("unsupported literal type")),
-            },
-            RealizedTy::EnumVariant(head, name) => {
-                let Object::Enum(enm) = vm.get_object(head.ptr()) else {
-                    return Err(invalid("expected enum declaration"));
-                };
-                let index = enm
-                    .variants
-                    .iter()
-                    .position(|variant| variant.name == name)
-                    .ok_or_else(|| invalid("unknown enum variant"))?;
-                Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
-            }
-            _ => Err(invalid("expected a literal, enum variant, or null type")),
-        }
-    }
-
     fn enum_value(
         vm: &mut BexVm,
         ty: &Value,

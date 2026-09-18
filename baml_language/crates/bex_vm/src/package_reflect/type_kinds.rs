@@ -20,7 +20,7 @@ use super::{
     BamlClassEnumReflectTypeView_for_Type, BamlClassEnumType,
     BamlClassFunctionReflectTypeView_for_Type, BamlClassFunctionType,
     BamlClassInterfaceImplementation, BamlClassInterfaceReflectTypeView_for_Type,
-    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type,
+    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type, BamlClassLiteralType,
     BamlClassMapReflectTypeView_for_Type, BamlClassMapType,
     BamlClassPrimitiveReflectTypeView_for_Type, BamlClassType,
     BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType, BamlNamespaceArray,
@@ -1731,6 +1731,38 @@ impl BamlClassEnumType for PackageReflectImpl {
     }
 }
 
+impl BamlClassLiteralType for PackageReflectImpl {
+    fn value(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Literal)?;
+        match ty {
+            bex_vm_types::RealizedTy::Literal(literal, _) => Ok(match literal {
+                baml_type::Literal::String(s) => Value::object(vm.alloc_string(s)),
+                baml_type::Literal::Int(n) => Value::int(n),
+                baml_type::Literal::Bool(b) => Value::bool(b),
+                baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
+                baml_type::Literal::Float(s) => Value::object(
+                    vm.alloc_float(
+                        s.parse()
+                            .expect("a float literal has a valid representation"),
+                    ),
+                ),
+            }),
+            bex_vm_types::RealizedTy::EnumVariant(head, name) => {
+                let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+                    unreachable!("an enum variant type's head points at Object::Enum")
+                };
+                let index = enm
+                    .variants
+                    .iter()
+                    .position(|variant| variant.name == name)
+                    .expect("an enum variant type names a declared variant");
+                Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
+            }
+            _ => unreachable!("a Literal-classified type is a literal or enum variant"),
+        }
+    }
+}
+
 impl BamlClassUnionType for PackageReflectImpl {
     fn member_types(
         vm: &mut BexVm,
@@ -1923,6 +1955,38 @@ class Fresh {}
             "user.{name}"
         )))
         .unwrap()
+    }
+
+    #[test]
+    fn literal_value_supports_internal_float_literals() {
+        let mut vm = vm();
+        let literal = alloc_runtime_composite(
+            &mut vm,
+            baml_type::type_kind::TypeKind::Literal,
+            RealizedTy::Literal(
+                baml_type::Literal::Float("-1.25".into()),
+                baml_type::Freshness::Regular,
+            ),
+        );
+        let value = <PackageReflectImpl as BamlClassLiteralType>::value(&mut vm, &literal)
+            .expect("a literal view has a value");
+        let Object::Float(value) = vm.get_object(value.as_object_ptr().unwrap()) else {
+            panic!("expected a float value")
+        };
+        assert_eq!(value.to_bits(), (-1.25_f64).to_bits());
+    }
+
+    #[test]
+    fn literal_value_rejects_a_view_with_the_wrong_kind() {
+        let mut vm = vm();
+        let forged = alloc_runtime_composite(
+            &mut vm,
+            baml_type::type_kind::TypeKind::Literal,
+            RealizedTy::Int,
+        );
+        let error = <PackageReflectImpl as BamlClassLiteralType>::value(&mut vm, &forged)
+            .expect_err("the literal view must retain its kind invariant");
+        assert!(matches!(error, crate::errors::VmRustFnError::Panic(_)));
     }
 
     /// A fresh anonymous class, as `reflect.class.new` allocates one.

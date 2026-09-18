@@ -11,6 +11,13 @@ class Type {
     /// classifies as this view's kind.
     _ty: reflect.Type,
 
+    /// Returns the exact value represented by this literal type, including enum variants.
+    //baml:mut_vm
+    //baml:fallible
+    function value(self) -> unknown throws never {
+        $rust_function
+    }
+
     implements reflect.TypeView {
         //baml:vm
         //baml:fallible

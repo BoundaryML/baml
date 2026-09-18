@@ -4,47 +4,6 @@ class ChoiceOption {
     key: string,
     description: string?,
     value: unknown,
-    skipped: bool,
-}
-
-/// (internal) Extract a literal, enum-variant, or null value without parsing
-/// the type's display text. All Choice formatting and metadata stay in BAML.
-//baml:mut_vm
-function constant_value(ty: reflect.Type) -> unknown throws baml.errors.InvalidArgument {
-    $rust_function
-}
-
-function constant(ty: reflect.Type) -> ChoiceOption {
-    let value = constant_value(ty);
-    if let en: reflect.enum.Type = reflect.Type.of_value(value).as_enum() {
-        let name = reflect.enum.get_value(value);
-        for (let variant in en.values()) {
-            if (variant.name == name) {
-                return ChoiceOption {
-                    key: variant.meta.alias ?? variant.name,
-                    description: variant.meta.description,
-                    value: value,
-                    skipped: variant.meta.skip,
-                };
-            }
-        }
-        throw reject("JEV could not reflect the literal enum variant")
-    }
-    let key = match (value) {
-        null => "<null>",
-        let text: string => text,
-        let number: int => number.to_string(),
-        let number: bigint => number.to_string(),
-        let boolean: bool => {
-            if (boolean) {
-                "true"
-            } else {
-                "false"
-            }
-        },
-        _ => throw reject("JEV cannot format this literal value"),
-    };
-    ChoiceOption { key: key, description: null, value: value, skipped: false }
 }
 
 /// (internal) Construct the named variant of an already reflected enum.
@@ -97,7 +56,6 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
                         key: variant.meta.alias ?? variant.name,
                         description: variant.meta.description,
                         value: enum_value(ty, variant.name),
-                        skipped: false,
                     },
                 );
             }
@@ -113,12 +71,43 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         }
         return out;
     }
-    if (ty.as_literal() != null || ty == reflect.Type.of<null>()) {
-        let option = constant(ty);
-        if (option.skipped) {
-            return [];
+    if (ty == reflect.Type.of<null>()) {
+        return [ChoiceOption { key: "<null>", description: null, value: null }];
+    }
+    if let literal: reflect.literal.Type = ty.as_literal() {
+        let value = literal.value();
+        if let en: reflect.enum.Type = reflect.Type.of_value(value).as_enum() {
+            let name = reflect.enum.get_value(value);
+            for (let variant in en.values()) {
+                if (variant.name == name) {
+                    if (variant.meta.skip) {
+                        return [];
+                    }
+                    return [
+                        ChoiceOption {
+                            key: variant.meta.alias ?? variant.name,
+                            description: variant.meta.description,
+                            value: value,
+                        },
+                    ];
+                }
+            }
+            throw reject("JEV could not reflect the literal enum variant")
         }
-        return [option];
+        let key = match (value) {
+            let text: string => text,
+            let number: int => number.to_string(),
+            let number: bigint => number.to_string(),
+            let boolean: bool => {
+                if (boolean) {
+                    "true"
+                } else {
+                    "false"
+                }
+            },
+            _ => throw reject("JEV cannot format this literal value"),
+        };
+        return [ChoiceOption { key: key, description: null, value: value }];
     }
     throw reject(`JEV cannot convert Choice member ${ty.to_string()}`)
 }

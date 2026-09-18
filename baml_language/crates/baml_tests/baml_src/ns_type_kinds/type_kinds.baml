@@ -185,6 +185,62 @@ test "kind_casts_are_nullable_identity_preserving_views" {
     assert.is_true(reflect.Type.of<Foo>() is reflect.Type)
 }
 
+type EscapedLiteral = "a\"b\\c\n";
+
+function literal_value(t: reflect.literal.Type) -> unknown throws never {
+    t.value()
+}
+
+test "literal_values_preserve_primitive_values_and_types" {
+    let text = reflect.Type.of<EscapedLiteral>().as_literal() ?? throw "literal";
+    let integer = reflect.Type.of<-42>().as_literal() ?? throw "literal";
+    let large = reflect.Type.of<90071992547409931234567890n>().as_literal() ?? throw "literal";
+    let negative = reflect.Type.of<-90071992547409931234567890n>().as_literal() ?? throw "literal";
+    let yes = reflect.Type.of<true>().as_literal() ?? throw "literal";
+    let no = reflect.Type.of<false>().as_literal() ?? throw "literal";
+
+    assert.equal(literal_value(text), "a\"b\\c\n");
+    assert.equal(literal_value(integer), -42);
+    assert.equal(literal_value(large), 90071992547409931234567890n);
+    assert.equal(literal_value(negative), -90071992547409931234567890n);
+    assert.equal(literal_value(yes), true);
+    assert.equal(literal_value(no), false);
+    assert.equal(reflect.Type.of_value(large.value()), reflect.Type.of<bigint>());
+    assert.equal(reflect.Type.of_value(integer.value()), reflect.Type.of<int>());
+    assert.is_true(reflect.Type.of<null>().as_literal() == null)
+}
+
+test "literal_values_preserve_enum_identity_not_alias_or_name_strings" {
+    let red = reflect.Type.of<Color.Red>().as_literal() ?? throw "literal";
+    let hidden = reflect.Type.of<WithSkippedVariant.Hidden>().as_literal() ?? throw "literal";
+    assert.equal(red.value(), Color.Red);
+    assert.equal(reflect.Type.of_value(red.value()), reflect.Type.of<Color>());
+    assert.equal(reflect.enum.get_value(red.value()), "Red");
+    assert.equal(hidden.value(), WithSkippedVariant.Hidden)
+}
+
+test "runtime_literal_constructors_roundtrip_values" {
+    assert.equal(reflect.literal.new("hello").value(), "hello");
+    assert.equal(reflect.literal.new(0).value(), 0);
+    assert.equal(reflect.literal.new(-42).value(), -42);
+    assert.equal(reflect.literal.new(true).value(), true);
+    assert.equal(reflect.literal.new(false).value(), false)
+}
+
+test "runtime_package_enum_literal_values_keep_their_declaration" {
+    let package = reflect.Package.compile(
+        {
+            "schema.baml": `enum Choice { FIRST SECOND } function pick() -> Choice.FIRST { Choice.FIRST }`,
+        },
+    );
+    let fn_view = package.functions().get("root.pick") ?? throw "missing function";
+    let literal = fn_view.return_type().as_literal() ?? throw "literal";
+    let en = package.get_enum("root.Choice") ?? throw "missing enum";
+    let value = literal.value();
+    assert.equal(reflect.Type.of_value(value), en.as_type());
+    assert.equal(reflect.enum.get_value(value), "FIRST")
+}
+
 test "class_and_enum_readback_preserves_schema_metadata" {
     let class_view = reflect.Type.of<Person>().as_class() ?? throw "class";
     let class_meta = class_view.meta();
