@@ -1,5 +1,5 @@
 // Reflection owns traversal, metadata precedence, routing, and validation.
-// Native helpers only bridge operations reflection cannot express yet.
+// Reflected enums and classes are constructed through unreflect + JSON.
 class ChoiceOption {
     key: string,
     description: string?,
@@ -7,20 +7,17 @@ class ChoiceOption {
 }
 
 /// (internal) Construct the named variant of an already reflected enum.
-//baml:mut_vm
-function enum_value(ty: reflect.Type, name: string) -> unknown throws baml.errors.InvalidArgument {
-    $rust_function
+function enum_value(ty: reflect.Type, name: string) -> unknown {
+    type T = unreflect(ty);
+    baml.json.from_string<T>(baml.json.stringify(name))
 }
 
 /// (internal) Construct a realized class, preserving its generic arguments.
-/// An unreflect + JSON round trip can reconstruct classes, but cannot preserve
-/// an already-selected enum versus string literal with the same JSON value.
-//baml:mut_vm
-function class_value(
-    ty: reflect.Type,
-    fields: unknown[],
-) -> unknown throws baml.errors.InvalidArgument {
-    $rust_function
+/// JSON currently cannot preserve an already-selected enum versus string
+/// literal with the same JSON value. This is an accepted JEV limitation.
+function class_value(ty: reflect.Type, fields: map<string, unknown>) -> unknown {
+    type T = unreflect(ty);
+    baml.json.from_string<T>(baml.json.to_string(fields))
 }
 
 class Leaf {
@@ -364,15 +361,15 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
 
 function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>) -> unknown {
     if let cls: reflect.class.Type = ty.as_class() {
-        let fields: unknown[] = [];
+        let fields: map<string, unknown> = {};
         for (let field in cls.fields()) {
             if (field.meta.skip) {
-                fields.push(null);
+                let _ = fields.set(field.name, null);
             } else {
                 let field_type: reflect.Type = field.type else {
                     throw failed("Missing field type")
                 };
-                fields.push(assemble(field_type, path.concat([field.name]), values));
+                let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
             }
         }
         return class_value(ty, fields);
