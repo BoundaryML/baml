@@ -5,16 +5,16 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × method `pair` on interface `Pairable` has no `self` receiver, so it cannot be called on a value — qualify the type instead: `(SomeImplementor as Pairable).pair(...)`
-    ╭─[existential_one_self.baml:36:23]
- 36 │     let on_instance = a.pair(1);
+    ╭─[existential_one_self.baml:52:23]
+ 52 │     let on_instance = a.pair(1);
     ·                       ──────
     ╰────
 
   [type] E0001
 
   × method `both` on interface `Pairable` uses `Self` in more than one parameter, or nested in a parameter, so it requires a concrete `Self`, not an erased one (an interface-existential or union)
-    ╭─[existential_one_self.baml:38:21]
- 38 │     let two_selfs = Pairable.both(a, b);
+    ╭─[existential_one_self.baml:54:21]
+ 54 │     let two_selfs = Pairable.both(a, b);
     ·                     ───────────────────
     ╰────
 
@@ -22,32 +22,49 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × method `later` on interface `Pairable` takes `Self` as parameter 1 (counting from 0); an erased `Self` — `Pairable` — is dispatched from the first argument only, so name a concrete `Self`:
   │ `(SomeImplementor as Pairable).later(...)`
-    ╭─[existential_one_self.baml:40:21]
- 40 │     let not_first = Pairable.later(1, a);
+    ╭─[existential_one_self.baml:56:21]
+ 56 │     let not_first = Pairable.later(1, a);
     ·                     ────────────────────
     ╰────
 
   [type] E0002
 
   × cannot infer type parameter `Self`
-    ╭─[existential_one_self.baml:42:19]
- 42 │     let no_self = Pairable.make(1);
+    ╭─[existential_one_self.baml:58:19]
+ 58 │     let no_self = Pairable.make(1);
     ·                   ────────────────
     ╰────
 
   [type] E0001
 
   × method `twice` on interface `Pairable` uses `Self` in more than one parameter, or nested in a parameter, so it requires a concrete `Self`, not an erased one (an interface-existential or union)
-    ╭─[existential_one_self.baml:44:29]
- 44 │     let receiver_and_self = a.twice(b);
+    ╭─[existential_one_self.baml:60:29]
+ 60 │     let receiver_and_self = a.twice(b);
     ·                             ───────
+    ╰────
+
+  [type] E0001
+
+  × method `maybe` on interface `Pairable` uses `Self` in more than one parameter, or nested in a parameter, so it requires a concrete `Self`, not an erased one (an interface-existential or union)
+    ╭─[existential_one_self.baml:63:25]
+ 63 │     let optional_self = a.maybe(b);
+    ·                         ───────
+    ╰────
+
+  [type] E0001
+
+  × method `eithered` on interface `Pairable` uses `Self` in more than one parameter, or nested in a parameter, so it requires a concrete `Self`, not an erased one (an interface-existential or
+  │ union)
+    ╭─[existential_one_self.baml:65:22]
+ 65 │     let union_self = a.eithered(b);
+    ·                      ──────────
     ╰────
 
   [type] E0001
 
   × method `boxed` on interface `Pairable` uses `Self` in its return/throws type, nested in a container (e.g. `Self[]`), so it requires a concrete `Self`, not an erased one (an interface-existential
   │ or union)
-    ╭─[existential_one_self.baml:46:18]
- 46 │     let nested = a.boxed();
+    ╭─[existential_one_self.baml:67:18]
+ 67 │     let nested = a.boxed();
     ·                  ───────
     ╰────

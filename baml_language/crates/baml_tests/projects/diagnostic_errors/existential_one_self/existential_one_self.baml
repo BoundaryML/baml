@@ -4,13 +4,17 @@
 // such a parameter — and `Self` occurs nowhere else (a bare `-> Self` is
 // fine). `self` is only the sugar that lets `Pairable.pair(a, 1)` be written
 // `a.pair(1)`; a method without it is a static, which an instance does not
-// have.
+// have. A union is no relaxation in argument position: `Self?` and
+// `Self | int` each name the implementor, so they are second `Self`
+// parameters, not covariant widenings.
 interface Pairable {
     function pair(x: Self, y: int) -> int throws never
     function both(x: Self, y: Self) -> int throws never
     function later(n: int, x: Self) -> int throws never
     function make(n: int) -> Self throws never
     function twice(self, other: Self) -> int throws never
+    function maybe(self, other: Self?) -> int throws never
+    function eithered(self, other: Self | int) -> int throws never
     function boxed(self) -> Self[] throws never
     function clone(self) -> Self throws never
 }
@@ -24,6 +28,18 @@ class P {
         function later(n: int, x: P) -> int throws never { x.v + n }
         function make(n: int) -> P throws never { P { v: n } }
         function twice(self, other: P) -> int throws never { self.v + other.v }
+        function maybe(self, other: P?) -> int throws never {
+            match (other) {
+                let p: P => self.v + p.v,
+                null => self.v,
+            }
+        }
+        function eithered(self, other: P | int) -> int throws never {
+            match (other) {
+                let p: P => self.v + p.v,
+                let n: int => self.v + n,
+            }
+        }
         function boxed(self) -> P[] throws never { [self] }
         function clone(self) -> P throws never { P { v: self.v } }
     }
@@ -42,6 +58,11 @@ function through_existential(a: Pairable, b: Pairable) -> int throws never {
     let no_self = Pairable.make(1);
     // error: `self` plus another `Self`
     let receiver_and_self = a.twice(b);
+    // error: `Self?` is a second `Self` parameter — `b` could be any other
+    // implementor, and the callee is compiled for one
+    let optional_self = a.maybe(b);
+    // error: `Self | int` likewise
+    let union_self = a.eithered(b);
     // error: `Self[]`
     let nested = a.boxed();
     // legal: bare `-> Self`
@@ -51,5 +72,5 @@ function through_existential(a: Pairable, b: Pairable) -> int throws never {
 
 function concrete(a: P, b: P) -> int throws never {
     P.pair(a, 1) + P.both(a, b) + P.later(1, a) + P.make(1).v + a.twice(b) + a.boxed().length()
-        + a.clone().v
+        + a.clone().v + a.maybe(b) + a.eithered(b)
 }

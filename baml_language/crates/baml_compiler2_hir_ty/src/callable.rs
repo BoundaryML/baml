@@ -560,6 +560,13 @@ pub fn instantiate_callable_signature<'db>(
 /// in the return/throws type (a bare top-level `-> Self` collapses
 /// covariantly and stays legal). `Self.Assoc` projections are exempt: the
 /// existential's pins make them one concrete type.
+///
+/// A union is NOT a relaxation in argument position: `other: Self?` and
+/// `other: Self | int` each name the implementor, so a caller holding two
+/// existentials could pass a second, DIFFERENT concrete type into a callee
+/// compiled for one. Covariance makes a top-level `Self` harmless only
+/// where the value flows OUT (the return and throws types), which is why
+/// those two are the only positions tested permissively.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelfDispatch {
     /// Object-safe: the one bare-`Self` parameter is at this index, and an
@@ -583,10 +590,11 @@ pub fn callable_self_dispatch(
 ) -> SelfDispatch {
     use crate::diagnostics::SelfCallPosition;
     let signature = callable_signature(db, callable);
-    // `self_occurs(_, true)` flags only NESTED occurrences; a bare
-    // top-level `Self` is what a dispatch parameter is made of.
-    let nested_self = |ty: &baml_type::Ty| {
-        crate::method_resolution::self_occurs(&baml_type::interned::Ty::from_plain(ty), true)
+    // `top_ok` is the covariance switch: with it set, a bare top-level
+    // `Self` is permitted and only NESTED occurrences are flagged. Only
+    // the dispatch parameter and the outward-flowing types earn it.
+    let self_occurs = |ty: &baml_type::Ty, top_ok: bool| {
+        crate::method_resolution::self_occurs(&baml_type::interned::Ty::from_plain(ty), top_ok)
     };
     let bare_self = |ty: &baml_type::Ty| {
         matches!(
@@ -603,10 +611,20 @@ pub fn callable_self_dispatch(
         .map(|(index, _)| index);
     let first = dispatch_params.next();
     let second = dispatch_params.next();
-    if second.is_some() || signature.params.iter().any(|param| nested_self(&param.ty)) {
+    // Every parameter but the one dispatch source must be free of `Self`
+    // ENTIRELY, unions included — one runtime value answers the question
+    // "which implementor?", and a second mention is a second answer.
+    let other_param_mentions_self = signature
+        .params
+        .iter()
+        .enumerate()
+        .any(|(index, param)| Some(index) != first && self_occurs(&param.ty, false));
+    if second.is_some() || other_param_mentions_self {
         return SelfDispatch::Breaks(SelfCallPosition::Parameter);
     }
-    if nested_self(&signature.return_type) || nested_self(callable_throws_of(db, callable)) {
+    if self_occurs(&signature.return_type, true)
+        || self_occurs(callable_throws_of(db, callable), true)
+    {
         return SelfDispatch::Breaks(SelfCallPosition::NestedInReturn);
     }
     first.map_or(SelfDispatch::NoSelfParam, SelfDispatch::OnParam)
