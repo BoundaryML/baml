@@ -953,12 +953,31 @@ fn enrich_runtime_mount(
             );
         }
 
+        // A witness is exported only against an interface this mount can
+        // serve: one its own interface declares, or one of a package the
+        // consumer's world can spell. A runtime class may also witness an
+        // interface of the HOST program that created it; that declaration
+        // does not exist in the consumer's world, so the fact has no row to
+        // be exported against — the same law that degrades a field type the
+        // world cannot spell.
+        let serves = |witness: &baml_type::Interface<TypeName>| {
+            !viewpoint.hides_interface(witness)
+                && (!witness.name.is_local()
+                    || matches!(
+                        interface.lookup_type(witness.name.namespace(), witness.name.name()),
+                        Some(ExportedType::Interface { .. })
+                    ))
+        };
         let rows: Vec<ExportedImpl<TypeName>> = mount
             .witnesses
             .into_iter()
+            .filter(|(witness, _)| serves(witness))
             .map(|(witness, field_links)| ExportedImpl {
+                // The bindings are the row's `associated_types`; the header
+                // names the interface and its arguments only, exactly as a
+                // source impl's does.
                 associated_types: witness.associated_types.to_vec(),
-                interface: witness,
+                interface: baml_type::Interface::new(witness.name, witness.generics, Box::new([])),
                 for_ty_pattern: root_ty.clone(),
                 generic_params: Vec::new(),
                 param_bounds: Vec::new(),
@@ -2396,6 +2415,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             for name in
                 mount_references(own_aliases, blob).map_err(|error| mount_error(alias, &error))?
             {
+                // BUG: a sibling mount is matched by the NAME the producer
+                // spelled its dependency by, not by identity. A producer that
+                // reached package `c` as `geometry`, mounted beside `c` under
+                // the name `c`, gets an empty foreign `geometry` root instead
+                // of `c`'s mount — one package, two roots — so its impl rows
+                // of `geometry.Shape` never meet a consumer's `c.Shape` (E0001
+                // at the use site). Names live on edges; the blob must record
+                // its dependencies' identities for this match to be by
+                // identity.
                 let root = match mount_roots.get(name.as_str()) {
                     Some(&root) => root,
                     None => match foreign_roots.get(&name) {

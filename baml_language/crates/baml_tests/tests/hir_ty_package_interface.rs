@@ -370,6 +370,244 @@ fn an_impl_row_claiming_another_slot_or_class_is_refused_before_installation() {
     );
 }
 
+/// A callable row's bound lists pair with its parameters wherever the row
+/// lives — a free function's included: readers zip the two, so an unpaired
+/// list would silently drop a generic's bounds.
+#[test]
+fn a_callable_row_with_unpaired_bounds_is_refused() {
+    let free = forged_library_blob(|interface| {
+        let row = interface
+            .functions
+            .get_mut(&Vec::new())
+            .and_then(|functions| functions.get_mut(&Name::new("choose")))
+            .expect("choose is exported");
+        assert_eq!(row.generic_params.len(), 1, "choose<T extends View<int>>");
+        row.generic_param_bounds.clear();
+    });
+    assert_eq!(
+        mount_refusal(free),
+        "the function row `app.choose` declares 1 generic parameter(s) but 0 bound list(s)"
+    );
+
+    let class = forged_library_blob(|interface| {
+        let ExportedType::Class {
+            generic_param_bounds,
+            ..
+        } = type_row_mut(interface, "Box")
+        else {
+            unreachable!("Box is a class")
+        };
+        generic_param_bounds.clear();
+    });
+    assert_eq!(
+        mount_refusal(class),
+        "the class row `app.Box` declares 1 generic parameter(s) but 0 bound list(s)"
+    );
+}
+
+/// A row's members are named once: readers address a member by its position
+/// in the row.
+#[test]
+fn a_row_repeating_a_member_name_is_refused() {
+    let field = forged_library_blob(|interface| {
+        let ExportedType::Class { fields, .. } = type_row_mut(interface, "Entry") else {
+            unreachable!("Entry is a class")
+        };
+        let repeated = fields[0].clone();
+        fields.push(repeated);
+    });
+    assert_eq!(
+        mount_refusal(field),
+        "the interface exports two class field rows as `app.Entry.label`"
+    );
+
+    let variant = forged_library_blob(|interface| {
+        let ExportedType::Enum { variants, .. } = type_row_mut(interface, "Status") else {
+            unreachable!("Status is an enum")
+        };
+        variants.push(Name::new("Active"));
+    });
+    assert_eq!(
+        mount_refusal(variant),
+        "the interface exports two enum variant rows as `app.Status.Active`"
+    );
+
+    let associated = forged_library_blob(|interface| {
+        let ExportedType::Interface {
+            associated_types, ..
+        } = type_row_mut(interface, "View")
+        else {
+            unreachable!("View is an interface")
+        };
+        let repeated = associated_types[0].clone();
+        associated_types.push(repeated);
+    });
+    assert_eq!(
+        mount_refusal(associated),
+        "the interface exports two associated type rows as `app.View.Item`"
+    );
+}
+
+/// A row lives under a namespace the interface lists: a source-less resolver
+/// walks `namespaces` and would never find one that does not.
+#[test]
+fn a_row_under_an_unlisted_namespace_is_refused() {
+    let hidden = forged_library_blob(|interface| {
+        let mut row = interface
+            .functions
+            .get(&Vec::new())
+            .and_then(|functions| functions.get(&Name::new("choose")))
+            .expect("choose is exported")
+            .clone();
+        row.target = ExternalCallTarget::Free {
+            function: wire_name("app", &["hidden"], "choose"),
+        };
+        interface
+            .functions
+            .entry(vec![Name::new("hidden")])
+            .or_default()
+            .insert(Name::new("choose"), row);
+    });
+    assert_eq!(
+        mount_refusal(hidden),
+        "the function row `app.hidden.choose` is exported under a namespace the interface does not list"
+    );
+}
+
+/// An impl row's header names the interface and its arguments only; its
+/// bindings are the row's `associated_types`. The identity is built from the
+/// header, so a pinned one is refused before an identity is asked of it.
+#[test]
+fn an_impl_header_pinning_associated_types_is_refused() {
+    let pinned = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter_mut()
+            .find(|row| row.interface.name.name().as_str() == "Parent")
+            .expect("Entry implements Parent");
+        row.interface = baml_type::Interface::new(
+            row.interface.name.clone(),
+            row.interface.generics.clone(),
+            Box::new([(Name::new("Root"), baml_type::Ty::String)]),
+        );
+    });
+    assert_eq!(
+        mount_refusal(pinned),
+        "an impl of `app.Parent` pins associated types in its header; a header names the interface \
+         and its arguments only"
+    );
+}
+
+/// An impl row's methods are judged against the interface's own row: what it
+/// provides the interface declares, and what the interface requires it
+/// provides. The source compile rejects both (E0115, E0113).
+#[test]
+fn an_impl_row_disagreeing_with_its_interface_is_refused() {
+    let undeclared = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter_mut()
+            .find(|row| !row.methods.is_empty())
+            .expect("Entry's View impl provides `get`");
+        let mut bogus = row.methods[0].clone();
+        bogus.name = Name::new("bogus");
+        bogus.target = ExternalCallTarget::Interface {
+            interface: wire_name("app", &[], "View"),
+            method: Name::new("bogus"),
+        };
+        row.methods.push(bogus);
+    });
+    assert_eq!(
+        mount_refusal(undeclared),
+        "an impl of `app.View` provides `bogus`, which the interface does not declare"
+    );
+
+    let missing = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter_mut()
+            .find(|row| !row.methods.is_empty())
+            .expect("Entry's View impl provides `get`");
+        row.methods.clear();
+    });
+    assert_eq!(
+        mount_refusal(missing),
+        "an impl of `app.View` does not provide `get`, which the interface requires"
+    );
+
+    let not_an_interface = forged_library_blob(|interface| {
+        let row = interface
+            .impls
+            .iter_mut()
+            .find(|row| row.interface.name.name().as_str() == "Parent")
+            .expect("Entry implements Parent, providing nothing");
+        row.interface =
+            baml_type::Interface::new(wire_name("app", &[], "Entry"), Box::new([]), Box::new([]));
+    });
+    assert_eq!(
+        mount_refusal(not_an_interface),
+        "an impl row implements `app.Entry`, which its package does not export as an interface"
+    );
+}
+
+/// An impl row of a DEPENDENCY's interface is judged against that
+/// dependency's declaration wherever this world can see it — here the
+/// stdlib's `ToString` — exactly as a row of the package's own interface is.
+/// (A package a mount names but this world did not mount has no visible
+/// declaration; its rows are accepted, pinned in the runtime corpus.)
+#[test]
+fn an_impl_row_of_a_visible_dependency_interface_is_judged_against_it() {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(
+        "/hir-ty-package-interface-dependency-impl",
+    ));
+    db.dependency("app");
+    db.file(
+        "<builtin>/app/lib.baml",
+        r#"
+class Widget {
+    n int
+
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            "widget"
+        }
+    }
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let faithful = export_interface(&db, app_root(&db));
+    let encode = |interface: &PackageInterface<TypeName>| {
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+            .expect("package interface serializes")
+    };
+
+    let mut consumer = ProjectDatabase::new();
+    consumer.workspace(std::path::Path::new(
+        "/hir-ty-package-interface-dependency-impl-consumer",
+    ));
+    consumer.mount("app", encode(&faithful));
+
+    let mut forged = faithful.clone();
+    let row = forged
+        .impls
+        .iter_mut()
+        .find(|row| row.interface.name.name().as_str() == "ToString")
+        .expect("Widget implements baml.ToString");
+    let mut bogus = row.methods[0].clone();
+    bogus.name = Name::new("bogus");
+    bogus.target = ExternalCallTarget::Interface {
+        interface: row.interface.name.clone(),
+        method: Name::new("bogus"),
+    };
+    row.methods.push(bogus);
+    assert_eq!(
+        mount_refusal(encode(&forged)),
+        "an impl of `baml.ToString` provides `bogus`, which the interface does not declare"
+    );
+}
+
 #[test]
 fn duplicate_impl_rows_are_refused_before_installation() {
     let duplicated = forged_library_blob(|interface| {
