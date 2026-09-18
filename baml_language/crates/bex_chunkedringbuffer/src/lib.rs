@@ -496,6 +496,38 @@ impl<T, S> Consumer<T, S> {
         mut timing: impl FnMut(ProducerId, T),
         mut span: impl FnMut(ProducerId, S),
     ) -> DrainStatus {
+        self.drain_chunks(
+            max_chunks,
+            |producer, records| {
+                for record in records {
+                    timing(producer, record);
+                }
+            },
+            |producer, records| {
+                for record in records {
+                    span(producer, record);
+                }
+            },
+        )
+    }
+
+    /// Exclusive access to whole sealed chunks, in FIFO handoff order.
+    ///
+    /// Each callback receives an ownership-moving iterator over one chunk. It
+    /// may consume records or simply drop the iterator to discard the contents.
+    /// Unconsumed records are destroyed without zeroing the backing storage;
+    /// records without destructors need no per-record work. The allocation stays
+    /// with the pool and is recycled after the callback returns. Iterators cannot
+    /// outlive the callback. Do not forget them: doing so leaks unconsumed payloads.
+    ///
+    /// Callbacks run outside the pool mutex. A panic fails the transport and
+    /// destroys remaining owned records exactly once, as with `drain`.
+    pub fn drain_chunks(
+        &mut self,
+        max_chunks: NonZeroUsize,
+        mut timing: impl FnMut(ProducerId, std::vec::Drain<'_, T>),
+        mut span: impl FnMut(ProducerId, std::vec::Drain<'_, S>),
+    ) -> DrainStatus {
         const BATCH: usize = 8;
         self.shared.check();
         let mut guard = FailureGuard {
@@ -535,15 +567,11 @@ impl<T, S> Consumer<T, S> {
                 match records {
                     Records::Timing(v) => {
                         status.records += v.len();
-                        for record in v.drain(..) {
-                            timing(*producer, record);
-                        }
+                        timing(*producer, v.drain(..));
                     }
                     Records::Span(v) => {
                         status.records += v.len();
-                        for record in v.drain(..) {
-                            span(*producer, record);
-                        }
+                        span(*producer, v.drain(..));
                     }
                 }
             }

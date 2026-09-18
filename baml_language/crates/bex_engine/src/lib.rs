@@ -780,6 +780,8 @@ pub struct BexEngine {
     /// One policy namespace for all function objects and VMs in this engine.
     telemetry_policies: Arc<TelemetryPolicies>,
     telemetry_clock: btel_clock::ClockRuntime,
+    #[cfg(not(target_arch = "wasm32"))]
+    telemetry_runtime: Arc<btel_processor::TelemetryRuntime>,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1616,6 +1618,9 @@ impl BexEngine {
 
         let telemetry_policies = Arc::new(TelemetryPolicies::new());
         let telemetry_clock = btel_clock::ClockRuntime::new(clock_mode);
+        #[cfg(not(target_arch = "wasm32"))]
+        let telemetry_runtime = btel_processor::TelemetryRuntime::new()
+            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1635,6 +1640,8 @@ impl BexEngine {
                     Arc::clone(&panic_class_ptrs),
                     Arc::clone(&telemetry_policies),
                     telemetry_clock.start_run(),
+                    #[cfg(not(target_arch = "wasm32"))]
+                    Arc::clone(&telemetry_runtime),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1774,6 +1781,8 @@ impl BexEngine {
             heap,
             telemetry_policies,
             telemetry_clock,
+            #[cfg(not(target_arch = "wasm32"))]
+            telemetry_runtime,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -3220,6 +3229,8 @@ impl BexEngine {
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.telemetry_policies),
             self.telemetry_clock.start_run(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.telemetry_runtime),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3306,17 +3317,17 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
-        thread
-            .vm
-            .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
-
-        let log_capture = logger.is_enabled().then(|| LogCaptureContext {
-            boundary_id: boundary.boundary_id,
-            logger: logger.clone(),
-        });
-        // Run the event loop.
-        let result = self
-            .run_thread_event_loop(
+        // Entry, execution and explicit finalization share one producer until
+        // the task actually suspends. VM method scopes nest inside this poll.
+        let execution = async {
+            thread
+                .vm
+                .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
+            let log_capture = logger.is_enabled().then(|| LogCaptureContext {
+                boundary_id: boundary.boundary_id,
+                logger: logger.clone(),
+            });
+            self.run_thread_event_loop_inner(
                 return_type,
                 throws_type,
                 thread,
@@ -3325,7 +3336,12 @@ impl BexEngine {
                 &cancel,
                 copy_objects,
             )
-            .await;
+            .await
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let result = self.telemetry_runtime.scope(execution).await;
+        #[cfg(target_arch = "wasm32")]
+        let result = execution.await;
 
         // Flush any host-value releases queued during this call. The root
         // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
@@ -4760,6 +4776,8 @@ impl BexEngine {
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.telemetry_policies),
             Arc::clone(&telemetry.clock),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.telemetry_runtime),
         );
         child_vm.thread_id = thread_id;
         child_vm.configure_spawn_telemetry(&telemetry);
@@ -4886,6 +4904,32 @@ impl BexEngine {
     /// through [`FutureManager`] so the awaiter resumes correctly.
     #[allow(clippy::too_many_arguments)]
     async fn run_thread_event_loop(
+        self: &Arc<Self>,
+        return_type: RuntimeTy,
+        throws_type: Option<RuntimeTy>,
+        thread: ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        log_capture: Option<LogCaptureContext>,
+        cancel: &CancellationToken,
+        copy_objects: bool,
+    ) -> Result<ThreadOutcome, EngineError> {
+        let execution = self.run_thread_event_loop_inner(
+            return_type,
+            throws_type,
+            thread,
+            call_id,
+            log_capture,
+            cancel,
+            copy_objects,
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.telemetry_runtime.scope(execution).await;
+        #[cfg(target_arch = "wasm32")]
+        execution.await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn run_thread_event_loop_inner(
         self: &Arc<Self>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,

@@ -1,7 +1,8 @@
 //! VM-side telemetry producer state.
 //!
-//! This module intentionally stops at logical events. Production builds consume
-//! and discard the two record types; buffer/processor integration is next.
+//! Native execution publishes typed records through chunk-backed transport.
+//! Captures remain explicitly deferred until owned snapshots are implemented.
+//! WASM transport integration is deferred; tests retain VM-local capture values.
 
 #![allow(unsafe_code)]
 #![allow(
@@ -109,7 +110,28 @@ pub use btel_records::{SpanRecord, TimingRecord};
 /// Shallow VM-backed captures, NOT independent snapshots. Retained test records
 /// are rooted/forwarded with the VM and may migrate with it. A background
 /// processor must instantiate `SpanRecord` with owned snapshot handles instead.
+#[cfg(any(test, target_arch = "wasm32"))]
 type VmSpanRecord = SpanRecord<[Value], Value>;
+#[cfg(all(not(test), not(target_arch = "wasm32")))]
+type VmSpanRecord = SpanRecord<btel_records::CaptureDeferred, btel_records::CaptureDeferred>;
+
+#[inline]
+fn capture_value(value: Value) -> CapturedValue {
+    #[cfg(any(test, target_arch = "wasm32"))]
+    {
+        value
+    }
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    {
+        let _ = value;
+        btel_records::CaptureDeferred
+    }
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+type CapturedValue = Value;
+#[cfg(all(not(test), not(target_arch = "wasm32")))]
+type CapturedValue = btel_records::CaptureDeferred;
 const _: () = assert!(size_of::<TimingRecord>() <= 32);
 const _: () = assert!(size_of::<VmSpanRecord>() <= 56);
 
@@ -132,6 +154,8 @@ pub struct TelemetryState {
     last_call_path: Option<(CallPathKey, CallPathId)>,
     policies: Arc<TelemetryPolicies>,
     clock: Arc<ClockEpoch>,
+    #[cfg(not(target_arch = "wasm32"))]
+    runtime: Arc<btel_processor::TelemetryRuntime>,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -139,7 +163,11 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
-    pub fn new_root(policies: Arc<TelemetryPolicies>, clock: Arc<ClockEpoch>) -> Self {
+    pub fn new_root(
+        policies: Arc<TelemetryPolicies>,
+        clock: Arc<ClockEpoch>,
+        #[cfg(not(target_arch = "wasm32"))] runtime: Arc<btel_processor::TelemetryRuntime>,
+    ) -> Self {
         clock.attach_thread();
         let id = allocate_telemetry_id();
         let started_at = clock.read();
@@ -159,6 +187,8 @@ impl TelemetryState {
             last_call_path: None,
             policies,
             clock,
+            #[cfg(not(target_arch = "wasm32"))]
+            runtime,
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
@@ -294,7 +324,17 @@ impl TelemetryState {
         }
 
         let captured_inputs = (mode == InvocationMode::Span && (policy.capture_inputs || is_ai))
-            .then(|| args.to_vec().into_boxed_slice());
+            .then(|| {
+                #[cfg(any(test, target_arch = "wasm32"))]
+                {
+                    args.to_vec().into_boxed_slice()
+                }
+                #[cfg(all(not(test), not(target_arch = "wasm32")))]
+                {
+                    let _ = args;
+                    Box::new(btel_records::CaptureDeferred)
+                }
+            });
         let entered_at = self.clock.read();
         if mode == InvocationMode::Span {
             let id = allocate_telemetry_id();
@@ -411,7 +451,7 @@ impl TelemetryState {
                 await_time: telemetry.await_duration,
                 outcome,
                 reentry: telemetry.is_reentry(),
-                captured_value: capture_value.map(Box::new),
+                captured_value: capture_value.map(|value| Box::new(self::capture_value(value))),
             });
             self.thread.active_id = telemetry.saved_parent_id;
         } else if policy.promotes(elapsed, outcome, self.clock.domain()) {
@@ -424,7 +464,7 @@ impl TelemetryState {
                 await_time: telemetry.await_duration,
                 outcome,
                 reentry: telemetry.is_reentry(),
-                captured_value: capture_value.map(Box::new),
+                captured_value: capture_value.map(|value| Box::new(self::capture_value(value))),
             });
         } else {
             self.write_timing(TimingRecord::FunctionTimingCompletion {
@@ -533,20 +573,27 @@ impl TelemetryState {
         id
     }
 
-    // Transport integration is the next step. Production still discards records;
-    // tests retain each concrete stream separately, without an umbrella enum.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn execution_scope(&self) -> btel_processor::ExecutionScope {
+        self.runtime.enter()
+    }
+
+    // Tests retain VM-backed captures locally. Native production writes only
+    // owned metadata/explicit deferred-capture markers to the processor.
     #[cfg_attr(
-        not(test),
+        all(not(test), target_arch = "wasm32"),
         allow(
             clippy::needless_pass_by_value,
-            reason = "writes transfer record ownership; production buffering is the next step"
+            reason = "WASM transport integration is deferred"
         )
     )]
     #[inline(always)]
     fn write_timing(&mut self, record: TimingRecord) {
         #[cfg(test)]
         self.timing_records.push(record);
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.runtime.write_timing(self.thread.id, record);
+        #[cfg(all(not(test), target_arch = "wasm32"))]
         let _ = (self, record);
     }
 
@@ -554,7 +601,9 @@ impl TelemetryState {
     fn write_span(&mut self, record: VmSpanRecord) {
         #[cfg(test)]
         self.span_records.push(record);
-        #[cfg(not(test))]
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        self.runtime.write_span(self.thread.id, record);
+        #[cfg(all(not(test), target_arch = "wasm32"))]
         {
             let _ = self;
             drop(record);
@@ -673,6 +722,13 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
     }
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn test_runtime() -> Arc<btel_processor::TelemetryRuntime> {
+    static RUNTIME: std::sync::OnceLock<Arc<btel_processor::TelemetryRuntime>> =
+        std::sync::OnceLock::new();
+    Arc::clone(RUNTIME.get_or_init(|| btel_processor::TelemetryRuntime::new().unwrap()))
+}
+
 #[cfg(test)]
 mod tests {
     fn test_clock() -> std::sync::Arc<btel_clock::ClockEpoch> {
@@ -680,6 +736,15 @@ mod tests {
     }
 
     use super::*;
+
+    fn test_state(policies: Arc<TelemetryPolicies>, clock: Arc<ClockEpoch>) -> TelemetryState {
+        TelemetryState::new_root(
+            policies,
+            clock,
+            #[cfg(not(target_arch = "wasm32"))]
+            test_runtime(),
+        )
+    }
 
     #[test]
     fn call_path_exhaustion_cannot_resume_with_reused_ids() {
@@ -703,7 +768,7 @@ mod tests {
             .tlab
             .alloc_function(Box::new(function(FunctionKind::Bytecode, None)))
             .unwrap();
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         let register = |caller: Option<HeapPtr>, callee| unsafe {
             // SAFETY: this single-threaded test owns the live functions and
             // never collects while resolving a call path.
@@ -818,7 +883,7 @@ mod tests {
         );
         let input = vm.tlab.alloc_string("input");
         let output = vm.tlab.alloc_string("output");
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         let frame = state
             .enter_bytecode(
                 &function,
@@ -913,7 +978,7 @@ mod tests {
     fn unsupported_function_cannot_be_enabled_or_create_a_call_path() {
         let mut function = function(FunctionKind::Bytecode, None);
         function.telemetry_function_id = None;
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         let policy = TelemetryPolicy {
             span_from_entry: true,
             ..TelemetryPolicy::NONE
@@ -953,7 +1018,7 @@ mod tests {
     #[test]
     fn timing_completion_is_anonymous_and_exclusive() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let thread_id = state.active_id();
         let frame = state
@@ -989,7 +1054,7 @@ mod tests {
                 client: "test".to_string(),
             }),
         );
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
@@ -1026,7 +1091,7 @@ mod tests {
     #[test]
     fn completion_reads_current_policy_for_late_promotion() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
@@ -1034,8 +1099,7 @@ mod tests {
                 (None, function.telemetry_function_id.unwrap())
             })
             .unwrap();
-        let updater =
-            TelemetryState::new_root(Arc::clone(&state.policies), Arc::clone(&state.clock));
+        let updater = test_state(Arc::clone(&state.policies), Arc::clone(&state.clock));
         updater
             .set_policy(
                 &function,
@@ -1051,7 +1115,7 @@ mod tests {
             .unwrap();
 
         // A VM created after publication sees the same table as an existing VM.
-        let later = TelemetryState::new_root(Arc::clone(&state.policies), Arc::clone(&state.clock));
+        let later = test_state(Arc::clone(&state.policies), Arc::clone(&state.clock));
         assert_eq!(
             later.policy_by_id(function.telemetry_policy_id.load()),
             state.policy_by_id(function.telemetry_policy_id.load())
@@ -1078,7 +1142,7 @@ mod tests {
     #[test]
     fn completions_preserve_self_await_and_reentry() {
         let function = function(FunctionKind::Bytecode, None);
-        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let mut outer = state
             .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
@@ -1121,7 +1185,7 @@ mod tests {
 
     #[test]
     fn native_policy_updates_are_rejected() {
-        let state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         let function = function(FunctionKind::NativeUnresolved, None);
         assert!(
             state
@@ -1146,8 +1210,7 @@ mod tests {
             for initial in [false, true] {
                 for current in [false, true] {
                     let function = function(FunctionKind::Bytecode, None);
-                    let mut state =
-                        TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+                    let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
                     state.start_thread();
                     let policy = |capture| TelemetryPolicy {
                         span_from_entry: true,
@@ -1193,15 +1256,14 @@ mod tests {
 
     #[test]
     fn spawned_thread_has_explicit_parent_and_structural_call_path() {
-        let mut parent = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let mut parent = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         parent.start_thread();
         let function = function(FunctionKind::Bytecode, None);
         let context = parent.spawn_context(None, 11, HeapPtr::null(), |_, _| {
             (None, function.telemetry_function_id.unwrap())
         });
 
-        let mut child =
-            TelemetryState::new_root(Arc::clone(&parent.policies), Arc::clone(&parent.clock));
+        let mut child = test_state(Arc::clone(&parent.policies), Arc::clone(&parent.clock));
         let child_id = child.active_id();
         child.configure_spawn(&context);
         child.start_thread();

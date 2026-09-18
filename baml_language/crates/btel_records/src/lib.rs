@@ -19,6 +19,12 @@ use btel_types::{
     TelemetryId,
 };
 
+/// Capture was requested, but an independent value snapshot is not implemented
+/// yet. This explicit placeholder contains no VM reference and must never be
+/// presented as successfully captured data. `None` still means no capture.
+#[derive(Debug)]
+pub struct CaptureDeferred;
+
 /// Frequent anonymous measurements with a 32-byte slot budget.
 /// Records transfer ownership rather than implicitly duplicating publication.
 ///

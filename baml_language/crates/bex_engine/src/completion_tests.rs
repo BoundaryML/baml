@@ -37,6 +37,18 @@ fn assert_completed(engine: &BexEngine, expected: &[(u64, InvocationOutcome)]) {
         actual, expected,
         "each logical thread must finish exactly once"
     );
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let stats = engine.telemetry_runtime.stats();
+        assert_eq!(
+            stats.active_producers, 0,
+            "no producer may survive a VM handoff"
+        );
+        assert!(
+            stats.sealed_records > 0,
+            "completion must publish real records"
+        );
+    }
 }
 
 #[tokio::test]

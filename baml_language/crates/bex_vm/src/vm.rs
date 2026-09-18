@@ -405,6 +405,8 @@ pub(crate) mod tests {
             telemetry: TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+                #[cfg(not(target_arch = "wasm32"))]
+                crate::telemetry::test_runtime(),
             ),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
@@ -1976,6 +1978,9 @@ impl BexVm {
         panic_class_ptrs: Arc<[HeapPtr]>,
         telemetry_policies: Arc<TelemetryPolicies>,
         telemetry_clock: Arc<btel_clock::ClockEpoch>,
+        #[cfg(not(target_arch = "wasm32"))] telemetry_runtime: Arc<
+            btel_processor::TelemetryRuntime,
+        >,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -2019,7 +2024,12 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
-            telemetry: TelemetryState::new_root(telemetry_policies, telemetry_clock),
+            telemetry: TelemetryState::new_root(
+                telemetry_policies,
+                telemetry_clock,
+                #[cfg(not(target_arch = "wasm32"))]
+                telemetry_runtime,
+            ),
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
@@ -3659,6 +3669,12 @@ impl BexVm {
             panic_class_ptrs,
             Arc::new(TelemetryPolicies::new()),
             btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            #[cfg(not(target_arch = "wasm32"))]
+            btel_processor::TelemetryRuntime::new().map_err(|error| {
+                VmInternalError::BridgeFailure {
+                    message: format!("telemetry processor startup: {error}"),
+                }
+            })?,
         ))
     }
 
@@ -3742,6 +3758,8 @@ impl BexVm {
         type_args: IndexMap<String, bex_vm_types::RealizedTy>,
         type_values: IndexMap<String, TypeValue>,
     ) {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         debug_assert!(
             matches!(
                 self.get_object(function),
@@ -6423,6 +6441,8 @@ impl BexVm {
     /// thread. The engine calls this exactly once when it chooses a terminal
     /// outcome (including cancellation races and explicit process exit).
     pub fn finish_telemetry(&mut self, outcome: InvocationOutcome) {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         self.finish_pending_telemetry_wait();
         for frame_idx in (0..self.frames.len()).rev() {
             self.complete_bytecode_invocation(frame_idx, outcome, None);
@@ -6447,6 +6467,8 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         self.finish_pending_telemetry_wait();
         // Keep GC polling progress across engine handoffs. Returning from
         // exec (for example, to spawn a child) does not necessarily release
@@ -6498,6 +6520,8 @@ impl BexVm {
     }
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.execution_scope();
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {

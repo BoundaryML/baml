@@ -1,0 +1,23 @@
+[package]
+name = "btel_processor"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Chunk-backed telemetry processing and storage recycling"
+
+[lints]
+workspace = true
+
+[dependencies]
+bex_chunkedringbuffer = { workspace = true }
+btel_records = { workspace = true }
+btel_types = { workspace = true }
+
+[dev-dependencies]
+btel_clock = { workspace = true }

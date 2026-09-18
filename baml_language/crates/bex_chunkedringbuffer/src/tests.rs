@@ -182,6 +182,59 @@ mod native {
     };
 
     use super::*;
+
+    #[test]
+    fn whole_chunks_drop_remaining_payloads_and_reuse_allocations() {
+        struct Owned(std::sync::Arc<AtomicUsize>);
+        impl Drop for Owned {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Order::SeqCst);
+            }
+        }
+        let drops = std::sync::Arc::new(AtomicUsize::new(0));
+        let pool = ChunkPool::<u64, Owned>::new(config(4, 1)).unwrap();
+        let mut writer = pool.register_producer().unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        for i in 0..3 {
+            writer.write_timing(i);
+            writer.write_span(Owned(drops.clone()));
+        }
+        let timing_ptr = writer.timing.as_ref().unwrap().as_ptr();
+        let span_ptr = writer.span.as_ref().unwrap().as_ptr();
+        writer.seal();
+        let status = reader.drain_chunks(
+            nz(2),
+            |_, records| {
+                assert_eq!(records.as_slice(), [0, 1, 2]);
+                // Discard the entire plain-data chunk without iterating it.
+                drop(records);
+            },
+            |_, mut records| {
+                // Moving one payload out and discarding the remainder must
+                // destroy all three exactly once before recycling the chunk.
+                drop(records.next().unwrap());
+                assert_eq!(drops.load(Order::SeqCst), 1);
+            },
+        );
+        assert_eq!(status.chunks, 2);
+        assert_eq!(status.records, 6);
+        assert_eq!(drops.load(Order::SeqCst), 3);
+        writer.write_timing(9);
+        writer.write_span(Owned(drops.clone()));
+        assert_eq!(writer.timing.as_ref().unwrap().as_ptr(), timing_ptr);
+        assert_eq!(writer.span.as_ref().unwrap().as_ptr(), span_ptr);
+        assert_eq!(writer.timing.as_ref().unwrap().capacity(), 4);
+        assert_eq!(writer.span.as_ref().unwrap().capacity(), 4);
+        assert_eq!(writer.stats().allocations, 2);
+        drop(writer);
+        pool.close_admission();
+        assert!(
+            reader
+                .drain_chunks(nz(8), |_, r| drop(r), |_, r| drop(r))
+                .complete
+        );
+        assert_eq!(drops.load(Order::SeqCst), 4);
+    }
     fn checked(f: impl FnOnce() + Send + 'static) {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {

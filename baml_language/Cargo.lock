@@ -1267,6 +1267,7 @@ dependencies = [
  "bex_vm_types",
  "bridge_ctypes",
  "btel_clock",
+ "btel_processor",
  "btel_types",
  "futures",
  "indexmap",
@@ -1439,6 +1440,7 @@ dependencies = [
  "bex_str",
  "bex_vm_types",
  "btel_clock",
+ "btel_processor",
  "btel_records",
  "btel_types",
  "chacha20poly1305",
@@ -1747,6 +1749,16 @@ dependencies = [
  "btel_types",
  "quanta",
  "web-time",
+]
+
+[[package]]
+name = "btel_processor"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_records",
+ "btel_types",
 ]
 
 [[package]]
