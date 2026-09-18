@@ -1469,7 +1469,7 @@ struct SpawnRequest {
     /// The `E` of that future.
     throws: RealizedTy,
     /// The task's cancellation parent is the runtime, not the spawner
-    /// (`detach = true`, or a plan under `baml.spawn.Root`).
+    /// (a plan under `baml.spawn.Root`).
     root: bool,
 }
 
@@ -5886,8 +5886,8 @@ impl BexEngine {
         } = request;
         // Each spawned thread gets a child cancel token so parent →
         // child cascade falls out of the token tree without bespoke
-        // tracking. A `detach = true` spawn instead gets a fresh,
-        // independent token so the parent's cancellation (and
+        // tracking. A rooted spawn (`baml.spawn.Root`) instead gets a
+        // fresh, independent token so the parent's cancellation (and
         // unhandled-throw cascade) does NOT reach it — it behaves
         // like a top-level task. So does a spawn from inside a
         // shield: cleanup that delegates must not hand its work a

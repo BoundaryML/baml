@@ -135,7 +135,13 @@ use sha2::{Digest, Sha256};
 /// callers).
 ///
 /// Version 16: `Bytecode::shield_table` records the PC ranges of `defer`
-/// bodies, which run shielded from cancellation.
+/// bodies, which run shielded from cancellation, and the `Spawn` opcode yields
+/// a `baml.spawn.Plan` instead of a pre-allocated `UnscheduledFuture`. The
+/// instruction encoding is unchanged — both pop that operand — so a cached
+/// unit from before this version decodes cleanly and then hands the engine the
+/// wrong object; this constant is what rejects it. `Object`/`ObjectType` also
+/// lost `UnscheduledFuture` from the middle of the enum, renumbering the Borsh
+/// discriminants after it.
 pub const FORMAT_VERSION: u32 = 16;
 
 const MAGIC: [u8; 4] = *b"BEXC";

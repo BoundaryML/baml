@@ -297,13 +297,6 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
     if name.name().as_str().starts_with('_') {
         return false;
     }
-    // `spawn.options` returns a VM closure, not a resource. Python and C# both
-    // classify native closure values as unsupported SDK boundaries; keeping it
-    // out here does not omit any resource factory or method.
-    if name.to_string() == "baml.spawn.options" {
-        return false;
-    }
-
     (name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
             matches!(

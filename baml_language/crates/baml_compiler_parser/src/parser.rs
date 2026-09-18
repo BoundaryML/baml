@@ -3119,7 +3119,7 @@ impl<'a> Parser<'a> {
 
             // Consume dot-separated path segments (e.g., baml.http.Request).
             // `spawn`/`await` are reserved keywords but valid as namespace
-            // segments after a `.` (e.g. `baml.spawn.Params` in a type
+            // segments after a `.` (e.g. `baml.spawn.Plan` in a type
             // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
@@ -5406,7 +5406,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await
@@ -7008,7 +7008,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
                 // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Params<T, E>>(x)`), mirroring
+                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
                 // the type-path parser's segment set.
                 | TokenKind::Spawn
                 | TokenKind::Await

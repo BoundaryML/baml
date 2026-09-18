@@ -1493,18 +1493,7 @@ pub enum VmExecState {
     ///   `Await` (settle our future as cancelled, or surface `Cancelled`).
     AwaitAny(Vec<FutureId>),
 
-    /// BEP-034: VM yields a `spawn { body }` to the engine.
-    ///
-    /// - Input: a `HeapPtr` to the `UnscheduledFuture` object the VM
-    ///   allocated. The struct carries the body closure, the optional
-    ///   spawn name, and the `Future<T, E>` type arguments this spawn
-    ///   site was typed at.
-    /// - Output: the engine builds a fresh `Future::Pending(id)` heap
-    ///   object at those types, dispatches the body on a new `BexThread`, and pushes
-    ///   the future pointer onto the VM stack. Terminal transitions
-    ///   (`Ready`/`Error`/`Cancelled`/`InternalError`) happen later
-    ///   via the `FutureManager`; the VM only ever sees `Pending`
-    ///   directly after this yield.
+    /// VM yields a `spawn` to the engine.
     ///
     /// - Input: `plan` points at the `Object::SpawnPlan` behind the plan
     ///   value — the body, wrappers, admission, cancellation, and the

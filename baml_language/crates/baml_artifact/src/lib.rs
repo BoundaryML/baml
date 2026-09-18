@@ -41,7 +41,15 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// for stable builds.)
 ///
 /// Version 8 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
-/// which run shielded from cancellation).
+/// which run shielded from cancellation), and changes what the `Spawn` opcode
+/// yields: the VM now pushes a `baml.spawn.Plan` for the engine to start,
+/// where it used to push a pre-allocated `UnscheduledFuture`. Both take that
+/// operand from the stack, so the encoded instruction is byte-identical and
+/// only this constant tells the two apart — a version-8 runtime replaying
+/// older bytecode would hand the engine the wrong object. The same version
+/// covers the `Object`/`ObjectType` lattice losing `UnscheduledFuture` from
+/// the middle of the enum, which renumbers the Borsh discriminants of every
+/// variant declared after it.
 pub const FORMAT_VERSION: u32 = 8;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
