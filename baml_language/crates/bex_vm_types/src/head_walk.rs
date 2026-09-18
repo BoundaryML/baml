@@ -146,13 +146,13 @@ macro_rules! walk_object_heads {
                         param.ty.$visit(f);
                     }
                 }
-                Object::UnscheduledFuture(fut) => {
-                    fut.returns.$visit(f);
-                    fut.throws.$visit(f);
-                }
                 Object::SpawnPlan(plan) => {
-                    plan.returns.$visit(f);
-                    plan.throws.$visit(f);
+                    plan.body_returns.$visit(f);
+                    plan.body_throws.$visit(f);
+                    for layer in &$($mut)? *plan.layers {
+                        layer.returns.$visit(f);
+                        layer.throws.$visit(f);
+                    }
                 }
                 Object::Future(fut) => fut.$visit(f),
                 Object::Array(array) => array.element_ty.$visit(f),

@@ -1011,18 +1011,8 @@ fn collect_uses_in_terminator<'db>(
                 }
             }
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
-            collect_uses_in_operand(closure, block, StatementRef::Terminator, def_use);
-            collect_uses_in_operand(name, block, StatementRef::Terminator, def_use);
-            if let Some(config) = config {
-                collect_uses_in_operand(config, block, StatementRef::Terminator, def_use);
-            }
+        Terminator::Spawn { plan, future, .. } => {
+            collect_uses_in_operand(plan, block, StatementRef::Terminator, def_use);
             if let Place::Local(local) = future {
                 if let Some(du) = def_use.get_mut(local) {
                     du.def = Some(DefLocation {

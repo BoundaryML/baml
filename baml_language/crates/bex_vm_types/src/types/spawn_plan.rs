@@ -40,14 +40,17 @@ fn mint_plan_id() -> u64 {
 pub struct SpawnPlanData {
     /// This plan value's identity; a heap copy of the handle keeps it.
     pub id: u64,
-    /// The written name, a heap string, if any.
-    pub name: Option<HeapPtr>,
-    /// The sealed body: an `Object::Closure` `() -> T throws E`.
+    /// The written name, if any.
+    pub name: Option<bex_str::BexStr>,
+    /// The sealed body: a callable `() -> T throws E`.
     pub body: HeapPtr,
-    /// Execution wrappers, closures `(Execution) -> Output throws Error`, in
-    /// application order: the first wraps the body, the last is outermost and
-    /// is what a launch invokes.
-    pub layers: Box<[HeapPtr]>,
+    /// The body's `T`.
+    pub body_returns: RealizedTy,
+    /// The body's `E`.
+    pub body_throws: RealizedTy,
+    /// Execution wrappers in application order: the first wraps the body, the
+    /// last is outermost and is what a launch invokes.
+    pub layers: Box<[SpawnPlanLayer]>,
     /// Admission: every limit is taken together before the first attempt.
     pub limits: LimitSet,
     /// `Root` applied: the task's cancellation parent is the runtime root, not
@@ -55,17 +58,24 @@ pub struct SpawnPlanData {
     pub root: bool,
     /// Linked tokens: each fires the task's own.
     pub cancel: Box<[CancellationToken]>,
-    /// The `T` of the `Future<T, E>` a launch yields: the outermost layer's
-    /// `Output`, or the body's `T`.
+}
+
+/// One execution wrapper of a plan: a callable
+/// `(Execution<T, E>) -> Output throws Error`, where `T`/`E` are the types of
+/// the plan beneath it.
+#[derive(Clone, Debug)]
+pub struct SpawnPlanLayer {
+    pub wrapper: HeapPtr,
+    /// The wrapper's `Output`.
     pub returns: RealizedTy,
-    /// The `E` of that future, likewise.
+    /// The wrapper's `Error`.
     pub throws: RealizedTy,
 }
 
 impl SpawnPlanData {
     /// The plan `Plan.new(name, body)` builds: the body alone.
     pub fn new(
-        name: Option<HeapPtr>,
+        name: Option<bex_str::BexStr>,
         body: HeapPtr,
         returns: RealizedTy,
         throws: RealizedTy,
@@ -74,26 +84,44 @@ impl SpawnPlanData {
             id: mint_plan_id(),
             name,
             body,
+            body_returns: returns,
+            body_throws: throws,
             layers: Box::new([]),
             limits: LimitSet::new(),
             root: false,
             cancel: Box::new([]),
-            returns,
-            throws,
         }
+    }
+
+    /// The `T` and `E` of the plan beneath `layer` — what the `Execution`
+    /// handed to that layer runs: the body's for the innermost layer, else the
+    /// `Output`/`Error` of the layer below.
+    pub fn types_beneath(&self, layer: usize) -> (&RealizedTy, &RealizedTy) {
+        match layer.checked_sub(1) {
+            None => (&self.body_returns, &self.body_throws),
+            Some(below) => (&self.layers[below].returns, &self.layers[below].throws),
+        }
+    }
+
+    /// The `T` and `E` of the `Future<T, E>` a launch yields: the outermost
+    /// layer's `Output`/`Error`, or the body's.
+    pub fn future_types(&self) -> (&RealizedTy, &RealizedTy) {
+        self.types_beneath(self.layers.len())
     }
 
     /// This plan wrapped by `layer`, which becomes outermost and decides the
     /// launch's `Output` and `Error`.
     #[must_use]
-    pub fn wrapped(&self, layer: HeapPtr, returns: RealizedTy, throws: RealizedTy) -> Self {
+    pub fn wrapped(&self, wrapper: HeapPtr, returns: RealizedTy, throws: RealizedTy) -> Self {
         let mut layers = self.layers.to_vec();
-        layers.push(layer);
+        layers.push(SpawnPlanLayer {
+            wrapper,
+            returns,
+            throws,
+        });
         Self {
             id: mint_plan_id(),
             layers: layers.into_boxed_slice(),
-            returns,
-            throws,
             ..self.clone()
         }
     }
@@ -131,22 +159,16 @@ impl SpawnPlanData {
         }
     }
 
-    /// Every heap object this plan keeps alive: its name, body, and layers.
+    /// Every heap object this plan keeps alive: its body and its wrappers.
     pub fn heap_refs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.name
-            .into_iter()
-            .chain(std::iter::once(self.body))
-            .chain(self.layers.iter().copied())
+        std::iter::once(self.body).chain(self.layers.iter().map(|layer| layer.wrapper))
     }
 
     /// Rewrite every heap reference in place (GC forwarding).
     pub fn forward_heap_refs(&mut self, mut forward: impl FnMut(&mut HeapPtr)) {
-        if let Some(name) = &mut self.name {
-            forward(name);
-        }
         forward(&mut self.body);
         for layer in &mut self.layers {
-            forward(layer);
+            forward(&mut layer.wrapper);
         }
     }
 }
@@ -266,6 +288,24 @@ impl ExecutionState {
     }
 }
 
+/// The dynamic extent of one `Execution`: held while the wrapper it was
+/// handed to runs, and dropped when that wrapper returns, throws, or is torn
+/// down with its task — at which point an unused execution expires.
+#[derive(Debug)]
+pub struct ExecutionExtent(Arc<ExecutionState>);
+
+impl ExecutionExtent {
+    pub fn new(state: Arc<ExecutionState>) -> Self {
+        Self(state)
+    }
+}
+
+impl Drop for ExecutionExtent {
+    fn drop(&mut self) {
+        self.0.expire();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,6 +317,21 @@ mod tests {
             RealizedTy::int(),
             RealizedTy::never(),
         )
+    }
+
+    #[test]
+    fn each_layer_runs_the_types_beneath_it() {
+        let plan = plan().wrapped(HeapPtr::null(), RealizedTy::string(), RealizedTy::int());
+        assert_eq!(
+            plan.types_beneath(0),
+            (&RealizedTy::int(), &RealizedTy::never()),
+            "the innermost layer runs the body"
+        );
+        assert_eq!(
+            plan.future_types(),
+            (&RealizedTy::string(), &RealizedTy::int()),
+            "a launch yields the outermost layer's types"
+        );
     }
 
     #[test]
@@ -321,6 +376,14 @@ mod tests {
             Ok(()),
             "a copied handle is the same plan"
         );
+    }
+
+    #[test]
+    fn an_extent_expires_its_execution_when_dropped() {
+        let plan = plan();
+        let state = Arc::new(ExecutionState::new(plan.id, 0));
+        drop(ExecutionExtent::new(Arc::clone(&state)));
+        assert_eq!(state.begin(&plan), Err(ExecutionMisuse::OutsideExtent));
     }
 
     #[test]

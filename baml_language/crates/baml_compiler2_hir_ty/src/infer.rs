@@ -76,30 +76,6 @@ fn type_admits_null(ty: &Ty) -> bool {
     }
 }
 
-/// The implicit `baml.spawn.Params<V, E>` a spawn's `with` chain
-/// threads (BEP-034).
-fn spawn_params_ty(lang: baml_base::LangRoots, value: Ty, error: Ty) -> Ty {
-    let Some(baml) = lang.get(baml_base::LangPackage::Baml) else {
-        return Ty::error();
-    };
-    Ty::intern(InferTy::Class(
-        baml_type::DeclName::in_root(
-            baml,
-            vec![baml_type::Name::new("spawn")],
-            baml_type::Name::new("Params"),
-        ),
-        Box::new([value, error]),
-        TyAttr::default(),
-    ))
-}
-
-fn is_spawn_params_qtn(lang: baml_base::LangRoots, qtn: &baml_type::DeclName) -> bool {
-    lang.is(baml_base::LangPackage::Baml, qtn.root())
-        && qtn.namespace().len() == 1
-        && qtn.namespace()[0].as_str() == "spawn"
-        && qtn.name().as_str() == "Params"
-}
-
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
 /// the fold: non-numeric literals, and an int result outside BAML's i63
@@ -930,14 +906,6 @@ enum PendingDiag<'db> {
         expr: ExprId,
         var: Ty,
         name: baml_type::Name,
-    },
-    /// A `spawn ... with` link that is not a middleware transformer
-    /// (TIR's `SpawnWithNotATransformer`: names the contract and the link's
-    /// concrete input).
-    SpawnWithBad {
-        at: ExprId,
-        expected_input: Ty,
-        got: Ty,
     },
     /// E0097: declared throws members the body can never throw.
     ExtraneousThrows {
@@ -2184,14 +2152,6 @@ impl<'db> InferenceContext<'db> {
             }),
             Expr::Path(segments) => self.resolve_value_path(body, expr, segments, expected),
             Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
-            Expr::Spawn {
-                name,
-                with_exprs,
-                body: spawn_body,
-            } => {
-                let (name, with_exprs, spawn_body) = (*name, with_exprs.clone(), *spawn_body);
-                self.infer_spawn(body, name, &with_exprs, spawn_body)
-            }
             Expr::Await { future } => self.infer_await(body, expr, *future),
             Expr::OptionalIndex { base, index } => {
                 self.infer_index(body, expr, *base, *index, true)
@@ -3747,6 +3707,14 @@ impl<'db> InferenceContext<'db> {
                 .reduce_projections(&closed, PROJECTION_FINALIZE_FUEL)
                 .into_ty();
         }
+        // Relate through the canonical spelling of a union whose members
+        // resolution has since ground out (see `canonical_if_ground`).
+        if actual.has_union() {
+            actual = self.deduped_unions(&actual);
+        }
+        if expected.has_union() {
+            expected = self.deduped_unions(&expected);
+        }
         if actual == expected || actual.has_error() || expected.has_error() {
             return true;
         }
@@ -4155,6 +4123,38 @@ impl<'db> InferenceContext<'db> {
         // deferred `Sub` residue is that ledger here: both directions
         // (this is Eq), re-examined at finish after resolution.
         if a.has_projection() || b.has_projection() {
+            self.deferred_subs
+                .push((a.clone(), b.clone(), self.obligation_anchor));
+            self.deferred_subs.push((b, a, self.obligation_anchor));
+            return true;
+        }
+        // A union against a NON-union has no unification arm, and it cannot
+        // grow one: `A | B ≡ C` does not entail `A ≡ C` (`true | false` is
+        // `bool`). While a member carries a variable the union is the
+        // spelling `union_of` deferred, so the exact equality is not yet
+        // decidable — `[f(), g()]` joins two open members that resolution
+        // makes identical. What IS entailed is CONTAINMENT of every member,
+        // so relate those: that lands the bounds a demand point later needs
+        // (`?T` of `f<T>()` reaching the other side's slot), without guessing
+        // the equality. The pair itself defers both directions, and the
+        // finish drain judges it against the canonical spelling.
+        // Union-against-union keeps unifying positionally, which is what
+        // determines a `T?` target's slot.
+        let union_members = |ty: &Ty| match ty.kind() {
+            InferTy::Union(members, _) => Some(members.to_vec()),
+            _ => None,
+        };
+        let one_sided = match (union_members(&a), union_members(&b)) {
+            (Some(members), None) => Some((members, b.clone())),
+            (None, Some(members)) => Some((members, a.clone())),
+            (Some(_), Some(_)) | (None, None) => None,
+        };
+        if let Some((members, other)) = one_sided {
+            for member in members {
+                // Report-only: the deferred pair below is the judge, so a
+                // failure here follows the anchorless-drop rule.
+                let _ = self.sub(&member, &other);
+            }
             self.deferred_subs
                 .push((a.clone(), b.clone(), self.obligation_anchor));
             self.deferred_subs.push((b, a, self.obligation_anchor));
@@ -4574,139 +4574,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// `spawn name? with...? { body } : Future<T, E>` (BEP-034; rustc's
-    /// async-block shape). The body arrives as a synthetic 0-arg lambda
-    /// and types through the ordinary lambda path - its OWN effect
-    /// channel (the S12 discipline) is the future's error side, read
-    /// straight off the lambda's fn type. Fresh literals widen out of
-    /// both slots. `with` transformers fold left-to-right over
-    /// `Params<T, E>`: each checks against
-    /// `(Params<cur>) -> Params<unknown, unknown>`, the
-    /// concrete input binding a generic transformer's params through
-    /// ordinary unification (TIR needs a value-ref workaround here;
-    /// inference variables make it unnecessary), and the transformer's
-    /// OUTPUT args seed the next link.
-    fn infer_spawn(
-        &mut self,
-        body: &ExprBody,
-        name: Option<ExprId>,
-        with_exprs: &[ExprId],
-        spawn_body: ExprId,
-    ) -> Ty {
-        if let Some(name_id) = name {
-            self.infer_expr(body, name_id, &Expectation::None);
-        }
-        let lambda_ty = self.infer_expr(body, spawn_body, &Expectation::None);
-        let resolved = self.structurally_resolve(&lambda_ty);
-        let (value, error) = match resolved.kind() {
-            InferTy::Function { ret, throws, .. } => (ret.clone(), throws.clone()),
-            _ => (resolved.clone(), Ty::never()),
-        };
-        let mut cur_value = self.widen_fresh(&value);
-        let mut cur_error = self.widen_fresh(&error);
-        for &with_id in with_exprs {
-            let unknown = || {
-                Ty::intern(InferTy::Unknown {
-                    attr: TyAttr::default(),
-                })
-            };
-            // A with-modifier is DEMANDED structurally (the infer_await
-            // discipline for language constructs): the expectation below
-            // flows into lambdas and generic calls (`options(group = g)`
-            // solves its `T`/`E` from the chain via the param
-            // unification), but the verdict is the shape check - a full
-            // subtype check against open `unknown` slots would trip the
-            // class-invariance rule on perfectly good modifiers.
-            let expected = Ty::intern(InferTy::Function {
-                params: Box::new([baml_type::interned::InferFunctionParamTy {
-                    name: None,
-                    ty: spawn_params_ty(self.lang(), cur_value.clone(), cur_error.clone()),
-                    mode: baml_type::FunctionParamMode::Required,
-                }]),
-                ret: spawn_params_ty(self.lang(), unknown(), unknown()),
-                throws: unknown(),
-                attr: TyAttr::default(),
-            });
-            let got = self.infer_expr(body, with_id, &Expectation::has_type(expected.clone()));
-            let got = self.structurally_resolve(&got);
-            let link = match got.kind() {
-                InferTy::Function { params, ret, .. } => {
-                    let ret = ret.clone();
-                    let ret = self.structurally_resolve(&ret);
-                    match ret.kind() {
-                        InferTy::Class(qn, args, _)
-                            if is_spawn_params_qtn(self.lang(), qn) && args.len() == 2 =>
-                        {
-                            // The modifier must accept the chain's
-                            // current link (solving its generics when
-                            // still open).
-                            if let Some(param) = params.first() {
-                                let chain = spawn_params_ty(
-                                    self.lang(),
-                                    cur_value.clone(),
-                                    cur_error.clone(),
-                                );
-                                let param_ty = param.ty.clone();
-                                if !self.sub(&chain, &param_ty) {
-                                    // Full transformer types on both sides:
-                                    // the render then shows the chain's
-                                    // concrete input against the
-                                    // transformer's (TIR's shape).
-                                    self.result
-                                        .type_mismatches
-                                        .insert(with_id, (expected.clone(), got.clone()));
-                                }
-                            }
-                            let ret = self.table.resolve_completely(&ret);
-                            match ret.kind() {
-                                InferTy::Class(_, args, _) => {
-                                    Some((args[0].clone(), args[1].clone()))
-                                }
-                                _ => None,
-                            }
-                        }
-                        _ => None,
-                    }
-                }
-                _ => None,
-            };
-            match link {
-                Some((value, error)) => {
-                    cur_value = self.table.resolve_completely(&value);
-                    cur_error = self.table.resolve_completely(&error);
-                }
-                None => {
-                    // Not a transformer at all. A fn-shaped or value-ref
-                    // link gets the middleware-contract wording (TIR's
-                    // SpawnWithNotATransformer); a direct non-fn value
-                    // keeps the readable shape mismatch.
-                    let is_value_ref = matches!(
-                        &body.exprs[with_id],
-                        Expr::Path(_) | Expr::MemberAccess { .. }
-                    );
-                    let got_resolved = self.table.resolve_completely(&got);
-                    if (is_value_ref || matches!(got_resolved.kind(), InferTy::Function { .. }))
-                        && !got_resolved.has_error()
-                        && !matches!(got_resolved.kind(), InferTy::Unknown { .. })
-                    {
-                        self.pending_diags.push(PendingDiag::SpawnWithBad {
-                            at: with_id,
-                            expected_input: spawn_params_ty(
-                                self.lang(),
-                                cur_value.clone(),
-                                cur_error.clone(),
-                            ),
-                            got: got_resolved,
-                        });
-                    } else {
-                        self.result.type_mismatches.insert(with_id, (expected, got));
-                    }
-                }
-            }
-        }
-        Ty::intern(InferTy::Future(cur_value, cur_error, TyAttr::default()))
-    }
-
     /// `await e : T` for `e : Future<T, E>`; `E` joins the effect
     /// channel like any throw site. DISTRIBUTES over a union of futures
     /// (BEP-034: `Future` is invariant, so mixed spawns join as a union
@@ -4718,6 +4585,18 @@ impl<'db> InferenceContext<'db> {
     fn infer_await(&mut self, body: &ExprBody, expr: ExprId, future: ExprId) -> Ty {
         let fut = self.infer_expr(body, future, &Expectation::None);
         let resolved = self.structurally_resolve(&fut);
+        // An await demands the future's ARGUMENTS, not only its head: `E`
+        // joins the effect channel right here, and an enclosing `catch`
+        // closes that channel during the walk, long before the finish
+        // fixpoint. A `Future<T, ?E>` whose `?E` is still pinned behind a
+        // pending obligation (`spawn with m { .. }` solves `Error` through
+        // `m`'s impl) would contribute a variable the catch cannot subtract
+        // from, and the error would never reach the enclosing surface.
+        let resolved = if resolved.has_infer() {
+            self.force_occurring_vars(&resolved)
+        } else {
+            resolved
+        };
         match resolved.kind() {
             InferTy::Future(value, error, _) => {
                 let (value, error) = (value.clone(), error.clone());
@@ -5224,6 +5103,7 @@ impl<'db> InferenceContext<'db> {
                 Some(
                     baml_compiler2_ast::BuiltinKind::Intrinsic
                         | baml_compiler2_ast::BuiltinKind::AwaitAny
+                        | baml_compiler2_ast::BuiltinKind::Spawn
                 )
             ) && baml_compiler2_hir::package::is_precompiled_stdlib(self.db, package_root);
         if external.linkability == crate::callable::ExternalLinkability::ReservedBuiltin
@@ -11661,38 +11541,6 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::SpawnWithBad {
-                        at,
-                        expected_input,
-                        got,
-                    } => {
-                        let got = self.plain_finalized(&got);
-                        // A flow-narrowed literal reads as its base in the
-                        // contract wording (`got int`, not `got 7`).
-                        let got = match got {
-                            baml_type::Ty::Literal(lit, _, attr) => {
-                                use baml_base::Literal as Lit;
-                                match lit {
-                                    Lit::Int(_) => baml_type::Ty::Int { attr },
-                                    Lit::Bigint(_) => baml_type::Ty::Bigint { attr },
-                                    Lit::Float(_) => baml_type::Ty::Float { attr },
-                                    Lit::String(_) => baml_type::Ty::String { attr },
-                                    Lit::Bool(_) => baml_type::Ty::Bool { attr },
-                                }
-                            }
-                            other => other,
-                        };
-                        diags.push(TirDiagnostic {
-                            error: TirTypeError::SpawnWithNotATransformer {
-                                expected_input: self.plain_finalized(&expected_input),
-                                got,
-                            },
-                            severity: DiagnosticSeverity::Error,
-                            primary: DiagnosticLocation::Expr(at),
-                            related: Vec::new(),
-                        });
-                        continue;
-                    }
                     PendingDiag::ExtraneousThrows { at, extra_types } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ExtraneousThrowsDeclaration { extra_types },
@@ -12131,6 +11979,38 @@ impl<'db> InferenceContext<'db> {
         let resolved = self.table.resolve_completely(ty);
         let erased = erase_infer(&resolved);
         self.reduce_projections(&erased, PROJECTION_FINALIZE_FUEL)
+    }
+
+    /// A type with every union node's SPELLING normalized: members resolved,
+    /// flattened, `never` dropped, duplicates removed.
+    ///
+    /// [`Self::union_of`] leaves a union syntactic while any member still
+    /// carries a variable, because the canonical algebra needs var-free input.
+    /// Resolution then solves those variables without revisiting the union
+    /// node, so a join of two generic calls (`[f(), g()]`) goes on spelling
+    /// two members that are by then the same type. Anything that relates or
+    /// dispatches on that spelling gets the wrong answer: a union answers only
+    /// through an interface every arm shares, and unification against a
+    /// non-union has no arm to pick.
+    ///
+    /// Deliberately dedup only, not the canonical algebra: absorption and
+    /// literal-into-base are SEMANTIC steps that erase literal freshness, and
+    /// flow narrowing downstream reads that freshness. Removing a member equal
+    /// to one already there changes no type.
+    fn deduped_unions(&mut self, ty: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(ty);
+        if !resolved.has_union() {
+            return resolved;
+        }
+        let rebuilt = Ty::intern(
+            resolved
+                .kind()
+                .map_children(|child| self.deduped_unions(child)),
+        );
+        match rebuilt.kind() {
+            InferTy::Union(members, _) => syntactic_union(members),
+            _ => rebuilt,
+        }
     }
 
     /// Post-substitution projection normalization (rustc's
@@ -12588,6 +12468,22 @@ impl<'db> InferenceContext<'db> {
         if resolved.has_infer() && resolved.has_projection() {
             resolved = self.force_occurring_vars(&resolved);
         }
+        // A member access on a union resolves through the ONE interface every
+        // arm shares, so the arm count IS the structure here — and a demand
+        // cannot wait for the finish fixpoint the way a relation can
+        // (`eq_piece` defers instead). Commit the occurring variables from
+        // their bounds, the same demand-point commitment a projection base
+        // gets, and relate the canonical spelling. Left syntactic, the lookup
+        // fails on arms that would have proven identical, stays silent
+        // because the type still carries variables, and finalizes `Error`
+        // into a well-typed program.
+        if resolved.has_union() {
+            resolved = self.deduped_unions(&resolved);
+            if resolved.has_infer() {
+                resolved = self.force_occurring_vars(&resolved);
+                resolved = self.deduped_unions(&resolved);
+            }
+        }
         // rustc's `structurally_resolve_type` NORMALIZES as well as
         // resolving: a ground reducible projection is not structure -
         // `(T as Source).Item` coming back from a call IS `string`
@@ -12639,7 +12535,15 @@ impl<'db> InferenceContext<'db> {
                     progressed = true;
                 }
             }
-            if !progressed {
+            // A var pinned by an associated type of a not-yet-selected impl
+            // (`Plan.with`'s `Output`/`Error`) has no bounds of its own:
+            // only discharging the obligation that names it solves it, and
+            // that may in turn expose vars bounds can force. rustc's
+            // `structurally_resolve_type` selects pending obligations
+            // where possible for the same reason. Selection is licensed by
+            // a known head and stalls otherwise, so it is as sound here as
+            // in the finish fixpoint.
+            if !progressed && !self.discharge_obligations_once() {
                 break;
             }
             resolved = self.table.resolve_completely(&resolved);
@@ -12835,8 +12739,11 @@ impl<'db> InferenceContext<'db> {
         let deferred = std::mem::take(&mut self.deferred_subs);
         let mut progressed = false;
         for (actual, expected, anchor) in deferred {
-            let actual = self.table.resolve_completely(&actual);
-            let expected = self.table.resolve_completely(&expected);
+            // A pair deferred over a not-yet-canonical union becomes
+            // decidable the moment its members ground out, so re-relate the
+            // canonical spelling (see `canonical_if_ground`).
+            let actual = self.deduped_unions(&actual);
+            let expected = self.deduped_unions(&expected);
             if actual.has_infer() && expected.has_infer() {
                 self.deferred_subs.push((actual, expected, anchor));
                 continue;

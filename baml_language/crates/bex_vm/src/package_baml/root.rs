@@ -880,7 +880,6 @@ fn deep_copy_value_recursive(
                 // `Object::Future(_)` is short-circuited above; it can't
                 // reach this match arm.
                 Object::Future(_) => unreachable!("Future short-circuited above"),
-                Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 // A spawn plan is an immutable recipe: the copy is the same
                 // plan (it keeps the id an execution is pinned to).
                 Object::SpawnPlan(plan) => vm.tlab.alloc(Object::SpawnPlan(plan)),

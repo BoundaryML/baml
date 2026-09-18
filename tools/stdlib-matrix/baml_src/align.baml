@@ -1035,9 +1035,11 @@ function run_sessions(
     limit: int,
     baml_names: map<string, string>,
 ) -> SessionResult[] {
-    let group = baml.spawn.TaskGroup.new(limit, name = "sessions");
+    let group = baml.spawn.Limit.new(limit) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic(`session limit must be positive, got ${limit}`),
+    };
     let pending = requests.map((request) -> {
-        spawn with baml.spawn.options(group = group) { run_session(box, request, baml_names) }
+        spawn with group { run_session(box, request, baml_names) }
     });
     report_progress(`${requests.length()} sessions, ${limit} at a time`);
     let results: SessionResult[] = [];

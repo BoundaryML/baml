@@ -2217,7 +2217,7 @@ async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
                 let tok = baml.spawn.CancelToken.new();
                 let items = [1, 2, 3];
                 let futures = items.map((n: int) -> baml.future.Future<string, never> {
-                    spawn with baml.spawn.options(cancel = tok) {
+                    spawn with tok {
                         if (n == 2) {
                             // parks the awaiter first, then faults the bridge
                             baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)) catch_all (e) {

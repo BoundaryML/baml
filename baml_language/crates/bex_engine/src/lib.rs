@@ -116,8 +116,9 @@ use bex_vm::{
     VmExecState,
 };
 use bex_vm_types::{
-    FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
+    Admission, AdmissionTicket, ExecutionExtent, FunctionMeta, FunctionOrigin, GlobalIndex,
+    GlobalPool, HeapPtr, LimitSet, Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind,
+    VmGlobals,
 };
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
@@ -357,7 +358,7 @@ impl Drop for ThreadBoundaryLeaseGuard {
 /// §7 follow-up 11: closes a spawned thread's profiling lifecycle if the
 /// task future is dropped before its event loop takes over (abnormal host
 /// teardown — e.g. dropping the runtime while the task is queued on a
-/// `TaskGroup` ticket or parked on the heap permit). By that point the
+/// admission ticket or parked on the heap permit). By that point the
 /// Spawn arm has emitted `BexThreadStart` and `set_entry_point` the entry
 /// `CallFunction`; nothing else would close them. Armed at the top of the
 /// task body; also the closer for the queued-then-cancelled early return;
@@ -1458,14 +1459,75 @@ enum CancelSite {
     Await,
 }
 
-/// Decoded `baml.spawn.Params` fields (BEP-034 middleware) — see
-/// [`BexEngine::read_spawn_params`].
-struct SpawnParamsData {
-    body: HeapPtr,
+/// A spawn edge, however it was written: the operands of a `spawn { body }`
+/// or a launched `baml.spawn.Plan`.
+struct SpawnRequest {
+    body: SpawnedBody,
     name: Option<String>,
-    group: Option<Arc<TaskGroupInner>>,
-    cancel: Option<CancellationToken>,
-    detach: bool,
+    /// The `T` of the `Future<T, E>` the edge yields.
+    returns: RealizedTy,
+    /// The `E` of that future.
+    throws: RealizedTy,
+    /// The task's cancellation parent is the runtime, not the spawner
+    /// (`detach = true`, or a plan under `baml.spawn.Root`).
+    root: bool,
+}
+
+/// What a spawned task runs, and what stands between it and running.
+struct SpawnedBody {
+    /// The callable the task enters: the spawn body, or a plan's outermost
+    /// wrapper.
+    entry: HeapPtr,
+    /// Its arguments: none for a body, the outermost `Execution` for a
+    /// wrapper. Heap values: consumed before the first await.
+    args: Vec<Value>,
+    /// Tokens linked into the task's own: any of them firing cancels it.
+    linked_cancel: Vec<CancellationToken>,
+    gate: EntryGate,
+    /// The outermost `Execution`'s extent: it ends with the task.
+    extent: Option<ExecutionExtent>,
+}
+
+/// What admits a spawned task before its first instruction.
+enum EntryGate {
+    Open,
+    /// Every limit of the plan, taken together.
+    Limits(LimitSet),
+}
+
+/// A task registered with its gate, synchronously at the spawn site, so the
+/// gate's counts observe it before the task is polled.
+enum EntryTicket {
+    Open,
+    Limits(AdmissionTicket),
+}
+
+/// Admission, held for the task's lifetime and released on drop.
+#[expect(dead_code, reason = "held for its Drop, which releases the slots")]
+enum EntryPermit {
+    Open,
+    Limits(Admission),
+}
+
+impl EntryGate {
+    fn register(self) -> EntryTicket {
+        match self {
+            EntryGate::Open => EntryTicket::Open,
+            EntryGate::Limits(limits) => EntryTicket::Limits(limits.admit()),
+        }
+    }
+}
+
+impl EntryTicket {
+    /// Wait for admission — without the heap permit, so a queued task never
+    /// blocks GC. `None` when the task was cancelled while queued: its body
+    /// never runs.
+    async fn acquire(self, cancel: &CancellationToken) -> Option<EntryPermit> {
+        match self {
+            EntryTicket::Open => Some(EntryPermit::Open),
+            EntryTicket::Limits(ticket) => ticket.acquire(cancel).await.map(EntryPermit::Limits),
+        }
+    }
 }
 
 /// Enforce the host callable's declared throws contract `E` on a
@@ -5798,62 +5860,196 @@ impl BexEngine {
         }
     }
 
-    /// Read the spawn parameters out of a `baml.spawn.Params` instance
-    /// (BEP-034 middleware: the value a `spawn ... with` transformer pipeline
-    /// produced). Fields are read BY INDEX in declaration order — body=0,
-    /// name=1, group=2, cancel=3, detach=4 — keep in sync with
-    /// `ns_spawn/spawn.baml`. Returns `None` when the value is not a
-    /// well-formed `Params` (caller falls back to the spawn operands).
-    ///
-    /// Safe to deref the pointers because the caller holds the active heap
-    /// permit and `params` is rooted by the `UnscheduledFuture` being handled.
-    fn read_spawn_params(params: HeapPtr) -> Option<SpawnParamsData> {
-        // Fields 2/3 helper: `group` / `cancel` are `TaskGroup` / `CancelToken`
-        // instances whose `_handle` field (index 0) is `Object::RustData`.
-        fn handle_object(value: Value) -> Option<&'static Object> {
-            let inst_ptr = value.as_object_ptr()?;
-            let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
-                return None;
-            };
-            let handle_ptr = inst.load_field(0).as_object_ptr()?;
-            Some(unsafe { handle_ptr.get() })
+    /// Start the task a spawn edge describes and push its future onto the
+    /// spawning VM's stack: derive the child's token, allocate the future
+    /// under the spawner's permit, and hand the body to [`Self::spawn_thread`].
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "spawn edge carries the full context"
+    )]
+    async fn spawn_edge(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+        request: SpawnRequest,
+        spawn_source_span: Option<bex_events::prof::record::CallSiteSourceSpan>,
+        call_id: CallId,
+        cancel: &CancellationToken,
+        call_capture: Option<&CallValueCaptureContext>,
+        log_capture: Option<&LogCaptureContext>,
+    ) -> Result<ActiveHeapPermit<BexThread>, EngineError> {
+        let SpawnRequest {
+            body: spawned,
+            name: spawn_name,
+            returns,
+            throws,
+            root,
+        } = request;
+        // Each spawned thread gets a child cancel token so parent →
+        // child cascade falls out of the token tree without bespoke
+        // tracking. A `detach = true` spawn instead gets a fresh,
+        // independent token so the parent's cancellation (and
+        // unhandled-throw cascade) does NOT reach it — it behaves
+        // like a top-level task. So does a spawn from inside a
+        // shield: cleanup that delegates must not hand its work a
+        // token that has already fired; the child stays
+        // cancellable through its own handle and token.
+        let child_cancel = if root || thread.vm_thread_is_shielded() {
+            CancellationToken::new()
+        } else {
+            cancel.child_token()
+        };
+        // Allocate the child's future under the parent's
+        // already-held permit, then hand the id to `spawn_thread`.
+        //
+        // Acquiring a *fresh* heap permit inside the spawn path
+        // (while this task still holds its own) deadlocks against
+        // GC: `HeapPermitManager::request_park` drains the entire
+        // semaphore via `acquire_many(MAX_PERMITS)`, and tokio's
+        // semaphore is fair — so a nested 1-permit acquire queues
+        // *behind* a pending park request, which in turn cannot
+        // proceed until *this* task's permit is released. The task
+        // can't release until the spawn completes → cycle, with all
+        // workers idle. Keeping the spawn path to a single permit
+        // per task (this `new_future` runs under `thread`) avoids
+        // it. The guard is dropped before the `spawn_thread` await
+        // so no non-`Send` guard crosses a yield point.
+        // BEX profiling: the spawn edge. This is the one place
+        // the parent thread id, the spawning call id, and the
+        // child's name are all in hand (plan §2.2).
+        let child_prof_thread_id = self.next_prof_thread_id();
+        let child_boundary_lease = thread.vm.prof_boundary_handle.and_then(|handle| {
+            self.profiler_session
+                .boundary_registry()
+                .and_then(|registry| registry.try_acquire_child_handle(handle).ok())
+                .map(|lease| {
+                    ThreadBoundaryLeaseGuard::new(Arc::clone(&self.profiler_session), lease)
+                })
+        });
+        let child_profile_active = child_boundary_lease.is_some();
+        let child_root_profiler = if child_profile_active || !thread.vm.root_profiler.is_active() {
+            thread.vm.root_profiler
+        } else {
+            RootProfiler::Inactive(
+                bex_events::prof::backend::InactiveReason::ThreadLeaseUnavailable,
+            )
+        };
+        if child_profile_active {
+            let name = spawn_name.as_deref().unwrap_or("");
+            let committed =
+                self.prof_emit(&bex_events::prof::record::Marker::BexThreadStartSpawned {
+                    flags: 0,
+                    thread_id: BexThreadId(child_prof_thread_id),
+                    parent_thread_id: BexThreadId(thread.vm.prof_thread_id),
+                    parent_call_id: BexCallId(thread.vm.current_call_id()),
+                    ts_ticks: bex_events::prof::clock::now_ticks(),
+                    spawn_site: spawn_source_span,
+                    name: bex_events::prof::record::capped_name_bytes(name),
+                });
+            if !committed {
+                self.prof_record_transport_loss(
+                    child_boundary_lease
+                        .as_ref()
+                        .and_then(ThreadBoundaryLeaseGuard::handle),
+                );
+            }
         }
 
-        let Object::Instance(instance) = (unsafe { params.get() }) else {
-            return None;
+        // Provenance for shutdown leak reports: the written spawn
+        // name when there is one, else the function this spawn
+        // expression appears in.
+        let spawn_origin: std::sync::Arc<str> = spawn_name
+            .clone()
+            .or_else(|| thread.vm.current_function_name())
+            .unwrap_or_else(|| "<unknown spawn site>".to_string())
+            .into();
+        let future_ptr = {
+            let mut guard = self.futures.acquire(thread.proof()).await;
+            let (future_id, future_ptr) =
+                guard.new_future(returns, throws, child_cancel.clone(), spawn_origin);
+            drop(guard);
+            Arc::clone(self)
+                .spawn_thread(
+                    child_cancel,
+                    spawned,
+                    spawn_name,
+                    call_id,
+                    future_id,
+                    child_prof_thread_id,
+                    !child_profile_active,
+                    child_root_profiler,
+                    child_boundary_lease,
+                    call_capture.cloned(),
+                    log_capture.cloned(),
+                )
+                .await?;
+            future_ptr
         };
-        // Field 0: `body` — the closure the spawned thread runs. A middleware
-        // transformer may have wrapped or replaced the original spawn body.
-        let body = instance.load_field(0).as_object_ptr()?;
+        thread.vm.stack.push(Value::object(future_ptr));
 
-        // Field 1: `name` — optional human-readable label.
-        let name =
-            instance
-                .load_field(1)
-                .as_object_ptr()
-                .and_then(|ptr| match unsafe { ptr.get() } {
-                    Object::String(s) => Some(s.to_string()),
-                    _ => None,
-                });
+        // Spawn setup can yield to Tokio while retaining the
+        // parent's heap permit. Cooperate only after the child
+        // is registered and its future is rooted on our stack;
+        // collection can now move both VMs' reachable objects.
+        let gc_requested = self.heap.should_gc();
+        #[cfg(not(target_arch = "wasm32"))]
+        let gc_requested = gc_requested || self.park_requested.load(Ordering::Relaxed);
+        if gc_requested {
+            thread = self.gc_safepoint(thread).await;
+        }
+        Ok(thread)
+    }
 
-        let group = handle_object(instance.load_field(2)).and_then(|obj| match obj {
-            Object::RustData(data) => data.clone().downcast::<TaskGroupInner>().ok(),
-            _ => None,
-        });
-        let cancel = handle_object(instance.load_field(3)).and_then(|obj| match obj {
-            Object::RustData(data) => data.downcast_ref::<CancellationToken>().cloned(),
-            _ => None,
-        });
-
-        // Field 4: `detach`.
-        let detach = instance.load_field(4).as_bool().unwrap_or(false);
-
-        Some(SpawnParamsData {
-            body,
-            name,
-            group,
-            cancel,
-            detach,
+    /// The spawn edge a plan describes. A plan with wrappers enters its
+    /// outermost one, handing it the `Execution` for everything beneath; a
+    /// bare plan enters its body.
+    fn spawn_request(
+        thread: &mut ActiveHeapPermit<BexThread>,
+        plan: HeapPtr,
+    ) -> Result<SpawnRequest, EngineError> {
+        let Object::SpawnPlan(data) = thread.vm.get_object(plan) else {
+            return Err(EngineError::VmInternalError(
+                bex_vm::errors::VmInternalError::TypeError {
+                    expected: bex_vm_types::ObjectType::SpawnPlan.into(),
+                    got: bex_vm_types::ObjectType::of(thread.vm.get_object(plan)).into(),
+                },
+            ));
+        };
+        // Owned: minting the outermost `Execution` allocates on this VM.
+        let data = (**data).clone();
+        let (returns, throws) = data.future_types();
+        let (returns, throws) = (returns.clone(), throws.clone());
+        let (entry, args, extent) = match data.layers.len().checked_sub(1) {
+            None => (data.body, Vec::new(), None),
+            Some(outermost) => {
+                let (execution, state) = bex_vm::package_baml::alloc_execution(
+                    &mut thread.vm,
+                    Value::object(plan),
+                    outermost,
+                )
+                .map_err(EngineError::VmInternalError)?;
+                (
+                    data.layers[outermost].wrapper,
+                    vec![execution],
+                    Some(ExecutionExtent::new(state)),
+                )
+            }
+        };
+        Ok(SpawnRequest {
+            body: SpawnedBody {
+                entry,
+                args,
+                linked_cancel: data.cancel.to_vec(),
+                gate: if data.limits.is_empty() {
+                    EntryGate::Open
+                } else {
+                    EntryGate::Limits(data.limits)
+                },
+                extent,
+            },
+            name: data.name.as_ref().map(ToString::to_string),
+            returns,
+            throws,
+            root: data.root,
         })
     }
 
@@ -5878,10 +6074,8 @@ impl BexEngine {
     fn spawn_thread(
         self: Arc<Self>,
         child_cancel: CancellationToken,
-        closure: HeapPtr,
+        body: SpawnedBody,
         name: Option<String>,
-        user_cancel: Option<CancellationToken>,
-        group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
         prof_thread_id: u64,
@@ -5895,10 +6089,8 @@ impl BexEngine {
     > {
         Box::pin(self.spawn_thread_inner(
             child_cancel,
-            closure,
+            body,
             name,
-            user_cancel,
-            group,
             call_id,
             future_id,
             prof_thread_id,
@@ -5923,10 +6115,8 @@ impl BexEngine {
     async fn spawn_thread_inner(
         self: Arc<Self>,
         child_cancel: CancellationToken,
-        closure: HeapPtr,
+        body: SpawnedBody,
         name: Option<String>,
-        user_cancel: Option<CancellationToken>,
-        group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
         prof_thread_id: u64,
@@ -5939,14 +6129,20 @@ impl BexEngine {
         // Count the producer until its task exits, even if its future was
         // cancelled or removed earlier. Created before the task is scheduled.
         let work_guard = self.bex_work.register_work();
-        // BEP-034 spawn options: link a user-provided `CancelToken`
-        // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
-        // token. Firing the user token cancels the child; the watcher
+        let SpawnedBody {
+            entry,
+            args,
+            linked_cancel,
+            gate,
+            extent,
+        } = body;
+        // Link each user-provided `CancelToken` into this spawn's effective
+        // token. Firing a linked token cancels the child; the watcher
         // self-terminates when `child_cancel` fires (body done / cancelled
         // / parent cascade) so it never outlives the spawn. (The token itself
-        // — fresh for `detach = true`, a child of the parent's otherwise — is
+        // — fresh for a root task, a child of the parent's otherwise — is
         // derived at the dispatch site, where the future is also allocated.)
-        if let Some(user) = user_cancel {
+        for user in linked_cancel {
             let linked = child_cancel.clone();
             let watcher = async move {
                 tokio::select! {
@@ -5961,12 +6157,12 @@ impl BexEngine {
             wasm_bindgen_futures::spawn_local(watcher);
         }
 
-        // BEP-034 rate limiting: register with the TaskGroup *synchronously*,
-        // here (before the body task is polled), so a `group.cancel()` /
-        // `active_count()` issued right after `spawn` already observes this
-        // member. The returned ticket is `acquire`d (parked on) inside the body
-        // task, so a queued task does not hold the heap permit while waiting.
-        let group_ticket = group.map(|group| group.register(child_cancel.clone()));
+        // Register with the entry gate *synchronously*, here (before the body
+        // task is polled), so a count read right after `spawn` already
+        // observes this task. The returned ticket is `acquire`d (parked on)
+        // inside the body task, so a queued task does not hold the heap
+        // permit while waiting.
+        let entry_ticket = gate.register();
 
         // Build the child VM up-front (synchronously) so the await on the
         // permit only holds Send values across yield points.
@@ -6007,7 +6203,7 @@ impl BexEngine {
         // BexThreadStart (with the spawn edge) was already emitted into the
         // ring at the Spawn arm.
         self.prof_refresh_vm_ring(&mut child_vm);
-        child_vm.set_entry_point(closure, &[]);
+        child_vm.set_entry_point(entry, &args);
         let child_entry_call_id = BexCallId(child_vm.current_call_id());
         let child_profile_enabled = child_vm.prof_ring.is_some();
 
@@ -6036,46 +6232,42 @@ impl BexEngine {
                 armed: child_profile_enabled,
                 boundary_lease,
             };
-            // BEP-034 rate limiting: if this spawn joined a `TaskGroup`, park
-            // here — WITHOUT the heap permit, so a queued task doesn't block GC
-            // — until a slot frees. A task cancelled while queued (group/user/
-            // parent) settles its future `Cancelled` and never runs its body.
-            // The permit is held for the body's lifetime and releases the slot
-            // (waking the next FIFO waiter) on drop.
+            // The outermost `Execution` expires with the task, whichever way
+            // the task ends.
+            let _extent = extent;
+            // If this spawn is gated, park here — WITHOUT the heap permit, so a
+            // queued task doesn't block GC — until it is admitted. A task
+            // cancelled while queued settles its future `Cancelled` and never
+            // runs its body. The permit is held for the body's lifetime and
+            // releases its slots (admitting the next waiter) on drop.
             let entry_wait_start = child_profile_enabled.then(bex_events::prof::clock::now_ticks);
-            let _group_permit = match group_ticket {
-                Some(ticket) => match ticket.acquire().await {
-                    Some(permit) => Some(permit),
-                    None => {
-                        let mut permit = inactive.acquire().await;
-                        if let Some(start_ticks) = entry_wait_start {
-                            let end_ticks = bex_events::prof::clock::now_ticks();
-                            engine.prof_charge_await(
-                                &mut permit.vm,
-                                child_entry_call_id.0,
-                                start_ticks,
-                                end_ticks,
-                            );
-                            prof_closer.awaited = permit.vm.prof_take_await(child_entry_call_id.0);
-                        }
-                        if let Err(err) =
-                            engine.settle_child_cancelled(&mut permit, future_id).await
-                        {
-                            tracing::error!(
-                                ?err,
-                                ?future_id,
-                                "failed to settle queued-then-cancelled spawn"
-                            );
-                        }
-                        // The armed `prof_closer` emits the profiling
-                        // closes (EndFunction{Cancelled} + BexThreadEnd{
-                        // Cancelled}) when it drops at this return — the
-                        // event loop that would otherwise close them never
-                        // runs for a queued-then-cancelled spawn.
-                        return;
+            let Some(_entry_permit) = entry_ticket.acquire(&child_cancel).await else {
+                {
+                    let mut permit = inactive.acquire().await;
+                    if let Some(start_ticks) = entry_wait_start {
+                        let end_ticks = bex_events::prof::clock::now_ticks();
+                        engine.prof_charge_await(
+                            &mut permit.vm,
+                            child_entry_call_id.0,
+                            start_ticks,
+                            end_ticks,
+                        );
+                        prof_closer.awaited = permit.vm.prof_take_await(child_entry_call_id.0);
                     }
-                },
-                None => None,
+                    if let Err(err) = engine.settle_child_cancelled(&mut permit, future_id).await {
+                        tracing::error!(
+                            ?err,
+                            ?future_id,
+                            "failed to settle queued-then-cancelled spawn"
+                        );
+                    }
+                    // The armed `prof_closer` emits the profiling
+                    // closes (EndFunction{Cancelled} + BexThreadEnd{
+                    // Cancelled}) when it drops at this return — the
+                    // event loop that would otherwise close them never
+                    // runs for a queued-then-cancelled spawn.
+                }
+                return;
             };
             let mut permit = inactive.acquire().await;
             if let Some(start_ticks) = entry_wait_start {
@@ -6723,165 +6915,19 @@ impl BexEngine {
                     }
                 }
 
-                VmExecState::Spawn {
-                    future: unscheduled,
-                    source_span: spawn_source_span,
-                } => {
-                    // BEP-034: pull the closure + name off the
-                    // `UnscheduledFuture` heap object and hand them to
-                    // `spawn_thread`, which allocates the future and
-                    // dispatches the body on a fresh `BexThread`.
-                    let unscheduled = thread
-                        .vm
-                        .unscheduled_future(unscheduled)
-                        .map_err(EngineError::VmInternalError)?;
-                    let UnscheduledFuture {
-                        closure,
-                        name: name_ptr,
-                        config: config_ptr,
-                        returns,
-                        throws,
-                    } = unscheduled.clone();
-                    let spawn_name: Option<String> =
-                        name_ptr.and_then(|ptr| match unsafe { ptr.get() } {
-                            Object::String(s) => Some(s.to_string()),
-                            _ => None,
-                        });
-                    // BEP-034 middleware: a `spawn ... with` lowers its final
-                    // transformed `baml.spawn.Params` into the config
-                    // operand. The params override the spawn operands — a
-                    // transformer may have wrapped/replaced the body or set a
-                    // name — and carry the options: `cancel` links into the
-                    // child's effective token; `detach` decouples it from the
-                    // parent; `group` rate-limits it.
-                    let params = config_ptr.and_then(Self::read_spawn_params);
-                    let (closure, spawn_name) = match &params {
-                        Some(p) => (p.body, p.name.clone().or(spawn_name)),
-                        None => (closure, spawn_name),
-                    };
-                    let (user_cancel, group, detach) = match params {
-                        Some(p) => (p.cancel, p.group, p.detach),
-                        None => (None, None, false),
-                    };
-                    // Each spawned thread gets a child cancel token so parent →
-                    // child cascade falls out of the token tree without bespoke
-                    // tracking. A `detach = true` spawn instead gets a fresh,
-                    // independent token so the parent's cancellation (and
-                    // unhandled-throw cascade) does NOT reach it — it behaves
-                    // like a top-level task. So does a spawn from inside a
-                    // shield: cleanup that delegates must not hand its work a
-                    // token that has already fired; the child stays
-                    // cancellable through its own handle and token.
-                    let child_cancel = if detach || thread.vm_thread_is_shielded() {
-                        CancellationToken::new()
-                    } else {
-                        cancel.child_token()
-                    };
-                    // Allocate the child's future under the parent's
-                    // already-held permit, then hand the id to `spawn_thread`.
-                    //
-                    // Acquiring a *fresh* heap permit inside the spawn path
-                    // (while this task still holds its own) deadlocks against
-                    // GC: `HeapPermitManager::request_park` drains the entire
-                    // semaphore via `acquire_many(MAX_PERMITS)`, and tokio's
-                    // semaphore is fair — so a nested 1-permit acquire queues
-                    // *behind* a pending park request, which in turn cannot
-                    // proceed until *this* task's permit is released. The task
-                    // can't release until the spawn completes → cycle, with all
-                    // workers idle. Keeping the spawn path to a single permit
-                    // per task (this `new_future` runs under `thread`) avoids
-                    // it. The guard is dropped before the `spawn_thread` await
-                    // so no non-`Send` guard crosses a yield point.
-                    // BEX profiling: the spawn edge. This is the one place
-                    // the parent thread id, the spawning call id, and the
-                    // child's name are all in hand (plan §2.2).
-                    let child_prof_thread_id = self.next_prof_thread_id();
-                    let child_boundary_lease = thread.vm.prof_boundary_handle.and_then(|handle| {
-                        self.profiler_session
-                            .boundary_registry()
-                            .and_then(|registry| registry.try_acquire_child_handle(handle).ok())
-                            .map(|lease| {
-                                ThreadBoundaryLeaseGuard::new(
-                                    Arc::clone(&self.profiler_session),
-                                    lease,
-                                )
-                            })
-                    });
-                    let child_profile_active = child_boundary_lease.is_some();
-                    let child_root_profiler =
-                        if child_profile_active || !thread.vm.root_profiler.is_active() {
-                            thread.vm.root_profiler
-                        } else {
-                            RootProfiler::Inactive(
-                                bex_events::prof::backend::InactiveReason::ThreadLeaseUnavailable,
-                            )
-                        };
-                    if child_profile_active {
-                        let name = spawn_name.as_deref().unwrap_or("");
-                        let committed = self.prof_emit(
-                            &bex_events::prof::record::Marker::BexThreadStartSpawned {
-                                flags: 0,
-                                thread_id: BexThreadId(child_prof_thread_id),
-                                parent_thread_id: BexThreadId(thread.vm.prof_thread_id),
-                                parent_call_id: BexCallId(thread.vm.current_call_id()),
-                                ts_ticks: bex_events::prof::clock::now_ticks(),
-                                spawn_site: spawn_source_span,
-                                name: bex_events::prof::record::capped_name_bytes(name),
-                            },
-                        );
-                        if !committed {
-                            self.prof_record_transport_loss(
-                                child_boundary_lease
-                                    .as_ref()
-                                    .and_then(ThreadBoundaryLeaseGuard::handle),
-                            );
-                        }
-                    }
-
-                    // Provenance for shutdown leak reports: the written spawn
-                    // name when there is one, else the function this spawn
-                    // expression appears in.
-                    let spawn_origin: std::sync::Arc<str> = spawn_name
-                        .clone()
-                        .or_else(|| thread.vm.current_function_name())
-                        .unwrap_or_else(|| "<unknown spawn site>".to_string())
-                        .into();
-                    let future_ptr = {
-                        let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) =
-                            guard.new_future(returns, throws, child_cancel.clone(), spawn_origin);
-                        drop(guard);
-                        Arc::clone(self)
-                            .spawn_thread(
-                                child_cancel,
-                                closure,
-                                spawn_name,
-                                user_cancel,
-                                group,
-                                call_id,
-                                future_id,
-                                child_prof_thread_id,
-                                !child_profile_active,
-                                child_root_profiler,
-                                child_boundary_lease,
-                                call_capture.clone(),
-                                log_capture.clone(),
-                            )
-                            .await?;
-                        future_ptr
-                    };
-                    thread.vm.stack.push(Value::object(future_ptr));
-
-                    // Spawn setup can yield to Tokio while retaining the
-                    // parent's heap permit. Cooperate only after the child
-                    // is registered and its future is rooted on our stack;
-                    // collection can now move both VMs' reachable objects.
-                    let gc_requested = self.heap.should_gc();
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let gc_requested = gc_requested || self.park_requested.load(Ordering::Relaxed);
-                    if gc_requested {
-                        thread = self.gc_safepoint(thread).await;
-                    }
+                VmExecState::Spawn { plan, source_span } => {
+                    let request = Self::spawn_request(&mut thread, plan)?;
+                    thread = self
+                        .spawn_edge(
+                            thread,
+                            request,
+                            source_span,
+                            call_id,
+                            cancel,
+                            call_capture.as_ref(),
+                            log_capture.as_ref(),
+                        )
+                        .await?;
                 }
 
                 VmExecState::Await(future_id) => {

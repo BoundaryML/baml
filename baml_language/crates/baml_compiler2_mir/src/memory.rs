@@ -265,10 +265,6 @@ pub fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMu
     match terminator {
         Terminator::NarrowBind { ty_template, .. } => ty_template.for_each_type_arg_ref(f),
         Terminator::VirtualCall { iface, .. } => iface.for_each_type_arg_ref(f),
-        Terminator::Spawn { future_ty, .. } => {
-            future_ty.returns.for_each_type_arg_ref(f);
-            future_ty.throws.for_each_type_arg_ref(f);
-        }
         // Call type arguments are `LoadType` temps, read where they are defined.
         Terminator::Goto { .. }
         | Terminator::Branch { .. }
@@ -279,6 +275,8 @@ pub fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMu
         | Terminator::SysOp { .. }
         | Terminator::Await { .. }
         | Terminator::AwaitAny { .. }
+        // A spawned plan carries its future's types as values.
+        | Terminator::Spawn { .. }
         | Terminator::Throw { .. }
         | Terminator::Rethrow { .. }
         | Terminator::ThrowIfPanic { .. }
@@ -311,14 +309,23 @@ pub fn rvalue_reads_cell(rvalue: &Rvalue<'_>) -> bool {
 /// captures in turn (a spawned body that calls a captured closure reaches
 /// that closure's cells).
 ///
-/// Computed from MIR alone. A spawn's closure operand is followed through
-/// single-definition copies to its `MakeClosure`; a cell holding a closure is
-/// followed through every store into it. Emit's arithmetic specialization
-/// declines on these cells: another task may write them at any point.
+/// Computed from MIR alone. A spawned plan is followed through the calls that
+/// built it — `Plan.new(body)`, then each `with`/`wrap` — to every closure
+/// handed to them: the body and the wrappers all run on the task. A local is
+/// followed through its single definition, and a cell holding a closure
+/// through every store into it. Emit's arithmetic specialization declines on
+/// these cells: another task may write them at any point.
 pub fn spawn_shared_cells<'a, 'db>(body: &'a MirFunctionBody<'db>) -> HashSet<CellId> {
+    /// Where a value can have come from, indexed by what holds it.
+    #[expect(
+        clippy::struct_field_names,
+        reason = "each field names the SITE it indexes, which is the distinction"
+    )]
     struct Defs<'a, 'db> {
         local_defs: HashMap<Local, Vec<&'a Rvalue<'db>>>,
         cell_stores: HashMap<CellId, Vec<&'a Rvalue<'db>>>,
+        /// The argument operands of every call whose result a local holds.
+        call_args: HashMap<Local, Vec<&'a Operand<'db>>>,
     }
     struct Walk<'a, 'db> {
         pending: Vec<&'a Rvalue<'db>>,
@@ -337,9 +344,14 @@ pub fn spawn_shared_cells<'a, 'db>(body: &'a MirFunctionBody<'db>) -> HashSet<Ce
                 None => {
                     if let Place::Local(local) = place
                         && self.followed_locals.insert(*local)
-                        && let Some([def]) = defs.local_defs.get(local).map(Vec::as_slice)
                     {
-                        self.pending.push(def);
+                        if let Some([def]) = defs.local_defs.get(local).map(Vec::as_slice) {
+                            self.pending.push(def);
+                        }
+                        // A call result may hold whatever the call was handed.
+                        for arg in defs.call_args.get(local).into_iter().flatten() {
+                            self.follow_operand(defs, arg);
+                        }
                     }
                 }
             }
@@ -368,9 +380,29 @@ pub fn spawn_shared_cells<'a, 'db>(body: &'a MirFunctionBody<'db>) -> HashSet<Ce
         }
     }
 
+    let mut call_args: HashMap<Local, Vec<&'a Operand<'db>>> = HashMap::new();
+    for block in &body.blocks {
+        if let Some(
+            Terminator::Call {
+                args,
+                destination: Place::Local(local),
+                ..
+            }
+            | Terminator::VirtualCall {
+                args,
+                destination: Place::Local(local),
+                ..
+            },
+        ) = &block.terminator
+        {
+            call_args.entry(*local).or_default().extend(args);
+        }
+    }
+
     let defs = Defs {
         local_defs,
         cell_stores,
+        call_args,
     };
     let mut walk = Walk {
         pending: Vec::new(),
@@ -378,8 +410,8 @@ pub fn spawn_shared_cells<'a, 'db>(body: &'a MirFunctionBody<'db>) -> HashSet<Ce
         followed_cells: HashSet::new(),
     };
     for block in &body.blocks {
-        if let Some(Terminator::Spawn { closure, .. }) = &block.terminator {
-            walk.follow_operand(&defs, closure);
+        if let Some(Terminator::Spawn { plan, .. }) = &block.terminator {
+            walk.follow_operand(&defs, plan);
         }
     }
 

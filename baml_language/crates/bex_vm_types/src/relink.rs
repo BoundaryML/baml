@@ -263,7 +263,6 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::Map(..)
         | Object::Float(..)
         | Object::Future(..)
-        | Object::UnscheduledFuture(..)
         | Object::SpawnPlan(..)
         | Object::RustData(..) => {}
     }

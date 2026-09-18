@@ -235,7 +235,7 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.WriterOptions"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "baml.spawn.TaskGroup"
+        "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"

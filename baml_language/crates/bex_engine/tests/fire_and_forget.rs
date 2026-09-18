@@ -450,7 +450,7 @@ async fn detached_spawn_error_uses_the_same_gc_reporting_path() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
         function main() -> int {
-            spawn with baml.spawn.options(detach = true) { bad() };
+            spawn with baml.spawn.Root.new() { bad() };
             1
         }
     "#;

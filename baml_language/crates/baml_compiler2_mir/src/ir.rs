@@ -560,30 +560,16 @@ pub enum Terminator<'db> {
         unwind: Option<BlockId>,
     },
 
-    /// BEP-034 `spawn name? { body }` — schedules a fresh BAML thread to
-    /// run `closure`'s body and yields a `Future<T, E>` handle.
-    ///
-    /// `closure` carries the body packaged via `MakeClosure` (a 0-arg
-    /// lambda that captures the surrounding bindings); `name` is an
-    /// optional human-readable label.
+    /// Launch a `baml.spawn.Plan<T, E>` as a new task and bind its
+    /// `Future<T, E>` into `future`. The plan carries everything the engine
+    /// needs — body, wrappers, admission, cancellation, and the future's
+    /// types — so the plan is the only operand. Launching never throws.
     Spawn {
-        /// Closure object representing the spawn body.
-        closure: Operand<'db>,
-        /// Optional name expression (string or null).
-        name: Operand<'db>,
-        /// Optional `baml.spawn.options(...)` config value from a `with`
-        /// clause (BEP-034 spawn options). `None` when there is no `with`
-        /// clause; the engine reads the config's `cancel` (and later
-        /// `group`/`detach`) to derive the spawn's effective cancel token.
-        /// Boxed to keep `Terminator`'s footprint down (clippy
-        /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
-        config: Option<Box<Operand<'db>>>,
-        /// The `T`/`E` of the `Future<T, E>` this spawn yields. Boxed for the
-        /// same footprint reason as `config`.
-        future_ty: Box<SpawnFutureTy>,
-        /// Where to store the resulting Future handle.
+        /// The `baml.spawn.Plan` value.
+        plan: Operand<'db>,
+        /// Where the future handle is stored.
         future: Place,
-        /// Block to resume after the spawn schedules.
+        /// Block to continue at once the task is launched.
         resume: BlockId,
     },
 
@@ -668,22 +654,6 @@ pub enum ShortCircuitKind {
     And,
     Or,
     Coalesce,
-}
-
-/// The type arguments of the `Future<T, E>` a [`Terminator::Spawn`] yields.
-///
-/// Held as [`TyTemplate`]s rather than resolved types so a spawn inside a
-/// generic function (`fn f<T>(x: T) { spawn { x } }`) resolves against the
-/// frame's type arguments at runtime, exactly as an array literal's element
-/// type does. The runtime stores the resolved pair on the heap `Future` so
-/// reflection and `is`/`match` can see the future's generic parameters.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SpawnFutureTy {
-    /// The `T` of `Future<T, E>` — the value the spawned body returns.
-    pub returns: TyTemplate,
-    /// The `E` of `Future<T, E>` — what the spawned body may throw. A body that
-    /// statically cannot throw spells this `never`.
-    pub throws: TyTemplate,
 }
 
 impl Terminator<'_> {

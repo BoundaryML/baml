@@ -937,19 +937,6 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
                 collect_callee_names_expr(body, *value, names);
             }
         }
-        ast::Expr::Spawn {
-            name,
-            with_exprs,
-            body: spawn_body,
-        } => {
-            if let Some(name) = name {
-                collect_callee_names_expr(body, *name, names);
-            }
-            for with_expr in with_exprs {
-                collect_callee_names_expr(body, *with_expr, names);
-            }
-            collect_callee_names_expr(body, *spawn_body, names);
-        }
         ast::Expr::Await { future } => collect_callee_names_expr(body, *future, names),
         ast::Expr::Binary { lhs, rhs, .. } => {
             collect_callee_names_expr(body, *lhs, names);

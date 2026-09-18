@@ -508,18 +508,8 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                     }
                     scan_place(destination, &mut set);
                 }
-                Terminator::Spawn {
-                    closure,
-                    name,
-                    config,
-                    future,
-                    ..
-                } => {
-                    scan_operand(closure, &mut set);
-                    scan_operand(name, &mut set);
-                    if let Some(config) = config {
-                        scan_operand(config, &mut set);
-                    }
+                Terminator::Spawn { plan, future, .. } => {
+                    scan_operand(plan, &mut set);
                     scan_place(future, &mut set);
                 }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
@@ -827,18 +817,8 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
             }
             count_dest_place(destination, uses);
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
-            count_in_operand(closure, uses);
-            count_in_operand(name, uses);
-            if let Some(config) = config {
-                count_in_operand(config, uses);
-            }
+        Terminator::Spawn { plan, future, .. } => {
+            count_in_operand(plan, uses);
             count_dest_place(future, uses);
         }
         Terminator::Await {
@@ -1234,18 +1214,7 @@ fn apply_subst_to_terminator<'db>(
                 apply_subst_to_operand(runtime_id, subst);
             }
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            ..
-        } => {
-            apply_subst_to_operand(closure, subst);
-            apply_subst_to_operand(name, subst);
-            if let Some(config) = config {
-                apply_subst_to_operand(config, subst);
-            }
-        }
+        Terminator::Spawn { plan, .. } => apply_subst_to_operand(plan, subst),
         Terminator::Throw { value }
         | Terminator::Rethrow { value }
         | Terminator::ThrowIfPanic { value, .. } => {
@@ -1600,18 +1569,8 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             }
             remap_place(destination, map);
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
-            remap_operand(closure, map);
-            remap_operand(name, map);
-            if let Some(config) = config {
-                remap_operand(config, map);
-            }
+        Terminator::Spawn { plan, future, .. } => {
+            remap_operand(plan, map);
             remap_place(future, map);
         }
         Terminator::Await {
@@ -1888,18 +1847,8 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
                     }
                     check_place(destination, &blk);
                 }
-                Terminator::Spawn {
-                    closure,
-                    name,
-                    config,
-                    future,
-                    ..
-                } => {
-                    check_operand(closure, &blk);
-                    check_operand(name, &blk);
-                    if let Some(config) = config {
-                        check_operand(config, &blk);
-                    }
+                Terminator::Spawn { plan, future, .. } => {
+                    check_operand(plan, &blk);
                     check_place(future, &blk);
                 }
                 Terminator::Await {
@@ -2432,18 +2381,8 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
                 }
                 write_place(&state, destination);
             }
-            Some(Terminator::Spawn {
-                closure,
-                name: spawn_name,
-                config,
-                future,
-                ..
-            }) => {
-                read_operand(&state, closure);
-                read_operand(&state, spawn_name);
-                if let Some(config) = config {
-                    read_operand(&state, config);
-                }
+            Some(Terminator::Spawn { plan, future, .. }) => {
+                read_operand(&state, plan);
                 write_place(&state, future);
             }
             Some(Terminator::Await {

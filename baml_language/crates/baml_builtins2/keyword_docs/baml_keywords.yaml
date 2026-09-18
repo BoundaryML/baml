@@ -937,7 +937,7 @@ await:
     let result = await future
 
 with:
-  summary: "Optional clause that attaches a runner to a test/testset or options to a spawn."
+  summary: "Optional clause that attaches a runner to a test/testset or modifiers to a spawn."
   syntax: |
     test "uses a quorum runner" with testing.Quorum(5, 3) {
       assert.is_true(true)
@@ -947,11 +947,11 @@ with:
       test "case" { assert.is_true(true) }
     }
 
-    let task = spawn with baml.spawn.options(group = g) {
+    let task = spawn with limit, retry {
       do_work()
     }
   details: |
-    `with` is a contextual keyword, not a general operator — it is only special right after a `test`/`testset` name (selecting the test runner expression) or after `spawn` (passing `baml.spawn.options(...)`). Everywhere else `with` is an ordinary identifier and may be used as a variable or field name.
+    `with` is a contextual keyword, not a general operator — it is only special right after a `test`/`testset` name (selecting the test runner expression) or after `spawn` (listing `baml.spawn.Modifier` values, applied left to right). Everywhere else `with` is an ordinary identifier and may be used as a variable or field name.
 
 # ── Cross-language SDKs (baml generate) ──────────────────────────────────────
 

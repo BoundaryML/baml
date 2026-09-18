@@ -32,7 +32,7 @@ function sleep_ms(ms: int) -> int {
 
 function engine_cancel() -> int {
   let tok = baml.spawn.CancelToken.new();
-  let f = spawn with baml.spawn.options(cancel = tok) {
+  let f = spawn with tok {
     baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
     42
   };

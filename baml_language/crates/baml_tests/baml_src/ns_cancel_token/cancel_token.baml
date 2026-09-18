@@ -1,4 +1,4 @@
-// BEP-034 spawn options — `spawn ... with baml.spawn.options(cancel = tok)`.
+// A `CancelToken` as a spawn modifier — `spawn ... with tok` (BEP-040).
 //
 // Helpers are top-level functions (test-block locals hit the known
 // local-boxing VM bug; see ns_cancel_cascade/cancel_cascade.baml).
@@ -11,7 +11,7 @@
 // Awaiting a token-cancelled spawn re-throws `Cancelled`, which is catchable.
 function await_token_cancelled_catches() -> int {
     let tok = baml.spawn.CancelToken.new();
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
         42
     };
@@ -27,7 +27,7 @@ test "await_token_cancelled_catches" {
 // not perturb the happy path.
 function uncancelled_token_completes() -> int {
     let tok = baml.spawn.CancelToken.new();
-    let f = spawn with baml.spawn.options(cancel = tok) { 42 };
+    let f = spawn with tok { 42 };
     await f
 }
 
@@ -49,14 +49,14 @@ test "token_is_cancelled_reflects_cancel" {
     assert.equal(token_is_cancelled_reflects_cancel(), [false, true])
 }
 
-// `detach = true` opts out of the parent cascade but must not break normal
-// completion (its survival/cascade-independence is verified by construction in
-// the engine: a detached spawn gets a fresh effective token).
-function detached_spawn_completes() -> int {
-    let f = spawn with baml.spawn.options(detach = true) { 42 };
+// `Root` takes the task out of the parent's cancellation cascade but must not
+// break normal completion (that it outlives a cancelled spawner is pinned in
+// `ns_spawn_plan`).
+function rooted_spawn_completes() -> int {
+    let f = spawn with baml.spawn.Root.new() { 42 };
     await f
 }
 
-test "detached_spawn_completes" {
-    assert.equal(detached_spawn_completes(), 42)
+test "rooted_spawn_completes" {
+    assert.equal(rooted_spawn_completes(), 42)
 }

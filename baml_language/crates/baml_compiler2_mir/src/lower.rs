@@ -4512,26 +4512,6 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// The `T`/`E` templates for a `spawn` expression — the arguments of its
-    /// `Future<T, E>` static type — for [`Terminator::Spawn`]. TIR has already
-    /// folded any `with` transformers into that type, so this is the future the
-    /// spawn actually hands back. Falls back to `unknown` when the recorded type
-    /// is not a future (error recovery).
-    fn spawn_future_ty(&self, expr_id: AstExprId) -> Box<crate::ir::SpawnFutureTy> {
-        let generic_params = self.enclosing_generic_params();
-        let (returns, throws) = match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            Some(Tir2Ty::Future(value, error, _)) => (
-                self.ty_to_template(value, &generic_params),
-                self.ty_to_template(error, &generic_params),
-            ),
-            _ => (
-                TyTemplate::from(RealizedTy::unknown()),
-                TyTemplate::from(RealizedTy::unknown()),
-            ),
-        };
-        Box::new(crate::ir::SpawnFutureTy { returns, throws })
-    }
-
     /// The type-argument templates of an object literal: its written type
     /// args as TIR resolved them (the call plan keyed at the expression), or,
     /// for `Box { … }`, the class type TIR inferred for it. Never re-lowered
@@ -6256,14 +6236,6 @@ impl<'db> LoweringContext<'db> {
                 }
             },
 
-            AstExpr::Spawn {
-                name,
-                with_exprs,
-                body,
-            } => {
-                self.lower_spawn(expr_id, name, &with_exprs, body, dest);
-            }
-
             AstExpr::Await { future } => {
                 self.lower_await(expr_id, future, dest);
             }
@@ -6279,113 +6251,6 @@ impl<'db> LoweringContext<'db> {
             }
             Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => false,
         }
-    }
-
-    /// Lower `spawn name? with? { body }` into:
-    ///   1. A `MakeClosure` for the body wrapped as a 0-arg lambda.
-    ///   2. A name temp (string operand or null constant).
-    ///   3. An optional config operand from the `with baml.spawn.options(...)`
-    ///      clause (BEP-034 spawn options).
-    ///   4. A `Terminator::Spawn` writing the resulting Future handle.
-    fn lower_spawn(
-        &mut self,
-        expr_id: AstExprId,
-        name: Option<AstExprId>,
-        with_exprs: &[AstExprId],
-        body: AstExprId,
-        dest: Place,
-    ) {
-        // The AST-lower step has already wrapped the spawn body in a
-        // synthetic 0-arg `Expr::Lambda`. Lowering it through the
-        // standard expression path emits a `MakeClosure` rvalue, which
-        // is exactly what we want as the closure operand to `Spawn`.
-        let closure_local = self.builder.temp(RuntimeTy::Null {
-            attr: TyAttr::default(),
-        });
-        let closure_place = Place::Local(closure_local);
-        self.lower_expr(body, closure_place.clone());
-        let closure_op = Operand::Copy(closure_place);
-
-        // Lower the optional name into an operand.
-        let name_op = match name {
-            Some(name_id) => self.lower_to_operand(name_id),
-            None => Operand::Constant(Constant::Null),
-        };
-
-        // BEP-034 middleware: with transformers present, package the body
-        // closure + name into a `baml.spawn.Params` instance, apply each
-        // `with` expression to it left-to-right (each is a function
-        // `(Params<T, E>) -> Params<U, F>`), and hand the FINAL
-        // params to the spawn as the config operand. The engine reads
-        // body/name/group/cancel/detach from its fields — a transformer may
-        // have replaced any of them, including the body. Fields are built in
-        // declaration order (the engine reads them BY INDEX; see
-        // ns_spawn/spawn.baml).
-        let config_op = if with_exprs.is_empty() {
-            None
-        } else {
-            let params_local = self.builder.temp(RuntimeTy::Null {
-                attr: TyAttr::default(),
-            });
-            self.builder.assign(
-                Place::Local(params_local),
-                Rvalue::Aggregate {
-                    kind: AggregateKind::Class {
-                        name: "baml.spawn.Params".to_string(),
-                        type_arg_templates: Vec::new(),
-                    },
-                    fields: vec![
-                        closure_op.clone(),
-                        name_op.clone(),
-                        Operand::Constant(Constant::Null),
-                        Operand::Constant(Constant::Null),
-                        Operand::Constant(Constant::Bool(false)),
-                    ],
-                },
-            );
-            let mut cur = params_local;
-            for &with_id in with_exprs {
-                let transformer_op = self.lower_to_operand(with_id);
-                let next = self.builder.temp(RuntimeTy::Null {
-                    attr: TyAttr::default(),
-                });
-                let resume = self.builder.create_block();
-                self.builder.call(
-                    transformer_op,
-                    vec![Operand::Copy(Place::Local(cur))],
-                    Place::Local(next),
-                    resume,
-                );
-                self.builder
-                    .set_call_layout(Some(baml_type::CallLayout::positional(1)));
-                self.builder.set_current_block(resume);
-                cur = next;
-            }
-            Some(Box::new(Operand::Copy(Place::Local(cur))))
-        };
-
-        // Allocate the future temp, typed as the `Future<T, E>` TIR inferred.
-        let future_local = self.builder.temp(self.expr_ty(expr_id));
-        let future_place = Place::Local(future_local);
-
-        // The same `Future<T, E>`, as templates: the runtime resolves them
-        // against the spawning frame's type args and stores the pair on the
-        // heap `Future` for reflection and `is`/`match`.
-        let future_ty = self.spawn_future_ty(expr_id);
-
-        let resume = self.builder.create_block();
-        self.builder.spawn(
-            closure_op,
-            name_op,
-            config_op,
-            future_ty,
-            future_place.clone(),
-            resume,
-        );
-        self.builder.set_current_block(resume);
-        // The result of `spawn` is the Future handle.
-        self.builder
-            .assign(dest, Rvalue::Use(Operand::Copy(future_place)));
     }
 
     /// Lower `await expr` into a `Terminator::Await` whose destination is
@@ -9599,6 +9464,37 @@ impl<'db> LoweringContext<'db> {
             return;
         }
 
+        // `baml.spawn.__spawn(plan)` lowers to a `Terminator::Spawn`, not a
+        // call: the engine starts the task. (Its `T`/`E` type params are used
+        // only for type checking; the plan carries the future's types.)
+        if self.check_spawn(callee) {
+            let plan_operand = arg_operands
+                .into_iter()
+                .next()
+                .expect("__spawn takes exactly one (plan) argument");
+            match &dest {
+                Place::Local(local) => {
+                    self.builder
+                        .spawn(plan_operand, Place::Local(*local), target);
+                    self.builder.set_current_block(target);
+                }
+                _ => {
+                    // Projection/capture destination: launch into a temp, then
+                    // assign across (mirrors the regular-call path below).
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder.spawn(plan_operand, Place::local(tmp), target);
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                }
+            }
+            return;
+        }
+
         if is_sys_op {
             // BEP-034 phase D′: sys-ops now lower to a single
             // `Terminator::SysOp` that runs the op inline in the
@@ -9789,6 +9685,13 @@ impl<'db> LoweringContext<'db> {
         matches!(
             self.callee_builtin_kind(callee),
             Some(baml_compiler2_ast::BuiltinKind::AwaitAny)
+        )
+    }
+
+    fn check_spawn(&self, callee: AstExprId) -> bool {
+        matches!(
+            self.callee_builtin_kind(callee),
+            Some(baml_compiler2_ast::BuiltinKind::Spawn)
         )
     }
 

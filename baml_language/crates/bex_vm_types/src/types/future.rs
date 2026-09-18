@@ -134,29 +134,6 @@ impl BorshDeserialize for Future {
     }
 }
 
-// `UnscheduledFuture` is a runtime spawn-request slot — same lifecycle
-// shape as `Future`, never appears in a compiled `Program`. The pack
-// envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
-// constant heap; if an `UnscheduledFuture` ever reaches the serializer
-// that's a malformed program and we want to fail fast.
-impl BorshSerialize for UnscheduledFuture {
-    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "UnscheduledFuture cannot be serialized",
-        ))
-    }
-}
-
-impl BorshDeserialize for UnscheduledFuture {
-    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "UnscheduledFuture cannot be deserialized",
-        ))
-    }
-}
-
 // `Future::read` calls `MaybeUninit::<Value>::assume_init_read`, which is
 // sound only because `Value: Copy`. If `Value` ever gains a non-trivial
 // `Drop` (e.g. by holding an `Arc<…>` or `Box<…>`), `assume_init_read`
@@ -633,61 +610,6 @@ impl std::fmt::Debug for Future {
             FutureRead::InternalError(id) => f.debug_tuple("InternalError").field(&id).finish(),
         }
     }
-}
-
-/// Runtime payload behind a `baml.spawn.SpawnConfig` instance's `_handle`
-/// (`Object::RustData`). Produced by `baml.spawn.options(...)` and read by the
-/// engine when dispatching a `spawn ... with` clause to derive the spawned
-/// task's effective cancel token. BEP-034 "spawn options".
-///
-/// PR1 carries only the optional cancel token; `group` (rate limiting) and
-/// `detach` are added as those features are wired, so the engine's downcast
-/// target stays stable across PRs.
-#[derive(Debug, Clone, Default)]
-pub struct SpawnConfigData {
-    /// User-provided cancel token from `options(cancel = ...)`, if any. Linked
-    /// into the spawn's effective token by the engine.
-    pub cancel: Option<CancellationToken>,
-    /// `detach = true`: the spawn opts out of the parent→child cancel cascade
-    /// (its effective token is independent of the parent's) and its unhandled
-    /// errors route to the root task rather than the spawner.
-    pub detach: bool,
-    /// `TaskGroup` from `options(group = ...)`, if any. The engine acquires a
-    /// concurrency slot from it before running the spawned body (BEP-034 rate
-    /// limiting).
-    pub group: Option<std::sync::Arc<crate::task_group::TaskGroupInner>>,
-}
-
-/// A pending user `spawn { body }` request that the engine still has to
-/// dispatch on a fresh `BexThread`.
-///
-/// BEP-034 phase D′: this struct used to also carry sys-op invocations
-/// (`kind: SysOp { ... }`), but sys-ops now go through the single-yield
-/// `VmExecState::SysOp` path without allocating a heap object. Only the
-/// spawn case survives.
-#[derive(Clone, Debug)]
-pub struct UnscheduledFuture {
-    /// Pointer to an `Object::Closure` carrying the spawn body.
-    pub closure: HeapPtr,
-    /// Optional human-readable name attached at the spawn site. Surfaces in
-    /// debug, stack traces, and the playground. Held here as a `HeapPtr` so
-    /// the GC keeps the underlying string alive while the unscheduled
-    /// future is on the heap.
-    pub name: Option<HeapPtr>,
-    /// Optional `baml.spawn.SpawnConfig` instance from a `spawn ... with
-    /// baml.spawn.options(...)` clause (BEP-034 "spawn options"). Held as a
-    /// `HeapPtr` — like `name` — so the GC keeps the config (and the
-    /// `CancelToken`/`TaskGroup` it references) alive while this slot is on the
-    /// heap. `None` when the spawn had no `with` clause. The engine reads the
-    /// config's `_handle` (`SpawnConfigData`) when dispatching the spawn.
-    pub config: Option<HeapPtr>,
-    /// The `T` of the `Future<T, E>` this spawn yields, already resolved
-    /// against the spawning frame's type args by `OpCode::Spawn`. Handed to
-    /// [`Future::pending`] so the scheduled future can answer reflection and
-    /// `is`/`match` on its generic parameters.
-    pub returns: RealizedTy,
-    /// The `E` of the `Future<T, E>` this spawn yields. See [`Self::returns`].
-    pub throws: RealizedTy,
 }
 
 /// A unique identifier for a future.

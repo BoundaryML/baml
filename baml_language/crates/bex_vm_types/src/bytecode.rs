@@ -492,19 +492,6 @@ pub enum Instruction {
     SysOp(GlobalIndex),
     SysOpWithRuntimeId(GlobalIndex),
 
-    /// BEP-034 `spawn { body }`. Pops `[closure, name, config, returns,
-    /// throws]` from the stack (in reverse push order), allocates an
-    /// `UnscheduledFuture` into the TLAB, and yields
-    /// `VmExecState::Spawn(ptr)` so the engine routes the closure to a fresh
-    /// `BexThread`.
-    ///
-    /// `returns` / `throws` are the `Object::Type` values a preceding pair of
-    /// `LoadType`s pushed — the `Future<T, E>` this spawn is typed at, already
-    /// resolved against the frame's type args. They travel with the request so
-    /// the engine can type the heap `Future` it allocates, which is what makes
-    /// a future's generic parameters visible to reflection and `is`/`match`.
-    Spawn,
-
     /// Awaits the future on top of the stack.
     ///
     /// VM yields execution back to the embedder because it is blocked awaiting
@@ -905,6 +892,14 @@ pub enum Instruction {
     JumpIfTrueOrPop(isize),
     /// Keep a non-null value on the taken edge; pop on fallthrough.
     JumpIfNotNullOrPop(isize),
+
+    /// `baml.spawn.__spawn(plan)`, what a `spawn` expression compiles to.
+    /// Pops a `baml.spawn.Plan` and yields `VmExecState::Spawn` so the engine
+    /// starts it as a task on a fresh `BexThread`; the engine pushes the
+    /// task's `Future<T, E>`. The plan carries the body, the wrappers,
+    /// admission, cancellation, and the future's types, so nothing else
+    /// travels with the request.
+    Spawn,
 }
 
 /// Compact bytecode opcodes.
@@ -1024,7 +1019,6 @@ pub enum OpCode {
     InitInstance,
     AllocVariant,
     SysOp,
-    Spawn,
     Call,
     IsType,
     DenseTag,
@@ -1109,6 +1103,9 @@ pub enum OpCode {
     JumpIfFalseOrPop,
     JumpIfTrueOrPop,
     JumpIfNotNullOrPop,
+
+    // The plan-taking spawn, appended to preserve serialized discriminants.
+    Spawn,
 }
 
 impl OpCode {

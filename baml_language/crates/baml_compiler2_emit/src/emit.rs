@@ -2456,23 +2456,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Spawn {
-                closure,
-                name,
-                config,
-                future_ty,
+                plan,
                 future,
                 resume,
             } => {
-                // Push closure, name, config, then the future's `T`/`E`. The
-                // runtime `OpCode::Spawn` pops them in reverse. Config is null
-                // when there is no `with` clause, so a fixed five values are
-                // always pushed (BEP-034 spawn options).
-                self.emit_operand_pull(closure);
-                self.emit_operand_pull(name);
-                let null_config = Operand::Constant(Constant::Null);
-                self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
-                unwrap_infallible(self.load_type(&future_ty.returns));
-                unwrap_infallible(self.load_type(&future_ty.throws));
+                // `Spawn` pops the plan and pushes the task's future.
+                self.emit_operand_pull(plan);
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);

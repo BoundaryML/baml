@@ -84,7 +84,7 @@ async fn never_awaited_detached_spawn_error_does_not_replace_call_result() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
+            let f = spawn with baml.spawn.Root.new() {
                 throw baml.errors.Io { message: "boom" }
             };
             baml.sys.sleep(baml.time.Duration.from_milliseconds(250n));
@@ -133,7 +133,7 @@ async fn detached_infinite_spawn_does_not_block_root_completion() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
+            let f = spawn with baml.spawn.Root.new() {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(600000n));
                 "never"
             };
@@ -186,7 +186,7 @@ async fn detached_delayed_throw_is_not_waited_and_root_returns_cleanly() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
-            let f = spawn with baml.spawn.options(detach = true) {
+            let f = spawn with baml.spawn.Root.new() {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
                 throw baml.errors.Io { message: "boom" }
             };

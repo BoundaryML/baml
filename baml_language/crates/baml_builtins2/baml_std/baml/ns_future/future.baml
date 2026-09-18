@@ -293,7 +293,7 @@ function with_timeout<T, E>(
     body: () -> T throws E,
 ) -> T throws E | baml.errors.Timeout {
     let token = baml.spawn.CancelToken.new();
-    let work = spawn with baml.spawn.options(cancel = token) { body() };
+    let work = spawn with token { body() };
     let deadline = spawn {
         baml.sys.sleep(limit);
         token.cancel()

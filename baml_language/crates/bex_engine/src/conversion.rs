@@ -890,9 +890,6 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::UnscheduledFuture(_) => Err(EngineError::CannotConvert {
-                type_name: "unscheduled_future".to_string(),
-            }),
             Object::SpawnPlan(_) => Err(EngineError::CannotConvert {
                 type_name: "spawn_plan".to_string(),
             }),
@@ -4102,7 +4099,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
-                | Object::UnscheduledFuture(_)
                 | Object::SpawnPlan(_)
                 | Object::RustData(_)
                 | Object::Type(_) => None,
@@ -4231,7 +4227,6 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
-                | Object::UnscheduledFuture(_)
                 | Object::SpawnPlan(_)
                 | Object::RustData(_)
                 | Object::Type(_) => {

@@ -1,98 +1,18 @@
-//! BEP-034 — spawn options and `with` middleware.
-//!
-//! This namespace holds the values a `spawn` can be configured with: a
-//! `CancelToken` for cooperative cancellation, a `TaskGroup` for rate
-//! limiting, and the `detach` flag — plus `Params`, the value a
-//! `spawn ... with` middleware pipeline transforms before the runtime
-//! creates the future.
+//! Spawning green threads: the `Plan` a `spawn` builds, the `Modifier`
+//! values its `with` clause applies, and the `Execution` capability a
+//! modifier's wrapper receives once the task runs.
 
-/// The parameters for spawning a new green thread.
+/// A one-shot cancellation handle backed by a runtime cancellation token.
 ///
-/// Every `spawn` implicitly constructs a `Params` from its name and
-/// body; the `with` pipeline transforms it left-to-right before the runtime
-/// creates the future. Each transformer is an ordinary function
-/// `(Params<T, E>) -> Params<U, F>` — it may set config fields,
-/// wrap `body` (retry, timing), or replace it entirely (type-changing
-/// transformers like a fallback that erases the error type).
-class Params<T, E> {
-    // NOTE for the runtime: the engine reads these fields BY INDEX at the spawn
-    // dispatch site (body=0, name=1, group=2, cancel=3, detach=4) — keep the
-    // declaration order in sync with `bex_engine`'s `read_spawn_params`.
-    body: () -> T throws E,
-    name: string?,
-    group: TaskGroup?,
-    cancel: CancelToken?,
-    detach: bool,
-}
-
-/// A logical group of green threads.
-///
-/// These have three primary purposes:
-/// - Task groups limit how many spawns referencing it run concurrently. Excess spawns queue
-///   FIFO and start as earlier ones settle; the `spawn` still returns its
-///   `Future` immediately, so queueing is invisible.
-/// - Shared cancellation: calling `cancel` on a group cancels all tasks in the group.
-/// - Debugging: task groups have an optional name and provide logical grouping of tasks.
-class TaskGroup {
-    _handle: $rust_type,
-
-    /// Create a group capping concurrency at `limit`. `name` is an optional
-    /// debug label (no semantic meaning).
-    //baml:mut_vm
-    function new(limit: int, name: string? = null) -> TaskGroup throws never {
-        $rust_function
-    }
-
-    /// Fire the cancel tokens of the group's members. `pending` selects queued
-    /// members, `active` selects running ones (both default `true`). Returns the
-    /// number signalled. The group stays usable afterward.
-    //baml:vm
-    function cancel(self, pending: bool? = true, active: bool? = true) -> int throws never {
-        $rust_function
-    }
-
-    /// Change the concurrency cap. Increasing admits queued members up to the new
-    /// cap immediately; decreasing never preempts running members; `0` pauses.
-    //baml:vm
-    function set_limit(self, limit: int) -> void throws never {
-        $rust_function
-    }
-
-    /// The current concurrency cap.
-    //baml:vm
-    function limit(self) -> int throws never {
-        $rust_function
-    }
-
-    /// The optional debug name.
-    //baml:vm
-    function name(self) -> string? throws never {
-        $rust_function
-    }
-
-    /// Instantaneous count of running members.
-    //baml:vm
-    function active_count(self) -> int throws never {
-        $rust_function
-    }
-
-    /// Instantaneous count of queued members.
-    //baml:vm
-    function queued_count(self) -> int throws never {
-        $rust_function
-    }
-}
-
-/// A one-shot cancellation handle backed by a runtime
-/// cancellation token. Passing one via `options(cancel = ...)` links it into a
-/// spawned task's effective token: once fired, the task's next `await` panics with
+/// Using one as a spawn modifier links it into the task's own token: once
+/// fired, the task's next checkpoint (an `await` or an IO call) panics with
 /// `baml.panics.Cancelled`. Once cancelled, a token stays cancelled forever.
 ///
 /// # Examples
 ///
 /// ```baml
 /// let token = baml.spawn.CancelToken.new()
-/// spawn with baml.spawn.options(cancel = token) {
+/// spawn with token {
 ///     baml.sys.sleep(baml.time.Duration.from_seconds(5)); // cancellation triggers here inside `sleep`
 ///     baml.io.println("sleep finished");
 /// }
@@ -127,27 +47,216 @@ class CancelToken {
     function is_cancelled(self) -> bool throws never {
         $rust_function
     }
+
+    /// Returns `plan` with this token linked in: once it fires, the task is
+    /// cancelled. A task spawned from the plan after that starts cancelled.
+    //baml:mut_vm
+    //baml:fallible
+    function link<T, E>(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+        $rust_function
+    }
 }
 
-/// The built-in config transformer for a `spawn ... with` clause: sets the
-/// provided fields, leaves everything else (including `body`) untouched, so
-/// types are unchanged. `cancel` links a cancel token into the spawn's
-/// effective token; `detach = true` opts the spawn out of the parent→child
-/// cancel cascade and routes its unhandled errors to the root task instead
-/// of the spawner; `group` enrolls the spawn in a `TaskGroup`, so it parks
-/// until the group admits it (FIFO).
-function options<T, E>(
-    group: TaskGroup? = null,
-    cancel: CancelToken? = null,
-    detach: bool? = null,
-) -> (Params<T, E>) -> Params<T, E> throws never {
-    (params: Params<T, E>) -> Params<T, E> {
-        Params {
-            body: params.body,
-            name: params.name,
-            group: group ?? params.group,
-            cancel: cancel ?? params.cancel,
-            detach: detach ?? params.detach,
-        }
+/// A value written after `with` in a `spawn`: it transforms the spawn's
+/// [`Plan`] before the task starts.
+///
+/// `T` and `E` are the value and error types of the plan it is applied to.
+/// Modifiers apply left to right, and one that wraps execution ends up outside
+/// the ones before it.
+interface Modifier<T, E> {
+    /// The value type of the plan after this modifier. Unchanged by default.
+    type Output = T;
+    /// The error type of the plan after this modifier. Unchanged by default.
+    type Error = E;
+    /// What `apply` itself may throw. A throw happens at the `spawn`, before
+    /// any task exists; modifiers to its right are not evaluated.
+    type ApplyError = never;
+
+    /// Returns `plan` transformed by this modifier.
+    ///
+    /// `apply` describes the task; it cannot start it. Work that can only fail
+    /// once the task runs belongs in a [`Plan.wrap`] wrapper, with its failure
+    /// in `Error`.
+    function apply(self, plan: Plan<T, E>) -> Plan<Self.Output, Self.Error> throws Self.ApplyError;
+}
+
+/// A reusable recipe for a spawned task: a body, and the modifiers applied to
+/// it.
+///
+/// A plan is immutable. `wrap` and `with` return a new plan and leave the
+/// receiver as it was. The body cannot be read back or called; a `spawn`
+/// expression builds a plan and starts it in one step.
+///
+/// Plans compare by identity and cannot be converted to JSON.
+class Plan<T, E> {
+    _handle: $rust_type,
+
+    /// Creates a plan that runs `body`. `name` labels the task in traces and
+    /// error reports.
+    //baml:mut_vm
+    //baml:fallible
+    function new(body: () -> T throws E, name: string? = null) -> Plan<T, E> throws never {
+        $rust_function
     }
+
+    /// Returns a plan whose execution is `wrapper`.
+    ///
+    /// When the task runs, `wrapper` receives an [`Execution`] for the plan as
+    /// it was before this call, and what it returns or throws is the task's
+    /// outcome. A later `wrap` goes outside an earlier one.
+    //baml:mut_vm
+    //baml:fallible
+    function wrap<Output, Error>(
+        self,
+        wrapper: (Execution<T, E>) -> Output throws Error,
+    ) -> Plan<Output, Error> throws never {
+        $rust_function
+    }
+
+    /// Returns this plan transformed by `modifier`.
+    ///
+    /// # Throws
+    ///
+    /// Whatever `modifier.apply` throws.
+    function with<Output, Error, ApplyError>(
+        self,
+        modifier: Modifier<T, E, Output = Output, Error = Error, ApplyError = ApplyError>,
+    ) -> Plan<Output, Error> throws ApplyError {
+        modifier.apply(self)
+    }
+
+    /// The name given to `new`.
+    //baml:vm
+    //baml:fallible
+    function name(self) -> string? throws never {
+        $rust_function
+    }
+}
+
+/// The rest of a running task, handed to a [`Plan.wrap`] wrapper.
+///
+/// An `Execution` is good for one `run`, and only while the wrapper that
+/// received it is running. Copies are the same `Execution`, not new ones.
+class Execution<T, E> {
+    _plan: $rust_type,
+    _handle: $rust_type,
+
+    /// Runs the rest of the task and returns or throws its outcome.
+    ///
+    /// # Panics
+    ///
+    /// If `run` was already called, or the wrapper that received this
+    /// `Execution` has returned.
+    //baml:mut_vm
+    //baml:may_yield
+    function run(self) -> T throws E {
+        $rust_function
+    }
+
+    /// The task's name, as given to [`Plan.new`].
+    //baml:vm
+    //baml:fallible
+    function name(self) -> string? throws never {
+        $rust_function
+    }
+}
+
+/// Caps how many tasks spawned `with` it run at once.
+///
+/// Tasks over the cap wait in line; the `spawn` still returns its `Future` at
+/// once. A waiting task can be cancelled. A task spawned with several limits
+/// starts once every one of them has room, and holds none of them while it
+/// waits. Two spawns share a cap only if they use the same `Limit` value.
+///
+/// # Examples
+///
+/// ```baml
+/// let provider = baml.spawn.Limit.new(8);
+/// let futures = ids.map((id) -> { spawn with provider { fetch(id) } });
+/// ```
+class Limit {
+    _handle: $rust_type,
+
+    /// Creates a limit that admits `capacity` tasks at a time.
+    ///
+    /// # Throws
+    ///
+    /// `InvalidArgument` if `capacity` is not positive.
+    //baml:mut_vm
+    function new(capacity: int) -> Limit throws baml.errors.InvalidArgument {
+        $rust_function
+    }
+
+    /// How many tasks this limit admits at a time.
+    //baml:vm
+    function capacity(self) -> int throws never {
+        $rust_function
+    }
+
+    /// How many tasks hold a slot right now.
+    //baml:vm
+    function active_count(self) -> int throws never {
+        $rust_function
+    }
+
+    /// How many tasks are waiting for a slot right now.
+    //baml:vm
+    function queued_count(self) -> int throws never {
+        $rust_function
+    }
+
+    /// Returns `plan` admitted through this limit as well. Applying the same
+    /// limit again changes nothing.
+    //baml:mut_vm
+    //baml:fallible
+    function admit<T, E>(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+        $rust_function
+    }
+}
+
+/// Spawns a task whose cancellation parent is the runtime, not the spawning
+/// task: cancelling the spawner no longer cancels it.
+///
+/// Nothing else changes. The `Future` still reports the task's outcome and can
+/// still cancel it, and an error nobody observes is still reported.
+class Root {
+    /// Creates a `Root`.
+    function new() -> Root throws never {
+        Root {}
+    }
+
+    /// Returns `plan` with the runtime as its cancellation parent.
+    //baml:mut_vm
+    //baml:fallible
+    function reparent<T, E>(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+        $rust_function
+    }
+}
+
+implements<T, E> Modifier<T, E> for Limit {
+    function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+        self.admit(plan)
+    }
+}
+
+implements<T, E> Modifier<T, E> for Root {
+    function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+        self.reparent(plan)
+    }
+}
+
+implements<T, E> Modifier<T, E> for CancelToken {
+    function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
+        self.link(plan)
+    }
+}
+
+/// (internal) The terminal a `spawn` expression compiles to, once its
+/// modifiers have been applied. Not a way to start a task: write
+/// `spawn ... { }`.
+///
+/// Starts `plan` and returns the new task's future. Never throws, and each
+/// call is an independent task.
+function __spawn<T, E>(plan: Plan<T, E>) -> baml.future.Future<T, E> throws never {
+    $spawn
 }

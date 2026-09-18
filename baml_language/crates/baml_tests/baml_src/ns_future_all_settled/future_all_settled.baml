@@ -31,20 +31,32 @@ function fas_label(
     }
 }
 
-function fas_failure_preserves_successes() -> string {
-    let group = baml.spawn.TaskGroup.new(0);
-    let failed = spawn { fas_value(-1) };
-    let later = spawn with baml.spawn.options(group = group) { fas_value(2) };
-    let release = spawn {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
-        group.set_limit(1)
+// A one-slot limit and the task holding that slot for `hold_ms`: anything else
+// spawned with the limit starts only once the holder is done (or cancelled).
+class FasGate {
+    limit: baml.spawn.Limit,
+    holder: baml.future.Future<null, baml.errors.Io>,
+}
+
+function fas_gate(hold_ms: int) -> FasGate {
+    let limit = baml.spawn.Limit.new(1) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
     };
-    defer { group.set_limit(1) }
+    let holder = spawn with limit {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(hold_ms))
+    };
+    FasGate { limit: limit, holder: holder }
+}
+
+function fas_failure_preserves_successes() -> string {
+    let gate = fas_gate(100);
+    let failed = spawn { fas_value(-1) };
+    let later = spawn with gate.limit { fas_value(2) };
+    defer { gate.holder.cancel() }
     let results = await baml.future.all_settled([failed, later, failed]);
     if (!later.is_settled() || later.is_cancelled()) {
         baml.sys.panic("later input must finish")
     }
-    await release;
     results
         .map((result) -> {
             fas_label(result)
@@ -62,16 +74,11 @@ test "failure_preserves_successes_and_waits_for_later_inputs" {
 }
 
 function fas_failures_in_input_order() -> string {
-    let group = baml.spawn.TaskGroup.new(0);
-    let first = spawn with baml.spawn.options(group = group) { fas_value(-1) };
+    let gate = fas_gate(100);
+    let first = spawn with gate.limit { fas_value(-1) };
     let second = spawn { fas_value(-2) };
-    let release = spawn {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
-        group.set_limit(1)
-    };
-    defer { group.set_limit(1) }
+    defer { gate.holder.cancel() }
     let results = await baml.future.all_settled([first, second]);
-    await release;
     results
         .map((result) -> {
             fas_label(result)
@@ -89,8 +96,10 @@ test "every_failure_is_returned_in_input_order" {
 }
 
 function fas_panic_and_cancellation() -> string {
-    let group = baml.spawn.TaskGroup.new(0);
-    let cancelled = spawn with baml.spawn.options(group = group) { fas_value(1) };
+    // Cancelled while still queued behind the holder: its body never runs.
+    let gate = fas_gate(15000);
+    defer { gate.holder.cancel() }
+    let cancelled = spawn with gate.limit { fas_value(1) };
     cancelled.cancel();
     let panic = spawn { fas_explode() };
     let results = await baml.future.all_settled([panic, cancelled, spawn { fas_value(3) }]);
@@ -166,9 +175,9 @@ test "returning_an_error_value_is_still_success" {
 }
 
 function fas_cancel_collector_only() -> string {
-    let group = baml.spawn.TaskGroup.new(0);
-    let input = spawn with baml.spawn.options(group = group) { fas_value(7) };
-    defer { group.set_limit(1) }
+    let gate = fas_gate(15000);
+    let input = spawn with gate.limit { fas_value(7) };
+    defer { gate.holder.cancel() }
     let collector = baml.future.all_settled([input]);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
     collector.cancel();
@@ -181,7 +190,7 @@ function fas_cancel_collector_only() -> string {
     if (input.is_settled()) {
         baml.sys.panic("collector cancelled its input")
     }
-    group.set_limit(1);
+    gate.holder.cancel();
     `${status}:${await input}`
 }
 

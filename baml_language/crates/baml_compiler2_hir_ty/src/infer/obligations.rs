@@ -132,8 +132,12 @@ impl<'db> InferenceContext<'db> {
                         // checks clean and dies in the VM's (correctly
                         // nominal) impl resolver. Fix = a dedicated
                         // does-not-implement channel whose deferred re-check
-                        // re-runs `implements_holds`, never `sub`. Full
-                        // analysis: HANDOFF_implements_not_subtyping.md.
+                        // re-runs `implements_holds`, never `sub`. Moving the
+                        // verdict to `PendingDiag::QualifierNotImplemented`
+                        // was tried and works, but it relocates the reports
+                        // the type-spec bound-violation fixtures pin, so it
+                        // belongs with those fixture updates. Full analysis:
+                        // HANDOFF_implements_not_subtyping.md.
                         let expected = interface.existential();
                         self.result
                             .type_mismatches
@@ -207,6 +211,8 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let Some(facts) = applicable else {
+            // BUG: the same nominal-verdict laundering as the ground path
+            // above; see its note.
             let expected = interface.existential();
             self.result
                 .type_mismatches

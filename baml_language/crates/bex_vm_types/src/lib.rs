@@ -23,7 +23,6 @@ pub mod link;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
-pub mod task_group;
 pub mod type_head;
 pub mod types;
 pub mod unit;
@@ -48,7 +47,6 @@ pub use runtime_compile::{
     RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount, SessionContract, SessionEvalLease,
     SessionVisibleKind, SessionVisibleSymbol,
 };
-pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────
@@ -160,14 +158,13 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
     CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, ConstValue,
-    DeclarationName, Enum, EnumVariant, ExecutionMisuse, ExecutionPhase, ExecutionState, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
-    GenericFunction, HostClosure, ImplCoherenceKey, Instance, InterfaceBound, LockedContainer,
-    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
-    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SpawnPlanData, SysOp,
-    SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
-    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
-    sys_op_for_path, type_tags,
+    DeclarationName, Enum, EnumVariant, ExecutionExtent, ExecutionMisuse, ExecutionPhase,
+    ExecutionState, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin,
+    Future, FutureRead, GenericFunction, HostClosure, ImplCoherenceKey, Instance, InterfaceBound,
+    LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard,
+    MediaValue, Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SpawnPlanData,
+    SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
 };
 pub use unit::{
     CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,

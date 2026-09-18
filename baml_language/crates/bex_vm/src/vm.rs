@@ -111,7 +111,7 @@ use bex_vm_types::{
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
-        TypeValue, UnscheduledFuture,
+        TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -1506,11 +1506,16 @@ pub enum VmExecState {
     ///   via the `FutureManager`; the VM only ever sees `Pending`
     ///   directly after this yield.
     ///
-    /// BEP-034 phase D′: this used to be `ScheduleFuture` and covered
-    /// both sys-ops and spawns; sys-ops have moved to the dedicated
-    /// single-yield `SysOp` variant below.
+    /// - Input: `plan` points at the `Object::SpawnPlan` behind the plan
+    ///   value — the body, wrappers, admission, cancellation, and the
+    ///   `Future<T, E>` types the spawn yields.
+    /// - Output: the engine allocates the pending future at the plan's types,
+    ///   starts the task on a new `BexThread`, and pushes the future pointer
+    ///   onto the VM stack. Terminal transitions (`Ready`/`Error`/`Cancelled`/
+    ///   `InternalError`) happen later via the `FutureManager`; the VM only
+    ///   ever sees `Pending` directly after this yield.
     Spawn {
-        future: HeapPtr,
+        plan: HeapPtr,
         source_span: Option<CallSiteSourceSpan>,
     },
 
@@ -1835,7 +1840,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::HostClosure(_) => type_tags::FUNCTION,
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
-                Object::UnscheduledFuture(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
                 Object::SpawnPlan(_) => type_tags::UNKNOWN,
@@ -3468,11 +3472,6 @@ impl BexVm {
                 Box::new(fut.throws().clone()),
                 TyAttr::default(),
             ),
-            // An `UnscheduledFuture` is the engine's spawn-request slot, consumed
-            // before control returns to the VM. It is never a value user code can
-            // hold, so it has no type of its own.
-            Object::UnscheduledFuture(_) => return None,
-
             // Opaque native handles are not BAML data types at all. A spawn
             // plan is a handle too: the `baml.spawn.Plan` instance holding it
             // is the value.
@@ -4239,23 +4238,6 @@ impl BexVm {
             capture_mask,
             function_id: 0,
         }));
-    }
-
-    /// Returns a reference to the unscheduled future at `future_ptr`.
-    ///
-    /// Returns [`VmInternalError::TypeError`] if the heap object is not an
-    /// `Object::UnscheduledFuture`.
-    pub fn unscheduled_future(
-        &self,
-        future_ptr: HeapPtr,
-    ) -> Result<&UnscheduledFuture, VmInternalError> {
-        match self.get_object(future_ptr) {
-            Object::UnscheduledFuture(future) => Ok(future),
-            other => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::UnscheduledFuture),
-                got: ObjectType::of(other).into(),
-            }),
-        }
     }
 
     /// Allocate a bigint on the heap. Takes an `Arc<BigInt>` to allow sharing.
@@ -8433,63 +8415,24 @@ impl BexVm {
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
                 OpCode::Spawn => {
-                    // Stack layout (pushed by emit in this order): closure, name,
-                    // config, the future's `T`, the future's `E`. So pop in
-                    // reverse: `E` (top), `T`, config, name, closure. The two
-                    // types were pushed by `LoadType`, already resolved against
-                    // this frame's type args, and travel with the request so the
-                    // engine can type the heap `Future` it allocates.
-                    let throws = self.ensure_pop_type()?;
-                    let returns = self.ensure_pop_type()?;
-                    // `config` is the optional `baml.spawn.SpawnConfig` from a
-                    // `with baml.spawn.options(...)` clause, or null.
-                    let config_value = self.stack.ensure_pop();
-                    let name_value = self.stack.ensure_pop();
-                    let closure_value = self.stack.ensure_pop();
-                    let closure_ptr =
-                        self.as_object_ptr(closure_value, ObjectType::Function(FunctionType::Any))?;
-                    let name_ptr = if name_value.is_null() {
-                        None
-                    } else if let Some(ptr) = name_value.as_object_ptr() {
-                        Some(ptr)
-                    } else {
-                        return Err(VmInternalError::TypeError {
-                            expected: Type::Object(ObjectType::String),
-                            got: self.type_of(&name_value),
+                    // The operand is a `baml.spawn.Plan` instance; the engine
+                    // wants the sealed recipe behind its `_handle`. Anything
+                    // else here would turn a local type error into a
+                    // VM→engine contract break downstream.
+                    let plan_value = self.stack.ensure_pop();
+                    let handle = self.as_instance(&plan_value)?.load_field(0);
+                    let plan = match handle.as_object_ptr() {
+                        Some(ptr) if matches!(self.get_object(ptr), Object::SpawnPlan(_)) => ptr,
+                        _ => {
+                            return Err(VmInternalError::TypeError {
+                                expected: Type::Object(ObjectType::SpawnPlan),
+                                got: self.type_of(&handle),
+                            }
+                            .into());
                         }
-                        .into());
                     };
-                    let config_ptr = if config_value.is_null() {
-                        None
-                    } else if let Some(ptr) = config_value.as_object_ptr()
-                        && matches!(unsafe { ptr.get() }, Object::Instance(_))
-                    {
-                        // Must be an instance (`baml.spawn.Params`) — an
-                        // arbitrary heap object here would turn a local type
-                        // error into a VM→engine contract break downstream.
-                        Some(ptr)
-                    } else {
-                        return Err(VmInternalError::TypeError {
-                            expected: Type::Object(ObjectType::Instance),
-                            got: self.type_of(&config_value),
-                        }
-                        .into());
-                    };
-                    let pending_future = bex_vm_types::types::UnscheduledFuture {
-                        closure: closure_ptr,
-                        name: name_ptr,
-                        config: config_ptr,
-                        returns,
-                        throws,
-                    };
-                    let object_index = self
-                        .tlab
-                        .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
                     let source_span = self.call_site_source_for_frame(*frame_idx, self.cur_pc);
-                    return Ok(Some(VmExecState::Spawn {
-                        future: object_index,
-                        source_span,
-                    }));
+                    return Ok(Some(VmExecState::Spawn { plan, source_span }));
                 }
 
                 // ── Call ──────────────────────────────────────────────────────

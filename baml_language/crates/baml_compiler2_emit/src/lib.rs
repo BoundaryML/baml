@@ -1100,7 +1100,7 @@ fn build_packages<'db>(
                         matches!(
                             function_body(db, m).as_ref(),
                             baml_compiler2_hir::body::FunctionBody::Builtin(
-                                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn
                             )
                         ),
                         "impl method `{method_name}` has no pooled function object",
@@ -3638,7 +3638,7 @@ fn generate_impl<'db>(
                     if matches!(
                         function_body(db, func_loc).as_ref(),
                         baml_compiler2_hir::body::FunctionBody::Builtin(
-                            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn
                         )
                     ) {
                         continue;
@@ -3937,7 +3937,7 @@ fn spliced_throws_match(
         if matches!(
             function_body(db, func_loc).as_ref(),
             baml_compiler2_hir::body::FunctionBody::Builtin(
-                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn
             )
         ) {
             continue;
@@ -4031,7 +4031,7 @@ fn emit_file_group<'db>(
             if matches!(
                 function_body(db, func_loc).as_ref(),
                 baml_compiler2_hir::body::FunctionBody::Builtin(
-                    BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                    BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn
                 )
             ) {
                 continue;
@@ -6176,7 +6176,7 @@ fn builtin_emit_function(
     arity: usize,
 ) -> Option<Function> {
     let kind = match kind {
-        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny => return None,
+        BuiltinKind::Intrinsic | BuiltinKind::AwaitAny | BuiltinKind::Spawn => return None,
         BuiltinKind::Io => {
             let sys_op = bex_vm_types::sys_op_for_path(native_path)
                 .unwrap_or_else(|| panic!("unknown sys_op path: {native_path}"));

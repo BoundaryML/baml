@@ -171,17 +171,17 @@ fn evaluated_calls_impl<'db>(
         for node in body.reachable_excluding_lambdas(root) {
             let BodyNode::Expr(id) = node else { continue };
             // A `spawn { … }` body is a launch, not a stored thunk, so it runs
-            // during `$init` too (module docs, "Closures"). It is LOWERED as a
-            // lambda (`lower_spawn_expr`), which is exactly what the
-            // lambda-excluding walk stops at — so re-seed it here, the same way
-            // an IIFE is re-seeded below. Without this, io inside a spawn in a
-            // top-level initializer passes the check and dies at runtime as an
-            // opaque `InitFailed`, which is the failure this module exists to
-            // replace.
-            if let Expr::Spawn {
-                body: spawn_body, ..
-            } = &body.exprs[id]
-                && let Expr::Lambda(lambda) = &body.exprs[*spawn_body]
+            // during `$init` too (module docs, "Closures"). The sugar lowers it
+            // to a lambda marked `LambdaKind::Spawn` and hands it to
+            // `Plan.new`, so the lambda-excluding walk stops at it — re-seed it
+            // here, the same way an IIFE is re-seeded below. Without this, io
+            // inside a spawn in a top-level initializer passes the check and
+            // dies at runtime as an opaque `InitFailed`, which is the failure
+            // this module exists to replace. A plan built by hand is an
+            // ordinary stored closure and gets the ordinary treatment: nothing
+            // runs until it is launched.
+            if let Expr::Lambda(lambda) = &body.exprs[id]
+                && lambda.kind == baml_compiler2_ast::LambdaKind::Spawn
                 && let Some(lambda_body) = lambda.body
                 && seen_lambda_bodies.insert(lambda_body)
             {

@@ -18,7 +18,7 @@ function sleep_ms(ms: bigint) -> void {
 }
 
 function spawn_sleeper(log: Log, tok: baml.spawn.CancelToken) -> baml.future.Future<int, baml.errors.Io> {
-    spawn with baml.spawn.options(cancel = tok) {
+    spawn with tok {
         defer { log.entries.push("cleanup") }
         log.entries.push("start")
         sleep_ms(5000n)
@@ -44,7 +44,7 @@ test "a cancelled body runs its defer and the future settles cancelled" {
 function nested_defers_unwind_innermost_first() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer { log.entries.push("outer") }
         {
             defer { log.entries.push("inner") }
@@ -64,7 +64,7 @@ test "nested defers unwind innermost first on cancellation" {
 function defer_that_suspends_completes() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer {
             sleep_ms(30n)
             let inner = spawn { 7 }
@@ -87,7 +87,7 @@ test "a defer body may suspend during cancellation and completes" {
 function body_catching_cancelled_settles_ready() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         let v = { sleep_ms(5000n); 1 } catch (e) { baml.panics.Cancelled => 42 }
         log.entries.push("after catch")
         v
@@ -105,7 +105,7 @@ test "a body that catches Cancelled settles ready with its value" {
 function cancelled_at_an_await_runs_defer() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer { log.entries.push("cleanup") }
         let never = spawn { sleep_ms(5000n); 1 }
         await never
@@ -122,7 +122,7 @@ test "a body cancelled while awaiting runs its defer" {
 
 function future_state_after_cancel_unwind() -> baml.future.State {
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer { let _ = 1 }
         sleep_ms(5000n)
         0
@@ -139,7 +139,7 @@ test "an uncaught cancellation still settles the future cancelled" {
 function cancelled_in_race_runs_defer() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer { log.entries.push("cleanup") }
         let a = spawn { sleep_ms(5000n); 1 }
         let b = spawn { sleep_ms(5000n); 2 }
@@ -162,7 +162,7 @@ test "a body cancelled while racing futures runs its defer" {
 function catch_then_next_checkpoint_throws_again() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         { sleep_ms(5000n) } catch (e) { baml.panics.Cancelled => { log.entries.push("caught") } }
         log.entries.push("between")
         sleep_ms(5000n)
@@ -184,7 +184,7 @@ test "catching Cancelled does not un-cancel: the next checkpoint throws again" {
 function catch_arm_unshielded_defer_shielded() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer {
             sleep_ms(20n)
             log.entries.push("defer slept")
@@ -213,7 +213,7 @@ test "a catch arm is not shielded, a defer body is" {
 function shielded_cleanup_delegates() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer {
             let child = spawn { sleep_ms(30n); 7 }
             let v = (await child) catch (e) { baml.panics.Cancelled => -7 }
@@ -243,7 +243,7 @@ function push_after_sleep(log: Log, entry: string) -> void {
 function callee_is_shielded_through_its_caller() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer { push_after_sleep(log, "cleanup") }
         sleep_ms(5000n)
         0
@@ -264,7 +264,7 @@ test "a callee is shielded through the defer body that calls it, even as its las
 function nested_shields_and_a_throwing_defer() -> string[] {
     let log = Log { entries: [] }
     let tok = baml.spawn.CancelToken.new()
-    let f = spawn with baml.spawn.options(cancel = tok) {
+    let f = spawn with tok {
         defer {
             sleep_ms(10n)
             log.entries.push("outer")

@@ -5309,7 +5309,7 @@ impl Printable for LambdaExpr {
 }
 
 /// The `with` options clause of a [`SpawnExpr`]: the keyword and its
-/// comma-separated expressions (in v1 a single `baml.spawn.options(...)`
+/// comma-separated expressions (each a `baml.spawn.Modifier` value
 /// call).
 pub type SpawnWithClause = (t::With, Vec<(Expression, Option<t::Comma>)>);
 
@@ -5551,7 +5551,7 @@ impl PrintMultiLine for SpawnExpr {
     /// opens right after it, closing at the outer indent.
     ///
     /// ```baml
-    /// spawn with baml.spawn.options(group = g) {
+    /// spawn with limit {
     ///     compute()
     /// }
     /// ```

@@ -813,27 +813,15 @@ impl<'db> MirBuilder<'db> {
         });
     }
 
-    /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
-    /// optional name operand and binds the resulting `Future<T, E>`
-    /// handle into `future`.
-    pub(crate) fn spawn(
-        &mut self,
-        closure: Operand<'db>,
-        name: Operand<'db>,
-        config: Option<Box<Operand<'db>>>,
-        future_ty: Box<crate::ir::SpawnFutureTy>,
-        future: Place,
-        resume: BlockId,
-    ) {
+    /// Emit a spawn terminator — start `plan` as a new task and bind its
+    /// `Future<T, E>` handle into `future`.
+    pub(crate) fn spawn(&mut self, plan: Operand<'db>, future: Place, resume: BlockId) {
         debug_assert!(
             matches!(future, Place::Local(_)),
             "Spawn future handle place must be local"
         );
         self.set_terminator(Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future_ty,
+            plan,
             future,
             resume,
         });

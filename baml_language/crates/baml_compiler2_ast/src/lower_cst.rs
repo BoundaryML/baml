@@ -570,6 +570,7 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
             "$rust_io_function" => return Some(BuiltinKind::Io),
             "$compiler_intrinsic" => return Some(BuiltinKind::Intrinsic),
             "$await_any" => return Some(BuiltinKind::AwaitAny),
+            "$spawn" => return Some(BuiltinKind::Spawn),
             _ => {}
         }
     }
