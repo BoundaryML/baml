@@ -93,38 +93,43 @@ test "env_ref_keeps_the_secret_out_of_the_client" {
 
 function env_ref_api_key_reaches_the_wire() -> string {
     let canned = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}`;
-    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(canned)], (
-        mock: root.llm_mock.MockJsonServer,
-    ) -> {
-        let cl = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = env.HOME,
-            base_url = mock.base_url(),
-        );
-        let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
-        `${result.value}|${mock.last_request().header("authorization") ?? "<absent>"}`
-    })
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = env.HOME,
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
+            `${result.value}|${mock.last_request().header("authorization") ?? "<absent>"}`
+        },
+    )
 }
 
 test "env_ref_api_key_reaches_the_wire" {
-    assert.equal(env_ref_api_key_reaches_the_wire(), `pong|Bearer ${baml.env.get_or_panic("HOME")}`)
+    assert.equal(
+        env_ref_api_key_reaches_the_wire(),
+        `pong|Bearer ${baml.env.get_or_panic("HOME")}`,
+    )
 }
 
 // A plain string in the same position still works, positionally, exactly as
 // before the union — this is the shape every other corpus namespace uses.
 function plain_string_api_key_still_works() -> string {
     let canned = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}`;
-    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(canned)], (
-        mock: root.llm_mock.MockJsonServer,
-    ) -> {
-        let cl = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = "test-key",
-            base_url = mock.base_url(),
-        );
-        let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
-        `${result.value}|${mock.last_request().header("authorization") ?? "<absent>"}`
-    })
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
+            `${result.value}|${mock.last_request().header("authorization") ?? "<absent>"}`
+        },
+    )
 }
 
 test "plain_string_api_key_still_works" {
@@ -141,27 +146,28 @@ test "plain_string_api_key_still_works" {
 // wire.
 function env_ref_base_url_resolves_at_request_time() -> string {
     let canned = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}`;
-    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(canned)], (
-        mock: root.llm_mock.MockJsonServer,
-    ) -> {
-        // construction never reads env: this is safe even though the
-        // variable does not exist anywhere ...
-        let unset_ref = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = "test-key",
-            base_url = env.BAML_TEST_ENV_REF_UNSET_BASE_URL,
-        );
-        // ... and the read happens HERE, resolving to null — "not
-        // configured", which is what selects the provider default.
-        let fell_through = unset_ref.resolved_base_url() == null;
-        let cl = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = "test-key",
-            base_url = mock.base_url(),
-        );
-        let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
-        `${fell_through}|${result.value}|${mock.last_request().path()}`
-    })
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            // construction never reads env: this is safe even though the
+            // variable does not exist anywhere ...
+            let unset_ref = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = env.BAML_TEST_ENV_REF_UNSET_BASE_URL,
+            );
+            // ... and the read happens HERE, resolving to null — "not
+            // configured", which is what selects the provider default.
+            let fell_through = unset_ref.resolved_base_url() == null;
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
+            `${fell_through}|${result.value}|${mock.last_request().path()}`
+        },
+    )
 }
 
 test "env_ref_base_url_resolves_at_request_time" {
@@ -236,8 +242,7 @@ function resolve_credential_arms() -> string {
         // ... and to nothing when there is no canonical variable
         ai.wire.resolve_credential(null, null) ?? "<null>",
         ai.wire.resolve_credential(null, "BAML_TEST_ENV_REF_UNSET") ?? "<null>",
-    ]
-        .join("|")
+    ].join("|")
 }
 
 // The expected joined value, built where a local is safe.
@@ -255,8 +260,7 @@ function credential_sources_names_every_variable() -> string {
         ai.wire.credential_sources(env.MY_KEY, "CANONICAL_KEY"),
         ai.wire.credential_sources("sk-literal", "CANONICAL_KEY"),
         ai.wire.credential_sources(null, null),
-    ]
-        .join(" / ")
+    ].join(" / ")
 }
 
 test "credential_sources_names_every_variable" {
@@ -282,8 +286,7 @@ function redact_url_secrets_scrubs_credentials() -> string {
         ai.wire.redact_url_secrets("?api_key=abc&access_token=def&x=1"),
         // nothing credential-shaped is left alone
         ai.wire.redact_url_secrets("connection closed before message completed"),
-    ]
-        .join(" / ")
+    ].join(" / ")
 }
 
 test "redact_url_secrets_scrubs_credentials" {
@@ -305,8 +308,7 @@ function blank_credential_is_unconfigured() -> string {
         `literal=${ai.wire.resolve_credential("", null) ?? "<null>"}`,
         `spaces=${ai.wire.resolve_credential("  \t ", null) ?? "<null>"}`,
         `ref=${ai.wire.resolve_credential(env.BAML_TEST_ENV_REF_UNSET, null) ?? "<null>"}`,
-    ]
-        .join("|")
+    ].join("|")
 }
 
 test "blank_credential_is_unconfigured" {
@@ -326,17 +328,14 @@ function explicit_credential_wins_per_client_family() -> string {
         openai.ChatClient.new(model = "m", api_key = env.HOME).resolved_api_key() ?? "<null>",
         openai.ImageClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
         openai.AzureClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
-        openai.OpenRouterClient.new(model = "m", api_key = "sk-explicit").resolved_api_key()
-            ?? "<null>",
+        openai.OpenRouterClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
         openai.OllamaClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
-        openai.GenericClient.new(model = "m", api_key = "sk-explicit").resolved_api_key()
-            ?? "<null>",
+        openai.GenericClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
         anthropic.Client.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
         google.GeminiClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
         google.VertexClient.new(model = "m", api_key = "sk-explicit").resolved_api_key() ?? "<null>",
         vercel.AiGatewayImageClient.new(model = "m", api_key = "sk-explicit").resolved_api_key(),
-    ]
-        .join("|")
+    ].join("|")
 }
 
 // One entry per client in the list above, in the same order.
@@ -361,8 +360,7 @@ function resolve_shorthand_ids() -> string {
         ai.clients.resolve("openai/gpt-4o-mini").id(),
         ai.clients.resolve("google/gemini-2.5-flash").id(),
         ai.clients.resolve("openrouter/z-ai/glm-4.6").id(),
-    ]
-        .join("|")
+    ].join("|")
 }
 
 test "resolve_shorthand_ids" {
@@ -432,10 +430,7 @@ test "resolve_of_a_ref_reads_at_call_time" {
         resolve_of_a_ref_reads_at_call_time(),
         "client selector env.BAML_TEST_ENV_REF_UNSET_CLIENT is not set",
     );
-    assert.contains(
-        resolve_of_a_ref_reads_at_call_time(),
-        "anthropic, typesafeai, google, vertex, bedrock",
-    )
+    assert.contains(resolve_of_a_ref_reads_at_call_time(), "anthropic, typesafeai, google, vertex, bedrock")
 }
 
 // ---------------------------------------------------------------------------
@@ -445,21 +440,22 @@ test "resolve_of_a_ref_reads_at_call_time" {
 
 function dynamic_client_selector_runs_against_the_mock() -> string {
     let canned = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}`;
-    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(canned)], (
-        mock: root.llm_mock.MockJsonServer,
-    ) -> {
-        // The spec's `client:` selected openai/gpt-4o-mini through the
-        // `??` fallback; the run is pointed at the mock explicitly, since
-        // the ephemeral port cannot appear in a declaration.
-        let cl = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = "test-key",
-            base_url = mock.base_url(),
-        );
-        let spec = EnvRefDynamicEcho@spec("Say pong.");
-        let result = ai.Agent.new(client = cl).run(spec);
-        `${spec.default_client.id()}|${result.value}`
-    })
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            // The spec's `client:` selected openai/gpt-4o-mini through the
+            // `??` fallback; the run is pointed at the mock explicitly, since
+            // the ephemeral port cannot appear in a declaration.
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = EnvRefDynamicEcho@spec("Say pong.");
+            let result = ai.Agent.new(client = cl).run(spec);
+            `${spec.default_client.id()}|${result.value}`
+        },
+    )
 }
 
 test "dynamic_client_selector_runs_against_the_mock" {
@@ -468,18 +464,19 @@ test "dynamic_client_selector_runs_against_the_mock" {
 
 function explicit_resolve_selector_runs_against_the_mock() -> string {
     let canned = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}`;
-    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(canned)], (
-        mock: root.llm_mock.MockJsonServer,
-    ) -> {
-        let cl = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = "test-key",
-            base_url = mock.base_url(),
-        );
-        let spec = EnvRefResolvedEcho@spec("Say pong.");
-        let result = ai.Agent.new(client = cl).run(spec);
-        `${spec.default_client.id()}|${result.value}`
-    })
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = EnvRefResolvedEcho@spec("Say pong.");
+            let result = ai.Agent.new(client = cl).run(spec);
+            `${spec.default_client.id()}|${result.value}`
+        },
+    )
 }
 
 test "explicit_resolve_selector_runs_against_the_mock" {
@@ -540,9 +537,7 @@ testset "live" with testing.Sequential() {
     }
 
     if (baml.env.get("OPENAI_API_KEY") != null) {
-        test "env_ref_declared_client" {
-            assert.is_true(live_env_ref_client_answers())
-        }
+        test "env_ref_declared_client" { assert.is_true(live_env_ref_client_answers()) }
 
         test "env_ref_fallback_selection" {
             assert.is_true(live_env_ref_fallback_selection_answers())
