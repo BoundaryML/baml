@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "hex",
  "indexmap",
@@ -1601,6 +1601,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
+ "find-msvc-tools",
  "futures",
  "indexmap",
  "libc",
