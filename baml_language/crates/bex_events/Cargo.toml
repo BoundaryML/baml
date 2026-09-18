@@ -19,6 +19,7 @@ workspace = true
 
 [dependencies]
 bex_vm_types = { workspace = true }
+btel_types = { workspace = true }
 sys_types = { workspace = true }
 base64 = { workspace = true }
 prost = { workspace = true }

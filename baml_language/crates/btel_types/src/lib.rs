@@ -1,7 +1,7 @@
 //! Transport-independent types shared by BAML telemetry producers.
 //!
-//! This crate contains identity, time, and invocation vocabulary only. It does
-//! not contain buffering, collection, decoding, storage, or publication.
+//! Identity, time, invocation vocabulary and telemetry function registration.
+//! No buffering, event transport, collection, decoding, or storage.
 
 #![allow(unsafe_code)]
 #![allow(
@@ -9,12 +9,17 @@
     reason = "these wrappers and clock/ID primitives are measured producer hot-path operations"
 )]
 
+mod function_lookup;
+mod functions;
 use std::{
     cell::Cell,
     mem::size_of,
     num::NonZeroU64,
     sync::atomic::{AtomicU16, AtomicU64, Ordering},
 };
+
+pub use function_lookup::{FunctionLookup, FunctionRegistration};
+pub use functions::*;
 
 const ID_RANGE_SIZE: u64 = 4096;
 
