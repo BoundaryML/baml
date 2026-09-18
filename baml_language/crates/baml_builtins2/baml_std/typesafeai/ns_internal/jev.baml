@@ -6,20 +6,6 @@ class ChoiceOption {
     value: unknown,
 }
 
-/// (internal) Construct the named variant of an already reflected enum.
-function enum_value(ty: reflect.Type, name: string) -> unknown {
-    type T = unreflect(ty);
-    baml.json.from_string<T>(baml.json.stringify(name))
-}
-
-/// (internal) Construct a realized class, preserving its generic arguments.
-/// JSON currently cannot preserve an already-selected enum versus string
-/// literal with the same JSON value. This is an accepted JEV limitation.
-function class_value(ty: reflect.Type, fields: map<string, unknown>) -> unknown {
-    type T = unreflect(ty);
-    baml.json.from_string<T>(baml.json.to_string(fields))
-}
-
 class Leaf {
     id: string,
     ty: reflect.Type,
@@ -45,6 +31,7 @@ function reject(detail: string) -> ai.errors.InvalidRequest {
 // is preserved; a key collision belongs to the first member that offered it.
 function options(ty: reflect.Type) -> ChoiceOption[] {
     if let en: reflect.enum.Type = ty.as_enum() {
+        type T = unreflect(ty);
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
             if (!variant.meta.skip) {
@@ -52,7 +39,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
                     ChoiceOption {
                         key: variant.meta.alias ?? variant.name,
                         description: variant.meta.description,
-                        value: enum_value(ty, variant.name),
+                        value: baml.json.from_string<T>(baml.json.stringify(variant.name)),
                     },
                 );
             }
@@ -372,7 +359,10 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
                 let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
             }
         }
-        return class_value(ty, fields);
+        // JSON currently cannot preserve an already-selected enum versus string
+        // literal with the same JSON value. This is an accepted JEV limitation.
+        type T = unreflect(ty);
+        return baml.json.from_string<T>(baml.json.to_string(fields));
     }
     values.get(
         if (path.length() == 0) {
