@@ -24,7 +24,7 @@ function constant(ty: reflect.Type) -> ChoiceOption {
                     key: variant.meta.alias ?? variant.name,
                     description: variant.meta.description,
                     value: value,
-                    skipped: skipped(en.as_type(), name),
+                    skipped: variant.meta.skip,
                 };
             }
         }
@@ -50,12 +50,6 @@ function constant(ty: reflect.Type) -> ChoiceOption {
 /// (internal) Construct the named variant of an already reflected enum.
 //baml:mut_vm
 function enum_value(ty: reflect.Type, name: string) -> unknown throws baml.errors.InvalidArgument {
-    $rust_function
-}
-
-/// (internal) Reflection metadata does not yet expose SAP's skip flag.
-//baml:vm
-function skipped(ty: reflect.Type, name: string) -> bool throws baml.errors.InvalidArgument {
     $rust_function
 }
 
@@ -97,7 +91,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
     if let en: reflect.enum.Type = ty.as_enum() {
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
-            if (!skipped(ty, variant.name)) {
+            if (!variant.meta.skip) {
                 out.push(
                     ChoiceOption {
                         key: variant.meta.alias ?? variant.name,
@@ -163,7 +157,7 @@ function collect(
             let field_type: reflect.Type = field.type else {
                 throw reject(`JEV cannot reflect field ${field.name}`)
             };
-            if (skipped(ty, field.name)) {
+            if (field.meta.skip) {
                 if (!accepts_null(field_type)) {
                     throw reject(`Skipped JEV field ${field.name} must accept null`)
                 }
@@ -383,7 +377,7 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
     if let cls: reflect.class.Type = ty.as_class() {
         let fields: unknown[] = [];
         for (let field in cls.fields()) {
-            if (skipped(ty, field.name)) {
+            if (field.meta.skip) {
                 fields.push(null);
             } else {
                 let field_type: reflect.Type = field.type else {

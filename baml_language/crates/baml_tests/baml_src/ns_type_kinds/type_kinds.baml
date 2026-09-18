@@ -210,6 +210,42 @@ test "class_and_enum_readback_preserves_schema_metadata" {
     assert.equal(red.meta.docstring, "Red docs")
 }
 
+class WithSkippedField {
+    kept: string,
+    hidden: string? @skip,
+}
+
+enum WithSkippedVariant {
+    Kept,
+    Hidden @skip,
+}
+
+test "skip_flag_reads_back_on_fields_and_variants_only" {
+    let class_view = reflect.Type.of<WithSkippedField>().as_class() ?? throw "class";
+    let enum_view = reflect.Type.of<WithSkippedVariant>().as_enum() ?? throw "enum";
+
+    assert.equal(class_view.fields()[0].meta.skip, false);
+    assert.is_true(class_view.fields()[1].meta.skip);
+    assert.equal(enum_view.values()[0].meta.skip, false);
+    assert.is_true(enum_view.values()[1].meta.skip);
+    // A class or enum itself is never skipped.
+    assert.equal(class_view.meta().skip, false);
+    assert.equal(enum_view.meta().skip, false);
+    // Rows built without the flag default to not skipped.
+    assert.equal(reflect.enum.value("Fresh").meta.skip, false)
+}
+
+test "enum_rebuilt_from_reflected_rows_keeps_skip" {
+    let enum_view = reflect.Type.of<WithSkippedVariant>().as_enum() ?? throw "enum";
+    let rows: (string | reflect.enum.Value)[] = [];
+    for (let row in enum_view.values()) {
+        rows.push(row);
+    }
+    let rebuilt = reflect.enum.new("Rebuilt", rows).as_type().as_enum() ?? throw "rebuilt";
+    assert.equal(rebuilt.values()[0].meta.skip, false);
+    assert.is_true(rebuilt.values()[1].meta.skip)
+}
+
 test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {
     let union_view = reflect.Type.of<int | string>().as_union() ?? throw "union";
     let array_view = reflect.Type.of<Foo[]>().as_array() ?? throw "array";

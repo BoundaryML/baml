@@ -648,6 +648,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             description.map(bex_str::BexStr::as_str),
             docstring.map(bex_str::BexStr::as_str),
             &other,
+            false,
         );
         let name = Value::object(vm.alloc_string(name.clone()));
         copy::r#enum::Value { name, meta }.to_value(vm)
@@ -1394,6 +1395,7 @@ fn alloc_meta(
     description: Option<&str>,
     docstring: Option<&str>,
     other: &IndexMap<String, String>,
+    skip: bool,
 ) -> Value {
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
@@ -1415,6 +1417,7 @@ fn alloc_meta(
         description,
         docstring,
         other,
+        skip,
     }
     .to_value(vm)
 }
@@ -1603,13 +1606,16 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                         .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())
                 })
                 .collect::<Result<IndexMap<_, _>, _>>()?;
+            // A row read back from `values()` keeps its skip flag, so
+            // rebuilding an enum from reflected rows does not unskip a variant.
+            let skip = meta.load_field(4).as_bool().unwrap_or(false);
             Ok(EnumVariant {
                 name,
                 alias: optional_string(0)?,
                 description: optional_string(1)?,
                 docstring: optional_string(2)?,
                 other,
-                skip: false,
+                skip,
             })
         }
         _ => Err("reflect.enum.new values must be strings or reflect.enum.Value rows".into()),
@@ -1665,6 +1671,7 @@ impl BamlClassClassType for PackageReflectImpl {
                     field.description.as_deref(),
                     field.docstring.as_deref(),
                     &field.other,
+                    field.skip,
                 );
                 copy::class::Field {
                     name,
@@ -1685,6 +1692,7 @@ impl BamlClassClassType for PackageReflectImpl {
             class.description.as_deref(),
             class.docstring.as_deref(),
             &class.other,
+            false,
         ))
     }
 }
@@ -1703,6 +1711,7 @@ impl BamlClassEnumType for PackageReflectImpl {
                     variant.description.as_deref(),
                     variant.docstring.as_deref(),
                     &variant.other,
+                    variant.skip,
                 );
                 copy::r#enum::Value { name, meta }.to_value(vm)
             })
@@ -1717,6 +1726,7 @@ impl BamlClassEnumType for PackageReflectImpl {
             enm.description.as_deref(),
             enm.docstring.as_deref(),
             &enm.other,
+            false,
         ))
     }
 }

@@ -54,31 +54,6 @@ fn type_arg(vm: &BexVm, value: Value) -> Result<RealizedTy, VmRustFnError> {
 }
 
 impl BamlNamespaceInternal for PackageTypesafeaiImpl {
-    fn skipped(vm: &BexVm, ty: &Value, name: &bex_str::BexStr) -> Result<bool, VmRustFnError> {
-        if let RealizedTy::Class(head, _) = type_arg(vm, *ty)? {
-            let Object::Class(class) = vm.get_object(head.ptr()) else {
-                return Err(invalid("expected class declaration"));
-            };
-            return class
-                .fields
-                .iter()
-                .find(|field| field.name.as_str() == name.as_str())
-                .map(|field| field.skip)
-                .ok_or_else(|| invalid("unknown class field"));
-        }
-        let RealizedTy::Enum(head) = type_arg(vm, *ty)? else {
-            return Err(invalid("expected an enum type"));
-        };
-        let Object::Enum(enm) = vm.get_object(head.ptr()) else {
-            return Err(invalid("expected enum declaration"));
-        };
-        enm.variants
-            .iter()
-            .find(|variant| variant.name.as_str() == name.as_str())
-            .map(|variant| variant.skip)
-            .ok_or_else(|| invalid("unknown enum variant"))
-    }
-
     fn constant_value(vm: &mut BexVm, ty: &Value) -> Result<Value, VmRustFnError> {
         match type_arg(vm, *ty)? {
             RealizedTy::Null { .. } => Ok(Value::NULL),

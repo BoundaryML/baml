@@ -404,6 +404,7 @@ func metadataInput(metadata Metadata) baml_go.Input {
 		"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 		"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
 		"other": baml_go.Map(metadata.Other, baml_go.String),
+		"skip": baml_go.Bool(false),
 	})
 }
 
