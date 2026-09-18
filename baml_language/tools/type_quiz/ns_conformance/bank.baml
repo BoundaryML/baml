@@ -734,7 +734,7 @@ test "traps: nobody is fooled by a conflict every model predicts" {
 }
 
 test "pairs: every foil is the same program a step away, answering the other way" {
-    assert.equal(pairing_report(), "cases=160 paired=72 items=18 of 40 mixed=[] faults=")
+    assert.equal(pairing_report(), "cases=224 paired=88 items=22 of 56 mixed=[] faults=")
 }
 
 // ─── how many ways an item can answer ────────────────────────────────────────
@@ -743,15 +743,15 @@ test "pairs: every foil is the same program a step away, answering the other way
 /// over the first eight seeds of each.
 ///
 /// A fact that concludes an equivalence or an unrelated pair reads the same
-/// in both directions, so every case it makes answers the same way, and the
-/// shape of such a case tells a learner the answer without their having to
-/// reason about it. Two things have narrowed it. The interface and generic
-/// facts are strict, so each answers both ways; and the coherence site asks
-/// the equivalence facts the other question, where being the same type is
-/// what the compiler objects to, so a fact that always compiled as a flow is
-/// rejected as a pair of `implements` blocks. Two items in five still answer
-/// one way, and near misses — a case a step away from an equivalence and
-/// therefore not one — are what would narrow it further.
+/// in both directions, so every case it makes answers the same way. That was
+/// once a tell — the shape of such a case gave its answer away — and what
+/// mended it was not fewer such items but more: each now stands beside a near
+/// miss of its own shape that answers the other way, so an item answering
+/// one way says nothing until it is known which of the two it is. The count
+/// of one-sided items therefore ROSE, and what holds the bank to the point
+/// is the tells suite, which asks the question of shapes rather than of
+/// items. This records the split, and that the two one-sided columns stay
+/// near each other, so an item drifting from one to another is noticed.
 function items_answering_report() -> string throws never {
     let counted = root.bank.items()
         .filter((item) -> {
@@ -833,7 +833,7 @@ function depth_report() -> string throws never {
 }
 
 test "bank: nearly every case it can draw turns on a single rule" {
-    assert.equal(depth_report(), `cases=312 rules=["0:0", "1:232", "2:48", "3:16", "4:8", "5:8"]`)
+    assert.equal(depth_report(), `cases=432 rules=["0:0", "1:358", "2:42", "3:16", "4:8", "5:8"]`)
 }
 
 // ─── which sites the bank reaches ────────────────────────────────────────────
@@ -878,10 +878,10 @@ function sites_reached_report() -> string throws never {
 }
 
 test "bank: the coherence site takes the smaller share of the bank's cases" {
-    assert.equal(sites_reached_report(), "coherence=13 flow=299 other=0")
+    assert.equal(sites_reached_report(), "coherence=13 flow=419 other=0")
 }
 
-test "bank: two items in five answer the same way every time" {
-    assert.equal(items_answering_report(), "always=10 never=4 both=25")
+test "bank: the items that answer one way do so in both directions, about equally" {
+    assert.equal(items_answering_report(), "always=11 never=13 both=30")
 }
 

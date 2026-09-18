@@ -4,7 +4,10 @@
 /// The features of a case: how many distinct rules its explanation uses
 /// (without the flow rule every flow item ends with), how many times its
 /// derivation flips a subtype into a supertype, the structural size of the
-/// types it renders, and the models it traps.
+/// types it renders, and the models its pair lures — in either direction,
+/// never this one alone, so that the two directions of one draw score alike
+/// (`root.engine.Candidate.lures`). The feature names keep the word the
+/// weights were written against.
 function features_of(
     trace: root.engine.Claim[],
     flips: int,

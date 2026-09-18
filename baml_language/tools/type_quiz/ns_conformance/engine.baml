@@ -613,6 +613,7 @@ function paired(compiles: bool) -> root.engine.Candidate throws never {
         case: traced(compiles, "one", ["axiom", "one-way"]),
         features: {},
         traps: ["spelling"],
+        lures: ["spelling"],
     }
 }
 

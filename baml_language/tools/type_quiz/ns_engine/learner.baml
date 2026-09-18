@@ -1114,7 +1114,11 @@ class Read {
 /// How well a case suits this learner now, on top of the bank's own score.
 function fit(profile: Profile, knobs: Knobs, read: Read) -> float throws never {
     let rules = read.rules;
-    let traps = read.scored.candidate.traps;
+    // What either casting of the draw would fool, never what this one does:
+    // see `Candidate.lures`. Everything below that asks how hard or how
+    // telling the case is asks it of the pair, so that which way the pair is
+    // served stays the seed's coin.
+    let traps = read.scored.candidate.lures;
     let p = predict(profile, knobs, rules, traps.length());
     // Either the aim or the information, never both: they are two answers
     // to the same question. Drawing in proportion to information raised to

@@ -136,8 +136,19 @@ class Candidate {
     case: Case,
     /// Feature values keyed by feature name. The bank defines both.
     features: map<string, float>,
-    /// Ids of naive models whose prediction differs from `case.key`.
+    /// Ids of naive models whose prediction differs from `case.key`: who
+    /// THIS case fools, which is what an answer to it is evidence about.
     traps: string[],
+    /// Ids of naive models that some casting of the same draw would fool:
+    /// this case, or the one the seed's coin could equally have made of it —
+    /// the same pair flowing the other way. Selection reads these and never
+    /// `traps`. A model that accepts too much is wrong only about rejected
+    /// cases and one that accepts too little only about compiling ones, so a
+    /// selection that could see which casting fools somebody would serve
+    /// that one, and the kind of question would give its answer away:
+    /// function types rejected, unions accepted. Reading what either
+    /// casting would do leaves the coin a coin.
+    lures: string[],
 }
 
 /// A case's opposite: the same program with the one thing that decides its

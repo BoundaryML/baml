@@ -126,6 +126,7 @@ function scored(score: float) -> root.engine.Scored throws never {
             },
             features: {},
             traps: [],
+            lures: [],
         },
         score,
     }

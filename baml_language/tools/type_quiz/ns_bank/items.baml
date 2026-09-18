@@ -246,6 +246,46 @@ function flow_traps(d: root.algebra.Derivation, one: Flowed) -> string[] throws 
     })
 }
 
+/// The naive models that either direction of `drawn` would fool.
+///
+/// A model's belief about the pair does not depend on which way it flows, so
+/// it is replayed once and read both ways; nothing is rendered.
+function pair_lures(drawn: Drawn) -> string[] throws never {
+    let castings = [orient(drawn.d, drawn.relation, false), orient(drawn.d, drawn.relation, true)];
+    models().filter_map((model) -> {
+        let believed = root.algebra.decided(root.algebra.under(drawn.d, model))
+            ?? return null;
+        let fooled = castings.some((flow) -> {
+            root.algebra.compiles_when(drawn.site, in_direction(believed, flow))
+                != root.algebra.compiles_when(drawn.site, flow.relation)
+        });
+        if (fooled) {
+            model.id
+        } else {
+            null
+        }
+    })
+}
+
+/// `drawn` flowing one way, as a candidate. Its features are the pair's and
+/// its traps the case's, so the two directions differ in nothing a sampler
+/// scores by.
+function candidate_of(drawn: Drawn, reversed: bool) -> root.engine.Candidate throws never {
+    let chosen = flowed(drawn, reversed);
+    let lures = pair_lures(drawn);
+    root.engine.Candidate {
+        case: chosen.case,
+        features: features_of(
+            chosen.case.trace,
+            root.algebra.flips(drawn.d),
+            [chosen.flow.source, chosen.flow.target],
+            lures,
+        ),
+        traps: flow_traps(drawn.d, chosen),
+        lures,
+    }
+}
+
 /// What differs between the two directions of one fact, in the learner's
 /// terms. It says which two types swap places and not which way round the
 /// compiler wants them: that is the question.
@@ -301,18 +341,7 @@ class FlowItem {
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
             let drawn = draw_flow(self.fact, self.sites, seed)
                 ?? return null;
-            let chosen = flowed(drawn, drawn.reversed);
-            let traps = flow_traps(drawn.d, chosen);
-            root.engine.Candidate {
-                case: chosen.case,
-                features: features_of(
-                    chosen.case.trace,
-                    root.algebra.flips(drawn.d),
-                    [chosen.flow.source, chosen.flow.target],
-                    traps,
-                ),
-                traps,
-            }
+            candidate_of(drawn, drawn.reversed)
         }
 
         function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
@@ -402,12 +431,57 @@ class UnguardedCycleItem {
                 },
                 features: features_of(trace, 0, [ty], []),
                 traps: [],
+                lures: [],
             }
         }
 
         /// A cycle has no neighbouring program that compiles: what would
         /// have to change to make one is the whole of what the case is
         /// about.
+        function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
+            null
+        }
+    }
+}
+
+/// `let x: A | (B | C) = v` for a `v` of type `A | B | D`, which the spec
+/// rejects — `D` is in neither part — and the compiler accepts: see
+/// COMPILER_DIVERGENCE.md, CD-003. It is `union_regrouped_differs` put where
+/// `sites_for` will not put it: at the binding, flowing into the side that
+/// nests.
+class NestedUnionLetItem {
+    implements root.engine.Item {
+        function id(self) -> string throws never {
+            "unions/nested-in-let-annotation"
+        }
+
+        function status(self) -> root.engine.Status throws never {
+            root.engine.CompilerDiverges {
+                divergence: "CD-003",
+                contradiction: root.engine.Contradiction.Accepts,
+            }
+        }
+
+        function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
+            let streams = root.engine.split(seed);
+            let d = union_regrouped_differs(streams.left).value;
+            let relation = root.algebra.decided(root.algebra.knowledge(d))
+                ?? return null;
+            let none: string[] = [];
+            // The fact nests its left side, so flowing backwards is what
+            // makes the nested union the annotation.
+            let drawn = Drawn {
+                d,
+                relation,
+                reversed: true,
+                site: root.algebra.SiteKind.Let,
+                names: site_names(streams.right, none),
+            };
+            candidate_of(drawn, true)
+        }
+
+        /// The other direction is rejected by the spec and the compiler
+        /// alike, so there is no second program that answers differently.
         function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
             null
         }

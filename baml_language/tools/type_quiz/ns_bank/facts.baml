@@ -335,6 +335,212 @@ function union_associates(seed: root.engine.Seed) -> Derived throws never {
     )
 }
 
+// ─── near misses ─────────────────────────────────────────────────────────────
+//
+// Each fact above that concludes an equivalence reads the same both ways, so
+// every case it makes compiles, and a learner who has noticed which shapes
+// those are answers them without reasoning. Each fact below wears one of
+// those shapes and concludes something else: the shape is no longer the
+// answer, and the members have to be read.
+
+/// `A | B` against `B | C`: the members of one are not the members of the
+/// other, so reordering is not what happened. Beside `union_commutes`.
+function union_member_swapped(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 3);
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new(l.value.slice(0, 2)),
+            root.algebra.Union.new(l.value.slice(1, 3)),
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        l.next,
+    )
+}
+
+/// `A | (B | C)` against `A | B | D`: regrouped, and one member changed.
+/// Beside `union_associates`.
+function union_regrouped_differs(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 4);
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new([l.value[0], root.algebra.Union.new(l.value.slice(1, 3))]),
+            root.algebra.Union.new([l.value[0], l.value[1], l.value[3]]),
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        l.next,
+    )
+}
+
+/// A literal of one type beside another: `int` against `"sheep" | int`. The
+/// literal belongs to no `int`, so nothing absorbs it, and the member is a
+/// strict subtype of the union. Beside `literal_absorbed_fact`.
+function foreign_literal_beside(seed: root.engine.Seed) -> Derived throws never {
+    let lit = pick_literal(seed);
+    let l = pick_leaves(lit.next, 2);
+    let other = if (l.value[0] == lit.value.concrete) {
+        l.value[1]
+    } else {
+        l.value[0]
+    };
+    let order = root.engine.below(l.next, 2);
+    let members = if (order.value == 0) {
+        [lit.value.literal, other]
+    } else {
+        [other, lit.value.literal]
+    };
+    derived(
+        root.algebra.pair(
+            other,
+            root.algebra.Union.new(members),
+            root.algebra.Relation.Sub,
+            union_member_rule(),
+        ),
+        order.next,
+    )
+}
+
+/// `int` against `int | unknown`: the union is `unknown`, which holds more
+/// than `int` does. Beside `unknown_absorbs_fact`.
+function unknown_beside_member(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 1);
+    derived(
+        root.algebra.pair(
+            l.value[0],
+            root.algebra.Union.new([l.value[0], root.algebra.Top {  }]),
+            root.algebra.Relation.Sub,
+            union_member_rule(),
+        ),
+        l.next,
+    )
+}
+
+/// `true | 1` against `bool`: a `bool` literal beside something that is no
+/// `bool` does not make `bool`. Beside `bool_true_false`.
+function bool_beside_foreign_literal(seed: root.engine.Seed) -> Derived throws never {
+    let which = root.engine.below(seed, 2);
+    // A `bool` literal beside a `bool` literal would be `bool` or one of its
+    // halves, so the other member is foreign: an `int` literal, a `string`
+    // literal, or a whole type that is not `bool`, evenly. Literals alone
+    // would make an `int` or `string` literal lean towards "rejected", since
+    // this is a rejection and they have no equivalence of their own to set
+    // against it as `bool`'s literals do.
+    let kind = root.engine.below(which.next, 3);
+    let n = root.engine.below(kind.next, 100);
+    let words = literal_words();
+    let others = leaves().filter((leaf) -> {
+        leaf != root.algebra.Prim.bool()
+    });
+    let foreign: root.algebra.Ty = if (kind.value == 0) {
+        root.algebra.Lit.new(n.value)
+    } else if (kind.value == 1) {
+        root.algebra.Lit.new(words[n.value % words.length()])
+    } else {
+        others[n.value % others.length()]
+    };
+    let order = root.engine.below(n.next, 2);
+    let members = if (order.value == 0) {
+        [root.algebra.Lit.new(which.value == 0), foreign]
+    } else {
+        [foreign, root.algebra.Lit.new(which.value == 0)]
+    };
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new(members),
+            root.algebra.Prim.bool(),
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        order.next,
+    )
+}
+
+/// One variant against its enum: a literal below its concrete type. Beside
+/// `enum_variants`.
+function enum_variant_below_enum(seed: root.engine.Seed) -> Derived throws never {
+    let e = pick_enum(seed);
+    let pick = root.engine.below(e.next, e.value.variants.length());
+    derived(
+        root.algebra.pair(
+            root.algebra.EnumLit.new(e.value, e.value.variants[pick.value]),
+            root.algebra.Enum.new(e.value),
+            root.algebra.Relation.Sub,
+            literal_subtype_of_concrete(),
+        ),
+        pick.next,
+    )
+}
+
+/// A variant of one enum beside a variant of another, against the first
+/// enum: `Side.Left | Shade.Red` is not `Side`, which holds its other
+/// variants and no `Shade`. Beside `enum_variants`.
+function variants_of_two_enums(seed: root.engine.Seed) -> Derived throws never {
+    let first = pick_enum(seed);
+    let name = pick_type_name(first.next, [first.value.name]);
+    let variants = root.engine.pick_distinct(name.next, variant_names(), 2);
+    let second = root.algebra.EnumDecl { name: name.value, variants: variants.value };
+    let order = root.engine.below(variants.next, 2);
+    let own: root.algebra.Ty = root.algebra.EnumLit.new(first.value, first.value.variants[0]);
+    let other: root.algebra.Ty = root.algebra.EnumLit.new(second, second.variants[0]);
+    let members = if (order.value == 0) {
+        [own, other]
+    } else {
+        [other, own]
+    };
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new(members),
+            root.algebra.Enum.new(first.value),
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        order.next,
+    )
+}
+
+/// A literal against a concrete type it does not belong to: `1` is an `int`
+/// and no `string`. Beside `literal_subtype`.
+function literal_of_another_type(seed: root.engine.Seed) -> Derived throws never {
+    let lit = pick_literal(seed);
+    let l = pick_leaves(lit.next, 2);
+    let other = if (l.value[0] == lit.value.concrete) {
+        l.value[1]
+    } else {
+        l.value[0]
+    };
+    derived(
+        root.algebra.pair(
+            lit.value.literal,
+            other,
+            root.algebra.Relation.Unrelated,
+            literal_subtype_of_concrete(),
+        ),
+        l.next,
+    )
+}
+
+/// `A | never` against `B`: `never` adds nothing to `A`, so this is `A`
+/// against a different type. Beside `never_omitted`.
+function never_beside_other(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 2);
+    let order = root.engine.below(l.next, 2);
+    let members: root.algebra.Ty[] = if (order.value == 0) {
+        [l.value[0], root.algebra.Never {  }]
+    } else {
+        [root.algebra.Never {  }, l.value[0]]
+    };
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new(members),
+            l.value[1],
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        order.next,
+    )
+}
+
 function alias_is_transparent(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     let none: string[] = [];
@@ -404,6 +610,98 @@ function unguarded_member_is_vacuous(seed: root.engine.Seed) -> Derived throws n
             root.algebra.Alias { decl: plain },
             root.algebra.Relation.Equiv,
             unguarded_member_vacuous(),
+        ),
+        names.next,
+    )
+}
+
+/// `type Id = int` against `string`: the alias is `int`, and that is not
+/// `string`. Beside `alias_is_transparent`.
+function alias_of_another_leaf(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 2);
+    let none: string[] = [];
+    let n = pick_type_name(l.next, none);
+    let decl = root.algebra.AliasDecl { name: n.value, body: l.value[0] };
+    derived(
+        root.algebra.pair(
+            root.algebra.Alias { decl: decl },
+            l.value[1],
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        n.next,
+    )
+}
+
+/// `type Id = int` against `int | string`: the alias is the member. Beside
+/// `alias_is_transparent`, and strict, so it answers both ways.
+function alias_below_union(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 2);
+    let none: string[] = [];
+    let n = pick_type_name(l.next, none);
+    let decl = root.algebra.AliasDecl { name: n.value, body: l.value[0] };
+    derived(
+        root.algebra.pair(
+            root.algebra.Alias { decl: decl },
+            root.algebra.Union.new(l.value),
+            root.algebra.Relation.Sub,
+            union_member_rule(),
+        ),
+        n.next,
+    )
+}
+
+/// `type A = int | A[]` against `type B = string | B[]`: the same recursion
+/// over different leaves. Beside `equirecursive`.
+function recursive_leaves_differ(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 2);
+    let names = root.engine.pick_distinct(l.next, type_names(), 2);
+    derived(
+        root.algebra.pair(
+            root.algebra.Alias { decl: list_alias(names.value[0], l.value[0]) },
+            root.algebra.Alias { decl: list_alias(names.value[1], l.value[1]) },
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        names.next,
+    )
+}
+
+/// `A` against `string | A[]` for `type A = int | A[]`: an unfolding keeps
+/// the leaf, and this one did not. Beside `unfolds_once`.
+function unfolded_with_wrong_leaf(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 2);
+    let none: string[] = [];
+    let n = pick_type_name(l.next, none);
+    let decl = list_alias(n.value, l.value[0]);
+    derived(
+        root.algebra.pair(
+            root.algebra.Alias { decl: decl },
+            root.algebra.Union.new(
+                [l.value[1], root.algebra.Array.new(root.algebra.Alias { decl: decl })],
+            ),
+            root.algebra.Relation.Unrelated,
+            subset_based(),
+        ),
+        n.next,
+    )
+}
+
+/// `type A = A | A[]` against `type L = int | L[]`: the unguarded member is
+/// vacuous and a leaf is not, so the second holds every `int` and the first
+/// holds none. Beside `unguarded_member_is_vacuous`.
+function vacuous_beside_guarded(seed: root.engine.Seed) -> Derived throws never {
+    let l = pick_leaves(seed, 1);
+    let names = root.engine.pick_distinct(l.next, type_names(), 2);
+    let with_member = root.algebra.AliasDecl.recursive(names.value[0], (self) -> {
+        root.algebra.Union.new([self, root.algebra.Array.new(self)])
+    });
+    derived(
+        root.algebra.pair(
+            root.algebra.Alias { decl: with_member },
+            root.algebra.Alias { decl: list_alias(names.value[1], l.value[0]) },
+            root.algebra.Relation.Unrelated,
+            subset_based(),
         ),
         names.next,
     )
@@ -599,6 +897,59 @@ function non_implementor(seed: root.engine.Seed) -> Derived throws never {
     )
 }
 
+/// One class against itself. Beside `distinct_classes_same_shape`, where the
+/// fields are as alike and the names are not: what makes two class types one
+/// type is the declaration, so the names are what there is to read.
+function same_class(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 1);
+    let field = root.engine.pick_distinct(names.next, binding_names(), 1);
+    let l = pick_leaves(field.next, 1);
+    let no_impls: root.algebra.Impl[] = [];
+    let cls = thing_decl(names.value[0], field.value[0], l.value[0], no_impls);
+    derived(
+        root.algebra.pair(
+            root.algebra.Class.new(cls, []),
+            root.algebra.Class.new(cls, []),
+            root.algebra.Relation.Equiv,
+            identity_rule(),
+        ),
+        l.next,
+    )
+}
+
+/// An implementor beside its own interface, against the interface: the
+/// existential already stands for every implementor, so naming one of them
+/// beside it adds nothing, as `1 | int` adds nothing to `int`. Beside
+/// `non_implementor`.
+///
+/// Kept out of `equivalent_pair`: that pool reaches the coherence site
+/// through a class argument, and whether the overlap check reads
+/// `Box<Thing | Base>` as `Box<Base>` is a question of its own.
+function implementor_beside_iface(seed: root.engine.Seed) -> Derived throws never {
+    let names = root.engine.pick_distinct(seed, type_names(), 2);
+    let field = root.engine.pick_distinct(names.next, binding_names(), 1);
+    let l = pick_leaves(field.next, 1);
+    let iface = iface_decl(names.value[0]);
+    let cls = thing_decl(names.value[1], field.value[0], l.value[0], [root.algebra.Impl.of(iface)]);
+    let order = root.engine.below(l.next, 2);
+    let thing: root.algebra.Ty = root.algebra.Class.new(cls, []);
+    let base: root.algebra.Ty = root.algebra.Iface.of(iface);
+    let members = if (order.value == 0) {
+        [thing, base]
+    } else {
+        [base, thing]
+    };
+    derived(
+        root.algebra.pair(
+            root.algebra.Union.new(members),
+            base,
+            root.algebra.Relation.Equiv,
+            implementor_below_existential(),
+        ),
+        order.next,
+    )
+}
+
 // ─── context facts ───────────────────────────────────────────────────────────
 
 /// The declarations a fact's pair already names, which a wrapper's own
@@ -628,19 +979,54 @@ function strict_pair(seed: root.engine.Seed) -> Derived throws never {
     pool[choice.value](choice.next)
 }
 
+/// A seeded pair for a wrapper that is invariant in it: half the seeds a
+/// strict pair, half a pair the spec calls one type. Not a fact of its own.
+///
+/// Invariance says the inner relation decides — a strict pair is collapsed to
+/// unrelated and an equivalence is carried through — so a wrapper fed only
+/// strict pairs could only ever reject, and a learner who noticed that a
+/// `map<` always meant "rejected" was right without knowing why. Drawing
+/// from both pools is what makes the inner relation the question.
+function wrapped_pair(seed: root.engine.Seed) -> Derived throws never {
+    let choice = root.engine.below(seed, 2);
+    if (choice.value == 0) {
+        strict_pair(choice.next)
+    } else {
+        equivalent_pair(choice.next)
+    }
+}
+
+/// Two types as the argument of a generic class: one type exactly when the
+/// arguments are.
+///
+/// The equivalences matter twice over. A flow site accepts them in both
+/// directions, and a class type may be named by an `implements` block where
+/// a union or a literal may not, so this is what carries the equivalence
+/// facts to the site where being one type is the objection rather than the
+/// permission.
 function class_arg_invariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = strict_pair(seed);
+    let inner = wrapped_pair(seed);
     let b = box_decl(inner.next, inner_names(inner.value));
     derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
 }
 
 function array_invariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = strict_pair(seed);
+    let inner = wrapped_pair(seed);
+    derived(root.algebra.in_array(inner.value, generics_invariant()), inner.next)
+}
+
+/// `T[]` against `unknown[]`: every `T` is an `unknown`, and an array of one
+/// is still not an array of the other. The case of `array_invariant` people
+/// are surest of, and the one fact in which `unknown` is rejected both ways —
+/// everything flows into `unknown` itself, so without it a learner could
+/// read `unknown` as "compiles".
+function array_of_unknown(seed: root.engine.Seed) -> Derived throws never {
+    let inner = unknown_top(seed);
     derived(root.algebra.in_array(inner.value, generics_invariant()), inner.next)
 }
 
 function map_value_invariant(seed: root.engine.Seed) -> Derived throws never {
-    let inner = strict_pair(seed);
+    let inner = wrapped_pair(seed);
     derived(root.algebra.in_map_value(inner.value, generics_invariant()), inner.next)
 }
 
@@ -684,30 +1070,11 @@ function equivalent_pair(seed: root.engine.Seed) -> Derived throws never {
     pool[choice.value](choice.next)
 }
 
-/// Two types the spec calls one type, as the argument of a generic class.
-///
-/// Invariance carries an equivalence through, so the two class types are one
-/// type as well. That matters twice over: a flow site accepts it in both
-/// directions, and a class type may be named by an `implements` block where
-/// a union or a literal may not, so this is what carries the equivalence
-/// facts to the site where being one type is the objection rather than the
-/// permission.
-function class_arg_of_equivalence(seed: root.engine.Seed) -> Derived throws never {
-    let inner = equivalent_pair(seed);
-    let b = box_decl(inner.next, inner_names(inner.value));
-    derived(root.algebra.in_class_arg(inner.value, b.value, generics_invariant()), b.next)
-}
-
 function double_contravariance(seed: root.engine.Seed) -> Derived throws never {
     let inner = strict_pair(seed);
     let r = pick_leaves(inner.next, 1);
     let once = root.algebra.in_fn_param(inner.value, r.value[0], fn_param_contravariant());
     derived(root.algebra.in_fn_param(once, r.value[0], fn_param_contravariant()), r.next)
-}
-
-function array_of_unfolded_alias(seed: root.engine.Seed) -> Derived throws never {
-    let inner = unfolds_once(seed);
-    derived(root.algebra.in_array(inner.value, generics_invariant()), inner.next)
 }
 
 /// `never | X` against `T | X` for a leaf `X` distinct from `T`: the algebra
@@ -812,10 +1179,24 @@ function facts() -> Fact[] throws never {
         fact("never_omitted", never_omitted),
         fact("union_commutes", union_commutes),
         fact("union_associates", union_associates),
+        fact("union_member_swapped", union_member_swapped),
+        fact("union_regrouped_differs", union_regrouped_differs),
+        fact("foreign_literal_beside", foreign_literal_beside),
+        fact("unknown_beside_member", unknown_beside_member),
+        fact("bool_beside_foreign_literal", bool_beside_foreign_literal),
+        fact("enum_variant_below_enum", enum_variant_below_enum),
+        fact("variants_of_two_enums", variants_of_two_enums),
+        fact("literal_of_another_type", literal_of_another_type),
+        fact("never_beside_other", never_beside_other),
         fact("alias_is_transparent", alias_is_transparent),
         fact("equirecursive", equirecursive),
         fact("unfolds_once", unfolds_once),
         fact("unguarded_member_is_vacuous", unguarded_member_is_vacuous),
+        fact("alias_of_another_leaf", alias_of_another_leaf),
+        fact("alias_below_union", alias_below_union),
+        fact("recursive_leaves_differ", recursive_leaves_differ),
+        fact("unfolded_with_wrong_leaf", unfolded_with_wrong_leaf),
+        fact("vacuous_beside_guarded", vacuous_beside_guarded),
         fact("optional_superset", optional_superset),
         fact("positional_count", positional_count),
         fact("distinct_classes_same_shape", distinct_classes_same_shape),
@@ -824,18 +1205,19 @@ function facts() -> Fact[] throws never {
         fact("typevar_below_its_bound", typevar_below_its_bound),
         fact("union_of_implementors", union_of_implementors),
         fact("non_implementor", non_implementor),
+        fact("same_class", same_class),
+        fact("implementor_beside_iface", implementor_beside_iface),
         fact("class_arg_invariant", class_arg_invariant),
         fact("array_invariant", array_invariant),
+        fact("array_of_unknown", array_of_unknown),
         fact("map_value_invariant", map_value_invariant),
         fact("param_contravariant", param_contravariant),
         fact("return_covariant", return_covariant),
         fact("error_covariant", error_covariant),
-        fact("class_arg_of_equivalence", class_arg_of_equivalence),
         fact("double_contravariance", double_contravariance),
         fact("carried_2", carried_2),
         fact("carried_3", carried_3),
         fact("carried_4", carried_4),
-        fact("array_of_unfolded_alias", array_of_unfolded_alias),
         fact("bottom_beside_member", bottom_beside_member),
     ]
 }
@@ -843,5 +1225,12 @@ function facts() -> Fact[] throws never {
 /// Helpers that share a fact's signature but are not facts. The registry
 /// check excludes them by name.
 function fact_helpers() -> string[] throws never {
-    ["strict_pair", "equivalent_pair", "wrap_in_param", "wrap_in_return", "wrap_in_error"]
+    [
+        "strict_pair",
+        "equivalent_pair",
+        "wrapped_pair",
+        "wrap_in_param",
+        "wrap_in_return",
+        "wrap_in_error",
+    ]
 }

@@ -55,9 +55,47 @@ parting company only where the direction of the flow is named — so a learner
 shown both and asked which one compiles can read nothing off their surface.
 An equivalence or an unrelated pair reads the same in both directions and so
 has no foil, and neither does anything at the coherence site, where the
-reverse draw is the same two blocks the other way up. Fifteen of the bank's
-thirty-six items pair; twenty-two answer both ways across their seeds, ten
-always compile and four never do.
+reverse draw is the same two blocks the other way up. Twenty-two of the
+bank's fifty-four served items pair; thirty answer both ways across their
+seeds, eleven always compile and thirteen never do — and an item that
+answers one way is no longer a shape that does, which is the next section.
+
+## What a case's surface may not say
+
+A fact that concludes an equivalence compiles whichever way it flows, and one
+that concludes an unrelated pair never does. A bank built only of those
+teaches its shapes instead of its rules: as first built, a case with a
+recursive alias compiled 93 times in 100 and one with a `map<` 19, three
+questions in five compiled overall, and a learner who had noticed was right
+without reasoning — which the estimator then credited as knowing the rule.
+
+So every fact that answers one way stands beside one that wears its shape
+and answers the other. `A | B` against `B | C` beside a reordered union;
+`A | (B | C)` against `A | B | D` beside a regrouped one; `type A = int |
+A[]` against `type B = string | B[]` beside two spellings of one recursion,
+and `A` against `string | A[]` beside its unfolding; a variant of each of two
+enums beside an enum's own variants; `true | 1` beside `true | false`; a
+literal beside a type it does not belong to, which nothing absorbs; one
+class against itself beside two classes of one shape; `int[]` against
+`unknown[]`, the one place `unknown` is rejected both ways. The wrappers that
+are invariant in their argument draw it from strict pairs and equivalent
+ones alike, so whether `Box<S>` is `Box<T>` turns on whether `S` is `T`. A
+near miss cites the rule that decides it — most often that subtyping is a
+subset relation and neither side is a subset of the other — and not the rule
+it resembles: the explanation says why the compiler answered, and what the
+case resembled is the learner's to notice.
+
+The suite holds the bank to it (`ns_conformance/tells.baml`). Over 128 seeds
+of every fact, no feature of a case's surface — a construct, a declaration, a
+site, a word in the source — may compile more than ten points more or less
+often than cases do overall, and that overall rate is within five points of
+half. What counts as surface is what is on screen before the answer: the rule
+a case turns on is named after it, in the explanation, so an equivalence rule
+still always "compiles" and that is not a tell. When the check fails it names
+the facts carrying the leaning feature and how each answers, which is where
+the missing half goes. This is a property of the bank because selection
+cannot buy it: forcing the answers even forces the items uneven, which was
+measured to cost a scripted expert its certification.
 
 ## What the bank covers
 
@@ -121,15 +159,42 @@ against what measuring them asks for. `exposure` penalises an item each time
 it has already been served, so a rule may come round as often as the estimate
 wants it while the same template does not. Both are measured in the suite: a
 perfect learner's questions get deeper over a sitting, no item comes round
-more than four times in sixty-odd questions, and certifying one costs 38 to
-72 questions where it had cost 79 and failed one sitting in two.
+more than three times in sixty-odd questions, and certifying one costs 60 to
+68 questions where it had cost 79 and failed one sitting in two.
+
+Selection cannot see which way a pair is served. The naive models are
+lopsided — one that accepts too much is wrong only about rejected cases, one
+that accepts too little only about compiling ones — and what a case traps
+reaches selection three ways: the bank's score, the information (a trap makes
+a case harder), and the bonus for a suspected model. Reading the traps of the
+case itself, it served whichever direction fooled somebody, and sittings asked
+about function types that were rejected ten times in eleven from a bank that
+rejects them half the time. So a candidate carries two lists: `traps`, who
+THIS case fools, which is what an answer is evidence about; and `lures`, who
+either direction of the same draw would fool, which is all selection reads.
+The direction is then the seed's coin and nothing else, and the suite holds
+the two directions of every draw to looking identical to it.
+
+What is NOT mended is recorded in the suite against its bar
+(`sitting: what the questions a learner is asked still give away`): selection
+serves what the tracer wants evidence about, which is rules, and a rule that
+concludes an equivalence can only be evidenced by cases that compile. There
+are a dozen of those to the one rule that decides every near miss, so a
+sitting asks for the equivalences about twice as often as the near misses
+beside them, and a union is still accepted seven times in ten. The bank is
+balanced and the served questions are not yet, for a reason selection cannot
+settle: it is a question of what a near miss is evidence OF.
 
 ## Interestingness
 
 A case is *interesting* when a plausible wrong intuition predicts the wrong
 verdict. Each naive model in `ns_bank/models.baml` is a sparse list of rules
 it disagrees with; replaying a case's derivation under the model gives the
-model's verdict, and a mismatch makes the case a trap for that model. The
+model's verdict, and a mismatch makes the case a trap for that model. One of
+them, `shape`, is the learner the near misses are there for: it reads a case
+as the equivalence it resembles, so every near miss traps it — without which
+they would trap nobody, read as uninteresting, and be served less often than
+the equivalences beside them, putting the lean straight back. The
 sampler scores candidates by traps, rule count, relation flips, and a hinged
 penalty on size, depth, and union width, with a soft penalty on single-rule
 cases every model agrees with. A session fixes each step's verdict on an even
@@ -487,3 +552,25 @@ keeps its number once it has one.
    takes the `Grade` rather than its `understanding`. The encoder would need
    the declared parameter type, which the wire already carries, to lower a
    string against an enum position.
+15. **A `let` annotated with a union that nests a union is checked backwards,
+   and a value of the wrong type gets through.** `let left: bool | (string |
+   int) = right` compiles for a `right` of type `bool | string | bigint`;
+   called with `5n`, the function it sits in returns a value that reflects as
+   `bigint` in a slot typed `bool | string | int`, and an exhaustive `match`
+   over `bool`, `string` and `int` takes the `int` arm. The flat spelling of
+   the same annotation is rejected with E0001, as it should be. The trigger
+   is exact — a top-level union with a parenthesised UNION among its members,
+   which includes the natural `(A | B | C) | null` — and it is the binding
+   only: the same type as a parameter, a field, a return or an array element
+   is checked correctly, as is a union parenthesised whole and a nesting
+   inside an array or a generic argument. Where the initializer shares no
+   member with the annotation the binding is rejected, but reversed —
+   `expected `bigint`, found `int | string | bool`` with the span on the
+   annotation — which is what testing the annotation as a refutable pattern
+   against the initializer would say; where they share one, nothing is said.
+   Found by a near miss: the bank had been putting `A | (B | C)` at a binding
+   since it could state associativity, but only ever beside the equivalent
+   `A | B | C`, which compiles either way. Recorded as CD-003 in
+   COMPILER_DIVERGENCE.md, with an item that fails the suite when it is
+   fixed; until then no pair that would spell such an annotation is put at a
+   binding.

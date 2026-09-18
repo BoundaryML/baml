@@ -110,18 +110,49 @@ function binds_target(site: SiteKind) -> bool throws never {
     }
 }
 
+/// Whether `ty` is a union with a union among its members, which its
+/// spelling parenthesises: `A | (B | C)`.
+function nests_union(ty: Ty) -> bool throws never {
+    match (ty) {
+        let u: Union => {
+            u.members().some((m) -> {
+                m is Union
+            })
+        },
+        Prim | Never | Top | Lit | EnumLit | Array | Map | Fn | Class | Enum | Iface | Alias | Var => {
+            false
+        },
+    }
+}
+
 /// The sites of `sites` that can carry this pair.
 ///
 /// Both types are consulted, not just the target, because one draw is
 /// rendered in both directions at one site: a case's foil is its reverse, so
 /// a site that cannot take the pair one way must not be drawn for the other.
 function sites_for(sites: SiteKind[], source: Ty, target: Ty) -> SiteKind[] throws never {
-    let bindable = if (!mentions_var(source) && !mentions_var(target)) {
+    let spellable = if (!mentions_var(source) && !mentions_var(target)) {
         sites
     } else {
         sites.filter((site) -> {
             binds_target(site)
         })
+    };
+    // An annotated binding whose annotation is a union with a parenthesised
+    // union member is checked the wrong way round: the compiler accepts
+    // `let x: A | (B | C) = v` for a `v` of type `A | B | D`. What it says at
+    // this site is therefore not the type system's answer, and a pair that
+    // would spell such an annotation is kept away from it rather than asked
+    // there and marked by a key the compiler contradicts. Recorded, and held
+    // to still being true, as COMPILER_DIVERGENCE.md CD-003. The other sites
+    // spell the same type as a parameter, a field, a return or an array
+    // element, and answer correctly.
+    let bindable = if (nests_union(source) || nests_union(target)) {
+        spellable.filter((site) -> {
+            site != SiteKind.Let
+        })
+    } else {
+        spellable
     };
     // A pair spelled the same way makes two `implements` blocks that are
     // character for character identical, which a learner can answer by

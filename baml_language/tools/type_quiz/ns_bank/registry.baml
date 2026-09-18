@@ -6,5 +6,5 @@ function items() -> root.engine.Item[] throws never {
     let flows: root.engine.Item[] = facts().map((fact) -> {
         FlowItem { fact: fact, status: root.engine.Verified {  }, sites: root.algebra.all_sites() }
     });
-    flows.concat([UnguardedCycleItem {  }])
+    flows.concat([UnguardedCycleItem {  }, NestedUnionLetItem {  }])
 }
