@@ -38,9 +38,13 @@ clear failures it owns.
 Leave the analyze step's `if:` off so it inherits `success()`. `continue-on-error`
 on the test step already keeps the job green through a test failure, so the
 analyze step still runs and still gates; what `success()` adds is skipping it
-when an *earlier* step failed and no report was ever written. A step that needs
-its own condition must spell out `success() &&` — any `if:` replaces the
-implicit one.
+when an *earlier* step failed and no report was ever written.
+
+Never use `always()` or `!cancelled()` here: those replace the implicit
+`success()` — only a status-check function does — and an analyze step that runs
+after its test step was skipped reports `No test output files found`. A step
+needing its own condition can write `success() && …` for clarity, though a
+plain expression already implies it.
 
 ```yaml
 - name: "Run tests"
