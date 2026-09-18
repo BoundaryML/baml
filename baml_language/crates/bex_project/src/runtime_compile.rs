@@ -272,6 +272,15 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
+    /// Whether a consumer can WRITE this row's name. It is the condition
+    /// under which emit is asked for the declaration's object, and so the
+    /// condition under which a link stub is mandatory rather than optional:
+    /// a row nothing can name is dead weight, a row source can name and the
+    /// stub lane cannot spell is a reference with nothing behind it.
+    fn nameable_from_source(namespace: &[Name], name: &Name) -> bool {
+        source_identifier(name) && namespace.iter().all(source_identifier)
+    }
+
     fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
         let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
             return;
@@ -531,6 +540,31 @@ fn enrich_runtime_mount(
     let viewpoint = StubViewpoint {
         aliases: all_aliases,
     };
+    // A stub is what gives emit an object for a mounted declaration, and a
+    // consumer can write `app.Color.Red` whenever the enum's own name is
+    // spellable. There is no honest partial stub — the variant list is the
+    // enum's ABI — so a nameable enum carrying a variant that is not a BAML
+    // identifier cannot be served at all. Refuse the mount here, where the
+    // host can catch it and see which row is at fault, instead of letting
+    // the reference type-check against the interface (the served package's
+    // semantic authority) and find no object at emit.
+    let unservable_enum_variant = |namespace: &[Name], name: &Name, variant: &Name| {
+        let mut path = alias.to_string();
+        for segment in namespace.iter().chain(std::iter::once(name)) {
+            path.push('.');
+            path.push_str(segment.as_str());
+        }
+        RuntimeCompileDiagnostic {
+            code: "E_RUNTIME_INTERFACE".to_string(),
+            message: format!(
+                "enum `{path}` cannot be served: variant `{variant}` is not a BAML identifier, \
+                 and an enum a consumer can name must be stubbed in full — rename the variant"
+            ),
+            severity: RuntimeDiagnosticSeverity::Error,
+            span: None,
+            details: None,
+        }
+    };
     let mut stubs = Vec::new();
     for function in interface
         .functions
@@ -684,10 +718,16 @@ fn enrich_runtime_mount(
                     stubs.push((namespace, name, source));
                 }
                 ExportedType::Enum { variants, .. } => {
-                    if source_identifier(export_name)
-                        && export_namespace.iter().all(source_identifier)
-                        && variants.iter().all(source_identifier)
-                    {
+                    if nameable_from_source(export_namespace, export_name) {
+                        if let Some(variant) =
+                            variants.iter().find(|variant| !source_identifier(variant))
+                        {
+                            return Err(unservable_enum_variant(
+                                export_namespace,
+                                export_name,
+                                variant,
+                            ));
+                        }
                         let mut source = format!("enum {export_name} {{\n");
                         for variant in variants {
                             writeln!(&mut source, "  {variant}")
@@ -834,9 +874,10 @@ fn enrich_runtime_mount(
                 source.push_str("}\n");
                 stubs.push((Vec::new(), name.clone(), source));
             }
-            ExportedType::Enum { variants, .. }
-                if source_identifier(name) && variants.iter().all(source_identifier) =>
-            {
+            ExportedType::Enum { variants, .. } if source_identifier(name) => {
+                if let Some(variant) = variants.iter().find(|variant| !source_identifier(variant)) {
+                    return Err(unservable_enum_variant(&[], name, variant));
+                }
                 let mut source = String::new();
                 let docs = minted_docs.get(name);
                 write_docstring(

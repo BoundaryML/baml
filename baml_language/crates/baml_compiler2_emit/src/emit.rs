@@ -2074,9 +2074,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // TIR admitted the enum and MIR resolved it to a declaration
                 // (`enum_ref_of`), so this compilation registered an object
                 // for it: a source enum — a mounted package's link stub
-                // included — in Pass 4, or a seeded pool object of the
-                // precompiled stdlib. A miss is an internal error, never a
-                // `Null` where a variant belongs.
+                // included, the mount boundary having refused any enum it
+                // can name but cannot stub — in Pass 4, or a seeded pool
+                // object of the precompiled stdlib. A miss is an internal
+                // error, never a `Null` where a variant belongs.
                 let enum_obj_idx = *self.enum_object_indices.get(&enum_name_str).unwrap_or_else(
                     || {
                         panic!(
