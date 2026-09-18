@@ -2,6 +2,7 @@ package baml_go
 
 import (
 	"math"
+	"math/big"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ func TestJSONDecodesCanonicalRecursiveValueAlgebra(t *testing.T) {
 			{Value: &cffi.BamlOutboundValue_NullValue{NullValue: &cffi.BamlValueNull{}}},
 			{Value: &cffi.BamlOutboundValue_BoolValue{BoolValue: true}},
 			{Value: &cffi.BamlOutboundValue_IntValue{IntValue: 42}},
+			{Value: &cffi.BamlOutboundValue_BigintValue{BigintValue: "18ee90ff6c373e0ee4e3f0ad2"}},
 			{Value: &cffi.BamlOutboundValue_FloatValue{FloatValue: 1.5}},
 			{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "ok"}},
 		}},
@@ -32,7 +34,8 @@ func TestJSONDecodesCanonicalRecursiveValueAlgebra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]any{"array": []any{nil, true, int64(42), 1.5, "ok"}}
+	large, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
+	want := map[string]any{"array": []any{nil, true, int64(42), large, 1.5, "ok"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("JSON() = %#v, want %#v", got, want)
 	}
@@ -41,12 +44,13 @@ func TestJSONDecodesCanonicalRecursiveValueAlgebra(t *testing.T) {
 func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 	alias := TypeAliasBAMLType("baml.json.json")
 	selected := PrimitiveBAMLType(StringType)
-	index := uint32(4)
+	index := uint32(5)
 	selfType := &cffi.BamlTy{Ty: &cffi.BamlTy_Union{
 		Union: &cffi.BamlTyUnion{Options: []*cffi.BamlTy{
 			PrimitiveBAMLType(NullType).value,
 			PrimitiveBAMLType(BoolType).value,
 			PrimitiveBAMLType(IntType).value,
+			PrimitiveBAMLType(BigintType).value,
 			PrimitiveBAMLType(FloatType).value,
 			selected.value,
 			ListBAMLType(alias).value,
@@ -69,11 +73,23 @@ func TestJSONValidatesUnionEnvelopeBeforeDecoding(t *testing.T) {
 		t.Fatalf("invalid union metadata error = %v", err)
 	}
 
-	bigint := PrimitiveBAMLType(BigintType)
-	bigintIndex := uint32(0)
-	forgedNonJSON := outboundUnion(
-		UnionBAMLType(bigint, selected),
+	bigintIndex := uint32(2)
+	wrappedBigint := outboundUnion(
+		UnionBAMLType(PrimitiveBAMLType(IntType), selected, PrimitiveBAMLType(BigintType)),
 		&bigintIndex,
+		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_BigintValue{BigintValue: "ff"}},
+	)
+	decodedBigint, err := wrappedBigint.JSON()
+	integer, ok := decodedBigint.(*big.Int)
+	if err != nil || !ok || integer.Cmp(big.NewInt(255)) != 0 {
+		t.Fatalf("bigint union JSON() = %#v, %v", decodedBigint, err)
+	}
+
+	bytes := PrimitiveBAMLType(BytesType)
+	bytesIndex := uint32(0)
+	forgedNonJSON := outboundUnion(
+		UnionBAMLType(bytes, selected),
+		&bytesIndex,
 		&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "forged"}},
 	)
 	if _, err := forgedNonJSON.JSON(); err == nil || !strings.Contains(err.Error(), "selected union arm is not JSON") {
@@ -139,7 +155,7 @@ func TestJSONRejectsMalformedAndNonJSONWireValues(t *testing.T) {
 		{"nan", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_FloatValue{FloatValue: math.NaN()}}), "non-finite"},
 		{"infinity", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_FloatValue{FloatValue: math.Inf(1)}}), "non-finite"},
 		{"bytes", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_Uint8ArrayValue{Uint8ArrayValue: []byte("no")}}), "non-JSON"},
-		{"bigint", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_BigintValue{BigintValue: "ff"}}), "non-JSON"},
+		{"malformed bigint", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_BigintValue{BigintValue: "not-hex"}}), "invalid bigint"},
 		{"class", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ClassValue{ClassValue: &cffi.BamlValueClass{Name: "user.C"}}}), "non-JSON"},
 		{"enum", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_EnumValue{EnumValue: &cffi.BamlValueEnum{Name: "user.E", Value: "X"}}}), "non-JSON"},
 		{"empty list", jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ListValue{}}), "list payload is empty"},
@@ -197,6 +213,7 @@ func (jsonTestEnum) BAMLEnumVariants() []string { return []string{"X"} }
 
 func TestJSONInputAcceptsOnlyCanonicalGoJSONShapes(t *testing.T) {
 	integer := int64(7)
+	large, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
 	valid := []any{
 		nil,
 		(*int64)(nil),
@@ -206,6 +223,7 @@ func TestJSONInputAcceptsOnlyCanonicalGoJSONShapes(t *testing.T) {
 		"text",
 		int64(-2),
 		uint64(math.MaxInt64),
+		large,
 		float64(1.25),
 		[]any{nil, true, int64(2), "three", []string{"nested"}},
 		map[string]any{"nested": map[string]any{"value": 3.5}},
@@ -289,14 +307,16 @@ func TestJSONInputRejectsCyclesAndExcessiveDepth(t *testing.T) {
 	}
 }
 
-func TestJSONDecodesPrimitiveLiteralsAndRejectsBigintLiteral(t *testing.T) {
+func TestJSONDecodesPrimitiveAndBigintLiterals(t *testing.T) {
 	stringLiteral := jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_LiteralValue{LiteralValue: &cffi.BamlLiteralValue{Literal: &cffi.BamlLiteralValue_StringValue{StringValue: "literal"}}}})
 	if got, err := stringLiteral.JSON(); err != nil || got != "literal" {
 		t.Fatalf("JSON() = %#v, %v", got, err)
 	}
 	bigintLiteral := jsonValue(&cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_LiteralValue{LiteralValue: &cffi.BamlLiteralValue{Literal: &cffi.BamlLiteralValue_BigintValue{BigintValue: "ff"}}}})
-	if _, err := bigintLiteral.JSON(); err == nil || !strings.Contains(err.Error(), "non-JSON") {
-		t.Fatalf("bigint literal error = %v", err)
+	got, err := bigintLiteral.JSON()
+	integer, ok := got.(*big.Int)
+	if err != nil || !ok || integer.Cmp(big.NewInt(255)) != 0 {
+		t.Fatalf("bigint literal = %#v, %v", got, err)
 	}
 }
 

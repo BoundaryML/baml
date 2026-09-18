@@ -46,6 +46,7 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
 
     public static var string: BamlTypeDescriptor { primitive(.bamlTyPrimitiveString) }
     public static var int: BamlTypeDescriptor { primitive(.bamlTyPrimitiveInt) }
+    public static var bigint: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBigint) }
     public static var float: BamlTypeDescriptor { primitive(.bamlTyPrimitiveFloat) }
     public static var bool: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBool) }
     public static var null: BamlTypeDescriptor { primitive(.bamlTyPrimitiveNull) }
@@ -166,11 +167,20 @@ extension Int: BamlEncodable {
 
     public func _bamlEncode() -> BamlInboundValue {
         // Swift Int is 64-bit on all Apple targets, so it always fits
-        // the wire's int64. (Arbitrary-precision bigint is a separate
-        // BamlBigInt type, later phase.)
+        // the wire's int64. Arbitrary-precision bigint uses BamlBigInt.
         var v = BamlBridge_Cffi_V1_InboundValue()
         v.intValue = Int64(self)
         return BamlInboundValue(v)
+    }
+}
+
+extension BamlBigInt: BamlEncodable {
+    public static var _bamlType: BamlTypeDescriptor? { .bigint }
+
+    public func _bamlEncode() -> BamlInboundValue {
+        var value = BamlBridge_Cffi_V1_InboundValue()
+        value.bigintValue = hexadecimal
+        return BamlInboundValue(value)
     }
 }
 

@@ -880,6 +880,8 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
             baml_type::Literal::Int(value)
         } else if let Some(value) = value.as_bool() {
             baml_type::Literal::Bool(value)
+        } else if let Ok(value) = vm.as_bigint(value) {
+            baml_type::Literal::Bigint((**value).clone())
         } else if let Ok(value) = vm.as_string(value) {
             baml_type::Literal::String(value.to_string())
         } else {
@@ -892,6 +894,7 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
         )
     }
 }
+
 impl BamlNamespaceMap for PackageReflectImpl {
     fn new(vm: &mut BexVm, key: &Value, value: &Value) -> Value {
         let key = reflected_type_value(vm, *key);

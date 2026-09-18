@@ -25,7 +25,7 @@ use bex_vm_types::{RealizedTy, TyTemplate};
 const BAML_JSON_JSON: &str = "baml.json.json";
 
 /// The runtime type of an untyped `json` value: the recursive `baml.json.json`
-/// alias (`null | bool | int | float | string | json[] | map<string, json>`).
+/// alias (`null | bool | int | bigint | float | string | json[] | map<string, json>`).
 /// Recursive aliases stay opaque in `RealizedTy`, so this is the most precise
 /// element/value type available for containers parsed from untyped JSON.
 /// The `baml.json.json` alias type, headed at its declaration.
@@ -273,7 +273,7 @@ fn render_to_serde(
                 .unwrap_or(serde_json::Value::Null),
         ),
         Object::String(s) => Snap::Leaf(serde_json::Value::String(s.to_string())),
-        Object::Bigint(b) => Snap::Leaf(serde_json::Value::String(b.to_string())),
+        Object::Bigint(b) => Snap::Leaf(bigint_to_serde(b)),
         Object::Array(values) => Snap::Seq(values.to_vec()),
         Object::Map(map) => Snap::Entries(
             map.to_index_map()
@@ -516,12 +516,12 @@ impl BamlNamespaceJson for PackageBamlImpl {
 
 /// Parse a JSON string and return a `json`-typed VM value.
 ///
-/// The `json` type alias is `null | bool | int | float | string | json[] | map<string, json>`,
+/// The `json` type alias is `null | bool | int | bigint | float | string | json[] | map<string, json>`,
 /// which maps directly onto VM value kinds:
 /// - JSON `null`   → `Value::NULL`
 /// - JSON `bool`   → tagged Bool
-/// - JSON integer  → tagged i63 (out-of-range falls through to float, see
-///   [`serde_to_value`])
+/// - JSON integer  → tagged i63 when representable, otherwise a heap-boxed
+///   `Object::Bigint`
 /// - JSON float    → heap-boxed `Object::Float`
 /// - JSON `string` → heap-boxed `Object::String`
 /// - JSON array    → heap-boxed `Object::Array`
@@ -532,6 +532,12 @@ pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
         match throw_json_parse_error(vm, msg) {
+            Ok(v) => VmRustFnError::thrown_fresh(v),
+            Err(e) => VmRustFnError::InternalError(e),
+        }
+    })?;
+    validate_json_bigint_bounds(&parsed).map_err(|message| {
+        match throw_json_parse_error(vm, message) {
             Ok(v) => VmRustFnError::thrown_fresh(v),
             Err(e) => VmRustFnError::InternalError(e),
         }
@@ -613,10 +619,9 @@ fn raise_serialize(
 
 /// Convert a `serde_json::Value` into a VM `Value`.
 ///
-/// JSON numbers: i63-representable integers become integers; anything that
-/// overflows the i63 range (or doesn't parse as `i64` to begin with) falls
-/// through to a heap-boxed float, with the usual f64 precision loss above
-/// 2^53. Matches SAP's disambiguation behaviour.
+/// JSON numbers: i63-representable integers become integers, larger integral
+/// tokens become bigints, and tokens with a fraction or exponent become
+/// heap-boxed floats.
 pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
     match v {
         serde_json::Value::Null => Value::NULL,
@@ -626,14 +631,15 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
                 && let Some(v) = Value::try_int(i)
             {
                 v
+            } else if let Some(bigint) = parse_json_bigint(v) {
+                // `parse_json_bigint` already enforces the VM's bit limit.
+                Value::object(vm.tlab.alloc(Object::Bigint(Arc::new(bigint))))
             } else if let Some(f) = n.as_f64() {
                 Value::object(vm.alloc_float(f))
             } else {
-                // Only reachable with serde_json's `arbitrary_precision`
-                // feature (not enabled here). NaN is a sentinel for "we
-                // were handed a number we can't represent at all"; if you
-                // hit this in practice, refuse arbitrary-precision input
-                // upstream rather than relying on this fallback.
+                // With `arbitrary_precision`, a non-integral number whose
+                // magnitude cannot fit in an f64 reaches here. NaN preserves
+                // the existing sentinel for a number we cannot represent.
                 Value::object(vm.alloc_float(f64::NAN))
             }
         }
@@ -694,7 +700,7 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                     .collect();
                 serde_json::Value::Object(entries)
             }
-            Object::Bigint(bi) => serde_json::Value::String(bi.to_string()),
+            Object::Bigint(bi) => bigint_to_serde(bi),
             // An enum variant renders as its variant-name string, matching the
             // typed (`ty_value_to_serde`) and structural (`render_to_serde`)
             // walkers. This is reached when a variant flows through an arm that
@@ -1135,8 +1141,86 @@ pub fn json_from_string_typed(
             Err(e) => VmRustFnError::InternalError(e),
         }
     })?;
+    validate_json_bigint_bounds(&parsed).map_err(|message| raise_decode(vm, message, ""))?;
     let mut path = String::new();
     ty_serde_to_value(vm, &parsed, ty, &mut path)
+}
+
+/// Convert a bigint to the arbitrary-precision JSON number representation used
+/// by `serde_json`. `BigInt`'s decimal display is always valid JSON number syntax.
+fn bigint_to_serde(value: &num_bigint::BigInt) -> serde_json::Value {
+    match value.to_string().parse::<serde_json::Number>() {
+        Ok(number) => serde_json::Value::Number(number),
+        Err(_) => unreachable!("BigInt decimal display must be a valid JSON number"),
+    }
+}
+
+/// Decode signed decimal text without passing through `f64`. Check the size
+/// before parsing so untrusted JSON cannot allocate an unbounded integer.
+fn parse_decimal_bigint(text: &str) -> Option<num_bigint::BigInt> {
+    let (negative, digits) = match text.as_bytes().first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    if digits.is_empty()
+        || digits.len() > baml_type::MAX_BIGINT_DECIMAL_DIGITS
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let magnitude = num_bigint::BigInt::parse_bytes(digits.as_bytes(), 10)?;
+    let value = if negative { -magnitude } else { magnitude };
+    (value.bits() <= baml_type::MAX_BIGINT_BITS).then_some(value)
+}
+
+/// Decode an integral JSON number token without passing through `f64`.
+fn parse_json_bigint(json: &serde_json::Value) -> Option<num_bigint::BigInt> {
+    let serde_json::Value::Number(number) = json else {
+        return None;
+    };
+    parse_decimal_bigint(&number.to_string())
+}
+
+/// Reject integral JSON tokens that cannot inhabit the runtime's bounded
+/// bigint representation. Without this check, they would fall through to
+/// `f64` and could silently become infinity (then serialize as `null`).
+fn validate_json_bigint_bounds(json: &serde_json::Value) -> Result<(), String> {
+    match json {
+        serde_json::Value::Number(number) => {
+            let text = number.to_string();
+            let integral = !text.bytes().any(|byte| matches!(byte, b'.' | b'e' | b'E'));
+            if integral && parse_decimal_bigint(&text).is_none() {
+                return Err(format!(
+                    "integral JSON number exceeds the {}-bit bigint limit",
+                    baml_type::MAX_BIGINT_BITS
+                ));
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                validate_json_bigint_bounds(item)?;
+            }
+        }
+        serde_json::Value::Object(entries) => {
+            for value in entries.values() {
+                validate_json_bigint_bounds(value)?;
+            }
+        }
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::String(_) => {}
+    }
+    Ok(())
+}
+
+/// Typed bigint decoding also accepts decimal text in a JSON string. This is
+/// intentionally separate from untyped JSON conversion, where a JSON string
+/// must remain a string.
+fn parse_typed_json_bigint(json: &serde_json::Value) -> Option<num_bigint::BigInt> {
+    match json {
+        serde_json::Value::Number(_) => parse_json_bigint(json),
+        serde_json::Value::String(text) => parse_decimal_bigint(text),
+        _ => None,
+    }
 }
 
 /// Walk a parsed `serde_json::Value` driven by `ty`, allocating VM values.
@@ -1169,12 +1253,12 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected integer", path)),
         },
 
-        // Bigint JSON decoding is not yet implemented (Phase 9+).
-        RealizedTy::Bigint => Err(raise_decode(
-            vm,
-            "bigint JSON decoding not yet implemented",
-            path,
-        )),
+        RealizedTy::Bigint => {
+            let bigint = parse_typed_json_bigint(json).ok_or_else(|| {
+                raise_decode(vm, "expected integral JSON number or numeric string", path)
+            })?;
+            vm.try_alloc_bigint(Arc::new(bigint)).map_err(Into::into)
+        }
 
         RealizedTy::Float => match json {
             serde_json::Value::Number(n) => {
@@ -1305,12 +1389,15 @@ fn ty_serde_to_value(
                 }
                 Err(raise_decode(vm, "literal float mismatch", path))
             }
-            // Literal bigint decoding is not yet implemented (Phase 9+).
-            (baml_type::Literal::Bigint(_), _) => Err(raise_decode(
-                vm,
-                "literal bigint JSON decoding not yet implemented",
-                path,
-            )),
+            (baml_type::Literal::Bigint(expected), json) => {
+                let actual = parse_typed_json_bigint(json).ok_or_else(|| {
+                    raise_decode(vm, "expected integral JSON number or numeric string", path)
+                })?;
+                if &actual != expected {
+                    return Err(raise_decode(vm, "literal bigint mismatch", path));
+                }
+                vm.try_alloc_bigint(Arc::new(actual)).map_err(Into::into)
+            }
             _ => Err(raise_decode(vm, "literal mismatch", path)),
         },
 

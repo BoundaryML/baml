@@ -25,7 +25,7 @@ The adapter's plan and decoding are written in BAML reflection, with no TypeSafe
 
 Literal Choice-key formatting, null's `<null>` key, and enum alias/description lookup are implemented in BAML. Class reconstruction preserves generic arguments and uses raw declared field names, not aliases. It currently inherits JSON union-decoding ambiguity: an enum variant and a string literal with the same JSON representation can decode to the same member even when they had distinct JEV choice keys. This is an accepted temporary limitation pending a JSON decoding fix; top-level choices do not undergo this class-construction round trip.
 
-JSON decoding also does not yet implement bigint literals. Top-level JEV bigint choices retain their exact value, but selecting a bigint literal inside a class can fail during reconstruction (or select a string member if the union accepts its decimal-string JSON representation).
+Bigint literal choices preserve precision both at the top level and inside classes. Class reconstruction uses the arbitrary-precision JSON number encoding and typed bigint decoding supplied by the bigint JSON support.
 
 Full response envelopes, including probabilities, confidence, and usage, remain available in `ai.events.LLMCall.http_response.body` through the usual event hooks. `capture_wire = false` omits bodies; captured authorization headers are redacted.
 

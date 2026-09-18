@@ -477,6 +477,51 @@ test "realized generic class" {
     assert.is_true(generic_class())
 }
 
+type BigintChoice = 123456789012345678901234567890n | -123456789012345678901234567890n | "unsure";
+
+class BigintReport {
+    selected: Judged<BigintChoice>,
+}
+
+function BigintClassResult(message: string) -> BigintReport {
+    client: "typesafeai/jev-latest"
+    prompt: `${role("instructions")}Choose the matching identifier.${role("user")}${message}`
+}
+
+function bigint_class_choice(key: string) -> BigintChoice {
+    let body = baml.json.stringify(
+        {
+            "answers": {
+                "selected.value": { "type": "choice", "choice": key },
+                "selected.confident": { "type": "noul", "noul": 0.9 },
+            },
+        },
+    );
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(body)], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
+        let result = ai.Agent.new(client = cl).run(BigintClassResult@spec(key)).value;
+        assert.is_true(result.selected.confident);
+        result.selected.value
+    })
+}
+
+test "bigint choices retain precision through nested generic class JSON reconstruction" {
+    assert.equal(
+        bigint_class_choice("123456789012345678901234567890"),
+        123456789012345678901234567890n,
+    );
+    assert.equal(
+        bigint_class_choice("-123456789012345678901234567890"),
+        -123456789012345678901234567890n,
+    )
+}
+
+test "bigint class union still decodes its string alternative" {
+    assert.equal(bigint_class_choice("unsure"), "unsure")
+}
+
 function rejects(ty: reflect.Type, instructions: bool = true) -> bool {
     root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok("{}")], (
         mock: root.llm_mock.MockJsonServer,
