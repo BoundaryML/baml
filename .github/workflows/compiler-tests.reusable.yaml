@@ -111,8 +111,8 @@ jobs:
           BAML_PACK_HOST_PREBUILT: "1"
           NEXTEST_PROFILE: ci
 
-      - name: "Upload test results to Trunk"
-        if: ${{ !cancelled() && inputs.run-compiler-tests }}
+      - name: "Analyze test results in Trunk"
+        if: ${{ success() && inputs.run-compiler-tests }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci/junit.xml
