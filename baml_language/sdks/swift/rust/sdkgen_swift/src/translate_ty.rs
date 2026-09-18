@@ -108,7 +108,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 baml_base::Literal::Bigint(_) => "BamlBigInt",
                 baml_base::Literal::Bool(_) => "Swift.Bool",
                 // Float literals are unsupported for now.
-                _ => return None,
+                baml_base::Literal::Float(_) => return None,
             }
             .to_string(),
         ),

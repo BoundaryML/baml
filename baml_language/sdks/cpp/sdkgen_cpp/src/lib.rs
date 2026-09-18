@@ -673,6 +673,36 @@ mod injected_argument_tests {
     use super::*;
 
     #[test]
+    fn bigint_literal_return_type_does_not_hide_callable() {
+        let name = Name::new(BaseName::new("user"), vec![], BaseName::new("exact"));
+        let function = Function {
+            name: BaseName::new("exact"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: Ty::Literal(
+                baml_base::Literal::Bigint(42.into()),
+                baml_codegen_types::Freshness::Regular,
+            ),
+            throws: None,
+            watchers: vec![],
+            origin: Origin {
+                source_file_path: "bigint.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let files = to_source_code_with_bytecode(
+            &SymbolPool::from([(name, Symbol::Function(function))]),
+            &[],
+            &[],
+        );
+        let header = &files[&PathBuf::from("include/baml_sdk.h")];
+        let bindings = &files[&PathBuf::from("src/bindings.cc")];
+        assert!(header.contains("::baml::bigint exact("), "{header}");
+        assert!(bindings.contains("\"user.exact\""), "{bindings}");
+    }
+
+    #[test]
     fn injected_callback_does_not_hide_callable() {
         let name = Name::new(
             BaseName::new("user"),
@@ -1470,9 +1500,7 @@ fn translate_ty(
             // C++20 and BAML has no float literal types in practice.
             match lit {
                 baml_base::Literal::Int(v) => format!("::baml::lit<{}>", lit_int_spelling(*v)),
-                baml_base::Literal::Bigint(_) => {
-                    return Translated::Unsupported("bigint literal (post-step-8)".to_string());
-                }
+                baml_base::Literal::Bigint(_) => "::baml::bigint".to_string(),
                 baml_base::Literal::Float(_) => "double".to_string(),
                 baml_base::Literal::String(s) => {
                     let chars: Vec<String> = s.bytes().map(lit_char_spelling).collect();
