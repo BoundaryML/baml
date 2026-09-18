@@ -227,7 +227,7 @@ impl<'db> InferenceContext<'db> {
     /// As in impl selection: exactly one applicable head commits,
     /// several stall, none records the mismatch.
     fn select_object(&mut self, subject: &Ty, goal: &InferInterface, at: ExprId) -> Attempt {
-        let InferTy::Interface(name, args, pins, _) = subject.kind() else {
+        let InferTy::Interface(name, args, pins) = subject.kind() else {
             return Attempt::Stalled;
         };
         let subject_target = InferInterface::new(name.clone(), args.clone(), pins.clone());
@@ -418,7 +418,7 @@ impl<'db> InferenceContext<'db> {
         goal: &Ty,
         facts: &crate::impls::ImplFacts<'_>,
     ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
-        if let InferTy::TypeVar(param, _) = facts.for_ty_pattern.kind()
+        if let InferTy::TypeVar(param) = facts.for_ty_pattern.kind()
             && facts.generic_params.iter().any(|(p, _)| p == param)
             && !crate::impls::is_concrete_receiver(goal)
         {
@@ -545,7 +545,7 @@ impl<'db> InferenceContext<'db> {
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {
-            InferTy::TypeVar(param, _) => {
+            InferTy::TypeVar(param) => {
                 let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
                     let have = InferInterface::from_constraint(have);
@@ -553,7 +553,7 @@ impl<'db> InferenceContext<'db> {
                         || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
-            InferTy::Interface(name, args, pins, _) => {
+            InferTy::Interface(name, args, pins) => {
                 let have = InferInterface::new(name.clone(), args.clone(), pins.clone());
                 crate::impls::head_satisfies(self.db, &have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)

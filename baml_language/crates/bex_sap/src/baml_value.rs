@@ -131,19 +131,15 @@ where
 }
 /// When we parse the value:
 /// - If the value is complete, we return `Complete(value)`.
-/// - If the value's coercer returned `None`, we return `class_in_progress_field_missing`.
-///   For a `StreamState` type, this should always be a `Pending(<value>)`.
-/// - If the value is incomplete, we return `Incomplete(<value>)`.
-///   This means either:
-///   - Value has `in_progress=<value>`, we return `Incomplete(<value>)`
-///   - Value has `in_progress=None`, we return `Incomplete(<partial_value>)`
+/// - If the value is incomplete and has a partial parse, we return `Incomplete(<partial>)`.
+/// - If the input has not reached the value, the field's default
+///   ([`crate::sap_model::TypeRefDb::field_default`]) supplies `Pending(<inner default>)`.
 #[derive(Debug, Clone)]
 pub enum BamlStreamState<'s, 'v, 't, N: TypeIdent>
 where
     's: 'v,
 {
-    /// The value has not yet been started and has been filled by
-    /// [`crate::sap_model::AnnotatedField::class_in_progress_field_missing`]
+    /// The value has not yet been started; holds the inner type's default.
     Pending(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
     Incomplete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
     Complete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),

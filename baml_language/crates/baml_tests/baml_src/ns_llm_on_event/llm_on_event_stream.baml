@@ -1,4 +1,4 @@
-// Offline regressions for the unified `on_event` listener on the `$stream`
+// Offline regressions for the unified `on_event` listener on the `@stream`
 // path. A scripted streaming client replays a fixed event sequence, so the
 // settle events (AssistantMessage, then Usage) and the recovered TurnMeta
 // token counts are deterministic on both drain paths.

@@ -29,8 +29,6 @@ mod phase6;
 mod phase7;
 #[cfg(test)]
 mod phase8_exceptions;
-#[cfg(test)]
-mod stream_expansion;
 
 #[cfg(test)]
 pub(crate) mod support {
@@ -777,20 +775,20 @@ pub(crate) mod support {
     fn collect_typevars_inner(ty: &baml_type::Ty, out: &mut Vec<String>) {
         use baml_type::Ty;
         match ty {
-            Ty::TypeVar(name, _) => {
+            Ty::TypeVar(name) => {
                 let s = name.to_string();
                 if !out.contains(&s) {
                     out.push(s);
                 }
             }
-            Ty::List(inner, _) => collect_typevars_inner(inner, out),
+            Ty::List(inner) => collect_typevars_inner(inner, out),
             Ty::Map {
                 key: k, value: v, ..
             } => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 for m in members {
                     collect_typevars_inner(m, out);
                 }
@@ -980,16 +978,15 @@ pub(crate) mod support {
     }
 
     /// Render a file's TIR output in the same format as the onion skin tool.
-    /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
         let mut output = String::new();
-        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
 
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         let pkg_id = pkg_info.root;
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
@@ -1064,37 +1061,27 @@ pub(crate) mod support {
                                 );
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
                                 for (fname, fty, fattrs) in resolved {
-                                    let ty_attr_names = fty.attr().attr_names();
-                                    let field_attr_strs: Vec<String> = fattrs
-                                        .iter()
-                                        .map(|a| {
-                                            if a.args.is_empty() {
-                                                format!("@{}", a.name)
-                                            } else {
-                                                let args_str = a
-                                                    .args
-                                                    .iter()
-                                                    .map(|arg| match &arg.key {
-                                                        Some(k) => format!("{}={}", k, arg.value),
-                                                        None => arg.value.clone(),
-                                                    })
-                                                    .collect::<Vec<_>>()
-                                                    .join(", ");
-                                                format!("@{}({})", a.name, args_str)
-                                            }
-                                        })
-                                        .collect();
-                                    // Format: field: (Ty @ty_attr) @field_attr
-                                    let ty_str = if ty_attr_names.is_empty() {
-                                        fty.render_with(&vp)
-                                    } else {
-                                        let ta = ty_attr_names
-                                            .iter()
-                                            .map(|a| format!("@{a}"))
-                                            .collect::<Vec<_>>()
-                                            .join(" ");
-                                        format!("({} {ta})", fty.render_with(&vp))
-                                    };
+                                    // The lowered attributes as they would be
+                                    // written, in the table's order.
+                                    let mut field_attr_strs: Vec<String> = Vec::new();
+                                    if let Some(description) = &fattrs.schema.description {
+                                        field_attr_strs
+                                            .push(format!("@description({description:?})"));
+                                    }
+                                    if let Some(alias) = &fattrs.schema.alias {
+                                        field_attr_strs.push(format!("@alias({alias:?})"));
+                                    }
+                                    if fattrs.skip {
+                                        field_attr_strs.push("@skip".to_string());
+                                    }
+                                    if fattrs.stream_done {
+                                        field_attr_strs.push("@stream.done".to_string());
+                                    }
+                                    if fattrs.must_exist {
+                                        field_attr_strs.push("@stream.must_exist".to_string());
+                                    }
+                                    // Format: field: Ty @field_attr
+                                    let ty_str = fty.render_with(&vp);
                                     if field_attr_strs.is_empty() {
                                         writeln!(output, "  {fname}: {ty_str}").ok();
                                     } else {
@@ -1183,11 +1170,11 @@ pub(crate) mod support {
             if matches!(scope.kind, ScopeKind::Function) {
                 // The authoritative scope→item link (replaces the fragile
                 // `func.span == scope.range` join, which collided on companion spans).
-                if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
-                    baml_compiler2_ppir::item_data::scope_owner(db, scope_id)
+                if let Some(baml_compiler2_hir::item_data::ScopeOwner::Function(func_loc)) =
+                    baml_compiler2_hir::item_data::scope_owner(db, scope_id)
                 {
-                    let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
-                    func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
+                    let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
+                    func_body_opt = Some(baml_compiler2_hir::body::function_body(db, func_loc));
                     let sig = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
 
                     let gp = &func_data.generic_params;
@@ -1200,7 +1187,7 @@ pub(crate) mod support {
                     };
 
                     let parameter_defaults =
-                        baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                        baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
                     let params: Vec<String> = sig
                         .params
                         .iter()
@@ -1235,7 +1222,7 @@ pub(crate) mod support {
                     // display reads the syntax side; the signature itself
                     // carries only the effective type.
                     let clause_written =
-                        baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc)
+                        baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc)
                             .throws
                             .is_some();
                     let throws = match (clause_written, &inferred_throws) {
@@ -1279,8 +1266,9 @@ pub(crate) mod support {
             if matches!(scope.kind, ScopeKind::Function)
                 && let Some(owner) = baml_compiler2_hir_ty::ide::owner_for_scope(db, scope_id)
             {
-                let source_map = baml_compiler2_ppir::body_source_map(db, owner);
-                let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
+                let source_map = baml_compiler2_hir::body::body_source_map(db, owner);
+                let type_ref_spans =
+                    baml_compiler2_hir::body_type_refs::body_type_ref_spans(db, owner);
                 let mut rendered = Vec::new();
                 for diagnostic in &inference.diagnostics {
                     rendered.push(diagnostic.render_with_body_type_refs(
@@ -1294,9 +1282,10 @@ pub(crate) mod support {
                     let defaults_owner =
                         baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(func_loc);
                     let defaults = baml_compiler2_hir_ty::infer::infer_body(db, defaults_owner);
-                    let defaults_map = baml_compiler2_ppir::body_source_map(db, defaults_owner);
+                    let defaults_map =
+                        baml_compiler2_hir::body::body_source_map(db, defaults_owner);
                     let defaults_spans =
-                        baml_compiler2_ppir::body_type_ref_spans(db, defaults_owner);
+                        baml_compiler2_hir::body_type_refs::body_type_ref_spans(db, defaults_owner);
                     for diagnostic in &defaults.diagnostics {
                         rendered.push(diagnostic.render_with_body_type_refs(
                             db,
@@ -1339,9 +1328,8 @@ pub(crate) mod support {
         output
     }
 
-    /// Render a file's PPIR (canonical, post-expansion item tree) as readable
-    /// text — includes the synthesized `*$stream` companions.
-    pub fn render_ppir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
+    /// Render a file's canonical item tree as readable text.
+    pub fn render_hir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
@@ -1367,16 +1355,6 @@ pub(crate) mod support {
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            fn is_local_type_path(
-                first: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> bool {
-                local_type_names.contains(first)
-                    || first
-                        .strip_suffix("$stream")
-                        .is_some_and(|base| local_type_names.contains(base))
-            }
-
             match &ty.kind {
                 baml_compiler2_ast::TypeExprKind::Path {
                     segments,
@@ -1390,7 +1368,7 @@ pub(crate) mod support {
                         .collect::<Vec<_>>()
                         .join(".");
                     let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    let mut rendered = if is_local_type_path(first, local_type_names) {
+                    let mut rendered = if local_type_names.contains(first) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
@@ -1413,15 +1391,15 @@ pub(crate) mod support {
                     }
                     rendered
                 }
-                baml_compiler2_ast::TypeExprKind::Int { .. } => "int".into(),
-                baml_compiler2_ast::TypeExprKind::Bigint { .. } => "bigint".into(),
-                baml_compiler2_ast::TypeExprKind::Float { .. } => "float".into(),
-                baml_compiler2_ast::TypeExprKind::String { .. } => "string".into(),
-                baml_compiler2_ast::TypeExprKind::Bool { .. } => "bool".into(),
-                baml_compiler2_ast::TypeExprKind::Null { .. } => "null".into(),
-                baml_compiler2_ast::TypeExprKind::Never { .. } => "never".into(),
-                baml_compiler2_ast::TypeExprKind::Void { .. } => "void".into(),
-                baml_compiler2_ast::TypeExprKind::Uint8Array { .. } => "uint8array".into(),
+                baml_compiler2_ast::TypeExprKind::Int => "int".into(),
+                baml_compiler2_ast::TypeExprKind::Bigint => "bigint".into(),
+                baml_compiler2_ast::TypeExprKind::Float => "float".into(),
+                baml_compiler2_ast::TypeExprKind::String => "string".into(),
+                baml_compiler2_ast::TypeExprKind::Bool => "bool".into(),
+                baml_compiler2_ast::TypeExprKind::Null => "null".into(),
+                baml_compiler2_ast::TypeExprKind::Never => "never".into(),
+                baml_compiler2_ast::TypeExprKind::Void => "void".into(),
+                baml_compiler2_ast::TypeExprKind::Uint8Array => "uint8array".into(),
                 baml_compiler2_ast::TypeExprKind::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
                 }
@@ -1491,7 +1469,7 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                baml_compiler2_ast::TypeExprKind::Unknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExprKind::Unknown => "unknown".into(),
                 baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
                     base,
                     interface,
@@ -1507,11 +1485,11 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                baml_compiler2_ast::TypeExprKind::Type { .. } => "reflect.Type".into(),
-                baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
-                baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
-                baml_compiler2_ast::TypeExprKind::Missing { .. } => "?".into(),
-                baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
+                baml_compiler2_ast::TypeExprKind::Type => "reflect.Type".into(),
+                baml_compiler2_ast::TypeExprKind::Rust => "$rust_type".into(),
+                baml_compiler2_ast::TypeExprKind::Error => "error".into(),
+                baml_compiler2_ast::TypeExprKind::Missing => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Infer => "_".into(),
             }
         }
 
@@ -1525,16 +1503,6 @@ pub(crate) mod support {
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
             use baml_compiler2_hir::type_ref::TypeRefKind as K;
-            fn is_local_type_path(
-                first: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> bool {
-                local_type_names.contains(first)
-                    || first
-                        .strip_suffix("$stream")
-                        .is_some_and(|base| local_type_names.contains(base))
-            }
-
             match &store[id].kind {
                 K::Path {
                     segments,
@@ -1547,7 +1515,7 @@ pub(crate) mod support {
                         .collect::<Vec<_>>()
                         .join(".");
                     let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    let mut rendered = if is_local_type_path(first, local_type_names) {
+                    let mut rendered = if local_type_names.contains(first) {
                         format!("{pkg_prefix}{path}")
                     } else {
                         path
@@ -2185,7 +2153,7 @@ pub(crate) mod support {
             )
         };
 
-        use baml_compiler2_ppir::item_data::{
+        use baml_compiler2_hir::item_data::{
             class_data, enum_data, file_classes, file_enums, file_functions, file_type_aliases,
             function_data, function_llm_meta, type_alias_data,
         };
@@ -2247,7 +2215,7 @@ pub(crate) mod support {
         functions.sort_by_key(|&loc| function_data(db, loc).name.as_str().to_string());
         for loc in functions {
             let func = function_data(db, loc);
-            let defaults = baml_compiler2_ppir::function_parameter_defaults(db, loc);
+            let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, loc);
             let params: Vec<String> = func
                 .params
                 .iter()
@@ -2268,7 +2236,7 @@ pub(crate) mod support {
                 .return_type
                 .map(|id| type_ref_to_string(&func.type_refs, id, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
-            let func_body = baml_compiler2_ppir::function_body(db, loc);
+            let func_body = baml_compiler2_hir::body::function_body(db, loc);
             let body_kind = if function_llm_meta(db, loc).is_some() {
                 "llm"
             } else {
@@ -2351,16 +2319,16 @@ pub(crate) mod support {
         expr_text: &str,
     ) -> String {
         let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
-        let func_loc = *baml_compiler2_ppir::item_data::file_functions(db, file)
+        let func_loc = *baml_compiler2_hir::item_data::file_functions(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .name
                     .as_str()
                     == function_name
             })
             .unwrap_or_else(|| panic!("function `{function_name}` not found"));
-        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
+        let func_body = baml_compiler2_hir::body::function_body(db, func_loc);
         let body = match func_body.as_ref() {
             FunctionBody::Expr(body) => body,
             _ => panic!("function `{function_name}` has no expression body"),

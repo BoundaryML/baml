@@ -285,11 +285,7 @@ mod tests {
     fn literal_widens_into_base() {
         // A value of literal type `1` is a member of the `int` arm.
         let int_arm = leaf(RealizedTy::int());
-        let one = RuntimeTy::Literal(
-            baml_type::Literal::Int(1),
-            baml_type::Freshness::Regular,
-            baml_type::TyAttr::default(),
-        );
+        let one = RuntimeTy::Literal(baml_type::Literal::Int(1), baml_type::Freshness::Regular);
         assert!(matches(&int_arm, &[], &one));
     }
 
@@ -305,18 +301,10 @@ mod tests {
     #[test]
     fn literal_membership_agrees_with_algebra() {
         fn lit(l: baml_type::Literal) -> RuntimeTy {
-            RuntimeTy::Literal(
-                l,
-                baml_type::Freshness::Regular,
-                baml_type::TyAttr::default(),
-            )
+            RuntimeTy::Literal(l, baml_type::Freshness::Regular)
         }
         fn lit_realized(l: baml_type::Literal) -> RealizedTy {
-            RealizedTy::Literal(
-                l,
-                baml_type::Freshness::Regular,
-                baml_type::TyAttr::default(),
-            )
+            RealizedTy::Literal(l, baml_type::Freshness::Regular)
         }
         let one = leaf(lit_realized(baml_type::Literal::Int(1)));
 

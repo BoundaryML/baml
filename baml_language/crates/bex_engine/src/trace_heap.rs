@@ -628,11 +628,11 @@ fn wire_ty_allocation_bound(ty: &baml_type::RuntimeTy) -> usize {
 
     let node = std::mem::size_of::<baml_type::RuntimeTy>();
     let nested = match ty {
-        RuntimeTy::Literal(value, _, _) => literal_bound(value),
-        RuntimeTy::Class(name, args, _) => args.iter().fold(type_name_bound(name), |total, arg| {
+        RuntimeTy::Literal(value, _) => literal_bound(value),
+        RuntimeTy::Class(name, args) => args.iter().fold(type_name_bound(name), |total, arg| {
             add(total, wire_ty_allocation_bound(arg))
         }),
-        RuntimeTy::Interface(name, args, bindings, _) => {
+        RuntimeTy::Interface(name, args, bindings) => {
             let args = args.iter().fold(type_name_bound(name), |total, arg| {
                 add(total, wire_ty_allocation_bound(arg))
             });
@@ -640,8 +640,8 @@ fn wire_ty_allocation_bound(ty: &baml_type::RuntimeTy) -> usize {
                 add(add(total, name_bound(name)), wire_ty_allocation_bound(ty))
             })
         }
-        RuntimeTy::Enum(name, _) | RuntimeTy::TypeAlias(name, _) => type_name_bound(name),
-        RuntimeTy::TypeVar(param, _) => name_bound(param.name()),
+        RuntimeTy::Enum(name) | RuntimeTy::TypeAlias(name) => type_name_bound(name),
+        RuntimeTy::TypeVar(param) => name_bound(param.name()),
         RuntimeTy::AssociatedTypeProjection {
             base,
             interface,
@@ -651,13 +651,13 @@ fn wire_ty_allocation_bound(ty: &baml_type::RuntimeTy) -> usize {
             add(wire_ty_allocation_bound(base), name_bound(member)),
             type_name_bound(&interface.name),
         ),
-        RuntimeTy::EnumVariant(name, variant, _) => add(type_name_bound(name), name_bound(variant)),
-        RuntimeTy::List(inner, _) => wire_ty_allocation_bound(inner),
-        RuntimeTy::Map { key, value, .. } | RuntimeTy::Future(key, value, _) => add(
+        RuntimeTy::EnumVariant(name, variant) => add(type_name_bound(name), name_bound(variant)),
+        RuntimeTy::List(inner) => wire_ty_allocation_bound(inner),
+        RuntimeTy::Map { key, value, .. } | RuntimeTy::Future(key, value) => add(
             wire_ty_allocation_bound(key),
             wire_ty_allocation_bound(value),
         ),
-        RuntimeTy::Union(members, _) => members.iter().fold(0usize, |total, member| {
+        RuntimeTy::Union(members) => members.iter().fold(0usize, |total, member| {
             add(total, wire_ty_allocation_bound(member))
         }),
         RuntimeTy::Function {
@@ -681,21 +681,21 @@ fn wire_ty_allocation_bound(ty: &baml_type::RuntimeTy) -> usize {
                 wire_ty_allocation_bound(throws),
             )
         }
-        RuntimeTy::Int { .. }
-        | RuntimeTy::Bigint { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::String { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Null { .. }
-        | RuntimeTy::Uint8Array { .. }
-        | RuntimeTy::Media(_, _)
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. }
-        | RuntimeTy::Resource { .. }
-        | RuntimeTy::PromptAst { .. }
-        | RuntimeTy::Void { .. }
-        | RuntimeTy::Unknown { .. }
-        | RuntimeTy::Never { .. } => 0,
+        RuntimeTy::Int
+        | RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Uint8Array
+        | RuntimeTy::Media(_)
+        | RuntimeTy::RustType
+        | RuntimeTy::Type
+        | RuntimeTy::Resource
+        | RuntimeTy::PromptAst
+        | RuntimeTy::Void
+        | RuntimeTy::Unknown
+        | RuntimeTy::Never => 0,
     };
     add(node, nested)
 }

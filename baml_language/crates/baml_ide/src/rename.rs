@@ -32,11 +32,13 @@
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
-use baml_compiler2_hir::loc::{ClassLoc, DeclRef, ImplLoc, InterfaceLoc};
+use baml_compiler2_hir::{
+    item_data::{self, MethodOwner},
+    loc::{ClassLoc, DeclRef, ImplLoc, InterfaceLoc},
+};
 use baml_compiler2_hir_ty::extern_loc::{
     extern_class_row, extern_function_row, extern_interface_row,
 };
-use baml_compiler2_ppir::item_data::{self, MethodOwner};
 use text_size::TextSize;
 
 use crate::{
@@ -118,7 +120,7 @@ impl std::fmt::Display for RenameError {
 /// the SYMBOL happens here too, so a rename never fails after the reader
 /// has typed a new name — only the name itself can still be rejected.
 pub fn prepare_rename(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Result<Location, RenameError> {
@@ -129,7 +131,7 @@ pub fn prepare_rename(
 ///
 /// Regular function (not cached); the searches underneath are Salsa-cached.
 pub fn rename(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
     new_name: &str,
@@ -182,7 +184,7 @@ struct Renameable<'db> {
 /// The one gate both entry points pass, so `prepareRename` and `rename`
 /// can never disagree about what is renameable.
 fn renameable(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Result<Renameable<'_>, RenameError> {
@@ -292,7 +294,7 @@ impl<'db> RenameGroup<'db> {
 ///   class as match type-patterns. The declarations alone are not a
 ///   rename.
 fn rename_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     target: SymbolTarget<'db>,
 ) -> Result<RenameGroup<'db>, RenameError> {
@@ -370,7 +372,7 @@ fn rename_group<'db>(
 /// One interface method slot: the interface's own declaration plus every
 /// `implements` block's override of it.
 fn interface_method_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     iface: InterfaceLoc<'db>,
     name: &Name,
@@ -409,7 +411,7 @@ fn interface_method_group<'db>(
 /// no link at all, which couples the two spellings with no token to
 /// rewrite — see [`RenameError::ImplicitInterfaceField`].
 fn interface_field_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     iface: InterfaceLoc<'db>,
     field_index: usize,
@@ -476,7 +478,7 @@ fn interface_field_group<'db>(
 /// class's own file are the complete set of links that can name this field
 /// — no search of other files can add one.
 fn class_field_group<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: ClassLoc<'db>,
     field_index: usize,
 ) -> Result<RenameGroup<'db>, RenameError> {
@@ -533,7 +535,7 @@ fn class_field_group<'db>(
 /// The `implements` blocks belonging to `class` — in-body, and the
 /// out-of-body ones the lowering attaches to it.
 fn class_impls<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: ClassLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
     item_data::file_impls(db, class.file(db))
@@ -546,7 +548,7 @@ fn class_impls<'db>(
 /// The interface an `implements` block implements, or `None` when its
 /// header does not resolve to one.
 fn block_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     block: ImplLoc<'db>,
 ) -> Option<InterfaceLoc<'db>> {
     baml_compiler2_hir_ty::interfaces::impl_data(db, block)
@@ -563,7 +565,7 @@ fn block_interface<'db>(
 /// miss it — this is the scope [`crate::usages_at`] searches, expressed as
 /// viewpoints.
 fn impls_of<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     iface: InterfaceLoc<'db>,
 ) -> Vec<ImplLoc<'db>> {
@@ -587,7 +589,7 @@ fn impls_of<'db>(
 
 /// The source text a span covers, or `None` when the span is not inside its
 /// file (which a correct search never produces).
-fn span_text<'db>(db: &'db dyn baml_compiler2_ppir::Db, span: &Location) -> Option<&'db str> {
+fn span_text<'db>(db: &'db dyn baml_compiler2_hir::Db, span: &Location) -> Option<&'db str> {
     span.file
         .text(db)
         .get(std::ops::Range::<usize>::from(span.range))

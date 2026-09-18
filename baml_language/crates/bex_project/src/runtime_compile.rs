@@ -127,20 +127,20 @@ impl StubViewpoint<'_> {
         use baml_type::Ty;
 
         match ty {
-            Ty::Class(name, generics, _) => {
+            Ty::Class(name, generics) => {
                 !self.spellable_package(name) || generics.iter().any(|ty| self.hides_type(ty))
             }
-            Ty::Interface(name, generics, associated_types, _) => {
+            Ty::Interface(name, generics, associated_types) => {
                 !self.spellable_package(name)
                     || generics.iter().any(|ty| self.hides_type(ty))
                     || associated_types.iter().any(|(_, ty)| self.hides_type(ty))
             }
-            Ty::Enum(name, _) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name, _) => {
+            Ty::Enum(name) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name) => {
                 !self.spellable_package(name)
             }
-            Ty::List(inner, _) => self.hides_type(inner),
+            Ty::List(inner) => self.hides_type(inner),
             Ty::Map { key, value, .. } => self.hides_type(key) || self.hides_type(value),
-            Ty::Union(members, _) => members.iter().any(|ty| self.hides_type(ty)),
+            Ty::Union(members) => members.iter().any(|ty| self.hides_type(ty)),
             Ty::Function {
                 params,
                 ret,
@@ -151,28 +151,28 @@ impl StubViewpoint<'_> {
                     || self.hides_type(ret)
                     || self.hides_type(throws)
             }
-            Ty::Future(value, throws, _) => self.hides_type(value) || self.hides_type(throws),
+            Ty::Future(value, throws) => self.hides_type(value) || self.hides_type(throws),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => self.hides_type(base) || self.hides_interface(interface),
-            Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
+            Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Literal(..)
-            | Ty::RustType { .. }
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Void { .. }
+            | Ty::RustType
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::Void
             | Ty::TypeVar(..)
-            | Ty::Unknown { .. }
-            | Ty::Never { .. }
-            | Ty::Error { .. } => false,
+            | Ty::Unknown
+            | Ty::Never
+            | Ty::Error => false,
         }
     }
 }
@@ -324,7 +324,6 @@ fn enrich_runtime_mount(
                 interface.name.clone(),
                 interface.generics.clone(),
                 interface.associated_types.clone(),
-                baml_type::TyAttr::default(),
             )
             .to_string()
         })
@@ -431,7 +430,7 @@ fn enrich_runtime_mount(
             .join(", ");
         let throws = if matches!(
             function.callable_throws,
-            baml_type::Ty::Never { .. } | baml_type::Ty::Void { .. }
+            baml_type::Ty::Never | baml_type::Ty::Void
         ) {
             String::new()
         } else {
@@ -913,7 +912,7 @@ fn enrich_runtime_mount(
         // root gets — and an export name equal to the item name is the item
         // row itself.
         let root_item = match &mount.ty {
-            baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
+            baml_type::RealizedTy::Class(qtn, _) | baml_type::RealizedTy::Enum(qtn) => {
                 if !minted_rows.contains_key(qtn.name()) {
                     return Err(RuntimeCompileDiagnostic {
                         code: "E_RUNTIME_INTERFACE".to_string(),
@@ -2491,7 +2490,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         if let Some(session) = &session
             && !matches!(
                 session.expected,
-                bex_vm_types::SessionContract::Checkable(baml_type::RuntimeTy::Unknown { .. })
+                bex_vm_types::SessionContract::Checkable(baml_type::RuntimeTy::Unknown)
             )
         {
             let file = session.artifact.submission_name.as_str();
@@ -2738,14 +2737,7 @@ mod tests {
         let aliases = vec![Name::new("app")];
         let viewpoint = StubViewpoint { aliases: &aliases };
         let class_list = |qtn: baml_type::QualifiedTypeName| {
-            baml_type::Ty::List(
-                Box::new(baml_type::Ty::Class(
-                    qtn,
-                    Box::new([]),
-                    baml_type::TyAttr::default(),
-                )),
-                baml_type::TyAttr::default(),
-            )
+            baml_type::Ty::List(Box::new(baml_type::Ty::Class(qtn, Box::new([]))))
         };
         // Local, stdlib, and mount-alias packages are spellable — even nested.
         assert!(
@@ -2882,7 +2874,7 @@ mod tests {
             callable::{ExternalCallTarget, ExternalLinkability},
             package_interface::{ExportedFunction, ExportedType},
         };
-        use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr};
+        use baml_type::{FunctionParamTy, ParamTy, Ty};
 
         let app = Name::new("app");
         let class_qtn =
@@ -2890,7 +2882,7 @@ mod tests {
         let iface_qtn =
             baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new("Describable"));
         let self_param = ParamTy::new(0, Name::new("Self"));
-        let self_ty = Ty::TypeVar(self_param.clone(), TyAttr::default());
+        let self_ty = Ty::TypeVar(self_param.clone());
         let function = |name: &str,
                         params: Vec<FunctionParamTy<TypeName>>,
                         target: ExternalCallTarget<TypeName>| {
@@ -2898,9 +2890,7 @@ mod tests {
                 name: Name::new(name),
                 params,
                 return_type: Ty::string(),
-                callable_throws: Ty::Never {
-                    attr: TyAttr::default(),
-                },
+                callable_throws: Ty::Never,
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
                 builtin_kind: None,
@@ -2910,7 +2900,7 @@ mod tests {
         };
         let class_self = FunctionParamTy::required(
             Some(Name::new("self")),
-            Ty::Class(class_qtn.clone(), Box::new([]), TyAttr::default()),
+            Ty::Class(class_qtn.clone(), Box::new([])),
         );
         let interface_self = FunctionParamTy::required(Some(Name::new("self")), self_ty);
         let mut types = IndexMap::new();
@@ -3097,11 +3087,7 @@ mod tests {
             types: vec![
                 bex_vm_types::RuntimeTypeMount {
                     export_name: Name::new("ClassAlias"),
-                    ty: baml_type::RealizedTy::Class(
-                        class_qtn,
-                        Box::new([]),
-                        baml_type::TyAttr::default(),
-                    ),
+                    ty: baml_type::RealizedTy::Class(class_qtn, Box::new([])),
                     classes: vec![bex_vm_types::RuntimeMountedClass {
                         name: class_name,
                         tag: baml_type::typetag::TypeTag::of_head("runtime.RuntimeClass"),
@@ -3120,7 +3106,7 @@ mod tests {
                 },
                 bex_vm_types::RuntimeTypeMount {
                     export_name: Name::new("StateAlias"),
-                    ty: baml_type::RealizedTy::Enum(enum_qtn, baml_type::TyAttr::default()),
+                    ty: baml_type::RealizedTy::Enum(enum_qtn),
                     classes: Vec::new(),
                     enums: vec![bex_vm_types::RuntimeMountedEnum {
                         name: enum_name,

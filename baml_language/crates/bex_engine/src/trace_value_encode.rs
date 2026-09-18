@@ -590,7 +590,7 @@ fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
 
     let mut metric = AllocationMetric::default().unit();
     match ty {
-        RuntimeTy::Literal(literal, _, _) => match literal {
+        RuntimeTy::Literal(literal, _) => match literal {
             Literal::String(value) | Literal::Float(value) => {
                 metric = metric.unit().add_bytes(value.len());
             }
@@ -603,13 +603,13 @@ fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
             }
             Literal::Int(_) | Literal::Bool(_) => {}
         },
-        RuntimeTy::Class(name, args, _) => {
+        RuntimeTy::Class(name, args) => {
             metric = metric.merge(type_name_metric(name));
             for arg in args {
                 metric = metric.merge(runtime_ty_allocation_metric(arg));
             }
         }
-        RuntimeTy::Interface(name, args, bindings, _) => {
+        RuntimeTy::Interface(name, args, bindings) => {
             metric = metric.merge(type_name_metric(name));
             for arg in args {
                 metric = metric.merge(runtime_ty_allocation_metric(arg));
@@ -621,22 +621,22 @@ fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
                     .merge(runtime_ty_allocation_metric(ty));
             }
         }
-        RuntimeTy::Enum(name, _) | RuntimeTy::TypeAlias(name, _) => {
+        RuntimeTy::Enum(name) | RuntimeTy::TypeAlias(name) => {
             metric = metric.merge(type_name_metric(name));
         }
-        RuntimeTy::EnumVariant(name, variant, _) => {
+        RuntimeTy::EnumVariant(name, variant) => {
             metric = metric
                 .merge(type_name_metric(name))
                 .unit()
                 .add_bytes(variant.as_str().len());
         }
-        RuntimeTy::List(inner, _) => metric = metric.merge(runtime_ty_allocation_metric(inner)),
-        RuntimeTy::Map { key, value, .. } | RuntimeTy::Future(key, value, _) => {
+        RuntimeTy::List(inner) => metric = metric.merge(runtime_ty_allocation_metric(inner)),
+        RuntimeTy::Map { key, value, .. } | RuntimeTy::Future(key, value) => {
             metric = metric
                 .merge(runtime_ty_allocation_metric(key))
                 .merge(runtime_ty_allocation_metric(value));
         }
-        RuntimeTy::Union(members, _) => {
+        RuntimeTy::Union(members) => {
             metric.units = metric
                 .units
                 .saturating_add(u64::try_from(members.len()).unwrap_or(u64::MAX));
@@ -682,24 +682,24 @@ fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
                     .merge(runtime_ty_allocation_metric(ty));
             }
         }
-        RuntimeTy::TypeVar(param, _) => {
+        RuntimeTy::TypeVar(param) => {
             metric = metric.unit().add_bytes(param.as_str().len());
         }
-        RuntimeTy::Int { .. }
-        | RuntimeTy::Bigint { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::String { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Null { .. }
-        | RuntimeTy::Uint8Array { .. }
-        | RuntimeTy::Media(_, _)
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. }
-        | RuntimeTy::Resource { .. }
-        | RuntimeTy::PromptAst { .. }
-        | RuntimeTy::Void { .. }
-        | RuntimeTy::Unknown { .. }
-        | RuntimeTy::Never { .. } => {}
+        RuntimeTy::Int
+        | RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Uint8Array
+        | RuntimeTy::Media(_)
+        | RuntimeTy::RustType
+        | RuntimeTy::Type
+        | RuntimeTy::Resource
+        | RuntimeTy::PromptAst
+        | RuntimeTy::Void
+        | RuntimeTy::Unknown
+        | RuntimeTy::Never => {}
     }
     metric
 }
@@ -846,36 +846,36 @@ fn interface_to_proto_ty(
 
 fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
     match ty {
-        RuntimeTy::String { .. } => primitive(BamlTyPrimitiveKind::String),
-        RuntimeTy::Int { .. } => primitive(BamlTyPrimitiveKind::Int),
-        RuntimeTy::Float { .. } => primitive(BamlTyPrimitiveKind::Float),
-        RuntimeTy::Bool { .. } => primitive(BamlTyPrimitiveKind::Bool),
-        RuntimeTy::Null { .. } => primitive(BamlTyPrimitiveKind::Null),
-        RuntimeTy::Uint8Array { .. } => primitive(BamlTyPrimitiveKind::Bytes),
-        RuntimeTy::Bigint { .. } => primitive(BamlTyPrimitiveKind::Bigint),
-        RuntimeTy::Class(name, args, _) => BamlTyVariant::ClassTy(BamlTyClass {
+        RuntimeTy::String => primitive(BamlTyPrimitiveKind::String),
+        RuntimeTy::Int => primitive(BamlTyPrimitiveKind::Int),
+        RuntimeTy::Float => primitive(BamlTyPrimitiveKind::Float),
+        RuntimeTy::Bool => primitive(BamlTyPrimitiveKind::Bool),
+        RuntimeTy::Null => primitive(BamlTyPrimitiveKind::Null),
+        RuntimeTy::Uint8Array => primitive(BamlTyPrimitiveKind::Bytes),
+        RuntimeTy::Bigint => primitive(BamlTyPrimitiveKind::Bigint),
+        RuntimeTy::Class(name, args) => BamlTyVariant::ClassTy(BamlTyClass {
             name: name.render_dotted(false),
             type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
         }),
-        RuntimeTy::TypeAlias(name, _) => BamlTyVariant::TypeAlias(BamlTyTypeAlias {
+        RuntimeTy::TypeAlias(name) => BamlTyVariant::TypeAlias(BamlTyTypeAlias {
             name: name.render_dotted(false),
             type_args: Vec::new(),
         }),
-        RuntimeTy::Enum(name, _) => BamlTyVariant::Enum(BamlTyEnum {
+        RuntimeTy::Enum(name) => BamlTyVariant::Enum(BamlTyEnum {
             name: name.render_dotted(false),
         }),
-        RuntimeTy::EnumVariant(name, variant, _) => BamlTyVariant::EnumVariant(BamlTyEnumVariant {
+        RuntimeTy::EnumVariant(name, variant) => BamlTyVariant::EnumVariant(BamlTyEnumVariant {
             name: name.render_dotted(false),
             variant: variant.as_str().to_string(),
         }),
-        RuntimeTy::List(inner, _) => BamlTyVariant::List(BamlTyList {
+        RuntimeTy::List(inner) => BamlTyVariant::List(BamlTyList {
             item: Some(Box::new(runtime_ty_to_proto_ty(inner))),
         }),
         RuntimeTy::Map { key, value, .. } => BamlTyVariant::Map(BamlTyMap {
             key: Some(Box::new(runtime_ty_to_proto_ty(key))),
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
         }),
-        RuntimeTy::Union(members, _) => {
+        RuntimeTy::Union(members) => {
             let has_null = members.iter().any(RuntimeTy::is_null);
             let non_null = members
                 .iter()
@@ -891,15 +891,13 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
                 })
             }
         }
-        RuntimeTy::Literal(lit, _, _) => BamlTyVariant::Literal(literal_to_proto(lit)),
-        RuntimeTy::Media(kind, _) => BamlTyVariant::Media(BamlTyMedia {
+        RuntimeTy::Literal(lit, _) => BamlTyVariant::Literal(literal_to_proto(lit)),
+        RuntimeTy::Media(kind) => BamlTyVariant::Media(BamlTyMedia {
             kind: media_kind_to_proto_ty(*kind) as i32,
         }),
-        RuntimeTy::Interface(name, args, bindings, _) => {
-            interface_to_proto_ty(name, args, bindings)
-                .ty
-                .unwrap_or_else(|| unreachable!("interface helper always sets ty"))
-        }
+        RuntimeTy::Interface(name, args, bindings) => interface_to_proto_ty(name, args, bindings)
+            .ty
+            .unwrap_or_else(|| unreachable!("interface helper always sets ty")),
         RuntimeTy::Function {
             params,
             ret,
@@ -918,16 +916,16 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ret: Some(Box::new(runtime_ty_to_proto_ty(ret))),
             throws: Some(Box::new(runtime_ty_to_proto_ty(throws))),
         }),
-        RuntimeTy::Future(value, error, _) => BamlTyVariant::Future(BamlTyFuture {
+        RuntimeTy::Future(value, error) => BamlTyVariant::Future(BamlTyFuture {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         }),
-        RuntimeTy::RustType { .. } => BamlTyVariant::RustType(BamlTyRustType {}),
-        RuntimeTy::Type { .. } => BamlTyVariant::MetaType(BamlTyMetaType {}),
-        RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
-        RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
-        RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
-        RuntimeTy::TypeVar(param, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
+        RuntimeTy::RustType => BamlTyVariant::RustType(BamlTyRustType {}),
+        RuntimeTy::Type => BamlTyVariant::MetaType(BamlTyMetaType {}),
+        RuntimeTy::Resource => BamlTyVariant::Resource(BamlTyResource {}),
+        RuntimeTy::PromptAst => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
+        RuntimeTy::Void => BamlTyVariant::Void(BamlTyVoid {}),
+        RuntimeTy::TypeVar(param) => BamlTyVariant::TypeVar(BamlTyTypeVar {
             name: param.as_str().to_string(),
             index: param.index(),
         }),
@@ -946,8 +944,8 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ))),
             member: member.as_str().to_string(),
         }),
-        RuntimeTy::Unknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
-        RuntimeTy::Never { .. } => BamlTyVariant::Never(BamlTyNever {}),
+        RuntimeTy::Unknown => BamlTyVariant::Unknown(BamlTyUnknown {}),
+        RuntimeTy::Never => BamlTyVariant::Never(BamlTyNever {}),
     }
 }
 

@@ -558,7 +558,7 @@ function main() -> int { 0 }
         iface.fields[1].ty,
     );
     assert!(
-        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int { .. }),
+        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int),
         "field after the projection must keep its own type, got {:?}",
         iface.fields[2].ty,
     );

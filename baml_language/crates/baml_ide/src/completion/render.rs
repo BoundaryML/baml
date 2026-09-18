@@ -26,7 +26,7 @@ pub(super) enum MemberForm {
 /// The right-hand column and the tooltip for a member, rendered from the
 /// DECLARATION the enumeration handed back.
 pub(super) fn member(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     decl: &MemberDecl<'_>,
     form: MemberForm,
@@ -40,7 +40,7 @@ pub(super) fn member(
     };
     match decl {
         MemberDecl::Method(DeclRef::Source(function)) => {
-            let data = baml_compiler2_ppir::item_data::function_data(db, *function);
+            let data = baml_compiler2_hir::item_data::function_data(db, *function);
             let signature =
                 info::resolved_function_sig_parts(db, *function, None).render(db, file, style);
             (Some(signature), data.docstring.clone())
@@ -57,7 +57,7 @@ pub(super) fn member(
             enum_loc: DeclRef::Source(enum_loc),
             index,
         } => {
-            let data = baml_compiler2_ppir::item_data::enum_data(db, *enum_loc);
+            let data = baml_compiler2_hir::item_data::enum_data(db, *enum_loc);
             (
                 Some(data.name.as_str().to_string()),
                 data.variants
@@ -73,7 +73,7 @@ pub(super) fn member(
             class: DeclRef::Source(class),
             index,
         } => {
-            let data = baml_compiler2_ppir::item_data::class_data(db, *class);
+            let data = baml_compiler2_hir::item_data::class_data(db, *class);
             let ty = baml_compiler2_hir_ty::lower::resolve_class_fields(db, *class)
                 .get(*index)
                 .map(|(_, ty, _)| crate::render::display_ty_canonical_for_file(db, file, ty));
@@ -99,7 +99,7 @@ pub(super) fn member(
             interface: DeclRef::Source(interface),
             index,
         } => {
-            let data = baml_compiler2_ppir::item_data::interface_data(db, *interface);
+            let data = baml_compiler2_hir::item_data::interface_data(db, *interface);
             (
                 None,
                 data.fields
@@ -123,13 +123,13 @@ pub(super) fn member(
 /// The right-hand column and tooltip for a top-level item — a function's
 /// signature comes from the same engine hover uses.
 pub(super) fn definition(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     def: &Definition<'_>,
 ) -> (Option<String>, Option<String>) {
     match def {
         Definition::Function(function) => {
-            let data = baml_compiler2_ppir::item_data::function_data(db, *function);
+            let data = baml_compiler2_hir::item_data::function_data(db, *function);
             let signature = info::resolved_function_sig_parts(db, *function, None).render(
                 db,
                 file,

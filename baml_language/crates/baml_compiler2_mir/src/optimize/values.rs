@@ -470,13 +470,12 @@ fn prefix_operands<'a, 'db>(
 
 fn constant_type(constant: &Constant<'_>) -> Option<baml_type::RuntimeTy> {
     use baml_type::RuntimeTy;
-    let attr = baml_type::TyAttr::default();
     Some(match constant {
-        Constant::Int(_) => RuntimeTy::Int { attr },
-        Constant::Float(_) => RuntimeTy::Float { attr },
-        Constant::Bool(_) => RuntimeTy::Bool { attr },
-        Constant::String(_) => RuntimeTy::String { attr },
-        Constant::Null => RuntimeTy::Null { attr },
+        Constant::Int(_) => RuntimeTy::Int,
+        Constant::Float(_) => RuntimeTy::Float,
+        Constant::Bool(_) => RuntimeTy::Bool,
+        Constant::String(_) => RuntimeTy::String,
+        Constant::Null => RuntimeTy::Null,
         _ => return None,
     })
 }

@@ -133,15 +133,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly _testHandleTableEntryCount: () => [number, number, number];
-    readonly cloneHandle: (a: bigint) => [bigint, number, number];
-    readonly releaseHandle: (a: bigint) => number;
-    readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
-    readonly seedGenericMediaHandle: () => [bigint, number, number];
-    readonly callFunction: (a: number, b: number) => any;
-    readonly callFunctionSync: (a: number, b: number) => [number, number];
-    readonly stageRuntimeBytecode: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly _testWebFireHostRelease: (a: bigint) => void;
     readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
@@ -161,6 +152,15 @@ export interface InitOutput {
     readonly mediaFromUrl: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
     readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
+    readonly callFunction: (a: number, b: number) => any;
+    readonly callFunctionSync: (a: number, b: number) => [number, number];
+    readonly stageRuntimeBytecode: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
+    readonly _testHandleTableEntryCount: () => [number, number, number];
+    readonly cloneHandle: (a: bigint) => [bigint, number, number];
+    readonly releaseHandle: (a: bigint) => number;
+    readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
+    readonly seedGenericMediaHandle: () => [bigint, number, number];
     readonly cancelFunctionCall: (a: bigint) => number;
     readonly configureWorkerdRuntime: () => void;
     readonly flushEvents: () => void;

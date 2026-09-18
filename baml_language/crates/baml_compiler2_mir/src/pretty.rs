@@ -810,9 +810,6 @@ mod tests {
     }
 
     #[salsa::db]
-    impl baml_compiler2_ppir::Db for TestDb {}
-
-    #[salsa::db]
     impl crate::Db for TestDb {}
 
     fn render_terminator(terminator: &Terminator<'_>) -> String {

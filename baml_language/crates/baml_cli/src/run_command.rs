@@ -1095,9 +1095,7 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let return_type = engine
             .function_return_type("baml_run_expr_main__")
-            .unwrap_or(bex_engine::RuntimeTy::Null {
-                attr: baml_type::TyAttr::default(),
-            });
+            .unwrap_or(bex_engine::RuntimeTy::Null);
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
@@ -1111,7 +1109,7 @@ impl RunArgs {
                 &rt,
                 async {
                     let value = call_result?;
-                    if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
+                    if !matches!(return_type, bex_engine::RuntimeTy::Void) {
                         if let Err(e) = baml_exec::write_output_with_context(
                             &engine,
                             value,
@@ -1804,24 +1802,16 @@ mod tests {
     }
 
     fn ty_string() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: Default::default(),
-        }
+        RuntimeTy::String
     }
     fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: Default::default(),
-        }
+        RuntimeTy::Int
     }
     fn ty_float() -> RuntimeTy {
-        RuntimeTy::Float {
-            attr: Default::default(),
-        }
+        RuntimeTy::Float
     }
     fn ty_bool() -> RuntimeTy {
-        RuntimeTy::Bool {
-            attr: Default::default(),
-        }
+        RuntimeTy::Bool
     }
 
     #[test]

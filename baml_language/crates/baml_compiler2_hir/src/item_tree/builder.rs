@@ -18,8 +18,9 @@ use crate::{
         LocalItemId, TypeAliasMarker, hash_impl_key, hash_name,
     },
     item_tree::{
-        Attribute, Class, ClassField, DefaultExprRef, Enum, EnumVariant, Function, FunctionParam,
-        ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink, ItemTree,
+        Class, ClassAttrs, ClassField, ClassFieldAttrs, DefaultExprRef, Enum, EnumAttrs,
+        EnumVariant, EnumVariantAttrs, Function, FunctionParam, ImplBlock, ImplSubject,
+        ImplementsBlock, Interface, InterfaceField, InterfaceFieldLink, ItemTree,
         ItemTreeSourceMap, Let, MethodOwner, TypeAlias,
     },
 };
@@ -89,7 +90,21 @@ impl ItemTreeBuilder {
     }
 
     /// Allocate a class, recording its field name spans in the source map.
-    pub fn alloc_class(&mut self, c: &ast::ClassDef) -> LocalItemId<ClassMarker> {
+    ///
+    /// `attrs` and `field_attrs` are the class's and each field's lowered
+    /// attributes (`field_attrs` parallel to `c.fields`), lowered by the
+    /// caller so their diagnostics land with the rest of the file's.
+    pub fn alloc_class(
+        &mut self,
+        c: &ast::ClassDef,
+        attrs: ClassAttrs,
+        field_attrs: Vec<ClassFieldAttrs>,
+    ) -> LocalItemId<ClassMarker> {
+        debug_assert_eq!(
+            field_attrs.len(),
+            c.fields.len(),
+            "one lowered attribute set per field"
+        );
         let id = self.alloc_id(ItemKind::Class, &c.name);
         self.source_map.class_name_spans.insert(id, c.name_span);
         self.source_map
@@ -98,10 +113,11 @@ impl ItemTreeBuilder {
         let fields = c
             .fields
             .iter()
-            .map(|f| ClassField {
+            .zip(field_attrs)
+            .map(|(f, attrs)| ClassField {
                 name: f.name.clone(),
                 type_expr: f.type_expr.clone(),
-                attributes: f.attributes.iter().map(Attribute::from).collect(),
+                attrs,
                 docstring: f.docstring.clone(),
             })
             .collect();
@@ -128,7 +144,7 @@ impl ItemTreeBuilder {
                 fields,
                 methods: Vec::new(),
                 implements,
-                attributes: c.attributes.iter().map(Attribute::from).collect(),
+                attrs,
                 docstring: c.docstring.clone(),
                 span: c.span,
             },
@@ -210,7 +226,20 @@ impl ItemTreeBuilder {
     }
 
     /// Allocate an enum, recording its variant name spans in the source map.
-    pub fn alloc_enum(&mut self, e: &ast::EnumDef) -> LocalItemId<EnumMarker> {
+    ///
+    /// `attrs` and `variant_attrs` are the enum's and each variant's lowered
+    /// attributes (`variant_attrs` parallel to `e.variants`).
+    pub fn alloc_enum(
+        &mut self,
+        e: &ast::EnumDef,
+        attrs: EnumAttrs,
+        variant_attrs: Vec<EnumVariantAttrs>,
+    ) -> LocalItemId<EnumMarker> {
+        debug_assert_eq!(
+            variant_attrs.len(),
+            e.variants.len(),
+            "one lowered attribute set per variant"
+        );
         let id = self.alloc_id(ItemKind::Enum, &e.name);
         self.source_map.enum_name_spans.insert(id, e.name_span);
         self.source_map
@@ -219,9 +248,10 @@ impl ItemTreeBuilder {
         let variants = e
             .variants
             .iter()
-            .map(|v| EnumVariant {
+            .zip(variant_attrs)
+            .map(|(v, attrs)| EnumVariant {
                 name: v.name.clone(),
-                attributes: v.attributes.iter().map(Attribute::from).collect(),
+                attrs,
                 docstring: v.docstring.clone(),
             })
             .collect();
@@ -230,7 +260,7 @@ impl ItemTreeBuilder {
             Enum {
                 name: e.name.clone(),
                 variants,
-                attributes: e.attributes.iter().map(Attribute::from).collect(),
+                attrs,
                 docstring: e.docstring.clone(),
                 span: e.span,
             },
@@ -307,10 +337,9 @@ impl ItemTreeBuilder {
         let fields = i
             .fields
             .iter()
-            .map(|f| ClassField {
+            .map(|f| InterfaceField {
                 name: f.name.clone(),
                 type_expr: f.type_expr.clone(),
-                attributes: f.attributes.iter().map(Attribute::from).collect(),
                 docstring: f.docstring.clone(),
             })
             .collect();
@@ -323,7 +352,6 @@ impl ItemTreeBuilder {
                 fields,
                 associated_types: i.associated_types.clone(),
                 methods: method_ids,
-                attributes: i.attributes.iter().map(Attribute::from).collect(),
                 docstring: i.docstring.clone(),
                 span: i.span,
             },

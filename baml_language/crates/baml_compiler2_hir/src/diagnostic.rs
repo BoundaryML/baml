@@ -5,7 +5,7 @@
 //! the file is known from context. Conversion to the shared `Diagnostic`
 //! type happens lazily via `to_diagnostic(file_id)`.
 
-use baml_base::{FileId, Name, Span};
+use baml_base::{AttributePosition, FileId, Name, Span};
 use baml_compiler_diagnostics::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase},
     runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
@@ -36,19 +36,20 @@ pub enum Hir2Diagnostic {
         scope: Option<Name>,
         sites: Vec<MemberSite>,
     },
-    /// Unknown builtin-internal attribute.
-    UnknownInternalAttribute {
+    /// An attribute the language does not define. Attributes are a fixed
+    /// vocabulary (`baml_base::SCHEMA_ATTRIBUTE_SPECS`), so an unknown name is
+    /// a misspelling or a removed attribute, never a pass-through annotation.
+    UnknownAttribute {
         attr_name: Name,
+        position: AttributePosition,
         span: TextRange,
-        valid_attributes: Vec<&'static str>,
     },
-    /// An attribute on a type expression is not a known type or field attribute.
-    UnknownTypeAttribute { attr_name: Name, span: TextRange },
-    /// Builtin-internal attribute used in the wrong place.
-    InvalidAttributeContext {
+    /// A schema attribute written at a declaration position it has no meaning
+    /// at: `@stream.done` on an enum variant, `@@skip` on a class.
+    AttributeNotAllowedHere {
         attr_name: Name,
-        context: &'static str,
-        allowed_contexts: &'static str,
+        position: AttributePosition,
+        allowed: &'static [AttributePosition],
         span: TextRange,
     },
     /// Builtin-only syntax used outside builtin stdlib files.
@@ -365,45 +366,51 @@ impl Hir2Diagnostic {
                 }
                 diag.with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::UnknownInternalAttribute {
+            Hir2Diagnostic::UnknownAttribute {
                 attr_name,
+                position,
                 span,
-                valid_attributes,
-            } => Diagnostic::error(
-                DiagnosticId::UnknownAttribute,
-                format!(
-                    "unknown attribute `@@{}`. Valid builtin internal attributes are: {}",
-                    attr_name,
-                    valid_attributes.join(", ")
-                ),
-            )
-            .with_primary(Span { file_id, range: *span }, "unknown attribute")
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::UnknownTypeAttribute { attr_name, span } => Diagnostic::error(
-                DiagnosticId::UnknownAttribute,
-                format!("unknown attribute `@{attr_name}`"),
-            )
-            .with_primary(Span { file_id, range: *span }, "unknown attribute")
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::InvalidAttributeContext {
+            } => {
+                let sigil = position.sigil();
+                let valid = baml_base::schema_attribute_specs_at(*position)
+                    .map(|spec| format!("`{sigil}{}`", spec.name))
+                    .collect::<Vec<_>>();
+                let valid = if valid.is_empty() {
+                    format!("no attribute is valid on {}", position.describe())
+                } else {
+                    format!("valid on {}: {}", position.describe(), valid.join(", "))
+                };
+                Diagnostic::error(
+                    DiagnosticId::UnknownAttribute,
+                    format!("unknown attribute `{sigil}{attr_name}`; {valid}"),
+                )
+                .with_primary(Span { file_id, range: *span }, "unknown attribute")
+                .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::AttributeNotAllowedHere {
                 attr_name,
-                context,
-                allowed_contexts,
+                position,
+                allowed,
                 span,
-            } => Diagnostic::error(
-                DiagnosticId::InvalidAttributeContext,
-                format!(
-                    "attribute `@@{attr_name}` is not valid on {context}. Allowed contexts: {allowed_contexts}",
-                ),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "invalid attribute context",
-            )
-            .with_phase(DiagnosticPhase::Hir),
+            } => {
+                let allowed = allowed
+                    .iter()
+                    .map(|allowed| {
+                        format!("`{}{attr_name}` on {}", allowed.sigil(), allowed.describe())
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Diagnostic::error(
+                    DiagnosticId::InvalidAttributeContext,
+                    format!(
+                        "attribute `{}{attr_name}` is not valid on {}; allowed: {allowed}",
+                        position.sigil(),
+                        position.describe(),
+                    ),
+                )
+                .with_primary(Span { file_id, range: *span }, "not valid here")
+                .with_phase(DiagnosticPhase::Hir)
+            }
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(
                 DiagnosticId::InvalidAttributeContext,
                 format!("builtin-only syntax `{feature}` is only allowed in builtin stdlib files"),

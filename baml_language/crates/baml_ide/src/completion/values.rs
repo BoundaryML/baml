@@ -1,12 +1,12 @@
 //! Expression position: the names and keywords that can start a value.
 //!
-//! The names come from [`baml_compiler2_ppir::resolve::names_in_scope_at`],
+//! The names come from [`baml_compiler2_hir::resolve::names_in_scope_at`],
 //! the enumeration counterpart of the resolver — so what is offered is what
 //! would resolve, shadowing included, and nothing here re-walks a scope
 //! chain.
 
 use baml_base::SourceFile;
-use baml_compiler2_ppir::resolve::{ScopeNameKind, names_in_scope_at};
+use baml_compiler2_hir::resolve::{ScopeNameKind, names_in_scope_at};
 use text_size::TextSize;
 
 use super::completions::Completions;
@@ -23,7 +23,7 @@ const EXPRESSION_KEYWORDS: &[&str] = &[
 ];
 
 pub(crate) fn complete(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
     out: &mut Completions<'_>,

@@ -45,75 +45,49 @@ pub enum TypeExprKind {
         generic_args: Vec<TypeExpr>,
         /// Named associated type bindings in type positions, e.g. `Iterator<Item = int>`.
         associated_type_bindings: Vec<AssociatedTypeBinding>,
-        attrs: Vec<RawAttribute>,
     },
     /// Associated type projection: `Base.Item` or `(Base as Interface).Item`.
     AssociatedTypeProjection {
         base: Box<TypeExpr>,
         interface: Option<Box<TypeExpr>>,
         member: Name,
-        attrs: Vec<RawAttribute>,
     },
     /// Primitive types
-    Int {
-        attrs: Vec<RawAttribute>,
-    },
-    Bigint {
-        attrs: Vec<RawAttribute>,
-    },
-    Float {
-        attrs: Vec<RawAttribute>,
-    },
-    String {
-        attrs: Vec<RawAttribute>,
-    },
-    Bool {
-        attrs: Vec<RawAttribute>,
-    },
-    Null {
-        attrs: Vec<RawAttribute>,
-    },
-    Never {
-        attrs: Vec<RawAttribute>,
-    },
+    Int,
+    Bigint,
+    Float,
+    String,
+    Bool,
+    Null,
+    Never,
     /// The `void` type — valid only as a function return type.
-    Void {
-        attrs: Vec<RawAttribute>,
-    },
+    Void,
     /// `Uint8Array` (binary data) type
-    Uint8Array {
-        attrs: Vec<RawAttribute>,
-    },
+    Uint8Array,
     /// Media types
     Media {
         kind: baml_base::MediaKind,
-        attrs: Vec<RawAttribute>,
     },
     /// T?
     Optional {
         inner: Box<TypeExpr>,
-        attrs: Vec<RawAttribute>,
     },
     /// T[]
     List {
         inner: Box<TypeExpr>,
-        attrs: Vec<RawAttribute>,
     },
     /// map<K, V>
     Map {
         key: Box<TypeExpr>,
         value: Box<TypeExpr>,
-        attrs: Vec<RawAttribute>,
     },
     /// A | B | C
     Union {
         variants: Vec<TypeExpr>,
-        attrs: Vec<RawAttribute>,
     },
     /// Literal types in unions: `"user"`, `200`, `3.14`, `true`.
     Literal {
         value: baml_base::Literal,
-        attrs: Vec<RawAttribute>,
     },
     /// Function type: `(params) -> return throws E`. Function *values* are
     /// realized, so a function type carries no generic parameters of its own —
@@ -122,36 +96,23 @@ pub enum TypeExprKind {
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
         throws: Option<Box<TypeExpr>>,
-        attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type
-    Unknown {
-        attrs: Vec<RawAttribute>,
-    },
+    Unknown,
     /// The `type` meta-type keyword
-    Type {
-        attrs: Vec<RawAttribute>,
-    },
+    Type,
     /// `$rust_type` — opaque Rust-managed state field type.
-    Rust {
-        attrs: Vec<RawAttribute>,
-    },
+    Rust,
     /// Error recovery sentinel
-    Error {
-        attrs: Vec<RawAttribute>,
-    },
+    Error,
     /// No type was written at this slot (an omitted annotation), as distinct
     /// from the written `unknown` keyword above.
-    Missing {
-        attrs: Vec<RawAttribute>,
-    },
+    Missing,
     /// The wildcard `_` — an inference hole. Valid only where the type at this
     /// slot can be inferred from context (a generic type argument whose binding
     /// is fixed by an initializer, or a `throws`-clause member). Lowered to
     /// an inference hole and filled during TIR checking.
-    Infer {
-        attrs: Vec<RawAttribute>,
-    },
+    Infer,
 }
 
 /// A type expression node paired with its source span. Every node in the tree
@@ -197,7 +158,7 @@ impl std::ops::DerefMut for TypeExpr {
 }
 
 impl TypeExprKind {
-    /// Pair this node with its source span. `TypeExprKind::Int { .. }.at(span)`.
+    /// Pair this node with its source span. `TypeExprKind::Int.at(span)`.
     pub fn at(self, span: TextRange) -> TypeExpr {
         TypeExpr { kind: self, span }
     }
@@ -211,69 +172,91 @@ impl TypeExpr {
         self.span = span;
         self
     }
-}
 
-impl TypeExprKind {
-    /// Access the type-level attributes on this type expression.
-    pub fn attrs(&self) -> &[RawAttribute] {
-        match self {
-            Self::Path { attrs, .. }
-            | Self::AssociatedTypeProjection { attrs, .. }
-            | Self::Int { attrs }
-            | Self::Bigint { attrs }
-            | Self::Float { attrs }
-            | Self::String { attrs }
-            | Self::Bool { attrs }
-            | Self::Null { attrs }
-            | Self::Never { attrs }
-            | Self::Void { attrs }
-            | Self::Uint8Array { attrs }
-            | Self::Media { attrs, .. }
-            | Self::Optional { attrs, .. }
-            | Self::List { attrs, .. }
-            | Self::Map { attrs, .. }
-            | Self::Union { attrs, .. }
-            | Self::Literal { attrs, .. }
-            | Self::Function { attrs, .. }
-            | Self::Unknown { attrs }
-            | Self::Type { attrs }
-            | Self::Rust { attrs }
-            | Self::Error { attrs }
-            | Self::Missing { attrs }
-            | Self::Infer { attrs } => attrs,
-        }
+    /// Every span in this type, in source order: its own and its children's.
+    ///
+    /// [`TypeExpr`]'s `PartialEq` deliberately ignores spans, so two types that
+    /// differ only in position compare equal. A memoized value that carries
+    /// spans needs them compared too, or Salsa keeps the older value and every
+    /// span read out of it is stale — see `signature::SignatureTypeExpr`.
+    #[must_use]
+    pub fn spans(&self) -> Vec<TextRange> {
+        let mut out = Vec::new();
+        self.collect_spans(&mut out);
+        out
     }
 
-    /// Mutable access to the type-level attributes on this type expression.
-    pub fn attrs_mut(&mut self) -> &mut Vec<RawAttribute> {
-        match self {
-            Self::Path { attrs, .. }
-            | Self::AssociatedTypeProjection { attrs, .. }
-            | Self::Int { attrs }
-            | Self::Bigint { attrs }
-            | Self::Float { attrs }
-            | Self::String { attrs }
-            | Self::Bool { attrs }
-            | Self::Null { attrs }
-            | Self::Never { attrs }
-            | Self::Void { attrs }
-            | Self::Uint8Array { attrs }
-            | Self::Media { attrs, .. }
-            | Self::Optional { attrs, .. }
-            | Self::List { attrs, .. }
-            | Self::Map { attrs, .. }
-            | Self::Union { attrs, .. }
-            | Self::Literal { attrs, .. }
-            | Self::Function { attrs, .. }
-            | Self::Unknown { attrs }
-            | Self::Type { attrs }
-            | Self::Rust { attrs }
-            | Self::Error { attrs }
-            | Self::Missing { attrs }
-            | Self::Infer { attrs } => attrs,
+    fn collect_spans(&self, out: &mut Vec<TextRange>) {
+        out.push(self.span);
+        match &self.kind {
+            TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    arg.collect_spans(out);
+                }
+                for binding in associated_type_bindings {
+                    binding.ty.collect_spans(out);
+                }
+            }
+            TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                base.collect_spans(out);
+                if let Some(interface) = interface {
+                    interface.collect_spans(out);
+                }
+            }
+            TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
+                inner.collect_spans(out);
+            }
+            TypeExprKind::Map { key, value, .. } => {
+                key.collect_spans(out);
+                value.collect_spans(out);
+            }
+            TypeExprKind::Union { variants, .. } => {
+                for variant in variants {
+                    variant.collect_spans(out);
+                }
+            }
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for param in params {
+                    param.ty.collect_spans(out);
+                }
+                ret.collect_spans(out);
+                if let Some(throws) = throws {
+                    throws.collect_spans(out);
+                }
+            }
+            TypeExprKind::Int
+            | TypeExprKind::Bigint
+            | TypeExprKind::Float
+            | TypeExprKind::String
+            | TypeExprKind::Bool
+            | TypeExprKind::Null
+            | TypeExprKind::Uint8Array
+            | TypeExprKind::Never
+            | TypeExprKind::Void
+            | TypeExprKind::Rust
+            | TypeExprKind::Literal { .. }
+            | TypeExprKind::Media { .. }
+            | TypeExprKind::Unknown
+            | TypeExprKind::Type
+            | TypeExprKind::Error
+            | TypeExprKind::Missing
+            | TypeExprKind::Infer => {}
         }
     }
 }
+
+impl TypeExprKind {}
 
 impl std::fmt::Display for TypeExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -345,15 +328,15 @@ impl std::fmt::Display for TypeExprKind {
                     write!(f, ".{member}")
                 }
             }
-            TypeExprKind::Int { .. } => write!(f, "int"),
-            TypeExprKind::Bigint { .. } => write!(f, "bigint"),
-            TypeExprKind::Float { .. } => write!(f, "float"),
-            TypeExprKind::String { .. } => write!(f, "string"),
-            TypeExprKind::Bool { .. } => write!(f, "bool"),
-            TypeExprKind::Null { .. } => write!(f, "null"),
-            TypeExprKind::Never { .. } => write!(f, "never"),
-            TypeExprKind::Void { .. } => write!(f, "void"),
-            TypeExprKind::Uint8Array { .. } => write!(f, "uint8array"),
+            TypeExprKind::Int => write!(f, "int"),
+            TypeExprKind::Bigint => write!(f, "bigint"),
+            TypeExprKind::Float => write!(f, "float"),
+            TypeExprKind::String => write!(f, "string"),
+            TypeExprKind::Bool => write!(f, "bool"),
+            TypeExprKind::Null => write!(f, "null"),
+            TypeExprKind::Never => write!(f, "never"),
+            TypeExprKind::Void => write!(f, "void"),
+            TypeExprKind::Uint8Array => write!(f, "uint8array"),
             TypeExprKind::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
             TypeExprKind::Optional { inner, .. } => {
                 write_postfix_base(f, inner)?;
@@ -407,12 +390,12 @@ impl std::fmt::Display for TypeExprKind {
                 }
                 Ok(())
             }
-            TypeExprKind::Unknown { .. } => write!(f, "unknown"),
-            TypeExprKind::Type { .. } => write!(f, "reflect.Type"),
-            TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
-            TypeExprKind::Error { .. } => write!(f, "error"),
-            TypeExprKind::Missing { .. } => write!(f, "?"),
-            TypeExprKind::Infer { .. } => write!(f, "_"),
+            TypeExprKind::Unknown => write!(f, "unknown"),
+            TypeExprKind::Type => write!(f, "reflect.Type"),
+            TypeExprKind::Rust => write!(f, "$rust_type"),
+            TypeExprKind::Error => write!(f, "error"),
+            TypeExprKind::Missing => write!(f, "?"),
+            TypeExprKind::Infer => write!(f, "_"),
         }
     }
 }
@@ -1780,9 +1763,9 @@ pub struct LlmBodyDef {
     /// any value other than an absent field or a literal empty list (`tools
     /// []`). A non-literal expression (`tools: shared()`) counts as `true`
     /// even if it evaluates empty — the compile-time signal is conservative.
-    /// PPIR skips `$stream` synthesis when set (streaming does not run the
-    /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
-    /// dynamic cases.
+    /// No `@stream` companion is synthesized when set (streaming does not run
+    /// the tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers
+    /// the dynamic cases.
     pub has_tools: bool,
     pub span: TextRange,
 }

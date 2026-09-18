@@ -7,9 +7,6 @@ class user.Node {
   next: user.Node
 }
   !! 0..24: class cycle: user.Node
-class user.Node$stream {
-  next: user.Node$stream | null
-}
 
 === class_field_mutual_reference + class_required_field_mutual_cycle (duplicate two-node cycle) ===
 class user.Husband {
@@ -20,12 +17,6 @@ class user.Wife {
   husband: user.Husband
 }
   !! 28..58: class cycle: user.Husband -> user.Wife -> user.Husband
-class user.Husband$stream {
-  wife: user.Wife$stream | null
-}
-class user.Wife$stream {
-  husband: user.Husband$stream | null
-}
 
 === class_required_field_three_way_cycle ===
 class user.A {
@@ -40,12 +31,3 @@ class user.C {
   a: user.A
 }
   !! 32..47: class cycle: user.A -> user.B -> user.C -> user.A
-class user.A$stream {
-  b: user.B$stream | null
-}
-class user.B$stream {
-  c: user.C$stream | null
-}
-class user.C$stream {
-  a: user.A$stream | null
-}

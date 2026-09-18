@@ -4,8 +4,22 @@ use text_size::TextRange;
 
 use crate::{
     ids::{ClassMarker, FunctionMarker, LocalItemId},
-    item_tree::{Attribute, ClassField, GenericParam},
+    item_tree::GenericParam,
 };
+
+/// An interface field stored in the `ItemTree`.
+///
+/// An interface is a contract, not a concrete data type: nothing is ever
+/// parsed or rendered *as* one, so its fields carry no attributes (any
+/// written there is rejected at lowering).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceField {
+    pub name: Name,
+    /// Always present — see [`ast::FieldDef::type_expr`].
+    pub type_expr: ast::TypeExpr,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
+}
 
 /// An interface (BEP-044) stored in the `ItemTree`.
 ///
@@ -23,13 +37,12 @@ pub struct Interface {
     pub requires: Vec<ast::TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values.
-    pub fields: Vec<ClassField>,
+    pub fields: Vec<InterfaceField>,
     /// Associated type declarations on the interface (BEP-057).
     pub associated_types: Vec<ast::AssociatedTypeDef>,
     /// Every method, default and required alike (required = `body: None`),
     /// in declaration-list order (defaults first, then required).
     pub methods: Vec<LocalItemId<FunctionMarker>>,
-    pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
     pub span: TextRange,
 }

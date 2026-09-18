@@ -33,7 +33,7 @@ use baml_compiler2_hir::{
     package::{lang_roots, package_dependency_closure},
 };
 use baml_type::{
-    DeclName, FunctionParamTy, Literal, Name, ParamTy, RealizedTy, Ty, TyAttr,
+    DeclName, FunctionParamTy, Literal, Name, ParamTy, RealizedTy, Ty,
     interned::{ClosedInterface, ClosedTy, InferInterface},
     normalize::TypeContext,
     unify::{AliasEquivCtx, EnumVariants, nf},
@@ -85,22 +85,22 @@ const MAX_UNIFY_DEPTH: usize = 256;
 /// Whether `ty` contains a type variable drawn from `generic_params`.
 fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
     match ty {
-        Ty::TypeVar(name, _) => generic_params.contains(name),
-        Ty::Class(_, args, _) | Ty::Union(args, _) => args
+        Ty::TypeVar(name) => generic_params.contains(name),
+        Ty::Class(_, args) | Ty::Union(args) => args
             .iter()
             .any(|arg| contains_bound_typevar(arg, generic_params)),
-        Ty::Interface(_, args, associated_bindings, _) => {
+        Ty::Interface(_, args, associated_bindings) => {
             args.iter()
                 .any(|arg| contains_bound_typevar(arg, generic_params))
                 || associated_bindings
                     .iter()
                     .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
         }
-        Ty::List(inner, _) => contains_bound_typevar(inner, generic_params),
+        Ty::List(inner) => contains_bound_typevar(inner, generic_params),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::Future(k, v, _) => {
+        | Ty::Future(k, v) => {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
         Ty::Function {
@@ -126,18 +126,18 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
 fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
     fn occurs(param: &ParamTy, ty: &Ty, in_union: bool) -> bool {
         match ty {
-            Ty::TypeVar(candidate, _) => in_union && candidate == param,
-            Ty::Union(members, _) => members.iter().any(|m| occurs(param, m, true)),
-            Ty::Class(_, args, _) => args.iter().any(|a| occurs(param, a, in_union)),
-            Ty::Interface(_, args, assoc, _) => {
+            Ty::TypeVar(candidate) => in_union && candidate == param,
+            Ty::Union(members) => members.iter().any(|m| occurs(param, m, true)),
+            Ty::Class(_, args) => args.iter().any(|a| occurs(param, a, in_union)),
+            Ty::Interface(_, args, assoc) => {
                 args.iter().any(|a| occurs(param, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(param, t, in_union))
             }
-            Ty::List(inner, _) => occurs(param, inner, in_union),
+            Ty::List(inner) => occurs(param, inner, in_union),
             Ty::Map {
                 key: k, value: v, ..
             }
-            | Ty::Future(k, v, _) => occurs(param, k, in_union) || occurs(param, v, in_union),
+            | Ty::Future(k, v) => occurs(param, k, in_union) || occurs(param, v, in_union),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => {
@@ -168,7 +168,7 @@ fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
 fn expand_alias_head(ty: &Ty, aliases: &AliasEquivCtx<'_>) -> Ty {
     let mut current = ty.clone();
     for _ in 0..64 {
-        let Ty::TypeAlias(qtn, _) = &current else {
+        let Ty::TypeAlias(qtn) = &current else {
             break;
         };
         match aliases.aliases.get(qtn) {
@@ -214,16 +214,16 @@ fn unify_into_at(
     // stack a spurious overlap. The inhabited top type `unknown`
     // (Unknown) is deliberately NOT bailed: it binds an opposing
     // variable and is otherwise a distinct atomic type under invariance.
-    if matches!(x, Ty::Error { .. }) || matches!(y, Ty::Error { .. }) {
+    if matches!(x, Ty::Error) || matches!(y, Ty::Error) {
         return Overlap::No;
     }
 
-    if let Ty::TypeVar(n, _) = &x
+    if let Ty::TypeVar(n) = &x
         && vars.contains(n)
     {
         return bind_unify_var(n, &y, vars, aliases, bindings, depth + 1);
     }
-    if let Ty::TypeVar(n, _) = &y
+    if let Ty::TypeVar(n) = &y
         && vars.contains(n)
     {
         return bind_unify_var(n, &x, vars, aliases, bindings, depth + 1);
@@ -234,10 +234,10 @@ fn unify_into_at(
     }
 
     match (&x, &y) {
-        (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => {
+        (Ty::Class(xq, xa), Ty::Class(yq, ya)) if xq == yq && xa.len() == ya.len() => {
             unify_all(xa, ya, vars, aliases, bindings, depth + 1)
         }
-        (Ty::Interface(xq, xa, xb, _), Ty::Interface(yq, ya, yb, _))
+        (Ty::Interface(xq, xa, xb), Ty::Interface(yq, ya, yb))
             if xq == yq && xa.len() == ya.len() =>
         {
             // Args AND associated bindings are part of an existential's
@@ -254,9 +254,7 @@ fn unify_into_at(
                 depth + 1,
             ))
         }
-        (Ty::List(xi, _), Ty::List(yi, _)) => {
-            unify_into_at(xi, yi, vars, aliases, bindings, depth + 1)
-        }
+        (Ty::List(xi), Ty::List(yi)) => unify_into_at(xi, yi, vars, aliases, bindings, depth + 1),
         (
             Ty::Map {
                 key: xk, value: xv, ..
@@ -272,7 +270,7 @@ fn unify_into_at(
             bindings,
             depth + 1,
         )),
-        (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => unify_into_at(
+        (Ty::Future(xv, xe), Ty::Future(yv, ye)) => unify_into_at(
             xv,
             yv,
             vars,
@@ -315,10 +313,10 @@ fn unify_into_at(
         // is what decides var-bearing unions opposite single types
         // precisely (`1 | T` vs `int` at `T = int`; `C | T` vs `C` via
         // idempotency; `D | T` vs `C` disjoint).
-        (Ty::Union(xm, _), Ty::Union(ym, _)) => {
+        (Ty::Union(xm), Ty::Union(ym)) => {
             unify_union_members_at(xm, ym, vars, aliases, bindings, depth + 1)
         }
-        (Ty::Union(xm, _), _) => unify_union_members_at(
+        (Ty::Union(xm), _) => unify_union_members_at(
             xm,
             std::slice::from_ref(&y),
             vars,
@@ -326,7 +324,7 @@ fn unify_into_at(
             bindings,
             depth + 1,
         ),
-        (_, Ty::Union(ym, _)) => unify_union_members_at(
+        (_, Ty::Union(ym)) => unify_union_members_at(
             std::slice::from_ref(&x),
             ym,
             vars,
@@ -486,7 +484,7 @@ fn try_union_mutual_absorption(xs: &[Ty], ys: &[Ty], vars: &[ParamTy]) -> Option
 }
 
 fn is_bare_var(m: &Ty, vars: &[ParamTy]) -> bool {
-    matches!(m, Ty::TypeVar(n, _) if vars.contains(n))
+    matches!(m, Ty::TypeVar(n) if vars.contains(n))
 }
 
 fn unions_set_equal(xs: &[Ty], ys: &[Ty], aliases: &AliasEquivCtx<'_>) -> bool {
@@ -539,19 +537,19 @@ fn cover(
 /// Directional `literal <: base` / `variant <: enum`.
 fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
     match (member, candidate) {
-        (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. })
-        | (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. })
-        | (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. })
-        | (Ty::Literal(Literal::String(_), _, _), Ty::String { .. })
-        | (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => true,
-        (Ty::EnumVariant(variant_enum, _, _), Ty::Enum(base_enum, _)) => variant_enum == base_enum,
+        (Ty::Literal(Literal::Int(_), _), Ty::Int)
+        | (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint)
+        | (Ty::Literal(Literal::Float(_), _), Ty::Float)
+        | (Ty::Literal(Literal::String(_), _), Ty::String)
+        | (Ty::Literal(Literal::Bool(_), _), Ty::Bool) => true,
+        (Ty::EnumVariant(variant_enum, _), Ty::Enum(base_enum)) => variant_enum == base_enum,
         _ => false,
     }
 }
 
 /// Pairs whose subtyping needs the impl registry: conservative `Yes`.
 fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
-    if matches!(a, Ty::RustType { .. }) || matches!(b, Ty::RustType { .. }) {
+    if matches!(a, Ty::RustType) || matches!(b, Ty::RustType) {
         return true;
     }
     match (a, b) {
@@ -637,7 +635,7 @@ fn cover_search(
 /// Resolve through the current bindings to the representative.
 fn chase_var(ty: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> Ty {
     let mut current = ty.clone();
-    while let Ty::TypeVar(name, _) = &current {
+    while let Ty::TypeVar(name) = &current {
         if vars.contains(name)
             && let Some(bound) = bindings.get(name)
         {
@@ -659,7 +657,7 @@ fn bind_unify_var(
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
-    if let Ty::TypeVar(tn, _) = t
+    if let Ty::TypeVar(tn) = t
         && tn == n
     {
         return Overlap::Yes;
@@ -679,19 +677,19 @@ fn bind_unify_var(
 fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> bool {
     let t = chase_var(t, vars, bindings);
     match &t {
-        Ty::TypeVar(m, _) => m == n,
-        Ty::Class(_, args, _) | Ty::Union(args, _) => {
+        Ty::TypeVar(m) => m == n,
+        Ty::Class(_, args) | Ty::Union(args) => {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
         }
-        Ty::Interface(_, args, assoc, _) => {
+        Ty::Interface(_, args, assoc) => {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
                 || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
         }
-        Ty::List(inner, _) => occurs_in(n, inner, vars, bindings),
+        Ty::List(inner) => occurs_in(n, inner, vars, bindings),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::Future(k, v, _) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
+        | Ty::Future(k, v) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => {
@@ -717,57 +715,47 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
 /// Substitute `bindings` into a plain type by param identity.
 fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
     match ty {
-        Ty::TypeVar(param, _) => bindings.get(param).cloned().unwrap_or_else(|| ty.clone()),
-        Ty::Union(members, attr) => Ty::Union(
+        Ty::TypeVar(param) => bindings.get(param).cloned().unwrap_or_else(|| ty.clone()),
+        Ty::Union(members) => Ty::Union(
             members
                 .iter()
                 .map(|m| substitute_plain(m, bindings))
                 .collect(),
-            attr.clone(),
         ),
-        Ty::Class(name, args, attr) => Ty::Class(
+        Ty::Class(name, args) => Ty::Class(
             name.clone(),
             args.iter().map(|a| substitute_plain(a, bindings)).collect(),
-            attr.clone(),
         ),
-        Ty::Interface(name, args, assoc, attr) => Ty::Interface(
+        Ty::Interface(name, args, assoc) => Ty::Interface(
             name.clone(),
             args.iter().map(|a| substitute_plain(a, bindings)).collect(),
             assoc
                 .iter()
                 .map(|(n, t)| (n.clone(), substitute_plain(t, bindings)))
                 .collect(),
-            attr.clone(),
         ),
-        Ty::List(inner, attr) => {
-            Ty::List(Box::new(substitute_plain(inner, bindings)), attr.clone())
-        }
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(substitute_plain(inner, bindings))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(substitute_plain(key, bindings)),
             value: Box::new(substitute_plain(value, bindings)),
-            attr: attr.clone(),
         },
-        Ty::Future(value, error, attr) => Ty::Future(
+        Ty::Future(value, error) => Ty::Future(
             Box::new(substitute_plain(value, bindings)),
             Box::new(substitute_plain(error, bindings)),
-            attr.clone(),
         ),
         Ty::AssociatedTypeProjection {
             base,
             interface,
             member,
-            attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(substitute_plain(base, bindings)),
             interface: Box::new(interface.map_tys(|t| substitute_plain(t, bindings))),
             member: member.clone(),
-            attr: attr.clone(),
         },
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .iter()
@@ -779,7 +767,6 @@ fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
                 .collect(),
             ret: Box::new(substitute_plain(ret, bindings)),
             throws: Box::new(substitute_plain(throws, bindings)),
-            attr: attr.clone(),
         },
         _ => ty.clone(),
     }
@@ -835,7 +822,7 @@ unsafe impl salsa::Update for CoherenceReport<'_> {
 /// dependency when ITS coherence is checked.
 #[salsa::tracked(returns(ref))]
 pub fn package_coherence_violations<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> CoherenceReport<'db> {
     let mut own = package_impls(db, pkg);
@@ -893,7 +880,7 @@ fn overlap_violation(overlap: Overlap) -> Option<bool> {
 }
 
 fn package_impls(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> Vec<(ImplLoc<'_>, &'_ ImplFacts<'_>)> {
     package_impl_locs(db, pkg)
@@ -902,8 +889,8 @@ fn package_impls(
         .collect()
 }
 
-fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String, u32) {
-    let span = baml_compiler2_ppir::item_data::impl_block_source_map(db, loc).span;
+fn impl_sort_key(db: &dyn baml_compiler2_hir::Db, loc: ImplLoc<'_>) -> (String, u32) {
+    let span = baml_compiler2_hir::item_data::impl_block_source_map(db, loc).span;
     (
         loc.file(db).path(db).display().to_string(),
         u32::from(span.start()),
@@ -923,7 +910,7 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 /// judged the normalized one, so a `true | false` subject was invalid here
 /// and valid there, and the pair escaped both.
 pub fn impls_conflict(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     a: &ImplFacts<'_>,
     b: &ImplFacts<'_>,
     aliases: &AliasEquivCtx<'_>,
@@ -939,7 +926,7 @@ pub fn impls_conflict(
 /// overlap engine receives the same normalized facts, but the caller keeps the
 /// mounted side structural because there is no legitimate `ImplLoc` to mint.
 pub fn source_mounted_impl_conflict(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_package: baml_base::SourceRoot,
     source: &ImplFacts<'_>,
     mounted: &crate::package_interface::ExportedImpl,
@@ -996,7 +983,7 @@ pub fn mounted_impl_facts(row: &crate::package_interface::ExportedImpl) -> ImplF
 /// against the registry; provable violation makes the pair disjoint
 /// (overriding even `Unknown`).
 fn impls_overlap(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     a: &ImplFacts<'_>,
     b: &ImplFacts<'_>,
     aliases: &AliasEquivCtx<'_>,
@@ -1044,7 +1031,7 @@ fn impls_overlap(
 /// stays conservatively satisfiable (a wrong negative would admit an
 /// overlapping pair).
 fn bounds_hold_at_common_instance(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     rule: &ImplFacts<'_>,
     prefix: char,
     vars: &[ParamTy],
@@ -1058,11 +1045,7 @@ fn bounds_hold_at_common_instance(
         .map(|(j, (param, _))| {
             (
                 param.clone(),
-                chase_var(
-                    &Ty::TypeVar(renamed_var(prefix, j), TyAttr::default()),
-                    vars,
-                    bindings,
-                ),
+                chase_var(&Ty::TypeVar(renamed_var(prefix, j)), vars, bindings),
             )
         })
         .collect();
@@ -1119,12 +1102,7 @@ fn renamed_subject(
         .generic_params
         .iter()
         .enumerate()
-        .map(|(i, (param, _bounds))| {
-            (
-                param.clone(),
-                Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
-            )
-        })
+        .map(|(i, (param, _bounds))| (param.clone(), Ty::TypeVar(renamed_var(prefix, i))))
         .collect();
     let for_ty = nf(
         &substitute_plain(&rule.for_ty_pattern.to_plain(), &rename),
@@ -1181,7 +1159,7 @@ unsafe impl salsa::Update for OrphanReport<'_> {
 /// any generic param BEFORE it uncovered and rejected).
 #[salsa::tracked(returns(ref))]
 pub fn package_orphan_violations(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
 ) -> OrphanReport<'_> {
     let mut violations = Vec::new();
@@ -1225,7 +1203,7 @@ fn orphan_check(
             Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.root() == current_package => {
                 return OrphanOutcome::Ok;
             }
-            Ty::TypeVar(param, _) => {
+            Ty::TypeVar(param) => {
                 return OrphanOutcome::UncoveredParam(param.name().clone());
             }
             _ => {}
@@ -1249,7 +1227,6 @@ mod tests {
             crate::test_heads::local(Name::new(name)),
             args.into(),
             Box::new([]),
-            TyAttr::default(),
         )
     }
 
@@ -1261,34 +1238,30 @@ mod tests {
                 .into_iter()
                 .map(|(name, ty)| (Name::new(name), ty))
                 .collect(),
-            TyAttr::default(),
         )
     }
 
     fn int_literal(n: i64) -> Ty {
-        Ty::Literal(Literal::Int(n), Freshness::Regular, TyAttr::default())
+        Ty::Literal(Literal::Int(n), Freshness::Regular)
     }
 
     fn bool_literal(b: bool) -> Ty {
-        Ty::Literal(Literal::Bool(b), Freshness::Regular, TyAttr::default())
+        Ty::Literal(Literal::Bool(b), Freshness::Regular)
     }
 
     fn enum_ty(name: &str) -> Ty {
-        Ty::Enum(crate::test_heads::local(Name::new(name)), TyAttr::default())
+        Ty::Enum(crate::test_heads::local(Name::new(name)))
     }
 
     fn enum_variant(enum_name: &str, variant: &str) -> Ty {
         Ty::EnumVariant(
             crate::test_heads::local(Name::new(enum_name)),
             Name::new(variant),
-            TyAttr::default(),
         )
     }
 
     fn never() -> Ty {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 
     /// Stub enum schema for `nf` tests: `Cmp` has `Less`, `Equal`, `More`.
@@ -1302,11 +1275,7 @@ mod tests {
         let ty = Ty::Interface(
             crate::test_heads::local(Name::new("Source")),
             Box::new([]),
-            Box::new([(
-                Name::new("Item"),
-                Ty::List(Box::new(Ty::type_var("T")), TyAttr::default()),
-            )]),
-            TyAttr::default(),
+            Box::new([(Name::new("Item"), Ty::List(Box::new(Ty::type_var("T"))))]),
         );
 
         assert!(contains_bound_typevar(&ty, &[param("T")]));
@@ -1566,23 +1535,17 @@ mod tests {
         let mut aliases = FxHashMap::default();
         aliases.insert(
             r.clone(),
-            crate::test_heads::class_with_args(
-                "Box",
-                vec![Ty::TypeAlias(r.clone(), TyAttr::default())],
-            ),
+            crate::test_heads::class_with_args("Box", vec![Ty::TypeAlias(r.clone())]),
         );
         aliases.insert(
             s.clone(),
-            crate::test_heads::class_with_args(
-                "Box",
-                vec![Ty::TypeAlias(s.clone(), TyAttr::default())],
-            ),
+            crate::test_heads::class_with_args("Box", vec![Ty::TypeAlias(s.clone())]),
         );
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
-                &Ty::TypeAlias(r, TyAttr::default()),
-                &Ty::TypeAlias(s, TyAttr::default()),
+                &Ty::TypeAlias(r),
+                &Ty::TypeAlias(s),
                 &[],
                 &crate::test_heads::alias_ctx(&aliases),
                 &mut bindings,
@@ -1663,7 +1626,7 @@ mod tests {
         let mut bindings = TypeBindings::default();
         assert_eq!(
             unify_into(
-                &Ty::TypeAlias(tf, TyAttr::default()),
+                &Ty::TypeAlias(tf),
                 &Ty::bool(),
                 &[],
                 &crate::test_heads::alias_ctx(&aliases),
@@ -1680,7 +1643,6 @@ mod tests {
                 params: Box::new([FunctionParamTy::required(None, param)]),
                 ret: Box::new(Ty::int()),
                 throws: Box::new(never()),
-                attr: TyAttr::default(),
             }
         }
         let vars = vec![param("T")];
@@ -1708,7 +1670,6 @@ mod tests {
                     .expect("interface() builds an existential"),
             ),
             member: Name::new("Item"),
-            attr: TyAttr::default(),
         };
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
@@ -2029,7 +1990,6 @@ mod tests {
         Ty::Class(
             crate::test_heads::new(Name::new(package), Vec::new(), Name::new(name)),
             Box::new([]),
-            TyAttr::default(),
         )
     }
 

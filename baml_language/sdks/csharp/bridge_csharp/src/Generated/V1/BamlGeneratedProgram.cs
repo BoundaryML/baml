@@ -59,15 +59,13 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    internal Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
-        BamlGeneratedFunction<TFinal> function,
-        BamlGeneratedArguments<TFinal> arguments,
-        BamlGeneratedType<TPartial> partialType,
+    internal Task<BamlStreamNativeHandle> StartStreamAsync<T>(
+        BamlGeneratedFunction<T> function,
+        BamlGeneratedArguments<T> arguments,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         FunctionDeclaration declaration = registry.RequireFunction(function);
-        TypeDeclaration<TPartial> partial = registry.RequireType(partialType);
         if (!StringComparer.Ordinal.Equals(declaration.Variant, "stream")
             || !ReferenceEquals(arguments.Registry, registry)
             || !ReferenceEquals(arguments.Function, declaration))
@@ -78,7 +76,6 @@ public sealed class BamlGeneratedProgram
 
         return StartStreamAsync(
             declaration.Identity,
-            partial,
             function.Result,
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
@@ -87,16 +84,14 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    internal Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
-        BamlGeneratedBoundFunction<TFinal> function,
-        BamlGeneratedGenericArguments<TFinal> arguments,
-        BamlGeneratedType<TPartial> partialType,
+    internal Task<BamlStreamNativeHandle> StartStreamAsync<T>(
+        BamlGeneratedBoundFunction<T> function,
+        BamlGeneratedGenericArguments<T> arguments,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        BoundGenericFunctionDeclaration<TFinal> declaration =
+        BoundGenericFunctionDeclaration<T> declaration =
             registry.RequireBoundFunction(function);
-        TypeDeclaration<TPartial> partial = registry.RequireType(partialType);
         if (!StringComparer.Ordinal.Equals(declaration.Definition.Variant, "stream")
             || !ReferenceEquals(arguments.Registry, registry)
             || !ReferenceEquals(arguments.Function, declaration))
@@ -107,7 +102,6 @@ public sealed class BamlGeneratedProgram
 
         return StartStreamAsync(
             declaration.Definition.Identity,
-            partial,
             declaration.Result,
             callId => PrimitiveProtocol.EncodeOwnedCallArguments(
                 arguments,
@@ -116,10 +110,9 @@ public sealed class BamlGeneratedProgram
             cancellationToken);
     }
 
-    private async Task<BamlStreamNativeHandle> StartStreamAsync<TPartial, TFinal>(
+    private async Task<BamlStreamNativeHandle> StartStreamAsync<T>(
         string functionIdentity,
-        TypeDeclaration<TPartial> partialType,
-        TypeDeclaration<TFinal> finalType,
+        TypeDeclaration<T> streamType,
         Func<ulong, EncodedCallArguments> encodeArguments,
         CancellationToken cancellationToken)
     {
@@ -130,8 +123,7 @@ public sealed class BamlGeneratedProgram
             .ConfigureAwait(false);
         return PrimitiveProtocol.DecodeStreamHandle(
             bytes,
-            partialType.Metadata,
-            finalType.Metadata,
+            streamType.Metadata,
             functionIdentity,
             nativeState.Api);
     }

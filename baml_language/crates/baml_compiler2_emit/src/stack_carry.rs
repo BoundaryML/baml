@@ -1352,10 +1352,8 @@ fn numeric_place_kind(body: &MirFunctionBody<'_>, place: &Place) -> Option<Numer
 
 fn numeric_ty_kind(ty: &RuntimeTy) -> Option<NumericKind> {
     match ty {
-        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
-        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => {
-            Some(NumericKind::Float)
-        }
+        RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _) => Some(NumericKind::Int),
+        RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => Some(NumericKind::Float),
         _ => None,
     }
 }
@@ -1701,20 +1699,16 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
-    use baml_type::{RealizedTy, TyAttr, TyTemplate};
+    use baml_type::{RealizedTy, TyTemplate};
 
     use super::*;
 
     fn int_ty() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     fn float_ty() -> RuntimeTy {
-        RuntimeTy::Float {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Float
     }
 
     fn local_decl(ty: RuntimeTy) -> LocalDecl {

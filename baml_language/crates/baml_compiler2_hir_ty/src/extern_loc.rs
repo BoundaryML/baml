@@ -132,7 +132,7 @@ pub struct InterfaceRow<'db> {
     pub default_methods: &'db [ExportedFunction],
 }
 
-fn no_type_row(db: &dyn baml_compiler2_ppir::Db, kind: &str, head: &DeclName) -> ! {
+fn no_type_row(db: &dyn baml_compiler2_hir::Db, kind: &str, head: &DeclName) -> ! {
     panic!(
         "internal error: no exported {kind} row for `{}`; an extern type loc is minted only from \
          a row in the current revision's package interface",
@@ -142,7 +142,7 @@ fn no_type_row(db: &dyn baml_compiler2_ppir::Db, kind: &str, head: &DeclName) ->
 
 /// The row `class` names. TOTAL, as [`extern_function_row`].
 pub fn extern_class_row<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: ExternClassLoc<'db>,
 ) -> ClassRow<'db> {
     let head = class.head(db);
@@ -170,7 +170,7 @@ pub fn extern_class_row<'db>(
 
 /// The row `enum_loc` names. TOTAL, as [`extern_function_row`].
 pub fn extern_enum_row<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     enum_loc: ExternEnumLoc<'db>,
 ) -> EnumRow<'db> {
     let head = enum_loc.head(db);
@@ -187,7 +187,7 @@ pub fn extern_enum_row<'db>(
 
 /// The row `interface` names. TOTAL, as [`extern_function_row`].
 pub fn extern_interface_row<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     interface: ExternInterfaceLoc<'db>,
 ) -> InterfaceRow<'db> {
     let head = interface.head(db);
@@ -221,7 +221,7 @@ pub fn extern_interface_row<'db>(
 
 /// The class `head` names, if its package exports one.
 fn extern_class_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternClassLoc<'db>> {
     matches!(type_row_at(db, head)?, ExportedType::Class { .. })
@@ -230,7 +230,7 @@ fn extern_class_loc<'db>(
 
 /// The enum `head` names, if its package exports one.
 fn extern_enum_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternEnumLoc<'db>> {
     matches!(type_row_at(db, head)?, ExportedType::Enum { .. })
@@ -239,7 +239,7 @@ fn extern_enum_loc<'db>(
 
 /// The interface `head` names, if its package exports one.
 fn extern_interface_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternInterfaceLoc<'db>> {
     matches!(type_row_at(db, head)?, ExportedType::Interface { .. })
@@ -248,7 +248,7 @@ fn extern_interface_loc<'db>(
 
 /// [`extern_class_loc`] for a package served from its interface.
 pub fn mounted_class_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternClassLoc<'db>> {
     served(db, head.root()).then(|| extern_class_loc(db, head))?
@@ -256,7 +256,7 @@ pub fn mounted_class_loc<'db>(
 
 /// [`extern_enum_loc`] for a package served from its interface.
 pub fn mounted_enum_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternEnumLoc<'db>> {
     served(db, head.root()).then(|| extern_enum_loc(db, head))?
@@ -264,7 +264,7 @@ pub fn mounted_enum_loc<'db>(
 
 /// [`extern_interface_loc`] for a package served from its interface.
 pub fn mounted_interface_loc<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
 ) -> Option<ExternInterfaceLoc<'db>> {
     served(db, head.root()).then(|| extern_interface_loc(db, head))?
@@ -376,9 +376,7 @@ fn canonical_param(param: &ParamTy) -> ParamTy {
 
 fn canonical_plain(ty: &baml_type::Ty) -> baml_type::Ty {
     baml_type::unify::rewrite_ty(ty, &mut |ty| match ty {
-        baml_type::Ty::TypeVar(param, attr) => {
-            Some(baml_type::Ty::TypeVar(canonical_param(param), attr.clone()))
-        }
+        baml_type::Ty::TypeVar(param) => Some(baml_type::Ty::TypeVar(canonical_param(param))),
         _ => None,
     })
 }
@@ -441,7 +439,7 @@ pub struct ExternFunctionLoc<'db> {
 impl<'db> ExternFunctionLoc<'db> {
     /// The package the row lives in, from the ADDRESS — never from the
     /// row's own `target`, whose heads a blob spells for itself.
-    pub fn package(self, db: &'db dyn baml_compiler2_ppir::Db) -> SourceRoot {
+    pub fn package(self, db: &'db dyn baml_compiler2_hir::Db) -> SourceRoot {
         match self.addr(db) {
             ExternRowAddr::Declared(ExternalCallTarget::Free { function }) => function.root(),
             ExternRowAddr::Declared(ExternalCallTarget::Method { class, .. }) => class.root(),
@@ -458,7 +456,7 @@ impl<'db> ExternFunctionLoc<'db> {
     /// (the substrate's oracles pin it), and the HONEST answer when a blob's
     /// `target` lies — which is why consumers link and trust through this,
     /// never through `extern_function_row(..).target`.
-    pub fn slot(self, db: &'db dyn baml_compiler2_ppir::Db) -> ExternalCallTarget {
+    pub fn slot(self, db: &'db dyn baml_compiler2_hir::Db) -> ExternalCallTarget {
         match self.addr(db) {
             ExternRowAddr::Declared(target) => target.clone(),
             ExternRowAddr::ImplProvided {
@@ -472,7 +470,7 @@ impl<'db> ExternFunctionLoc<'db> {
 
     /// The impl block that provides this row, for an impl-provided row.
     /// `None` IS the answer for a declared row.
-    pub fn impl_block(self, db: &'db dyn baml_compiler2_ppir::Db) -> Option<ExternImplLoc<'db>> {
+    pub fn impl_block(self, db: &'db dyn baml_compiler2_hir::Db) -> Option<ExternImplLoc<'db>> {
         match self.addr(db) {
             ExternRowAddr::Declared(_) => None,
             ExternRowAddr::ImplProvided {
@@ -498,7 +496,7 @@ impl std::fmt::Debug for ExternFunctionLoc<'_> {
 // ── Row reads ────────────────────────────────────────────────────────────────
 
 fn type_row_at<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     qtn: &DeclName,
 ) -> Option<&'db ExportedType> {
     package_interface(db, qtn.root()).lookup_type(qtn.namespace(), qtn.name())
@@ -508,7 +506,7 @@ fn type_row_at<'db>(
 /// read. `Option` is legitimate here and in the mint fns only — absence
 /// means "no such member"; every read through a minted loc is total.
 fn extern_row_at<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     addr: &ExternRowAddr,
 ) -> Option<&'db ExportedFunction> {
     match addr {
@@ -550,7 +548,7 @@ fn extern_row_at<'db>(
 /// The row `function` names. TOTAL: the loc was minted from a row in the
 /// current revision's interface input, so a miss is a compiler bug.
 pub fn extern_function_row<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: ExternFunctionLoc<'db>,
 ) -> &'db ExportedFunction {
     let addr = function.addr(db);
@@ -563,7 +561,7 @@ pub fn extern_function_row<'db>(
     })
 }
 
-fn spell_addr(db: &dyn baml_compiler2_ppir::Db, addr: &ExternRowAddr) -> String {
+fn spell_addr(db: &dyn baml_compiler2_hir::Db, addr: &ExternRowAddr) -> String {
     let viewpoint = Viewpoint::canonical(db);
     match addr {
         ExternRowAddr::Declared(ExternalCallTarget::Free { function }) => {
@@ -590,7 +588,7 @@ fn spell_addr(db: &dyn baml_compiler2_ppir::Db, addr: &ExternRowAddr) -> String 
 }
 
 fn spell_impl(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: SourceRoot,
     identity: &ImplIdentity,
 ) -> String {
@@ -620,7 +618,7 @@ pub(crate) fn spell_impl_identity(identity: &ImplIdentity, viewpoint: &Viewpoint
 /// invariant here, not an outcome.
 #[salsa::tracked(returns(ref))]
 fn package_impl_index(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: SourceRoot,
 ) -> FxHashMap<ImplIdentity, u32> {
     let mut index = FxHashMap::default();
@@ -640,7 +638,7 @@ fn package_impl_index(
 }
 
 fn impl_row_at<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     package: SourceRoot,
     identity: &ImplIdentity,
 ) -> Option<&'db ExportedImpl> {
@@ -650,7 +648,7 @@ fn impl_row_at<'db>(
 
 /// The row `block` names. TOTAL, as [`extern_function_row`].
 pub fn extern_impl_row<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     block: ExternImplLoc<'db>,
 ) -> &'db ExportedImpl {
     let package = block.package(db);
@@ -670,7 +668,7 @@ pub fn extern_impl_row<'db>(
 /// replacing a mount invalidates this like any other memo).
 #[salsa::tracked(returns(ref))]
 pub fn extern_impl_facts<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     block: ExternImplLoc<'db>,
 ) -> MountedImplFacts {
     crate::impls::exported_impl_facts(extern_impl_row(db, block))
@@ -681,7 +679,7 @@ pub fn extern_impl_facts<'db>(
 /// row, whose parameter modes the export already mapped from `has_default`.
 #[salsa::tracked(returns(ref))]
 pub fn extern_signature_ty<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: ExternFunctionLoc<'db>,
 ) -> FunctionSignatureTy {
     let row = extern_function_row(db, function);
@@ -708,7 +706,7 @@ pub fn extern_signature_ty<'db>(
 /// row holds it whole; EMPTY for a free function and for an impl-provided
 /// row, whose frame is the matched impl's, realized by the caller.
 pub fn extern_owner_generics<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: ExternFunctionLoc<'db>,
 ) -> (Cow<'db, [ParamTy]>, Cow<'db, [Vec<baml_type::Interface>]>) {
     match function.addr(db) {
@@ -744,9 +742,7 @@ pub fn extern_owner_generics<'db>(
                 }) => {
                     let args: Box<[baml_type::Ty]> = generic_params
                         .iter()
-                        .map(|param| {
-                            baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default())
-                        })
+                        .map(|param| baml_type::Ty::TypeVar(param.clone()))
                         .collect();
                     let mut params = Vec::with_capacity(1 + generic_params.len());
                     params.push(self_param.clone());
@@ -787,7 +783,7 @@ pub fn extern_owner_generics<'db>(
 // such member" and nowhere else.
 
 fn mint_declared(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     target: ExternalCallTarget,
 ) -> Option<ExternFunctionLoc<'_>> {
     let addr = ExternRowAddr::Declared(target);
@@ -806,13 +802,13 @@ fn mint_declared(
 // that hold a served-root head already — every caller today sits behind a
 // served gate of its own.
 
-fn served(db: &dyn baml_compiler2_ppir::Db, root: SourceRoot) -> bool {
+fn served(db: &dyn baml_compiler2_hir::Db, root: SourceRoot) -> bool {
     baml_compiler2_hir::package::is_served_from_interface(db, root)
 }
 
 /// [`extern_function_named`] for a package served from its interface.
 pub fn mounted_function_named<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     root: SourceRoot,
     namespace: &[Name],
     name: &Name,
@@ -822,7 +818,7 @@ pub fn mounted_function_named<'db>(
 
 /// [`extern_class_method`] for a class of a package served from its interface.
 pub fn mounted_class_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: &DeclName,
     name: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
@@ -832,7 +828,7 @@ pub fn mounted_class_method<'db>(
 /// [`extern_interface_method`] for an interface of a package served from its
 /// interface.
 pub fn mounted_interface_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     interface: &DeclName,
     name: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
@@ -841,7 +837,7 @@ pub fn mounted_interface_method<'db>(
 
 /// The free function `namespace.name` of `root`, if exported.
 pub fn extern_function_named<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     root: SourceRoot,
     namespace: &[Name],
     name: &Name,
@@ -856,7 +852,7 @@ pub fn extern_function_named<'db>(
 
 /// The inherent method `name` of the exported class `class`, if any.
 pub fn extern_class_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     class: &DeclName,
     name: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
@@ -872,7 +868,7 @@ pub fn extern_class_method<'db>(
 /// The required or default method `method` the exported interface
 /// `interface` DECLARES, if any — never a row an implementor provides.
 pub fn extern_interface_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     interface: &DeclName,
     method: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
@@ -887,7 +883,7 @@ pub fn extern_interface_method<'db>(
 
 /// The method `method` the exported impl `block` provides, if any.
 pub fn extern_impl_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     block: ExternImplLoc<'db>,
     method: &Name,
 ) -> Option<ExternFunctionLoc<'db>> {
@@ -902,7 +898,7 @@ pub fn extern_impl_method<'db>(
 
 /// The impl row of `package` with `identity`, if it exports one.
 pub fn extern_impl_block(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package: SourceRoot,
     identity: ImplIdentity,
 ) -> Option<ExternImplLoc<'_>> {

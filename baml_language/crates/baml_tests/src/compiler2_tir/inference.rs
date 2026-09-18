@@ -1,13 +1,15 @@
 //! Core type inference snapshot tests.
 
 use baml_base::Name;
-use baml_compiler2_hir::scope::ScopeKind;
+use baml_compiler2_hir::{
+    resolve::{ResolvedName, resolve_name_at_in_scope},
+    scope::ScopeKind,
+};
 use baml_compiler2_hir_ty::{
     package_interface::{ExportedType, package_interface},
     render::Viewpoint,
 };
-use baml_compiler2_ppir::resolve::{ResolvedName, resolve_name_at_in_scope};
-use baml_type::{FunctionParamMode, Ty, TyAttr};
+use baml_type::{FunctionParamMode, Ty};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
@@ -18,7 +20,7 @@ fn find_function_scope_id<'db>(
     file: baml_base::SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::scope::ScopeId<'db> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     index
         .scope_ids
         .iter()
@@ -69,7 +71,7 @@ fn resolver_initializer_shadowing_uses_previous_binding() {
         "function f() -> int { let x = 1; let x = x + 1; x }",
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let index = baml_compiler2_hir::file_semantic_index(&db, file);
     let function_scope = index
         .scopes
         .iter()
@@ -116,9 +118,6 @@ fn class_field_access() {
         return x.name : string
       }
     }
-    class user.Foo$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -153,9 +152,6 @@ fn unresolved_field() {
       }
       !! 64..73: type `Foo` has no member `missing`
     }
-    class user.Foo$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -184,9 +180,6 @@ function f(data: Data) -> string {
       }
       !! 73..87: type `Data` has no member `inner`
     }
-    class user.Data$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -214,9 +207,6 @@ function f(s: Sentiment) -> string {
         return s.feelin : !error
       }
       !! 83..91: type `Sentiment` has no member `feelin`
-    }
-    class user.Sentiment$stream {
-      feeling: string | null
     }
     ");
 }
@@ -337,11 +327,6 @@ fn resolve_class_fields_query() {
       y: float
       label: string
     }
-    class user.Point$stream {
-      x: int | null
-      y: float | null
-      label: string | null
-    }
     ");
 }
 
@@ -349,16 +334,13 @@ fn resolve_class_fields_query() {
 fn resolve_type_alias_query() {
     let mut db = make_db();
     let file = db.file("test.baml", "type MyStr = string");
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.MyStr = string
-    type user.MyStr$stream = string
-    ");
+    insta::assert_snapshot!(render_tir(&db, file), @"type user.MyStr = string");
 }
 
 #[test]
 fn class_field_bigint() {
     // Asserts that `class Foo { x bigint }` lowers the field type to
-    // `Ty::Bigint { .. }`, displayed as `bigint`.
+    // `Ty::Bigint`, displayed as `bigint`.
     // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
     // wires up the bigint.to_json() method.
     let mut db = make_db();
@@ -366,9 +348,6 @@ fn class_field_bigint() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       x: bigint
-    }
-    class user.Foo$stream {
-      x: bigint | null
     }
     ");
 }
@@ -534,7 +513,7 @@ implements ToJson for Dog {
     );
 
     assert_eq!(
-        baml_compiler2_ppir::item_data::file_free_impls(&db, impl_file).len(),
+        baml_compiler2_hir::item_data::file_free_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );
@@ -553,7 +532,6 @@ implements ToJson for Dog {
     let dog = Ty::Class(
         baml_type::DeclName::in_root(user_root, vec![], Name::new("Dog")),
         Box::new([]),
-        TyAttr::default(),
     );
     let to_json = baml_type::Interface::new(
         baml_type::DeclName::in_root(user_root, vec![], Name::new("ToJson")),
@@ -597,7 +575,6 @@ fn builtin_equals_compare_visible_from_user_package() {
     let bare = Ty::Class(
         baml_type::DeclName::in_root(user_pkg, vec![], Name::new("Bare")),
         Box::new([]),
-        TyAttr::default(),
     );
 
     // The membership query walks the interface's package (`baml`) via the orphan
@@ -646,18 +623,18 @@ class SearchService {
 
     // The source item's own resolved signature, through the one callable
     // surface, is what the export row was lowered from.
-    let items = baml_compiler2_ppir::package_items(&db, pkg_id);
+    let items = baml_compiler2_hir::package::package_items(&db, pkg_id);
     let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
         items.lookup_type(&[], &Name::new("SearchService"))
     else {
         panic!("SearchService resolves")
     };
-    let run = baml_compiler2_ppir::item_data::class_data(&db, class)
+    let run = baml_compiler2_hir::item_data::class_data(&db, class)
         .methods
         .iter()
         .copied()
         .find(|&method| {
-            baml_compiler2_ppir::item_data::function_data(&db, method)
+            baml_compiler2_hir::item_data::function_data(&db, method)
                 .name
                 .as_str()
                 == "Run"
@@ -670,7 +647,7 @@ class SearchService {
 
     assert_eq!(&own_method.params, &exported_method.params);
     assert!(
-        !matches!(own_method.params[0].ty, Ty::Error { .. }),
+        !matches!(own_method.params[0].ty, Ty::Error),
         "implicit self should be reified before lowering"
     );
     assert_eq!(
@@ -696,7 +673,7 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
         "function main(x: int) -> int { let f = () -> int { x }; return f(); }",
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let index = baml_compiler2_hir::file_semantic_index(&db, file);
     let lambda_scope_id = index
         .scope_ids
         .iter()
@@ -709,16 +686,16 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
     let lambda_inference = baml_compiler2_hir_ty::ide::infer_for_scope(&db, lambda_scope_id)
         .expect("lambda scope has an owner");
 
-    let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+    let main_loc = *baml_compiler2_hir::item_data::file_functions(&db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::function_data(&db, loc)
+            baml_compiler2_hir::item_data::function_data(&db, loc)
                 .name
                 .as_str()
                 == "main"
         })
         .expect("main function");
-    let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
+    let main_body = baml_compiler2_hir::body::function_body(&db, main_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");
     };
@@ -1070,10 +1047,10 @@ interface Encoder {
 "#,
     );
 
-    let iface_loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+    let iface_loc = *baml_compiler2_hir::item_data::file_interfaces(&db, file)
         .iter()
         .find(|&&i| {
-            baml_compiler2_ppir::item_data::interface_data(&db, i)
+            baml_compiler2_hir::item_data::interface_data(&db, i)
                 .name
                 .as_str()
                 == "Encoder"

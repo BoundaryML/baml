@@ -22,10 +22,10 @@
 use baml_base::{Name, SourceFile, SourceRoot};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
+    item_data,
     package::package_items,
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_compiler2_ppir::item_data;
 use text_size::TextRange;
 
 use crate::{
@@ -55,7 +55,7 @@ pub struct SymbolInfo {
 /// Callers choose the visible file set for their feature — typically every
 /// `Workspace` root's files, or `compiler2_all_files` to include the stdlib.
 pub fn search_symbols(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     query: &str,
 ) -> Vec<SymbolInfo> {
@@ -125,7 +125,7 @@ pub struct SearchHit {
 /// own package as `root`, a dependency by the viewer's edge name). Results
 /// are sorted best-first (ties by path) and truncated to `limit`.
 pub fn search_ranked(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
     packages: &[SourceRoot],
     query: &str,
@@ -316,7 +316,7 @@ struct Candidate {
 /// be a MEMBER (`ZonedDateTime._offset_ns`), which has no [`Definition`] to
 /// classify, so `search_ranked` applies [`Internals`] to items and members
 /// alike in one place.
-fn is_searchable(db: &dyn baml_compiler2_ppir::Db, name: &Name, def: Definition<'_>) -> bool {
+fn is_searchable(db: &dyn baml_compiler2_hir::Db, name: &Name, def: Definition<'_>) -> bool {
     match surface_of(db, name, def) {
         Surface::LanguageInternal | Surface::Synthetic | Surface::Companion => false,
         Surface::AliasedCarrier | Surface::StdlibInternal | Surface::Public => true,
@@ -326,7 +326,7 @@ fn is_searchable(db: &dyn baml_compiler2_ppir::Db, name: &Name, def: Definition<
 /// Everything in `packages` the ranked search can land on, addressed from
 /// `viewer`.
 fn ranked_candidates(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
     packages: &[SourceRoot],
 ) -> Vec<Candidate> {
@@ -390,7 +390,7 @@ fn dotted(prefix: &str, ns_path: &[Name], name: &str) -> String {
 
 /// The item itself plus its members, per definition kind.
 fn collect_definition_candidates(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     def: Definition<'_>,
     name: &Name,
     path: &str,

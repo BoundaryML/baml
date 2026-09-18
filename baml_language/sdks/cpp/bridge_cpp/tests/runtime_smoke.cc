@@ -155,7 +155,7 @@ static void TestPortableValuesTranscodeWithoutHandles() {
 
 static void TestTypedSpecStreamAndPortableValueCodecs() {
   using Spec = baml::function_spec<std::string>;
-  using Stream = baml::stream<std::optional<std::string>, std::string>;
+  using Stream = baml::stream<std::string>;
 
   const auto spec_ty = baml::codec<Spec>::baml_ty();
   Require(spec_ty.class_ty().name() == "ai.FunctionSpec",
@@ -166,8 +166,8 @@ static void TestTypedSpecStreamAndPortableValueCodecs() {
   const auto stream_ty = baml::codec<Stream>::baml_ty();
   Require(stream_ty.class_ty().name() == "ai.stream.Stream",
           "Stream codec lost nominal identity");
-  Require(stream_ty.class_ty().type_args_size() == 2,
-          "Stream codec lost Partial/Final type arguments");
+  Require(stream_ty.class_ty().type_args_size() == 1,
+          "Stream codec lost its value type argument");
 
   baml::detail::pb::BamlOutboundValue done;
   done.mutable_class_value()->set_name("ai.stream.Done");

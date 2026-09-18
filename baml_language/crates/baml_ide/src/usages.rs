@@ -42,15 +42,13 @@ use baml_compiler2_ast::{Expr, ExprBody};
 use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
+    item_data,
     loc::{DeclRef, FunctionLoc},
+    resolve::{ResolvedName, resolve_name_at},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{
         BindingId, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
     },
-};
-use baml_compiler2_ppir::{
-    item_data,
-    resolve::{ResolvedName, resolve_name_at},
 };
 use rowan::NodeOrToken;
 use text_size::{TextRange, TextSize};
@@ -62,7 +60,7 @@ use crate::resolve::{Location, SymbolTarget, member_resolution_target, symbol_at
 /// Regular function (not cached); the per-file work is Salsa-cached. Returns
 /// an empty `Vec` if the cursor is not on a resolvable symbol.
 pub fn usages_at(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Vec<Location> {
@@ -79,7 +77,7 @@ pub fn usages_at(
 /// (an interface method and every `implements` block's override), and only
 /// one of them is under the cursor.
 pub(crate) fn usages_of<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     anchor: SourceFile,
     target: SymbolTarget<'db>,
 ) -> Vec<Location> {
@@ -104,7 +102,7 @@ pub(crate) fn usages_of<'db>(
 /// detached from any workspace package, e.g. a provisional single-file
 /// root).
 fn workspace_search_files(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     current_file: SourceFile,
 ) -> Vec<SourceFile> {
     let mut files: Vec<SourceFile> = baml_compiler2_hir::package::workspace_roots(db)
@@ -121,7 +119,7 @@ fn workspace_search_files(
 
 /// Scan workspace files for name tokens resolving to the same definition.
 fn find_item_usages(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     current_file: SourceFile,
     def: Definition<'_>,
 ) -> Vec<Location> {
@@ -167,7 +165,7 @@ fn find_item_usages(
 
 /// The declared name of a top-level definition, from its file's symbol
 /// contributions (covers every `Definition` variant uniformly).
-fn definition_name(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> Option<Name> {
+fn definition_name(db: &dyn baml_compiler2_hir::Db, def: Definition<'_>) -> Option<Name> {
     let contributions = baml_compiler2_hir::file_symbol_contributions(db, def.file(db));
     contributions
         .types
@@ -182,7 +180,7 @@ fn definition_name(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> Opt
 /// References to a local binding within its owning function (including
 /// nested lambda bodies and parameter-default arenas).
 fn find_local_usages(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     func: FunctionLoc<'_>,
     func_scope: FileScopeId,
     target_binding: BindingId,
@@ -190,11 +188,11 @@ fn find_local_usages(
     let file = func.file(db);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
-    let body = baml_compiler2_ppir::function_body(db, func);
+    let body = baml_compiler2_hir::body::function_body(db, func);
     let FunctionBody::Expr(expr_body) = body.as_ref() else {
         return Vec::new();
     };
-    let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func) else {
+    let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func) else {
         return Vec::new();
     };
 
@@ -221,7 +219,7 @@ fn find_local_usages(
     // A defaults arena is a *forest* — one root per defaulted parameter, and
     // `root_expr` is always `None` for it. Walk each parameter's default
     // separately.
-    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, func);
+    let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, func);
     for default in defaults.params.iter().flatten() {
         collector.collect(
             func_scope,
@@ -239,7 +237,7 @@ fn find_local_usages(
 fn binding_name(
     index: &FileSemanticIndex<'_>,
     binding: BindingId,
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     func: FunctionLoc<'_>,
 ) -> Option<Name> {
     use baml_compiler2_hir::semantic_index::BindingKind;
@@ -356,7 +354,7 @@ impl LocalUsageCollector<'_, '_> {
 /// References to a member target (field, variant, method, interface slot):
 /// one walk over workspace function scopes, matching inference resolutions.
 fn find_member_usages(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     current_file: SourceFile,
     target: SymbolTarget<'_>,
 ) -> Vec<Location> {
@@ -387,11 +385,11 @@ fn find_member_usages(
             else {
                 continue;
             };
-            let body = baml_compiler2_ppir::function_body(db, func_loc);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let FunctionBody::Expr(expr_body) = body.as_ref() else {
                 continue;
             };
-            let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc)
+            let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
             else {
                 continue;
             };
@@ -474,7 +472,7 @@ fn find_member_usages(
 
 /// The declared name of a member target (for the text pre-filter and key
 /// matching).
-fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>) -> Option<Name> {
+fn member_target_name(db: &dyn baml_compiler2_hir::Db, target: SymbolTarget<'_>) -> Option<Name> {
     use baml_compiler2_hir_ty::extern_loc::{
         extern_class_row, extern_enum_row, extern_function_row, extern_interface_row,
     };
@@ -538,7 +536,7 @@ fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>
     reason = "per-scope walk context threaded through one call site"
 )]
 fn collect_constructor_key_usages(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     class: baml_compiler2_hir_ty::extern_loc::ClassRef<'_>,
     field_name: &Name,
@@ -560,7 +558,7 @@ fn collect_constructor_key_usages(
         let Some(obj_ty) = inference.type_of_expr.get(&expr_id).cloned() else {
             continue;
         };
-        let Ty::Class(ref qtn, _, _) = obj_ty else {
+        let Ty::Class(ref qtn, _) = obj_ty else {
             continue;
         };
 

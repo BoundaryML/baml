@@ -195,8 +195,8 @@ function mpc_consumer() -> reflect.Package {
                     a.merge(b)
                 }
 
-                // Compiling this declaration proves the mounted package exports
-                // its canonical PPIR-generated streaming companion.
+                // Compiling this declaration proves the mounted package's return
+                // type resolves in the consumer's generated streaming companion.
                 function Ask() -> app.Widget {
                     client: Dummy
                     prompt: "Return a widget"

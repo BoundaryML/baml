@@ -96,22 +96,20 @@ unsafe impl salsa::Update for CallableThrows {
 }
 
 fn callable_throws_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    _db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
     _function: FunctionLoc<'db>,
 ) -> CallableThrows {
     // The fixpoint seed: a recursive call contributes nothing until an
     // iteration proves otherwise.
-    CallableThrows(baml_type::Ty::Never {
-        attr: baml_type::TyAttr::default(),
-    })
+    CallableThrows(baml_type::Ty::Never)
 }
 
 /// What `function` throws: the declared clause when written, else the
 /// union its body's effect channel infers.
 #[salsa::tracked(cycle_initial = callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> CallableThrows {
     // A seeded value from a previous compile short-circuits body inference
@@ -153,7 +151,7 @@ pub fn callable_throws<'db>(
                 .clone(),
         );
     }
-    let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+    let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
     if let Some(throws_ref) = data.throws {
         let frame = crate::lower::function_generic_frame(db, function);
         let ctx = crate::lower::lower_ctx_for_file(db, function.file(db)).with_frame(frame);
@@ -221,11 +219,11 @@ unsafe impl salsa::Update for FunctionSignatureTy {
 /// The enclosing type's generic-frame prefix length for a method's frame;
 /// 0 for a free function.
 fn enclosing_param_count<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> usize {
-    use baml_compiler2_ppir::item_data::MethodOwner;
-    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+    use baml_compiler2_hir::item_data::MethodOwner;
+    match baml_compiler2_hir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => crate::lower::class_generic_frame(db, class).len(),
         Some(MethodOwner::Interface(iface)) => crate::lower::interface_frame(db, iface).len(),
         Some(MethodOwner::Impl(imp)) => crate::lower::impl_frame(db, imp).len(),
@@ -234,7 +232,7 @@ fn enclosing_param_count<'db>(
 }
 
 fn function_signature_ty_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    _db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
     _function: FunctionLoc<'db>,
 ) -> FunctionSignatureTy {
@@ -253,7 +251,7 @@ fn function_signature_ty_cycle_initial<'db>(
 
 #[salsa::tracked(returns(ref), cycle_initial = function_signature_ty_cycle_initial)]
 pub fn function_signature_ty<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> FunctionSignatureTy {
     let sig = crate::lower::function_signature(db, function);
@@ -271,7 +269,7 @@ pub fn function_signature_ty<'db>(
             },
         })
         .collect();
-    let builtin_kind = match baml_compiler2_ppir::function_body(db, function).as_ref() {
+    let builtin_kind = match baml_compiler2_hir::body::function_body(db, function).as_ref() {
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         baml_compiler2_hir::body::FunctionBody::Expr(_)
         | baml_compiler2_hir::body::FunctionBody::Missing => None,
@@ -295,7 +293,7 @@ pub fn function_signature_ty<'db>(
 /// The declaration-site resolved signature: own generics, every parameter
 /// (`self` included), the declared return type.
 pub fn callable_signature<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'db>,
 ) -> &'db FunctionSignatureTy {
     match callable {
@@ -309,7 +307,7 @@ pub fn callable_signature<'db>(
 /// `function_signature` pairs with the parameters), the exported
 /// `callable_throws` for a row.
 pub fn callable_throws_of<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'db>,
 ) -> &'db baml_type::Ty {
     match callable {
@@ -326,7 +324,7 @@ pub fn callable_throws_of<'db>(
 /// instance. Whether an erased `Self` can be dispatched is
 /// [`callable_self_dispatch`], which treats the receiver as the parameter
 /// it is.
-pub fn callable_takes_self(db: &dyn baml_compiler2_ppir::Db, callable: FunctionRef<'_>) -> bool {
+pub fn callable_takes_self(db: &dyn baml_compiler2_hir::Db, callable: FunctionRef<'_>) -> bool {
     callable_signature(db, callable)
         .params
         .first()
@@ -336,7 +334,7 @@ pub fn callable_takes_self(db: &dyn baml_compiler2_ppir::Db, callable: FunctionR
 
 /// `Some` for a builtin-bodied callable.
 pub fn callable_builtin_kind(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'_>,
 ) -> Option<baml_compiler2_ast::BuiltinKind> {
     callable_signature(db, callable).builtin_kind
@@ -347,7 +345,7 @@ pub fn callable_builtin_kind(
 /// present, its exported row when it is served from its interface. `None`
 /// when the package is not installed or declares no such function.
 pub fn lang_function<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     package: baml_base::LangPackage,
     namespace: &[&str],
     name: &str,
@@ -361,7 +359,7 @@ pub fn lang_function<'db>(
         return crate::extern_loc::extern_function_named(db, root, &namespace, &name)
             .map(DeclRef::External);
     }
-    match baml_compiler2_ppir::package_items(db, root).lookup_value(&namespace, &name)? {
+    match baml_compiler2_hir::package::package_items(db, root).lookup_value(&namespace, &name)? {
         Definition::Function(function) => Some(DeclRef::Source(function)),
         Definition::Class(_)
         | Definition::Enum(_)
@@ -374,7 +372,7 @@ pub fn lang_function<'db>(
 /// The class-inherent method `class.method` a language package declares at
 /// its root, whichever lane serves the package (see [`lang_function`]).
 pub fn lang_class_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     package: baml_base::LangPackage,
     class: &str,
     method: &str,
@@ -386,28 +384,28 @@ pub fn lang_class_method<'db>(
         return crate::extern_loc::extern_class_method(db, &head, &method).map(DeclRef::External);
     }
     let baml_compiler2_hir::contributions::Definition::Class(class) =
-        baml_compiler2_ppir::package_items(db, root).lookup_type(&[], &Name::new(class))?
+        baml_compiler2_hir::package::package_items(db, root).lookup_type(&[], &Name::new(class))?
     else {
         return None;
     };
-    baml_compiler2_ppir::item_data::class_data(db, class)
+    baml_compiler2_hir::item_data::class_data(db, class)
         .methods
         .iter()
         .copied()
         .find(|&candidate| {
-            baml_compiler2_ppir::item_data::function_data(db, candidate).name == method
+            baml_compiler2_hir::item_data::function_data(db, candidate).name == method
         })
         .map(DeclRef::Source)
 }
 
 /// The callable's own short name, for diagnostics and display.
 pub fn callable_display_name<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'db>,
 ) -> &'db Name {
     match callable {
         DeclRef::Source(function) => {
-            &baml_compiler2_ppir::item_data::function_data(db, function).name
+            &baml_compiler2_hir::item_data::function_data(db, function).name
         }
         DeclRef::External(function) => &extern_function_row(db, function).name,
     }
@@ -417,7 +415,7 @@ pub fn callable_display_name<'db>(
 /// parameters minus the synthetic callback-effect parameters, which are
 /// inference-only and never participate in written arity.
 pub fn callable_user_generic_params(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'_>,
 ) -> Vec<(ParamTy, Vec<baml_type::Interface>)> {
     let own: Vec<(ParamTy, Vec<baml_type::Interface>)> = match callable {
@@ -476,7 +474,7 @@ pub struct CallableFrame<'db> {
 /// no bound constrains; preserved verbatim rather than unified here, so the
 /// unification is its own reviewable change.
 pub fn callable_generic_frame<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'db>,
 ) -> CallableFrame<'db> {
     match callable {
@@ -486,7 +484,7 @@ pub fn callable_generic_frame<'db>(
                 &params,
                 &crate::lower::function_generic_bounds(db, function),
             );
-            let own = baml_compiler2_ppir::item_data::function_data(db, function)
+            let own = baml_compiler2_hir::item_data::function_data(db, function)
                 .generic_params
                 .len();
             CallableFrame {
@@ -525,7 +523,7 @@ fn concat_frame<'db, T: Clone>(owner: Cow<'db, [T]>, own: &'db [T]) -> Cow<'db, 
 /// (one type per frame slot): parameters, return type, and effective throws
 /// with every frame variable substituted.
 pub fn instantiate_callable_signature<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'db>,
     instantiation: &[baml_type::interned::Ty],
 ) -> baml_type::interned::Ty {
@@ -546,7 +544,6 @@ pub fn instantiate_callable_signature<'db>(
         params,
         ret: substitute(&signature.return_type),
         throws: substitute(callable_throws_of(db, callable)),
-        attr: baml_type::TyAttr::default(),
     })
 }
 
@@ -585,7 +582,7 @@ pub enum SelfDispatch {
 /// in both — the export asserts it and the import refuses a row that frames
 /// it otherwise — so one test serves both.
 pub fn callable_self_dispatch(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'_>,
 ) -> SelfDispatch {
     use crate::diagnostics::SelfCallPosition;
@@ -599,7 +596,7 @@ pub fn callable_self_dispatch(
     let bare_self = |ty: &baml_type::Ty| {
         matches!(
             baml_type::interned::Ty::from_plain(ty).kind(),
-            baml_type::interned::InferTy::TypeVar(param, _)
+            baml_type::interned::InferTy::TypeVar(param)
                 if param.index() == 0 && param.as_str() == "Self"
         )
     };
@@ -634,7 +631,7 @@ pub fn callable_self_dispatch(
 /// erased `Self` — [`SelfDispatch::Breaks`]. A method with no `Self`
 /// parameter does not break the rule; it merely has nothing to dispatch on.
 pub fn callable_breaks_one_self(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'_>,
 ) -> bool {
     matches!(
@@ -657,13 +654,13 @@ pub enum CallableOwnerKind {
 }
 
 pub fn callable_owner_kind(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'_>,
 ) -> CallableOwnerKind {
-    use baml_compiler2_ppir::item_data::MethodOwner;
+    use baml_compiler2_hir::item_data::MethodOwner;
     match callable {
         DeclRef::Source(function) => {
-            match baml_compiler2_ppir::item_data::method_owner(db, function) {
+            match baml_compiler2_hir::item_data::method_owner(db, function) {
                 None => CallableOwnerKind::Free,
                 Some(MethodOwner::Class(_)) => CallableOwnerKind::Class,
                 Some(MethodOwner::Interface(_)) => CallableOwnerKind::Interface,
@@ -686,13 +683,13 @@ pub fn callable_owner_kind(
 /// for an impl-provided method; `None` for a free function (and for an
 /// impl whose header did not resolve).
 pub fn callable_owner_type(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'_>,
 ) -> Option<DeclName> {
-    use baml_compiler2_ppir::item_data::MethodOwner;
+    use baml_compiler2_hir::item_data::MethodOwner;
     match callable {
         DeclRef::Source(function) => {
-            match baml_compiler2_ppir::item_data::method_owner(db, function)? {
+            match baml_compiler2_hir::item_data::method_owner(db, function)? {
                 MethodOwner::Class(class) => Some(crate::lower::class_qualified_name(db, class)),
                 MethodOwner::Interface(interface) => {
                     Some(crate::lower::interface_qualified_name(db, interface))
