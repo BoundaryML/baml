@@ -54,8 +54,19 @@ fn type_arg(vm: &BexVm, value: Value) -> Result<RealizedTy, VmRustFnError> {
 }
 
 impl BamlNamespaceInternal for PackageTypesafeaiImpl {
-    fn enum_skipped(vm: &BexVm, ty: &Value, name: &bex_str::BexStr) -> Result<bool, VmRustFnError> {
-        let RealizedTy::Enum(head, _) = type_arg(vm, *ty)? else {
+    fn skipped(vm: &BexVm, ty: &Value, name: &bex_str::BexStr) -> Result<bool, VmRustFnError> {
+        if let RealizedTy::Class(head, _) = type_arg(vm, *ty)? {
+            let Object::Class(class) = vm.get_object(head.ptr()) else {
+                return Err(invalid("expected class declaration"));
+            };
+            return class
+                .fields
+                .iter()
+                .find(|field| field.name.as_str() == name.as_str())
+                .map(|field| field.skip)
+                .ok_or_else(|| invalid("unknown class field"));
+        }
+        let RealizedTy::Enum(head) = type_arg(vm, *ty)? else {
             return Err(invalid("expected an enum type"));
         };
         let Object::Enum(enm) = vm.get_object(head.ptr()) else {
@@ -71,7 +82,7 @@ impl BamlNamespaceInternal for PackageTypesafeaiImpl {
     fn constant(vm: &mut BexVm, ty: &Value) -> Result<Value, VmRustFnError> {
         let (key, description, value, skipped) = match type_arg(vm, *ty)? {
             RealizedTy::Null { .. } => ("<null>".to_owned(), None, Value::NULL, false),
-            RealizedTy::Literal(literal, _, _) => {
+            RealizedTy::Literal(literal, _) => {
                 let (key, value) = match literal {
                     baml_type::Literal::String(s) => (s.clone(), Value::object(vm.alloc_string(s))),
                     baml_type::Literal::Int(n) => (n.to_string(), Value::int(n)),
@@ -83,7 +94,7 @@ impl BamlNamespaceInternal for PackageTypesafeaiImpl {
                 };
                 (key, None, value, false)
             }
-            RealizedTy::EnumVariant(head, name, _) => {
+            RealizedTy::EnumVariant(head, name) => {
                 let Object::Enum(enm) = vm.get_object(head.ptr()) else {
                     return Err(invalid("expected enum declaration"));
                 };
@@ -121,7 +132,7 @@ impl BamlNamespaceInternal for PackageTypesafeaiImpl {
         ty: &Value,
         name: &bex_str::BexStr,
     ) -> Result<Value, VmRustFnError> {
-        let RealizedTy::Enum(head, _) = type_arg(vm, *ty)? else {
+        let RealizedTy::Enum(head) = type_arg(vm, *ty)? else {
             return Err(invalid("expected an enum type"));
         };
         let Object::Enum(enm) = vm.get_object(head.ptr()) else {
@@ -136,7 +147,7 @@ impl BamlNamespaceInternal for PackageTypesafeaiImpl {
     }
 
     fn class_value(vm: &mut BexVm, ty: &Value, fields: &[Value]) -> Result<Value, VmRustFnError> {
-        let RealizedTy::Class(head, args, _) = type_arg(vm, *ty)? else {
+        let RealizedTy::Class(head, args) = type_arg(vm, *ty)? else {
             return Err(invalid("expected a class type"));
         };
         let Object::Class(class) = vm.get_object(head.ptr()) else {

@@ -19,7 +19,7 @@ Unsupported outputs, recursive classes, tools, media, empty instructions, empty 
 
 Colliding choice keys are tolerated and belong to the first **reflected** member. The compiler currently canonicalizes union order, so swapping declaration order does not necessarily change the winner. Preserving declaration order is a compiler follow-up; clients must not rely on collisions to select a particular runtime type.
 
-The adapter's plan and decoding are written in BAML reflection. Four small native operations expose literal values, enum values, the skip flag, and validated class construction. `ai.ModelTurn.parsed_output` carries the exact typed result through the runner, avoiding a second heuristic SAP parse that could change a union member. Its wrapper distinguishes a decoded null from an absent decoded result, and the runner checks the value against its output type.
+The adapter's plan and decoding are written in BAML reflection. Four small native operations expose literal values, enum values, class/enum skip flags, and validated class construction. Skipped class fields produce no questions and are filled with null; their declared types must accept null (including `unknown`), otherwise validation fails before HTTP. `ai.ModelTurn.parsed_output` carries the exact typed result through the runner, avoiding a second heuristic SAP parse that could change a union member. Its wrapper distinguishes a decoded null from an absent decoded result, and the runner checks the value against its output type.
 
 Full response envelopes, including probabilities, confidence, and usage, remain available in `ai.events.LLMCall.http_response.body` through the usual event hooks. `capture_wire = false` omits bodies; captured authorization headers are redacted.
 

@@ -43,6 +43,24 @@ class WithNotes {
 class Empty {
 }
 
+class WithSkipped {
+    route: Team,
+    notes: string? @skip,
+    internal: unknown @skip,
+    flag: bool? @skip,
+    media: image? @skip,
+}
+
+class InvalidSkipped {
+    route: Team,
+    notes: string @skip,
+}
+
+function SkipFields(message: string) -> WithSkipped {
+    client: "typesafeai/jev-latest"
+    prompt: `${message}`
+}
+
 type Tree = Tree[] | Team;
 
 function Urgent(message: string) -> bool {
@@ -607,6 +625,32 @@ function skipped_subset() -> bool {
 
 test "skip applies to enum variant subsets" {
     assert.is_true(skipped_subset())
+}
+
+function skipped_fields() -> bool {
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(`{"answers":{"route":{"type":"choice","choice":"tech"}}}`)], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
+        let value = ai.Agent.new(client = cl).run(SkipFields@spec("outage")).value;
+        assert.equal(value.route, Team.Technical);
+        assert.equal(value.notes, null);
+        assert.equal(value.internal, null);
+        assert.equal(value.flag, null);
+        assert.equal(value.media, null);
+        let questions = baml.json.path<map<string, baml.json.json>>(mock.last_request().json(), ".questions");
+        assert.equal(questions.keys().length(), 1);
+        assert.is_true(questions.has("route"));
+        true
+    })
+}
+
+test "skipped class fields are omitted and filled with null" {
+    assert.is_true(skipped_fields())
+}
+
+test "reject nonnullable skipped fields before HTTP" {
+    assert.is_true(rejects(reflect.Type.of<InvalidSkipped>()))
 }
 
 testset "live" with testing.Sequential() {

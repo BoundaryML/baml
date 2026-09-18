@@ -22,7 +22,7 @@ function enum_value(ty: reflect.Type, name: string) -> unknown throws baml.error
 
 /// (internal) Reflection metadata does not yet expose SAP's skip flag.
 //baml:vm
-function enum_skipped(ty: reflect.Type, name: string) -> bool throws baml.errors.InvalidArgument {
+function skipped(ty: reflect.Type, name: string) -> bool throws baml.errors.InvalidArgument {
     $rust_function
 }
 
@@ -62,7 +62,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
     if let en: reflect.enum.Type = ty.as_enum() {
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
-            if (!enum_skipped(ty, variant.name)) {
+            if (!skipped(ty, variant.name)) {
                 out.push(
                     ChoiceOption {
                         key: variant.meta.alias ?? variant.name,
@@ -94,6 +94,20 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
     throw reject(`JEV cannot convert Choice member ${ty.to_string()}`)
 }
 
+function accepts_null(ty: reflect.Type) -> bool {
+    if (ty == reflect.Type.of<null>() || ty == reflect.Type.of<unknown>()) {
+        return true;
+    }
+    if let union: reflect.union.Type = ty.as_union() {
+        for (let member in union.member_types()) {
+            if (accepts_null(member)) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 function collect(
     ty: reflect.Type,
     ids: string[],
@@ -114,18 +128,24 @@ function collect(
             let field_type: reflect.Type = field.type else {
                 throw reject(`JEV cannot reflect field ${field.name}`)
             };
-            for (
-                let leaf in collect(
-                    field_type,
-                    ids.concat([field.name]),
-                    labels.concat([field.meta.alias ?? field.name]),
-                    field.meta.description,
-                    field.meta.alias != null,
-                    prefix,
-                    ancestors.concat([ty]),
-                )
-            ) {
-                out.push(leaf);
+            if (skipped(ty, field.name)) {
+                if (!accepts_null(field_type)) {
+                    throw reject(`Skipped JEV field ${field.name} must accept null`)
+                }
+            } else {
+                for (
+                    let leaf in collect(
+                        field_type,
+                        ids.concat([field.name]),
+                        labels.concat([field.meta.alias ?? field.name]),
+                        field.meta.description,
+                        field.meta.alias != null,
+                        prefix,
+                        ancestors.concat([ty]),
+                    )
+                ) {
+                    out.push(leaf);
+                }
             }
         }
         if (out.length() == 0) {
@@ -328,10 +348,14 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
     if let cls: reflect.class.Type = ty.as_class() {
         let fields: unknown[] = [];
         for (let field in cls.fields()) {
-            let field_type: reflect.Type = field.type else {
-                throw failed("Missing field type")
-            };
-            fields.push(assemble(field_type, path.concat([field.name]), values));
+            if (skipped(ty, field.name)) {
+                fields.push(null);
+            } else {
+                let field_type: reflect.Type = field.type else {
+                    throw failed("Missing field type")
+                };
+                fields.push(assemble(field_type, path.concat([field.name]), values));
+            }
         }
         return class_value(ty, fields);
     }
