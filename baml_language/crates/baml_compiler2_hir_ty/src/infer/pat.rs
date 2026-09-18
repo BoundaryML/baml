@@ -23,7 +23,7 @@
 
 use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
-    Freshness, TyAttr,
+    Freshness,
     interned::{InferInterface, InferTy, Ty},
     normalize::{TypeContext as _, normalize_interned},
 };
@@ -316,7 +316,7 @@ impl<'db> InferenceContext<'db> {
                 };
                 let short = segments.last()?;
                 let qtn = self.lower.qualify_definition(def, short);
-                let generic_count = baml_compiler2_ppir::item_data::class_data(self.db, class_loc)
+                let generic_count = baml_compiler2_hir::item_data::class_data(self.db, class_loc)
                     .generic_params
                     .len();
                 let written = self.type_refs.pattern_class_args.get(&pat).cloned();
@@ -329,11 +329,7 @@ impl<'db> InferenceContext<'db> {
                         .map(|_| self.table.new_var_ty())
                         .collect(),
                 };
-                Some(Ty::intern(InferTy::Class(
-                    qtn,
-                    args.into(),
-                    TyAttr::default(),
-                )))
+                Some(Ty::intern(InferTy::Class(qtn, args.into())))
             }
             Pattern::Or(alts) => {
                 let alts = alts.clone();
@@ -589,8 +585,7 @@ impl<'db> InferenceContext<'db> {
         field_pats: &[(baml_type::Name, PatId)],
         scrut: &Ty,
     ) -> PatternOutcome {
-        let attr = TyAttr::default;
-        let data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
+        let data = baml_compiler2_hir::item_data::interface_data(self.db, interface);
         let short = path.last().expect("type paths are never empty");
         let qtn = self.lower.qualify_definition(
             baml_compiler2_hir::contributions::Definition::Interface(interface),
@@ -624,7 +619,7 @@ impl<'db> InferenceContext<'db> {
         let adopted = scrut_members(scrut)
             .into_iter()
             .find_map(|member| match member.kind() {
-                InferTy::Interface(member_qtn, args, pins, _)
+                InferTy::Interface(member_qtn, args, pins)
                     if *member_qtn == qtn
                         && (written_args.is_empty()
                             || (written_args.len() == args.len()
@@ -667,7 +662,6 @@ impl<'db> InferenceContext<'db> {
             qtn.clone(),
             args.clone().into_boxed_slice(),
             pins.clone().into_boxed_slice(),
-            attr(),
         ));
         let target = InferInterface::new(
             qtn.clone(),
@@ -735,11 +729,11 @@ impl<'db> InferenceContext<'db> {
         let dpat = {
             let iface_dpat = DPat::interface(dpat_ty(&head), fields, dpat_ty(scrut));
             match scrut.kind() {
-                InferTy::Union(members, _) => {
+                InferTy::Union(members) => {
                     let claimed: Vec<&Ty> = members
                         .iter()
                         .filter(|member| {
-                            matches!(member.kind(), InferTy::Interface(member_qtn, _, _, _) if *member_qtn == qtn)
+                            matches!(member.kind(), InferTy::Interface(member_qtn, _, _) if *member_qtn == qtn)
                         })
                         .collect();
                     match claimed.as_slice() {
@@ -843,8 +837,8 @@ impl<'db> InferenceContext<'db> {
         let pat = self.expand_alias_chain(pat);
         let scrut = self.expand_alias_chain(scrut);
         match (&pat, &scrut) {
-            (P::Never { .. }, _) => true,
-            (P::List(a, _), P::List(b, _)) => self.pattern_matchable(a, b),
+            (P::Never, _) => true,
+            (P::List(a), P::List(b)) => self.pattern_matchable(a, b),
             (
                 P::Map {
                     key: ka, value: va, ..
@@ -854,8 +848,8 @@ impl<'db> InferenceContext<'db> {
                 },
             ) => self.pattern_matchable(ka, kb) && self.pattern_matchable(va, vb),
             (
-                P::Interface(pat_qtn, pat_args, pat_assoc, _),
-                P::Interface(scrut_qtn, scrut_args, _, _),
+                P::Interface(pat_qtn, pat_args, pat_assoc),
+                P::Interface(scrut_qtn, scrut_args, _),
             ) if pat_qtn == scrut_qtn
                 && pat_assoc.is_empty()
                 && (pat_args.is_empty()
@@ -886,7 +880,7 @@ impl<'db> InferenceContext<'db> {
 
     fn flatten_union_members(&self, ty: &baml_type::Ty) -> Vec<baml_type::Ty> {
         match self.expand_alias_chain(ty) {
-            baml_type::Ty::Union(members, _) => members
+            baml_type::Ty::Union(members) => members
                 .iter()
                 .flat_map(|member| self.flatten_union_members(member))
                 .collect(),
@@ -900,7 +894,7 @@ impl<'db> InferenceContext<'db> {
         use baml_type::normalize::TypeContext as _;
         let mut ty = ty.clone();
         for _ in 0..64 {
-            let baml_type::Ty::TypeAlias(qtn, _) = &ty else {
+            let baml_type::Ty::TypeAlias(qtn) = &ty else {
                 return ty;
             };
             match self.facts.alias_def(qtn) {
@@ -926,7 +920,7 @@ impl<'db> InferenceContext<'db> {
             };
         }
         let covers = self.provable_subtype(scrut, pat_ty);
-        if let InferTy::Union(members, _) = scrut.kind()
+        if let InferTy::Union(members) = scrut.kind()
             && !covers
         {
             let members: Vec<Ty> = members.to_vec();
@@ -1013,10 +1007,10 @@ impl<'db> InferenceContext<'db> {
             return DPat::wildcard(col_plain);
         }
         match pat_ty.kind() {
-            InferTy::Literal(..) | InferTy::EnumVariant(..) | InferTy::Null { .. } => {
+            InferTy::Literal(..) | InferTy::EnumVariant(..) | InferTy::Null => {
                 DPat::single(pat_plain, col_plain)
             }
-            InferTy::Bool { .. } => DPat::or(
+            InferTy::Bool => DPat::or(
                 [true, false]
                     .into_iter()
                     .map(|value| {
@@ -1024,7 +1018,6 @@ impl<'db> InferenceContext<'db> {
                             baml_type::Ty::Literal(
                                 baml_base::Literal::Bool(value),
                                 Freshness::Regular,
-                                TyAttr::default(),
                             ),
                             col_plain.clone(),
                         )
@@ -1032,14 +1025,14 @@ impl<'db> InferenceContext<'db> {
                     .collect(),
                 col_plain,
             ),
-            InferTy::Enum(qtn, _) => {
+            InferTy::Enum(qtn) => {
                 let variants = self.facts.enum_variants(qtn).unwrap_or_default();
                 DPat::or(
                     variants
                         .into_iter()
                         .map(|variant| {
                             DPat::single(
-                                baml_type::Ty::EnumVariant(qtn.clone(), variant, TyAttr::default()),
+                                baml_type::Ty::EnumVariant(qtn.clone(), variant),
                                 col_plain.clone(),
                             )
                         })
@@ -1047,14 +1040,14 @@ impl<'db> InferenceContext<'db> {
                     col_plain,
                 )
             }
-            InferTy::Union(members, _) => DPat::or(
+            InferTy::Union(members) => DPat::or(
                 members
                     .iter()
                     .map(|member| self.dpat_for_type(member, col))
                     .collect(),
                 col_plain,
             ),
-            InferTy::Class(qtn, args, _) => {
+            InferTy::Class(qtn, args) => {
                 let fields = self.class_pattern_field_types(qtn, args);
                 DPat::class_inst(
                     qtn.clone(),
@@ -1178,12 +1171,12 @@ impl<'db> InferenceContext<'db> {
             let candidates: Vec<&Ty> = scrut_members(scrut)
                 .into_iter()
                 .filter(|member| {
-                    matches!(member.kind(), InferTy::Class(member_qtn, _, _) if *member_qtn == qtn)
+                    matches!(member.kind(), InferTy::Class(member_qtn, _) if *member_qtn == qtn)
                 })
                 .collect();
             match candidates.as_slice() {
                 [only] => match only.kind() {
-                    InferTy::Class(_, args, _) => args.to_vec(),
+                    InferTy::Class(_, args) => args.to_vec(),
                     _ => Vec::new(),
                 },
                 // None or ambiguous: Error args (S17's diagnostic).
@@ -1244,7 +1237,7 @@ impl<'db> InferenceContext<'db> {
                 dpat_ty(&head),
             );
             match scrut.kind() {
-                InferTy::Union(members, _) => {
+                InferTy::Union(members) => {
                     // Same class AND agreeing instantiation: against
                     // `Box<int> | Box<string>`, `Box<int> { .. }` claims
                     // exactly the `Box<int>` member, so
@@ -1256,7 +1249,7 @@ impl<'db> InferenceContext<'db> {
                     let claimed: Vec<&Ty> = members
                         .iter()
                         .filter(|member| match member.kind() {
-                            InferTy::Class(member_qtn, member_args, _) => {
+                            InferTy::Class(member_qtn, member_args) => {
                                 *member_qtn == qtn
                                     && (args.is_empty()
                                         || (member_args.len() == args.len()
@@ -1340,7 +1333,7 @@ impl<'db> InferenceContext<'db> {
         // slices cover one another regardless of their ascriptions.
         let scrut_structure = self.structurally_resolve(scrut);
         let claimed_union = match scrut_structure.kind() {
-            InferTy::Union(members, _) => {
+            InferTy::Union(members) => {
                 let members = members.to_vec();
                 let mut lists: Vec<Ty> = Vec::new();
                 for member in &members {
@@ -1373,7 +1366,7 @@ impl<'db> InferenceContext<'db> {
             None => effective,
         };
         let element = match effective.kind() {
-            InferTy::List(element, _) => element.clone(),
+            InferTy::List(element) => element.clone(),
             _ => Ty::error(),
         };
         let mut sub_dpats = Vec::new();
@@ -1468,7 +1461,7 @@ impl<'db> InferenceContext<'db> {
                 suffix,
                 ..
             } => {
-                let InferTy::List(element, _) = expanded.kind() else {
+                let InferTy::List(element) = expanded.kind() else {
                     return false;
                 };
                 if let Some(type_ref) = self.type_refs.array_ascriptions.get(&pat).copied() {
@@ -1548,9 +1541,7 @@ fn dpat_ty(ty: &Ty) -> baml_type::Ty {
         // compatibility. (An explicit unjudgeable `DPat` ctor could replace
         // the sentinel reuse; today recovery-Error and open-Error want the
         // same suppression.)
-        Err(baml_type::interned::OpenTy) => baml_type::Ty::Error {
-            attr: baml_type::TyAttr::default(),
-        },
+        Err(baml_type::interned::OpenTy) => baml_type::Ty::Error,
     }
 }
 
@@ -1568,7 +1559,7 @@ fn rest_pattern_shape_ok(body: &ExprBody, pat: PatId) -> bool {
 /// A scrutinee's members: union members, or the type itself.
 fn scrut_members(scrut: &Ty) -> Vec<&Ty> {
     match scrut.kind() {
-        InferTy::Union(members, _) => members.iter().collect(),
+        InferTy::Union(members) => members.iter().collect(),
         _ => vec![scrut],
     }
 }
@@ -1599,9 +1590,9 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let Some(Definition::Interface(iface_loc)) = facts.definition_of(iface_qtn) else {
             return None;
         };
-        let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
+        let class_data = baml_compiler2_hir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg.root);
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
         // The class's implements block for THIS interface supplies the
         // `field as class_field` links (default: the same name).
         let block = class_data.implements.iter().find(|block| {
@@ -1613,7 +1604,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 &pkg.namespace_path,
             ) == Some(iface_loc)
         })?;
-        let iface_data = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+        let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
         iface_data
             .fields
             .iter()
@@ -1636,35 +1627,31 @@ impl PatCtx for HirPatCtx<'_, '_> {
         use baml_type::Ty as P;
         let ty = self.peel_aliases(ty.clone(), 8);
         match &ty {
-            P::Bool { .. } => vec![
+            P::Bool => vec![
                 Ctor::Single(P::Literal(
                     baml_base::Literal::Bool(true),
                     Freshness::Regular,
-                    TyAttr::default(),
                 )),
                 Ctor::Single(P::Literal(
                     baml_base::Literal::Bool(false),
                     Freshness::Regular,
-                    TyAttr::default(),
                 )),
             ],
-            P::Null { .. } | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Single(ty.clone())],
-            P::Never { .. } => vec![],
-            P::Union(members, _) => members
+            P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Single(ty.clone())],
+            P::Never => vec![],
+            P::Union(members) => members
                 .iter()
                 .map(|member| Ctor::UnionMember(member.clone()))
                 .collect(),
-            P::Enum(qtn, _) => self
+            P::Enum(qtn) => self
                 .infer
                 .facts
                 .enum_variants(qtn)
                 .unwrap_or_default()
                 .into_iter()
-                .map(|variant| {
-                    Ctor::Single(P::EnumVariant(qtn.clone(), variant, TyAttr::default()))
-                })
+                .map(|variant| Ctor::Single(P::EnumVariant(qtn.clone(), variant)))
                 .collect(),
-            P::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
+            P::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // An existential column is a single-constructor STRUCT VIEW
             // over its declared fields (rustc's non-enum struct shape).
             P::Interface(..) => vec![Ctor::Interface(ty.clone())],
@@ -1679,7 +1666,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
     /// order - the same member instantiation field access uses.
     fn interface_field_types(&self, iface_ty: &baml_type::Ty) -> Vec<baml_type::Ty> {
         use baml_compiler2_hir::contributions::Definition;
-        let baml_type::Ty::Interface(qtn, args, pins, _) = iface_ty else {
+        let baml_type::Ty::Interface(qtn, args, pins) = iface_ty else {
             return Vec::new();
         };
         let Some(Definition::Interface(interface)) = self.infer.facts.definition_of(qtn) else {
@@ -1696,7 +1683,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                 .collect(),
         );
-        baml_compiler2_ppir::item_data::interface_data(self.infer.db, interface)
+        baml_compiler2_hir::item_data::interface_data(self.infer.db, interface)
             .fields
             .iter()
             .map(|field| {
@@ -1716,9 +1703,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                         .ok()
                         .map(|closed| closed.to_plain())
                 })
-                .unwrap_or_else(|| baml_type::Ty::Error {
-                    attr: TyAttr::default(),
-                })
+                .unwrap_or(baml_type::Ty::Error)
             })
             .collect()
     }
@@ -1729,7 +1714,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
         ty: &baml_type::Ty,
     ) -> Vec<baml_type::Ty> {
         let args: Vec<Ty> = match ty {
-            baml_type::Ty::Class(_, args, _) => args
+            baml_type::Ty::Class(_, args) => args
                 .iter()
                 .map(baml_type::interned::Ty::from_plain)
                 .collect(),
@@ -1743,16 +1728,14 @@ impl PatCtx for HirPatCtx<'_, '_> {
             .map(|ty| {
                 baml_type::interned::ClosedTy::try_from(ty)
                     .map(|closed| closed.to_plain())
-                    .unwrap_or_else(|_| baml_type::Ty::Error {
-                        attr: TyAttr::default(),
-                    })
+                    .unwrap_or_else(|_| baml_type::Ty::Error)
             })
             .collect()
     }
 
     fn list_element_type(&self, ty: &baml_type::Ty) -> baml_type::Ty {
         match self.peel_aliases(ty.clone(), 8) {
-            baml_type::Ty::List(element, _) => *element,
+            baml_type::Ty::List(element) => *element,
             other => other,
         }
     }
@@ -1764,7 +1747,7 @@ impl HirPatCtx<'_, '_> {
             return ty;
         }
         match &ty {
-            baml_type::Ty::TypeAlias(qtn, _) => match self.infer.facts.alias_def(qtn) {
+            baml_type::Ty::TypeAlias(qtn) => match self.infer.facts.alias_def(qtn) {
                 Some(target) => self.peel_aliases(target, fuel - 1),
                 None => ty,
             },

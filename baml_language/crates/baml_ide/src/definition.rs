@@ -17,7 +17,7 @@ use crate::resolve::{symbol_at, target_definition};
 /// `resolve_name_at`, inference) is internally Salsa-cached. Returns `None`
 /// if the cursor is not on an identifier or the name cannot be resolved.
 pub fn definition_at(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Option<Location> {

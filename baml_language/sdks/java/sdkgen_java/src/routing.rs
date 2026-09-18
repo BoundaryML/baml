@@ -15,12 +15,7 @@
 //! `"<vendor>"` for declared external packages.
 //!
 //! `"baml"` routes under `baml/`, anything else under `vendor/<pkg>/`.
-//!
-//! `$stream` companions do **not** get a separate package: `$` is a
-//! valid Java identifier character, so a stream companion keeps its
-//! `$stream`-suffixed name and is emitted beside its base type in the
-//! same package. Routing is therefore independent of the `$stream`
-//! suffix and of the symbol kind.
+//! Routing is independent of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package
 //! segments MUST avoid Java's reserved words — the `void` fixture
@@ -163,10 +158,7 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 
 /// Route a pool entry to its package directory (under `baml_sdk/`).
 ///
-/// Routing depends only on the symbol's package + namespace path. The
-/// `$stream` suffix (on companion classes or function companions) does
-/// not influence placement — stream companions live beside their base
-/// type.
+/// Routing depends only on the symbol's package + namespace path.
 pub(crate) fn route(name: &Name) -> PackagePath {
     let mut segs: Vec<String> = Vec::new();
 
@@ -231,12 +223,6 @@ mod tests {
     }
 
     #[test]
-    fn stream_class_routes_to_base_package() {
-        let pp = route(&name("user", &["lorem"], "Resume$stream"));
-        assert_eq!(pp.segments, vec!["lorem".to_string()]);
-    }
-
-    #[test]
     fn user_deeper_ns() {
         let pp = route(&name("user", &["a", "b"], "Thing"));
         assert_eq!(pp.segments, vec!["a".to_string(), "b".to_string()]);
@@ -262,7 +248,7 @@ mod tests {
         assert_eq!(java_identifier("void"), "void$");
         assert_eq!(java_identifier("new"), "new$");
         assert_eq!(java_identifier("helpers"), "helpers");
-        assert_eq!(java_identifier("Resume$stream"), "Resume$stream");
+        assert_eq!(java_identifier("Keep$dollar"), "Keep$dollar");
         assert_eq!(java_identifier("has space"), "has_space");
         assert_eq!(java_identifier("_"), "_$");
     }

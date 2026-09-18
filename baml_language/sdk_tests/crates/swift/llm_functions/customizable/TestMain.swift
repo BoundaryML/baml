@@ -12,8 +12,6 @@ final class TestMain: XCTestCase {
         _ = Baml.lorem.Resume.self
         _ = Baml.lorem.StreamingDoc.self
         _ = Baml.ipsum.Sentiment.self
-        _ = Baml.stream_types.lorem.Resume.self
-        _ = Baml.stream_types.lorem.StreamingDoc.self
     }
 
     func test_main_ipsum_sentiment_enum_shape() {

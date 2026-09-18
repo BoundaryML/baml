@@ -7,20 +7,20 @@
 //! own table ([`baml_type`]'s), not database state.
 
 use baml_base::SourceFile;
-use baml_compiler2_ppir::resolve::type_names_in_scope_at;
+use baml_compiler2_hir::resolve::type_names_in_scope_at;
 use text_size::TextSize;
 
 use super::completions::Completions;
 use crate::symbols;
 
 pub(crate) fn complete(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
     out: &mut Completions<'_>,
 ) {
     for entry in type_names_in_scope_at(db, file, offset) {
-        if let baml_compiler2_ppir::resolve::TypeScopeNameKind::Item(def) = &entry.kind
+        if let baml_compiler2_hir::resolve::TypeScopeNameKind::Item(def) = &entry.kind
             && !symbols::offered_in_completion(db, &entry.name, *def)
         {
             continue;

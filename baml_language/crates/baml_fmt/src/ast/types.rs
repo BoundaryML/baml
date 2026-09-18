@@ -7,7 +7,7 @@ use rowan::{TextRange, TextSize};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
 use crate::{
-    ast::{Attribute, Literal, SyntaxNodeIter, Token},
+    ast::{Literal, SyntaxNodeIter, Token},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
 };
@@ -28,8 +28,6 @@ pub enum Type {
     Generic(GenericType),
     AssociatedProjection(AssociatedProjectionType),
     Function(FunctionType),
-    /// Types constrained by attributes.
-    Constrained(ConstrainedType<Type>),
     Unknown(TextRange),
 }
 
@@ -54,7 +52,6 @@ impl Type {
             Type::Generic(_) => false,
             Type::AssociatedProjection(_) => false,
             Type::Function(_) => true,
-            Type::Constrained(_) => true,
             Type::Unknown(_) => true, // to be safe
         }
     }
@@ -81,29 +78,13 @@ impl FromCST for Type {
 
         it.expect_end()?;
 
-        match rest.pop() {
-            None => Ok(first.into()),
-            Some((pipe, UnionTypeMember::Constrained(constrained))) => {
-                // is a union and last member is constrained
-                // so we need to lift the last member's attributes to the union
-                let ConstrainedType { ty, attrs } = constrained;
-                rest.push((pipe, *ty));
-                Ok(Type::Constrained(ConstrainedType {
-                    ty: Box::new(Type::Union(UnionType {
-                        first: Box::new(first),
-                        rest,
-                    })),
-                    attrs,
-                }))
-            }
-            Some(other) => {
-                rest.push(other); // put it back
-                // last is not constrained, keep it a normal union
-                Ok(Type::Union(UnionType {
-                    first: Box::new(first),
-                    rest,
-                }))
-            }
+        if rest.is_empty() {
+            Ok(first.into())
+        } else {
+            Ok(Type::Union(UnionType {
+                first: Box::new(first),
+                rest,
+            }))
         }
     }
 }
@@ -128,7 +109,6 @@ impl Printable for Type {
             Type::Generic(generic) => generic.print(shape, printer),
             Type::AssociatedProjection(projection) => projection.print(shape, printer),
             Type::Function(function) => function.print(shape, printer),
-            Type::Constrained(constrained) => constrained.print(shape, printer),
             Type::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo {
@@ -150,7 +130,6 @@ impl Printable for Type {
             Type::Generic(generic) => generic.leftmost_token(),
             Type::AssociatedProjection(projection) => projection.leftmost_token(),
             Type::Function(function) => function.leftmost_token(),
-            Type::Constrained(constrained) => constrained.leftmost_token(),
             Type::Unknown(range) => *range,
         }
     }
@@ -167,7 +146,6 @@ impl Printable for Type {
             Type::Generic(generic) => generic.rightmost_token(),
             Type::AssociatedProjection(projection) => projection.rightmost_token(),
             Type::Function(function) => function.rightmost_token(),
-            Type::Constrained(constrained) => constrained.rightmost_token(),
             Type::Unknown(range) => *range,
         }
     }
@@ -507,8 +485,6 @@ pub enum UnionTypeMember {
     Generic(GenericType),
     AssociatedProjection(AssociatedProjectionType),
     Function(FunctionType),
-    /// Types constrained by attributes.
-    Constrained(ConstrainedType<UnionTypeMember>),
     Unknown(TextRange),
 }
 
@@ -689,7 +665,7 @@ impl UnionTypeMember {
     pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let mut ty = Self::take_base_type(it)?;
 
-        // Handle non-union postfix operators: `[][][][]...`, `?`, `<...>`, `@attr`
+        // Handle non-union postfix operators: `[][][][]...`, `?`, `<...>`
         loop {
             if it
                 .peek()
@@ -723,18 +699,6 @@ impl UnionTypeMember {
                     args: type_args,
                 });
                 continue;
-            } else if let Some(attr) = it.next_if_kind(SyntaxKind::ATTRIBUTE) {
-                // Attributes
-                let mut attrs = Vec::new();
-                attrs.push(Attribute::from_cst(attr)?);
-                while let Some(attr) = it.next_if_kind(SyntaxKind::ATTRIBUTE) {
-                    attrs.push(Attribute::from_cst(attr)?);
-                }
-                ty = UnionTypeMember::Constrained(ConstrainedType {
-                    ty: Box::new(ty),
-                    attrs,
-                });
-                break; // we can't have other postfix operators after attributes
             }
             // Done with postfix operators
             break;
@@ -759,7 +723,6 @@ impl From<UnionTypeMember> for Type {
                 Type::AssociatedProjection(projection)
             }
             UnionTypeMember::Function(function) => Type::Function(function),
-            UnionTypeMember::Constrained(constrained) => Type::Constrained(constrained.into()),
             UnionTypeMember::Unknown(range) => Type::Unknown(range),
         }
     }
@@ -778,7 +741,6 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Generic(generic) => generic.print(shape, printer),
             UnionTypeMember::AssociatedProjection(projection) => projection.print(shape, printer),
             UnionTypeMember::Function(function) => function.print(shape, printer),
-            UnionTypeMember::Constrained(constrained) => constrained.print(shape, printer),
             UnionTypeMember::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo { multi_lined: false }
@@ -797,7 +759,6 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Generic(generic) => generic.leftmost_token(),
             UnionTypeMember::AssociatedProjection(projection) => projection.leftmost_token(),
             UnionTypeMember::Function(function) => function.leftmost_token(),
-            UnionTypeMember::Constrained(constrained) => constrained.leftmost_token(),
             UnionTypeMember::Unknown(range) => *range,
         }
     }
@@ -813,7 +774,6 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Generic(generic) => generic.rightmost_token(),
             UnionTypeMember::AssociatedProjection(projection) => projection.rightmost_token(),
             UnionTypeMember::Function(function) => function.rightmost_token(),
-            UnionTypeMember::Constrained(constrained) => constrained.rightmost_token(),
             UnionTypeMember::Unknown(range) => *range,
         }
     }
@@ -1430,131 +1390,6 @@ impl Printable for FunctionTypeParam {
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()
-    }
-}
-
-/// The type argument is what type enumeration is being constrained.
-/// Generally either use [`Type`] or [`UnionTypeMember`].
-#[derive(Debug)]
-pub struct ConstrainedType<T: Printable> {
-    pub ty: Box<T>,
-    /// Should not be empty: if it is, just use the inner type
-    pub attrs: Vec<Attribute>,
-}
-
-impl<T: Printable> PrintMultiLine for ConstrainedType<T> {
-    /// Multi-line layout: each attribute is indented one layer and is on a new line.
-    ///
-    /// ```baml
-    /// map<string, int>
-    ///     @stream.done
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let ty_info = printer.print(&*self.ty, shape.clone());
-        let (ty_trailing, _) = printer.print_trivia_all_trailing_for(self.ty.rightmost_token());
-        if !ty_info.multi_lined
-            && ty_trailing == 0
-            && let [attr] = self.attrs.as_slice()
-            && let remaining_width = printer.current_line_remaining_width().saturating_sub(1)
-            && attr.non_wrappable_len() <= remaining_width
-        {
-            // only one attribute and type was single line.
-            // we can start the attribute on the same line as the type
-            // ```baml
-            // MyReallyReallyLongTypeButOnOneLine
-            // ```
-            printer.print_spaces(1);
-            let attr_shape = Shape {
-                width: remaining_width,
-                indent: shape.indent,
-                first_line_offset: printer
-                    .config
-                    .line_width
-                    .saturating_sub(shape.indent + remaining_width),
-            };
-            return printer.print(attr, attr_shape);
-        }
-
-        let attr_indent = shape.indent + printer.config.indent_width;
-        let attr_shape = Shape {
-            width: printer.config.line_width.saturating_sub(attr_indent),
-            indent: attr_indent,
-            first_line_offset: 0,
-        };
-        for attr in &self.attrs {
-            printer.print_newline();
-            printer.print_spaces(attr_indent);
-            printer.print(attr, attr_shape.clone());
-        }
-        PrintInfo::default_multi_lined()
-    }
-}
-
-impl<T: Printable> ConstrainedType<T> {
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the type alias on a single line.
-    pub fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        if printer
-            .print(&*self.ty, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-
-        let (_, ty_trailing) = printer.trivia.get_for_element(&*self.ty);
-        let mut trivia_len = printer.try_print_trivia_single_line_squished(ty_trailing)?;
-
-        for (i, attr) in self.attrs.iter().enumerate() {
-            let (attr_leading, attr_trailing) = printer.trivia.get_for_element(attr);
-            trivia_len += printer.try_print_trivia_single_line_squished(attr_leading)?;
-            if trivia_len == 0 {
-                printer.print_spaces(1);
-            }
-            if printer
-                .print(attr, Shape::unlimited_single_line())
-                .multi_lined
-            {
-                return None;
-            }
-            let is_last = i + 1 >= self.attrs.len();
-            if !is_last {
-                trivia_len = printer.try_print_trivia_single_line_squished(attr_trailing)?;
-            }
-        }
-
-        if printer.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
-        }
-    }
-}
-
-impl<T: Printable> Printable for ConstrainedType<T> {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        debug_assert!(!self.attrs.is_empty());
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.ty.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some(attr) = self.attrs.last() {
-            attr.rightmost_token()
-        } else {
-            self.ty.rightmost_token()
-        }
-    }
-}
-
-impl From<ConstrainedType<UnionTypeMember>> for ConstrainedType<Type> {
-    fn from(member: ConstrainedType<UnionTypeMember>) -> Self {
-        ConstrainedType {
-            ty: Box::new((*member.ty).into()),
-            attrs: member.attrs,
-        }
     }
 }
 

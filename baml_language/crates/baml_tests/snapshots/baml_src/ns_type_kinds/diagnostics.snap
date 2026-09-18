@@ -5,28 +5,28 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0097
 
   ⚠ extraneous throws declaration: reflect.errors.CompilationError
-     ╭─[type_kinds.baml:85:50]
-  85 │ ╭─▶ ) -> bool throws reflect.errors.CompilationError {
-  86 │ │       let params = function_view.params();
-  87 │ │       let function_schema = match (reflect.Type.of<reflect.function.Type>().kind()) {
-  88 │ │           let class_view: reflect.class.Type => class_view,
-  89 │ │           _ => {
-  90 │ │               return false;
-  91 │ │           },
-  92 │ │       };
-  93 │ │       union_view.member_types().length() == 2
-  94 │ │           && array_view.element_type() == reflect.Type.of<Foo>()
-  95 │ │           && map_view.key_type() == reflect.Type.of<string>()
-  96 │ │           && map_view.value_type() == reflect.Type.of<Foo>()
-  97 │ │           && interface_view.implemented_by(reflect.Type.of<Foo>())
-  98 │ │           && params.length() == 2
-  99 │ │           && params[0].name == "x"
- 100 │ │           && params[0].type == reflect.Type.of<int>()
- 101 │ │           && params[0].optional == false
- 102 │ │           && params[1].name == "label"
- 103 │ │           && params[1].type == reflect.Type.of<string>()
- 104 │ │           && function_view.return_type() == reflect.Type.of<bool>()
- 105 │ │           && function_schema.fields().length() == 1
- 106 │ │           && function_schema.fields()[0].name == "_ty"
- 107 │ ╰─▶ }
+     ╭─[type_kinds.baml:83:50]
+  83 │ ╭─▶ ) -> bool throws reflect.errors.CompilationError {
+  84 │ │       let params = function_view.params();
+  85 │ │       let function_schema = match (reflect.Type.of<reflect.function.Type>().kind()) {
+  86 │ │           let class_view: reflect.class.Type => class_view,
+  87 │ │           _ => {
+  88 │ │               return false;
+  89 │ │           },
+  90 │ │       };
+  91 │ │       union_view.member_types().length() == 2
+  92 │ │           && array_view.element_type() == reflect.Type.of<Foo>()
+  93 │ │           && map_view.key_type() == reflect.Type.of<string>()
+  94 │ │           && map_view.value_type() == reflect.Type.of<Foo>()
+  95 │ │           && interface_view.implemented_by(reflect.Type.of<Foo>())
+  96 │ │           && params.length() == 2
+  97 │ │           && params[0].name == "x"
+  98 │ │           && params[0].type == reflect.Type.of<int>()
+  99 │ │           && params[0].optional == false
+ 100 │ │           && params[1].name == "label"
+ 101 │ │           && params[1].type == reflect.Type.of<string>()
+ 102 │ │           && function_view.return_type() == reflect.Type.of<bool>()
+ 103 │ │           && function_schema.fields().length() == 1
+ 104 │ │           && function_schema.fields()[0].name == "_ty"
+ 105 │ ╰─▶ }
      ╰────

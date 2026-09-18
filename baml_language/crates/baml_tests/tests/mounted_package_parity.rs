@@ -601,7 +601,7 @@ fn exported_impl_method_preserves_synthetic_callback_effect_params() {
             implementation.interface.name.name().as_str() == "Applies"
                 && matches!(
                     &implementation.for_ty_pattern,
-                    baml_type::Ty::Class(qtn, _, _) if qtn.name().as_str() == "Runner"
+                    baml_type::Ty::Class(qtn, _) if qtn.name().as_str() == "Runner"
                 )
         })
         .expect("Runner implements Applies row");
@@ -684,7 +684,7 @@ fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
     let artifacts = library_artifacts();
     assert!(artifacts.interface.impls.iter().any(|implementation| {
         implementation.interface.name.name().as_str() == "Tagged"
-            && matches!(implementation.for_ty_pattern, baml_type::Ty::TypeVar(_, _))
+            && matches!(implementation.for_ty_pattern, baml_type::Ty::TypeVar(_))
     }));
     assert!(matches!(
         artifacts.interface.lookup_type(&[], &Name::new("Tagged")),

@@ -133,7 +133,11 @@ use sha2::{Digest, Sha256};
 /// that left those maps (version 11 removed interface-machinery bodies from
 /// them, so direct calls to interface bodies stopped dirtying their
 /// callers).
-pub const FORMAT_VERSION: u32 = 15;
+///
+/// Version 16: `DiagnosticId` dropped `FieldAttributeInTypePosition` (E0106,
+/// BEP-075 removed type attributes), shifting the borsh discriminants of all
+/// later variants.
+pub const FORMAT_VERSION: u32 = 16;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

@@ -330,7 +330,6 @@ function f(callback: MaybeFn) -> int? {
       }
       !! 99..113: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
     }
-    type user.MaybeFn$stream = unknown | null
     ");
 }
 
@@ -358,10 +357,6 @@ function f(u: MaybeUser) -> string? {
       }
       !! 100..107: did you mean `u.name`? `u?.name` is unnecessary, because `u` cannot be null
     }
-    class user.User$stream {
-      name: string | null
-    }
-    type user.MaybeUser$stream = user.User$stream | null
     ");
 }
 
@@ -384,7 +379,6 @@ function f(xs: MaybeInts) -> int? {
         return xs?.[0] : int | null
       }
     }
-    type user.MaybeInts$stream = int[] | null
     ");
 }
 

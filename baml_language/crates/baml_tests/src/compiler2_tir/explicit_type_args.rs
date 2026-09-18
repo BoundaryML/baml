@@ -3,7 +3,7 @@
 //! Each test is a labeled semantic matrix. Together they preserve the original
 //! sixteen scenarios while sharing compiler setup and snapshot review surface.
 
-use super::support::{make_db, render_ppir, render_tir};
+use super::support::{make_db, render_hir, render_tir};
 use crate::engine::TestDbExt;
 
 #[test]
@@ -32,14 +32,14 @@ function caller(t: reflect.Type) -> bool {
         tir.contains("type S = Wrapper<string> : type"),
         "typed rendering lost the static type:\n{tir}"
     );
-    let ppir = render_ppir(&db, file);
+    let hir = render_hir(&db, file);
     assert!(
-        ppir.contains("type R = unreflect(t)"),
-        "HIR rendering lost the runtime operand:\n{ppir}"
+        hir.contains("type R = unreflect(t)"),
+        "HIR rendering lost the runtime operand:\n{hir}"
     );
     assert!(
-        ppir.contains("type S = user.Wrapper<string>"),
-        "HIR rendering lost the static type:\n{ppir}"
+        hir.contains("type S = user.Wrapper<string>"),
+        "HIR rendering lost the static type:\n{hir}"
     );
 }
 

@@ -6,7 +6,7 @@
 //!     rendering is now covered by the `@render_prompt` companion tests in
 //!     `baml_src/ns_prompt_tag_runtime/`.
 //!
-//! The remaining tests exercise the ai-world `$stream` companion against a
+//! The remaining tests exercise the ai-world `@stream` companion against a
 //! local OpenAI Responses API endpoint.
 
 #![allow(dead_code)]

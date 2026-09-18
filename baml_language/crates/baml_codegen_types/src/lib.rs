@@ -1,5 +1,5 @@
 //! Types that can now be used in multiple languages
-//! Attributes "don't exist", dual-types (types vs `stream_types`) are now modules
+//! Attributes "don't exist"
 //! Union / Optional / Null invariance guaranteed
 
 mod errors;

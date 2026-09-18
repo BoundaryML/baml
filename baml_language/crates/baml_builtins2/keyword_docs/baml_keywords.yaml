@@ -121,6 +121,26 @@ skip:
   details: |
     `@skip` takes no arguments and may appear at most once on a declaration.
 
+stream.done:
+  summary: "Holds a field at its default, or a whole class back, until the streamed value is complete. Takes no arguments."
+  syntax: |
+    class Article {
+      slug string @stream.done
+      body string
+    }
+  details: |
+    `@stream.done` applies to a class field: while the value is incomplete the partial parse uses the field's default, `""` for a string, rather than the text received so far. `@@stream.done` applies to a class: the object has no partial parse until every field is complete. Without either, a field streams its partial value whenever its type has one, which strings, arrays, maps, classes, and unions do. Takes no arguments, at most once per declaration.
+
+stream.must_exist:
+  summary: "Removes a class field's default, so the class has no partial parse until that field arrives. Takes no arguments."
+  syntax: |
+    class Invoice {
+      customer string
+      currency string @stream.must_exist
+    }
+  details: |
+    A class field normally has a default the partial parse uses before the field arrives, `""` for a string. `@stream.must_exist` makes that default `never`, and a class with any `never` field has no partial parse, so nothing is produced for `Invoice` until `currency` is present. Reach for it when a partial object missing that field would mislead. Applies to class fields only. Takes no arguments, at most once per declaration.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |

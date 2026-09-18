@@ -7,12 +7,14 @@
 //! promise.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler2_hir::contributions::DefinitionKind;
-use baml_compiler2_hir_ty::method_resolution::{MemberCandidate, MemberDecl, MemberSource};
-use baml_compiler2_ppir::resolve::{
-    NamespaceMember, NamespaceMemberKind, ScopeName, ScopeNameKind, TypeScopeName,
-    TypeScopeNameKind,
+use baml_compiler2_hir::{
+    contributions::DefinitionKind,
+    resolve::{
+        NamespaceMember, NamespaceMemberKind, ScopeName, ScopeNameKind, TypeScopeName,
+        TypeScopeNameKind,
+    },
 };
+use baml_compiler2_hir_ty::method_resolution::{MemberCandidate, MemberDecl, MemberSource};
 use text_size::TextRange;
 
 use super::{
@@ -22,7 +24,7 @@ use super::{
 };
 
 pub(super) struct Completions<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     /// The file being edited: types render relative to it.
     file: SourceFile,
     /// The range every accepted item replaces: the fragment already typed.
@@ -37,7 +39,7 @@ impl<'db> Completions<'db> {
     /// `typed` is the fragment the reader has already written at the cursor
     /// — exactly the text `source_range` covers.
     pub(super) fn new(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         file: SourceFile,
         source_range: TextRange,
         typed: &str,
@@ -283,7 +285,7 @@ impl<'db> Completions<'db> {
     pub(super) fn add_record_field(
         &mut self,
         class: baml_compiler2_hir::loc::ClassLoc<'_>,
-        field: &baml_compiler2_ppir::item_data::FieldData,
+        field: &baml_compiler2_hir::item_data::FieldData,
         ty: Option<&baml_type::Ty>,
     ) {
         let item = Completion {

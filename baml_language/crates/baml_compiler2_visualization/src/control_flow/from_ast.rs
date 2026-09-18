@@ -1500,14 +1500,12 @@ mod tests {
             let pat1 = patterns.alloc(ast::Pattern::Type(
                 ast::TypeExprKind::Literal {
                     value: ast::Literal::Int(1),
-                    attrs: vec![],
                 }
                 .at(baml_compiler2_ast::TextRange::default()),
             ));
             let pat2 = patterns.alloc(ast::Pattern::Type(
                 ast::TypeExprKind::Literal {
                     value: ast::Literal::Int(2),
-                    attrs: vec![],
                 }
                 .at(baml_compiler2_ast::TextRange::default()),
             ));
@@ -1563,7 +1561,6 @@ mod tests {
                 segments: vec!["int".into()],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(baml_compiler2_ast::TextRange::default());
             let inner = patterns.alloc(ast::Pattern::Type(int_ty));

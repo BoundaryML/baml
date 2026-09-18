@@ -29,7 +29,7 @@ pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
     HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
     PortableEnumDef, PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy,
-    TaggedHeapHandleKind, TyAttr, TypeDefRef, WeakHeapRef, host_release_dispatch,
+    TaggedHeapHandleKind, TypeDefRef, WeakHeapRef, host_release_dispatch,
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
 pub use bex_vm_types::{HeapPtr, Program};

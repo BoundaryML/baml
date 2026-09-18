@@ -133,8 +133,7 @@ jobs:
         run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      - name: "Upload test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci/junit.xml
@@ -249,8 +248,7 @@ jobs:
         env:
           BAML_PACK_HOST_PREBUILT: "1"
 
-      - name: "Upload test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci/junit.xml
@@ -483,8 +481,7 @@ jobs:
           BAML_PROFILE: "0"
 
       # Must precede the `cargo clean` below, which takes target/nextest/ too.
-      - name: "Upload test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci/junit.xml
@@ -519,8 +516,7 @@ jobs:
           BAML_PROFILE: "0"
           BAML_PACK_HOST_PREBUILT: "1"
 
-      - name: "Upload CLI e2e test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze CLI e2e test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci-cli-e2e/junit.xml
@@ -1220,8 +1216,8 @@ jobs:
         run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
-      - name: "Upload sdk test results to Trunk"
-        if: ${{ !cancelled() && matrix.sdk-label != 'csharp' }}
+      - name: "Analyze sdk test results in Trunk"
+        if: ${{ success() && matrix.sdk-label != 'csharp' }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci/junit.xml
@@ -1239,8 +1235,8 @@ jobs:
         run: cargo nextest run --profile ci -p ${{ matrix.package-name }} --all-features --no-fail-fast -E 'package(=${{ matrix.package-name }})'
         working-directory: baml_language
 
-      - name: "Upload C# sdk test results to Trunk"
-        if: ${{ !cancelled() && matrix.sdk-label == 'csharp' }}
+      - name: "Analyze C# sdk test results in Trunk"
+        if: ${{ success() && matrix.sdk-label == 'csharp' }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci/junit.xml
@@ -1290,8 +1286,8 @@ jobs:
         run: cargo nextest run --profile ci-bridge -p baml_bridge --all-features
         working-directory: baml_language
 
-      - name: "Upload rust bridge results to Trunk"
-        if: ${{ !cancelled() && matrix.sdk-label == 'rust' }}
+      - name: "Analyze rust bridge results in Trunk"
+        if: ${{ success() && matrix.sdk-label == 'rust' }}
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: baml_language/target/nextest/ci-bridge/junit.xml

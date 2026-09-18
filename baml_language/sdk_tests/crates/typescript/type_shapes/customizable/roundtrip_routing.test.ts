@@ -1,6 +1,6 @@
 // Roundtrip coverage for the cross-namespace routing suite — ported from
-// test_routing.py. The baml.http.Response-typed round trips are covered in
-// roundtrip_streams.test.ts (they need an engine-minted handle).
+// test_routing.py. The baml.http.Response arms need an engine-minted handle;
+// the handle round trip is covered by roundtrip_handles.test.ts.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
 import { Foo, make_foo, round_trip_foo } from "./baml_sdk/index.js";
@@ -11,6 +11,7 @@ import {
   round_trip_resume,
   round_trip_root_foo,
   round_trip_deep_thing_from_lorem,
+  round_trip_resume_or_http_response,
 } from "./baml_sdk/lorem/index.js";
 import { round_trip_lorem_resume_from_ipsum } from "./baml_sdk/ipsum/index.js";
 
@@ -47,5 +48,9 @@ describe("roundtrip routing", () => {
   it("routing_round_trip_lorem_resume_from_ipsum", () => {
     const r = new Resume({ name: "grace", email: "g@x.com" });
     expect(round_trip_lorem_resume_from_ipsum(r)).toEqual(r);
+  });
+  it("routing_round_trip_resume_or_http_response", () => {
+    const r = new Resume({ name: "lovelace", email: "a@x.com" });
+    expect(round_trip_resume_or_http_response(r)).toEqual(r);
   });
 });
