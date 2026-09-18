@@ -6,12 +6,14 @@ use std::{
     pin::pin,
     rc::Rc,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicU64, Ordering},
     },
 };
 
-use bex_chunkedringbuffer::{ChunkPool, Config, Producer, SetupError, Stats, TransportFailed};
+use bex_chunkedringbuffer::{
+    ChunkPool, Config, Producer, SetupError, Stats, TransportFailed, WorkerSlot,
+};
 use btel_records::{CaptureDeferred, SpanRecord, TimingRecord};
 use btel_types::TelemetryId;
 
@@ -26,16 +28,28 @@ static NEXT_RUNTIME: AtomicU64 = AtomicU64::new(0);
 struct Binding {
     runtime: u64,
     depth: usize,
-    producer: Producer<TimingRecord, Span>,
+    producer: Option<Producer<TimingRecord, Span>>,
+    worker: Option<WorkerSlot>,
+    owner: Weak<TelemetryRuntime>,
     // Last emitted context per independent stream, not the scheduled thread.
     // Silent invocations and chunk publication leave these unchanged.
     timing_thread: Option<TelemetryId>,
     span_thread: Option<TelemetryId>,
 }
 
+impl Drop for Binding {
+    fn drop(&mut self) {
+        // TLS retirement seals any active producer before releasing its slot.
+        drop(self.producer.take());
+        if let (Some(runtime), Some(worker)) = (self.owner.upgrade(), self.worker.take()) {
+            runtime.pool.release_worker(worker);
+        }
+    }
+}
+
 thread_local! {
-    // Usually one engine and one synchronous execution scope. A stack supports
-    // nested execution of another engine without sharing mutable producers.
+    // One predetermined slot per engine/OS worker, retained across polls. Weak
+    // owners keep idle bindings from extending engine or pool lifetimes.
     static BINDINGS: RefCell<Vec<Binding>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -122,16 +136,23 @@ impl TelemetryRuntime {
     /// is !Send; the outermost scope releases/seals, including unwinding. It must
     /// not survive an async suspension. No outcome-sensitive events originate
     /// in its destructor; the VM/engine still explicitly complete invocations.
-    /// A new registration has a new `ProducerId` and needs fresh stream context.
+    /// The worker slot and stream selectors survive across polls. Only the
+    /// active producer and its private payload chunks are released on suspension.
     pub fn enter(self: &Arc<Self>) -> ExecutionScope {
         BINDINGS.with_borrow_mut(|bindings| {
-            if let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) {
+            if let Some(binding) = bindings.iter_mut().find(|b| b.runtime == self.id) {
+                if binding.depth == 0 {
+                    binding.producer = Some(self.bind_worker(binding.worker.as_ref().unwrap()));
+                }
                 binding.depth += 1;
                 return;
             }
-            let producer = loop {
-                match self.pool.register_producer() {
-                    Ok(producer) => break producer,
+            // Cold first attachment only. Dead engines leave no pool ownership;
+            // remove their tiny TLS entries before attaching another engine.
+            bindings.retain(|binding| binding.owner.strong_count() != 0);
+            let worker = loop {
+                match self.pool.reserve_worker() {
+                    Ok(worker) => break worker,
                     Err(SetupError::ProducerLimit) => std::hint::spin_loop(),
                     Err(_) => {
                         self.pool.fail();
@@ -139,10 +160,13 @@ impl TelemetryRuntime {
                     }
                 }
             };
+            let producer = self.bind_worker(&worker);
             bindings.push(Binding {
                 runtime: self.id,
                 depth: 1,
-                producer,
+                producer: Some(producer),
+                worker: Some(worker),
+                owner: Arc::downgrade(self),
                 timing_thread: None,
                 span_thread: None,
             });
@@ -153,6 +177,13 @@ impl TelemetryRuntime {
         }
     }
 
+    fn bind_worker(&self, worker: &WorkerSlot) -> Producer<TimingRecord, Span> {
+        self.pool.bind_worker(worker).unwrap_or_else(|_| {
+            self.pool.fail();
+            std::panic::panic_any(TransportFailed);
+        })
+    }
+
     #[inline]
     pub fn write_timing(&self, thread: TelemetryId, record: TimingRecord) {
         BINDINGS.with_borrow_mut(|bindings| {
@@ -161,13 +192,15 @@ impl TelemetryRuntime {
                 .rev()
                 .find(|b| b.runtime == self.id)
                 .expect("telemetry emission outside execution scope");
+            let producer = binding
+                .producer
+                .as_mut()
+                .expect("telemetry emission outside execution scope");
             if binding.timing_thread != Some(thread) {
-                binding
-                    .producer
-                    .write_timing(TimingRecord::ThreadSelected { thread_id: thread });
+                producer.write_timing(TimingRecord::ThreadSelected { thread_id: thread });
                 binding.timing_thread = Some(thread);
             }
-            binding.producer.write_timing(record);
+            producer.write_timing(record);
         });
     }
 
@@ -179,13 +212,15 @@ impl TelemetryRuntime {
                 .rev()
                 .find(|b| b.runtime == self.id)
                 .expect("telemetry emission outside execution scope");
+            let producer = binding
+                .producer
+                .as_mut()
+                .expect("telemetry emission outside execution scope");
             if binding.span_thread != Some(thread) {
-                binding
-                    .producer
-                    .write_span(SpanRecord::ThreadSelected { thread_id: thread });
+                producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
                 binding.span_thread = Some(thread);
             }
-            binding.producer.write_span(record);
+            producer.write_span(record);
         });
     }
 
@@ -208,10 +243,12 @@ impl Drop for ExecutionScope {
                 .rposition(|b| b.runtime == self.runtime.id)
                 .unwrap();
             bindings[index].depth -= 1;
-            (bindings[index].depth == 0).then(|| bindings.remove(index))
+            (bindings[index].depth == 0)
+                .then(|| bindings[index].producer.take())
+                .flatten()
         });
         // Release outside the TLS borrow. Producer drop publishes partial chunks
-        // and deregisters before runtime shutdown can wait for the processor.
+        // and deactivates before shutdown can wait. Its worker slot stays bound.
         drop(released);
         if !std::thread::panicking() && self.runtime.pool.is_failed() {
             std::panic::panic_any(TransportFailed);
@@ -321,8 +358,8 @@ mod tests {
                     }
                 }
             },
-            |_, records| {
-                for record in records {
+            |_, mut records| {
+                for record in records.drain() {
                     match record {
                         SpanRecord::ThreadSelected { thread_id } => {
                             span_current = Some(thread_id);
@@ -435,7 +472,7 @@ mod tests {
         }));
         assert!(panic.is_err());
         assert_eq!(pool.stats().active_producers, 0);
-        assert_eq!(pool.stats().sealed_records, 4);
+        assert_eq!(pool.stats().sealed_records, 3); // Same worker keeps its selector.
         pool.close_admission();
         assert!(
             consumer
@@ -518,6 +555,61 @@ mod tests {
             }
         ));
         assert!(!pool.is_failed());
+    }
+
+    #[test]
+    fn worker_slots_survive_polls_retire_with_threads_and_do_not_keep_runtime_alive() {
+        use btel_types::{AwaitDuration, CallPathId, ClockInstant, InvocationOutcome};
+        let (runtime, pool) = manual_runtime();
+        let mut consumer = pool.bind_consumer().unwrap();
+        for _ in 0..8 {
+            let copy = runtime.clone();
+            std::thread::spawn(move || {
+                let id = allocate_telemetry_id();
+                for _ in 0..2 {
+                    let _poll = copy.enter();
+                    copy.write_timing(
+                        id,
+                        TimingRecord::FunctionTimingCompletion {
+                            call_path: CallPathId::new_non_root(1).unwrap(),
+                            entered_at: ClockInstant::from_ticks(1),
+                            exited_at: ClockInstant::from_ticks(2),
+                            await_time: AwaitDuration::ZERO,
+                            outcome: InvocationOutcome::Ok,
+                            reentry: false,
+                        },
+                    );
+                }
+            })
+            .join()
+            .unwrap();
+            let mut chunks = Vec::new();
+            consumer.drain_chunks(
+                NonZeroUsize::new(8).unwrap(),
+                |id, records| {
+                    chunks.push((id.index(), records.len()));
+                },
+                |_, _| unreachable!(),
+            );
+            // Stable slot, no duplicate selector in poll two; TLS retirement
+            // releases it so subsequent OS workers reuse the bounded table.
+            assert_eq!(chunks, [(0, 2), (0, 1)]);
+            assert_eq!(Arc::strong_count(&runtime), 1);
+        }
+        // An idle binding on a still-live OS thread is weak as well.
+        drop(runtime.enter());
+        let weak = Arc::downgrade(&runtime);
+        drop(runtime);
+        assert!(weak.upgrade().is_none());
+        assert!(
+            consumer
+                .drain(
+                    NonZeroUsize::new(8).unwrap(),
+                    |_, _| unreachable!(),
+                    |_, _| unreachable!()
+                )
+                .complete
+        );
     }
 
     #[test]

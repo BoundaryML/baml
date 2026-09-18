@@ -94,6 +94,35 @@ fn full_chunk_handoff_wakeup_and_recycling() {
 }
 
 #[test]
+fn retained_span_recycling_unblocks_a_different_producer() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let mut writer = pool.register_producer().unwrap();
+        writer.write_span(1);
+        drop(writer);
+        let mut held = None;
+        reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held = Some(c));
+        let copy = pool.clone();
+        let writer = thread::spawn(move || {
+            let mut writer = copy.register_producer().unwrap();
+            writer.write_span(2);
+            assert_eq!(writer.stats().allocations, 0);
+        });
+        drop(held);
+        writer.join().unwrap();
+        pool.close_admission();
+        assert!(
+            reader
+                .drain(nz(8), |_, _| unreachable!(), |_, v| assert_eq!(v, 2))
+                .complete
+        );
+        assert_eq!(pool.stats().allocated_span_chunks, 1);
+        assert_eq!(pool.stats().free_chunks, 1);
+    });
+}
+
+#[test]
 fn close_racing_admission_cannot_lose_partial_chunk() {
     model(|| {
         let pool = ChunkPool::<usize, usize>::new(config(2, 1)).unwrap();
@@ -202,6 +231,7 @@ mod native {
         let timing_ptr = writer.timing.as_ref().unwrap().as_ptr();
         let span_ptr = writer.span.as_ref().unwrap().as_ptr();
         writer.seal();
+        let mut held = None;
         let status = reader.drain_chunks(
             nz(2),
             |_, records| {
@@ -209,15 +239,29 @@ mod native {
                 // Discard the entire plain-data chunk without iterating it.
                 drop(records);
             },
-            |_, mut records| {
-                // Moving one payload out and discarding the remainder must
-                // destroy all three exactly once before recycling the chunk.
-                drop(records.next().unwrap());
-                assert_eq!(drops.load(Order::SeqCst), 1);
-            },
+            |_, records| held = Some(records),
         );
         assert_eq!(status.chunks, 2);
         assert_eq!(status.records, 6);
+        let mut held = held.unwrap();
+        assert_eq!(held.as_slice().as_ptr(), span_ptr);
+        assert_eq!(pool.stats().free_chunks, 1, "Timing recycled independently");
+        assert_eq!(
+            drops.load(Order::SeqCst),
+            0,
+            "publisher still owns payloads"
+        );
+        let counter = drops.clone();
+        thread::spawn(move || {
+            // The same allocation can be consumed and returned on another thread.
+            let mut records = held.drain();
+            drop(records.next().unwrap());
+            assert_eq!(counter.load(Order::SeqCst), 1);
+            drop(records);
+            drop(held);
+        })
+        .join()
+        .unwrap();
         assert_eq!(drops.load(Order::SeqCst), 3);
         writer.write_timing(9);
         writer.write_span(Owned(drops.clone()));
@@ -234,6 +278,68 @@ mod native {
                 .complete
         );
         assert_eq!(drops.load(Order::SeqCst), 4);
+    }
+    #[test]
+    fn publisher_owned_span_exhausts_quota_until_lease_returns() {
+        checked(|| {
+            let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
+            let mut reader = pool.bind_consumer().unwrap();
+            let mut writer = pool.register_producer().unwrap();
+            writer.write_span(1);
+            drop(writer);
+            let mut held = None;
+            reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held = Some(c));
+            let (started_tx, started_rx) = mpsc::channel();
+            let (done_tx, done_rx) = mpsc::channel();
+            let copy = pool.clone();
+            let writer = thread::spawn(move || {
+                let mut writer = copy.register_producer().unwrap();
+                started_tx.send(()).unwrap();
+                writer.write_span(2);
+                done_tx.send(()).unwrap();
+                writer.stats()
+            });
+            started_rx.recv().unwrap();
+            thread::sleep(Duration::from_millis(2));
+            assert!(done_rx.try_recv().is_err());
+            assert_eq!(pool.stats().allocated_span_chunks, 1);
+            assert_eq!(pool.stats().free_chunks, 0);
+            drop(held);
+            assert_eq!(writer.join().unwrap().allocations, 0);
+            pool.close_admission();
+            let mut held = None;
+            assert!(
+                reader
+                    .drain_chunks(nz(8), |_, _| unreachable!(), |_, c| held = Some(c))
+                    .complete
+            );
+            drop(reader); // Input completion does not require publisher release.
+            assert!(!pool.is_failed());
+            let held = held.unwrap();
+            assert_eq!(held.as_slice(), [2]);
+            drop(pool); // Lease keeps its pool alive, independently of endpoints.
+            thread::spawn(move || drop(held)).join().unwrap();
+        });
+    }
+
+    #[test]
+    fn retained_payload_destructor_failure_stops_transport() {
+        struct Broken;
+        impl Drop for Broken {
+            fn drop(&mut self) {
+                panic!("capture destructor failed");
+            }
+        }
+        let pool = ChunkPool::<usize, Broken>::new(config(1, 1)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let mut writer = pool.register_producer().unwrap();
+        writer.write_span(Broken);
+        let mut held = None;
+        reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held = Some(c));
+        assert!(catch_unwind(AssertUnwindSafe(|| drop(held))).is_err());
+        assert!(pool.is_failed());
+        let error = catch_unwind(AssertUnwindSafe(|| writer.write_timing(1))).unwrap_err();
+        assert!(error.is::<TransportFailed>());
     }
     fn checked(f: impl FnOnce() + Send + 'static) {
         let (tx, rx) = mpsc::channel();
@@ -453,4 +559,50 @@ mod native {
         drop(c);
         assert!(pool.is_failed());
     }
+}
+
+#[test]
+fn worker_slot_is_predetermined_across_polls_and_reuses_fifo_after_retirement() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(4, 2)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let worker = pool.reserve_worker().unwrap();
+        let mut producer = pool.bind_worker(&worker).unwrap();
+        let id = producer.id();
+        producer.write_timing(1);
+        producer.write_span(2);
+        drop(producer);
+        assert_eq!(pool.stats().active_producers, 0);
+        let mut producer = pool.bind_worker(&worker).unwrap();
+        assert_eq!(id, producer.id());
+        producer.write_timing(3);
+        drop(producer);
+        pool.release_worker(worker);
+        let mut producer = pool.register_producer().unwrap();
+        assert_eq!(id.index(), producer.id().index());
+        assert!(id.index() < reader.producer_capacity());
+        producer.write_span(4);
+        drop(producer);
+        pool.close_admission();
+        let seen = std::cell::RefCell::new(Vec::new());
+        let record = |actual, v| {
+            assert_eq!(actual, id);
+            seen.borrow_mut().push(v);
+        };
+        assert!(reader.drain(nz(8), record, record).complete);
+        assert_eq!(*seen.borrow(), [1, 2, 3, 4]);
+    });
+}
+
+#[test]
+fn expired_consumer_deadline_does_not_wait_for_a_live_producer() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(4, 1)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let writer = pool.register_producer().unwrap();
+        reader.wait_until(Some(std::time::Instant::now()));
+        drop(writer);
+        pool.close_admission();
+        assert!(reader.drain(nz(8), |_, _| {}, |_, _| {}).complete);
+    });
 }

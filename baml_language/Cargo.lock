@@ -1759,6 +1759,7 @@ dependencies = [
  "btel_clock",
  "btel_records",
  "btel_types",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]

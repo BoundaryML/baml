@@ -8,7 +8,7 @@
 //!
 //! One pool has one consumer, a FIFO of sealed chunks, and separate typed storage
 //! quotas. Every allocation counts toward its quota while free, producer-owned,
-//! ready, or processor-owned. Producers spin on exhaustion and metadata contention;
+//! ready, processor-owned, or publisher-owned. Producers spin on exhaustion and metadata contention;
 //! only the idle consumer parks. No production VM integration is provided here.
 #![allow(
     clippy::inline_always,
@@ -29,6 +29,7 @@ pub struct Config {
     pub chunk_capacity: NonZeroUsize,
     pub timing_chunks: NonZeroUsize,
     pub span_chunks: NonZeroUsize,
+    /// Maximum registered OS workers; their predetermined slots survive polls.
     /// Each lane needs at least this many chunks, otherwise writers can exhaust
     /// it with PRIVATE partial chunks that the consumer cannot reclaim.
     pub max_producers: NonZeroUsize,
@@ -44,15 +45,34 @@ pub enum SetupError {
     ProducerLimit,
     ProducerAlreadyBound,
     ConsumerAlreadyBound,
-    IdentityExhausted,
 }
 
+/// Bounded, pool-local stream index, fixed for a registered OS worker. Reusing
+/// a retired worker's slot continues its FIFO stream, not a new global identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct ProducerId(usize);
 impl ProducerId {
     pub fn index(self) -> usize {
         self.0
     }
+}
+
+/// OS-thread-bound slot reservation, independent of a poll's active producer.
+/// The owner must call `ChunkPool::release_worker` when retiring it. This token
+/// deliberately does not retain the pool, so an idle TLS cache cannot keep an
+/// engine's buffers alive. A stale token cannot be used without its original pool.
+#[must_use = "release the worker reservation when its OS thread retires"]
+pub struct WorkerSlot {
+    id: ProducerId,
+    pool: *const (),
+    _thread_bound: PhantomData<Rc<()>>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct WorkerState {
+    owner: Option<thread::ThreadId>,
+    reserved: bool,
+    active: bool,
 }
 
 /// Terminal signal, never a normal BAML exception. Engine integration is pending.
@@ -79,6 +99,8 @@ pub struct ProducerStats {
 pub struct DrainStatus {
     pub chunks: usize,
     pub records: usize,
+    /// Input is exhausted after admission closes and producers finish. Owned
+    /// span chunks may still be held downstream; this is not a delivery barrier.
     pub complete: bool,
 }
 
@@ -114,8 +136,8 @@ struct State<T, S> {
     timing: Lane<T>,
     span: Lane<S>,
     ready: VecDeque<Chunk<T, S>>,
-    producers: Vec<(thread::ThreadId, ProducerId)>,
-    next_id: usize,
+    workers: Box<[WorkerState]>,
+    active_producers: usize,
     closed: bool,
     bound: bool,
     sleeping: bool,
@@ -279,10 +301,7 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
             || !fits(chunks, size_of::<Chunk<T, S>>())
             || !fits(timing, size_of::<Vec<T>>())
             || !fits(span, size_of::<Vec<S>>())
-            || !fits(
-                config.max_producers.get(),
-                size_of::<(thread::ThreadId, ProducerId)>(),
-            )
+            || !fits(config.max_producers.get(), size_of::<WorkerState>())
         {
             return Err(SetupError::InvalidCapacity);
         }
@@ -295,8 +314,9 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                     timing: Lane::new(capacity, timing, config.preallocate),
                     span: Lane::new(capacity, span, config.preallocate),
                     ready: VecDeque::with_capacity(chunks),
-                    producers: Vec::with_capacity(config.max_producers.get()),
-                    next_id: 0,
+                    workers: vec![WorkerState::default(); config.max_producers.get()]
+                        .into_boxed_slice(),
+                    active_producers: 0,
                     closed: false,
                     bound: false,
                     sleeping: false,
@@ -318,6 +338,15 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
         })
     }
     pub fn register_producer(&self) -> Result<Producer<T, S>, SetupError> {
+        // Convenience for a single producer scope. Runtime workers instead keep
+        // the reservation across polls and bind it directly on every entry.
+        let worker = self.reserve_worker()?;
+        let producer = self.bind_worker(&worker);
+        self.release_worker(worker);
+        producer
+    }
+
+    pub fn reserve_worker(&self) -> Result<WorkerSlot, SetupError> {
         let mut state = self.shared.lock();
         if self.shared.failed.load(Ordering::Acquire) {
             return Err(SetupError::Failed);
@@ -326,27 +355,84 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
             return Err(SetupError::Closed);
         }
         let owner = thread::current().id();
-        if state.producers.iter().any(|(id, _)| *id == owner) {
+        if state
+            .workers
+            .iter()
+            .any(|worker| worker.owner == Some(owner))
+        {
             return Err(SetupError::ProducerAlreadyBound);
         }
-        if state.producers.len() == self.shared.config.max_producers.get() {
-            return Err(SetupError::ProducerLimit);
+        let index = state
+            .workers
+            .iter()
+            .position(|worker| worker.owner.is_none())
+            .ok_or(SetupError::ProducerLimit)?;
+        state.workers[index] = WorkerState {
+            owner: Some(owner),
+            reserved: true,
+            active: false,
+        };
+        Ok(WorkerSlot {
+            id: ProducerId(index),
+            pool: Arc::as_ptr(&self.shared).cast::<()>(),
+            _thread_bound: PhantomData,
+        })
+    }
+
+    /// Resume this worker's predetermined slot. No thread search or slot selection.
+    pub fn bind_worker(&self, worker: &WorkerSlot) -> Result<Producer<T, S>, SetupError> {
+        assert_eq!(
+            worker.pool,
+            Arc::as_ptr(&self.shared).cast::<()>(),
+            "wrong worker pool"
+        );
+        let mut state = self.shared.lock();
+        if self.shared.failed.load(Ordering::Acquire) {
+            return Err(SetupError::Failed);
         }
-        let id = ProducerId(state.next_id);
-        state.next_id = state
-            .next_id
-            .checked_add(1)
-            .ok_or(SetupError::IdentityExhausted)?;
-        state.producers.push((owner, id));
+        if state.closed {
+            return Err(SetupError::Closed);
+        }
+        let owner = thread::current().id();
+        let slot = &mut state.workers[worker.id.index()];
+        assert_eq!(slot.owner, Some(owner));
+        assert!(slot.reserved);
+        if slot.active {
+            return Err(SetupError::ProducerAlreadyBound);
+        }
+        slot.active = true;
+        state.active_producers += 1;
         Ok(Producer {
             shared: self.shared.clone(),
-            id,
+            id: worker.id,
             owner,
             timing: None,
             span: None,
             stats: ProducerStats::default(),
             _thread_bound: PhantomData,
         })
+    }
+
+    /// Retire a worker. An active producer keeps the slot until its final seal;
+    /// otherwise the next worker may reuse it immediately. FIFO orders old and
+    /// new chunks, and each new writer must announce its initial stream context.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "retirement consumes the non-Clone slot token so it cannot be rebound"
+    )]
+    pub fn release_worker(&self, worker: WorkerSlot) {
+        assert_eq!(
+            worker.pool,
+            Arc::as_ptr(&self.shared).cast::<()>(),
+            "wrong worker pool"
+        );
+        let mut state = self.shared.lock();
+        let slot = &mut state.workers[worker.id.index()];
+        assert_eq!(slot.owner, Some(thread::current().id()));
+        slot.reserved = false;
+        if !slot.active {
+            slot.owner = None;
+        }
     }
     pub fn bind_consumer(&self) -> Result<Consumer<T, S>, SetupError> {
         let mut state = self.shared.lock();
@@ -382,7 +468,7 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
             allocated_span_chunks: s.span.allocated,
             free_chunks: s.timing.free.len() + s.span.free.len(),
             ready_chunks: s.ready.len(),
-            active_producers: s.producers.len(),
+            active_producers: s.active_producers,
             sealed_chunks: s.sealed_chunks,
             sealed_records: s.sealed_records,
             wakeups: s.wakeups,
@@ -475,9 +561,56 @@ impl<T, S> Drop for Producer<T, S> {
             self.shared.seal(self.id, Records::Span(c));
         }
         let mut state = self.shared.lock();
-        state.producers.retain(|(id, _)| *id != self.owner);
+        let slot = &mut state.workers[self.id.index()];
+        debug_assert_eq!(slot.owner, Some(self.owner));
+        slot.active = false;
+        if !slot.reserved {
+            slot.owner = None;
+        }
+        state.active_producers -= 1;
         drop(state);
         self.shared.wake.notify_one();
+    }
+}
+
+/// Exclusive ownership of a sealed span allocation. Moving this lease never
+/// copies its records. It may outlive the consumer and cross threads when its
+/// record types are Send. It continues to count against the pool's span quota.
+///
+/// Drop destroys remaining payloads and returns the allocation without zeroing
+/// storage. Forgetting a lease permanently withholds its capacity from producers.
+pub struct SpanChunk<T, S> {
+    shared: Arc<Shared<T, S>>,
+    records: Vec<S>,
+}
+
+impl<T, S> SpanChunk<T, S> {
+    pub fn as_slice(&self) -> &[S] {
+        &self.records
+    }
+
+    /// Move records out when needed; the backing allocation stays with the lease.
+    pub fn drain(&mut self) -> std::vec::Drain<'_, S> {
+        self.records.drain(..)
+    }
+}
+
+impl<T, S> Drop for SpanChunk<T, S> {
+    fn drop(&mut self) {
+        let mut guard = FailureGuard {
+            shared: &self.shared,
+            armed: true,
+        };
+        // User destructors run outside the pool lock. A destructor panic makes
+        // the pool terminal rather than silently losing a counted allocation.
+        self.records.clear();
+        let mut state = self.shared.lock();
+        state.span.free.push(std::mem::take(&mut self.records));
+        self.shared
+            .span_free
+            .0
+            .store(state.span.free.len(), Ordering::Release);
+        guard.armed = false;
     }
 }
 
@@ -487,9 +620,23 @@ pub struct Consumer<T, S> {
     _thread_bound: PhantomData<Rc<()>>,
 }
 impl<T, S> Consumer<T, S> {
+    /// Protect processing outside a drain callback, such as a publisher flush.
+    /// A panic makes the pool terminal even if input draining already completed.
+    pub fn guard_processing<R>(&self, process: impl FnOnce() -> R) -> R {
+        self.shared.check();
+        let mut guard = FailureGuard {
+            shared: &self.shared,
+            armed: true,
+        };
+        let result = process();
+        guard.armed = false;
+        result
+    }
+
     /// Consume sealed chunks in FIFO handoff order, moving records into callbacks
-    /// without copying allocations. Recycling happens in groups of at most eight
-    /// chunks; callbacks run outside the pool lock. No ordering across pools.
+    /// without copying allocations. Timing recycling happens in groups of at
+    /// most eight chunks; spans recycle after their callback consumes the lease.
+    /// Callbacks run outside the pool lock. No ordering across pools.
     pub fn drain(
         &mut self,
         max_chunks: NonZeroUsize,
@@ -503,8 +650,8 @@ impl<T, S> Consumer<T, S> {
                     timing(producer, record);
                 }
             },
-            |producer, records| {
-                for record in records {
+            |producer, mut records| {
+                for record in records.drain() {
                     span(producer, record);
                 }
             },
@@ -513,12 +660,10 @@ impl<T, S> Consumer<T, S> {
 
     /// Exclusive access to whole sealed chunks, in FIFO handoff order.
     ///
-    /// Each callback receives an ownership-moving iterator over one chunk. It
-    /// may consume records or simply drop the iterator to discard the contents.
-    /// Unconsumed records are destroyed without zeroing the backing storage;
-    /// records without destructors need no per-record work. The allocation stays
-    /// with the pool and is recycled after the callback returns. Iterators cannot
-    /// outlive the callback. Do not forget them: doing so leaks unconsumed payloads.
+    /// Timing receives a scoped Drain and recycles after processing. Span receives
+    /// an owned lease, which can be passed downstream and retained past callback
+    /// return. Its allocation recycles only when the lease drops. Neither path
+    /// copies records or zeroes storage; remaining owned payloads are destroyed.
     ///
     /// Callbacks run outside the pool mutex. A panic fails the transport and
     /// destroys remaining owned records exactly once, as with `drain`.
@@ -526,7 +671,7 @@ impl<T, S> Consumer<T, S> {
         &mut self,
         max_chunks: NonZeroUsize,
         mut timing: impl FnMut(ProducerId, std::vec::Drain<'_, T>),
-        mut span: impl FnMut(ProducerId, std::vec::Drain<'_, S>),
+        mut span: impl FnMut(ProducerId, SpanChunk<T, S>),
     ) -> DrainStatus {
         const BATCH: usize = 8;
         self.shared.check();
@@ -556,24 +701,40 @@ impl<T, S> Consumer<T, S> {
                 self.shared.ready_hint.0.store(false, Ordering::Relaxed);
             }
             if count == 0 {
-                self.finished = state.closed && state.producers.is_empty();
+                self.finished = state.closed && state.active_producers == 0;
                 break;
             }
             drop(state);
             // Callbacks run outside the mutex. On panic, remaining owned records
             // drop exactly once and FailureGuard makes the transport terminal.
+            let mut has_timing = false;
             for slot in &mut batch[..count] {
-                let Chunk { producer, records } = slot.as_mut().unwrap();
+                let Chunk { producer, records } = slot.take().unwrap();
                 match records {
-                    Records::Timing(v) => {
+                    Records::Timing(mut v) => {
                         status.records += v.len();
-                        timing(*producer, v.drain(..));
+                        timing(producer, v.drain(..));
+                        *slot = Some(Chunk {
+                            producer,
+                            records: Records::Timing(v),
+                        });
+                        has_timing = true;
                     }
                     Records::Span(v) => {
                         status.records += v.len();
-                        span(*producer, v.drain(..));
+                        span(
+                            producer,
+                            SpanChunk {
+                                shared: self.shared.clone(),
+                                records: v,
+                            },
+                        );
                     }
                 }
+            }
+            status.chunks += count;
+            if !has_timing {
+                continue;
             }
             let mut state = self
                 .shared
@@ -581,15 +742,13 @@ impl<T, S> Consumer<T, S> {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             for slot in &mut batch[..count] {
-                match slot.take().unwrap().records {
-                    Records::Timing(v) => {
-                        debug_assert!(v.is_empty());
-                        state.timing.free.push(v);
-                    }
-                    Records::Span(v) => {
-                        debug_assert!(v.is_empty());
-                        state.span.free.push(v);
-                    }
+                if let Some(Chunk {
+                    records: Records::Timing(v),
+                    ..
+                }) = slot.take()
+                {
+                    debug_assert!(v.is_empty());
+                    state.timing.free.push(v);
                 }
             }
             // Serialized exact counts, published once per recycled batch.
@@ -597,11 +756,6 @@ impl<T, S> Consumer<T, S> {
                 .timing_free
                 .0
                 .store(state.timing.free.len(), Ordering::Release);
-            self.shared
-                .span_free
-                .0
-                .store(state.span.free.len(), Ordering::Release);
-            status.chunks += count;
         }
         self.shared.check();
         status.complete = self.finished;
@@ -611,6 +765,12 @@ impl<T, S> Consumer<T, S> {
     /// Only consumers park. The condition-variable predicate and notification
     /// share the metadata mutex, so sparse partial seals cannot miss a wake.
     pub fn wait(&mut self) {
+        self.wait_until(None);
+    }
+
+    /// Consumer-only deadline for periodic processing when no input arrives.
+    /// The same locked predicate protects timed and untimed waits from lost wakes.
+    pub fn wait_until(&mut self, deadline: Option<std::time::Instant>) {
         for _ in 0..if cfg!(baml_loom) { 1 } else { 64 } {
             self.shared.check();
             // Avoid competing with publishers for the mutex during empty polls.
@@ -627,19 +787,34 @@ impl<T, S> Consumer<T, S> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         while s.ready.is_empty()
-            && !(s.closed && s.producers.is_empty())
+            && !(s.closed && s.active_producers == 0)
             && !self.shared.failed.load(Ordering::Acquire)
         {
+            if deadline.is_some_and(|at| std::time::Instant::now() >= at) {
+                break;
+            }
             s.sleeping = true;
-            s = self
-                .shared
-                .wake
-                .wait(s)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            s = if let Some(at) = deadline {
+                self.shared
+                    .wake
+                    .wait_timeout(s, at.saturating_duration_since(std::time::Instant::now()))
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .0
+            } else {
+                self.shared
+                    .wake
+                    .wait(s)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            };
             s.sleeping = false;
         }
         drop(s);
         self.shared.check();
+    }
+
+    /// Fixed decoder capacity; every chunk carries an index below this bound.
+    pub fn producer_capacity(&self) -> usize {
+        self.shared.config.max_producers.get()
     }
 }
 impl<T, S> Drop for Consumer<T, S> {
