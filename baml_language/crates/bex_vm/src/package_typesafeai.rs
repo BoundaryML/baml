@@ -1,0 +1,169 @@
+//! Small value-construction bridges for the reflection-driven JEV adapter.
+
+use bex_heap::TlabHolder;
+use bex_vm_types::{
+    ArrayReadGuard, MapReadGuard, RealizedTy,
+    types::{Instance, Object, Value},
+};
+
+use crate::{
+    BexVm,
+    errors::{VmBamlError, VmRustFnError},
+    package_baml::{NativeCallResult, NativeFunction, NativeFunctionResult},
+};
+
+#[allow(
+    unused_variables,
+    unsafe_code,
+    non_camel_case_types,
+    clippy::wildcard_imports,
+    clippy::pub_underscore_fields,
+    clippy::used_underscore_binding,
+    clippy::elidable_lifetime_names,
+    clippy::get_first,
+    clippy::iter_not_returning_iterator,
+    clippy::needless_lifetimes,
+    clippy::redundant_closure_call,
+    clippy::new_ret_no_self,
+    clippy::too_many_arguments,
+    non_snake_case
+)]
+mod generated {
+    use super::*;
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/typesafeaifunctions_generated.rs"
+    ));
+}
+pub use generated::*;
+
+pub struct PackageTypesafeaiImpl;
+
+fn invalid(message: impl Into<String>) -> VmRustFnError {
+    VmBamlError::InvalidArgument {
+        message: message.into(),
+    }
+    .into()
+}
+
+fn type_arg(vm: &BexVm, value: Value) -> Result<RealizedTy, VmRustFnError> {
+    match value.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+        Some(Object::Type(ty)) => Ok(ty.ty.clone()),
+        _ => Err(invalid("expected reflect.Type")),
+    }
+}
+
+impl BamlNamespaceInternal for PackageTypesafeaiImpl {
+    fn enum_skipped(vm: &BexVm, ty: &Value, name: &bex_str::BexStr) -> Result<bool, VmRustFnError> {
+        let RealizedTy::Enum(head, _) = type_arg(vm, *ty)? else {
+            return Err(invalid("expected an enum type"));
+        };
+        let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+            return Err(invalid("expected enum declaration"));
+        };
+        enm.variants
+            .iter()
+            .find(|variant| variant.name.as_str() == name.as_str())
+            .map(|variant| variant.skip)
+            .ok_or_else(|| invalid("unknown enum variant"))
+    }
+
+    fn constant(vm: &mut BexVm, ty: &Value) -> Result<Value, VmRustFnError> {
+        let (key, description, value, skipped) = match type_arg(vm, *ty)? {
+            RealizedTy::Null { .. } => ("<null>".to_owned(), None, Value::NULL, false),
+            RealizedTy::Literal(literal, _, _) => {
+                let (key, value) = match literal {
+                    baml_type::Literal::String(s) => (s.clone(), Value::object(vm.alloc_string(s))),
+                    baml_type::Literal::Int(n) => (n.to_string(), Value::int(n)),
+                    baml_type::Literal::Bool(b) => (b.to_string(), Value::bool(b)),
+                    baml_type::Literal::Bigint(n) => {
+                        (n.to_string(), vm.try_alloc_bigint(std::sync::Arc::new(n))?)
+                    }
+                    baml_type::Literal::Float(_) => return Err(invalid("unsupported JEV literal")),
+                };
+                (key, None, value, false)
+            }
+            RealizedTy::EnumVariant(head, name, _) => {
+                let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+                    return Err(invalid("expected enum declaration"));
+                };
+                let (index, variant) = enm
+                    .variants
+                    .iter()
+                    .enumerate()
+                    .find(|(_, variant)| variant.name == name)
+                    .ok_or_else(|| invalid("unknown enum variant"))?;
+                let key = variant.alias.clone().unwrap_or_else(|| name.to_string());
+                let description = variant.description.clone();
+                let skipped = variant.skip;
+                (
+                    key,
+                    description,
+                    Value::object(vm.alloc_variant(head.ptr(), index)),
+                    skipped,
+                )
+            }
+            _ => return Err(invalid("expected a JEV literal, enum variant, or null")),
+        };
+        let key = Value::object(vm.alloc_string(key));
+        let description = description.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s)));
+        Ok(copy::internal::ChoiceOption {
+            key,
+            description,
+            value,
+            skipped,
+        }
+        .to_value(vm))
+    }
+
+    fn enum_value(
+        vm: &mut BexVm,
+        ty: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let RealizedTy::Enum(head, _) = type_arg(vm, *ty)? else {
+            return Err(invalid("expected an enum type"));
+        };
+        let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+            return Err(invalid("expected enum declaration"));
+        };
+        let index = enm
+            .variants
+            .iter()
+            .position(|variant| variant.name.as_str() == name.as_str())
+            .ok_or_else(|| invalid("unknown enum variant"))?;
+        Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
+    }
+
+    fn class_value(vm: &mut BexVm, ty: &Value, fields: &[Value]) -> Result<Value, VmRustFnError> {
+        let RealizedTy::Class(head, args, _) = type_arg(vm, *ty)? else {
+            return Err(invalid("expected a class type"));
+        };
+        let Object::Class(class) = vm.get_object(head.ptr()) else {
+            return Err(invalid("expected class declaration"));
+        };
+        if fields.len() != class.fields.len() {
+            return Err(invalid("wrong field count for JEV class"));
+        }
+        for (field, value) in class.fields.iter().zip(fields) {
+            let expected = field
+                .field_template
+                .substitute(&args, vm)
+                .map_err(|_| invalid("unresolved JEV class field type"))?;
+            let actual = vm
+                .value_singleton_ty(*value)
+                .ok_or_else(|| invalid("invalid JEV class field value"))?;
+            if !baml_type::normalize::is_subtype(actual.as_ty(), expected.as_ty(), vm) {
+                return Err(invalid(format!(
+                    "wrong value type for field {}",
+                    field.name
+                )));
+            }
+        }
+        Ok(Value::object(vm.tlab.alloc(Object::Instance(
+            Instance::new(head.ptr(), args, fields.to_vec()),
+        ))))
+    }
+}
+
+impl BamlPackageTypesafeai for PackageTypesafeaiImpl {}

@@ -148,9 +148,9 @@ impl FromCST for Expression {
             SyntaxKind::STRING_LITERAL => t::QuotedString::from_cst(elem)
                 .map(Literal::String)
                 .map(Expression::Literal)?,
-            SyntaxKind::INTEGER_LITERAL => Expression::Literal(Literal::Integer(
-                t::IntegerLiteral::new_from_span(elem.text_range()),
-            )),
+            SyntaxKind::INTEGER_LITERAL | SyntaxKind::BIGINT_LITERAL => Expression::Literal(
+                Literal::Integer(t::IntegerLiteral::new_from_span(elem.text_range())),
+            ),
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
@@ -436,6 +436,11 @@ impl FromCST for Literal {
         match elem.kind() {
             SyntaxKind::STRING_LITERAL => Ok(Literal::String(t::QuotedString::from_cst(elem)?)),
             SyntaxKind::INTEGER_LITERAL => Ok(Literal::Integer(t::IntegerLiteral::from_cst(elem)?)),
+            // Both integer spellings print their original token verbatim,
+            // including the bigint suffix; formatting never parses a value.
+            SyntaxKind::BIGINT_LITERAL => Ok(Literal::Integer(t::IntegerLiteral::new_from_span(
+                elem.text_range(),
+            ))),
             SyntaxKind::FLOAT_LITERAL => Ok(Literal::Float(t::FloatLiteral::from_cst(elem)?)),
             SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
                 Ok(Literal::Keyword(t::KeywordLiteral::from_cst(elem)?))

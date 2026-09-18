@@ -336,6 +336,10 @@ pub(super) fn make_to_json_callee(
 type NativeResolver = fn(&str) -> Option<NativeFunction>;
 
 const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
+    (
+        "typesafeai.",
+        <crate::package_typesafeai::PackageTypesafeaiImpl as crate::package_typesafeai::BamlPackageTypesafeai>::get_native_fn,
+    ),
     ("baml.", PackageBamlImpl::get_native_fn),
     (
         "ai.",
