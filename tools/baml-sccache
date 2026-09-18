@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ -n "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}" ]]; then
+if [[ -n "${BAML_SCCACHE_R2_ACCESS_KEY_ID:-}" && -n "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
     export AWS_ACCESS_KEY_ID="${BAML_SCCACHE_R2_ACCESS_KEY_ID}"
+    export AWS_SECRET_ACCESS_KEY="${BAML_SCCACHE_R2_SECRET_ACCESS_KEY}"
+elif [[ -n "${BAML_SCCACHE_R2_ACCESS_KEY:-}" && -n "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
+    # Deprecated compatibility alias. The canonical name includes `_ID`.
+    export AWS_ACCESS_KEY_ID="${BAML_SCCACHE_R2_ACCESS_KEY}"
+    export AWS_SECRET_ACCESS_KEY="${BAML_SCCACHE_R2_SECRET_ACCESS_KEY}"
+else
+    # .envrc exports the shared R2 configuration unconditionally so the native
+    # wrapper can retrieve local credentials. Secretless POSIX builds stay on
+    # the host-local cache.
+    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY SCCACHE_BUCKET SCCACHE_REGION SCCACHE_ENDPOINT SCCACHE_S3_KEY_PREFIX
 fi
 
-if [[ -n "${BAML_SCCACHE_R2_SECRET_ACCESS_KEY:-}" ]]; then
-    export AWS_SECRET_ACCESS_KEY="${BAML_SCCACHE_R2_SECRET_ACCESS_KEY}"
-fi
+# sccache only needs the mapped AWS names. In particular, never leak a
+# short-lived Infisical session token into the sccache server.
+unset BAML_SCCACHE_R2_ACCESS_KEY_ID BAML_SCCACHE_R2_ACCESS_KEY BAML_SCCACHE_R2_SECRET_ACCESS_KEY INFISICAL_TOKEN
 
 exec sccache "$@"
