@@ -123,8 +123,7 @@ jobs:
         run: pnpm --filter app-vscode-webview test:unit:run
         working-directory: typescript2
 
-      - name: "Upload unit test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze unit test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/app-vscode-webview/junit.xml
@@ -189,8 +188,7 @@ jobs:
         run: pnpm --filter app-vscode-webview test:browser:run
         working-directory: typescript2
 
-      - name: "Upload browser test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze browser test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/app-vscode-webview/junit.xml
