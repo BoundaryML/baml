@@ -585,6 +585,33 @@ pub(crate) mod tests {
             "both lambda callbacks have the same visible call site"
         );
         assert!(timings[3..].iter().all(|(_, reentry)| !reentry));
+        let mut named_paths = HashMap::new();
+        for event in vm.telemetry.events() {
+            if let ProducerEvent::CallPathDefined {
+                call_path,
+                visible_caller,
+                callee,
+                ..
+            } = event
+            {
+                let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
+                let caller =
+                    visible_caller.map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
+                named_paths.insert(*call_path, (caller, callee.fqn));
+            }
+        }
+        // Definitions carry registered IDs for the authored functions, never
+        // the hidden native Invoke wrapper, including both lambda callbacks.
+        assert_eq!(
+            named_paths[&timings[0].0],
+            (Some("user.Main".into()), "user.F".into())
+        );
+        assert_eq!(
+            named_paths[&timings[3].0],
+            (Some("user.Main".into()), "user.G".into())
+        );
+        assert_eq!(named_paths[&timings[5].0].0.as_deref(), Some("user.Main"));
+        assert!(named_paths[&timings[5].0].1.contains("<lambda"));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -834,7 +861,10 @@ pub(crate) mod tests {
         assert!(vm.heap.function_metadata(vm.proof(), copied_id).is_none());
         // SAFETY: the running test VM excludes GC and the copy is fully linked.
         unsafe {
-            vm.heap.register_telemetry_function(copied_ptr);
+            assert_eq!(
+                vm.heap.register_telemetry_function(copied_ptr),
+                Some(copied_id)
+            );
         }
         assert!(vm.heap.function_metadata(vm.proof(), copied_id).is_some());
 
@@ -3805,7 +3835,7 @@ impl BexVm {
                     false,
                     args,
                     |caller, callee| unsafe {
-                        Self::register_call_path_functions(&self.heap, caller, callee);
+                        Self::register_call_path_functions(&self.heap, caller, callee)
                     },
                 );
                 self.pending_call_type_args.clone_from(&effective_type_args);
@@ -5923,7 +5953,7 @@ impl BexVm {
                     caller_is_observed,
                     args,
                     |caller, callee| unsafe {
-                        Self::register_call_path_functions(&self.heap, caller, callee);
+                        Self::register_call_path_functions(&self.heap, caller, callee)
                     },
                 );
 
@@ -6261,13 +6291,14 @@ impl BexVm {
         heap: &BexHeap,
         caller: Option<HeapPtr>,
         callee: HeapPtr,
-    ) {
+    ) -> (Option<btel_types::FunctionId>, btel_types::FunctionId) {
         // SAFETY: the running VM excludes GC and points only at linked objects.
         unsafe {
-            if let Some(caller) = caller {
-                heap.register_telemetry_function(caller);
-            }
-            heap.register_telemetry_function(callee);
+            let caller = caller.and_then(|caller| heap.register_telemetry_function(caller));
+            let callee = heap
+                .register_telemetry_function(callee)
+                .expect("observed callee must support telemetry");
+            (caller, callee)
         }
     }
 
@@ -7534,7 +7565,7 @@ impl BexVm {
                             caller_pc,
                             callee,
                             |caller, callee| unsafe {
-                                Self::register_call_path_functions(&self.heap, caller, callee);
+                                Self::register_call_path_functions(&self.heap, caller, callee)
                             },
                         );
                         return Ok(Some(VmExecState::Spawn {
@@ -7601,7 +7632,7 @@ impl BexVm {
                                     |caller, callee| unsafe {
                                         Self::register_call_path_functions(
                                             &self.heap, caller, callee,
-                                        );
+                                        )
                                     },
                                 );
                                 let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {

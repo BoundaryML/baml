@@ -20,11 +20,11 @@ use std::{
 
 use bex_vm_types::{Function, FunctionKind, FunctionMeta, HeapPtr, Value};
 use btel_clock::ClockEpoch;
-use btel_types::allocate_telemetry_id;
 pub use btel_types::{
     AwaitDuration, CallPathEdge, CallPathId, ClockDuration, ClockInstant, InvocationMode,
     InvocationOutcome, TelemetryId,
 };
+use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
 mod policy;
@@ -52,7 +52,18 @@ const CAPTURE_OUTPUT: u8 = 1 << 1;
 const CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
 
-static NEXT_CALL_PATH_ID: AtomicU32 = AtomicU32::new(1);
+static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
+
+fn allocate_call_path_id(last: &AtomicU32) -> CallPathId {
+    // Exhaustion stays terminal even if a caller catches the panic. A wrapping
+    // fetch_add could otherwise reuse live IDs after the first overflow.
+    let previous = last
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .expect("call-path identity space exhausted");
+    CallPathId::new_non_root(previous + 1).expect("call-path identity is nonzero")
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct CallPathKey {
@@ -148,9 +159,9 @@ pub enum ProducerEvent {
     CallPathDefined {
         call_path: CallPathId,
         parent_call_path: CallPathId,
-        visible_caller: Option<HeapPtr>,
+        visible_caller: Option<FunctionId>,
         caller_pc: u32,
-        callee: HeapPtr,
+        callee: FunctionId,
         edge: CallPathEdge,
     },
 }
@@ -239,7 +250,7 @@ impl TelemetryState {
         visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         callee: HeapPtr,
-        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> ThreadSpawnContext {
         let spawn_call_path = self.resolve_call_path(
             CallPathKey {
@@ -271,7 +282,7 @@ impl TelemetryState {
         caller_pc: u32,
         caller_is_observed: bool,
         args: &[Value],
-        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> Option<FrameTelemetry> {
         if function.telemetry_function_id.is_none()
             || !matches!(function.kind, FunctionKind::Bytecode)
@@ -363,7 +374,7 @@ impl TelemetryState {
         visible_caller: Option<HeapPtr>,
         caller_pc: u32,
         caller_is_observed: bool,
-        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> FrameTelemetry {
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
@@ -528,7 +539,7 @@ impl TelemetryState {
     fn resolve_call_path(
         &mut self,
         key: CallPathKey,
-        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> CallPathId {
         if let Some((cached_key, id)) = self.last_call_path
             && cached_key == key
@@ -543,7 +554,7 @@ impl TelemetryState {
     fn resolve_call_path_slow(
         &mut self,
         key: CallPathKey,
-        register: impl FnOnce(Option<HeapPtr>, HeapPtr),
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> CallPathId {
         if let Some(id) = self.call_paths.get(&key) {
             let id = *id;
@@ -552,19 +563,17 @@ impl TelemetryState {
         }
         // Registration precedes publishing any definition that references it.
         // Existing paths return above without even loading a registration flag.
-        register(key.visible_caller, key.callee);
-        let raw = NEXT_CALL_PATH_ID.fetch_add(1, Ordering::Relaxed);
-        assert_ne!(raw, 0, "call-path identity space exhausted");
-        let id = CallPathId::new_non_root(raw).expect("call-path identity is nonzero");
+        let (visible_caller, callee) = register(key.visible_caller, key.callee);
+        let id = allocate_call_path_id(&LAST_CALL_PATH_ID);
         self.call_paths.insert(key, id);
         self.call_path_keys.insert(id, key);
         self.last_call_path = Some((key, id));
         self.emit(ProducerEvent::CallPathDefined {
             call_path: id,
             parent_call_path: key.parent,
-            visible_caller: key.visible_caller,
+            visible_caller,
             caller_pc: key.caller_pc,
-            callee: key.callee,
+            callee,
             edge: key.edge,
         });
         id
@@ -603,15 +612,8 @@ impl TelemetryState {
                 | ProducerEvent::LateSpan { captured_value, .. } => {
                     roots.extend(captured_value.iter().filter_map(Value::as_object_ptr));
                 }
-                ProducerEvent::CallPathDefined {
-                    visible_caller,
-                    callee,
-                    ..
-                } => {
-                    roots.extend(*visible_caller);
-                    roots.push(*callee);
-                }
-                ProducerEvent::ThreadStarted { .. }
+                ProducerEvent::CallPathDefined { .. }
+                | ProducerEvent::ThreadStarted { .. }
                 | ProducerEvent::ThreadCompleted { .. }
                 | ProducerEvent::Timing { .. } => {}
             }
@@ -652,17 +654,8 @@ impl TelemetryState {
                         forward_value(value, roots);
                     }
                 }
-                ProducerEvent::CallPathDefined {
-                    visible_caller,
-                    callee,
-                    ..
-                } => {
-                    if let Some(caller) = visible_caller {
-                        *caller = roots.get(caller).copied().unwrap_or(*caller);
-                    }
-                    *callee = roots.get(callee).copied().unwrap_or(*callee);
-                }
-                ProducerEvent::ThreadStarted { .. }
+                ProducerEvent::CallPathDefined { .. }
+                | ProducerEvent::ThreadStarted { .. }
                 | ProducerEvent::ThreadCompleted { .. }
                 | ProducerEvent::Timing { .. } => {}
             }
@@ -702,6 +695,132 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn call_path_exhaustion_cannot_resume_with_reused_ids() {
+        assert_eq!(allocate_call_path_id(&AtomicU32::new(0)).get(), 1);
+        let last = AtomicU32::new(u32::MAX - 1);
+        assert_eq!(allocate_call_path_id(&last).get(), u32::MAX);
+        for _ in 0..2 {
+            assert!(std::panic::catch_unwind(|| allocate_call_path_id(&last)).is_err());
+            assert_eq!(last.load(Ordering::Relaxed), u32::MAX);
+        }
+    }
+
+    #[test]
+    fn call_path_definitions_survive_relocation_and_collection() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let caller = vm
+            .tlab
+            .alloc_function(Box::new(function(FunctionKind::Bytecode, None)))
+            .unwrap();
+        let callee = vm
+            .tlab
+            .alloc_function(Box::new(function(FunctionKind::Bytecode, None)))
+            .unwrap();
+        let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
+        let register = |caller: Option<HeapPtr>, callee| unsafe {
+            // SAFETY: this single-threaded test owns the live functions and
+            // never collects while resolving a call path.
+            (
+                caller.map(|ptr| vm.heap.register_telemetry_function(ptr).unwrap()),
+                vm.heap.register_telemetry_function(callee).unwrap(),
+            )
+        };
+        let key = CallPathKey {
+            parent: CallPathId::ROOT,
+            visible_caller: Some(caller),
+            caller_pc: 7,
+            callee,
+            edge: CallPathEdge::Synchronous,
+        };
+        let path = state.resolve_call_path(key, register);
+        assert_eq!(
+            state.resolve_call_path(key, |_, _| panic!("last-path hit registered")),
+            path
+        );
+        let spawn = state.spawn_context(Some(caller), 11, callee, register);
+        assert_ne!(spawn.spawn_call_path, path);
+        assert_eq!(
+            state.resolve_call_path(key, |_, _| panic!("cached path registered")),
+            path
+        );
+
+        let definitions = |state: &TelemetryState| {
+            state
+                .events()
+                .iter()
+                .filter_map(|event| match event {
+                    ProducerEvent::CallPathDefined {
+                        call_path,
+                        parent_call_path,
+                        visible_caller,
+                        caller_pc,
+                        callee,
+                        edge,
+                    } => Some((
+                        *call_path,
+                        *parent_call_path,
+                        *visible_caller,
+                        *caller_pc,
+                        *callee,
+                        *edge,
+                    )),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let before = definitions(&state);
+        assert_eq!(before.len(), 2);
+        let caller_id = before[0].2.unwrap();
+        let callee_id = before[0].4;
+        assert_ne!(caller_id, callee_id);
+        assert_eq!(before[1].2, Some(caller_id));
+        assert_eq!(before[1].4, callee_id);
+        assert_eq!(before[1].5, CallPathEdge::Spawn);
+        assert!(vm.heap.function_metadata(vm.proof(), caller_id).is_some());
+        assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_some());
+
+        let mut roots = Vec::new();
+        state.collect_roots(&mut roots);
+        // SAFETY: the test has exclusive heap access and supplies every live
+        // cache pointer. No bytecode is running and no frames/captures exist.
+        let (_, _, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
+        };
+        state.forward_roots(&forwarding);
+        assert_eq!(definitions(&state), before);
+        let moved = CallPathKey {
+            visible_caller: Some(forwarding[&caller]),
+            callee: forwarding[&callee],
+            ..key
+        };
+        assert_eq!(
+            state.resolve_call_path(moved, |_, _| panic!("moved cache registered")),
+            path
+        );
+        assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_some());
+
+        // Drop only the pointer cache, retaining the actual emitted events.
+        // Definitions must not keep executable objects alive or need forwarding.
+        state.call_paths.clear();
+        state.call_path_keys.clear();
+        state.last_call_path = None;
+        roots.clear();
+        state.collect_roots(&mut roots);
+        assert!(roots.is_empty());
+        // SAFETY: as above; the test has discarded all live heap references.
+        let (stats, _, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
+        };
+        state.forward_roots(&forwarding);
+        assert_eq!(stats.live_count, 0);
+        assert!(vm.heap.function_metadata(vm.proof(), caller_id).is_none());
+        assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_none());
+        assert_eq!(definitions(&state), before);
+    }
 
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
         Function {
@@ -791,7 +910,9 @@ mod tests {
         state.start_thread();
         let thread_id = state.active_id();
         let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 7, false, &[], |_, _| {})
+            .enter_bytecode(&function, HeapPtr::null(), None, 7, false, &[], |_, _| {
+                (None, function.telemetry_function_id.unwrap())
+            })
             .unwrap();
 
         assert!(!frame.is_span());
@@ -831,7 +952,7 @@ mod tests {
                 0,
                 false,
                 &[Value::int(3)],
-                |_, _| {},
+                |_, _| (None, function.telemetry_function_id.unwrap()),
             )
             .unwrap();
         let span_id = state.active_id();
@@ -861,7 +982,9 @@ mod tests {
         state.start_thread();
         let parent_id = state.active_id();
         let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {})
+            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                (None, function.telemetry_function_id.unwrap())
+            })
             .unwrap();
         let updater =
             TelemetryState::new_root(Arc::clone(&state.policies), Arc::clone(&state.clock));
@@ -910,7 +1033,9 @@ mod tests {
         let mut state = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let mut outer = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {})
+            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                (None, function.telemetry_function_id.unwrap())
+            })
             .unwrap();
         let mut inner = state
             .enter_bytecode(
@@ -920,7 +1045,7 @@ mod tests {
                 1,
                 true,
                 &[],
-                |_, _| {},
+                |_, _| (None, function.telemetry_function_id.unwrap()),
             )
             .unwrap();
         outer.add_await(ClockDuration::from_ticks(3));
@@ -984,7 +1109,9 @@ mod tests {
                     };
                     state.set_policy(&function, policy(initial)).unwrap();
                     let frame = state
-                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {})
+                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                            (None, function.telemetry_function_id.unwrap())
+                        })
                         .unwrap();
                     // Updating to zero must not erase an entry requirement.
                     state
@@ -1020,7 +1147,10 @@ mod tests {
     fn spawned_thread_has_explicit_parent_and_structural_call_path() {
         let mut parent = TelemetryState::new_root(Arc::new(TelemetryPolicies::new()), test_clock());
         parent.start_thread();
-        let context = parent.spawn_context(None, 11, HeapPtr::null(), |_, _| {});
+        let function = function(FunctionKind::Bytecode, None);
+        let context = parent.spawn_context(None, 11, HeapPtr::null(), |_, _| {
+            (None, function.telemetry_function_id.unwrap())
+        });
 
         let mut child =
             TelemetryState::new_root(Arc::clone(&parent.policies), Arc::clone(&parent.clock));

@@ -10,21 +10,21 @@ use crate::{BexHeap, CollectionLevel, Generation};
 
 impl BexHeap {
     /// Register a function before publishing its first telemetry reference.
-    /// Unsupported functions remain absent even if reached through this hook.
+    /// Return its stable ID after registration; unsupported functions return None.
     ///
     /// # Safety
     /// The caller must exclude GC, and the pointer must belong to this heap
     /// and refer to a fully initialized function. Linking must have finished.
     #[inline]
-    pub unsafe fn register_telemetry_function(&self, ptr: HeapPtr) {
+    pub unsafe fn register_telemetry_function(&self, ptr: HeapPtr) -> Option<FunctionId> {
         // SAFETY: caller guarantees the live, completed object and excludes GC.
         let Object::Function(function) = (unsafe { ptr.get() }) else {
-            return;
+            return None;
         };
-        if let Some(id) = function.telemetry_function_id {
-            self.functions
-                .register(id, ptr, &function.telemetry_registration);
-        }
+        let id = function.telemetry_function_id?;
+        self.functions
+            .register(id, ptr, &function.telemetry_registration);
+        Some(id)
     }
 
     /// Return an owned copy; never expose a weak pointer beyond the permit.
