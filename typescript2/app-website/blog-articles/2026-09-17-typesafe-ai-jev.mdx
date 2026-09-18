@@ -1,0 +1,339 @@
+---
+title: "TypeSafe AI's Jev model is coming to BAML v1"
+description: "Turn BAML return types into classification questions with TypeSafe AI's Jev model, starting with the next BAML v1 nightly."
+slug: typesafe-ai-jev
+date: September 17, 2026
+isPublished: false
+tags: ['Announcements', 'Tutorials']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+Starting with the next BAML v1 nightly release, you can use [TypeSafe AI's Jev model](https://docs.typesafe.ai/api) directly from BAML:
+
+```baml
+function IsUrgent(message: string) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+        Does this ticket require immediate attention?
+        ${role("user")}
+        ${message}
+    `
+}
+```
+
+That function returns a `bool`. Change its return type to `float`, and it returns Jev's probability instead. Return an enum, and BAML asks Jev to choose one of its variants. Return a class, and BAML turns its fields into a set of questions in one request.
+
+The idea is simple: your return type defines the judgments you want; your prompt and descriptions explain how to make them. BAML handles the request and reconstructs the typed result.
+
+## Getting started on the next nightly
+
+This integration targets BAML v1, not the v0 client-block syntax. It will first be available in the next nightly containing the [TypeSafe client implementation](https://github.com/BoundaryML/baml/pull/4938); it is not available in earlier releases.
+
+Once that nightly ships, select it with the BAML CLI:
+
+```bash
+baml toolchain use nightly
+baml toolchain update
+```
+
+If your project's `baml.toml` pins another toolchain, update that selection too with `baml toolchain pin nightly`. See the [BAML introduction](/baml-intro) if you need to install the CLI or create a project first.
+
+Set `TYPESAFE_API_KEY` in your environment, then add the function above to your BAML project. Credentials are read when the function is invoked, not when the client is constructed. For a quick call from the terminal:
+
+```bash
+export TYPESAFE_API_KEY="your-typesafe-api-key"
+baml run IsUrgent -- --message "Production is down and customers cannot log in."
+```
+
+The examples below use the same BAML v1 syntax and can be added to that project. Example answers are illustrative, not promises about how the model will classify a particular input.
+
+## A classifier, not a text generator
+
+Jev evaluates input against questions. It does not invent a new category or generate free-form text. BAML therefore supports return types that describe a finite set of choices, plus boolean judgments and probabilities:
+
+| BAML return type | Jev question | BAML result |
+| --- | --- | --- |
+| `bool` | Noul | `true` when the probability is at least `0.5` |
+| `float` | Noul | The probability, between `0.0` and `1.0` |
+| Enum | Choice | The selected enum variant |
+| Finite union of literals, enums, enum variants, or null | Choice | The selected typed member |
+| Class with supported fields | One question per leaf field | An instance of the declared class |
+
+The [TypeSafe API reference](https://docs.typesafe.ai/api) describes the underlying Noul and Choice primitives. BAML's integration uses those two question types; it does not map return types to Jev's Score primitive. For example, `1 | 2 | 3 | 4 | 5` promises one of five integers, not an interpolated score such as `3.1`.
+
+Under the hood, the client uses BAML reflection to inspect the realized return type, read its metadata, and build the question plan. Small native helpers supply operations reflection cannot yet express, such as constructing an enum value or a generic class instance. Planning and answer decoding live in the BAML standard library.
+
+## Keep the probability when you need it
+
+For a yes/no decision, `bool` gives you a convenient threshold. A Noul answer of `0.91` becomes `true`; `0.5` is also `true`, while `0.49` is `false`.
+
+Use `float` if your application should choose the threshold:
+
+```baml
+function UrgencyProbability(message: string) -> float {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+        Does this ticket require immediate attention?
+        ${role("user")}
+        ${message}
+    `
+}
+
+function NeedsPaging(message: string) -> bool {
+    UrgencyProbability(message) >= 0.8
+}
+```
+
+Both functions' LLM calls ask the same question as `IsUrgent`. The declared return type determines whether BAML preserves the probability or thresholds it. Here, `float` means a probability, not an arbitrary numeric prediction.
+
+## Route a ticket with an enum
+
+An enum supplies the available choices. Its `@@description` supplies the question, while each variant's `@description` supplies its classification criteria:
+
+```baml
+enum Team {
+    Billing @description("Payments, charges, refunds, or invoices"),
+    Technical @alias("tech") @description("Bugs, outages, or integrations"),
+    Account @description("Login, identity, or account access"),
+
+    @@description("Which team should handle this ticket?")
+}
+
+function RouteTicket(tier: string, message: string) -> Team {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        Customer tier: ${tier}
+        Ticket message: ${message}
+    `
+}
+```
+
+For a production outage, the request has this shape:
+
+```json
+{
+  "model": "jev-latest",
+  "state": "Customer tier: enterprise\nTicket message: Our production integration is down.",
+  "questions": {
+    "result": {
+      "type": "choice",
+      "instructions": "Which team should handle this ticket?",
+      "criteria": {
+        "Billing": "Payments, charges, refunds, or invoices",
+        "tech": "Bugs, outages, or integrations",
+        "Account": "Login, identity, or account access"
+      }
+    }
+  }
+}
+```
+
+A response with `choice: "tech"` becomes `Team.Technical`, not the string `"tech"`. An enum alias is the model-visible choice key; without an alias, the variant name is used. A variant without a description gets a null criterion, and variants marked `@skip` are excluded.
+
+BAML decodes the response's `choice` field using the options it offered. It does not recompute the winner from the probability distribution. Scalar results use the question ID `result`.
+
+## Use literal unions and optional choices
+
+You do not need an enum for every classification:
+
+```baml
+type Mood = "calm" | "concerned" | "angry";
+
+function ClassifyMood(message: string) -> Mood {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+        What is the customer's emotional state?
+        ${role("user")}
+        ${message}
+    `
+}
+
+function StarRating(review: string) -> 1 | 2 | 3 | 4 | 5 {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+        How many stars does this review give the product?
+        ${role("user")}
+        ${review}
+    `
+}
+```
+
+The first function returns one of three strings. The second returns an integer literal: a Choice key of `"3"` becomes the integer `3`. Boolean and bigint literals are supported too; BAML bigint literals use the `n` suffix, such as `9007199254740993n`.
+
+An optional enum adds an explicit abstention choice:
+
+```baml
+function RouteOrLeave(message: string) -> Team? {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+        Which team should handle this ticket, if any?
+        ${role("user")}
+        ${message}
+    `
+}
+```
+
+`Team?` is `Team | null`. BAML offers the enum's choices plus `"<null>"`, and maps that key back to `null`. You can also return `Team | "hold"`, or a subset such as `Team.Billing | Team.Technical`.
+
+A union does not inherit an enum member's `@@description`. Give a scalar union its own `role("instructions")`, as above; for a union-valued class field, use a field description or shared instructions.
+
+Avoid colliding choice keys: an enum alias of `"high"` and a literal `"high"` cannot be distinguished on the wire. In this release, the first **reflected** member owns the key. The compiler canonicalizes unions, so swapping their source order does not reliably change the result. Preserving declaration order is deferred.
+
+## One class, one request, multiple judgments
+
+A class combines several classifications without hand-writing a separate API request for each field:
+
+```baml
+class TicketAssessment {
+    urgent: bool @description("Does this ticket require immediate attention?"),
+    route: Team,
+    reply_within_hour: float @description("How likely is it that the customer expects a reply within the hour?"),
+    mood: Mood @description("What is the customer's emotional state?"),
+}
+
+function AssessTicket(tier: string, message: string) -> TicketAssessment {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+        You are triaging support tickets for an API company.
+        ${role("user")}
+        Customer tier: ${tier}
+        Ticket message: ${message}
+    `
+}
+```
+
+BAML sends one request containing four questions: `urgent`, `route`, `reply_within_hour`, and `mood`. The result is a `TicketAssessment`, for example:
+
+```text
+TicketAssessment {
+    urgent: true,
+    route: Team.Technical,
+    reply_within_hour: 0.77,
+    mood: "angry",
+}
+```
+
+Each question is an independent judgment about the same input. A field description takes precedence over the enum's description. Here, `route` has no field description, so it uses `Team`'s question.
+
+The `role("instructions")` segment prefixes every question and is removed from the request's `state`. The other prompt messages become text state in order. For a scalar `bool`, `float`, or literal union, use that instructions segment to say what to judge; putting the question only in an ordinary user message does not supply question instructions.
+
+## Nested types keep their shape
+
+Nested classes work too. BAML flattens their leaves into dotted question IDs, then reconstructs the original structure:
+
+```baml
+class Sentiment {
+    angry: bool @description("Is this person angry?"),
+    likely_to_disengage: float @description("How likely is this person to end the conversation?"),
+}
+
+class ConversationReport {
+    route: Team,
+    customer: Sentiment @alias("the customer"),
+    agent: Sentiment @alias("the support agent"),
+}
+
+function AnalyzeConversation(transcript: string) -> ConversationReport {
+    client: "typesafeai/jev-latest"
+    prompt: `${transcript}`
+}
+```
+
+The request includes `customer.angry` and `agent.angry`. Those IDs are routing keys, not model-visible instructions, so BAML also supplies context in the instruction text:
+
+```text
+the customer.angry: Is this person angry?
+the support agent.angry: Is this person angry?
+```
+
+Field aliases change this instruction context, not the question IDs or the returned field names. A description on a parent class-valued field does not become a question; put descriptions on its leaves and use parent aliases to distinguish branches.
+
+Generics follow the same rule after substituting their type arguments:
+
+```baml
+class Judged<T> {
+    value: T,
+    clear_cut: bool @description("Is the judgment about this ticket clear-cut?"),
+}
+
+function JudgeRoute(message: string) -> Judged<Team> {
+    client: "typesafeai/jev-latest"
+    prompt: `${message}`
+}
+```
+
+That is a Choice question for `value` and a Noul question for `clear_cut`. `Judged<string>` would not work: substituting the type argument would produce an unsupported free-form string field.
+
+## Configure the client and inspect the response
+
+The shorthand uses `typesafeai.Client`, which implements the same `ai.Client` interface as the other built-in clients. Construct it explicitly when you want to configure a timeout, credential, endpoint, or wire capture:
+
+```baml
+function RouteWithTimeout(message: string) -> Team {
+    client: typesafeai.Client.new(
+        model = "jev-latest",
+        api_key = env.TYPESAFE_API_KEY,
+        request_timeout_ms = 10000,
+        capture_wire = true,
+    )
+    prompt: `${message}`
+}
+```
+
+The default endpoint is `https://api.typesafe.ai/v1/systemone`. Only override `base_url` with a trusted endpoint: invocation sends your API key there. Use HTTPS for remote endpoints.
+
+To inspect the request without sending it or resolving the API key, use a function spec:
+
+```baml
+function PreviewAssessment(tier: string, message: string) -> baml.http.Request {
+    AssessTicket@spec(tier, message).build_request()
+}
+```
+
+Typed results intentionally do not include the Choice probability distribution or confidence. To inspect the full response envelope, use the existing event hook:
+
+```baml
+function RouteWithEvidence(message: string) -> Team {
+    let runner = ai.Agent.new(on_event = (event: ai.events.Event) -> void {
+        if let call: ai.events.LLMCall = event {
+            if let body: string = call.http_response?.body {
+                log.info(body);
+            }
+        }
+    });
+    runner.run(RouteTicket@spec("enterprise", message)).value
+}
+```
+
+Use response logging only where appropriate for your data. Wire capture is enabled by default; `capture_wire = false` omits bodies. Captured authorization headers are redacted. Token usage is also available through the usual usage events and `ai.RunResult.usage`.
+
+Adding a field named `route_confidence: float` would ask a new, independent Noul question. It would **not** read the confidence of the `route` answer. Use the response envelope for that evidence.
+
+## What this first release does not support
+
+Jev support is deliberately narrower than the BAML type system:
+
+- No free-form `string`, `int`, or `bigint` outputs. Finite literal unions are supported instead.
+- No arrays, maps, recursive classes, class unions, or optional classes. The adapter needs a fixed set of independent questions.
+- No `bool?` or `float?`: a Noul question has no abstention answer. A nullable finite Choice such as `Team?` does.
+- No media in the prompt or output, tool calls, or streaming.
+- No empty classes or single-choice outputs, including a standalone literal or a literal-valued discriminator field. Each Choice question needs 2–255 distinct options.
+
+Unsupported shapes and missing question instructions raise `ai.errors.InvalidRequest` when BAML builds the request, before any HTTP call. These checks are runtime checks in this release, not compile-time diagnostics. One unsupported leaf makes the enclosing class unsupported.
+
+Skipped class fields are omitted from the question set and filled with null. Their declared types must accept null, such as `string?` or `unknown`; nonnullable skipped fields are rejected before HTTP.
+
+## Try it with your own decisions
+
+Start with a boolean for a yes/no decision, an enum for routing, or a class for a set of related judgments. Keep the descriptions close to the types, put shared guidance in `role("instructions")`, and let BAML turn the result shape into Jev questions.
+
+Select the next supporting BAML v1 nightly, set `TYPESAFE_API_KEY`, and use `client: "typesafeai/jev-latest"`. Your application gets an ordinary typed BAML result; the classification protocol stays inside the client.
