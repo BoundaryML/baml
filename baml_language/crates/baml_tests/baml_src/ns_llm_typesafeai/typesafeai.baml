@@ -282,6 +282,47 @@ test "bigint literal preserves precision" {
     )
 }
 
+test "negative int and bigint choice keys have no suffix" {
+    assert.equal(literal_decode(reflect.Type.of<-12 | "unsure">(), "-12"), -12);
+    assert.equal(
+        literal_decode(reflect.Type.of<-9007199254740993n | "unsure">(), "-9007199254740993"),
+        -9007199254740993n,
+    )
+}
+
+type EscapedChoice = "a\"b\\c" | "unsure";
+
+test "false and raw string choice keys" {
+    assert.equal(literal_decode(reflect.Type.of<false | "unsure">(), "false"), false);
+    assert.equal(literal_decode(reflect.Type.of<EscapedChoice>(), "a\"b\\c"), "a\"b\\c")
+}
+
+class ExactChoice {
+    // The enum's wire key is "tech"; the literal's is "Technical".
+    // JSON serializes both values as "Technical", losing their identity.
+    route: Team | "Technical" @description("Choose a team or the literal label"),
+}
+
+function ExactChoiceResult(message: string) -> ExactChoice {
+    client: "typesafeai/jev-latest"
+    prompt: `${message}`
+}
+
+function exact_class_choice(key: string) -> Team | "Technical" {
+    let body = baml.json.stringify({ "answers": { "route": { "type": "choice", "choice": key } } });
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(body)], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
+        ai.Agent.new(client = cl).run(ExactChoiceResult@spec("outage")).value.route
+    })
+}
+
+test "class construction preserves exact enum and literal choices" {
+    assert.equal(exact_class_choice("tech"), Team.Technical);
+    assert.equal(exact_class_choice("Technical"), "Technical")
+}
+
 function MediaInput(media: image | audio | video | pdf) -> bool {
     client: "typesafeai/jev-latest"
     prompt: `${role("instructions")}Is it urgent?${role("user")}${media}`

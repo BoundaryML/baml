@@ -79,52 +79,29 @@ impl BamlNamespaceInternal for PackageTypesafeaiImpl {
             .ok_or_else(|| invalid("unknown enum variant"))
     }
 
-    fn constant(vm: &mut BexVm, ty: &Value) -> Result<Value, VmRustFnError> {
-        let (key, description, value, skipped) = match type_arg(vm, *ty)? {
-            RealizedTy::Null { .. } => ("<null>".to_owned(), None, Value::NULL, false),
-            RealizedTy::Literal(literal, _) => {
-                let (key, value) = match literal {
-                    baml_type::Literal::String(s) => (s.clone(), Value::object(vm.alloc_string(s))),
-                    baml_type::Literal::Int(n) => (n.to_string(), Value::int(n)),
-                    baml_type::Literal::Bool(b) => (b.to_string(), Value::bool(b)),
-                    baml_type::Literal::Bigint(n) => {
-                        (n.to_string(), vm.try_alloc_bigint(std::sync::Arc::new(n))?)
-                    }
-                    baml_type::Literal::Float(_) => return Err(invalid("unsupported JEV literal")),
-                };
-                (key, None, value, false)
-            }
+    fn constant_value(vm: &mut BexVm, ty: &Value) -> Result<Value, VmRustFnError> {
+        match type_arg(vm, *ty)? {
+            RealizedTy::Null { .. } => Ok(Value::NULL),
+            RealizedTy::Literal(literal, _) => match literal {
+                baml_type::Literal::String(s) => Ok(Value::object(vm.alloc_string(s))),
+                baml_type::Literal::Int(n) => Ok(Value::int(n)),
+                baml_type::Literal::Bool(b) => Ok(Value::bool(b)),
+                baml_type::Literal::Bigint(n) => Ok(vm.try_alloc_bigint(std::sync::Arc::new(n))?),
+                baml_type::Literal::Float(_) => Err(invalid("unsupported literal type")),
+            },
             RealizedTy::EnumVariant(head, name) => {
                 let Object::Enum(enm) = vm.get_object(head.ptr()) else {
                     return Err(invalid("expected enum declaration"));
                 };
-                let (index, variant) = enm
+                let index = enm
                     .variants
                     .iter()
-                    .enumerate()
-                    .find(|(_, variant)| variant.name == name)
+                    .position(|variant| variant.name == name)
                     .ok_or_else(|| invalid("unknown enum variant"))?;
-                let key = variant.alias.clone().unwrap_or_else(|| name.to_string());
-                let description = variant.description.clone();
-                let skipped = variant.skip;
-                (
-                    key,
-                    description,
-                    Value::object(vm.alloc_variant(head.ptr(), index)),
-                    skipped,
-                )
+                Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
             }
-            _ => return Err(invalid("expected a JEV literal, enum variant, or null")),
-        };
-        let key = Value::object(vm.alloc_string(key));
-        let description = description.map_or(Value::NULL, |s| Value::object(vm.alloc_string(s)));
-        Ok(copy::internal::ChoiceOption {
-            key,
-            description,
-            value,
-            skipped,
+            _ => Err(invalid("expected a literal, enum variant, or null type")),
         }
-        .to_value(vm))
     }
 
     fn enum_value(

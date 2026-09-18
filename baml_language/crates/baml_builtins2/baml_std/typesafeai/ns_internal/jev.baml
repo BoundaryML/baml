@@ -7,11 +7,44 @@ class ChoiceOption {
     skipped: bool,
 }
 
-/// (internal) The value and metadata of a literal or null; enum variants
-/// include their alias and description. Never parses a type's display text.
+/// (internal) Extract a literal, enum-variant, or null value without parsing
+/// the type's display text. All Choice formatting and metadata stay in BAML.
 //baml:mut_vm
-function constant(ty: reflect.Type) -> ChoiceOption throws baml.errors.InvalidArgument {
+function constant_value(ty: reflect.Type) -> unknown throws baml.errors.InvalidArgument {
     $rust_function
+}
+
+function constant(ty: reflect.Type) -> ChoiceOption {
+    let value = constant_value(ty);
+    if let en: reflect.enum.Type = reflect.Type.of_value(value).as_enum() {
+        let name = reflect.enum.get_value(value);
+        for (let variant in en.values()) {
+            if (variant.name == name) {
+                return ChoiceOption {
+                    key: variant.meta.alias ?? variant.name,
+                    description: variant.meta.description,
+                    value: value,
+                    skipped: skipped(en.as_type(), name),
+                };
+            }
+        }
+        throw reject("JEV could not reflect the literal enum variant")
+    }
+    let key = match (value) {
+        null => "<null>",
+        let text: string => text,
+        let number: int => number.to_string(),
+        let number: bigint => number.to_string(),
+        let boolean: bool => {
+            if (boolean) {
+                "true"
+            } else {
+                "false"
+            }
+        },
+        _ => throw reject("JEV cannot format this literal value"),
+    };
+    ChoiceOption { key: key, description: null, value: value, skipped: false }
 }
 
 /// (internal) Construct the named variant of an already reflected enum.
@@ -27,6 +60,8 @@ function skipped(ty: reflect.Type, name: string) -> bool throws baml.errors.Inva
 }
 
 /// (internal) Construct a realized class, preserving its generic arguments.
+/// An unreflect + JSON round trip can reconstruct classes, but cannot preserve
+/// an already-selected enum versus string literal with the same JSON value.
 //baml:mut_vm
 function class_value(
     ty: reflect.Type,
