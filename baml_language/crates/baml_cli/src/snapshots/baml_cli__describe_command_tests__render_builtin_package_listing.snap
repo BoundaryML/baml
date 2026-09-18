@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
@@ -156,16 +157,16 @@ function         baml.json.stringify_pretty       <builtin>/baml/ns_json/json.ba
 function         baml.json.to_string              <builtin>/baml/ns_json/json.baml:93
 function         baml.json.to_json                <builtin>/baml/ns_json/json.baml:117
 function         baml.json.from                   <builtin>/baml/ns_json/json.baml:147
-function         baml.json.from_string            <builtin>/baml/ns_json/json.baml:186
-function         baml.json.from_json              <builtin>/baml/ns_json/json.baml:209
-function         baml.json.to                     <builtin>/baml/ns_json/json.baml:243
-function         baml.json.field                  <builtin>/baml/ns_json/json.baml:256
-class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:267
-function         baml.json.path                   <builtin>/baml/ns_json/json.baml:341
-function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:443
-function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:474
-function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:489
-function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:513
+function         baml.json.from_string            <builtin>/baml/ns_json/json.baml:185
+function         baml.json.from_json              <builtin>/baml/ns_json/json.baml:208
+function         baml.json.to                     <builtin>/baml/ns_json/json.baml:245
+function         baml.json.field                  <builtin>/baml/ns_json/json.baml:258
+class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:269
+function         baml.json.path                   <builtin>/baml/ns_json/json.baml:343
+function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:445
+function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:476
+function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:491
+function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:515
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:4
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:50
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:96

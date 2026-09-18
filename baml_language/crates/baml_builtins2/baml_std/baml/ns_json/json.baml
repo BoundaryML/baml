@@ -157,7 +157,7 @@ function from<T>(value: T) -> json throws SerializationError {
 /// an `int`, and a number outside BAML's 63-bit `int` is rejected rather than
 /// widened to `float`.
 /// A `bigint` is decoded from an integral JSON number without passing through
-/// floating point, matching its serialized form. This text entry point also
+/// floating point, matching its serialized form. Bigint decoding also
 /// accepts a JSON string containing an optional sign followed by ASCII decimal
 /// digits; leading zeroes and negative zero are normalized. Fractions,
 /// exponents, whitespace, and alternate-base spellings are rejected.
@@ -174,9 +174,8 @@ function from<T>(value: T) -> json throws SerializationError {
 ///
 /// This is the *structural* text path, and the only one that fills
 /// `DecodeError.path` with a full location. `deserialize<T>` is the same job
-/// with `baml.FromJson` overrides honored, except that numeric-string bigint
-/// decoding is deliberately limited to this function; reach for
-/// `deserialize<T>` unless you specifically want overrides bypassed.
+/// with `baml.FromJson` overrides honored; reach for `deserialize<T>` unless
+/// you specifically want overrides bypassed.
 ///
 /// # Throws
 ///
@@ -229,6 +228,9 @@ function from_json<T>(j: json) -> T throws DecodeError {
 /// Structural decoding follows BEP-038's raw field names, so `@alias` and
 /// `@skip` have no effect. A missing optional (`T?`) field decodes to `null`,
 /// a missing required field throws, and unrecognized object keys are ignored.
+/// Bigint and bigint literal targets accept integral JSON numbers or strings
+/// containing an optional sign followed by ASCII decimal digits, using the
+/// same rules as `from_string<T>`.
 ///
 /// This is the caller-facing decoder, and what `Type.from_json(j)` desugars
 /// to. `from_json<T>` is the same dispatcher one hop further in.

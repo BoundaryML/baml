@@ -1143,7 +1143,7 @@ pub fn json_from_string_typed(
     })?;
     validate_json_bigint_bounds(&parsed).map_err(|message| raise_decode(vm, message, ""))?;
     let mut path = String::new();
-    ty_serde_to_value(vm, &parsed, ty, &mut path, true)
+    ty_serde_to_value(vm, &parsed, ty, &mut path)
 }
 
 /// Convert a bigint to the arbitrary-precision JSON number representation used
@@ -1230,7 +1230,6 @@ fn ty_serde_to_value(
     json: &serde_json::Value,
     ty: &RealizedTy,
     path: &mut String,
-    accept_bigint_strings: bool,
 ) -> Result<Value, VmRustFnError> {
     match ty {
         RealizedTy::Null => match json {
@@ -1255,18 +1254,8 @@ fn ty_serde_to_value(
         },
 
         RealizedTy::Bigint => {
-            let bigint = if accept_bigint_strings {
-                parse_typed_json_bigint(json)
-            } else {
-                parse_json_bigint(json)
-            }
-            .ok_or_else(|| {
-                let expected = if accept_bigint_strings {
-                    "expected integral JSON number or numeric string"
-                } else {
-                    "expected integral JSON number"
-                };
-                raise_decode(vm, expected, path)
+            let bigint = parse_typed_json_bigint(json).ok_or_else(|| {
+                raise_decode(vm, "expected integral JSON number or numeric string", path)
             })?;
             vm.try_alloc_bigint(Arc::new(bigint)).map_err(Into::into)
         }
@@ -1292,7 +1281,7 @@ fn ty_serde_to_value(
                 let mut items = Vec::with_capacity(arr.len());
                 for (i, item) in arr.iter().enumerate() {
                     let v = with_path_segment(path, format_args!("[{i}]"), |p| {
-                        ty_serde_to_value(vm, item, elem, p, accept_bigint_strings)
+                        ty_serde_to_value(vm, item, elem, p)
                     })?;
                     items.push(v);
                 }
@@ -1310,7 +1299,7 @@ fn ty_serde_to_value(
                     IndexMap::with_capacity(map.len());
                 for (k, val) in map {
                     let v = with_path_segment(path, format_args!("[{k:?}]"), |p| {
-                        ty_serde_to_value(vm, val, vty, p, accept_bigint_strings)
+                        ty_serde_to_value(vm, val, vty, p)
                     })?;
                     entries.insert(bex_vm_types::BexStr::from(k.as_str()), v);
                 }
@@ -1335,11 +1324,11 @@ fn ty_serde_to_value(
             if let Some(kind) = media_kind_from_head(*head) {
                 return deserialize_media(vm, json, kind, *head, path);
             }
-            deserialize_class_instance(vm, json, *head, type_args, path, accept_bigint_strings)
+            deserialize_class_instance(vm, json, *head, type_args, path)
         }
 
         RealizedTy::Interface(head, type_args, _) => {
-            deserialize_class_instance(vm, json, *head, type_args, path, accept_bigint_strings)
+            deserialize_class_instance(vm, json, *head, type_args, path)
         }
 
         RealizedTy::Enum(head) => match json {
@@ -1370,9 +1359,7 @@ fn ty_serde_to_value(
             // Try each member structurally; first match wins.
             for member in members {
                 let mut tmp_path = path.clone();
-                if let Ok(v) =
-                    ty_serde_to_value(vm, json, member, &mut tmp_path, accept_bigint_strings)
-                {
+                if let Ok(v) = ty_serde_to_value(vm, json, member, &mut tmp_path) {
                     return Ok(v);
                 }
             }
@@ -1403,18 +1390,8 @@ fn ty_serde_to_value(
                 Err(raise_decode(vm, "literal float mismatch", path))
             }
             (baml_type::Literal::Bigint(expected), json) => {
-                let actual = if accept_bigint_strings {
-                    parse_typed_json_bigint(json)
-                } else {
-                    parse_json_bigint(json)
-                }
-                .ok_or_else(|| {
-                    let expected = if accept_bigint_strings {
-                        "expected integral JSON number or numeric string"
-                    } else {
-                        "expected integral JSON number"
-                    };
-                    raise_decode(vm, expected, path)
+                let actual = parse_typed_json_bigint(json).ok_or_else(|| {
+                    raise_decode(vm, "expected integral JSON number or numeric string", path)
                 })?;
                 if &actual != expected {
                     return Err(raise_decode(vm, "literal bigint mismatch", path));
@@ -1453,7 +1430,6 @@ fn deserialize_class_instance(
     head: bex_vm_types::TypeHead,
     type_args: &[RealizedTy],
     path: &mut String,
-    accept_bigint_strings: bool,
 ) -> Result<Value, VmRustFnError> {
     let named = baml_type::HeadDisplay::head_display_name(&head);
     let map = match json {
@@ -1500,7 +1476,7 @@ fn deserialize_class_instance(
                     p,
                 ));
             };
-            ty_serde_to_value(vm, field_json, &field_ty, p, accept_bigint_strings)
+            ty_serde_to_value(vm, field_json, &field_ty, p)
         })?;
         field_values.push(v);
     }
@@ -1622,7 +1598,7 @@ fn deserialize_media(
 fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &RealizedTy) -> NativeCallResult {
     let serde = value_to_serde(vm, j);
     let mut path = String::new();
-    match ty_serde_to_value(vm, &serde, ty, &mut path, false) {
+    match ty_serde_to_value(vm, &serde, ty, &mut path) {
         Ok(v) => NativeCallResult::Done(v),
         Err(e) => NativeCallResult::Error(e),
     }
@@ -2205,5 +2181,5 @@ fn peel_optional(ty: &RealizedTy) -> &RealizedTy {
 fn decode_value_sync(vm: &mut BexVm, v: Value, ty: &RealizedTy) -> Result<Value, VmRustFnError> {
     let serde = value_to_serde(vm, v);
     let mut path = String::new();
-    ty_serde_to_value(vm, &serde, ty, &mut path, false)
+    ty_serde_to_value(vm, &serde, ty, &mut path)
 }

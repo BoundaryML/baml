@@ -176,11 +176,81 @@ test "bigint_json_rejects_fractions_exponents_and_non_numeric_strings" {
     }
 }
 
-test "from_json_bigint_keeps_numeric_strings_strict" {
-    let j: json = baml.json.parse("\"42\"");
+test "all_bigint_decoders_accept_numeric_strings" {
+    let j: json = baml.json.parse("\"+00042\"");
+    assert.equal(baml.json.to<bigint>(j), 42n);
+    assert.equal(baml.json.from_json<bigint>(j), 42n);
+    assert.equal(baml.json.deserialize<bigint>("\"+00042\""), 42n);
+    assert.equal(baml.json.to<42n>(j), 42n);
+    assert.equal(baml.json.from_json<42n>(j), 42n);
+    assert.equal(baml.json.deserialize<42n>("\"+00042\""), 42n);
+    assert.equal(
+        baml.json.to<bigint>("-123456789012345678901234567890"),
+        -123456789012345678901234567890n,
+    );
+    assert.equal(baml.json.to<bigint>("-0"), 0n);
+    assert.equal(baml.json.to_string(j), "\"+00042\"");
+    assert.equal(baml.json.to<string>(j), "+00042")
+}
+
+function to_bigint_numeric_string_collections_decode_exactly() -> bool {
+    let records = baml.json.to<BigintRecord[]>(
+        baml.json.parse("[{\"id\":\"123456789012345678901234567890\",\"exact\":\"42\"}]"),
+    );
+    let record = records.at(0);
+    if (record == null) {
+        return false;
+    }
+    let items = baml.json.to<bigint[]>(baml.json.parse("[\"1\",\"-2\"]"));
+    let by_name = baml.json.to<map<string, 42n>>(baml.json.parse("{\"a\":\"42\"}"));
+    let optional = baml.json.to<bigint?>("42");
+    record.id == 123456789012345678901234567890n
+        && record.exact == 42n
+        && items.at(0) == 1n
+        && items.at(1) == -2n
+        && by_name.get("a") == 42n
+        && optional == 42n
+}
+
+test "to_bigint_numeric_string_collections" {
+    assert.is_true(to_bigint_numeric_string_collections_decode_exactly());
+    assert.equal(baml.json.to<bigint?>(null), null)
+}
+
+function to_bigint_first_numeric_string_union_selects_bigint() -> bool {
+    let value = baml.json.to<bigint | string>("42");
+    match (value) {
+        let n: bigint => n == 42n,
+        _ => false,
+    }
+}
+
+function to_string_first_numeric_string_union_selects_string() -> bool {
+    let value = baml.json.to<string | bigint>("42");
+    match (value) {
+        let s: string => s == "42",
+        _ => false,
+    }
+}
+
+test "to_bigint_numeric_string_union_order" {
+    assert.is_true(to_bigint_first_numeric_string_union_selects_bigint());
+    assert.is_true(to_string_first_numeric_string_union_selects_string())
+}
+
+test "to_bigint_rejects_invalid_strings_and_literal_mismatches" {
+    for (let text in ["", "12.5", "1e3", " 42", "0x2a", "hello"]) {
+        {
+            let wrong = baml.json.to<bigint>(text);
+            baml.sys.panic("expected invalid bigint string to fail")
+        } catch (e) {
+            baml.json.DecodeError => null
+        }
+    }
+    ;
     {
-        let wrong: bigint = baml.json.from_json<bigint>(j);
-        baml.sys.panic("expected from_json numeric string to stay a string")
+        let wrong = baml.json.to<42n>("43");
+        baml.sys.panic("expected numeric-string literal bigint mismatch")
     } catch (e) {
         baml.json.DecodeError => null
     }
