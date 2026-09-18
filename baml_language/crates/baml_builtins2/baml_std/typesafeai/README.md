@@ -4,6 +4,8 @@ The wire format follows the [TypeSafe API reference](https://docs.typesafe.ai/ap
 
 Use `client: "typesafeai/jev-latest"` in an LLM function, or construct `typesafeai.Client.new(model = "jev-latest")`. The client reads `TYPESAFE_API_KEY` at invocation time. `api_key` and `base_url` accept literal strings or late-bound `env.NAME` references. The default base URL is `https://api.typesafe.ai/v1`; requests POST to `/systemone`. `render` previews the request without reading the API key. `request_timeout_ms` and `capture_wire` follow the other built-in clients.
 
+Only configure trusted endpoints: invocation sends the API key to `base_url`. Like the other built-in clients, explicit HTTP overrides are supported for local servers and tests; use HTTPS for remote endpoints and never derive `base_url` from untrusted input.
+
 ```baml
 function IsUrgent(message: string) -> bool {
     client: "typesafeai/jev-latest"
