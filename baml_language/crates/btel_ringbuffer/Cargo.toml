@@ -1,0 +1,21 @@
+[package]
+name = "btel_ringbuffer"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Bounded telemetry rings, producer leases, and consumer wakeups"
+
+[dependencies]
+btel_types = { workspace = true }
+
+[target.'cfg(baml_loom)'.dependencies]
+loom = { workspace = true }
+
+[lints]
+workspace = true
