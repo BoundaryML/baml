@@ -80,7 +80,7 @@ fn loss_byte(reason: bex_prof_store::prof::backend::ValueLossReason) -> u8 {
         .map_or(u8::MAX, |(_, byte, _)| *byte)
 }
 
-fn loss_unavailability(byte: u8) -> UnavailableReason {
+pub fn loss_unavailability(byte: u8) -> UnavailableReason {
     if byte == LOSS_NOT_CAPTURED {
         return UnavailableReason::NotCaptured;
     }

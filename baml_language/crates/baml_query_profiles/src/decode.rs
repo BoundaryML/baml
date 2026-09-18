@@ -126,7 +126,7 @@ const OMITTED_CLASS: &str = "baml.trace.OmittedValue";
 
 /// Decode one codec-1 body. `Err` carries a typed unavailability
 /// (corrupt bytes, depth cap).
-pub(crate) fn decode_codec1(body: &[u8], max_depth: u32) -> Result<Value, UnavailableReason> {
+pub fn decode_codec1(body: &[u8], max_depth: u32) -> Result<Value, UnavailableReason> {
     let decoded = PbValue::decode(body).map_err(|_| UnavailableReason::Corrupt)?;
     convert(&decoded, max_depth)
 }

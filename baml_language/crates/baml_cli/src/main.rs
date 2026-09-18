@@ -36,7 +36,9 @@ fn main() {
     };
     // Streams spec §7.5: flush the profiler's pending stream segments on
     // every exit path (the durability window is otherwise publish_interval).
-    bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+    if !baml_cli::flush_profiler() {
+        std::process::exit(baml_cli::ExitCode::Other.into());
+    }
     std::process::exit(exit_code.into());
 }
 
