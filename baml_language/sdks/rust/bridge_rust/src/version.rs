@@ -8,5 +8,5 @@
 //! development builds too.
 
 pub(crate) const BRIDGE_RUNTIME_NAME: &str = "baml_bridge";
-pub(crate) const TOOLCHAIN_VERSION: &str = "0.20.0";
-pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "0.20.0";
+pub(crate) const TOOLCHAIN_VERSION: &str = "0.20.1";
+pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "0.20.1";
