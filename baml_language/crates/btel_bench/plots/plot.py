@@ -16,7 +16,7 @@ target_calls_per_second/calls_per_run in identity.json; volume sweeps vary calls
 Output: summary.json, plus PNG and SVG versions of the established charts.
 Without --output, writes to RESULTS/plots. No benchmarks or Rust builds are run.
 Medians/min-max and paired CPU differences are preserved; no outliers are removed.
-Results describe the synthetic drain-only benchmark, not isolated VM overhead.
+Results describe the synthetic transport benchmark, not isolated VM overhead.
 """
 
 import argparse
@@ -43,6 +43,7 @@ def load_results(directory):
     dimension = "requested_calls_per_second" if is_rate else "calls"
     lookup = {}
     transport_settings = set()
+    stages = set()
     for run in runs:
         require(("requested_calls_per_second" in run) == is_rate, "Mixed sweep types")
         require(run["exit_code"] == 0, "Dataset contains a failed measured run")
@@ -63,8 +64,20 @@ def load_results(directory):
         )
         baseline = run["mode"] == "feeder-only"
         require(
-            result["preset"] == ("feeder-only" if baseline else "drain-only"),
-            "This chart's stage labels currently describe the drain-only benchmark",
+            result["preset"]
+            in (
+                {"feeder-only"}
+                if baseline
+                else {"drain-only", "copy-local", "copy-handoff"}
+            ),
+            "Unsupported consumer stage",
+        )
+        if not baseline:
+            stages.add(result["preset"])
+        require(
+            result.get("downstream_threads", 0)
+            == int(not baseline and result["preset"] == "copy-handoff"),
+            "Unexpected downstream worker count",
         )
         require(
             result["consumer_threads"] == (0 if baseline else 1),
@@ -101,12 +114,26 @@ def load_results(directory):
                     result["idle_timeout_micros"],
                     result["idle_rings"],
                     load["batch_markers"],
+                    result.get("batch_payload_bytes"),
+                    result.get("batch_source_ranges"),
+                    result.get("batch_queue_capacity"),
+                    result.get("batch_retained_capacity"),
                 )
             )
         lookup[key] = run
     require(
         len(transport_settings) == 1, "Mixed transport/pacing settings in one sweep"
     )
+    require(
+        len(stages) == 1,
+        "Mixed consumer stages; plot each stage's result directory separately",
+    )
+    identity["consumer_stage"] = stages.pop()
+    identity["stage_description"] = {
+        "drain-only": "discard drainer",
+        "copy-local": "local copy/reuse",
+        "copy-handoff": "copy/handoff + return",
+    }[identity["consumer_stage"]]
     threads = sorted({r["threads"] for r in runs})
     values = sorted({r[dimension] for r in runs})
     if is_rate:
