@@ -9,15 +9,18 @@
 // decode sees values through detail::unwrap (union metadata dropped) and
 // widens literal values to their base scalar (Python parity).
 
+#include <baml/bigint.h>
 #include <baml/box.h>
 #include <baml/detail/host_value.h>
 #include <baml/detail/proto.h>
 #include <baml/errors.h>
 #include <baml/lit.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -65,6 +68,327 @@ inline bool selected_type_matches(const pb::BamlTy& expected,
   return selected.ty_case() == pb::BamlTy::kOptional &&
          selected.optional().has_inner() &&
          selected_type_matches(expected, selected.optional().inner());
+}
+
+// Unsigned, little-endian limbs used only for radix conversion at the bridge.
+// Divide-and-conquer parsing plus Karatsuba multiplication avoids repeatedly
+// rescanning a growing decimal or hexadecimal string.
+template <std::uint64_t Base>
+using bigint_radix_digits = std::vector<std::uint32_t>;
+
+template <std::uint64_t Base>
+inline void bigint_radix_normalize(bigint_radix_digits<Base>& value) {
+  while (!value.empty() && value.back() == 0) value.pop_back();
+}
+
+template <std::uint64_t Base>
+inline void bigint_radix_multiply_small(bigint_radix_digits<Base>& value,
+                                        std::uint32_t factor) {
+  std::uint64_t carry = 0;
+  for (std::uint32_t& digit : value) {
+    const std::uint64_t product =
+        static_cast<std::uint64_t>(digit) * factor + carry;
+    digit = static_cast<std::uint32_t>(product % Base);
+    carry = product / Base;
+  }
+  if (carry != 0) value.push_back(static_cast<std::uint32_t>(carry));
+  bigint_radix_normalize<Base>(value);
+}
+
+template <std::uint64_t Base>
+inline void bigint_radix_add_small(bigint_radix_digits<Base>& value,
+                                   std::uint32_t addend) {
+  std::uint64_t carry = addend;
+  std::size_t i = 0;
+  while (carry != 0) {
+    if (i == value.size()) value.push_back(0);
+    const std::uint64_t sum = value[i] + carry;
+    value[i] = static_cast<std::uint32_t>(sum % Base);
+    carry = sum / Base;
+    ++i;
+  }
+}
+
+template <std::uint64_t Base>
+inline void bigint_radix_add_shifted(bigint_radix_digits<Base>& target,
+                                     const bigint_radix_digits<Base>& addend,
+                                     std::size_t shift) {
+  if (addend.empty()) return;
+  if (target.size() < shift + addend.size()) {
+    target.resize(shift + addend.size(), 0);
+  }
+  std::uint64_t carry = 0;
+  std::size_t i = 0;
+  while (i < addend.size() || carry != 0) {
+    const std::size_t target_index = shift + i;
+    if (target_index == target.size()) target.push_back(0);
+    const std::uint64_t sum =
+        target[target_index] + carry + (i < addend.size() ? addend[i] : 0);
+    target[target_index] = static_cast<std::uint32_t>(sum % Base);
+    carry = sum / Base;
+    ++i;
+  }
+}
+
+template <std::uint64_t Base>
+inline bigint_radix_digits<Base> bigint_radix_add(
+    const bigint_radix_digits<Base>& lhs,
+    const bigint_radix_digits<Base>& rhs) {
+  bigint_radix_digits<Base> result = lhs;
+  bigint_radix_add_shifted<Base>(result, rhs, 0);
+  return result;
+}
+
+template <std::uint64_t Base>
+inline bigint_radix_digits<Base> bigint_radix_subtract(
+    const bigint_radix_digits<Base>& lhs,
+    const bigint_radix_digits<Base>& rhs) {
+  bigint_radix_digits<Base> result = lhs;
+  std::uint64_t borrow = 0;
+  for (std::size_t i = 0; i < result.size(); ++i) {
+    const std::uint64_t subtrahend = borrow + (i < rhs.size() ? rhs[i] : 0);
+    const std::uint64_t digit = result[i];
+    if (digit < subtrahend) {
+      result[i] = static_cast<std::uint32_t>(digit + Base - subtrahend);
+      borrow = 1;
+    } else {
+      result[i] = static_cast<std::uint32_t>(digit - subtrahend);
+      borrow = 0;
+    }
+  }
+  if (borrow != 0) {
+    throw error("BAML internal error: bigint radix subtraction underflow");
+  }
+  bigint_radix_normalize<Base>(result);
+  return result;
+}
+
+template <std::uint64_t Base>
+inline bigint_radix_digits<Base> bigint_radix_slice(
+    const bigint_radix_digits<Base>& value, std::size_t begin,
+    std::size_t end) {
+  if (begin >= value.size()) return {};
+  end = std::min(end, value.size());
+  bigint_radix_digits<Base> result(value.begin() + begin, value.begin() + end);
+  bigint_radix_normalize<Base>(result);
+  return result;
+}
+
+template <std::uint64_t Base>
+inline bigint_radix_digits<Base> bigint_radix_multiply_schoolbook(
+    const bigint_radix_digits<Base>& lhs,
+    const bigint_radix_digits<Base>& rhs) {
+  if (lhs.empty() || rhs.empty()) return {};
+  bigint_radix_digits<Base> result(lhs.size() + rhs.size(), 0);
+  for (std::size_t i = 0; i < lhs.size(); ++i) {
+    std::uint64_t carry = 0;
+    for (std::size_t j = 0; j < rhs.size(); ++j) {
+      const std::uint64_t product =
+          static_cast<std::uint64_t>(lhs[i]) * rhs[j] + result[i + j] + carry;
+      result[i + j] = static_cast<std::uint32_t>(product % Base);
+      carry = product / Base;
+    }
+    result[i + rhs.size()] = static_cast<std::uint32_t>(carry);
+  }
+  bigint_radix_normalize<Base>(result);
+  return result;
+}
+
+template <std::uint64_t Base>
+inline bigint_radix_digits<Base> bigint_radix_multiply(
+    const bigint_radix_digits<Base>& lhs,
+    const bigint_radix_digits<Base>& rhs) {
+  constexpr std::size_t kKaratsubaThreshold = 32;
+  if (lhs.empty() || rhs.empty()) return {};
+  if (std::min(lhs.size(), rhs.size()) <= kKaratsubaThreshold) {
+    return bigint_radix_multiply_schoolbook<Base>(lhs, rhs);
+  }
+
+  const std::size_t split = std::max(lhs.size(), rhs.size()) / 2;
+  const bigint_radix_digits<Base> lhs_low =
+      bigint_radix_slice<Base>(lhs, 0, split);
+  const bigint_radix_digits<Base> lhs_high =
+      bigint_radix_slice<Base>(lhs, split, lhs.size());
+  const bigint_radix_digits<Base> rhs_low =
+      bigint_radix_slice<Base>(rhs, 0, split);
+  const bigint_radix_digits<Base> rhs_high =
+      bigint_radix_slice<Base>(rhs, split, rhs.size());
+
+  const bigint_radix_digits<Base> low =
+      bigint_radix_multiply<Base>(lhs_low, rhs_low);
+  const bigint_radix_digits<Base> high =
+      bigint_radix_multiply<Base>(lhs_high, rhs_high);
+  bigint_radix_digits<Base> middle =
+      bigint_radix_multiply<Base>(bigint_radix_add<Base>(lhs_low, lhs_high),
+                                  bigint_radix_add<Base>(rhs_low, rhs_high));
+  middle = bigint_radix_subtract<Base>(middle, low);
+  middle = bigint_radix_subtract<Base>(middle, high);
+
+  bigint_radix_digits<Base> result = low;
+  bigint_radix_add_shifted<Base>(result, middle, split);
+  bigint_radix_add_shifted<Base>(result, high, split * 2);
+  bigint_radix_normalize<Base>(result);
+  return result;
+}
+
+template <std::uint64_t Base>
+inline const bigint_radix_digits<Base>& bigint_radix_small_power(
+    std::uint32_t small_base, std::size_t exponent,
+    std::map<std::size_t, bigint_radix_digits<Base>>& cache) {
+  const auto cached = cache.find(exponent);
+  if (cached != cache.end()) return cached->second;
+
+  bigint_radix_digits<Base> result;
+  if (exponent == 0) {
+    result.push_back(1);
+  } else if (exponent == 1) {
+    result.push_back(small_base);
+  } else {
+    const bigint_radix_digits<Base>& half =
+        bigint_radix_small_power<Base>(small_base, exponent / 2, cache);
+    result = bigint_radix_multiply<Base>(half, half);
+    if (exponent % 2 != 0) {
+      bigint_radix_multiply_small<Base>(result, small_base);
+    }
+  }
+  return cache.emplace(exponent, std::move(result)).first->second;
+}
+
+template <std::uint64_t Base, typename DecodeDigit>
+inline bigint_radix_digits<Base> bigint_radix_parse(
+    const std::string& text, std::size_t begin, std::size_t end,
+    std::uint32_t input_base, const DecodeDigit& decode_digit,
+    std::map<std::size_t, bigint_radix_digits<Base>>& power_cache) {
+  constexpr std::size_t kLeafDigits = 64;
+  if (end - begin <= kLeafDigits) {
+    bigint_radix_digits<Base> result;
+    for (std::size_t i = begin; i < end; ++i) {
+      bigint_radix_multiply_small<Base>(result, input_base);
+      bigint_radix_add_small<Base>(result, decode_digit(text[i]));
+    }
+    return result;
+  }
+
+  const std::size_t middle = begin + (end - begin) / 2;
+  bigint_radix_digits<Base> lhs = bigint_radix_parse<Base>(
+      text, begin, middle, input_base, decode_digit, power_cache);
+  const bigint_radix_digits<Base> rhs = bigint_radix_parse<Base>(
+      text, middle, end, input_base, decode_digit, power_cache);
+  const bigint_radix_digits<Base>& scale =
+      bigint_radix_small_power<Base>(input_base, end - middle, power_cache);
+  lhs = bigint_radix_multiply<Base>(lhs, scale);
+  bigint_radix_add_shifted<Base>(lhs, rhs, 0);
+  return lhs;
+}
+
+inline std::string bigint_binary_limbs_to_hex(
+    const bigint_radix_digits<4294967296ULL>& value) {
+  if (value.empty()) return "0";
+  static const char kHexDigits[] = "0123456789abcdef";
+  std::string result;
+  result.reserve(value.size() * 8);
+  bool started = false;
+  for (std::size_t i = value.size(); i-- > 0;) {
+    for (int shift = 28; shift >= 0; shift -= 4) {
+      const char digit = kHexDigits[(value[i] >> shift) & 0xf];
+      if (started || digit != '0') {
+        result.push_back(digit);
+        started = true;
+      }
+    }
+  }
+  return result.empty() ? "0" : result;
+}
+
+inline std::string bigint_decimal_limbs_to_string(
+    const bigint_radix_digits<1000000000ULL>& value) {
+  if (value.empty()) return "0";
+  std::string result = std::to_string(value.back());
+  for (std::size_t i = value.size() - 1; i-- > 0;) {
+    const std::string digits = std::to_string(value[i]);
+    result.append(9 - digits.size(), '0');
+    result.append(digits);
+  }
+  return result;
+}
+
+inline std::string bigint_decimal_to_hex(const std::string& value) {
+  if (value.empty()) {
+    throw error("BAML encode error: malformed decimal bigint");
+  }
+  if (value.front() == '+') {
+    throw error("BAML encode error: noncanonical decimal bigint");
+  }
+  const bool negative = value.front() == '-';
+  const std::size_t digits_start = negative ? 1 : 0;
+  if (digits_start == value.size()) {
+    throw error("BAML encode error: malformed decimal bigint");
+  }
+  for (std::size_t i = digits_start; i < value.size(); ++i) {
+    if (value[i] < '0' || value[i] > '9') {
+      throw error("BAML encode error: malformed decimal bigint");
+    }
+  }
+  const std::size_t digit_count = value.size() - digits_start;
+  if ((digit_count > 1 && value[digits_start] == '0') ||
+      (negative && value[digits_start] == '0')) {
+    throw error("BAML encode error: noncanonical decimal bigint");
+  }
+
+  if (value[digits_start] == '0') return "0";
+  std::map<std::size_t, bigint_radix_digits<4294967296ULL>> power_cache;
+  const auto decode_digit = [](char digit) {
+    return static_cast<std::uint32_t>(digit - '0');
+  };
+  const bigint_radix_digits<4294967296ULL> binary =
+      bigint_radix_parse<4294967296ULL>(value, digits_start, value.size(), 10,
+                                        decode_digit, power_cache);
+  std::string hex = bigint_binary_limbs_to_hex(binary);
+  if (negative) hex.insert(hex.begin(), '-');
+  return hex;
+}
+
+inline std::string bigint_hex_to_decimal(const std::string& value) {
+  if (value.empty()) {
+    throw error("BAML decode error: malformed hexadecimal bigint");
+  }
+  const bool negative = value.front() == '-';
+  const std::size_t digits_start = (negative || value.front() == '+') ? 1 : 0;
+  if (digits_start == value.size()) {
+    throw error("BAML decode error: malformed hexadecimal bigint");
+  }
+
+  bool nonzero = false;
+  for (std::size_t i = digits_start; i < value.size(); ++i) {
+    const char digit = value[i];
+    unsigned hex_digit;
+    if (digit >= '0' && digit <= '9') {
+      hex_digit = digit - '0';
+    } else if (digit >= 'a' && digit <= 'f') {
+      hex_digit = digit - 'a' + 10;
+    } else if (digit >= 'A' && digit <= 'F') {
+      hex_digit = digit - 'A' + 10;
+    } else {
+      throw error("BAML decode error: malformed hexadecimal bigint");
+    }
+    nonzero = nonzero || hex_digit != 0;
+  }
+  std::map<std::size_t, bigint_radix_digits<1000000000ULL>> power_cache;
+  const auto decode_digit = [](char digit) {
+    if (digit >= '0' && digit <= '9') {
+      return static_cast<std::uint32_t>(digit - '0');
+    }
+    if (digit >= 'a' && digit <= 'f') {
+      return static_cast<std::uint32_t>(digit - 'a' + 10);
+    }
+    return static_cast<std::uint32_t>(digit - 'A' + 10);
+  };
+  const bigint_radix_digits<1000000000ULL> decimal_limbs =
+      bigint_radix_parse<1000000000ULL>(value, digits_start, value.size(), 16,
+                                        decode_digit, power_cache);
+  std::string decimal = bigint_decimal_limbs_to_string(decimal_limbs);
+  if (negative && nonzero) decimal.insert(decimal.begin(), '-');
+  return decimal;
 }
 
 }  // namespace detail
@@ -151,6 +475,29 @@ struct codec<int64_t> {
       return v.literal_value().int_value();
     }
     detail::kind_mismatch("int", v);
+  }
+};
+
+template <>
+struct codec<bigint> {
+  static detail::pb::BamlTy baml_ty() {
+    return detail::primitive_baml_ty(detail::pb::BAML_TY_PRIMITIVE_BIGINT);
+  }
+  static void encode(detail::pb::InboundValue& value_msg, const bigint& v) {
+    value_msg.set_bigint_value(detail::bigint_decimal_to_hex(v.str()));
+  }
+  static bigint decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
+    if (v.value_case() == detail::pb::BamlOutboundValue::kBigintValue) {
+      return bigint(detail::bigint_hex_to_decimal(v.bigint_value()));
+    }
+    if (v.value_case() == detail::pb::BamlOutboundValue::kLiteralValue &&
+        v.literal_value().literal_case() ==
+            detail::pb::BamlLiteralValue::kBigintValue) {
+      return bigint(
+          detail::bigint_hex_to_decimal(v.literal_value().bigint_value()));
+    }
+    detail::kind_mismatch("bigint", v);
   }
 };
 

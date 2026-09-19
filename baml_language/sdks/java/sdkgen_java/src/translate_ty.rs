@@ -445,11 +445,12 @@ const BAMLTYPE_UNKNOWN: &str = "baml_bridge.BamlType.UNKNOWN";
 /// decode); an anonymous union renders as `BamlType.union(<arms…>)` in
 /// declaration order (a union with a `TypeVar` arm, or a same-base literal union,
 /// degenerates to the base / `UNKNOWN`, matching [`translate_union`]'s Java type);
-/// a decode-inert leaf (bigint / uint8array / null / void / media / callable /
+/// a decode-inert leaf (uint8array / null / void / media / callable /
 /// handle / unknown / unmodeled) renders as `UNKNOWN`.
 pub(crate) fn descriptor_expr(ty: &Ty, aliases: &AliasTable) -> String {
     match ty {
         Ty::Int => "baml_bridge.BamlType.INT".to_string(),
+        Ty::Bigint => "baml_bridge.BamlType.BIGINT".to_string(),
         Ty::Float => "baml_bridge.BamlType.FLOAT".to_string(),
         Ty::String => "baml_bridge.BamlType.STRING".to_string(),
         Ty::Bool => "baml_bridge.BamlType.BOOL".to_string(),
@@ -510,8 +511,7 @@ fn descriptor_union_expr(items: &[Ty], aliases: &AliasTable) -> String {
                         baml_base::Literal::Float(_) => "baml_bridge.BamlType.FLOAT".to_string(),
                         baml_base::Literal::String(_) => "baml_bridge.BamlType.STRING".to_string(),
                         baml_base::Literal::Bool(_) => "baml_bridge.BamlType.BOOL".to_string(),
-                        // bigint has no BamlType primitive → wire-driven.
-                        baml_base::Literal::Bigint(_) => BAMLTYPE_UNKNOWN.to_string(),
+                        baml_base::Literal::Bigint(_) => "baml_bridge.BamlType.BIGINT".to_string(),
                     };
                 }
             }
@@ -542,6 +542,7 @@ fn descriptor_union_expr(items: &[Ty], aliases: &AliasTable) -> String {
 pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
     match ty {
         Ty::Int => "baml_bridge.BamlType.INT".to_string(),
+        Ty::Bigint => "baml_bridge.BamlType.BIGINT".to_string(),
         Ty::Float => "baml_bridge.BamlType.FLOAT".to_string(),
         Ty::String => "baml_bridge.BamlType.STRING".to_string(),
         Ty::Bool => "baml_bridge.BamlType.BOOL".to_string(),
@@ -1250,6 +1251,27 @@ mod tests {
         assert_eq!(
             descriptor_expr(&u, &aliases),
             "baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING)"
+        );
+    }
+
+    #[test]
+    fn bigint_descriptors_are_typed() {
+        let aliases = AliasTable::new();
+        assert_eq!(
+            descriptor_expr(&bigint(), &aliases),
+            "baml_bridge.BamlType.BIGINT"
+        );
+        assert_eq!(
+            registry_arm_expr(&bigint(), &aliases),
+            "baml_bridge.BamlType.BIGINT"
+        );
+        let literals = union(vec![
+            literal(baml_base::Literal::Bigint(1.into())),
+            literal(baml_base::Literal::Bigint(2.into())),
+        ]);
+        assert_eq!(
+            descriptor_expr(&literals, &aliases),
+            "baml_bridge.BamlType.BIGINT"
         );
     }
 
