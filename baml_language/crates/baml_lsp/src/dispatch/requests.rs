@@ -3,9 +3,12 @@
 use std::{path::PathBuf, sync::Arc};
 
 use lsp_types::{
-    InitializeParams, InitializeResult, SaveOptions, ServerCapabilities, ServerInfo,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    FileOperationFilter, FileOperationPattern, FileOperationPatternKind,
+    FileOperationRegistrationOptions, InitializeParams, InitializeResult, SaveOptions,
+    ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
+    WorkspaceFileOperationsServerCapabilities, WorkspaceFoldersServerCapabilities,
+    WorkspaceServerCapabilities,
 };
 
 use crate::{
@@ -106,7 +109,39 @@ pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> Serv
                 supported: Some(true),
                 change_notifications: Some(lsp_types::OneOf::Left(true)),
             }),
-            file_operations: None,
+            file_operations: Some(WorkspaceFileOperationsServerCapabilities {
+                did_create: Some(FileOperationRegistrationOptions {
+                    filters: vec![FileOperationFilter {
+                        scheme: Some("file".to_owned()),
+                        pattern: FileOperationPattern {
+                            glob: "**/*.baml".to_owned(),
+                            matches: Some(FileOperationPatternKind::File),
+                            options: None,
+                        },
+                    }],
+                }),
+                did_delete: Some(FileOperationRegistrationOptions {
+                    filters: vec![
+                        FileOperationFilter {
+                            scheme: Some("file".to_owned()),
+                            pattern: FileOperationPattern {
+                                glob: "**/*.baml".to_owned(),
+                                matches: Some(FileOperationPatternKind::File),
+                                options: None,
+                            },
+                        },
+                        FileOperationFilter {
+                            scheme: Some("file".to_owned()),
+                            pattern: FileOperationPattern {
+                                glob: "**".to_owned(),
+                                matches: Some(FileOperationPatternKind::Folder),
+                                options: None,
+                            },
+                        },
+                    ],
+                }),
+                ..WorkspaceFileOperationsServerCapabilities::default()
+            }),
         }),
         diagnostic_provider: None,
         // `.` (member/qualifier access) and `@` (attribute names) are the
@@ -943,6 +978,37 @@ mod tests {
         assert_eq!(sync.change, Some(TextDocumentSyncKind::INCREMENTAL));
         assert_eq!(sync.will_save, Some(false));
         assert!(capabilities.diagnostic_provider.is_none());
+    }
+
+    #[test]
+    fn capabilities_request_baml_file_lifecycle_notifications() {
+        let capabilities = server_capabilities(PositionEncoding::UTF16, false);
+        let operations = capabilities
+            .workspace
+            .and_then(|workspace| workspace.file_operations)
+            .expect("file operation notifications are required for deleted open buffers");
+        let did_create = operations
+            .did_create
+            .expect("workspace/didCreateFiles is required to revive recreated buffers");
+        assert_eq!(did_create.filters.len(), 1);
+        let filter = &did_create.filters[0];
+        assert_eq!(filter.scheme.as_deref(), Some("file"));
+        assert_eq!(filter.pattern.glob, "**/*.baml");
+        assert_eq!(filter.pattern.matches, Some(FileOperationPatternKind::File));
+
+        let did_delete = operations
+            .did_delete
+            .expect("workspace/didDeleteFiles is required to suppress deleted open buffers");
+        assert_eq!(did_delete.filters.len(), 2);
+        assert_eq!(
+            did_delete.filters[0].pattern.matches,
+            Some(FileOperationPatternKind::File)
+        );
+        assert_eq!(did_delete.filters[1].pattern.glob, "**");
+        assert_eq!(
+            did_delete.filters[1].pattern.matches,
+            Some(FileOperationPatternKind::Folder)
+        );
     }
 
     /// Lenses and the command they invoke are advertised together, and only

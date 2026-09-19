@@ -49,6 +49,20 @@ pub enum SourceMutation {
     RemoveFile {
         path: PathBuf,
     },
+    /// The editor reported a user-initiated deletion through
+    /// `workspace/didDeleteFiles`. Unlike a watcher event, this explicitly
+    /// suppresses an open overlay so a deleted buffer is no longer indexed.
+    DeletePath {
+        path: PathBuf,
+        /// Folder deletions suppress every source beneath `path`; file
+        /// deletions only suppress the exact path.
+        recursive: bool,
+    },
+    /// A fresh open, create, save, or post-deletion disk observation proves
+    /// that a deleted document exists again.
+    RestoreFile {
+        path: PathBuf,
+    },
     /// didClose: the overlay is no longer authoritative. The text is left in
     /// place until a following `SetDisk`/`RemoveFile` reconciles it.
     CloseDocument {
