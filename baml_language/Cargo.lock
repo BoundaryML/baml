@@ -1601,6 +1601,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
+ "find-msvc-tools",
  "futures",
  "indexmap",
  "libc",
