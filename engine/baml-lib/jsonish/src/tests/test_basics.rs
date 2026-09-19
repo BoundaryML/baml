@@ -42,6 +42,20 @@ test_deserializer!(test_bool_3, EMPTY_FILE, "false", TypeIR::bool(), false);
 test_deserializer!(test_bool_4, EMPTY_FILE, "False", TypeIR::bool(), false);
 
 test_deserializer!(
+    test_compact_unquoted_values_with_numeric_commas,
+    r#"
+    class Test {
+        enabled bool
+        amount float
+        disabled bool
+    }
+    "#,
+    r#"{"enabled":true,"amount":$1,234,"disabled":false}"#,
+    TypeIR::class("Test"),
+    {"enabled": true, "amount": 1234.0, "disabled": false}
+);
+
+test_deserializer!(
     test_bool_wrapped,
     EMPTY_FILE,
     "The answer is true",

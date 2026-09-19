@@ -3,6 +3,61 @@ use baml_types::ir_type::UnionConstructor;
 use super::*;
 use crate::helpers::load_test_ir;
 
+const NULL_UNION_ARRAY: &str = r#"
+class Ref {
+  id string
+  text string
+}
+
+class Block {
+  main (string | Ref)[]?
+  content (string | Ref)[]
+}
+
+class Result {
+  blocks Block[]
+}
+"#;
+
+#[test_log::test]
+fn test_partial_null_union_array_is_not_a_string() {
+    // Regression for #4760: every prefix from `n` through the complete minified
+    // response must keep `main` null instead of streaming raw JSON as a string.
+    let ir = load_test_ir(NULL_UNION_ARRAY);
+    let mut target_type = TypeIR::class("Result");
+    ir.finalize_type(&mut target_type);
+    let target_type = target_type.to_streaming_type(&ir).to_ir_type();
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::Streaming,
+    )
+    .unwrap();
+
+    let response =
+        r#"{"blocks":[{"main":null,"content":["Hello ",{"id":"kw-1","text":"world"},"!"]}]}"#;
+    let value_start = response.find("null").unwrap();
+
+    for prefix_len in value_start + 1..=response.len() {
+        let prefix = &response[..prefix_len];
+        let parsed = from_str(&target, &target_type, prefix, false).unwrap();
+        let result = crate::helpers::parsed_value_to_response(
+            &ir,
+            parsed,
+            baml_types::StreamingMode::Streaming,
+        )
+        .unwrap();
+
+        let partial = json!(result.serialize_partial());
+        assert_eq!(
+            partial.pointer("/blocks/0/main"),
+            Some(&serde_json::Value::Null),
+            "main was not null for prefix {prefix_len}: {prefix}"
+        );
+    }
+}
+
 const NUMBERS: &str = r#"
 class Foo {
   nums int[]

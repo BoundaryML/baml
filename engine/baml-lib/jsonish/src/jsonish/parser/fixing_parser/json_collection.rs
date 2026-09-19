@@ -108,6 +108,20 @@ impl From<JsonCollection> for Option<Value> {
                     Value::Boolean(false)
                 } else if s == "null" {
                     Value::Null
+                } else if completion_state == CompletionState::Incomplete
+                    && matches!(s, "n" | "nu" | "nul")
+                {
+                    // Preserve the raw string interpretation for string targets, but also
+                    // expose the possible null so optional structured targets do not emit
+                    // a transient string while the literal is still streaming.
+                    let original = s.to_string();
+                    Value::AnyOf(
+                        vec![
+                            Value::Null,
+                            Value::String(original.clone(), completion_state),
+                        ],
+                        original,
+                    )
                 } else if let Ok(n) = s.parse::<i64>() {
                     Value::Number(n.into(), completion_state)
                 } else if let Ok(n) = s.parse::<u64>() {
