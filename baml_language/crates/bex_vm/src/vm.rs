@@ -129,11 +129,9 @@ use crate::{
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
 
-#[derive(Clone, Copy)]
-struct CallOptions<'a> {
+struct CallOptions {
     runtime_id: Option<Value>,
-    type_args: &'a [bex_vm_types::RealizedTy],
-    type_values: &'a [Option<TypeValue>],
+    type_args: TakenTypeArgs,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -144,16 +142,20 @@ struct TakenTypeArgs {
 
 fn append_virtual_method_type_args(
     frame_type_args: &mut Vec<bex_vm_types::RealizedTy>,
-    method_type_args: &TakenTypeArgs,
+    method_type_args: TakenTypeArgs,
 ) -> Vec<Option<TypeValue>> {
+    let TakenTypeArgs {
+        tys,
+        values: method_values,
+    } = method_type_args;
     let mut values = Vec::new();
-    if !method_type_args.values.is_empty() {
+    if !method_values.is_empty() {
         // The resolver-provided owner/impl slots precede method-level slots in
         // the callee frame. Preserve that sparse alignment for exact values.
         values.resize(frame_type_args.len(), None);
-        values.extend_from_slice(&method_type_args.values);
+        values.extend(method_values);
     }
-    frame_type_args.extend_from_slice(&method_type_args.tys);
+    frame_type_args.extend(tys);
     values
 }
 
@@ -1049,7 +1051,7 @@ pub(crate) mod tests {
         };
         let mut frame_type_args = vec![bex_vm_types::RealizedTy::int()];
 
-        let values = append_virtual_method_type_args(&mut frame_type_args, &method);
+        let values = append_virtual_method_type_args(&mut frame_type_args, method);
 
         assert_eq!(
             frame_type_args,
@@ -6899,8 +6901,10 @@ impl BexVm {
                             arg_count,
                             CallOptions {
                                 runtime_id: None,
-                                type_args: &callback_type_args,
-                                type_values: &[],
+                                type_args: TakenTypeArgs {
+                                    tys: callback_type_args,
+                                    values: Vec::new(),
+                                },
                             },
                             frame_idx,
                             function,
@@ -7080,58 +7084,87 @@ impl BexVm {
         callee_ptr: HeapPtr,
         locals_offset: StackIndex,
         arg_count: usize,
-        options: CallOptions<'_>,
+        options: CallOptions,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
-        let previous_type_args =
-            std::mem::replace(&mut self.pending_call_type_args, options.type_args.to_vec());
-        let previous_type_values = std::mem::replace(
-            &mut self.pending_call_type_values,
-            options.type_values.to_vec(),
+        let CallOptions {
+            runtime_id,
+            type_args,
+        } = options;
+        // Keep the call's owned lanes in the VM while dispatching. They are
+        // explicit GC roots for native calls and can be recovered after the
+        // dispatch with any forwarded heads intact.
+        let previous_type_args = std::mem::replace(&mut self.pending_call_type_args, type_args.tys);
+        let previous_type_values =
+            std::mem::replace(&mut self.pending_call_type_values, type_args.values);
+        #[cfg(debug_assertions)]
+        let previous_type_args_shape = (
+            previous_type_args.as_ptr() as usize,
+            previous_type_args.len(),
+        );
+        #[cfg(debug_assertions)]
+        let previous_type_values_shape = (
+            previous_type_values.as_ptr() as usize,
+            previous_type_values.len(),
         );
         let frames_before = self.frames.len();
         let result = self.execute_call_from_locals_offset(
             callee_ptr,
             locals_offset,
             arg_count,
-            options.runtime_id,
+            runtime_id,
             frame_idx,
             function,
         );
-        self.pending_call_type_args = previous_type_args;
-        self.pending_call_type_values = previous_type_values;
-        // FOLLOW-UP (not a defect today): the rooted copy of the values is
-        // dropped one line above, and the writes below read `options`, which
-        // borrows a caller *local* that no GC root covers. A collection between
-        // the two would forward the rooted copy and leave these pointers stale.
-        // It is unreachable as written — `execute_call_from_locals_offset` only
-        // pushes a frame and sizes the eval stack, with no TLAB allocation, and
-        // the native path that can allocate pushes no bytecode frame, so the
-        // guard below declines. Recorded because this lane now carries recovered
-        // identities as well as method-level ones, so the day something on that
-        // path starts allocating, this is where it bites.
-        //
+        let recovered_type_args =
+            std::mem::replace(&mut self.pending_call_type_args, previous_type_args);
+        let recovered_type_values =
+            std::mem::replace(&mut self.pending_call_type_values, previous_type_values);
+        #[cfg(debug_assertions)]
+        {
+            debug_assert_eq!(
+                (
+                    self.pending_call_type_args.as_ptr() as usize,
+                    self.pending_call_type_args.len(),
+                ),
+                previous_type_args_shape,
+                "the predecessor type-argument lane must be restored after dispatch",
+            );
+            debug_assert_eq!(
+                (
+                    self.pending_call_type_values.as_ptr() as usize,
+                    self.pending_call_type_values.len(),
+                ),
+                previous_type_values_shape,
+                "the predecessor exact-value lane must be restored after dispatch",
+            );
+        }
+        let type_args = TakenTypeArgs {
+            tys: recovered_type_args,
+            values: recovered_type_values,
+        };
         // A definition overlay can arrive without any type-argument slots of its
         // own — interface dispatch hands one down for a method that declares no
-        // generics — so the metadata lane is written whenever any of the three
-        // has something to say, not only when the frame widens.
-        if (!options.type_args.is_empty() || !options.type_values.is_empty())
+        // generics — so the metadata lane is written whenever the recovered
+        // values lane has something to say, not only when the frame widens.
+        if (!type_args.tys.is_empty() || !type_args.values.is_empty())
             && self.frames.len() == frames_before + 1
             && *frame_idx == frames_before
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
         {
+            let TakenTypeArgs { tys, values } = type_args;
+            let type_arg_count = tys.len();
             let initial_type_arg_count = frame.type_args.len();
-            frame.type_args.extend_from_slice(options.type_args);
-            if !options.type_values.is_empty() {
+            frame.type_args.extend(tys);
+            if !values.is_empty() {
                 let metadata = frame
                     .type_metadata
                     .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
                 metadata.values.resize(initial_type_arg_count, None);
-                metadata.values.extend(
-                    (0..options.type_args.len())
-                        .map(|slot| options.type_values.get(slot).cloned().flatten()),
-                );
+                metadata
+                    .values
+                    .extend((0..type_arg_count).map(|slot| values.get(slot).cloned().flatten()));
             }
         }
         result
@@ -7704,8 +7737,10 @@ impl BexVm {
                             arg_count,
                             CallOptions {
                                 runtime_id: None,
-                                type_args: &callback_type_args,
-                                type_values: &[],
+                                type_args: TakenTypeArgs {
+                                    tys: callback_type_args,
+                                    values: Vec::new(),
+                                },
                             },
                             &mut frame_idx,
                             &mut function,
@@ -8471,8 +8506,7 @@ impl BexVm {
                             arg_count,
                             CallOptions {
                                 runtime_id,
-                                type_args: &type_args.tys,
-                                type_values: &type_args.values,
+                                type_args,
                             },
                             frame_idx,
                             function,
@@ -8634,16 +8668,6 @@ impl BexVm {
                         Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
                         None => nargs,
                     };
-                    // The receiver's class-level slots need no exact carrier:
-                    // the resolver realizes them off `Self` as head-carrying
-                    // types, so `reflect.Type.of<T>()` in an impl or default-method
-                    // body dereferences the caller's own declaration rather
-                    // than deriving a fresh identity for it.
-                    let type_values = match method_type_args.as_ref() {
-                        Some(method) => append_virtual_method_type_args(&mut type_args, method),
-                        None => Vec::new(),
-                    };
-
                     let locals_offset = StackIndex::from_raw(args_offset);
 
                     // Save pc as return address before pushing the new frame.
@@ -8666,14 +8690,25 @@ impl BexVm {
                             function,
                         )
                     } else {
+                        // The receiver's class-level slots need no exact carrier:
+                        // the resolver realizes them off `Self` as head-carrying
+                        // types, so `reflect.Type.of<T>()` in an impl or default-method
+                        // body dereferences the caller's own declaration rather
+                        // than deriving a fresh identity for it.
+                        let type_values = match method_type_args {
+                            Some(method) => append_virtual_method_type_args(&mut type_args, method),
+                            None => Vec::new(),
+                        };
                         self.execute_call_from_locals_offset_with_type_args(
                             callee_ptr,
                             locals_offset,
                             nargs,
                             CallOptions {
                                 runtime_id,
-                                type_args: &type_args,
-                                type_values: &type_values,
+                                type_args: TakenTypeArgs {
+                                    tys: type_args,
+                                    values: type_values,
+                                },
                             },
                             frame_idx,
                             function,
