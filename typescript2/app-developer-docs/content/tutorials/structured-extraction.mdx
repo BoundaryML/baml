@@ -1,6 +1,6 @@
 ---
 title: Build a structured extractor
-description: Model a receipt, extract typed data, call the generated client, and strengthen the boundary.
+description: Extract line items and totals from receipt text.
 breadcrumbs:
   - href: /tutorials
     label: Tutorials
@@ -9,7 +9,7 @@ breadcrumbs:
 
 ## What you will build
 
-This tutorial turns receipt text into a typed list of items and a nullable total. Create a [Canary project](/baml/get-started) first. You need an OpenAI API key to run the model call; the TypeScript option also needs Node.js.
+Extract a list of items and a nullable total from receipt text. Create a [Canary project](/baml/get-started) first. You need an OpenAI API key to run the model call; the TypeScript option also needs Node.js.
 
 ## 1. Model the result
 
@@ -23,7 +23,7 @@ Add this function below the types. It configures an OpenAI client, puts instruct
 
 <BamlSnippet id="receipts/extract-receipt" region="function" />
 
-> Keep the prompt focused on the task. The return type already carries the structural contract into the generated output instructions.
+`ctx.output_format` inserts instructions based on the return type. You don't need to repeat the schema in the prompt.
 
 ## 3. Call the client
 
@@ -50,7 +50,9 @@ export async function extractReceipt(text: string) {
 }
 ```
 
-## 4. Harden the boundary
+<span id="4-harden-the-boundary" />
+
+## 4. Add tests and handle missing data
 
 - Add representative tests for clean, noisy, and incomplete receipts.
 - Decide whether a missing total is acceptable before making it optional.
