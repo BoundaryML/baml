@@ -135,6 +135,8 @@ pub mod baml_to_host;
 pub mod buffer;
 pub mod error;
 pub mod handle;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_logs;
 mod identity;
 
 pub use baml_to_host::{

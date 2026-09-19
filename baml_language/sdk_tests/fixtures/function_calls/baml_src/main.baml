@@ -165,3 +165,15 @@ class OptBox {
     OptBox { base: base + (opt1 ?? 0) }
   }
 }
+
+// BAML structured logs reach an SDK host's stderr only when the host process
+// opts in through the BAML_LOG environment variable. SDK tests call this
+// function with BAML_LOG set (in a subprocess where in-process stderr capture
+// is unavailable) and assert on the emitted `[LEVEL] body` lines.
+function emit_logs(marker: string) -> string {
+  log.debug(`debug ${marker}`);
+  log.info(`info ${marker}`);
+  log.warn(`warn ${marker}`);
+  log.error(`error ${marker}`);
+  marker
+}
