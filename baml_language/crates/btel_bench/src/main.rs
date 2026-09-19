@@ -1,4 +1,4 @@
-//! One binary, one preset for Phase A. Start with `--help`.
+//! One binary, selectable downstream stages. Start with `--help`.
 use std::{io, path::PathBuf, time::Duration};
 
 use btel_bench::{
@@ -10,9 +10,9 @@ use btel_transport::{TransportConfig, batch::BatchConfig};
 use clap::Parser;
 
 #[derive(Parser)]
-#[command(about = "Measure Btel ring producers and all-no-op pipeline (drain-only)")]
+#[command(about = "Measure Btel producers, transport, and incremental span building")]
 struct Args {
-    /// Discard, copy/reuse on the drainer, or copy/handoff to a downstream worker.
+    /// Discard, copy locally, hand off buffers, or build spans on the worker.
     #[arg(long, value_enum, default_value_t = ConsumerMode::Discard)]
     consumer_mode: ConsumerMode,
     #[arg(long, default_value_t = 262_144)]

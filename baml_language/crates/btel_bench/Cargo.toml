@@ -12,6 +12,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+btel_builder.workspace = true
 btel_core.workspace = true
 btel_transport.workspace = true
 clap = { workspace = true, features = [ "derive" ] }
