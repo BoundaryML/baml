@@ -210,7 +210,7 @@ impl JsonParseState {
     /// outer loop would re-process that character, causing duplication.
     fn should_close_unescaped_string(
         &mut self,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> CloseStringResult {
         let pos: Pos = if self.collection_stack.len() >= 2 {
             self.collection_stack
@@ -288,6 +288,25 @@ impl JsonParseState {
                                 !(current_value.contains(" ") || current_value.contains("("));
                             let is_possible_value =
                                 is_numeric || is_bool || is_null || is_identifier;
+                            let trimmed_value = current_value.trim();
+                            let is_complete_json_primitive =
+                                matches!(trimmed_value, "true" | "false" | "null")
+                                    || trimmed_value
+                                        .parse::<f64>()
+                                        .ok()
+                                        .and_then(serde_json::Number::from_f64)
+                                        .is_some();
+
+                            // A compact separator is only unambiguous after a
+                            // complete JSON primitive. Arbitrary unquoted text
+                            // such as `docs,sip:user@example.com` can otherwise
+                            // be mistaken for another field.
+                            if is_complete_json_primitive
+                                && Self::starts_compact_unquoted_object_key(&next)
+                            {
+                                log::debug!("Closing due to: compact unquoted key after comma");
+                                return CloseStringResult::Close(idx, CompletionState::Complete);
+                            }
 
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
@@ -398,6 +417,53 @@ impl JsonParseState {
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
         }
+    }
+
+    /// Returns whether the characters immediately after a comma form a compact
+    /// unquoted object key such as `reason:`. This lookahead disambiguates an
+    /// object separator from commas that belong to an unquoted value, such as
+    /// the decimal comma in `amount -1.617,98`.
+    fn starts_compact_unquoted_object_key(
+        next: &Peekable<impl Iterator<Item = (usize, char)> + Clone>,
+    ) -> bool {
+        let mut quote = None;
+        let mut escaped = false;
+        let mut at_key_start = true;
+
+        for (_, c) in next.clone() {
+            if let Some(closing_quote) = quote {
+                if escaped {
+                    escaped = false;
+                } else if c == '\\' {
+                    escaped = true;
+                } else if c == closing_quote {
+                    quote = None;
+                }
+                continue;
+            }
+
+            if at_key_start {
+                if c.is_whitespace() {
+                    continue;
+                }
+                at_key_start = false;
+                if matches!(c, '"' | '\'' | '`') {
+                    quote = Some(c);
+                    continue;
+                }
+            }
+
+            match c {
+                ':' => return true,
+                // A structural delimiter before `:` means this is not a key.
+                ',' | '}' | ']' | '\n' => return false,
+                // Match the normal unquoted-key parser, which accepts all
+                // other characters until the separating colon.
+                _ => {}
+            }
+        }
+
+        false
     }
 
     /// Determines whether a quoted string (double-quoted, single-quoted, or
@@ -522,7 +588,7 @@ impl JsonParseState {
     pub fn process_token(
         &mut self,
         token: char,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> Result<usize> {
         // println!("Processing: {:?}..{:?}", token, next.peek());
         match self.collection_stack.last() {
@@ -765,7 +831,7 @@ impl JsonParseState {
     fn find_any_starting_value(
         &mut self,
         token: char,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> Result<usize> {
         match token {
             '{' => {
