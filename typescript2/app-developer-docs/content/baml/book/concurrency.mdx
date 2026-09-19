@@ -9,13 +9,9 @@ breadcrumbs:
   - label: "12. Run work concurrently"
 ---
 
-BAML is designed to feel familiar to TypeScript developers, but concurrency is one place where it deliberately takes a different path. In TypeScript, an asynchronous API returns a `Promise`, making asynchrony part of the function's type and the APIs that callers use.
+A direct BAML call waits for its result. Use `spawn` to start the same call concurrently and receive a future that you can await.
 
-BAML keeps functions colorless. The same function can be called directly when the caller should wait or placed in `spawn` when it should run concurrently. Libraries don't need separate synchronous and asynchronous forms, and making one call concurrent doesn't require async signatures throughout the functions that lead to it.
-
-In that respect, BAML works more like Go. Unlike Go's `go` statement, however, `spawn` returns a future that you can await.
-
-This page compares how BAML, TypeScript, and Go start the same external operation concurrently. It then shows how to wait for results, inspect concurrent work, and limit or cancel it. [Concurrency model and task lifecycle](#concurrency-model-and-task-lifecycle) covers future types, errors, ordering, cancellation, and parent-child behavior.
+In TypeScript, an asynchronous API returns a `Promise`. In BAML, concurrency is a choice at the call site; the function keeps the same signature. Libraries don't need separate synchronous and asynchronous forms.
 
 The examples assume familiarity with functions, arrays, lambdas, and [error handling](/baml/book/errors). Each named function adds to the same project. The browser example supplies `simulate_read` and `main`; the later one-line excerpt reuses its variables. File-reading examples require the native CLI or an SDK with filesystem access.
 
@@ -191,8 +187,6 @@ If `cancel()` returns `false`, the future was already settled. A successful futu
 For the precise cancellation and parent-child rules, continue to [Cancellation and task lifetimes](#cancellation-and-task-lifetimes).
 
 ## Concurrency model and task lifecycle
-
-The main pattern is short: spawn independent work, keep its future, and await the future when you need the result. The following sections describe the model behind that pattern.
 
 ### Logical threads and runtime workers
 

@@ -4,9 +4,11 @@ import type { MDXComponents } from 'mdx/types';
 import { BamlProject, BamlSnippet } from '@/components/baml-snippet';
 import { BridgeCompatibility } from '@/components/bridge-compatibility';
 import { CodeBlock } from '@/components/code-block';
+import { CodeComparison } from '@/components/code-comparison';
 import { CodeExample } from '@/components/code-example';
 import { DocsCard } from '@/components/docs-card';
 import { LanguageTabs, ProviderTabs } from '@/components/language-tabs';
+import { PerspectiveNote } from '@/components/perspective-note';
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
@@ -14,9 +16,11 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     BamlProject,
     BamlSnippet,
     BridgeCompatibility,
+    CodeComparison,
     CodeExample,
     DocsCard,
     LanguageTabs,
+    PerspectiveNote,
     ProviderTabs,
     pre: CodeBlock,
     table: (props) => (
