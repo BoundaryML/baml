@@ -1,9 +1,8 @@
 //! `PyClass` — Python class definition.
 //!
-//! Covers user-code classes, stdlib classes (`baml.http.Response`, …),
-//! and `$stream` companion classes. All three render as a
-//! `pydantic.BaseModel` subclass with typed fields; they differ only in
-//! leaf routing.
+//! Covers user-code classes and stdlib classes (`baml.http.Response`, …).
+//! Both render as a `pydantic.BaseModel` subclass with typed fields; they
+//! differ only in leaf routing.
 
 use std::collections::BTreeMap;
 
@@ -15,8 +14,7 @@ use crate::emit::method::PyMethodBinding;
 /// `static_methods` and `instance_methods`; §7 handle-backed
 /// classes are deferred — every `PyClass` renders as vanilla Pydantic.
 pub(crate) struct PyClass {
-    /// Python identifier (bare name). `$stream` suffix is stripped —
-    /// it influenced routing, not the class name.
+    /// Python identifier (bare name).
     pub(crate) py_name: String,
     /// Source pool key, retained for debug / routing.
     #[allow(dead_code)]

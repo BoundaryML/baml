@@ -11,7 +11,6 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use baml_type::TyAttr;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, RuntimeTy};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -117,9 +116,7 @@ async fn test_concurrent_allocations_no_overlap() {
         // Verify the result is correct
         let value = result.unwrap();
         let expected = BexExternalValue::Array {
-            element_type: RuntimeTy::String {
-                attr: TyAttr::default(),
-            },
+            element_type: RuntimeTy::String,
             items: vec![
                 BexExternalValue::String("a".to_string().into()),
                 BexExternalValue::String("b".to_string().into()),
@@ -306,9 +303,7 @@ async fn test_concurrent_array_allocations() {
 
         // Build expected array [0, 1, 2, ..., size-1]
         let expected = BexExternalValue::Array {
-            element_type: RuntimeTy::Int {
-                attr: TyAttr::default(),
-            },
+            element_type: RuntimeTy::Int,
             items: (0..size).map(BexExternalValue::Int).collect(),
         };
         assert_eq!(value, expected, "Array mismatch for size {size}");
@@ -365,9 +360,7 @@ async fn test_call_function_with_external_args() {
 
     // Test passing an array via BexExternalValue
     let arr = BexExternalValue::Array {
-        element_type: RuntimeTy::Int {
-            attr: TyAttr::default(),
-        },
+        element_type: RuntimeTy::Int,
         items: vec![
             BexExternalValue::Int(1),
             BexExternalValue::Int(2),

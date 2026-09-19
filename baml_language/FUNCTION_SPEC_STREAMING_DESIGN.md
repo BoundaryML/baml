@@ -33,9 +33,8 @@ There are three different concepts that must not be conflated:
 | Authored callable | `user.orders.Extract` | User-declared function identity |
 | Internal callable companion | `user.orders.Extract@spec` | Ordinary compiled function hidden from the host's general function surface |
 | Generated host binding | Python `Extract_spec`, TypeScript `Extract$stream` | Language-owned public spelling that calls an exact FQN |
-| Partial type identity | `Order$stream` | Existing generated type convention; this is not a callable companion |
 
-The `$` to `@` rename applies to **callable companion FQNs only**. It must not rename partial classes, type aliases, or any other generated type whose `$stream` suffix is already part of its schema identity.
+The `$` to `@` rename applies to **callable companion FQNs**.
 
 The BAML parser supports source references to the compiler-produced callable postfixes
 `@spec`, `@stream`, `@render_prompt`, `@build_request`, and `@parse`. This
@@ -158,13 +157,11 @@ The synthesized stream companion should likewise call `Fn@spec` through normal B
 ```baml
 // Compiler-generated shape, shown as BAML pseudocode.
 function Extract@stream(args..., client: Client?, on_event: StreamCallback?)
-    -> ai.stream.Stream<Extract$stream, Extract> {
+    -> ai.stream.Stream<Extract, Extract> {
   let spec = Extract@spec(args...)
   spec.stream(client: client, on_event: on_event)
 }
 ```
-
-`Extract$stream` above is intentionally unchanged because it is a partial **type**, not a callable.
 
 ## 4. Host SDK surface
 
@@ -769,7 +766,6 @@ hand-written architecture stabilized.
 - mixed enum union reaches wildcard;
 - `Fn@spec` and `Fn@stream` exist as ordinary compiled functions;
 - `$spec`/callable `$stream` no longer exist;
-- partial type `$stream` names remain unchanged;
 - `Fn@spec` returns a rooted `FunctionSpec` handle;
 - dynamic enum/class outbound returns `RuntimeValue` kind;
 - runtime value inbound resolves the same heap object;
@@ -883,7 +879,7 @@ updated to assert exact `@spec`/`@stream` FQNs with no operation selector.
 
 - [x] No wire/codegen/project/engine `FunctionOperation` axis or call-request operation field remains; a host-bridge-local selector is permitted.
 - [x] No engine/project `*_operation` call API is needed for spec or stream.
-- [x] Internal callable companions use `@`; partial type names keep `$stream`.
+- [x] Internal callable companions use `@`.
 - [x] BAML source `@spec` lowers to the ordinary `Fn@spec` symbol.
 - [x] SDKs expose direct + their existing stream spelling + a new spec spelling.
 - [x] SDKs do not expose standalone render-prompt/build-request/parse companions.
@@ -901,7 +897,6 @@ updated to assert exact `@spec`/`@stream` FQNs with no operation selector.
 ## 16. Explicit non-goals
 
 - A new universal cross-SDK naming policy.
-- Renaming partial `$stream` types.
 - A general function-projection/operation protocol.
 - Reconstructing spec/stream signatures in the IDE symbol pool.
 - Making live RuntimeValue or FunctionSpec handles portable across processes.

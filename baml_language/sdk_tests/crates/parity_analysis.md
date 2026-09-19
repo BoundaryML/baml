@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 684. IDs with complete required parity: 39. Required gaps: 4457.
+Distinct exact test IDs: 700. IDs with complete required parity: 72. Required gaps: 4343.
 
-Baseline ratchet: UNCHANGED. Required gaps: 4457 (baseline: 4457). Present declarations: 2069 (baseline: 2069). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: WORSE. Required gaps: 4343 (baseline: 4457). Present declarations: 2058 (baseline: 2069). Newly missing required pairs: 29. Resolved baseline gaps: 143. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 303 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 312 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 303 / 303 | 100.0% |
-| typescript_node | 124 / 303 | 40.9% |
-| typescript_web_chromium | 117 / 303 | 38.6% |
-| typescript_web_cloudflare_workers | 117 / 303 | 38.6% |
-| cpp | 128 / 303 | 42.2% |
-| csharp | 0 / 303 | 0.0% |
-| rust | 224 / 303 | 73.9% |
-| go | 13 / 303 | 4.3% |
-| java | 293 / 303 | 96.7% |
-| swift | 185 / 303 | 61.1% |
+| python_pydantic2 | 312 / 312 | 100.0% |
+| typescript_node | 120 / 312 | 38.5% |
+| typescript_web_chromium | 113 / 312 | 36.2% |
+| typescript_web_cloudflare_workers | 113 / 312 | 36.2% |
+| cpp | 128 / 312 | 41.0% |
+| csharp | 0 / 312 | 0.0% |
+| rust | 216 / 312 | 69.2% |
+| go | 13 / 312 | 4.2% |
+| java | 288 / 312 | 92.3% |
+| swift | 181 / 312 | 58.0% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -59,6 +59,7 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | function_calls/callback_throws_rethrown_carries_the_effect_param_into_the_error_union | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific inferred callback error unions |
 | function_calls/cancellation_accepts_the_native_decimal_uint64_boundary_spellings | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancellation_async_call_returns_none | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/cancellation_async_cancel_skips_later_step | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | drives Python asyncio cancellation (task.cancel / wait_for) |
 | function_calls/cancellation_async_cancel_via_asyncio_timeout | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/cancellation_async_cancel_via_call_context | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/cancellation_async_cancel_via_future_cancel | - | - | - | - | y | - | - | - | - | - | all |  |
@@ -150,6 +151,7 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_choose_infers_unified_typevar | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_choose_union_outside_container_is_sound | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_combine_invariant_class_arg_conflict_rejects | y | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/generic_inference_default_only_value_position | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python default-argument stubs and runtime TypeVar inference |
 | function_calls/generic_inference_elem_type_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_elem_type_homogeneous_array_is_single_type | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_elem_type_three_way_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | - | all |  |
@@ -396,33 +398,53 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | integration/stdlib_structurals_executes_native_stdlib_structural_roundtrips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/streaming_executes_generated_native_stream_and_request_failure | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/type_roundtrips_executes_nominals_collections_defaults_and_unions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| llm_functions/constructs_a_live_spec_without_a_synthetic_fqn | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript's live FunctionSpec metadata surface |
+| llm_functions/dynamic_runtime_stream_identity_and_flat_projection_parity | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python BamlRuntimeValue identity through the generated sync stream surface |
+| llm_functions/dynamic_runtime_stream_is_an_elegant_async_iterable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated async-iterable stream surface |
+| llm_functions/flat_stream_calls_exact_companion_fqn | - | - | - | - | y | - | - | - | - | - | cpp | C++-only exact flat-stream companion dispatch check. |
+| llm_functions/flat_stream_controls_are_typed_options | - | - | - | - | - | - | - | y | - | - | go | pins the Go generator's typed option surface for flat stream controls. |
+| llm_functions/function_spec_parse_replaces_the_parse_companion | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's generated FunctionSpec parse surface |
+| llm_functions/function_spec_parse_returns_closed_enum | - | - | - | - | - | - | - | y | - | - | go | pins Go's closed-enum FunctionSpec decoder surface. |
+| llm_functions/function_spec_parse_returns_runtime_error_for_invalid_output | - | - | - | - | - | - | - | y | - | - | go | pins Go's FunctionSpec parse-error translation. |
+| llm_functions/function_spec_parse_returns_typed_class_and_fills_missing_nullable_field | - | - | - | - | - | - | - | y | - | - | go | pins Go's typed FunctionSpec class decoder surface. |
+| llm_functions/function_spec_prompt_uses_generated_ai_prompt_type_and_is_reusable | - | - | - | - | - | - | - | y | - | - | go | pins the Go FunctionSpec prompt facade and reusable context behavior. |
+| llm_functions/keeps_a_portable_prompt_reusable_across_engine_reentry | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript's portable Prompt and Image wrappers |
+| llm_functions/legacy_function_companion_wire_bindings_are_absent | - | - | - | - | - | - | - | y | - | - | go | pins the Go generator's emitted wire-binding names. |
 | llm_functions/main_baml_sdk_lorem_and_baml_sdk_ipsum_are_reachable | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_classify_sentiment_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
-| llm_functions/main_extract_resume_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_extract_resume_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
+| llm_functions/main_extract_resume_operation_bindings | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | pins Python and Java flat operation binding spellings |
+| llm_functions/main_extract_resume_spec_and_stream_bindings | - | - | - | - | - | - | y | - | - | - | rust | pins Rust generated spec and stream binding spellings |
+| llm_functions/main_flat_stream_controls_live_on_the_stream_options | - | - | - | - | - | - | - | - | y | - | all |  |
+| llm_functions/main_function_spec_prompt_is_portable_and_reusable | - | - | - | - | - | - | - | - | y | - | all |  |
 | llm_functions/main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_ipsum_sentiment_enum_has_positive_negative_neutral_members | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_ipsum_sentiment_enum_shape | y | - | - | - | - | - | y | - | y | y | all |  |
-| llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type | - | y | y | y | - | - | - | - | - | - | all |  |
-| llm_functions/main_lorem_extract_resume_companion_bindings_exist | - | y | y | y | - | - | - | - | - | - | all |  |
+| llm_functions/main_lorem_extract_resume_exposes_flat_spec_and_stream_bindings | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | pins TypeScript's dollar-preserving flat stream binding names |
 | llm_functions/main_lorem_extract_resume_sync_plus_async_factories_are_callable | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_lorem_resume_class_shape | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_lorem_resume_is_reachable | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_lorem_streaming_doc_class_shape | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_lorem_streaming_doc_is_reachable | - | y | y | y | - | - | - | - | - | - | all |  |
-| llm_functions/main_lorem_streaming_extract_companion_bindings_exist | - | y | y | y | - | - | - | - | - | - | all |  |
+| llm_functions/main_lorem_streaming_extract_exposes_flat_spec_and_stream_bindings | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | pins TypeScript's dollar-preserving flat streaming binding names |
 | llm_functions/main_lorem_streaming_extract_sync_plus_async_factories_are_callable | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_namespaces_reachable_via_explicit_import | y | - | - | - | - | - | y | - | y | - | all |  |
+| llm_functions/main_nullable_model_field_can_be_omitted | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | pins the Python generator's nullable-field `= None` default |
 | llm_functions/main_replay_server_namespace_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | all |  |
-| llm_functions/main_stream_types_lorem_leaf_present | y | - | - | - | - | - | y | - | y | - | all |  |
-| llm_functions/main_streaming_extract_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
+| llm_functions/main_spec_replaces_prompt_parse_and_request_companions | - | - | - | - | - | - | y | - | - | - | rust | validates Rust's generated FunctionSpec prompt, parse, and request surface |
 | llm_functions/main_streaming_extract_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
+| llm_functions/main_streaming_extract_operation_bindings | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | pins Python and Java flat streaming operation binding spellings |
+| llm_functions/main_streaming_extract_spec_and_stream_bindings | - | - | - | - | - | - | y | - | - | - | rust | pins Rust generated streaming spec and stream binding spellings |
 | llm_functions/main_types_and_bindings_reachable | - | - | - | - | - | - | - | - | - | y | all |  |
-| llm_functions/parse_companion_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/parse_companion_returns_closed_enum | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/parse_companion_returns_runtime_error_for_invalid_output | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field | - | - | - | - | - | - | - | y | - | - | all |  |
+| llm_functions/on_event_plain_call_delivers_events | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
+| llm_functions/on_event_plain_call_delivers_llm_call_model | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
+| llm_functions/on_event_plain_call_raising_listener_does_not_fail | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
+| llm_functions/on_event_stream_delivers_settle_events | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
+| llm_functions/on_event_stream_raising_listener_does_not_fail | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
+| llm_functions/projects_static_and_instance_llm_methods_without_invoking_a_provider | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript static and instance operation member spellings |
+| llm_functions/prompt_is_reusable_and_media_survives_request_preview | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's portable Prompt and media wrapper surface |
+| llm_functions/spec_projection_honors_cancellation | - | - | - | - | - | - | - | y | - | - | go | pins Go context cancellation through the Spec projection. |
 | llm_functions/streaming_e2e_async_class_typed_next_async_yields_10_partials | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | llm_functions/streaming_e2e_async_next_async_yields_10_partials | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | llm_functions/streaming_e2e_baml_driven_collect_keeps_the_s_stream_finished_union_engine_side | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
@@ -436,6 +458,7 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | llm_functions/streaming_e2e_stream_doc_async | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_collect_in_baml | y | - | - | - | - | - | y | - | y | y | all |  |
 | package_edges/compile_cross_package_types_compile | - | - | - | - | - | - | - | y | - | - | all |  |
+| package_edges/compile_llm_projection_default_overrides | - | - | - | - | - | - | - | y | - | - | go | pins Go generator options for authored Spec and Stream defaults. |
 | type_shapes/alias_container_composition_and_defaults | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/alias_package_scope_collisions_compile_and_run | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/aliases_round_trip_alias_container | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -494,6 +517,7 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | type_shapes/handles_http_get_response_fields_and_methods | y | y | - | - | - | - | y | - | y | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | type_shapes/handles_image_from_base64_roundtrips_payload | y | y | y | y | - | - | y | - | y | y | all |  |
 | type_shapes/handles_open_file_returns_file_handle | y | - | - | - | - | - | y | - | y | y | all |  |
+| type_shapes/host_created_media_round_trips_through_optional_list | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python host-created media wrapper encoding |
 | type_shapes/lists_round_trip_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_ints | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_list_container | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -511,6 +535,7 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | type_shapes/lorem_resume_reachable | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/main_all_namespaces_reachable | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/main_deep_namespace_thing_reachable | y | y | y | y | y | - | y | - | y | y | all |  |
+| type_shapes/main_generated_models_ignore_extra_fields | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python Pydantic extra-field compatibility |
 | type_shapes/main_lorem_resume_reachable | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/main_root_foo_reachable | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | all |  |
@@ -599,7 +624,6 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | type_shapes/root_imports_cleanly | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_bool | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_box_int | - | - | - | - | - | - | - | y | - | - | all |  |
-| type_shapes/round_trip_box_of_resume_stream | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_dedup | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_deep | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -651,11 +675,8 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | type_shapes/round_trip_primitives_float_field_accepts_int_constant | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_required_resume | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_resume_or_http_response | - | - | - | - | - | - | - | y | - | - | all |  |
-| type_shapes/round_trip_resume_or_resume_stream | - | - | - | - | - | - | - | y | - | - | all |  |
-| type_shapes/round_trip_resume_stream | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_root_foo_from_ab | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_root_foo_from_lorem | - | - | - | - | - | - | - | y | - | - | all |  |
-| type_shapes/round_trip_root_foo_stream | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_scct1_t2_t3 | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_scct4_t5_t6 | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/round_trip_sentiment | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -676,14 +697,10 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | type_shapes/routing_round_trip_foo | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_lorem_resume_from_ipsum | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_resume | y | y | y | y | y | - | y | - | y | y | all |  |
+| type_shapes/routing_round_trip_resume_or_http_response | y | y | y | y | - | - | - | - | y | y | all |  |
 | type_shapes/routing_round_trip_root_foo | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_root_foo_from_ab | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_thing_from_ab | y | y | y | y | y | - | y | - | y | y | all |  |
-| type_shapes/streams_round_trip_box_of_resume_stream | y | y | y | y | - | - | y | - | y | y | all |  |
-| type_shapes/streams_round_trip_resume_or_http_response | y | y | y | y | - | - | y | - | y | y | all |  |
-| type_shapes/streams_round_trip_resume_or_resume_stream | y | y | y | y | - | - | y | - | y | y | all |  |
-| type_shapes/streams_round_trip_resume_stream | y | y | y | y | - | - | y | - | y | y | all |  |
-| type_shapes/streams_round_trip_root_foo_stream | y | y | y | y | - | - | y | - | y | y | all |  |
 | type_shapes/supported_namespaces_reachable | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/symbol_collisions_round_trip_deep | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/symbol_collisions_round_trip_fizz_buzz_foo_bar | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -693,8 +710,7 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | type_shapes/transparent_alias_functions_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/type_alias_declared_before_classes_is_importable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python-specific generated type alias ordering |
 | type_shapes/typemap_is_installed_during_root_module_evaluation | - | y | y | y | - | - | - | - | - | - | all |  |
-| type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases | - | y | y | y | - | - | - | - | - | - | all |  |
-| type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings | - | y | y | y | - | - | - | - | - | - | all |  |
+| type_shapes/typemap_preserves_user_enum_and_generic_mappings | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/typemap_resolves_every_runtime_owned_base_to_one_bridge_constructor_identity | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/union_aliases_are_transparent_and_flatten_before_thresholding | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/unions_consumption_surfaces | - | - | - | - | - | - | - | - | - | y | all |  |
@@ -712,4 +728,181 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
-No required coverage pairs changed.
+### Newly missing required pairs
+
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `cpp`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `csharp`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `go`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `python_pydantic2`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `rust`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `swift`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `typescript_node`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `typescript_web_chromium`
+- `llm_functions/main_flat_stream_controls_live_on_the_stream_options` in `typescript_web_cloudflare_workers`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `cpp`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `csharp`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `go`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `python_pydantic2`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `rust`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `swift`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `typescript_node`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `typescript_web_chromium`
+- `llm_functions/main_function_spec_prompt_is_portable_and_reusable` in `typescript_web_cloudflare_workers`
+- `type_shapes/routing_round_trip_resume_or_http_response` in `cpp`
+- `type_shapes/routing_round_trip_resume_or_http_response` in `csharp`
+- `type_shapes/routing_round_trip_resume_or_http_response` in `go`
+- `type_shapes/routing_round_trip_resume_or_http_response` in `rust`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `cpp`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `csharp`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `go`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `java`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `python_pydantic2`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `rust`
+- `type_shapes/typemap_preserves_user_enum_and_generic_mappings` in `swift`
+
+### Resolved baseline gaps
+
+- `llm_functions/main_extract_resume_companion_bindings` in `cpp`
+- `llm_functions/main_extract_resume_companion_bindings` in `csharp`
+- `llm_functions/main_extract_resume_companion_bindings` in `go`
+- `llm_functions/main_extract_resume_companion_bindings` in `swift`
+- `llm_functions/main_extract_resume_companion_bindings` in `typescript_node`
+- `llm_functions/main_extract_resume_companion_bindings` in `typescript_web_chromium`
+- `llm_functions/main_extract_resume_companion_bindings` in `typescript_web_cloudflare_workers`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `cpp`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `csharp`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `go`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `java`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `python_pydantic2`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `rust`
+- `llm_functions/main_lorem_exposes_the_stream_companion_classes_beside_their_base_type` in `swift`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `cpp`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `csharp`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `go`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `java`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `python_pydantic2`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `rust`
+- `llm_functions/main_lorem_extract_resume_companion_bindings_exist` in `swift`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `cpp`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `csharp`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `go`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `java`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `python_pydantic2`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `rust`
+- `llm_functions/main_lorem_streaming_extract_companion_bindings_exist` in `swift`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `cpp`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `csharp`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `go`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `swift`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `typescript_node`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `typescript_web_chromium`
+- `llm_functions/main_stream_types_lorem_leaf_present` in `typescript_web_cloudflare_workers`
+- `llm_functions/main_streaming_extract_companion_bindings` in `cpp`
+- `llm_functions/main_streaming_extract_companion_bindings` in `csharp`
+- `llm_functions/main_streaming_extract_companion_bindings` in `go`
+- `llm_functions/main_streaming_extract_companion_bindings` in `swift`
+- `llm_functions/main_streaming_extract_companion_bindings` in `typescript_node`
+- `llm_functions/main_streaming_extract_companion_bindings` in `typescript_web_chromium`
+- `llm_functions/main_streaming_extract_companion_bindings` in `typescript_web_cloudflare_workers`
+- `llm_functions/parse_companion_honors_cancellation` in `cpp`
+- `llm_functions/parse_companion_honors_cancellation` in `csharp`
+- `llm_functions/parse_companion_honors_cancellation` in `java`
+- `llm_functions/parse_companion_honors_cancellation` in `python_pydantic2`
+- `llm_functions/parse_companion_honors_cancellation` in `rust`
+- `llm_functions/parse_companion_honors_cancellation` in `swift`
+- `llm_functions/parse_companion_honors_cancellation` in `typescript_node`
+- `llm_functions/parse_companion_honors_cancellation` in `typescript_web_chromium`
+- `llm_functions/parse_companion_honors_cancellation` in `typescript_web_cloudflare_workers`
+- `llm_functions/parse_companion_returns_closed_enum` in `cpp`
+- `llm_functions/parse_companion_returns_closed_enum` in `csharp`
+- `llm_functions/parse_companion_returns_closed_enum` in `java`
+- `llm_functions/parse_companion_returns_closed_enum` in `python_pydantic2`
+- `llm_functions/parse_companion_returns_closed_enum` in `rust`
+- `llm_functions/parse_companion_returns_closed_enum` in `swift`
+- `llm_functions/parse_companion_returns_closed_enum` in `typescript_node`
+- `llm_functions/parse_companion_returns_closed_enum` in `typescript_web_chromium`
+- `llm_functions/parse_companion_returns_closed_enum` in `typescript_web_cloudflare_workers`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `cpp`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `csharp`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `java`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `python_pydantic2`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `rust`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `swift`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `typescript_node`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `typescript_web_chromium`
+- `llm_functions/parse_companion_returns_runtime_error_for_invalid_output` in `typescript_web_cloudflare_workers`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `cpp`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `csharp`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `java`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `python_pydantic2`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `rust`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `swift`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `typescript_node`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `typescript_web_chromium`
+- `llm_functions/parse_companion_returns_typed_class_and_fills_missing_nullable_field` in `typescript_web_cloudflare_workers`
+- `type_shapes/round_trip_box_of_resume_stream` in `cpp`
+- `type_shapes/round_trip_box_of_resume_stream` in `csharp`
+- `type_shapes/round_trip_box_of_resume_stream` in `java`
+- `type_shapes/round_trip_box_of_resume_stream` in `python_pydantic2`
+- `type_shapes/round_trip_box_of_resume_stream` in `rust`
+- `type_shapes/round_trip_box_of_resume_stream` in `swift`
+- `type_shapes/round_trip_box_of_resume_stream` in `typescript_node`
+- `type_shapes/round_trip_box_of_resume_stream` in `typescript_web_chromium`
+- `type_shapes/round_trip_box_of_resume_stream` in `typescript_web_cloudflare_workers`
+- `type_shapes/round_trip_resume_or_resume_stream` in `cpp`
+- `type_shapes/round_trip_resume_or_resume_stream` in `csharp`
+- `type_shapes/round_trip_resume_or_resume_stream` in `java`
+- `type_shapes/round_trip_resume_or_resume_stream` in `python_pydantic2`
+- `type_shapes/round_trip_resume_or_resume_stream` in `rust`
+- `type_shapes/round_trip_resume_or_resume_stream` in `swift`
+- `type_shapes/round_trip_resume_or_resume_stream` in `typescript_node`
+- `type_shapes/round_trip_resume_or_resume_stream` in `typescript_web_chromium`
+- `type_shapes/round_trip_resume_or_resume_stream` in `typescript_web_cloudflare_workers`
+- `type_shapes/round_trip_resume_stream` in `cpp`
+- `type_shapes/round_trip_resume_stream` in `csharp`
+- `type_shapes/round_trip_resume_stream` in `java`
+- `type_shapes/round_trip_resume_stream` in `python_pydantic2`
+- `type_shapes/round_trip_resume_stream` in `rust`
+- `type_shapes/round_trip_resume_stream` in `swift`
+- `type_shapes/round_trip_resume_stream` in `typescript_node`
+- `type_shapes/round_trip_resume_stream` in `typescript_web_chromium`
+- `type_shapes/round_trip_resume_stream` in `typescript_web_cloudflare_workers`
+- `type_shapes/round_trip_root_foo_stream` in `cpp`
+- `type_shapes/round_trip_root_foo_stream` in `csharp`
+- `type_shapes/round_trip_root_foo_stream` in `java`
+- `type_shapes/round_trip_root_foo_stream` in `python_pydantic2`
+- `type_shapes/round_trip_root_foo_stream` in `rust`
+- `type_shapes/round_trip_root_foo_stream` in `swift`
+- `type_shapes/round_trip_root_foo_stream` in `typescript_node`
+- `type_shapes/round_trip_root_foo_stream` in `typescript_web_chromium`
+- `type_shapes/round_trip_root_foo_stream` in `typescript_web_cloudflare_workers`
+- `type_shapes/streams_round_trip_box_of_resume_stream` in `cpp`
+- `type_shapes/streams_round_trip_box_of_resume_stream` in `csharp`
+- `type_shapes/streams_round_trip_box_of_resume_stream` in `go`
+- `type_shapes/streams_round_trip_resume_or_http_response` in `cpp`
+- `type_shapes/streams_round_trip_resume_or_http_response` in `csharp`
+- `type_shapes/streams_round_trip_resume_or_http_response` in `go`
+- `type_shapes/streams_round_trip_resume_or_resume_stream` in `cpp`
+- `type_shapes/streams_round_trip_resume_or_resume_stream` in `csharp`
+- `type_shapes/streams_round_trip_resume_or_resume_stream` in `go`
+- `type_shapes/streams_round_trip_resume_stream` in `cpp`
+- `type_shapes/streams_round_trip_resume_stream` in `csharp`
+- `type_shapes/streams_round_trip_resume_stream` in `go`
+- `type_shapes/streams_round_trip_root_foo_stream` in `cpp`
+- `type_shapes/streams_round_trip_root_foo_stream` in `csharp`
+- `type_shapes/streams_round_trip_root_foo_stream` in `go`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `cpp`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `csharp`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `go`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `java`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `python_pydantic2`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `rust`
+- `type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases` in `swift`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `cpp`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `csharp`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `go`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `java`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `python_pydantic2`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `rust`
+- `type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings` in `swift`
+

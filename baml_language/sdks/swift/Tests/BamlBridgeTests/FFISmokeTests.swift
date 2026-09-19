@@ -63,7 +63,7 @@ final class FFISmokeTests: XCTestCase {
         var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
         raw.handleValue = handle
 
-        let stream = try BamlStream<String, String>._bamlDecode(BamlOutboundValue(raw))
+        let stream = try BamlStream<String>._bamlDecode(BamlOutboundValue(raw))
         XCTAssertEqual(stream.bamlClassFQN, "ai.stream.Stream")
         XCTAssertEqual(stream.nextFQN, "ai.stream.Stream.next")
         XCTAssertEqual(stream.finalFQN, "ai.stream.Stream.final")
@@ -77,7 +77,7 @@ final class FFISmokeTests: XCTestCase {
         raw.handleValue = handle
 
         XCTAssertThrowsError(
-            try BamlStream<String, String>._bamlDecode(BamlOutboundValue(raw))
+            try BamlStream<String>._bamlDecode(BamlOutboundValue(raw))
         )
     }
 

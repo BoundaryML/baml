@@ -10,5 +10,3 @@ function user.f(x: user.Loop) -> user.Loop throws never {
     return x : user.Loop
   }
 }
-type user.Loop$stream = user.Loop$stream
-  !! 0..0: recursive type alias cycle: Loop$stream

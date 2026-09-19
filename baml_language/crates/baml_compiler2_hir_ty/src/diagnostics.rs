@@ -1004,7 +1004,7 @@ impl TirTypeError {
                     )
                 }
                 TirTypeError::UnresolvedMember { base_type, member } => {
-                    if matches!(base_type, Ty::Unknown { .. }) {
+                    if matches!(base_type, Ty::Unknown) {
                         write!(f, "cannot access field `{member}` on `unknown`")
                     } else {
                         write!(f, "type `{}` has no member `{member}`", base_type.spell(vp))
@@ -2456,7 +2456,7 @@ impl<'db> TirDiagnostic<'db> {
     /// the expressions/statements referenced by `self.primary`.
     pub fn render(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
     ) -> RenderedTirDiagnostic {
@@ -2467,7 +2467,7 @@ impl<'db> TirDiagnostic<'db> {
     /// annotation-anchored diagnostics (`DiagnosticLocation::BodyTypeRef`).
     pub fn render_with_body_type_refs(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
         type_ref_spans: Option<&baml_compiler2_hir::body_type_refs::BodyTypeRefSourceMap>,
@@ -2531,7 +2531,7 @@ impl<'db> TirDiagnostic<'db> {
 }
 
 fn resolve_related_location<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     scope_file: SourceFile,
     source_map: Option<&AstSourceMap>,
     location: &RelatedLocation<'db>,
@@ -2556,12 +2556,12 @@ fn resolve_related_location<'db>(
                 .map(|range| (func_loc.file(db).file_id(db), range))
         }
         RelatedLocation::ClassField(class_loc, field_name) => {
-            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+            let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
             let field_index = class_data
                 .fields
                 .iter()
                 .position(|field| &field.name == field_name)?;
-            let range = baml_compiler2_ppir::item_data::class_source_map(db, *class_loc)
+            let range = baml_compiler2_hir::item_data::class_source_map(db, *class_loc)
                 .field_name_spans
                 .get(field_index)
                 .copied()?;

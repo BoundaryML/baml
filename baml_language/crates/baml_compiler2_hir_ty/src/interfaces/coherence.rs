@@ -7,7 +7,7 @@
 
 use std::cell::OnceCell;
 
-use baml_base::{Name, Span, TyAttr};
+use baml_base::{Name, Span};
 use baml_type::{
     DeclName, ParamTy, Ty,
     unify::{
@@ -56,7 +56,7 @@ pub struct CoherenceViolation {
 /// dependency when *its* coherence is checked, so nothing is double-reported.
 #[salsa::tracked(returns(ref))]
 pub fn package_coherence_diagnostics(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> Vec<CoherenceViolation> {
     let mut own = package_impls_with_spans(db, pkg_id);
@@ -117,7 +117,7 @@ pub fn package_coherence_diagnostics(
 /// The impls of `pkg` the overlap check compares, each prepared once, drawn from
 /// the canonical `impl_data` substrate.
 fn package_impls_with_spans(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> Vec<PreparedImpl<'_>> {
     package_impl_locs(db, pkg_id)
@@ -172,7 +172,7 @@ impl<'db> PreparedImpl<'db> {
     /// every `bool` receiver: ambiguous dispatch with no diagnostic. (Aliases and
     /// collapses *under* a constructor are resolved later by
     /// `is_same_normalized_type`; only the head matters here.)
-    fn valid_subject(&self, db: &'db dyn baml_compiler2_ppir::Db) -> bool {
+    fn valid_subject(&self, db: &'db dyn baml_compiler2_hir::Db) -> bool {
         *self.valid_subject.get_or_init(|| {
             // Read the header's ONE validity decision rather than re-deriving
             // it. Re-deriving is what let this gate and E0138 disagree about
@@ -190,7 +190,7 @@ impl<'db> PreparedImpl<'db> {
 /// True iff two impls of the *same* interface conflict (overlap with no
 /// specialization to rescue them). Distinct interfaces never conflict.
 fn impls_conflict<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
     a: &PreparedImpl<'db>,
     b: &PreparedImpl<'db>,
@@ -233,7 +233,7 @@ fn impls_conflict<'db>(
 /// obligates extending the key in the same change; the decompose link-key
 /// uniqueness hard-error is the backstop that fires if the two ever drift.
 fn impls_overlap<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
     a: &ImplData<'db>,
     b: &ImplData<'db>,
@@ -294,7 +294,7 @@ fn impls_overlap<'db>(
               subject), and the unifier state (vars, bindings, aliases)"
 )]
 fn bounds_hold_at_common_instance<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
     rule: &ImplData<'db>,
     prefix: char,
@@ -312,11 +312,7 @@ fn bounds_hold_at_common_instance<'db>(
         .map(|(j, (name, _))| {
             (
                 name.clone(),
-                chase_var(
-                    &Ty::TypeVar(renamed_var(prefix, j), TyAttr::default()),
-                    vars,
-                    bindings,
-                ),
+                chase_var(&Ty::TypeVar(renamed_var(prefix, j)), vars, bindings),
             )
         })
         .collect();
@@ -376,12 +372,7 @@ fn renamed_subject(
         .generic_params
         .iter()
         .enumerate()
-        .map(|(i, (name, _bounds))| {
-            (
-                name.clone(),
-                Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
-            )
-        })
+        .map(|(i, (name, _bounds))| (name.clone(), Ty::TypeVar(renamed_var(prefix, i))))
         .collect();
     let for_ty = nf(&substitute_ty(&rule.for_ty_pattern, &rename), enum_variants);
     let args = rule

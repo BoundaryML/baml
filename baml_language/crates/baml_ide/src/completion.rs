@@ -45,7 +45,7 @@ use self::{
 /// index, inference, member enumeration) are Salsa-cached underneath, and the
 /// speculative parse is one lex+parse of one file.
 pub fn completions(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Vec<Completion> {
@@ -87,8 +87,8 @@ pub fn completions(
         CompletionAnalysis::Item { container } => {
             declarations::complete_items(*container, &mut out);
         }
-        CompletionAnalysis::Attribute => {
-            declarations::complete_attributes(&mut out);
+        CompletionAnalysis::Attribute { position } => {
+            declarations::complete_attributes(*position, &mut out);
         }
         CompletionAnalysis::Unsupported => {}
     }
@@ -297,8 +297,8 @@ function f(seed: int) -> int throws never {
 
     #[test]
     fn a_synthesized_companion_is_never_offered() {
-        // `Summarize$stream` and friends resolve, but no reader can write a
-        // `$` in a name, so an enumeration of what to WRITE drops them.
+        // `summarize@stream` and friends resolve, but no reader can write an
+        // `@` in a name, so an enumeration of what to WRITE drops them.
         let test = CursorTest::new(
             r#"function summarize(input: string) -> string {
     client: "openai/gpt-4o"
@@ -320,11 +320,11 @@ function f() -> int throws never {
             "the function itself completes: {labels:?}"
         );
         assert!(
-            !labels.iter().any(|label| label.contains('$')),
+            !labels.iter().any(|label| label.contains('@')),
             "no companion spelling is offerable: {:?}",
             labels
                 .iter()
-                .filter(|label| label.contains('$'))
+                .filter(|label| label.contains('@'))
                 .collect::<Vec<_>>()
         );
     }
@@ -1242,7 +1242,7 @@ function f() -> int throws <[CURSOR]
             "description",
             "skip",
             "stream.done",
-            "stream.with_state",
+            "stream.must_exist",
         ] {
             assert!(labels.contains(&name), "missing `{name}`: {labels:?}");
         }
@@ -1251,6 +1251,37 @@ function f() -> int throws <[CURSOR]
                 .iter()
                 .all(|item| item.kind == CompletionKind::Attribute)
         );
+    }
+
+    #[test]
+    fn an_attribute_position_offers_only_what_has_meaning_there() {
+        // The menu is the schema table filtered to the position: the
+        // streaming attributes belong to class fields and classes, `skip` to
+        // members, and an interface, its fields, and a function take none.
+        let cases: [(&str, &[&str]); 6] = [
+            (
+                "enum E {\n    A @<[CURSOR]\n}\n",
+                &["alias", "description", "skip"],
+            ),
+            (
+                "class C {\n    x: int\n    @@<[CURSOR]\n}\n",
+                &["alias", "description", "stream.done"],
+            ),
+            (
+                "enum E {\n    A\n    @@<[CURSOR]\n}\n",
+                &["alias", "description"],
+            ),
+            ("interface I {\n    x: int @<[CURSOR]\n}\n", &[]),
+            ("interface I {\n    @@<[CURSOR]\n}\n", &[]),
+            ("@@<[CURSOR]\nfunction f() -> int {\n    1\n}\n", &[]),
+        ];
+        for (source, expected) in cases {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            let mut labels = labels(&items);
+            labels.sort_unstable();
+            assert_eq!(labels, expected, "in {source:?}");
+        }
     }
 
     #[test]

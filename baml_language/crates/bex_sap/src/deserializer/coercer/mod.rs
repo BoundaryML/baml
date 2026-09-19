@@ -16,10 +16,19 @@ use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
     jsonish,
-    sap_model::{
-        FromLiteral, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb, TypeValue,
-    },
+    sap_model::{FromLiteral, TypeIdent, TypeName, TypeRefDb, TypeValue},
 };
+
+/// A type on the coercion stack, paired with the value being coerced into it. Re-entering the
+/// same pair is a cycle through a recursive type (a class field, or an alias such as
+/// `type J = int | J[]` whose array member tries a scalar as a single-item array).
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) enum VisitedType {
+    /// Classes are identified by declaration name.
+    Class(String),
+    /// Anonymous array types are identified by the address of the model node.
+    Array(*const ()),
+}
 
 pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     pub scope: Vec<String>,
@@ -27,8 +36,8 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     // two distinct but structurally identical subtrees are NOT treated as the
     // same visited node. This prevents false-positive circular-reference
     // errors when the input contains repeated equal objects or arrays.
-    visited_during_coerce: HashSet<(String, *const jsonish::Value<'s>)>,
-    visited_during_try_cast: HashSet<(String, *const jsonish::Value<'s>)>,
+    visited_during_coerce: HashSet<(VisitedType, *const jsonish::Value<'s>)>,
+    visited_during_try_cast: HashSet<(VisitedType, *const jsonish::Value<'s>)>,
     pub db: &'t TypeRefDb<'t, N>,
     /// Hint for union coercion: the variant index that succeeded on the previous
     /// array element. Used to optimize arrays of unions by trying the likely
@@ -79,15 +88,31 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         }
     }
 
+    /// Whether coercing `value` into `ty` is already on the stack.
+    pub(crate) fn is_visiting(
+        &self,
+        ty: &VisitedType,
+        value: &'v jsonish::Value<'s>,
+        is_coerce: bool,
+    ) -> bool {
+        let ptr_pair = (ty.clone(), ::core::ptr::from_ref(value));
+        if is_coerce {
+            self.visited_during_coerce.contains(&ptr_pair)
+        } else {
+            self.visited_during_try_cast.contains(&ptr_pair)
+        }
+    }
+
     // TODO: This function and `enter_scope` are clonning both the scope vector
     // and visited hash set each time. Maybe it can be optimized with interior
     // mutability or something.
-    pub(crate) fn visit_class_value_pair(
+    pub(crate) fn visit(
         &self,
-        cls_value_pair: (String, &'v jsonish::Value<'s>),
+        ty: VisitedType,
+        value: &'v jsonish::Value<'s>,
         is_coerce: bool,
     ) -> Self {
-        let ptr_pair = (cls_value_pair.0, ::core::ptr::from_ref(cls_value_pair.1));
+        let ptr_pair = (ty, ::core::ptr::from_ref(value));
         let mut new_visited_coerce = self.visited_during_coerce.clone();
         let mut new_visited_try_cast = self.visited_during_try_cast.clone();
         if is_coerce {
@@ -376,13 +401,15 @@ pub trait TypeCoercer<'s, 'v, 't, N: TypeIdent>:
 where
     's: 'v,
 {
-    /// Tries to coerce a value to an annotated type. May perform transformations.
+    /// Tries to coerce a value to the type. May perform transformations.
     ///
-    /// Returns `Ok(None)` if the value was incomplete and has `in_progress = never`
+    /// Returns `Ok(None)` when the value is incomplete and the type has no partial parse for
+    /// it (BEP-075's "can be partial?" column): numbers, `bool`, literals, enums, media, and
+    /// classes that are `@@stream.done` or have a field without a default.
     #[allow(clippy::type_complexity)]
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<
         Option<
@@ -391,10 +418,10 @@ where
         ParsingError,
     >;
 
-    /// Tries to cast a value to an annotated type. Does not perform any transformations.
+    /// Tries to cast a value to the type. Does not perform any transformations.
     fn try_cast(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<
         ValueWithMeta<<Self as TypeValue<'s, 'v, 't>>::Value, DeserializerMeta<'s, 'v, 't, N>>,

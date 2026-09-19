@@ -69,7 +69,7 @@ pub struct FileAction {
 ///
 /// Returns one action per function (Run in Playground) and one per test (Run
 /// Test), in the order they appear in the contributions list.
-pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<FileAction> {
+pub fn file_actions(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<FileAction> {
     let contribs = file_symbol_contributions(db, file);
     let mut actions = Vec::new();
 
@@ -78,7 +78,7 @@ pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<F
     for (name, contrib) in &contribs.values {
         match contrib.definition {
             Definition::Function(loc) => {
-                let func = baml_compiler2_ppir::item_data::function_data(db, loc);
+                let func = baml_compiler2_hir::item_data::function_data(db, loc);
                 match func.metadata.origin {
                     FunctionOrigin::UserDefined => {}
                     FunctionOrigin::Companion

@@ -77,7 +77,7 @@ impl std::fmt::Debug for ResolvedTarget<'_> {
 /// For empty input (`n == 0`), returns `None` — the dispatcher handles the
 /// project-level case.
 pub fn resolve_target<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
@@ -149,7 +149,7 @@ pub fn resolve_target<'db>(
 /// because they have language-reference topics rather than addressable stdlib
 /// definitions.
 pub fn resolve_builtin_type_target<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     name: &str,
 ) -> Option<ResolvedTarget<'db>> {
     let (alias, member_path) = name.split_once('.').unwrap_or((name, ""));
@@ -231,7 +231,7 @@ impl ListingEntry {
 /// `types` and `values` from each `NamespaceItems`. The FQN is constructed
 /// as `ns_path.join(".") + "." + item_name` (or bare `item_name` for root namespace).
 pub fn list_package_items(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package_id: baml_base::SourceRoot,
     internals: Internals,
 ) -> Vec<ListingEntry> {
@@ -242,7 +242,7 @@ pub fn list_package_items(
 
 /// Collect listing entries from a `PackageItems`, including all namespaces.
 fn collect_entries_from_package(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     pkg: &PackageItems<'_>,
     package_name: &Name,
     internals: Internals,
@@ -288,7 +288,7 @@ fn collect_entries_from_package(
 /// includes items from child namespaces (e.g., `baml describe baml`
 /// includes `baml.env.GetEnv`).
 pub fn list_namespace_items(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     package_id: baml_base::SourceRoot,
     namespace_path: &[Name],
     internals: Internals,
@@ -355,7 +355,7 @@ fn is_local_package_name(package_name: &Name) -> bool {
 /// cannot be named at all. That is why it is the one view that shows
 /// carriers and `@` companions.
 fn is_listed(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     item_name: &Name,
     def: Definition<'_>,
     internals: Internals,
@@ -365,8 +365,7 @@ fn is_listed(
         // `$invoke_collector` is hand-written stdlib that resolves from
         // source, so an addressing view keeps it. The predicate this
         // replaced also asked whether the declaration was a function; that
-        // branch was vestigial, since a `$`-named TYPE never reaches a
-        // listing (PPIR synthesizes those rather than lowering them).
+        // branch was vestigial.
         Surface::Synthetic => true,
         // `Foo@spec` is written in real BAML source and resolves, so an
         // addressing view lists it.
@@ -381,7 +380,7 @@ fn is_listed(
 
 /// Build a single `ListingEntry` from a definition.
 fn make_entry<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     line_indexes: &mut HashMap<SourceFile, LineIndex<'db>>,
     package_name: Name,
     ns_path: Vec<Name>,
@@ -412,7 +411,7 @@ fn make_entry<'db>(
 /// Line indexes are built once per file in `line_indexes` and shared across
 /// entries, so a listing never rescans a file's text per entry.
 fn entry_line<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     line_indexes: &mut HashMap<SourceFile, LineIndex<'db>>,
     file: SourceFile,
     offset: TextSize,
@@ -622,9 +621,7 @@ test "identity" {
         assert!(resolve_target(&project.db, pkg_id, internal_name.as_str()).is_none());
     }
 
-    /// The AST-level LLM companions stay visible in listings. `@stream` is
-    /// synthesized in PPIR rather than lowered as an item, so it is
-    /// deliberately absent.
+    /// The AST-level LLM companions stay visible in listings.
     #[test]
     fn llm_companions_remain_visible_in_listing() {
         let mut builder = ProjectTest::builder();
@@ -655,6 +652,7 @@ function summarize_structured(input: string) -> Summary {
             "summarize@render_prompt",
             "summarize@build_request",
             "summarize@parse",
+            "summarize@stream",
         ] {
             assert!(
                 entries.iter().any(|entry| entry.item_name.as_str() == name),
@@ -669,14 +667,6 @@ function summarize_structured(input: string) -> Summary {
                 Some(ResolvedTarget::Item(_))
             ));
         }
-
-        assert!(
-            entries
-                .iter()
-                .all(|entry| entry.item_name.as_str() != "Summary$stream"),
-            "generated partial types must not appear in describe listings"
-        );
-        assert!(resolve_target(&project.db, pkg_id, "Summary$stream").is_none());
     }
 
     // ── Namespace listing ────────────────────────────────────────────────────

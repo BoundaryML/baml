@@ -260,14 +260,14 @@ fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
         // Persist the type's attr onto the base (consistent with the enum-variant
         // arm below), so a literal carrying a non-default attr normalizes to its
         // base with that attr intact rather than silently dropping it.
-        RealizedTy::Literal(lit, _, attr) => Cow::Owned(match lit {
-            Literal::Int(_) => RealizedTy::Int { attr: attr.clone() },
-            Literal::Bigint(_) => RealizedTy::Bigint { attr: attr.clone() },
-            Literal::Float(_) => RealizedTy::Float { attr: attr.clone() },
-            Literal::String(_) => RealizedTy::String { attr: attr.clone() },
-            Literal::Bool(_) => RealizedTy::Bool { attr: attr.clone() },
+        RealizedTy::Literal(lit, _) => Cow::Owned(match lit {
+            Literal::Int(_) => RealizedTy::Int,
+            Literal::Bigint(_) => RealizedTy::Bigint,
+            Literal::Float(_) => RealizedTy::Float,
+            Literal::String(_) => RealizedTy::String,
+            Literal::Bool(_) => RealizedTy::Bool,
         }),
-        RealizedTy::EnumVariant(name, _, attr) => Cow::Owned(RealizedTy::Enum(*name, attr.clone())),
+        RealizedTy::EnumVariant(name, _) => Cow::Owned(RealizedTy::Enum(*name)),
         _ => Cow::Borrowed(ty),
     }
 }
@@ -634,7 +634,7 @@ impl<'vm> ImplResolver<'vm> {
         requested_assoc: &[(Name, RealizedTy)],
     ) -> bool {
         let base = concrete_base(concrete_ty);
-        let RealizedTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
+        let RealizedTy::Interface(ex_qtn, ex_args, ex_assoc) = base.as_ref() else {
             return false;
         };
         *ex_qtn == iface
@@ -673,8 +673,8 @@ impl<'vm> ImplResolver<'vm> {
                     None => false,
                 }
             }
-            TyTemplate::List(inner, _) => match concrete {
-                RealizedTy::List(elem, _) => self.match_template(inner, elem, bindings),
+            TyTemplate::List(inner) => match concrete {
+                RealizedTy::List(elem) => self.match_template(inner, elem, bindings),
                 _ => false,
             },
             TyTemplate::Map { key, value, .. } => match concrete {
@@ -688,14 +688,14 @@ impl<'vm> ImplResolver<'vm> {
                 }
                 _ => false,
             },
-            TyTemplate::Class(name, args, _) => match concrete {
-                RealizedTy::Class(cname, cargs, _) => {
+            TyTemplate::Class(name, args) => match concrete {
+                RealizedTy::Class(cname, cargs) => {
                     name == cname && self.all_match(args, cargs, bindings)
                 }
                 _ => false,
             },
-            TyTemplate::Interface(name, args, assoc, _) => match concrete {
-                RealizedTy::Interface(cname, cargs, cassoc, _) => {
+            TyTemplate::Interface(name, args, assoc) => match concrete {
+                RealizedTy::Interface(cname, cargs, cassoc) => {
                     // Each *concrete* binding must match a same-named pattern binding, found
                     // order-insensitively; extra pattern bindings don't constrain. This
                     // direction mirrors the compiler's selection matcher
@@ -744,8 +744,8 @@ impl<'vm> ImplResolver<'vm> {
                 }
                 _ => false,
             },
-            TyTemplate::Future(value, error, _) => match concrete {
-                RealizedTy::Future(cvalue, cerror, _) => {
+            TyTemplate::Future(value, error) => match concrete {
+                RealizedTy::Future(cvalue, cerror) => {
                     self.match_template(value, cvalue, bindings)
                         && self.match_template(error, cerror, bindings)
                 }
@@ -754,8 +754,8 @@ impl<'vm> ImplResolver<'vm> {
             // Order-insensitive union match: each pattern member must pair with a
             // distinct concrete member, with type-var bindings consistent across the
             // chosen pairing (so `Box<T | int>` matches a value `Box<int | string>`).
-            TyTemplate::Union(parts, _) => match concrete {
-                RealizedTy::Union(cparts, _) => self.match_union(parts, cparts, bindings),
+            TyTemplate::Union(parts) => match concrete {
+                RealizedTy::Union(cparts) => self.match_union(parts, cparts, bindings),
                 _ => false,
             },
             // Realized leaves are handled by the fast path above.
@@ -908,7 +908,7 @@ impl ImplResolver<'_> {}
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Freshness, Literal, TyAttr};
+    use baml_type::{Freshness, Literal};
 
     use super::*;
 
@@ -923,12 +923,8 @@ mod tests {
     fn concrete_literal_pattern_matches_only_the_literal() {
         let vm = crate::vm::tests::test_vm(Vec::new());
         let resolver = ImplResolver::new(&vm);
-        let one = RealizedTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
-        let pattern = TyTemplate::from(RealizedTy::Literal(
-            Literal::Int(1),
-            Freshness::Regular,
-            TyAttr::default(),
-        ));
+        let one = RealizedTy::Literal(Literal::Int(1), Freshness::Regular);
+        let pattern = TyTemplate::from(RealizedTy::Literal(Literal::Int(1), Freshness::Regular));
         let mut binds: Vec<Option<RealizedTy>> = Vec::new();
         assert!(resolver.match_template(&pattern, &one, &mut binds));
         assert!(!resolver.match_template(&pattern, &RealizedTy::int(), &mut binds));

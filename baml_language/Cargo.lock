@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -763,7 +763,6 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
- "baml_compiler2_ppir",
  "baml_type",
  "baml_type_runtime",
  "bex_vm_types",
@@ -801,7 +800,6 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
- "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
  "baml_type",
  "baml_type_runtime",
@@ -824,7 +822,6 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler2_ppir",
  "baml_type",
  "baml_type_runtime",
  "indexmap",
@@ -833,22 +830,6 @@ dependencies = [
  "salsa",
  "smol_str",
  "subenum",
-]
-
-[[package]]
-name = "baml_compiler2_ppir"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_compiler2_ast",
- "baml_compiler2_hir",
- "baml_compiler_parser",
- "baml_type",
- "indexmap",
- "rustc-hash 2.1.2",
- "salsa",
- "smol_str",
- "text-size",
 ]
 
 [[package]]
@@ -917,7 +898,6 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
- "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",
@@ -985,7 +965,6 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler2_ppir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
@@ -1136,6 +1115,7 @@ name = "baml_release"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "dirs",
  "flate2",
  "reqwest",
  "serde",
@@ -1161,7 +1141,6 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
- "baml_compiler2_ppir",
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_fmt",
@@ -1397,7 +1376,6 @@ dependencies = [
  "baml_compiler2_emit",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler2_ppir",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
@@ -3152,6 +3130,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "dispatch2"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4492,6 +4491,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "libredox"
+version = "0.1.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6480ccc157a1389bb2e4891b24751b0f798ba640d22386f23143fbcc89da195a"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "libsui"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5126,6 +5134,12 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ouroboros"
@@ -5905,6 +5919,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
  "bitflags 2.11.1",
+]
+
+[[package]]
+name = "redox_users"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60dc65c0ff1a7ae1294b0c67b9f14baf70b644404010370171787bfac1038fc0"
+dependencies = [
+ "libredox",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
