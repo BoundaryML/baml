@@ -901,6 +901,7 @@ pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
     ("ollama", "openai", "OllamaClient"),
     ("openrouter", "openai", "OpenRouterClient"),
     ("anthropic", "anthropic", "Client"),
+    ("typesafeai", "typesafeai", "Client"),
     ("google", "google", "GeminiClient"),
     ("vertex", "google", "VertexClient"),
     ("bedrock", "aws", "BedrockClient"),

@@ -648,6 +648,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             description.map(bex_str::BexStr::as_str),
             docstring.map(bex_str::BexStr::as_str),
             &other,
+            false,
         );
         let name = Value::object(vm.alloc_string(name.clone()));
         copy::r#enum::Value { name, meta }.to_value(vm)
@@ -894,25 +895,6 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
     }
 }
 
-impl BamlClassLiteralType for PackageReflectImpl {
-    fn value(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
-        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Literal)?;
-        let bex_vm_types::RealizedTy::Literal(literal, _) = ty else {
-            unreachable!("a Literal-classified type is RealizedTy::Literal")
-        };
-        match literal {
-            baml_type::Literal::String(s) => Ok(Value::object(vm.alloc_string(s.as_str()))),
-            baml_type::Literal::Int(n) => Ok(Value::int(n)),
-            baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n)).map_err(Into::into),
-            baml_type::Literal::Bool(b) => Ok(Value::bool(b)),
-            baml_type::Literal::Float(_) => Err(crate::errors::VmRustFnError::BamlError(
-                crate::errors::VmBamlError::InvalidArgument {
-                    message: "literal value has no public reflection representation".into(),
-                },
-            )),
-        }
-    }
-}
 impl BamlNamespaceMap for PackageReflectImpl {
     fn new(vm: &mut BexVm, key: &Value, value: &Value) -> Value {
         let key = reflected_type_value(vm, *key);
@@ -1416,6 +1398,7 @@ fn alloc_meta(
     description: Option<&str>,
     docstring: Option<&str>,
     other: &IndexMap<String, String>,
+    skip: bool,
 ) -> Value {
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
@@ -1437,6 +1420,7 @@ fn alloc_meta(
         description,
         docstring,
         other,
+        skip,
     }
     .to_value(vm)
 }
@@ -1625,13 +1609,16 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                         .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())
                 })
                 .collect::<Result<IndexMap<_, _>, _>>()?;
+            // A row read back from `values()` keeps its skip flag, so
+            // rebuilding an enum from reflected rows does not unskip a variant.
+            let skip = meta.load_field(4).as_bool().unwrap_or(false);
             Ok(EnumVariant {
                 name,
                 alias: optional_string(0)?,
                 description: optional_string(1)?,
                 docstring: optional_string(2)?,
                 other,
-                skip: false,
+                skip,
             })
         }
         _ => Err("reflect.enum.new values must be strings or reflect.enum.Value rows".into()),
@@ -1687,6 +1674,7 @@ impl BamlClassClassType for PackageReflectImpl {
                     field.description.as_deref(),
                     field.docstring.as_deref(),
                     &field.other,
+                    field.skip,
                 );
                 copy::class::Field {
                     name,
@@ -1707,6 +1695,7 @@ impl BamlClassClassType for PackageReflectImpl {
             class.description.as_deref(),
             class.docstring.as_deref(),
             &class.other,
+            false,
         ))
     }
 }
@@ -1725,6 +1714,7 @@ impl BamlClassEnumType for PackageReflectImpl {
                     variant.description.as_deref(),
                     variant.docstring.as_deref(),
                     &variant.other,
+                    variant.skip,
                 );
                 copy::r#enum::Value { name, meta }.to_value(vm)
             })
@@ -1739,7 +1729,40 @@ impl BamlClassEnumType for PackageReflectImpl {
             enm.description.as_deref(),
             enm.docstring.as_deref(),
             &enm.other,
+            false,
         ))
+    }
+}
+
+impl BamlClassLiteralType for PackageReflectImpl {
+    fn value(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Literal)?;
+        match ty {
+            bex_vm_types::RealizedTy::Literal(literal, _) => Ok(match literal {
+                baml_type::Literal::String(s) => Value::object(vm.alloc_string(s)),
+                baml_type::Literal::Int(n) => Value::int(n),
+                baml_type::Literal::Bool(b) => Value::bool(b),
+                baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
+                baml_type::Literal::Float(s) => Value::object(
+                    vm.alloc_float(
+                        s.parse()
+                            .expect("a float literal has a valid representation"),
+                    ),
+                ),
+            }),
+            bex_vm_types::RealizedTy::EnumVariant(head, name) => {
+                let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+                    unreachable!("an enum variant type's head points at Object::Enum")
+                };
+                let index = enm
+                    .variants
+                    .iter()
+                    .position(|variant| variant.name == name)
+                    .expect("an enum variant type names a declared variant");
+                Ok(Value::object(vm.alloc_variant(head.ptr(), index)))
+            }
+            _ => unreachable!("a Literal-classified type is a literal or enum variant"),
+        }
     }
 }
 
@@ -1935,6 +1958,38 @@ class Fresh {}
             "user.{name}"
         )))
         .unwrap()
+    }
+
+    #[test]
+    fn literal_value_supports_internal_float_literals() {
+        let mut vm = vm();
+        let literal = alloc_runtime_composite(
+            &mut vm,
+            baml_type::type_kind::TypeKind::Literal,
+            RealizedTy::Literal(
+                baml_type::Literal::Float("-1.25".into()),
+                baml_type::Freshness::Regular,
+            ),
+        );
+        let value = <PackageReflectImpl as BamlClassLiteralType>::value(&mut vm, &literal)
+            .expect("a literal view has a value");
+        let Object::Float(value) = vm.get_object(value.as_object_ptr().unwrap()) else {
+            panic!("expected a float value")
+        };
+        assert_eq!(value.to_bits(), (-1.25_f64).to_bits());
+    }
+
+    #[test]
+    fn literal_value_rejects_a_view_with_the_wrong_kind() {
+        let mut vm = vm();
+        let forged = alloc_runtime_composite(
+            &mut vm,
+            baml_type::type_kind::TypeKind::Literal,
+            RealizedTy::Int,
+        );
+        let error = <PackageReflectImpl as BamlClassLiteralType>::value(&mut vm, &forged)
+            .expect_err("the literal view must retain its kind invariant");
+        assert!(matches!(error, crate::errors::VmRustFnError::Panic(_)));
     }
 
     /// A fresh anonymous class, as `reflect.class.new` allocates one.
