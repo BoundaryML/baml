@@ -1239,6 +1239,38 @@ autoplay (`LIVE_GUIDE=migrate,fanout,race,deadline,settled,recover,fork`). The
 scenarios also passed against site servers that ran with the `CHAOS` object
 above.
 
+## Release build against debug
+
+Build the worker with `cargo build --release -p baml_cli` for a demo. The
+figures below were measured on Apple M5 Max, macOS 26.6, with the three site
+servers and the web app running, so they carry the load of the machine they
+were taken on (load average 26 during the run). Read them as a comparison
+between the two builds rather than as a floor for the runtime.
+
+| Operation | debug | release |
+|---|---|---|
+| Start a run through the site server, which compiles the project | about 2100 ms | 502 ms |
+| Start a worker from the program store with no project directory | 99.9 ms | 32.9 ms |
+| Resume request to a live process, measured at the site server | — | 10.3 ms |
+| `program_load_ms` of a resume, from the store | about 1200 ms | 87 to 130 ms, median 100 ms over 8 resumes |
+| `decode_ms` of a resume, the snapshot itself | 0.49 ms | 0.09 ms |
+| Pause latency and snapshot size, `durable_plan_trip` | — | 0.07 ms, 565 bytes |
+| Binary size | 581 MB | 64.8 MB |
+
+The `release` profile of this workspace sets `opt-level = "s"`. A `fasttest`
+build (`opt-level = 2`, thin LTO) was measured against it on the same
+machine and gave the same `program_load_ms`, 81 ms median for both, with a
+binary of 260 MB. The release profile is therefore the better choice: the
+same speed in a quarter of the size, which also shortens a cold start.
+
+What is left in a resume is the engine build, not the snapshot. Decoding the
+snapshot is under a tenth of a millisecond, while building an engine from the
+program is the rest of `program_load_ms`. Neither a compiler flag nor a
+faster snapshot format moves that number. The two changes that would are a
+worker pool that keeps built engines in memory keyed by program hash, and a
+shared stdlib image per runtime build, since a store entry is about 99.9%
+stdlib. Both are described in the design document and neither is built.
+
 ## Measurements with the real worker
 
 Debug build of `baml-cli` (`cargo build -p baml_cli`, unoptimized), Apple M5
