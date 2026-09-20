@@ -31,6 +31,35 @@ impl std::fmt::Display for RuntimeError {
 }
 impl std::error::Error for RuntimeError {}
 
+#[derive(Default)]
+struct RuntimeStatus {
+    processing: OnceLock<Result<(), RuntimeError>>,
+    // A writer can fail after the processor has already completed successfully.
+    failure: OnceLock<RuntimeError>,
+}
+impl RuntimeStatus {
+    fn result(&self) -> Option<Result<(), RuntimeError>> {
+        self.failure
+            .get()
+            .map(|error| Err(error.clone()))
+            .or_else(|| self.processing.get().cloned())
+    }
+}
+
+/// Storage failure control shared with the dedicated sink writer. The first
+/// error survives shutdown; disabling never cancels application execution.
+#[derive(Clone)]
+pub struct RecordingControl {
+    pool: Pool,
+    result: Arc<RuntimeStatus>,
+}
+impl RecordingControl {
+    pub fn disable(&self, error: RuntimeError) {
+        let _ = self.result.failure.set(error);
+        self.pool.disable();
+    }
+}
+
 static NEXT_RUNTIME: AtomicU64 = AtomicU64::new(0);
 
 struct Binding {
@@ -68,7 +97,7 @@ pub struct TelemetryRuntime {
     id: u64,
     pool: Pool,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
-    result: Arc<OnceLock<Result<(), RuntimeError>>>,
+    result: Arc<RuntimeStatus>,
 }
 
 impl TelemetryRuntime {
@@ -109,15 +138,31 @@ impl TelemetryRuntime {
     where
         P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
     {
+        Self::with_publisher_factory(config, |_| Ok(publisher))
+    }
+
+    /// Construct the sole publisher/sink with a failure control before either
+    /// worker can produce data. The writer can disable even an idle processor.
+    pub fn with_publisher_factory<P>(
+        config: Config,
+        make: impl FnOnce(RecordingControl) -> std::io::Result<P>,
+    ) -> std::io::Result<Arc<Self>>
+    where
+        P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
+    {
         const {
             assert!(btel_settings::processor::THREADS_PER_RUNTIME == 1);
         }
-        let result = Arc::new(OnceLock::new());
+        let result = Arc::new(RuntimeStatus::default());
         let completion = Arc::clone(&result);
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+        let publisher = make(RecordingControl {
+            pool: pool.clone(),
+            result: Arc::clone(&result),
+        })?;
         let worker = {
             let copy = pool.clone();
             let (ready, bound) =
@@ -156,7 +201,7 @@ impl TelemetryRuntime {
                             Err(RuntimeError(message.to_owned()))
                         }
                     };
-                    let _ = completion.set(result);
+                    let _ = completion.processing.set(result);
                 })?;
             match bound.recv() {
                 Ok(Ok(())) => worker,
@@ -184,13 +229,19 @@ impl TelemetryRuntime {
     /// The worker slot and stream selectors survive across polls. Only the
     /// active producer and its private payload chunks are released on suspension.
     pub fn enter(self: &Arc<Self>) -> ExecutionScope {
-        BINDINGS.with_borrow_mut(|bindings| {
+        let active = BINDINGS.with_borrow_mut(|bindings| {
+            if self.is_disabled() {
+                return false;
+            }
             if let Some(binding) = bindings.iter_mut().find(|b| b.runtime == self.id) {
                 if binding.depth == 0 {
-                    binding.producer = Some(self.bind_worker(binding.worker.as_ref().unwrap()));
+                    binding.producer = self.bind_worker(binding.worker.as_ref().unwrap());
+                    if binding.producer.is_none() {
+                        return false;
+                    }
                 }
                 binding.depth += 1;
-                return;
+                return true;
             }
             // Cold first attachment only. Dead engines leave no pool ownership;
             // remove their tiny TLS entries before attaching another engine.
@@ -199,13 +250,17 @@ impl TelemetryRuntime {
                 match self.pool.reserve_worker() {
                     Ok(worker) => break worker,
                     Err(SetupError::ProducerLimit) => std::hint::spin_loop(),
+                    Err(SetupError::Disabled) => return false,
                     Err(_) => {
                         self.pool.fail();
                         std::panic::panic_any(TransportFailed);
                     }
                 }
             };
-            let producer = self.bind_worker(&worker);
+            let Some(producer) = self.bind_worker(&worker) else {
+                self.pool.release_worker(worker);
+                return false;
+            };
             bindings.push(Binding {
                 runtime: self.id,
                 depth: 1,
@@ -215,32 +270,47 @@ impl TelemetryRuntime {
                 timing_thread: None,
                 span_thread: None,
             });
+            true
         });
         ExecutionScope {
+            active,
             runtime: Arc::clone(self),
             _thread_bound: PhantomData,
         }
     }
 
-    fn bind_worker(&self, worker: &WorkerSlot) -> Producer<TimingRecord, Span> {
-        self.pool.bind_worker(worker).unwrap_or_else(|_| {
-            self.pool.fail();
-            std::panic::panic_any(TransportFailed);
-        })
+    fn bind_worker(&self, worker: &WorkerSlot) -> Option<Producer<TimingRecord, Span>> {
+        match self.pool.bind_worker(worker) {
+            Ok(producer) => Some(producer),
+            Err(SetupError::Disabled) => None,
+            Err(_) => {
+                self.pool.fail();
+                std::panic::panic_any(TransportFailed);
+            }
+        }
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        self.pool.is_disabled()
     }
 
     #[inline]
     pub fn write_timing(&self, thread: TelemetryId, record: TimingRecord) {
         BINDINGS.with_borrow_mut(|bindings| {
-            let binding = bindings
-                .iter_mut()
-                .rev()
-                .find(|b| b.runtime == self.id)
-                .expect("telemetry emission outside execution scope");
-            let producer = binding
-                .producer
-                .as_mut()
-                .expect("telemetry emission outside execution scope");
+            let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) else {
+                assert!(
+                    self.is_disabled(),
+                    "telemetry emission outside execution scope"
+                );
+                return;
+            };
+            let Some(producer) = binding.producer.as_mut() else {
+                assert!(
+                    self.is_disabled(),
+                    "telemetry emission outside execution scope"
+                );
+                return;
+            };
             if binding.timing_thread != Some(thread) {
                 producer.write_timing(TimingRecord::ThreadSelected { thread_id: thread });
                 binding.timing_thread = Some(thread);
@@ -252,15 +322,20 @@ impl TelemetryRuntime {
     #[inline]
     pub fn write_span(&self, thread: TelemetryId, record: Span) {
         BINDINGS.with_borrow_mut(|bindings| {
-            let binding = bindings
-                .iter_mut()
-                .rev()
-                .find(|b| b.runtime == self.id)
-                .expect("telemetry emission outside execution scope");
-            let producer = binding
-                .producer
-                .as_mut()
-                .expect("telemetry emission outside execution scope");
+            let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) else {
+                assert!(
+                    self.is_disabled(),
+                    "telemetry emission outside execution scope"
+                );
+                return;
+            };
+            let Some(producer) = binding.producer.as_mut() else {
+                assert!(
+                    self.is_disabled(),
+                    "telemetry emission outside execution scope"
+                );
+                return;
+            };
             if binding.span_thread != Some(thread) {
                 producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
                 binding.span_thread = Some(thread);
@@ -283,10 +358,11 @@ impl TelemetryRuntime {
             if handle.join().is_err() {
                 let _ = self
                     .result
+                    .processing
                     .set(Err(RuntimeError("telemetry worker panicked".into())));
             }
         }
-        self.result.get().cloned().unwrap_or_else(|| {
+        self.result.result().unwrap_or_else(|| {
             Err(RuntimeError(
                 "telemetry worker stopped without a result".into(),
             ))
@@ -295,7 +371,7 @@ impl TelemetryRuntime {
 
     /// None while running; failure is observable without waiting for shutdown.
     pub fn result(&self) -> Option<Result<(), RuntimeError>> {
-        self.result.get().cloned()
+        self.result.result()
     }
 
     pub fn stats(&self) -> Stats {
@@ -305,12 +381,16 @@ impl TelemetryRuntime {
 
 /// Synchronous ownership boundary; stores no references into a VM or its heap.
 pub struct ExecutionScope {
+    active: bool,
     runtime: Arc<TelemetryRuntime>,
     _thread_bound: PhantomData<Rc<()>>,
 }
 
 impl Drop for ExecutionScope {
     fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
         let released = BINDINGS.with_borrow_mut(|bindings| {
             let index = bindings
                 .iter()
@@ -365,7 +445,7 @@ mod tests {
             id: NEXT_RUNTIME.fetch_add(1, Ordering::Relaxed),
             pool: pool.clone(),
             worker: Mutex::new(None),
-            result: Arc::new(OnceLock::new()),
+            result: Arc::new(RuntimeStatus::default()),
         });
         (runtime, pool)
     }
@@ -715,6 +795,31 @@ mod tests {
         assert_eq!(first_pool.stats().free_chunks, 8);
         assert!(!first_pool.is_failed());
         assert!(!second_pool.is_failed());
+    }
+
+    #[test]
+    fn late_storage_failure_overrides_processor_success_and_never_restarts() {
+        let mut control = None;
+        let runtime = TelemetryRuntime::with_publisher_factory(config(), |handle| {
+            control = Some(handle);
+            Ok(NoSinkPublisher::default())
+        })
+        .unwrap();
+        runtime.finish().unwrap();
+        let error = RuntimeError("late disk write failure".into());
+        let control = control.unwrap();
+        control.disable(error.clone());
+        control.disable(RuntimeError("secondary failure".into()));
+        assert_eq!(runtime.result(), Some(Err(error.clone())));
+        {
+            let _outer = runtime.enter();
+            let _nested = runtime.enter();
+            let thread_id = allocate_telemetry_id();
+            runtime.write_timing(thread_id, TimingRecord::ThreadSelected { thread_id });
+        }
+        assert_eq!(runtime.stats().active_producers, 0);
+        assert_eq!(runtime.stats().sealed_records, 0);
+        assert_eq!(runtime.finish(), Err(error));
     }
 
     #[test]

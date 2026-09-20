@@ -45,7 +45,7 @@ impl<F: FnMut(ConvertedBatch)> Publisher<CaptureDeferred, CaptureDeferred>
         self.buffer.span(t, r);
     }
     fn flush(&mut self) {
-        if self.buffer.estimate == 0 {
+        if self.buffer.is_empty() {
             return;
         }
         let b = self.buffer.take();

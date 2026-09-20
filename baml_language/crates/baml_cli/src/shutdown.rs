@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, future::Future, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use bex_engine::BexEngine;
 
@@ -28,21 +28,23 @@ pub(crate) fn shutdown_engine(
     rt.block_on(shutdown_engine_future(engine, reporter));
 }
 
-pub(crate) fn shutdown_engine_future<'a>(
-    engine: &'a Arc<BexEngine>,
-    reporter: &'a Reporter,
-) -> impl Future<Output = ()> + 'a {
-    engine.shutdown_with_deadline(
-        shutdown_grace(),
-        |count| {
-            reporter.status("Waiting", wait_message(count));
-        },
-        |leaks| {
-            if !leaks.is_empty() {
-                reporter.warning(leak_message(leaks));
-            }
-        },
-    )
+pub(crate) async fn shutdown_engine_future(engine: &Arc<BexEngine>, reporter: &Reporter) {
+    engine
+        .shutdown_with_deadline(
+            shutdown_grace(),
+            |count| {
+                reporter.status("Waiting", wait_message(count));
+            },
+            |leaks| {
+                if !leaks.is_empty() {
+                    reporter.warning(leak_message(leaks));
+                }
+            },
+        )
+        .await;
+    if let Some(Err(error)) = engine.telemetry_result() {
+        reporter.warning(format_args!("telemetry recording failed: {error}"));
+    }
 }
 
 fn wait_message(count: usize) -> String {

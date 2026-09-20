@@ -12,7 +12,7 @@ pub(crate) struct EngineTelemetry {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) runtime: Arc<btel_processor::TelemetryRuntime>,
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) recording_id: btel_publisher::RecordingId,
+    pub(super) recording_id: Option<btel_publisher::RecordingId>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) file_sink: Option<Arc<btel_file::FileSink>>,
 }
@@ -33,8 +33,12 @@ impl EngineTelemetry {
         }
     }
 
-    pub(super) fn new_root(&self) -> TelemetryState {
-        self.new_state(self.clock.start_run())
+    pub(super) fn new_root(&self) -> Option<TelemetryState> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.runtime.is_disabled() {
+            return None;
+        }
+        Some(self.new_state(self.clock.start_run()))
     }
     fn new_state(&self, clock: Arc<btel_clock::ClockEpoch>) -> TelemetryState {
         TelemetryState::new_root(
@@ -44,10 +48,15 @@ impl EngineTelemetry {
             Arc::clone(&self.runtime),
         )
     }
-    pub(super) fn new_child(&self, context: &ThreadSpawnContext) -> TelemetryState {
+    pub(super) fn new_child(&self, context: Option<&ThreadSpawnContext>) -> Option<TelemetryState> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.runtime.is_disabled() {
+            return None;
+        }
+        let context = context.expect("enabled parent supplies telemetry spawn context");
         let mut state = self.new_state(Arc::clone(&context.clock));
         state.configure_spawn(context);
-        state
+        Some(state)
     }
     pub(super) fn validate(&self, vm: &BexVm, force: bool) {
         if let Some(clock) = vm.telemetry_clock() {

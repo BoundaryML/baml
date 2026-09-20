@@ -7,6 +7,10 @@ rust-version = { workspace = true }
 license = { workspace = true }
 description = "Bounded local delivery and recovery of Btel recording files"
 
+[features]
+# Deterministic storage fault injection for dependent-crate tests only.
+test-support = [  ]
+
 [lints]
 workspace = true
 

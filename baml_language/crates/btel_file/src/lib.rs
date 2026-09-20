@@ -2,13 +2,14 @@
 //! this sink writes its exact bytes, without reencoding or per-sink aggregation.
 //!
 //! A newly created recording directory has one writer. Completed files use
-//! zero-padded sequence names; `.part` files are never complete records. File
-//! data is synced before rename, and the directory is synced on Unix. Successful
-//! finish means every accepted file completed that procedure. It does not imply
+//! zero-padded `.btel` sequence names; `.btel.part` files are never complete records.
+//! Files are written, closed and renamed without forcing storage synchronization.
+//! Successful finish means every accepted file completed that procedure. Recent
+//! data can be lost or damaged after a machine crash or power loss. It does not imply
 //! `RecordingEnd`, settled clock validity, available captures, or complete metadata.
 //!
-//! Queue admission never waits on disk. A full queue fails explicitly; retained
-//! `SealedFile`s remain charged to the publisher's existing resident-byte budget.
+//! A full queue blocks the delivery worker until capacity is available. The queue
+//! bounds retained sealed files; the publisher seals on size or elapsed time.
 //! Call finish after stopping the publisher; Drop only provides cleanup.
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -55,62 +56,76 @@ enum Command {
     Finish,
 }
 
-#[derive(Clone)]
 pub struct FileSender {
     sender: mpsc::SyncSender<Command>,
     result: Arc<OnceLock<Result<(), FileSinkError>>>,
 }
 impl FileSender {
-    /// Called only after input chunk release. Full/failed/closed delivery never
-    /// masquerades as success; callers must propagate the error, not drop it.
+    /// Called only after input chunk release. Full queues apply bounded backpressure
+    /// to the delivery worker; disk errors and closed writers remain errors.
     pub fn send(&self, file: SealedFile) -> Result<(), FileSinkError> {
         if let Some(result) = self.result.get() {
             return result
                 .clone()
                 .and(Err(FileSinkError("telemetry file sink is closed".into())));
         }
-        self.sender.try_send(Command::File(file)).map_err(|error| {
+        self.sender.send(Command::File(file)).map_err(|_| {
             if let Some(Err(failure)) = self.result.get() {
                 return failure.clone();
             }
-            FileSinkError(match error {
-                mpsc::TrySendError::Full(_) => "telemetry file queue is full".into(),
-                mpsc::TrySendError::Disconnected(_) => "telemetry file writer stopped".into(),
-            })
+            FileSinkError("telemetry file writer stopped".into())
         })
     }
 }
 
 pub struct FileSink {
     directory: PathBuf,
-    sender: FileSender,
+    sender: mpsc::SyncSender<Command>,
+    result: Arc<OnceLock<Result<(), FileSinkError>>>,
+    delivery: Option<FileSender>,
     worker: Mutex<Option<JoinHandle<()>>>,
 }
 impl FileSink {
     /// Refuse an existing recording directory: sequences cannot overwrite a
     /// previous recording or race a second writer. Root directories may exist.
     pub fn create(root: &Path, id: RecordingId, config: FileSinkConfig) -> io::Result<Self> {
+        Self::create_with_failure_handler(root, id, config, |_| {})
+    }
+
+    /// Notify the recording control independently of publisher progress. The
+    /// error is retained before invoking this callback or releasing senders.
+    pub fn create_with_failure_handler(
+        root: &Path,
+        id: RecordingId,
+        config: FileSinkConfig,
+        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+    ) -> io::Result<Self> {
         if root.as_os_str().is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "empty telemetry directory",
             ));
         }
-        fs::create_dir_all(root)?;
-        let directory = recording_directory(root, id);
+        // Keep the writer bound to its original destination if the host later
+        // changes its process working directory.
+        let root = std::path::absolute(root)?;
+        fs::create_dir_all(&root)?;
+        let directory = recording_directory(&root, id);
         fs::create_dir(&directory)?;
-        #[cfg(unix)]
-        fs::File::open(root)?.sync_all()?;
         let writer_directory = directory.clone();
-        Self::start(directory, config, move |file| {
-            write_file(&writer_directory, id, file)
-        })
+        Self::start(
+            directory,
+            config,
+            move |file| write_file(&writer_directory, id, file),
+            on_failure,
+        )
     }
 
     fn start(
         directory: PathBuf,
         config: FileSinkConfig,
         mut write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
+        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
     ) -> io::Result<Self> {
         let (sender, receiver) = mpsc::sync_channel(config.queue_files.get());
         let result = Arc::new(OnceLock::new());
@@ -138,23 +153,50 @@ impl FileSink {
                 }))
                 .unwrap_or_else(|_| Err(FileSinkError("telemetry file writer panicked".into())));
                 let _ = worker_result.set(outcome);
+                // Retain the result before releasing queued files and blocked sends.
+                drop(receiver);
+                if let Some(Err(error)) = worker_result.get() {
+                    on_failure(error);
+                }
             })?;
         Ok(Self {
             directory,
-            sender: FileSender { sender, result },
+            delivery: Some(FileSender {
+                sender: sender.clone(),
+                result: Arc::clone(&result),
+            }),
+            sender,
+            result,
             worker: Mutex::new(Some(worker)),
         })
+    }
+
+    /// Test-only writer substitution. Uses the real bounded queue, worker,
+    /// shutdown and failure notification; only the storage operation is injected.
+    #[cfg(feature = "test-support")]
+    #[doc(hidden)]
+    pub fn with_test_writer(
+        directory: PathBuf,
+        config: FileSinkConfig,
+        write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
+        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+    ) -> io::Result<Self> {
+        Self::start(directory, config, write, on_failure)
     }
 
     pub fn directory(&self) -> &Path {
         &self.directory
     }
-    pub fn sender(&self) -> FileSender {
-        self.sender.clone()
+    /// Move the sole delivery endpoint to the publisher. Cannot fan out or
+    /// obtain a second endpoint for this recording.
+    pub fn take_sender(&mut self) -> FileSender {
+        self.delivery
+            .take()
+            .expect("recording already has its sole sender")
     }
     /// None while running. Disk errors are observable even without another file.
     pub fn result(&self) -> Option<Result<(), FileSinkError>> {
-        self.sender.result.get().cloned()
+        self.result.get().cloned()
     }
     /// Blocking and idempotent. Stop the upstream publisher first. Runs outside
     /// VM execution/heap permits, typically in the engine's shutdown blocking task.
@@ -164,11 +206,10 @@ impl FileSink {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(handle) = worker.take() {
-            // Blocking only at shutdown; queued files precede the sentinel.
-            let _ = self.sender.sender.send(Command::Finish);
+            // Queued files precede the sentinel; a full queue also waits here.
+            let _ = self.sender.send(Command::Finish);
             if handle.join().is_err() {
                 let _ = self
-                    .sender
                     .result
                     .set(Err(FileSinkError("telemetry file writer panicked".into())));
             }
@@ -193,8 +234,8 @@ fn write_file(directory: &Path, id: RecordingId, file: &SealedFile) -> Result<()
         ));
     }
     let sequence = file.sequence().get();
-    let destination = directory.join(format!("{sequence:020}.pb"));
-    let temporary = directory.join(format!("{sequence:020}.pb.part"));
+    let destination = directory.join(format!("{sequence:020}.btel"));
+    let temporary = directory.join(format!("{sequence:020}.btel.part"));
     if destination
         .try_exists()
         .map_err(|e| io_error(&destination, &e))?
@@ -211,14 +252,9 @@ fn write_file(directory: &Path, id: RecordingId, file: &SealedFile) -> Result<()
         .map_err(|e| io_error(&temporary, &e))?;
     output
         .write_all(file.bytes())
-        .and_then(|()| output.sync_all())
         .map_err(|e| io_error(&temporary, &e))?;
     drop(output);
     fs::rename(&temporary, &destination).map_err(|e| io_error(&destination, &e))?;
-    #[cfg(unix)]
-    fs::File::open(directory)
-        .and_then(|file| file.sync_all())
-        .map_err(|e| io_error(directory, &e))?;
     Ok(())
 }
 

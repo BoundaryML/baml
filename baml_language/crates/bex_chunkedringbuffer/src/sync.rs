@@ -3,7 +3,7 @@ pub(crate) use std::sync::TryLockError;
 pub(crate) use std::{
     sync::{
         Arc, Condvar, Mutex, MutexGuard,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
     },
     thread,
 };
@@ -12,7 +12,7 @@ pub(crate) use std::{
 pub(crate) use loom::{
     sync::{
         Arc, Condvar, Mutex, MutexGuard,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
     },
     thread,
 };

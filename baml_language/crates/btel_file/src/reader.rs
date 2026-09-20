@@ -63,7 +63,7 @@ pub fn read_directory(directory: &Path) -> io::Result<RecordingRead> {
             read.issues.push(ReadIssue::UnfinishedFile(path));
             continue;
         }
-        if path.extension().is_none_or(|ext| ext != "pb") {
+        if path.extension().is_none_or(|ext| ext != "btel") {
             continue;
         }
         let file = (|| -> Result<proto::RecordingFile, String> {

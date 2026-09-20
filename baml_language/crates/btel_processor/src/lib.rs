@@ -264,7 +264,7 @@ impl<P> Processing<P> {
 #[cfg(not(target_arch = "wasm32"))]
 mod runtime;
 #[cfg(not(target_arch = "wasm32"))]
-pub use runtime::{ExecutionScope, RuntimeError, TelemetryRuntime};
+pub use runtime::{ExecutionScope, RecordingControl, RuntimeError, TelemetryRuntime};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ProcessorError {
@@ -341,6 +341,14 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
     /// panic fails the transport and prevents producers from silently proceeding.
     /// No partially accepted batch is retried after failure.
     pub fn process_available(&mut self) -> Progress {
+        if self.consumer.is_disabled() {
+            // Abandon pending reductions/encoding; shutdown must not manufacture
+            // successful completion after a storage failure.
+            return Progress {
+                complete: true,
+                ..Progress::default()
+            };
+        }
         self.consumer.guard_processing(|| {
             if self.consumer.has_ready_chunks() {
                 self.processing.publisher.before_batch(
@@ -358,6 +366,12 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
             |id, records| processing.borrow_mut().timing::<I, V>(id, records),
             |id, records| processing.borrow_mut().spans(id, records),
         );
+        if self.consumer.is_disabled() {
+            return Progress {
+                complete: true,
+                ..progress
+            };
+        }
         self.consumer.guard_processing(|| {
             if progress.complete {
                 if !self.finished {

@@ -1,13 +1,5 @@
-//! Bounded append/merge buffers and immutable file sealing, shared by destinations.
-use std::{
-    fmt,
-    num::NonZeroU64,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Instant,
-};
+//! Size/time-triggered append/merge buffers and immutable file sealing for one sink.
+use std::{fmt, num::NonZeroU64, time::Instant};
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_records::{CaptureDeferred, SpanRecord};
@@ -15,9 +7,8 @@ use btel_settings::{encoding, publisher as settings};
 use btel_types::TelemetryId;
 use prost::Message;
 pub use settings::RecordingConfig;
-use settings::{BASE_CHARGE, CHUNK_HEADROOM_PER_RECORD, FILE_OVERHEAD, ITEM_CHARGE};
 
-use crate::{ConversionBuffer, PendingMessages, proto};
+use crate::{ConversionBuffer, proto};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RecordingId([u8; 16]);
 impl RecordingId {
@@ -35,7 +26,7 @@ impl RecordingId {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RecordingError {
     InvalidConfig,
-    BudgetExceeded,
+    EncodingTooLarge,
     SequenceExhausted,
 }
 impl fmt::Display for RecordingError {
@@ -45,41 +36,28 @@ impl fmt::Display for RecordingError {
 }
 impl std::error::Error for RecordingError {}
 
-struct RetainedBytes {
-    used: AtomicUsize,
-}
-struct FileInner {
+/// A completed file has one owner and is moved to the recording's sole sink.
+pub struct SealedFile {
     id: RecordingId,
     sequence: NonZeroU64,
     bytes: Vec<u8>,
-    charge: usize,
-    retained: Arc<RetainedBytes>,
 }
-impl Drop for FileInner {
-    fn drop(&mut self) {
-        self.retained.used.fetch_sub(self.charge, Ordering::AcqRel);
-    }
-}
-/// Clone shares the allocation. Both destinations and retries see identical
-/// bytes and sequence; no reencoding, payload clone, or contribution reassignment.
-#[derive(Clone)]
-pub struct SealedFile(Arc<FileInner>);
 impl SealedFile {
     pub fn recording_id(&self) -> RecordingId {
-        self.0.id
+        self.id
     }
     pub fn sequence(&self) -> NonZeroU64 {
-        self.0.sequence
+        self.sequence
     }
     pub fn bytes(&self) -> &[u8] {
-        &self.0.bytes
+        &self.bytes
     }
 }
 
 /// Recording publisher used with `Processor::with_publisher`. Callback execution
-/// occurs after the chunk is recycled. Keep delivery outside this worker; the
-/// callback may hand the immutable file to both sinks, which share its byte charge.
-/// Budget errors terminate processing through its existing panic guard.
+/// occurs after the chunk is recycled, so bounded sink delivery can wait for capacity.
+/// Files move to one sink. Size and elapsed time are the
+/// only automatic sealing triggers; explicit flush/shutdown also seal pending data.
 /// No output is replayed after an error. Final epoch lifecycle is separate: this
 /// implementation seals data on shutdown but does not claim RecordingEnd/finality.
 pub struct RecordingPublisher<F> {
@@ -87,11 +65,9 @@ pub struct RecordingPublisher<F> {
     config: RecordingConfig,
     source_snapshot_id: Option<[u8; 32]>,
     buffer: ConversionBuffer,
-    retained: Arc<RetainedBytes>,
     receive: F,
     next_sequence: Option<NonZeroU64>,
     deadline: Option<Instant>,
-    conversion_charge: usize,
     pending_span_reservation: usize,
     span_credit: usize,
 }
@@ -109,13 +85,9 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
             config,
             source_snapshot_id: None,
             buffer: ConversionBuffer::default(),
-            retained: Arc::new(RetainedBytes {
-                used: AtomicUsize::new(0),
-            }),
             receive,
             next_sequence: NonZeroU64::new(1),
             deadline: None,
-            conversion_charge: 0,
             pending_span_reservation: 0,
             span_credit: 0,
         })
@@ -127,60 +99,22 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         self
     }
 
-    fn used(&self) -> usize {
-        BASE_CHARGE
-            .saturating_add(self.conversion_charge)
-            .saturating_add(self.span_credit.saturating_mul(CHUNK_HEADROOM_PER_RECORD))
-            .saturating_add(self.buffer.aggregates.allocation_charge())
-            .saturating_add(self.buffer.spans.capacity())
-            .saturating_add(self.retained.used.load(Ordering::Acquire))
-    }
-    fn check(&self, extra: usize) -> Result<(), RecordingError> {
-        if self.used().saturating_add(extra) > self.config.max_resident_bytes.get() {
-            Err(RecordingError::BudgetExceeded)
-        } else {
-            Ok(())
-        }
-    }
-    // Charge the old and new allocations during growth, before any record is
-    // consumed. Exact reservation avoids Vec's implicit, uncharged doubling.
-    fn reserve_encoding(
-        &mut self,
-        additional: usize,
-        headroom: usize,
-    ) -> Result<(), RecordingError> {
-        let needed = self.buffer.spans.len().saturating_add(additional);
-        if needed > encoding::MAX_BUFFER_BYTES {
-            return Err(RecordingError::BudgetExceeded);
-        }
-        if needed > self.buffer.spans.capacity() {
-            let target = settings::encoding_capacity(self.buffer.spans.capacity(), needed)
-                .min(encoding::MAX_BUFFER_BYTES);
-            self.check(
-                target
-                    .saturating_add(headroom)
-                    .saturating_add(FILE_OVERHEAD),
-            )?;
-            self.buffer.spans.reserve(target);
-            self.check(headroom.saturating_add(FILE_OVERHEAD))?;
-        }
-        Ok(())
-    }
-    fn batch_charge(&self, records: usize) -> usize {
-        let record_charge = settings::batch_record_charge(records);
+    // Reserve span storage once per chunk. The limit belongs to the encoder's
+    // u32 length representation, not a resident-memory budget or sealing policy.
+    fn reserve_encoding(&mut self, additional: usize) -> Result<(), RecordingError> {
         let needed = self
             .buffer
             .spans
             .len()
-            .saturating_add(records.saturating_mul(encoding::MAX_EVENT_BYTES));
-        let growth = if needed > self.buffer.spans.capacity() {
-            settings::encoding_capacity(self.buffer.spans.capacity(), needed)
-        } else {
-            0
-        };
-        record_charge
-            .saturating_add(growth)
-            .saturating_add(FILE_OVERHEAD)
+            .checked_add(additional)
+            .filter(|&n| n <= encoding::MAX_BUFFER_BYTES)
+            .ok_or(RecordingError::EncodingTooLarge)?;
+        if needed > self.buffer.spans.capacity() {
+            let target = settings::encoding_capacity(self.buffer.spans.capacity(), needed)
+                .min(encoding::MAX_BUFFER_BYTES);
+            self.buffer.spans.reserve(target);
+        }
+        Ok(())
     }
     #[cold]
     #[inline(never)]
@@ -188,9 +122,7 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         // Delay allocation until the first span so a timing-only batch does not
         // allocate a worst-case span buffer. Reserve once for the whole batch.
         let records = self.pending_span_reservation.max(1);
-        let charge = records.saturating_mul(CHUNK_HEADROOM_PER_RECORD);
-        self.check(charge)?;
-        self.reserve_encoding(records.saturating_mul(encoding::MAX_EVENT_BYTES), charge)?;
+        self.reserve_encoding(records.saturating_mul(encoding::MAX_EVENT_BYTES))?;
         self.span_credit = records;
         self.pending_span_reservation = 0;
         Ok(())
@@ -201,15 +133,14 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
     }
     fn seal(&mut self) -> Result<(), RecordingError> {
         self.clear_batch();
-        if self.buffer.estimate == 0 {
+        if self.buffer.is_empty() {
             return Ok(());
         }
         let sequence = self
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
-        let estimate = self.buffer.estimate;
         let ready = self.buffer.take();
-        let mut file = proto::RecordingFile {
+        let file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
                 format_minor: encoding::FORMAT_MINOR,
@@ -224,41 +155,22 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
             end: None,
         };
         let length = file.encoded_len();
-        // Span bytes already occupy their final allocation. Admission covers
-        // cold-message encoding and any allocation growth before closing the
-        // open messages, so a failed seal can be retried without losing input.
-        if let Err(error) = self
-            .check(FILE_OVERHEAD)
-            .and_then(|()| self.reserve_encoding(length, 0))
-        {
-            self.buffer.pending = PendingMessages {
-                definitions: file.definitions.take().unwrap(),
-                aggregates: file.aggregates.take().unwrap(),
-                clock_states: file.clock_states.take().unwrap(),
-            };
-            self.buffer.estimate = estimate;
-            return Err(error);
-        }
+        self.reserve_encoding(length)?;
         let mut bytes = self.buffer.spans.finish();
         file.encode_raw(&mut bytes);
-        let charge = bytes.capacity().saturating_add(FILE_OVERHEAD);
-        self.retained.used.fetch_add(charge, Ordering::AcqRel);
-        let sealed = SealedFile(Arc::new(FileInner {
+        let sealed = SealedFile {
             id: self.id,
             sequence,
             bytes,
-            charge,
-            retained: Arc::clone(&self.retained),
-        }));
-        drop(file);
-        self.conversion_charge = 0;
+        };
+        drop(file); // Release converted metadata before potentially blocking delivery.
         self.next_sequence = sequence.get().checked_add(1).and_then(NonZeroU64::new);
         (self.receive)(sealed);
         Ok(())
     }
     fn service(&mut self, now: Instant, force: bool) -> Result<(), RecordingError> {
         if force
-            || self.buffer.estimate >= self.config.target_bytes.get()
+            || self.buffer.encoded_size_hint() >= self.config.target_bytes.get()
             || self.deadline.is_some_and(|deadline| now >= deadline)
         {
             self.seal()?;
@@ -279,12 +191,7 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
 }
 impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for RecordingPublisher<F> {
     fn aggregate(&mut self, delta: AggregateDelta) {
-        Self::terminal(self.check(ITEM_CHARGE));
-        let before = self.buffer.estimate;
         self.buffer.aggregate(delta);
-        if self.buffer.estimate != before {
-            self.conversion_charge = self.conversion_charge.saturating_add(ITEM_CHARGE);
-        }
     }
     fn span(&mut self, thread: TelemetryId, record: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
         if self.span_credit == 0 {
@@ -292,27 +199,9 @@ impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for Recor
         }
         self.span_credit -= 1;
         self.buffer.span(thread, record);
-        let items = match record {
-            SpanRecord::ThreadSpanAnnouncement { .. } | SpanRecord::ThreadSpanCompletion { .. } => {
-                settings::THREAD_ITEMS
-            }
-            SpanRecord::CallPathDefined { visible_caller, .. } => {
-                settings::CALL_PATH_ITEMS
-                    + usize::from(visible_caller.is_some()) * settings::VISIBLE_CALLER_ITEMS
-            }
-            _ => settings::OTHER_ITEMS,
-        };
-        self.conversion_charge = self.conversion_charge.saturating_add(items * ITEM_CHARGE);
     }
     fn before_batch(&mut self, records: usize) {
         self.clear_batch();
-        if self.check(self.batch_charge(records)).is_err() {
-            Self::terminal(self.service(Instant::now(), true));
-            if self.check(self.batch_charge(records)).is_err() {
-                self.buffer.aggregates.release_empty_capacity();
-            }
-        }
-        Self::terminal(self.check(self.batch_charge(records)));
         self.pending_span_reservation = records;
     }
     fn before_span_chunk(&mut self, records: usize) {
@@ -348,4 +237,4 @@ impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for Recor
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-use std::{num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, sync::Arc, time::Duration};

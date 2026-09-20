@@ -3755,6 +3755,8 @@ impl BexVm {
         type_values: IndexMap<String, TypeValue>,
     ) {
         #[cfg(not(target_arch = "wasm32"))]
+        self.stop_disabled_telemetry();
+        #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         debug_assert!(
             matches!(
@@ -6463,6 +6465,25 @@ impl BexVm {
         }
     }
 
+    /// Cold one-time cleanup at existing VM entry/resume/finalization boundaries.
+    /// Frames remain executable; only observation state and GC roots are released.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn stop_disabled_telemetry(&mut self) {
+        if self
+            .telemetry
+            .as_ref()
+            .is_some_and(TelemetryState::is_disabled)
+        {
+            self.telemetry.take().unwrap().abandon();
+            self.pending_telemetry_wait = None;
+            for frame in &mut self.frames {
+                if let Frame::Bytecode(frame) = frame {
+                    frame.telemetry = None;
+                }
+            }
+        }
+    }
+
     /// Finalize every still-open observed invocation and then the logical
     /// thread. The engine calls this exactly once when it chooses a terminal
     /// outcome (including cancellation races and explicit process exit).
@@ -6471,7 +6492,12 @@ impl BexVm {
             return;
         }
         #[cfg(not(target_arch = "wasm32"))]
+        self.stop_disabled_telemetry();
+        #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
+        if self.telemetry.is_none() {
+            return;
+        }
         self.finish_pending_telemetry_wait();
         for frame_idx in (0..self.frames.len()).rev() {
             self.complete_bytecode_invocation(frame_idx, outcome, None);
@@ -6494,6 +6520,8 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();
@@ -6547,6 +6575,8 @@ impl BexVm {
     }
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();

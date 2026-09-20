@@ -1638,11 +1638,17 @@ impl BexEngine {
             None
         } else {
             #[cfg(not(target_arch = "wasm32"))]
-            let recording = recording.unwrap_or_default();
+            let recording_id = recording.as_ref().map(TelemetryRecording::id);
             #[cfg(not(target_arch = "wasm32"))]
-            let recording_id = recording.id();
-            #[cfg(not(target_arch = "wasm32"))]
-            let (runtime, file_sink) = recording.start(source_snapshot_id.map(|id| id.0))?;
+            let (runtime, file_sink) = match recording {
+                Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
+                None => (
+                    btel_processor::TelemetryRuntime::new().map_err(|error| {
+                        EngineError::Other(format!("telemetry processor startup: {error}"))
+                    })?,
+                    None,
+                ),
+            };
             Some(EngineTelemetry {
                 policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
                     telemetry_mode,
@@ -1673,7 +1679,7 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
-                    telemetry.as_ref().map(EngineTelemetry::new_root),
+                    telemetry.as_ref().and_then(EngineTelemetry::new_root),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -3294,7 +3300,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            self.telemetry.as_ref().map(EngineTelemetry::new_root),
+            self.telemetry.as_ref().and_then(EngineTelemetry::new_root),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -4841,13 +4847,9 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            self.telemetry.as_ref().map(|state| {
-                state.new_child(
-                    telemetry
-                        .as_ref()
-                        .expect("enabled parent supplies telemetry spawn context"),
-                )
-            }),
+            self.telemetry
+                .as_ref()
+                .and_then(|state| state.new_child(telemetry.as_ref())),
         );
         child_vm.thread_id = thread_id;
 

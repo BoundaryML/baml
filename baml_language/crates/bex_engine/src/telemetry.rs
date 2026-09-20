@@ -4,49 +4,58 @@ use std::{
     sync::Arc,
 };
 
-use btel_publisher::{RecordingConfig, RecordingId, RecordingPublisher, SealedFile};
+use btel_publisher::{RecordingConfig, RecordingId, RecordingPublisher};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
-/// One recording per engine. All destinations receive the same encoded files.
-/// The callback runs on the processor thread after input chunks are recycled.
-/// It must return promptly and must not retain or call back into this engine.
-/// Retained `SealedFile`s count against the publisher's resident-byte budget.
-/// No sinks means encoding still runs and completed files are immediately freed.
-/// Current output retains deferred-capture and unavailable-function-metadata
-/// markers; clock observations do not yet claim final recording validity.
+/// One recording per engine, with exactly one local-file sink. BCS and spooling
+/// are not implemented. Storage failures disable recording and remain available
+/// through `BexEngine::telemetry_result`; they do not fail BAML execution.
 pub struct TelemetryRecording {
     id: RecordingId,
     config: RecordingConfig,
     destination: Destination,
 }
 enum Destination {
-    Callback(Box<dyn FnMut(SealedFile) + Send>),
     LocalFiles(PathBuf),
+    UserFiles,
 }
 
-impl Default for TelemetryRecording {
-    fn default() -> Self {
-        Self::new(RecordingConfig::default(), drop)
-    }
-}
 impl TelemetryRecording {
-    pub fn new(config: RecordingConfig, receive: impl FnMut(SealedFile) + Send + 'static) -> Self {
-        Self {
-            id: RecordingId::generate(),
+    /// Write to `<project-root>/.baml/btel/recordings/<recording-id>`.
+    /// The caller supplies the resolved BAML project root; the engine does not
+    /// rediscover it from the working directory or source paths. Packed binary
+    /// hosts without a project root should use [`Self::user_files`].
+    /// File output remains explicitly enabled.
+    pub fn local_files(project_root: impl AsRef<Path>, config: RecordingConfig) -> Self {
+        Self::local_files_in(
+            project_root
+                .as_ref()
+                .join(btel_settings::local_files::RECORDINGS_DIRECTORY),
             config,
-            destination: Destination::Callback(Box::new(receive)),
-        }
+        )
     }
 
-    /// Write to a new `<directory>/<recording-id>` directory. No I/O or worker
+    /// Override the standard root with `<directory>/<recording-id>`. No I/O or worker
     /// starts until engine construction; `BAML_TELEMETRY=off` ignores this output.
     /// Existing recording directories are never reused. Shutdown awaits writes.
-    pub fn local_files(directory: impl Into<PathBuf>, config: RecordingConfig) -> Self {
+    pub fn local_files_in(directory: impl Into<PathBuf>, config: RecordingConfig) -> Self {
         Self {
             id: RecordingId::generate(),
             config,
             destination: Destination::LocalFiles(directory.into()),
+        }
+    }
+
+    /// Write beneath the current user's home: `~/.baml/btel/recordings`.
+    /// Resolve the home directory only when the enabled engine starts recording.
+    /// Fail explicitly if no home directory can be determined; never fall back
+    /// to the working directory. Intended for packed programs without a project.
+    pub fn user_files(config: RecordingConfig) -> Self {
+        Self {
+            id: RecordingId::generate(),
+            config,
+            destination: Destination::UserFiles,
         }
     }
 
@@ -68,47 +77,61 @@ impl TelemetryRecording {
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
-        let (receive, sink): (Box<dyn FnMut(SealedFile) + Send>, _) = match self.destination {
-            Destination::Callback(receive) => (receive, None),
-            Destination::LocalFiles(root) => {
-                let sink = Arc::new(
-                    btel_file::FileSink::create(
+        let root = match self.destination {
+            Destination::UserFiles => std::env::home_dir()
+                .map(|home| home.join(btel_settings::local_files::RECORDINGS_DIRECTORY))
+                .ok_or_else(|| std::io::Error::other("cannot determine telemetry home directory")),
+            Destination::LocalFiles(root) => Ok(root),
+        };
+        let mut sink = None;
+        let runtime =
+            btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
+                let failure = control.clone();
+                let writer = root.and_then(|root| {
+                    btel_file::FileSink::create_with_failure_handler(
                         &root,
                         self.id,
                         btel_file::FileSinkConfig::default(),
+                        move |error| {
+                            failure.disable(btel_processor::RuntimeError(error.to_string()));
+                            tracing::warn!(%error, "telemetry recording disabled");
+                        },
                     )
-                    .map_err(|error| {
-                        EngineError::Other(format!("telemetry file startup: {error}"))
-                    })?,
-                );
-                let sender = sink.sender();
-                (
-                    Box::new(move |file| {
-                        // The existing processor guard turns delivery failure into
-                        // a terminal, observable transport error. Never drop silently.
+                });
+                let sender = match writer {
+                    Ok(mut writer) => {
+                        let sender = writer.take_sender();
+                        sink = Some(Arc::new(writer));
+                        Some(sender)
+                    }
+                    Err(error) => {
+                        // Failure to create the directory/file worker also must not
+                        // prevent application startup. No automatic retry.
+                        tracing::warn!(%error, "telemetry recording startup disabled");
+                        control.disable(btel_processor::RuntimeError(format!(
+                            "telemetry file startup: {error}"
+                        )));
+                        None
+                    }
+                };
+                RecordingPublisher::new(self.id, self.config, move |file| {
+                    if let Some(sender) = &sender {
                         if let Err(error) = sender.send(file) {
-                            panic!("{error}");
+                            control.disable(btel_processor::RuntimeError(error.to_string()));
                         }
-                    }),
-                    Some(sink),
-                )
-            }
-        };
-        let publisher = RecordingPublisher::new(self.id, self.config, receive)
-            .map_err(|error| EngineError::Other(error.to_string()))?
-            .with_source_snapshot(source_snapshot);
-        let runtime =
-            btel_processor::TelemetryRuntime::with_config_and_publisher(transport, publisher)
-                .map_err(|error| {
-                    EngineError::Other(format!("telemetry processor startup: {error}"))
-                })?;
+                    }
+                })
+                .map(|publisher| publisher.with_source_snapshot(source_snapshot))
+                .map_err(std::io::Error::other)
+            })
+            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
         Ok((runtime, sink))
     }
 }
 
 impl BexEngine {
     /// Configure encoded-file delivery before initialization executes. Existing
-    /// constructors use the same full pipeline with zero destinations.
+    /// constructors run the diagnostic processor without creating a recording.
     /// `BAML_TELEMETRY=off` disables it even when a recording is supplied.
     pub fn new_with_telemetry_recording(
         program: bex_vm_types::Program,
@@ -132,7 +155,7 @@ impl BexEngine {
     pub fn telemetry_recording_id(&self) -> Option<RecordingId> {
         self.telemetry
             .as_ref()
-            .map(|telemetry| telemetry.recording_id)
+            .and_then(|telemetry| telemetry.recording_id)
     }
 
     /// Local output directory, when configured and telemetry is enabled.
@@ -144,9 +167,10 @@ impl BexEngine {
             .map(|sink| sink.directory())
     }
 
-    /// None when disabled or while processing. After shutdown, Some(Ok(())) means all published
-    /// chunks were consumed and pending bytes delivered to the callback. For
-    /// local files, it also waits for completed file writes. It does not assert
+    /// None when telemetry is off or while processing. A disabled recording returns
+    /// its retained error. After shutdown, Some(Ok(())) means all published
+    /// chunks were consumed and accepted files written and closed. Storage failures
+    /// disable recording independently of application execution. It does not assert
     /// complete captures, final clock validity, or a `RecordingEnd` marker.
     pub fn telemetry_result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         self.telemetry
@@ -154,3 +178,6 @@ impl BexEngine {
             .and_then(super::telemetry_state::EngineTelemetry::result)
     }
 }
+
+#[cfg(all(test, unix))]
+mod failure_tests;

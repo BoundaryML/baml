@@ -51,7 +51,10 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     let id = recording.id();
     let engine = engine(program, recording);
     let directory = engine.telemetry_recording_directory().unwrap().to_owned();
-    assert_eq!(directory, btel_file::recording_directory(root.path(), id));
+    assert_eq!(
+        directory,
+        btel_file::recording_directory(&root.path().join(".baml/btel/recordings"), id)
+    );
     assert_eq!(
         engine
             .call_function("main", vec![], context(), true)
@@ -74,7 +77,7 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     })
     .await
     .expect("idle flush must reach disk without another invocation");
-    let first_bytes = std::fs::read(directory.join("00000000000000000001.pb")).unwrap();
+    let first_bytes = std::fs::read(directory.join("00000000000000000001.btel")).unwrap();
     assert!(!prefix.has_recording_end);
     engine
         .call_function("main", vec![], context(), true)
@@ -87,7 +90,7 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     .unwrap();
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
     assert_eq!(
-        std::fs::read(directory.join("00000000000000000001.pb")).unwrap(),
+        std::fs::read(directory.join("00000000000000000001.btel")).unwrap(),
         first_bytes
     );
     let read = btel_file::read_directory(&directory).unwrap();
@@ -151,7 +154,7 @@ async fn shutdown_reports_disk_errors_even_without_another_invocation() {
     let root = tempfile::tempdir().unwrap();
     let engine = engine(
         baml_db::testing::compile_source("function main() -> int { 1 }"),
-        TelemetryRecording::local_files(
+        TelemetryRecording::local_files_in(
             root.path(),
             RecordingConfig {
                 flush_interval_duration: Duration::from_secs(3600),
@@ -197,7 +200,7 @@ fn off_does_not_create_local_files() {
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let engine = engine(
             baml_db::testing::compile_source("function main() -> int { 1 }"),
-            TelemetryRecording::local_files(&destination, RecordingConfig::default()),
+            TelemetryRecording::local_files_in(&destination, RecordingConfig::default()),
         );
         assert!(engine.telemetry_recording_directory().is_none());
         assert_eq!(
@@ -211,4 +214,29 @@ fn off_does_not_create_local_files() {
         assert!(engine.telemetry_result().is_none());
     });
     assert!(!destination.exists());
+}
+
+#[tokio::test]
+async fn storage_startup_failure_preserves_status_without_preventing_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("file-not-directory");
+    std::fs::write(&destination, b"occupied").unwrap();
+    let engine = engine(
+        baml_db::testing::compile_source(
+            "function main() -> int { let child = spawn { 7 }; await child }",
+        ),
+        TelemetryRecording::local_files_in(destination, RecordingConfig::default()),
+    );
+    let failure = engine.telemetry_result().unwrap().unwrap_err();
+    assert!(failure.to_string().contains("telemetry file startup"));
+    assert!(engine.telemetry_recording_directory().is_none());
+    assert_eq!(
+        engine
+            .call_function("main", vec![], context(), true)
+            .await
+            .unwrap(),
+        BexExternalValue::Int(7)
+    );
+    engine.shutdown().await;
+    assert_eq!(engine.telemetry_result(), Some(Err(failure)));
 }

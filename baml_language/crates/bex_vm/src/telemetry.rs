@@ -807,6 +807,20 @@ impl TelemetryState {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn is_disabled(&self) -> bool {
+        self.runtime.is_disabled()
+    }
+
+    /// Release clock bookkeeping without claiming that this thread completed.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn abandon(&mut self) {
+        if !self.thread.completed {
+            self.thread.completed = true;
+            self.clock.finish_thread();
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn execution_scope(&self) -> btel_processor::ExecutionScope {
         self.runtime.enter()
     }

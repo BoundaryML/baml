@@ -9,7 +9,8 @@
 //! One pool has one consumer, a FIFO of sealed chunks, and separate typed storage
 //! quotas. Every allocation counts toward its quota while free, producer-owned,
 //! ready, processor-owned, or publisher-owned. Producers spin on exhaustion and metadata contention;
-//! only the idle consumer parks. No production VM integration is provided here.
+//! only the idle consumer parks. Explicit recording disable abandons queued data
+//! and makes writes return without storing; invariant failures remain terminal.
 #![allow(
     clippy::inline_always,
     reason = "ordinary append must inline to private Vec writes"
@@ -21,8 +22,8 @@ use std::{collections::VecDeque, marker::PhantomData, mem::size_of, num::NonZero
 
 pub use btel_settings::transport::ChunkConfig as Config;
 use sync::{
-    Arc, AtomicBool, AtomicUsize, Condvar, Mutex, MutexGuard, Ordering, Padded, TryLockError,
-    thread,
+    Arc, AtomicBool, AtomicU8, AtomicUsize, Condvar, Mutex, MutexGuard, Ordering, Padded,
+    TryLockError, thread,
 };
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SetupError {
@@ -30,6 +31,7 @@ pub enum SetupError {
     InsufficientChunks,
     Closed,
     Failed,
+    Disabled,
     ProducerLimit,
     ProducerAlreadyBound,
     ConsumerAlreadyBound,
@@ -63,7 +65,7 @@ struct WorkerState {
     active: bool,
 }
 
-/// Terminal signal, never a normal BAML exception. Engine integration is pending.
+/// Invariant-failure signal, distinct from nonfatal recording disable.
 #[derive(Debug)]
 pub struct TransportFailed;
 
@@ -133,10 +135,14 @@ struct State<T, S> {
     sealed_records: usize,
     wakeups: usize,
 }
+const ACTIVE: u8 = 0;
+const DISABLED: u8 = 1;
+const FAILED: u8 = 2;
+
 struct Shared<T, S> {
     state: Mutex<State<T, S>>,
     wake: Condvar,
-    failed: AtomicBool,
+    status: AtomicU8,
     // Advisory only: sleeping always rechecks state under the mutex.
     ready_hint: Padded<AtomicBool>,
     timing_free: Padded<AtomicUsize>,
@@ -152,9 +158,11 @@ fn terminal() -> ! {
 
 impl<T, S> Shared<T, S> {
     #[inline(always)]
-    fn check(&self) {
-        if self.failed.load(Ordering::Acquire) {
-            terminal();
+    fn check(&self) -> bool {
+        match self.status.load(Ordering::Acquire) {
+            ACTIVE => true,
+            DISABLED => false,
+            _ => terminal(),
         }
     }
     /// All producer metadata access is nonblocking try-lock plus CPU spin.
@@ -170,7 +178,9 @@ impl<T, S> Shared<T, S> {
     fn fail(&self) {
         // Serialize with the consumer's condition-variable check/wait transition.
         let guard = self.lock();
-        self.failed.store(true, Ordering::Release);
+        let _ = self
+            .status
+            .compare_exchange(ACTIVE, FAILED, Ordering::AcqRel, Ordering::Acquire);
         drop(guard);
         self.wake.notify_all();
     }
@@ -180,17 +190,19 @@ impl<T, S> Shared<T, S> {
         lane: impl Fn(&mut State<T, S>) -> &mut Lane<R>,
         stats: &mut ProducerStats,
         available: &AtomicUsize,
-    ) -> Vec<R> {
+    ) -> Option<Vec<R>> {
         let mut exhausted = false;
         loop {
-            self.check();
+            if !self.check() {
+                return None;
+            }
             let mut state = self.lock();
             let lane = lane(&mut state);
             if let Some(chunk) = lane.free.pop() {
                 // All free-list mutations are serialized by state. Publish its
                 // exact length; no read-modify-write is needed.
                 available.store(lane.free.len(), Ordering::Release);
-                return chunk;
+                return Some(chunk);
             }
             if lane.allocated < lane.max {
                 // Reserved allocations also count: two writers cannot both
@@ -204,7 +216,7 @@ impl<T, S> Shared<T, S> {
                 };
                 let chunk = Vec::with_capacity(self.config.chunk_capacity.get());
                 guard.armed = false;
-                return chunk;
+                return Some(chunk);
             }
             let notify = state.sleeping;
             if notify {
@@ -223,7 +235,9 @@ impl<T, S> Shared<T, S> {
             // The consumer publishes availability after returning the allocation.
             // Another writer may win it first; the locked recheck above decides.
             while available.load(Ordering::Acquire) == 0 {
-                self.check();
+                if !self.check() {
+                    return None;
+                }
                 sync::spin();
             }
         }
@@ -235,7 +249,8 @@ impl<T, S> Shared<T, S> {
         };
         debug_assert!(len > 0);
         let mut state = self.lock();
-        if self.failed.load(Ordering::Acquire) {
+        if self.status.load(Ordering::Acquire) != ACTIVE {
+            drop(state);
             return false;
         }
         // Descriptor capacity was reserved for EVERY allocated chunk. No ready
@@ -313,7 +328,7 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                     wakeups: 0,
                 }),
                 wake: Condvar::new(),
-                failed: AtomicBool::new(false),
+                status: AtomicU8::new(ACTIVE),
                 ready_hint: Padded(AtomicBool::new(false)),
                 timing_free: Padded(AtomicUsize::new(if config.preallocate {
                     timing
@@ -336,8 +351,10 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
 
     pub fn reserve_worker(&self) -> Result<WorkerSlot, SetupError> {
         let mut state = self.shared.lock();
-        if self.shared.failed.load(Ordering::Acquire) {
-            return Err(SetupError::Failed);
+        match self.shared.status.load(Ordering::Acquire) {
+            FAILED => return Err(SetupError::Failed),
+            DISABLED => return Err(SetupError::Disabled),
+            _ => {}
         }
         if state.closed {
             return Err(SetupError::Closed);
@@ -375,8 +392,10 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
             "wrong worker pool"
         );
         let mut state = self.shared.lock();
-        if self.shared.failed.load(Ordering::Acquire) {
-            return Err(SetupError::Failed);
+        match self.shared.status.load(Ordering::Acquire) {
+            FAILED => return Err(SetupError::Failed),
+            DISABLED => return Err(SetupError::Disabled),
+            _ => {}
         }
         if state.closed {
             return Err(SetupError::Closed);
@@ -424,7 +443,7 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
     }
     pub fn bind_consumer(&self) -> Result<Consumer<T, S>, SetupError> {
         let mut state = self.shared.lock();
-        if self.shared.failed.load(Ordering::Acquire) {
+        if self.shared.status.load(Ordering::Acquire) == FAILED {
             return Err(SetupError::Failed);
         }
         if state.bound {
@@ -446,8 +465,35 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
     pub fn fail(&self) {
         self.shared.fail();
     }
+    /// Permanently abandon recording. Release queued allocations and wake the
+    /// consumer; producers blocked on capacity return without writing. Unlike
+    /// an invariant failure, this must not unwind application execution.
+    pub fn disable(&self) {
+        let mut state = self.shared.lock();
+        if self
+            .shared
+            .status
+            .compare_exchange(ACTIVE, DISABLED, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        state.closed = true;
+        let ready = std::mem::take(&mut state.ready);
+        let timing = std::mem::take(&mut state.timing.free);
+        let span = std::mem::take(&mut state.span.free);
+        self.shared.ready_hint.0.store(false, Ordering::Release);
+        drop(state);
+        self.shared.wake.notify_all();
+        // Destruct payloads outside the metadata lock. Private chunks belong to
+        // their producers and are released when those scopes exit.
+        drop((ready, timing, span));
+    }
+    pub fn is_disabled(&self) -> bool {
+        self.shared.status.load(Ordering::Acquire) == DISABLED
+    }
     pub fn is_failed(&self) -> bool {
-        self.shared.failed.load(Ordering::Acquire)
+        self.shared.status.load(Ordering::Acquire) == FAILED
     }
     pub fn stats(&self) -> Stats {
         let s = self.shared.lock();
@@ -484,15 +530,19 @@ impl<T, S> Producer<T, S> {
     }
     #[inline(always)]
     pub fn write_timing(&mut self, record: T) {
-        self.shared.check();
+        if !self.shared.check() {
+            return;
+        }
         if self.timing.is_none() {
-            self.timing = Some(self.shared.take(
+            self.timing = self.shared.take(
                 |s| &mut s.timing,
                 &mut self.stats,
                 &self.shared.timing_free.0,
-            ));
+            );
         }
-        let chunk = self.timing.as_mut().unwrap();
+        let Some(chunk) = self.timing.as_mut() else {
+            return;
+        };
         chunk.push(record);
         if chunk.len() == self.shared.config.chunk_capacity.get() {
             self.seal_timing();
@@ -500,15 +550,17 @@ impl<T, S> Producer<T, S> {
     }
     #[inline(always)]
     pub fn write_span(&mut self, record: S) {
-        self.shared.check();
-        if self.span.is_none() {
-            self.span = Some(self.shared.take(
-                |s| &mut s.span,
-                &mut self.stats,
-                &self.shared.span_free.0,
-            ));
+        if !self.shared.check() {
+            return;
         }
-        let chunk = self.span.as_mut().unwrap();
+        if self.span.is_none() {
+            self.span =
+                self.shared
+                    .take(|s| &mut s.span, &mut self.stats, &self.shared.span_free.0);
+        }
+        let Some(chunk) = self.span.as_mut() else {
+            return;
+        };
         chunk.push(record);
         if chunk.len() == self.shared.config.chunk_capacity.get() {
             self.seal_span();
@@ -518,7 +570,7 @@ impl<T, S> Producer<T, S> {
     fn seal_timing(&mut self) {
         if let Some(chunk) = self.timing.take() {
             if !self.shared.seal(self.id, Records::Timing(chunk)) {
-                terminal();
+                self.shared.check();
             }
         }
     }
@@ -526,7 +578,7 @@ impl<T, S> Producer<T, S> {
     fn seal_span(&mut self) {
         if let Some(chunk) = self.span.take() {
             if !self.shared.seal(self.id, Records::Span(chunk)) {
-                terminal();
+                self.shared.check();
             }
         }
     }
@@ -593,7 +645,9 @@ impl<T, S> Drop for SpanChunk<T, S> {
         // the pool terminal rather than silently losing a counted allocation.
         self.records.clear();
         let mut state = self.shared.lock();
-        state.span.free.push(std::mem::take(&mut self.records));
+        if self.shared.status.load(Ordering::Acquire) == ACTIVE {
+            state.span.free.push(std::mem::take(&mut self.records));
+        }
         self.shared
             .span_free
             .0
@@ -662,7 +716,13 @@ impl<T, S> Consumer<T, S> {
         mut span: impl FnMut(ProducerId, SpanChunk<T, S>),
     ) -> DrainStatus {
         use btel_settings::transport::DRAIN_BATCH_CHUNKS as BATCH;
-        self.shared.check();
+        if !self.shared.check() {
+            self.finished = true;
+            return DrainStatus {
+                complete: true,
+                ..DrainStatus::default()
+            };
+        }
         let mut guard = FailureGuard {
             shared: &self.shared,
             armed: true,
@@ -736,7 +796,9 @@ impl<T, S> Consumer<T, S> {
                 }) = slot.take()
                 {
                     debug_assert!(v.is_empty());
-                    state.timing.free.push(v);
+                    if self.shared.status.load(Ordering::Acquire) == ACTIVE {
+                        state.timing.free.push(v);
+                    }
                 }
             }
             // Serialized exact counts, published once per recycled batch.
@@ -745,7 +807,9 @@ impl<T, S> Consumer<T, S> {
                 .0
                 .store(state.timing.free.len(), Ordering::Release);
         }
-        self.shared.check();
+        if !self.shared.check() {
+            self.finished = true;
+        }
         status.complete = self.finished;
         guard.armed = false;
         status
@@ -764,7 +828,9 @@ impl<T, S> Consumer<T, S> {
         } else {
             btel_settings::transport::IDLE_PROBES
         } {
-            self.shared.check();
+            if !self.shared.check() {
+                return;
+            }
             // Avoid competing with publishers for the mutex during empty polls.
             // A stale hint only changes how soon we reach the locked recheck;
             // it never authorizes sleep or access to the queue itself.
@@ -780,7 +846,7 @@ impl<T, S> Consumer<T, S> {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         while s.ready.is_empty()
             && !(s.closed && s.active_producers == 0)
-            && !self.shared.failed.load(Ordering::Acquire)
+            && self.shared.status.load(Ordering::Acquire) == ACTIVE
         {
             if deadline.is_some_and(|at| std::time::Instant::now() >= at) {
                 break;
@@ -807,6 +873,10 @@ impl<T, S> Consumer<T, S> {
     /// Readiness hint only. A producer may publish immediately after this read.
     pub fn has_ready_chunks(&self) -> bool {
         self.shared.ready_hint.0.load(Ordering::Acquire)
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        self.shared.status.load(Ordering::Acquire) == DISABLED
     }
 
     pub fn chunk_capacity(&self) -> usize {
