@@ -552,7 +552,8 @@ timers show after a suspend.
 - No effect is in flight during a sleep, so a suspend at this point cannot
   repeat an effect.
 
-**Waits on remote results.** The same rule applies to a thread that waits for
+**Waits on remote results (later phase).** Phase 3 suspends a run only for a
+sleep and wakes it only by its timer. The same rule can apply to a thread that waits for
 a `remote_` call. The parent suspends, and the arrival of the `remote_result`
 wakes it. The site server already stores results for a run that has no process
 and passes them with `--remote-result` at resume. With both rules, a run that

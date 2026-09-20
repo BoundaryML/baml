@@ -615,3 +615,182 @@ parent on `cloud` calls into `cloud2`, and a parent on `cloud2` calls into
   of the demo can run next to the first one. The cleanup of an instance ends
   only the workers of its own run stores and only the listeners on its own
   ports.
+
+## 9. Phase 3: threads and futures, durable sleep, remote cancellation, program store
+
+Sections 1 to 8 stay in force. This section adds to them.
+
+### 9.1 Snapshot coverage (Rust)
+
+A run pauses and resumes correctly when it holds any of the following at the
+pause point. "Correctly" means that the resumed run produces the same result
+and the same observable effects as an uninterrupted run.
+
+- Several BAML threads (`spawn`), each parked at the pause gate, in a `sleep`,
+  in a remote-call wait, or in `await` / `__await_any`.
+- `Future` objects in every state: pending, resolved with any heap value,
+  failed with a typed error, panicked, and cancelled. A settled future keeps
+  its value and its "error not yet observed" state.
+- The cancellation tree of the run's threads, `baml.spawn.CancelToken`
+  objects (including `CancelToken.any`), and `baml.spawn.TaskGroup` objects
+  with their limit, name, and queued work.
+- Native continuation frames of the array combinators (`map`, `filter`,
+  `find`, `find_last`, `some`, `every`, `reduce`, `flat_map`, `sort_by`) and of
+  the JSON and string walks, because `baml.future.all` awaits inside a `map`
+  callback.
+- Any serializable heap value as a local, a captured variable, a future
+  result, a remote-call argument, or a remote-call result: nested class
+  instances, enums, optional fields, unions, arrays and maps of instances,
+  bigint, float, generic classes, and object graphs with cycles.
+
+The stdlib combinators `baml.future.all`, `all_settled`, `race`, `any`, and
+`baml.future.with_timeout` work across a pause at every yield they reach. A
+value that still cannot be serialized (a host resource, a host closure)
+produces `blocked` with a path, as before.
+
+The snapshot format version becomes 2. A version 1 snapshot is refused with a
+clear error.
+
+### 9.2 Worker additions
+
+Flags:
+
+- `--sleep-suspend-ms <n>`: a durable run suspends itself for a `sleep` whose
+  remaining time is at least `n`. Default 5000. `0` disables. Non-durable runs
+  never suspend themselves.
+- `--program-store <dir>`: the content-addressed program store (9.5).
+- `--program-hash <hex>`: with `--start`, run the program with this hash from
+  the store instead of compiling `--project`. `--project` is then optional.
+  With `--resume` the hash comes from the snapshot header and `--project` is
+  optional.
+
+Events:
+
+| type | Additional fields | Meaning |
+|---|---|---|
+| `hello` | adds `program_hash: string` (hex) | |
+| `paused` | adds `wake: { reason: "sleep", remaining_ms: number, at_ts: number } \| null` | `wake` is set when the run suspended itself for a sleep. `remaining_ms` is measured at the moment of the snapshot. |
+| `remote_cancel` | `call_id`, `thread` | The thread that waited on this remote call was cancelled (`Future.cancel`, a `race` loser, a cancel token, a timeout, or the failure of a parent). The run no longer waits on `call_id`, and a later `remote_result` for it is ignored. |
+| `resumed` | `stats` adds `program_source: "store" \| "compile"` | |
+
+Self-suspend rule. A durable run suspends itself when every live thread of
+the run is parked in a wait that can be re-issued (a `sleep`, a remote-call
+wait, or an `await` on a future of this run), at least one thread is in a
+`sleep`, and the earliest sleep deadline is at least `--sleep-suspend-ms`
+away. The snapshot is written exactly as for `pause`. If the snapshot is
+blocked, the threads keep waiting in process and the worker emits one
+`blocked` event. The run does not wake early when a remote result arrives;
+that is a later phase.
+
+On resume, a `sleep` whose deadline has passed completes at once. A remote
+result delivered with `--remote-result` settles its call before the threads
+run.
+
+### 9.3 Site server additions
+
+- Run status adds `sleeping`. A run record adds `wake_at: number | null`
+  (Unix ms, computed by the site server as receipt time plus
+  `wake.remaining_ms`) and `program_hash: string | null`.
+- A `paused` event with `wake` sets the status to `sleeping`. A timer resumes
+  the run at `wake_at` through the normal resume path. The status change from
+  `sleeping` or `paused` to `starting` is a compare-and-set: a second resume
+  request, a late timer, or a timer that fires after a manual resume does
+  nothing. Two workers never start from one snapshot under one run id.
+- At startup the site server rebuilds its timers from the run store and
+  resumes overdue runs at once.
+- `POST /api/runs/:id/resume` works on a `sleeping` run (the new worker sleeps
+  the remaining time or suspends again). `POST /api/runs/:id/cancel` on a
+  `sleeping` or `paused` run sets `cancelled` without a process and cancels
+  its outstanding remote children. `kill` on a `sleeping` run returns 409.
+- SSE events: `sleep_scheduled { run, wake_at }` and
+  `woken { run, reason: "timer" | "manual" | "restart" }`.
+- Remote cancellation. On a worker `remote_cancel` event the site server
+  removes the `waiting_on` entry, sends `POST /api/runs/:id/cancel` to the
+  child's site, and emits `remote_cancelled { run, call_id, child_site,
+  child_run }`. A result that arrives for a cancelled call is discarded. A
+  child that is `paused` or `sleeping` is cancelled without a process. A run
+  that ends as `cancelled`, `failed`, or `lost` cancels its outstanding
+  children in the same way.
+- Placement (replaces step 2 of 8.2). The caller's site keeps one counter and
+  picks the eligible pool members in round-robin order, so that a fan-out from
+  `local` alternates between `cloud` and `cloud2`.
+- Test knobs. The environment variable `CHAOS` is a JSON object read by the
+  site server: `dispatch_delay_ms`, `result_delay_ms`, `cancel_delay_ms`,
+  `import_delay_ms`, `program_fetch_delay_ms` (each a number, applied before
+  the named site-to-site request or its handling), `duplicate_results` (send
+  every `remote_result` twice), and `reorder_results` (hold one result until
+  the next one was sent). Without `CHAOS` the server behaves normally.
+
+### 9.4 Demo program additions
+
+`program/baml_src/trip.baml` keeps its content and line numbers. New functions
+live in new files. They use classes, enums, maps, and nested values as
+arguments and results, not only strings.
+
+- `remote_get_quote(request: QuoteRequest) -> Quote`: a class in and a class
+  out, with a `sleep` whose length depends on the request.
+- `durable_fan_out(city: string) -> TripReport`: spawns four
+  `remote_get_quote` calls, sleeps 12 seconds (the run suspends itself while
+  the children run on `cloud` and `cloud2`), then awaits
+  `baml.future.all(...)` and returns a class that contains the four quotes.
+- `durable_race(city: string) -> Quote`: `baml.future.race` over three remote
+  calls of different length. The two losers are cancelled on their sites.
+- `durable_settled(city: string) -> SettledReport`: `baml.future.all_settled`
+  over remote calls of which one throws a typed error.
+- `durable_deadline(city: string) -> string`: `baml.future.with_timeout` of 2
+  seconds around a remote call that takes 6 seconds. The function returns a
+  message built from the `Timeout` error, and the child is cancelled.
+- `durable_nap(seconds: int) -> string`: one `println`, one `sleep`, one
+  `println`.
+
+Every function runs to completion under a plain `baml run`.
+
+### 9.5 Program store
+
+A program is identified by its program hash: the SHA-256 of the Borsh-encoded
+`Program`, the same value that a snapshot header carries. The store is
+content-addressed and immutable.
+
+- Layout: `<store>/<first two hex chars>/<hash>.bamlprog`. A file holds a
+  small header (magic, format version, runtime build) and the Borsh bytes. A
+  writer writes to a temporary file in the same directory and renames it. A
+  reader verifies the hash of the bytes before use and treats a mismatch as a
+  missing entry.
+- The worker with `--program-store`: a `--start` from `--project` compiles,
+  stores the program, and reports `program_hash` in `hello`. A `--start` with
+  `--program-hash` and every `--resume` load the program from the store and
+  build the engine from it without compiling. If the store has no entry for
+  the hash and `--project` is given, the worker compiles, checks that the hash
+  matches, and stores the program. If it has neither, it emits `failed` with
+  the error `program <hash> is not in the store`.
+- An entry built by a different runtime build is not used. The worker treats
+  it as missing.
+- Site server. Each site has its own store (`PROGRAMS_DIR`, default
+  `.baml/programs<RUNS_TAG>-<site>`). `GET /api/programs/:hash` returns
+  `{ hash, runtime_build, program_base64 }` or 404. Before a site starts a
+  worker for a run whose `program_hash` it does not hold (a remote child, an
+  imported run), it fetches the program from the site that sent the request,
+  verifies the hash, and stores it. `POST /api/remote/runs` and
+  `POST /api/runs/import` add `program_hash` and `from_site`.
+- The cloud sites of the demo start workers for remote children with
+  `--program-hash` and without `--project`, so that the demo shows a machine
+  that runs a program it never compiled.
+
+### 9.6 Web app additions
+
+- A scenario gallery. Each scenario has a title, a short description, the
+  function and arguments it starts, and guided hints that appear at the right
+  moment from the event stream (for example "Click Pause now: four children
+  are running"). An autoplay switch performs the hinted actions. Scenarios:
+  pause and resume on another site; fan-out with durable sleep; race and
+  cancellation; deadline; all settled with one failure; kill and recover;
+  fork.
+- Timeline: a `sleeping` gap with its own style, the label
+  `sleeping until <time>`, and a live countdown; cancelled child bars with
+  their own style and a cancel connector from the parent; several children in
+  one lane stacked in rows; thread sub-bars that continue across segments.
+- State tree: several threads, futures with their state and value, cancel
+  tokens, and class instances with nested values.
+- Runs list and details: the `sleeping` status with its wake time, the program
+  hash, and `program_source` in the resume timings.
+- Fixtures for every new scenario, so that each one plays without servers.
