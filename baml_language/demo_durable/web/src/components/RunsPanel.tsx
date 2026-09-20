@@ -146,9 +146,11 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
                 return (
                   <tr key={key} className="run-row" aria-selected={key === selected} data-in-tree={tree.includes(key)} data-depth={depth}
                     data-testid="run-row" data-run={run.id} data-site={run.site} data-status={run.status} onClick={() => onSelect(key)}>
-                    <td><StatusBadge status={run.status} /></td>
+                    <td style={depth > 0 ? { paddingLeft: 4 + Math.min(depth, 3) * 14 } : undefined}>
+                      <StatusBadge status={run.status} />
+                    </td>
                     <td><SiteChip site={run.site} /></td>
-                    <td style={depth > 0 ? { paddingLeft: 6 + Math.min(depth, 3) * 12 } : undefined}>
+                    <td>
                       <div className="fn" title={run.function}>
                         {children > 0 && (
                           <button className="group-toggle" data-testid="group-toggle" aria-expanded={isOpen(key)}

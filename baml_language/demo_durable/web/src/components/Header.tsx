@@ -21,6 +21,30 @@ const CONNECTION_LABELS = {
   fixture: "fixture",
 } as const;
 
+/**
+ * One line for every site together. A site is only worth naming when
+ * something is wrong with it, so the good case says "connected" once and the
+ * bad case names the sites that are not.
+ */
+function connectionSummary(
+  sites: readonly SiteEntry[],
+  connections: AppState["connections"],
+): { text: string; problem: boolean } {
+  const statusOf = (name: Site) => connectionOf({ connections }, name).status;
+  const down = sites.filter((site) => statusOf(site.name) === "disconnected");
+  if (down.length > 0) {
+    const names = down.map((site) => site.name).join(", ");
+    return { text: `${names} ${down.length === 1 ? "is" : "are"} not answering`, problem: true };
+  }
+  if (sites.some((site) => statusOf(site.name) === "connecting")) {
+    return { text: "connecting", problem: false };
+  }
+  if (sites.length > 0 && sites.every((site) => statusOf(site.name) === "fixture")) {
+    return { text: "fixture", problem: false };
+  }
+  return { text: "connected", problem: false };
+}
+
 function parseArgs(text: string): { args: JsonObject | null; error: string | null } {
   try {
     const value: unknown = JSON.parse(text);
@@ -35,6 +59,7 @@ function parseArgs(text: string): { args: JsonObject | null; error: string | nul
 
 export function Header({ sites, connections, fixture, onStart, onOpenScenarios }: Props) {
   // Every site runs the same program. The first site that answered names the functions.
+  const summary = connectionSummary(sites, connections);
   const info: SiteInfo | null = sites.map((entry) => connectionOf({ connections }, entry.name).info).find((candidate) => candidate !== null) ?? null;
   const functions = useMemo(() => pickerFunctions(info), [info]);
   const [choice, setChoice] = useState<string>(CUSTOM);
@@ -85,17 +110,22 @@ export function Header({ sites, connections, fixture, onStart, onOpenScenarios }
             <span aria-hidden="true">✦</span> Scenarios
           </button>
         </div>
-        <div className="conns">
-          {sites.map(({ name, url }) => {
+        <div className="conns" data-testid="conns" data-problem={summary.problem ? "true" : undefined}
+          title={sites
+            .map(({ name, url }) => `${name}${url ? ` (${url})` : ""}: ${CONNECTION_LABELS[connectionOf({ connections }, name).status]}`)
+            .join("\n")}>
+          {sites.map(({ name }) => {
             const status = connectionOf({ connections }, name).status;
             return (
-              <span key={name} className="conn" data-status={status} data-testid={`conn-${name}`}
-                title={`${name}${url ? ` (${url})` : ""}: ${CONNECTION_LABELS[status]}`}>
+              <span key={name} className="conn-dot" data-status={status} data-testid={`conn-${name}`}>
                 <i className="site-dot" data-site={name} />
-                {name} · {CONNECTION_LABELS[status]}
               </span>
             );
           })}
+          <span className="conn-summary" data-problem={summary.problem ? "true" : undefined} data-testid="conn-summary">
+            {summary.problem && <span aria-hidden="true">⚠ </span>}
+            {summary.text}
+          </span>
         </div>
       </div>
 

@@ -288,6 +288,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .site-dot[data-site] { background: var(--site); }
 .conn[data-status="disconnected"] .site-dot, .conn[data-status="connecting"] .site-dot { background: transparent; outline: 1.5px solid currentColor; outline-offset: -1.5px; }
 
+/* One status for every site. A site is named only when it is not answering. */
+.conns[data-problem="true"] { border-color: var(--crit); background: var(--crit-soft); }
+.conn-dot { display: inline-flex; align-items: center; }
+.conn-dot[data-status="disconnected"] .site-dot,
+.conn-dot[data-status="connecting"] .site-dot { background: transparent; outline: 1.5px solid var(--ink-3); outline-offset: -1.5px; }
+.conn-dot[data-status="disconnected"] .site-dot { outline-color: var(--crit); }
+.conn-summary { color: var(--ink-2); }
+.conn-summary[data-problem="true"] { color: var(--crit); font-weight: 650; }
+
 .start-form { display: flex; align-items: flex-start; gap: 6px; flex: 1; min-width: 0; }
 .start-form label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; min-width: 0; }
 .start-form .args { flex: 1; }
@@ -334,9 +343,16 @@ a.btn { text-decoration: none; color: inherit; display: inline-block; }
 .runs .rel button { border: 0; background: none; padding: 0; color: var(--ink-2); text-decoration: underline; cursor: pointer; font-family: var(--mono); font-size: 10.5px; }
 
 .runs .rel .prog { color: var(--ink-3); }
-.runs tr.run-row[data-depth="1"] td:nth-child(3), .runs tr.run-row[data-depth="2"] td:nth-child(3), .runs tr.run-row[data-depth="3"] td:nth-child(3) {
+/* A child row is indented from the left edge of the list, with a guide down
+   the first cell, so that a remote child reads as belonging to the run above
+   it rather than as another run of its own. */
+.runs tr.run-row[data-depth="1"] td:first-child,
+.runs tr.run-row[data-depth="2"] td:first-child,
+.runs tr.run-row[data-depth="3"] td:first-child {
   background-image: linear-gradient(var(--line-2), var(--line-2)); background-size: 1px 100%; background-repeat: no-repeat; background-position: 8px 0;
 }
+.runs tr.run-row[data-depth="2"] td:first-child { background-position: 22px 0; }
+.runs tr.run-row[data-depth="3"] td:first-child { background-position: 36px 0; }
 .group-toggle { border: 1px solid var(--line-2); background: var(--surface); border-radius: 3px; padding: 0 4px; margin-right: 5px; font: 600 10px var(--sans); color: var(--ink-2); cursor: pointer; }
 .group-toggle:hover { background: var(--surface-3); }
 /* The states of the runs a collapsed row holds, e.g. "2 ✓ · 1 ⊘". */
@@ -554,6 +570,13 @@ a.btn { text-decoration: none; color: inherit; display: inline-block; }
 .log-line > span { text-indent: 0; }
 .log-line:hover { background: var(--surface-2); }
 .log-line[data-selected="true"][data-site] { border-left-color: var(--site); }
+
+.log-filter-row { display: flex; gap: 5px; align-items: center; font-size: 11px; flex: none; }
+.log-filter-on { border: 1px solid var(--crit); color: var(--crit); border-radius: 8px; padding: 0 6px; font-size: 10px; }
+/* An unfiltered lane keeps every line, so selecting a run never empties it.
+   The selected run reads as foreground and the rest recede. */
+.logs[data-dim="true"] .log-line { opacity: 0.5; }
+.logs[data-dim="true"] .log-line[data-selected="true"] { opacity: 1; }
 .log-line .t, .log-line .pid { color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .log-line .run { color: var(--ink-2); }
 .log-line .t, .log-line .run, .log-line .pid, .log-line .stream { margin-right: 7px; white-space: nowrap; }

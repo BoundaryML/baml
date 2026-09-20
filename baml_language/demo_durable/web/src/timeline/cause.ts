@@ -317,6 +317,40 @@ const shortJson = (value: Json, limit = 70): string => {
 // ---------------------------------------------------------------------------
 
 /** The cause of a remote call, shared by the call arrow and the wait band. */
+/**
+ * How long a remote call took, from the caller's side. `launch` is the part
+ * the demo is about: the interval between the parent yielding the call and the
+ * child's process announcing itself on the other machine, which covers the
+ * dispatch between the sites, the worker start and the program load.
+ */
+function callTimings(
+  ctx: CauseContext,
+  parentRun: string,
+  callId: string,
+  childRun: string | null,
+): [string, string][] {
+  const call = remoteCallEvent(ctx, parentRun, callId);
+  if (call === null) return [];
+  const rows: [string, string][] = [];
+  if (childRun !== null) {
+    const child = runEvents(ctx, childRun);
+    const hello = child.find((event) => event.type === "hello") ?? null;
+    if (hello !== null) {
+      rows.push(["launch", formatMs(hello.ts - call.ts)]);
+      const done = child.find((event) => event.type === "completed" || event.type === "failed");
+      if (done !== undefined) rows.push(["child ran for", formatMs(done.ts - hello.ts)]);
+    }
+  }
+  // What the calling thread actually waited. It is not launch plus run time
+  // when the parent had no process for part of the call: the result then waits
+  // in the parent's run store until a new process takes it.
+  const taken = runEvents(ctx, parentRun).find(
+    (event) => event.type === "remote_result_received" && event.call_id === callId,
+  );
+  if (taken !== undefined) rows.push(["result taken after", formatMs(taken.ts - call.ts)]);
+  return rows;
+}
+
 function callCause(ctx: CauseContext, site: Site, run: string, callId: string, childSite: Site | null, childRun: string | null): Cause {
   const event = remoteCallEvent(ctx, run, callId);
   const fn = event?.function ?? recordedFunction(ctx, run, callId) ?? "a remote function";
@@ -347,6 +381,7 @@ function callCause(ctx: CauseContext, site: Site, run: string, callId: string, c
     ...(caller === null ? [] : ([["calling function", caller]] as [string, string][])),
     ...(thread === null ? [] : ([["calling thread", String(thread)]] as [string, string][])),
     ...(childRun === null ? [] : ([["child run", `${childSite}/${childRun}`]] as [string, string][])),
+    ...callTimings(ctx, run, callId, childRun),
     ...(event === null ? [] : ([["arguments", shortJson(event.args)]] as [string, string][])),
   ];
   return {

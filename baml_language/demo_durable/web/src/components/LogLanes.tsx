@@ -191,7 +191,11 @@ interface Props {
 }
 
 export function LogLanes({ sites, events, tree, selected }: Props) {
-  const [treeOnly, setTreeOnly] = useState(true);
+  // Off by default: selecting a run in the list used to empty and refill the
+  // lanes, which reads as lines appearing and disappearing for no visible
+  // reason. Unfiltered lanes stay a continuous stream, and the selected run's
+  // lines are highlighted in place instead.
+  const [treeOnly, setTreeOnly] = useState(false);
   const filter = useMemo(() => (treeOnly && tree.length > 0 ? new Set(tree) : null), [treeOnly, tree]);
   const names = useMemo(() => sites.map((site) => site.name), [sites]);
   const lines = useMemo(
@@ -202,7 +206,7 @@ export function LogLanes({ sites, events, tree, selected }: Props) {
   const share = 100 / Math.max(names.length, 1);
   return (
     <div className="logs-wrap" style={{ display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, gap: 4 }}>
-      <div className="logs" style={{ flex: 1 }}>
+      <div className="logs" style={{ flex: 1 }} data-dim={!treeOnly && selectedRun !== null ? "true" : undefined}>
         {/* The pane set follows the registry. The key remounts the group when the
             set changes, and the pane ids name the sites, so a layout that was
             saved for another set of lanes is never applied to this one. */}
@@ -213,9 +217,12 @@ export function LogLanes({ sites, events, tree, selected }: Props) {
           content: <Lane site={site} lines={lines[site] ?? []} selectedRun={selectedRun} />,
         }))} />
       </div>
-      <label className="muted" style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 11, flex: "none" }}>
+      <label className="muted log-filter-row">
         <input type="checkbox" checked={treeOnly} onChange={(event) => setTreeOnly(event.target.checked)} data-testid="log-filter" />
-        Show only the selected run tree in the log lanes
+        {selectedRun === null
+          ? "Show only the selected run tree"
+          : `Show only ${selectedRun} and its remote children`}
+        {treeOnly && selectedRun !== null && <span className="log-filter-on">filtered</span>}
       </label>
     </div>
   );
