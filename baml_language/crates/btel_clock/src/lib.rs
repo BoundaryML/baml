@@ -21,7 +21,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 
 mod calibration;
 use calibration::{Calibrated, Probe, probe};
-pub use quanta::ClockSource as Source;
+pub use quanta::{CalibrationStatus as CalibrationOutcome, ClockSource as Source};
 
 // Budget: up to 100 ppm accepted scale uncertainty contributes 10 us between
 // 100 ms checks. A 250 us residual margin leaves headroom within the 1 ms target.
@@ -49,6 +49,17 @@ pub struct ClockDomainId(NonZeroU64);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClockEpochId(NonZeroU64);
+
+impl ClockDomainId {
+    pub const fn get(self) -> u64 {
+        self.0.get()
+    }
+}
+impl ClockEpochId {
+    pub const fn get(self) -> u64 {
+        self.0.get()
+    }
+}
 
 /// OS monotonic nanoseconds, never UTC or raw counter ticks.
 #[repr(transparent)]

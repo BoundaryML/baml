@@ -1,0 +1,27 @@
+[package]
+name = "btel_publisher"
+version = { workspace = true }
+publish = false
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Owned protobuf conversion for Btel recording data"
+
+[lints]
+workspace = true
+
+[dependencies]
+btel_clock = { workspace = true }
+btel_processor = { workspace = true }
+btel_records = { workspace = true }
+btel_types = { workspace = true }
+prost = { workspace = true }
+rustc-hash = { workspace = true }
+uuid = { workspace = true, features = [ "v4" ] }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+[dev-dependencies]
+bex_chunkedringbuffer = { workspace = true }

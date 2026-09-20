@@ -1763,6 +1763,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel_publisher"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_processor",
+ "btel_records",
+ "btel_types",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "rustc-hash 2.1.2",
+ "uuid",
+]
+
+[[package]]
 name = "btel_records"
 version = "0.0.0-beta"
 dependencies = [

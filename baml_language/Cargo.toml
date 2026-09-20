@@ -123,6 +123,7 @@ btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }
 btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
+btel_publisher = { path = "crates/btel_publisher" }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }

@@ -52,15 +52,13 @@ impl Drop for Capture {
 }
 
 fn span(capture: Capture) -> SpanRecord<[Capture], Capture> {
-    SpanRecord::LateFunctionSpanCompletion {
+    SpanRecord::LateFunctionSpanCompletionOk {
         id: allocate_telemetry_id(),
         parent_id: allocate_telemetry_id(),
         call_path: CallPathId::new_non_root(1).unwrap(),
         entered_at: ClockInstant::from_ticks(1),
         exited_at: ClockInstant::from_ticks(2),
         await_time: AwaitDuration::ZERO,
-        outcome: InvocationOutcome::Ok,
-        reentry: false,
         captured_value: Some(Box::new(capture)),
     }
 }
@@ -237,15 +235,13 @@ fn destructor_panic_is_preserved_and_stops_producers() {
     producer.write_span(SpanRecord::ThreadSelected {
         thread_id: allocate_telemetry_id(),
     });
-    producer.write_span(SpanRecord::FunctionSpanCompletion {
+    producer.write_span(SpanRecord::FunctionSpanCompletionOk {
         id: allocate_telemetry_id(),
         parent_id: allocate_telemetry_id(),
         call_path: CallPathId::new_non_root(1).unwrap(),
         entered_at: ClockInstant::from_ticks(1),
         exited_at: ClockInstant::from_ticks(2),
         await_time: AwaitDuration::ZERO,
-        outcome: InvocationOutcome::Ok,
-        reentry: false,
         captured_value: Some(Box::new(BrokenCapture)),
     });
     let panic = catch_unwind(AssertUnwindSafe(|| processor.run())).unwrap_err();
@@ -258,17 +254,22 @@ fn destructor_panic_is_preserved_and_stops_producers() {
 #[derive(Default)]
 struct RecordingPublisher {
     deltas: Vec<AggregateDelta>,
-    spans: Vec<ProcessedSpanBatch<[Capture], Capture>>,
-    initial_threads: Vec<Option<btel_types::TelemetryId>>,
+    threads: Vec<TelemetryId>,
+    captured_addresses: Vec<usize>,
     flushes: usize,
 }
 impl Publisher<[Capture], Capture> for RecordingPublisher {
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.deltas.push(delta);
     }
-    fn spans(&mut self, batch: ProcessedSpanBatch<[Capture], Capture>) {
-        self.initial_threads.push(batch.initial_thread());
-        self.spans.push(batch);
+    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<[Capture], Capture>) {
+        self.threads.push(thread);
+        if let Some(completion) = record.completion()
+            && let Some(value) = completion.captured_value
+        {
+            self.captured_addresses
+                .push(std::ptr::from_ref(value).addr());
+        }
     }
     fn flush(&mut self) {
         self.flushes += 1;
@@ -276,7 +277,7 @@ impl Publisher<[Capture], Capture> for RecordingPublisher {
 }
 
 #[test]
-fn all_completions_combine_once_and_spans_move_without_copying_captures() {
+fn all_completions_combine_once_and_borrowed_spans_release_captures() {
     let pool = ChunkPool::new(config(16, 2)).unwrap();
     let mut processor = Processor::with_publisher(
         pool.bind_consumer().unwrap(),
@@ -309,29 +310,25 @@ fn all_completions_combine_once_and_spans_move_without_copying_captures() {
     let captured = Box::new(Capture(drops.clone()));
     let address = &raw const *captured;
     producer.write_span(SpanRecord::ThreadSelected { thread_id });
-    producer.write_span(SpanRecord::FunctionSpanCompletion {
+    producer.write_span(SpanRecord::FunctionSpanCompletionOk {
         id: allocate_telemetry_id(),
         parent_id: thread_id,
         call_path: path,
         entered_at: ClockInstant::from_ticks(10),
         exited_at: ClockInstant::from_ticks(20),
         await_time: io,
-        outcome: InvocationOutcome::Ok,
-        reentry: false,
         captured_value: Some(captured),
     });
     producer.seal();
     processor.process_available();
     // A later chunk deliberately has no selector: context survives chunk reuse.
-    producer.write_span(SpanRecord::LateFunctionSpanCompletion {
+    producer.write_span(SpanRecord::LateFunctionSpanCompletionCancelled {
         id: allocate_telemetry_id(),
         parent_id: thread_id,
         call_path: path,
         entered_at: ClockInstant::from_ticks(20),
         exited_at: ClockInstant::from_ticks(10),
         await_time: io,
-        outcome: InvocationOutcome::Cancelled,
-        reentry: false,
         captured_value: None,
     });
     let clock = btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
@@ -385,26 +382,14 @@ fn all_completions_combine_once_and_spans_move_without_copying_captures() {
             .sum::<u64>(),
         12
     );
-    assert_eq!(receiver.initial_threads, [None, Some(thread_id)]);
-    assert_eq!(receiver.spans.len(), 2); // Two original, retained chunks.
+    assert_eq!(receiver.threads, [thread_id; 3]);
+    assert_eq!(receiver.captured_addresses, [address.addr()]);
     assert_eq!(
-        receiver
-            .spans
-            .iter()
-            .map(|b| b.records().len())
-            .sum::<usize>(),
-        4
+        pool.stats().free_chunks,
+        4,
+        "both lanes recycled immediately"
     );
-    assert_eq!(pool.stats().free_chunks, 2, "only Timing recycled");
-    let SpanRecord::FunctionSpanCompletion {
-        captured_value: Some(value),
-        ..
-    } = &receiver.spans[0].records()[1]
-    else {
-        panic!()
-    };
-    assert_eq!(&raw const **value, address);
-    assert_eq!(drops.load(Ordering::Relaxed), 0);
+    assert_eq!(drops.load(Ordering::Relaxed), 1);
     assert_eq!(receiver.flushes, 1);
     assert!(processor.process_available().complete);
     assert_eq!(processor.publisher().flushes, 1, "final flush happens once");
@@ -426,7 +411,7 @@ fn all_completions_combine_once_and_spans_move_without_copying_captures() {
 }
 
 #[test]
-fn retained_span_chunks_keep_context_after_switches_and_producer_retirement() {
+fn borrowed_spans_keep_context_after_switches_and_producer_retirement() {
     let pool = ChunkPool::new(config(4, 4)).unwrap();
     let mut processor = Processor::with_publisher(
         pool.bind_consumer().unwrap(),
@@ -475,26 +460,8 @@ fn retained_span_chunks_keep_context_after_switches_and_producer_retirement() {
         publisher.deltas.is_empty(),
         "announcements do not aggregate"
     );
-    assert_eq!(publisher.initial_threads, [None, Some(a), Some(a), Some(a)]);
-    for (batch, expected) in publisher
-        .spans
-        .iter()
-        .zip([vec![a], vec![a], vec![b, a], vec![b]])
-    {
-        let mut current = batch.initial_thread();
-        let mut observed = Vec::new();
-        for record in batch.records() {
-            match record {
-                SpanRecord::ThreadSelected { thread_id } => current = Some(*thread_id),
-                SpanRecord::FunctionSpanAnnouncement { parent_id, .. } => {
-                    assert_eq!(current, Some(*parent_id));
-                    observed.push(current.unwrap());
-                }
-                _ => unreachable!(),
-            }
-        }
-        assert_eq!(observed, expected);
-    }
+    assert_eq!(publisher.threads, [a, a, b, a, b]);
+    assert_eq!(pool.stats().free_chunks, 8);
 }
 
 #[test]
@@ -611,7 +578,7 @@ fn idle_deadline_flushes_without_new_input() {
             fn aggregate(&mut self, d: AggregateDelta) {
                 self.1 += d.count;
             }
-            fn spans(&mut self, _: ProcessedSpanBatch<(), ()>) {}
+            fn span(&mut self, _: TelemetryId, _: &SpanRecord<(), ()>) {}
             fn flush(&mut self) {
                 if self.1 != 0 {
                     self.0.send(std::mem::take(&mut self.1)).unwrap();
@@ -645,7 +612,7 @@ fn publisher_flush_failure_is_terminal_even_after_the_last_chunk() {
     struct BrokenPublisher;
     impl Publisher<(), ()> for BrokenPublisher {
         fn aggregate(&mut self, _: AggregateDelta) {}
-        fn spans(&mut self, _: ProcessedSpanBatch<(), ()>) {}
+        fn span(&mut self, _: TelemetryId, _: &SpanRecord<(), ()>) {}
         fn flush(&mut self) {
             std::panic::panic_any(43_u32);
         }
@@ -667,5 +634,41 @@ fn publisher_flush_failure_is_terminal_even_after_the_last_chunk() {
     assert!(
         retry.is::<TransportFailed>(),
         "no replay after partial acceptance"
+    );
+}
+
+#[test]
+fn borrowed_callback_panic_recycles_input_and_never_replays() {
+    struct BrokenPublisher;
+    impl Publisher<[Capture], Capture> for BrokenPublisher {
+        fn aggregate(&mut self, _: AggregateDelta) {}
+        fn span(&mut self, _: TelemetryId, _: &SpanRecord<[Capture], Capture>) {
+            std::panic::panic_any(44_u32);
+        }
+        fn flush(&mut self) {}
+    }
+    let pool = ChunkPool::new(config(4, 1)).unwrap();
+    let mut processor =
+        Processor::with_publisher(pool.bind_consumer().unwrap(), nz(8), BrokenPublisher);
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut producer = pool.register_producer().unwrap();
+    producer.write_span(SpanRecord::ThreadSelected {
+        thread_id: allocate_telemetry_id(),
+    });
+    producer.write_span(span(Capture(drops.clone())));
+    producer.write_span(span(Capture(drops.clone())));
+    producer.seal();
+    let error = catch_unwind(AssertUnwindSafe(|| processor.process_available())).unwrap_err();
+    assert_eq!(*error.downcast::<u32>().unwrap(), 44);
+    assert_eq!(
+        drops.load(Ordering::Relaxed),
+        2,
+        "including unvisited capture"
+    );
+    assert!(pool.is_failed());
+    assert!(
+        catch_unwind(AssertUnwindSafe(|| processor.process_available()))
+            .unwrap_err()
+            .is::<TransportFailed>()
     );
 }

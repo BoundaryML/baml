@@ -52,6 +52,7 @@ const SPAN: u8 = 1 << 0;
 const CAPTURE_OUTPUT: u8 = 1 << 1;
 const CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
+const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
 
 static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -335,6 +336,9 @@ impl TelemetryState {
                     Box::new(btel_records::CaptureDeferred)
                 }
             });
+        if captured_inputs.is_some() {
+            flags |= REQUIRES_ANNOUNCEMENT;
+        }
         let entered_at = self.clock.read();
         if mode == InvocationMode::Span {
             let id = allocate_telemetry_id();
@@ -442,30 +446,232 @@ impl TelemetryState {
 
         if telemetry.is_span() {
             let id = self.thread.active_id;
-            self.write_span(SpanRecord::FunctionSpanCompletion {
-                id,
-                parent_id: telemetry.saved_parent_id,
-                call_path,
-                entered_at: telemetry.entered_at,
-                exited_at,
-                await_time: telemetry.await_duration,
+            match (
                 outcome,
-                reentry: telemetry.is_reentry(),
-                captured_value: capture_value.map(|value| Box::new(self::capture_value(value))),
-            });
+                telemetry.is_reentry(),
+                telemetry.flags & REQUIRES_ANNOUNCEMENT != 0,
+            ) {
+                (InvocationOutcome::Ok, false, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionOk {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Ok, false, true) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Ok, true, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionOkReentry {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Ok, true, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    },
+                ),
+                (InvocationOutcome::Errored, false, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionErrored {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Errored, false, true) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Errored, true, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionErroredReentry {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Errored, true, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    },
+                ),
+                (InvocationOutcome::Cancelled, false, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionCancelled {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Cancelled, false, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    },
+                ),
+                (InvocationOutcome::Cancelled, true, false) => {
+                    self.write_span(SpanRecord::FunctionSpanCompletionCancelledReentry {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Cancelled, true, true) => self.write_span(
+                    SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+                        id,
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    },
+                ),
+            }
             self.thread.active_id = telemetry.saved_parent_id;
         } else if policy.promotes(elapsed, outcome, self.clock.domain()) {
-            self.write_span(SpanRecord::LateFunctionSpanCompletion {
-                id: allocate_telemetry_id(),
-                parent_id: telemetry.saved_parent_id,
-                call_path,
-                entered_at: telemetry.entered_at,
-                exited_at,
-                await_time: telemetry.await_duration,
-                outcome,
-                reentry: telemetry.is_reentry(),
-                captured_value: capture_value.map(|value| Box::new(self::capture_value(value))),
-            });
+            match (outcome, telemetry.is_reentry()) {
+                (InvocationOutcome::Ok, false) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionOk {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Ok, true) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionOkReentry {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Errored, false) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionErrored {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Errored, true) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionErroredReentry {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Cancelled, false) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionCancelled {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+                (InvocationOutcome::Cancelled, true) => {
+                    self.write_span(SpanRecord::LateFunctionSpanCompletionCancelledReentry {
+                        id: allocate_telemetry_id(),
+                        parent_id: telemetry.saved_parent_id,
+                        call_path,
+                        entered_at: telemetry.entered_at,
+                        exited_at,
+                        await_time: telemetry.await_duration,
+                        captured_value: capture_value
+                            .map(|value| Box::new(self::capture_value(value))),
+                    });
+                }
+            }
         } else {
             self.write_timing(TimingRecord::FunctionTimingCompletion {
                 call_path,
@@ -636,8 +842,43 @@ impl TelemetryState {
                         .flat_map(|capture| capture.iter())
                         .filter_map(Value::as_object_ptr),
                 ),
-                SpanRecord::FunctionSpanCompletion { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletion { captured_value, .. } => {
+                SpanRecord::FunctionSpanCompletionOk { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                    captured_value, ..
+                }
+                | SpanRecord::FunctionSpanCompletionOkReentry { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErrored { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErroredReentry { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelled { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelledReentry { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionOk { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionOkReentry { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionErrored { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionErroredReentry { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionCancelled { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionCancelledReentry {
+                    captured_value, ..
+                } => {
                     roots.extend(
                         captured_value
                             .iter()
@@ -682,8 +923,43 @@ impl TelemetryState {
                         }
                     }
                 }
-                SpanRecord::FunctionSpanCompletion { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletion { captured_value, .. } => {
+                SpanRecord::FunctionSpanCompletionOk { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                    captured_value, ..
+                }
+                | SpanRecord::FunctionSpanCompletionOkReentry { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErrored { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErroredReentry { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelled { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelledReentry { captured_value, .. }
+                | SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+                    captured_value,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionOk { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionOkReentry { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionErrored { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionErroredReentry { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionCancelled { captured_value, .. }
+                | SpanRecord::LateFunctionSpanCompletionCancelledReentry {
+                    captured_value, ..
+                } => {
                     if let Some(value) = captured_value {
                         forward_value(value, roots);
                     }
@@ -922,7 +1198,7 @@ mod tests {
             SpanRecord::FunctionSpanAnnouncement { captured_inputs: Some(capture), .. }
             if capture[0] == Value::object(forwarding[&input]))));
         assert!(state.span_records().iter().any(|record| matches!(record,
-            SpanRecord::FunctionSpanCompletion { captured_value: Some(capture), .. }
+            SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { captured_value: Some(capture), .. }
             if **capture == Value::object(forwarding[&output]))));
         drop(state);
         // SAFETY: dropping the record owner removed all remaining roots.
@@ -1039,11 +1315,12 @@ mod tests {
                 .count(),
             1
         );
-        assert!(!state.span_records().iter().any(|event| matches!(
-            event,
-            SpanRecord::FunctionSpanCompletion { .. }
-                | SpanRecord::LateFunctionSpanCompletion { .. }
-        )));
+        assert!(
+            !state
+                .span_records()
+                .iter()
+                .any(|event| event.completion().is_some())
+        );
     }
 
     #[test]
@@ -1083,7 +1360,7 @@ mod tests {
         )));
         assert!(state.span_records().iter().any(|event| matches!(
             event,
-            SpanRecord::FunctionSpanCompletion { id, captured_value: Some(value), .. }
+            SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { id, captured_value: Some(value), .. }
                 if *id == span_id && **value == Value::int(5)
         )));
     }
@@ -1125,7 +1402,7 @@ mod tests {
         assert_eq!(state.active_id(), parent_id);
         assert!(state.span_records().iter().any(|event| matches!(
             event,
-            SpanRecord::LateFunctionSpanCompletion {
+            SpanRecord::LateFunctionSpanCompletionOk {
                 parent_id: parent,
                 captured_value: Some(value),
                 ..
@@ -1184,6 +1461,151 @@ mod tests {
     }
 
     #[test]
+    fn specialized_completions_preserve_outcome_reentry_and_entry_dependency() {
+        for outcome in [
+            InvocationOutcome::Ok,
+            InvocationOutcome::Errored,
+            InvocationOutcome::Cancelled,
+        ] {
+            for reentry in [false, true] {
+                for inputs in [false, true] {
+                    let function = function(FunctionKind::Bytecode, None);
+                    let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                    state.start_thread();
+                    state
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                span_from_entry: true,
+                                capture_inputs: inputs,
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    let outer = state
+                        .enter_bytecode(
+                            &function,
+                            HeapPtr::null(),
+                            None,
+                            0,
+                            false,
+                            &[Value::int(3)],
+                            |_, _| (None, function.telemetry_function_id.unwrap()),
+                        )
+                        .unwrap();
+                    let inner = reentry.then(|| {
+                        state
+                            .enter_bytecode(
+                                &function,
+                                HeapPtr::null(),
+                                Some(HeapPtr::null()),
+                                1,
+                                true,
+                                &[Value::int(4)],
+                                |_, _| {
+                                    (
+                                        Some(function.telemetry_function_id.unwrap()),
+                                        function.telemetry_function_id.unwrap(),
+                                    )
+                                },
+                            )
+                            .unwrap()
+                    });
+                    let frame = inner.unwrap_or(outer);
+                    let id = state.active_id();
+                    // A later policy cannot manufacture or erase entry-side dependencies.
+                    state
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                span_from_entry: true,
+                                capture_inputs: !inputs,
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
+                    let completed = state.span_records().last().unwrap().completion().unwrap();
+                    assert_eq!(completed.id, id);
+                    assert_eq!(completed.outcome, outcome);
+                    assert_eq!(completed.reentry, reentry);
+                    assert_eq!(completed.requires_announcement, inputs);
+                    assert!(!completed.late);
+                    assert!(state.span_records().iter().any(|record| matches!(record,
+                        SpanRecord::FunctionSpanAnnouncement {id: announced, captured_inputs, ..}
+                        if *announced == id && captured_inputs.is_some() == inputs)));
+                    if reentry {
+                        state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_late_completion_variants_are_announcement_independent() {
+        for outcome in [
+            InvocationOutcome::Ok,
+            InvocationOutcome::Errored,
+            InvocationOutcome::Cancelled,
+        ] {
+            for reentry in [false, true] {
+                let function = function(FunctionKind::Bytecode, None);
+                let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+                state.start_thread();
+                let outer = state
+                    .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                        (None, function.telemetry_function_id.unwrap())
+                    })
+                    .unwrap();
+                let inner = reentry.then(|| {
+                    state
+                        .enter_bytecode(
+                            &function,
+                            HeapPtr::null(),
+                            Some(HeapPtr::null()),
+                            1,
+                            true,
+                            &[],
+                            |_, _| {
+                                (
+                                    Some(function.telemetry_function_id.unwrap()),
+                                    function.telemetry_function_id.unwrap(),
+                                )
+                            },
+                        )
+                        .unwrap()
+                });
+                state
+                    .set_policy(
+                        &function,
+                        TelemetryPolicy {
+                            span_from_entry: true,
+                            capture_inputs: true,
+                            ..TelemetryPolicy::NONE
+                        },
+                    )
+                    .unwrap();
+                state.complete_invocation(inner.unwrap_or(outer), &function, outcome, None);
+                let completed = state.span_records().last().unwrap().completion().unwrap();
+                assert_eq!(completed.outcome, outcome);
+                assert_eq!(completed.reentry, reentry);
+                assert!(completed.late);
+                assert!(!completed.requires_announcement);
+                assert!(
+                    !state.span_records().iter().any(|record| matches!(
+                        record,
+                        SpanRecord::FunctionSpanAnnouncement { .. }
+                    ))
+                );
+                if reentry {
+                    state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn native_policy_updates_are_rejected() {
         let state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         let function = function(FunctionKind::NativeUnresolved, None);
@@ -1236,17 +1658,11 @@ mod tests {
                         )
                         .unwrap();
                     state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
-                    let Some(SpanRecord::FunctionSpanCompletion {
-                        captured_value,
-                        outcome: recorded,
-                        ..
-                    }) = state.span_records().last()
-                    else {
-                        panic!("an entry-selected span must remain a span");
-                    };
-                    assert_eq!(*recorded, outcome);
+                    let recorded = state.span_records().last().unwrap().completion().unwrap();
+                    assert!(!recorded.late, "an entry-selected span must remain a span");
+                    assert_eq!(recorded.outcome, outcome);
                     assert_eq!(
-                        captured_value.as_ref().map(|capture| **capture),
+                        recorded.captured_value.copied(),
                         (initial || current).then_some(Value::int(7))
                     );
                 }

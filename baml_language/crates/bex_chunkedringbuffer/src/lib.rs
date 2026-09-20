@@ -812,6 +812,15 @@ impl<T, S> Consumer<T, S> {
         self.shared.check();
     }
 
+    /// Readiness hint only. A producer may publish immediately after this read.
+    pub fn has_ready_chunks(&self) -> bool {
+        self.shared.ready_hint.0.load(Ordering::Acquire)
+    }
+
+    pub fn chunk_capacity(&self) -> usize {
+        self.shared.config.chunk_capacity.get()
+    }
+
     /// Fixed decoder capacity; every chunk carries an index below this bound.
     pub fn producer_capacity(&self) -> usize {
         self.shared.config.max_producers.get()
