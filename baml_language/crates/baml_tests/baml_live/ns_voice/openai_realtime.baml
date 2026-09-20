@@ -132,7 +132,7 @@ class OpenAIRealtime {
                 _instructions: config.instructions,
                 _item_id: null,
                 _response_active: false,
-                _create_pending: false,
+                _pending_creates: [],
                 _closing: false,
             }
         }
@@ -144,23 +144,24 @@ class OpenAIRealtimeSession {
     _instructions: string,
     // The assistant item whose audio is playing, for truncation.
     _item_id: string?,
-    // Server VAD starts responses by itself, and only one may be active.
-    // A `response.create` that would collide waits for `response.done`.
+    // Server VAD starts responses by itself, and only one may be active. A
+    // `response.create` that would collide waits here, as the complete
+    // message, and one is sent after each `response.done`.
     _response_active: bool,
-    _create_pending: bool,
+    _pending_creates: baml.json.json[],
     _closing: bool,
 
     function _send(self, message: baml.json.json) -> void throws baml.errors.Io {
         self.ws.send(baml.json.stringify(message));
     }
 
-    /// (internal) Start a response now, or as soon as the active one is done.
-    function _create_response(self) -> void throws baml.errors.Io {
+    /// (internal) Send `message`, a `response.create`, now or once the active response is done.
+    function _create_response(self, message: baml.json.json) -> void throws baml.errors.Io {
         if (self._response_active) {
-            self._create_pending = true;
+            self._pending_creates.push(message);
         } else {
             self._response_active = true;
-            self._send({ "type": "response.create" });
+            self._send(message);
         }
     }
 
@@ -243,9 +244,10 @@ class OpenAIRealtimeSession {
                         "response.done" => {
                             self._response_active = false;
                             let out = self._response_done(ev);
-                            if (self._create_pending) {
-                                self._create_pending = false;
-                                self._create_response();
+                            // `json` admits null, so the length is the test
+                            // for an empty queue, not the shifted value.
+                            if (self._pending_creates.length() > 0) {
+                                self._create_response(self._pending_creates.shift());
                             }
                             out
                         },
@@ -276,11 +278,11 @@ class OpenAIRealtimeSession {
                     },
                 );
             }
-            self._create_response();
+            self._create_response({ "type": "response.create" });
         }
 
         function say(self, text: string) -> void {
-            self._send(
+            self._create_response(
                 {
                     "type": "response.create",
                     // Per-response instructions replace the session's, so

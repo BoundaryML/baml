@@ -176,7 +176,11 @@ function mic_check(echo_cancellation: bool = true) -> MicCheck {
     let heard_ms = 0;
     let played = false;
     while (heard_ms < 3000) {
-        let frame = device.next_input() ?? b"";
+        // A helper that exited, for example without microphone permission,
+        // ends the input. Without this the loop would never advance.
+        let frame: uint8array = device.next_input() else {
+            break;
+        };
         frames = frames + 1;
         heard_ms = heard_ms + frame.length() / 48;
         let i = 1;

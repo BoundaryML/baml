@@ -233,7 +233,8 @@ function fake_hangup() -> string {
     let agent = voice.VoiceAgent.new(audio = voice.ScriptedAudioDevice.new([]), provider = provider);
     let outcome = agent.run(ReservationLine@spec("Luigi's")) catch (e) {
         let ended: voice.SessionEnded => {
-            return `ended: ${ended.reason}`;
+            // The runner releases the session on every way out of a run.
+            return `ended: ${ended.reason}, session closed: ${session._closed}`;
         },
     };
     "returned a value"
@@ -322,7 +323,7 @@ testset "voice" {
     }
 
     test "a session that ends early throws SessionEnded" {
-        assert.equal(fake_hangup(), "ended: the script ended");
+        assert.equal(fake_hangup(), "ended: the script ended, session closed: true");
     }
 
     test "a text model is rejected before connecting" {

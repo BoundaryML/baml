@@ -494,6 +494,9 @@ class VoiceAgent {
             for (let timer in timers) {
                 let _ = timer.cancel();
             }
+            // The loop also ends when the microphone pump fails to send, and
+            // that path has not closed the session. Closing twice is safe.
+            session.close();
             self._flush_transcript(j, state, client_id);
             self.audio.drain() catch_all (e) {
                 _ => {}
