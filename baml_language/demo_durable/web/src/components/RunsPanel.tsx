@@ -159,7 +159,18 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
                 const blocked = pauseBlocked(run, events[key]);
                 return (
                   <tr key={key} className="run-row" aria-selected={key === selected} data-in-tree={tree.includes(key)} data-depth={depth}
-                    data-testid="run-row" data-run={run.id} data-site={run.site} data-status={run.status} onClick={() => onSelect(key)}>
+                    data-testid="run-row" data-run={run.id} data-site={run.site} data-status={run.status}
+                    onClick={() => {
+                      // Clicking the row that is already selected collapses it,
+                      // so the same click that opened a run closes it again.
+                      // The selection does not change, so the effect above does
+                      // not reopen it.
+                      if (key === selected && children > 0 && isOpen(key)) {
+                        toggle(key);
+                        return;
+                      }
+                      onSelect(key);
+                    }}>
                     <td style={depth > 0 ? { paddingLeft: 4 + Math.min(depth, 3) * 14 } : undefined}>
                       <StatusBadge status={run.status} />
                     </td>
