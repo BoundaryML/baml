@@ -72,6 +72,52 @@ pub struct YieldPosition {
     pub line: usize,
 }
 
+/// Why a thread that waited on a remote call was cancelled (contract
+/// section 10.1). The engine decides from the tokens that are linked to the
+/// thread; [`Self::Unknown`] is a correct answer when they do not tell the
+/// cases apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CancelCause {
+    /// The future the thread settles was cancelled: `Future.cancel`, and the
+    /// blanket cancel a `baml.future.race` applies to its losers.
+    FutureCancel,
+    /// A user `baml.spawn.CancelToken` that the spawn linked into the thread
+    /// fired. `baml.future.with_timeout` cancels its body this way.
+    Token,
+    /// An ancestor thread's token fired, so the cancellation cascaded down.
+    Parent,
+    /// The tokens do not distinguish the case: the run itself was cancelled,
+    /// the thread has no links the engine can read, or nothing had fired.
+    Unknown,
+}
+
+impl CancelCause {
+    /// The spelling used by the worker protocol.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FutureCancel => "future_cancel",
+            Self::Token => "token",
+            Self::Parent => "parent",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// A remote call the run has abandoned. See [`DurableHost::remote_cancelled`].
+#[derive(Clone, Debug)]
+pub struct RemoteCancel {
+    /// The identifier [`DurableHost::remote_call`] returned.
+    pub call_id: String,
+    /// The thread that waited for the result.
+    pub thread: DurableThreadId,
+    /// Where the abandoned call was made, as recorded when it was made. It
+    /// survives a snapshot, so a resumed run reports the same location.
+    pub site: Option<YieldPosition>,
+    /// Which token fired.
+    pub cause: CancelCause,
+}
+
 /// One argument of a [`RemoteCallRequest`].
 #[derive(Clone, Debug)]
 pub struct RemoteCallArg {
@@ -106,6 +152,10 @@ pub struct RemoteCallRequest {
     /// Declared return type of the callee. The engine converts the result
     /// against this type.
     pub return_type: RuntimeTy,
+    /// Where the call was made: the innermost user frame of the calling
+    /// thread, the same frame the accompanying [`YieldReason::RemoteCall`]
+    /// yield reports. `None` when no user frame is on the stack.
+    pub site: Option<YieldPosition>,
 }
 
 /// A thread that waits for the result of a remote call.
@@ -120,6 +170,9 @@ pub struct RemoteResultWait {
     pub function: String,
     /// Declared return type of the callee.
     pub return_type: RuntimeTy,
+    /// Where the call was made, as recorded when it was made. A restored
+    /// thread reports the location the snapshot carries.
+    pub site: Option<YieldPosition>,
 }
 
 /// Hooks an embedder installs to observe a run and to service `remote_` calls.
@@ -159,15 +212,23 @@ pub trait DurableHost: Send + Sync + 'static {
     ) -> BoxFuture<'static, Result<BexExternalValue, String>>;
 
     /// A thread is about to execute. `parent` is `None` for a root thread.
-    fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>);
+    /// `site` is the `spawn` site in the parent thread, and `None` for a root
+    /// thread and whenever the engine has no user frame for the spawn.
+    fn thread_started(
+        &self,
+        thread: DurableThreadId,
+        parent: Option<DurableThreadId>,
+        site: Option<&YieldPosition>,
+    );
 
     /// A thread finished, on every exit path. A spawned thread that was
     /// cancelled before its body ran reports neither start nor end.
     fn thread_ended(&self, thread: DurableThreadId);
 
-    /// `thread` was cancelled while it waited for the result of the remote
-    /// call `call_id` (`Future.cancel`, a `race` loser, a cancel token, a
-    /// timeout, the failure of a parent, or the cancellation of the run). The
+    /// `cancel.thread` was cancelled while it waited for the result of the
+    /// remote call `cancel.call_id` (`Future.cancel`, a `race` loser, a cancel
+    /// token, a timeout, the failure of a parent, or the cancellation of the
+    /// run; [`RemoteCancel::cause`] says which one the tokens name). The
     /// run no longer waits on the call: the engine has dropped the
     /// [`Self::remote_result`] future and will not ask for this id again, so
     /// the host can cancel the remote work and must discard a result that
@@ -176,8 +237,8 @@ pub trait DurableHost: Send + Sync + 'static {
     /// then; the host may therefore hear about one call in two processes.
     ///
     /// The default does nothing.
-    fn remote_cancelled(&self, call_id: &str, thread: DurableThreadId) {
-        let _ = (call_id, thread);
+    fn remote_cancelled(&self, cancel: RemoteCancel) {
+        let _ = cancel;
     }
 
     /// True when the host already holds the result of `call_id` and the
@@ -294,6 +355,11 @@ pub enum ParkedKind {
         function: String,
         /// Index of the callee in the heap's compile-time region.
         function_index: u64,
+        /// Where the call was made. It travels in the snapshot so that a
+        /// resumed run reports the same location for the call, in a
+        /// `remote_cancel` for example, without re-deriving it from the
+        /// restored frames.
+        site: Option<YieldPosition>,
     },
     /// A spawned thread that has not started: it waits for a slot in its
     /// `baml.spawn.TaskGroup`. Its VM holds the entry frame of the spawn body.
@@ -908,10 +974,16 @@ mod native {
                     call_id,
                     function,
                     function_index,
+                    site,
                 } => serde_json::json!({
                     "call_id": call_id,
                     "function": function,
                     "function_index": function_index,
+                    "site": site.as_ref().map(|site| serde_json::json!({
+                        "function": site.function,
+                        "file": site.file,
+                        "line": site.line,
+                    })),
                 })
                 .to_string()
                 .into_bytes(),
@@ -945,6 +1017,22 @@ mod native {
                 }
                 "remote_call" => {
                     let payload = payload()?;
+                    // A snapshot that predates the call site has no `site`.
+                    let site = payload.get("site").and_then(|site| {
+                        let text = |name: &str| {
+                            site.get(name)
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_string)
+                        };
+                        Some(super::YieldPosition {
+                            function: text("function")?,
+                            file: text("file")?,
+                            line: usize::try_from(
+                                site.get("line").and_then(serde_json::Value::as_u64)?,
+                            )
+                            .ok()?,
+                        })
+                    });
                     Ok(Self::RemoteCall {
                         call_id: field(&payload, "call_id")?
                             .as_str()
@@ -957,6 +1045,7 @@ mod native {
                         function_index: field(&payload, "function_index")?
                             .as_u64()
                             .ok_or("`function_index` is not a number")?,
+                        site,
                     })
                 }
                 other => Err(format!("unknown parked kind `{other}`")),
@@ -1176,6 +1265,8 @@ mod native {
     pub(crate) struct RestoredChild {
         pub(crate) thread_id: super::DurableThreadId,
         pub(crate) parent: Option<super::DurableThreadId>,
+        /// The `spawn` site the snapshot recorded for the thread.
+        pub(crate) spawn_site: Option<super::YieldPosition>,
         pub(crate) permit: bex_heap::InactiveHeapPermit<crate::BexThread>,
         pub(crate) parked: ParkedKind,
         pub(crate) settles_future: bex_vm_types::types::FutureId,
@@ -1775,7 +1866,7 @@ mod native {
             if parked[0] == ParkedKind::Queued {
                 return Err(refuse("the root thread cannot be queued".to_string()));
             }
-            let engine_states: Vec<(String, u64, u64)> = restored
+            let engine_states: Vec<crate::thread::EngineState> = restored
                 .threads
                 .iter()
                 .map(|thread| {
@@ -1996,13 +2087,19 @@ mod native {
             let mut thread_infos = Vec::with_capacity(restored.threads.len());
             let mut children = Vec::new();
             let mut vms = vms.into_iter();
-            for (index, ((restored_thread, parked), (path, spawned, remote_calls))) in restored
+            for (index, ((restored_thread, parked), engine_state)) in restored
                 .threads
                 .into_iter()
                 .zip(parked)
                 .zip(engine_states)
                 .enumerate()
             {
+                let crate::thread::EngineState {
+                    path,
+                    spawned,
+                    remote_calls,
+                    spawn_site,
+                } = engine_state;
                 let token = tokens[&restored_thread.thread_id].clone();
                 thread_infos.push(RestoredThreadInfo {
                     thread: restored_thread.thread_id,
@@ -2036,6 +2133,13 @@ mod native {
                     parent: restored_thread.parent_thread,
                     token_parent: links.token_parent,
                     user_cancels: links.user_cancels.clone(),
+                    // The restored cancel tree: the token of the thread this
+                    // one hangs under, so that a cascade is still recognized
+                    // as one after a resume.
+                    token_parent_cancel: links
+                        .token_parent
+                        .and_then(|parent| tokens.get(&parent).cloned()),
+                    spawn_site: spawn_site.clone(),
                     pause: Some(Arc::clone(&pause)),
                     path,
                     spawned,
@@ -2055,6 +2159,7 @@ mod native {
                 children.push(RestoredChild {
                     thread_id: restored_thread.thread_id,
                     parent: restored_thread.parent_thread,
+                    spawn_site,
                     permit,
                     parked,
                     settles_future,

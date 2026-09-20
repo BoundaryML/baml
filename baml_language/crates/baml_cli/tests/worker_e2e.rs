@@ -314,6 +314,48 @@ fn durable_run_answers_remote_call_and_completes() {
     assert_eq!(last["value"], expected_plan());
 }
 
+/// Contract section 10.3: the app names "the calling function and its call
+/// site". The call is made in `fetch_via`, and the run's entry function is
+/// `durable_nested_weather`, so the two differ and only the worker's own field
+/// can tell them apart. The spelling is the one a `position` event uses.
+#[test]
+fn a_remote_call_names_the_function_that_made_it() {
+    let mut worker = Worker::start("durable_nested_weather");
+
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(call["function"], "remote_fetch_weather");
+    assert_eq!(call["caller"], "fetch_via", "{call}");
+    assert_eq!(call["file"], SOURCE_FILE, "{call}");
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon via helper",
+    }));
+
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    // The caller and the call site are the frame of the `position` event that
+    // accompanies the call (section 10.1).
+    let position = of_type(&events, "position")
+        .into_iter()
+        .find(|e| e["reason"] == "remote_call")
+        .expect("the call reports its position");
+    assert_eq!(
+        (
+            call["caller"].clone(),
+            call["file"].clone(),
+            call["line"].clone()
+        ),
+        (
+            position["function"].clone(),
+            position["file"].clone(),
+            position["line"].clone()
+        ),
+        "{call}\n{position}"
+    );
+    assert_eq!(events.last().unwrap()["type"], "completed");
+}
+
 #[test]
 fn remote_function_started_as_root_runs_locally() {
     let worker = Worker::start("remote_fetch_weather");
@@ -2278,4 +2320,293 @@ fn a_sleep_of_exactly_the_threshold_suspends_the_run() {
         let remaining = paused["wake"]["remaining_ms"].as_u64().unwrap();
         assert!((1300..=1500).contains(&remaining), "{paused}");
     }
+}
+
+// ============================================================================
+// Contract section 10.1: every arrow explains its own cause
+// ============================================================================
+
+/// The fixture source, so that a test names a line by what is written on it.
+const FIXTURE_SOURCE: &str = include_str!("fixtures/worker_trip/baml_src/trip.baml");
+
+/// The 1-based number of the only line of the fixture that reads exactly
+/// `text`, indentation included. Two functions of the fixture contain the
+/// same statement at different depths, so the whole line is the key.
+fn fixture_line(text: &str) -> u64 {
+    let mut found = None;
+    for (index, line) in FIXTURE_SOURCE.lines().enumerate() {
+        if line.trim_end() == text {
+            assert!(found.is_none(), "`{text}` is on more than one line");
+            found = Some(index as u64 + 1);
+        }
+    }
+    found.unwrap_or_else(|| panic!("no line of the fixture reads `{text}`"))
+}
+
+/// Like [`fixture_line`], but only inside the body of `function`: two
+/// functions of the fixture have the same `await` line.
+fn fixture_line_in(function: &str, text: &str) -> u64 {
+    let start = FIXTURE_SOURCE
+        .lines()
+        .position(|line| line.starts_with(&format!("function {function}(")))
+        .unwrap_or_else(|| panic!("the fixture has no function `{function}`"));
+    let offset = FIXTURE_SOURCE
+        .lines()
+        .skip(start)
+        .position(|line| line.trim_end() == text)
+        .unwrap_or_else(|| panic!("`{function}` has no line that reads `{text}`"));
+    (start + offset) as u64 + 1
+}
+
+/// `(file, line)` of an event, for a comparison that prints both.
+fn location(event: &Value) -> (Value, Value) {
+    (event["file"].clone(), event["line"].clone())
+}
+
+fn at(line: u64) -> (Value, Value) {
+    (json!(SOURCE_FILE), json!(line))
+}
+
+/// The three spawned calls of `durable_quote_race`, with the line each one
+/// is written on.
+fn race_call_sites() -> Vec<(&'static str, (Value, Value))> {
+    [("fast", 1), ("medium", 2), ("slow", 3)]
+        .into_iter()
+        .map(|(vendor, nights)| {
+            let line = fixture_line(&format!(
+                r#"    let {vendor} = spawn {{ remote_get_quote(quote_request(city, "{vendor}", {nights})) }};"#
+            ));
+            (vendor, at(line))
+        })
+        .collect()
+}
+
+/// A race: every `remote_call` names the `spawn` line its call was written
+/// on, every spawned thread names the same line as its `spawn` site, and each
+/// loser's `remote_cancel` repeats the location of its own call with the
+/// cause `future_cancel`.
+#[test]
+fn a_race_reports_the_call_site_the_spawn_site_and_the_cause_of_each_loser() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_quote_race",
+        r#"{"city":"Lisbon","tail_ms":100}"#,
+        "0",
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 3 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    for (vendor, expected) in race_call_sites() {
+        let call = calls
+            .iter()
+            .find(|call| call["args"]["request"]["vendor"] == vendor)
+            .unwrap_or_else(|| panic!("no call for {vendor}: {calls:#?}"));
+        assert_eq!(location(call), expected, "{vendor}: {call}");
+    }
+
+    let winner = calls
+        .iter()
+        .find(|call| call["args"]["request"]["vendor"] == "slow")
+        .unwrap()
+        .clone();
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": winner["call_id"],
+        "value": quote("slow", "Business", 3),
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+
+    // The root has no spawn site. Each thread that made a call names the
+    // `spawn` it came from, and the thread `baml.future.race` spawns inside
+    // the standard library names the innermost user frame, the `await`.
+    let started = of_type(&events, "thread_started");
+    assert_eq!(started[0]["parent_thread"], Value::Null);
+    assert_eq!(location(started[0]), (Value::Null, Value::Null));
+    let root = started[0]["thread"].clone();
+    for (vendor, expected) in race_call_sites() {
+        let call = calls
+            .iter()
+            .find(|call| call["args"]["request"]["vendor"] == vendor)
+            .unwrap();
+        let event = started
+            .iter()
+            .find(|event| event["thread"] == call["thread"])
+            .unwrap_or_else(|| panic!("no thread_started for {vendor}: {started:#?}"));
+        assert_eq!(event["parent_thread"], root, "{event}");
+        assert_eq!(location(event), expected, "{vendor}: {event}");
+    }
+    let call_threads: Vec<&Value> = calls.iter().map(|call| &call["thread"]).collect();
+    let race_thread = started
+        .iter()
+        .find(|event| event["parent_thread"] == root && !call_threads.contains(&&event["thread"]))
+        .expect("the thread `baml.future.race` spawns");
+    assert_eq!(
+        location(race_thread),
+        at(fixture_line_in(
+            "durable_quote_race",
+            "    let winner = await baml.future.race([fast, medium, slow]);"
+        )),
+        "{race_thread}"
+    );
+
+    let cancels = of_type(&events, "remote_cancel");
+    assert_eq!(cancels.len(), 2, "{events:#?}");
+    for cancel in &cancels {
+        let call = calls
+            .iter()
+            .find(|call| call["call_id"] == cancel["call_id"])
+            .unwrap_or_else(|| panic!("unknown call id: {cancel}"));
+        assert_eq!(location(cancel), location(call), "{cancel}");
+        assert_eq!(cancel["cause"], "future_cancel", "{cancel}");
+    }
+}
+
+/// `with_timeout` cancels its body through a user cancel token, in the
+/// process that started the run and in a process that resumed it: the call
+/// site travels in the snapshot, so both name the line of the call.
+#[test]
+fn a_deadline_reports_a_token_cause_with_the_call_site_before_and_after_a_resume() {
+    let call_site = at(fixture_line(
+        r#"        remote_get_quote(quote_request(city, "sluggish", 3)).vendor"#,
+    ));
+
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_deadline",
+        r#"{"city":"Lisbon","limit_ms":400}"#,
+        "5000",
+    );
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(location(&call), call_site, "{call}");
+    let cancel = worker.wait_for("remote_cancel", is_type("remote_cancel"));
+    assert_eq!(location(&cancel), call_site, "{cancel}");
+    assert_eq!(cancel["cause"], "token", "{cancel}");
+    let (code, _, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}");
+
+    // The same deadline, but long enough that the run suspends itself first.
+    // The process that reports the cancellation never made the call.
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_deadline",
+        r#"{"city":"Lisbon","limit_ms":3000}"#,
+        "400",
+    );
+    worker.wait_for("remote_call", is_type("remote_call"));
+    let (paused, events) = finish_self_suspended(worker);
+    assert!(of_type(&events, "remote_cancel").is_empty());
+    sleep_until_ms(paused["wake"]["at_ts"].as_u64().unwrap());
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(
+        of_type(&events, "remote_call").is_empty(),
+        "a resumed run does not announce the call again: {events:#?}"
+    );
+    let cancels = of_type(&events, "remote_cancel");
+    assert_eq!(cancels.len(), 1, "{events:#?}");
+    assert_eq!(location(cancels[0]), call_site, "{}", cancels[0]);
+    assert_eq!(cancels[0]["cause"], "token", "{}", cancels[0]);
+}
+
+/// A thread whose parent fails is cancelled by the parent's token, and its
+/// abandoned call says so.
+#[test]
+fn the_child_of_a_failing_parent_reports_the_parent_as_the_cause() {
+    let mut worker = Worker::start("durable_failing_parent");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(
+        location(&call),
+        at(fixture_line(
+            r#"        let child = spawn { remote_get_quote(quote_request(city, "orphan", 2)).vendor };"#
+        )),
+        "{call}"
+    );
+    let cancel = worker.wait_for("remote_cancel", is_type("remote_cancel"));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(location(&cancel), location(&call), "{cancel}");
+    assert_eq!(cancel["cause"], "parent", "{cancel}");
+}
+
+/// `Future.cancel` on a thread that waits for a remote result.
+#[test]
+fn a_cancelled_future_reports_the_future_as_the_cause() {
+    let mut worker = Worker::start("durable_cancel_future");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let cancel = worker.wait_for("remote_cancel", is_type("remote_cancel"));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(location(&cancel), location(&call), "{cancel}");
+    assert_eq!(
+        location(&cancel),
+        at(fixture_line(
+            r#"    let pending = spawn { remote_get_quote(quote_request(city, "unwanted", 2)).vendor };"#
+        )),
+        "{cancel}"
+    );
+    assert_eq!(cancel["cause"], "future_cancel", "{cancel}");
+}
+
+/// A call the run never abandoned itself: the worker reports it when the run
+/// ends, with the call site it recorded.
+#[test]
+fn a_call_abandoned_at_the_end_of_a_run_keeps_its_call_site() {
+    let mut worker = Worker::start("durable_failing_root");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(
+        location(&call),
+        at(fixture_line(
+            r#"    let child = spawn { remote_get_quote(quote_request(city, "orphan", 2)).vendor };"#
+        )),
+        "{call}"
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 1, "stderr: {stderr}\nevents: {events:#?}");
+    let cancels = of_type(&events, "remote_cancel");
+    assert_eq!(cancels.len(), 1, "{events:#?}");
+    assert_eq!(location(cancels[0]), location(&call), "{}", cancels[0]);
+    // Either the engine classified the cascade or the worker reported the
+    // call when the run ended; both are honest answers here.
+    // The report comes from the worker's sweep when the run ends before the
+    // cancelled thread reaches its wait (`unknown`), and from the engine's
+    // classification of the cascade when it does not (`parent`).
+    assert!(
+        ["parent", "unknown"].contains(&cancels[0]["cause"].as_str().unwrap()),
+        "{}",
+        cancels[0]
+    );
+}
+
+/// A remote call that follows a loop reports the line the call is written on,
+/// the same frame its `position` event describes, and not the loop body the
+/// thread was in before.
+#[test]
+fn a_remote_call_after_a_loop_reports_the_frame_of_its_position_event() {
+    let mut worker = Worker::start("durable_plan_trip");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+
+    let position = of_type(&events, "position")
+        .into_iter()
+        .find(|event| event["reason"] == "remote_call")
+        .expect("a position for the remote call");
+    assert_eq!(location(&call), location(position), "{call}");
+    assert_eq!(call["thread"], position["thread"]);
+    // Line 22 of the fixture, as `durable_run_answers_remote_call_and_completes`
+    // expects of the `position` event.
+    assert_eq!(location(&call), at(22), "{call}");
+    let started = of_type(&events, "thread_started");
+    assert_eq!(location(started[0]), (Value::Null, Value::Null));
 }

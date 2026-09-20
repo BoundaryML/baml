@@ -340,3 +340,13 @@ function durable_background(city: string, ms: int) -> Quote {
     let pending = spawn { remote_get_quote(quote_request(city, "solo", 3)) };
     await pending
 }
+
+// Phase 4, contract section 10.3: the call is made in a helper, so the caller
+// that `remote_call` names is `fetch_via`, not the run's entry function.
+function fetch_via(city: string) -> string {
+    remote_fetch_weather(city + " via helper")
+}
+
+function durable_nested_weather(city: string) -> string {
+    fetch_via(city)
+}

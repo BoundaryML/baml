@@ -252,7 +252,12 @@ impl DurableHost for HostRef {
         })
     }
 
-    fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>) {
+    fn thread_started(
+        &self,
+        thread: DurableThreadId,
+        parent: Option<DurableThreadId>,
+        _site: Option<&YieldPosition>,
+    ) {
         self.0.started.lock().unwrap().push((thread, parent));
         self.0.changed.notify_waiters();
     }

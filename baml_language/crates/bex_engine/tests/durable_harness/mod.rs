@@ -21,7 +21,7 @@ use bex_engine::{
     BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
     durable::{
         DurableHost, DurableThreadId, PauseProgress, RecordedResult, RemoteCallRequest,
-        RemoteResultWait, RestoredInfo, ResumeOptions, SnapshotFailure, SnapshotMode,
+        RemoteCancel, RemoteResultWait, RestoredInfo, ResumeOptions, SnapshotFailure, SnapshotMode,
         SnapshotReport, SnapshotRequest, YieldPosition, YieldReason,
     },
 };
@@ -98,6 +98,10 @@ pub(crate) struct Site {
     pub(crate) announced_vendors_in_order: Mutex<Vec<String>>,
     /// Call ids the run abandoned, with the cancelled thread.
     pub(crate) cancelled: Mutex<Vec<(String, DurableThreadId)>>,
+    /// Everything the engine reported about each abandoned call, in order.
+    pub(crate) cancel_reports: Mutex<Vec<RemoteCancel>>,
+    /// The call site of every announced call, by call id.
+    pub(crate) announced_sites: Mutex<HashMap<String, Option<YieldPosition>>>,
     /// Call ids whose result a thread took, in the order the engine reported
     /// the deliveries.
     pub(crate) received: Mutex<Vec<String>>,
@@ -120,6 +124,8 @@ impl Site {
             announced_vendors: Mutex::new(std::collections::BTreeMap::new()),
             announced_vendors_in_order: Mutex::new(Vec::new()),
             cancelled: Mutex::new(Vec::new()),
+            cancel_reports: Mutex::new(Vec::new()),
+            announced_sites: Mutex::new(HashMap::new()),
             received: Mutex::new(Vec::new()),
             results: Mutex::new(HashMap::new()),
             changed: tokio::sync::Notify::new(),
@@ -214,6 +220,8 @@ pub(crate) struct Host {
     pause_at: AtomicUsize,
     pause_wanted: tokio::sync::Notify,
     pub(crate) started: Mutex<Vec<(DurableThreadId, Option<DurableThreadId>)>>,
+    /// The `spawn` site reported with every `thread_started`, in order.
+    pub(crate) spawn_sites: Mutex<Vec<(DurableThreadId, Option<YieldPosition>)>>,
     pub(crate) ended: Mutex<Vec<DurableThreadId>>,
     pub(crate) yield_log: Mutex<Vec<(DurableThreadId, YieldReason, Option<String>)>>,
 }
@@ -232,6 +240,7 @@ impl Host {
             pause_at: AtomicUsize::new(pause_at.unwrap_or(usize::MAX)),
             pause_wanted: tokio::sync::Notify::new(),
             started: Mutex::new(Vec::new()),
+            spawn_sites: Mutex::new(Vec::new()),
             ended: Mutex::new(Vec::new()),
             yield_log: Mutex::new(Vec::new()),
         });
@@ -300,6 +309,10 @@ impl DurableHost for HostRef {
                 .unwrap()
                 .insert(call_id.clone(), vendor.clone());
             site.announced_vendors_in_order.lock().unwrap().push(vendor);
+            site.announced_sites
+                .lock()
+                .unwrap()
+                .insert(call_id.clone(), request.site.clone());
         }
         if site.remote == Remote::Execute {
             site.execute(call_id.clone(), request);
@@ -351,21 +364,32 @@ impl DurableHost for HostRef {
         self.0.site.changed.notify_waiters();
     }
 
-    fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>) {
+    fn thread_started(
+        &self,
+        thread: DurableThreadId,
+        parent: Option<DurableThreadId>,
+        site: Option<&YieldPosition>,
+    ) {
         self.0.started.lock().unwrap().push((thread, parent));
+        self.0
+            .spawn_sites
+            .lock()
+            .unwrap()
+            .push((thread, site.cloned()));
     }
 
     fn thread_ended(&self, thread: DurableThreadId) {
         self.0.ended.lock().unwrap().push(thread);
     }
 
-    fn remote_cancelled(&self, call_id: &str, thread: DurableThreadId) {
+    fn remote_cancelled(&self, cancel: RemoteCancel) {
         self.0
             .site
             .cancelled
             .lock()
             .unwrap()
-            .push((call_id.to_string(), thread));
+            .push((cancel.call_id.clone(), cancel.thread));
+        self.0.site.cancel_reports.lock().unwrap().push(cancel);
         self.0.site.changed.notify_waiters();
     }
 

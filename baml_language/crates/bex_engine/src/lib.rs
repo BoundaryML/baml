@@ -4196,6 +4196,8 @@ impl BexEngine {
                 parent: None,
                 token_parent: None,
                 user_cancels: Vec::new(),
+                token_parent_cancel: None,
+                spawn_site: None,
                 pause: is_run_root.then(|| Arc::clone(&self.durable_pause)),
                 path: "0".to_string(),
                 spawned: 0,
@@ -4446,22 +4448,23 @@ impl BexEngine {
                     let mut waiting: Vec<(
                         durable::DurableThreadId,
                         Option<durable::DurableThreadId>,
+                        Option<durable::YieldPosition>,
                     )> = durable_children
                         .iter()
                         .filter(|child| child.parked != durable::ParkedKind::Queued)
-                        .map(|child| (child.thread_id, child.parent))
+                        .map(|child| (child.thread_id, child.parent, child.spawn_site.clone()))
                         .collect();
                     let restored: std::collections::HashSet<durable::DurableThreadId> =
-                        waiting.iter().map(|(thread, _)| *thread).collect();
+                        waiting.iter().map(|(thread, _, _)| *thread).collect();
                     while !waiting.is_empty() {
                         let before = waiting.len();
-                        waiting.retain(|(thread, parent)| {
+                        waiting.retain(|(thread, parent, site)| {
                             let ready = parent.is_none_or(|parent| {
                                 !restored.contains(&parent) || announced.contains(&parent)
                             });
                             if ready {
                                 if let Some(host) = host.as_ref() {
-                                    host.thread_started(*thread, *parent);
+                                    host.thread_started(*thread, *parent, site.as_ref());
                                 }
                                 announced.insert(*thread);
                             }
@@ -4470,9 +4473,9 @@ impl BexEngine {
                         if waiting.len() == before {
                             // A cycle of parents cannot come from a real run;
                             // announce the rest in the order they are in.
-                            for (thread, parent) in waiting.drain(..) {
+                            for (thread, parent, site) in waiting.drain(..) {
                                 if let Some(host) = host.as_ref() {
-                                    host.thread_started(thread, parent);
+                                    host.thread_started(thread, parent, site.as_ref());
                                 }
                             }
                         }
@@ -6521,6 +6524,7 @@ impl BexEngine {
             ticket,
             live,
             parent: _,
+            spawn_site: _,
         } = child;
         let durable_pause = Some(Arc::clone(&self.durable_pause));
         let task = self.run_spawned_thread(SpawnedThreadTask {
@@ -6575,7 +6579,8 @@ impl BexEngine {
             // A restored spawned thread was announced by the restore, in
             // parent-first order (see `durable_after_start` in `run_entry`).
             if durable_resume.is_none() || ctx.parent.is_none() {
-                ctx.host.thread_started(prof_thread_id, ctx.parent);
+                ctx.host
+                    .thread_started(prof_thread_id, ctx.parent, ctx.spawn_site.as_ref());
             }
             Arc::clone(&ctx.host)
         });
@@ -7369,6 +7374,12 @@ impl BexEngine {
                         }
                         None => (String::new(), 0),
                     };
+                    // The call site: the same frame the `RemoteCall` yield
+                    // reported a moment ago, read while the permit is still
+                    // held. It travels with the announcement and into the
+                    // parked state, so that the location is reported for the
+                    // call itself and not re-derived from the last position.
+                    let site = Self::durable_position(&thread.vm);
                     let announce = host.remote_call(durable::RemoteCallRequest {
                         thread: thread.vm.prof_thread_id,
                         thread_path,
@@ -7376,6 +7387,7 @@ impl BexEngine {
                         function: name.clone(),
                         args: external_args,
                         return_type,
+                        site: site.clone(),
                     });
                     // Until the host has announced the call nobody outside the
                     // process knows about it, so this short wait is an
@@ -7440,6 +7452,7 @@ impl BexEngine {
                                 remote_call_id,
                                 name,
                                 function,
+                                site,
                                 call_id,
                                 throws_type.as_ref(),
                                 call_capture.as_ref(),
@@ -7505,6 +7518,13 @@ impl BexEngine {
                         ctx.spawned += 1;
                         format!("{}.{index}", ctx.path)
                     });
+                    // Durable POC: where the parent spawned the child. Read
+                    // from the parent's frames, which still stand at the
+                    // `spawn` expression.
+                    let durable_spawn_site = thread
+                        .durable
+                        .as_ref()
+                        .and_then(|_| Self::durable_position(&thread.vm));
                     // Each spawned thread gets a child cancel token so parent →
                     // child cascade falls out of the token tree without bespoke
                     // tracking. A `detach = true` spawn instead gets a fresh,
@@ -7610,6 +7630,8 @@ impl BexEngine {
                                     parent: Some(thread.vm.prof_thread_id),
                                     token_parent: (!detach).then_some(thread.vm.prof_thread_id),
                                     user_cancels: durable_user_cancels,
+                                    token_parent_cancel: (!detach).then(|| cancel.clone()),
+                                    spawn_site: durable_spawn_site,
                                     pause: ctx.pause.clone(),
                                     path: durable_child_path.unwrap_or_default(),
                                     spawned: 0,
@@ -8153,6 +8175,7 @@ impl BexEngine {
         remote_call_id: String,
         name: String,
         function: HeapPtr,
+        site: Option<durable::YieldPosition>,
         call_id: CallId,
         throws_type: Option<&RuntimeTy>,
         call_capture: Option<&CallValueCaptureContext>,
@@ -8183,6 +8206,7 @@ impl BexEngine {
                 .heap
                 .compile_time_index_of(function)
                 .map_or(u64::MAX, |index| index as u64),
+            site: site.clone(),
         };
         let thread_id = thread.vm.prof_thread_id;
         let mut result = host.remote_result(durable::RemoteResultWait {
@@ -8190,6 +8214,7 @@ impl BexEngine {
             thread: thread.vm.prof_thread_id,
             function: name.clone(),
             return_type: return_type.clone(),
+            site: site.clone(),
         });
         match self
             .durable_reissuable_wait(thread, cancel, &parked, &mut result)
@@ -8200,7 +8225,12 @@ impl BexEngine {
                 // Stop asking for the result before the host is told that the
                 // run has abandoned the call.
                 drop(result);
-                host.remote_cancelled(&remote_call_id, thread_id);
+                host.remote_cancelled(durable::RemoteCancel {
+                    call_id: remote_call_id.clone(),
+                    thread: thread_id,
+                    site,
+                    cause: Self::durable_cancel_cause(&thread),
+                });
                 self.durable_cancelled(thread).await
             }
             DurableWait::Done(mut thread, Ok(external)) => {
@@ -8294,6 +8324,7 @@ impl BexEngine {
                 call_id: remote_call_id,
                 function: name,
                 function_index,
+                site,
             } => {
                 // The thread was cancelled after it had parked in the wait, or
                 // while the run had no process. The wait is not issued again:
@@ -8301,8 +8332,15 @@ impl BexEngine {
                 // ends like any thread that is cancelled at a yield.
                 if cancel.is_cancelled() {
                     if let Some(ctx) = thread.durable.as_ref() {
-                        ctx.host
-                            .remote_cancelled(&remote_call_id, thread.vm.prof_thread_id);
+                        ctx.host.remote_cancelled(durable::RemoteCancel {
+                            call_id: remote_call_id.clone(),
+                            thread: thread.vm.prof_thread_id,
+                            // The call site of the snapshot, so that the
+                            // resumed run names the line the call was made on
+                            // in the process that made it.
+                            site: site.clone(),
+                            cause: Self::durable_cancel_cause(&thread),
+                        });
                     }
                     return self.durable_cancelled(thread).await;
                 }
@@ -8326,6 +8364,7 @@ impl BexEngine {
                     remote_call_id,
                     name,
                     function,
+                    site,
                     call_id,
                     throws_type,
                     call_capture,
@@ -8349,6 +8388,41 @@ impl BexEngine {
                 file: frame.file_path,
                 line: frame.error_line,
             })
+    }
+
+    /// Durable POC: which token cancelled `thread` (contract section 10.1).
+    ///
+    /// The tokens are read, not guessed. A user `baml.spawn.CancelToken` that
+    /// the spawn linked into the thread is the most specific answer, because
+    /// the program created it and can see it fire (`with_timeout` uses one).
+    /// Otherwise an ancestor thread's token that fired means the cancellation
+    /// cascaded down; the token is held directly, so the answer does not
+    /// depend on whether the ancestor's thread has ended yet. What is left is
+    /// the thread's own token, which is the token of the future the thread
+    /// settles: `Future.cancel` and the blanket cancel of a `race` fire it. A
+    /// thread that settles no future (the run's root) has no such future, so
+    /// its cancellation is the run's and stays `unknown`.
+    fn durable_cancel_cause(thread: &BexThread) -> durable::CancelCause {
+        fn fired(token: &bex_vm_types::CancelTokenData) -> bool {
+            token.is_cancelled() || token.sources().iter().any(|source| fired(source))
+        }
+        let Some(ctx) = thread.durable.as_ref() else {
+            return durable::CancelCause::Unknown;
+        };
+        if ctx.user_cancels.iter().any(|token| fired(token)) {
+            return durable::CancelCause::Token;
+        }
+        if ctx
+            .token_parent_cancel
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+        {
+            return durable::CancelCause::Parent;
+        }
+        if thread.settles_future.is_some() && thread.cancel.is_cancelled() {
+            return durable::CancelCause::FutureCancel;
+        }
+        durable::CancelCause::Unknown
     }
 
     /// Durable POC: report a VM yield to the thread's host. `SysOp` is

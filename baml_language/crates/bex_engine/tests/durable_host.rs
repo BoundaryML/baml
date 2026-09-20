@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
     durable::{
-        DurableHost, DurableThreadId, RemoteCallRequest, RemoteResultWait, YieldPosition,
-        YieldReason,
+        DurableHost, DurableThreadId, RemoteCallRequest, RemoteCancel, RemoteResultWait,
+        YieldPosition, YieldReason,
     },
 };
 use common::compile_for_engine;
@@ -52,6 +52,32 @@ function catching_caller(city: string) -> string {
 function sleeper() -> int {
   baml.sys.sleep(baml.time.Duration.from_milliseconds(10n));
   7
+}
+
+function loop_caller(city: string) -> string {
+  let seen = "";
+  let day = 0;
+  while (day < 2) {
+    seen = seen + remote_report(city, day).city;
+    day += 1;
+  }
+  seen
+}
+
+function helper(city: string) -> string {
+  remote_report(city, 3).city
+}
+
+function nested_caller(city: string) -> string {
+  helper(city)
+}
+
+function spawn_caller(city: string) -> string {
+  let handle = spawn {
+    let inner = remote_report(city, 4);
+    inner
+  };
+  (await handle).city
 }
 
 function gc_caller(city: string) -> string {
@@ -105,6 +131,12 @@ struct RecordingHost {
     notes: Mutex<Vec<Note>>,
     /// Announced calls by call id, for `remote_result`.
     calls: Mutex<std::collections::HashMap<String, RemoteCallRequest>>,
+    /// The call site of every announced call, in announcement order.
+    sites: Mutex<Vec<Option<YieldPosition>>>,
+    /// The `spawn` site of every started thread, in order.
+    spawn_sites: Mutex<Vec<(DurableThreadId, Option<YieldPosition>)>>,
+    /// What `remote_cancelled` reported, in order.
+    cancels: Mutex<Vec<RemoteCancel>>,
 }
 
 impl RecordingHost {
@@ -113,12 +145,42 @@ impl RecordingHost {
             reply,
             notes: Mutex::new(Vec::new()),
             calls: Mutex::new(std::collections::HashMap::new()),
+            sites: Mutex::new(Vec::new()),
+            spawn_sites: Mutex::new(Vec::new()),
+            cancels: Mutex::new(Vec::new()),
         })
     }
 
     fn notes(&self) -> Vec<Note> {
         std::mem::take(&mut self.notes.lock().unwrap())
     }
+
+    /// The call site of the `n`-th announced call.
+    fn site(&self, n: usize) -> YieldPosition {
+        self.sites.lock().unwrap()[n]
+            .clone()
+            .unwrap_or_else(|| panic!("call {n} reported no site"))
+    }
+
+    /// The `spawn` site reported for the one thread that has a parent.
+    fn only_spawn_site(&self) -> Option<YieldPosition> {
+        let sites = self.spawn_sites.lock().unwrap();
+        let spawned: Vec<_> = sites.iter().skip(1).collect();
+        assert_eq!(spawned.len(), 1, "expected one spawned thread: {sites:?}");
+        spawned[0].1.clone()
+    }
+}
+
+/// The 1-based line of the only line of [`SOURCE`] that contains `needle`.
+fn line_of(needle: &str) -> usize {
+    let mut found = None;
+    for (index, line) in SOURCE.lines().enumerate() {
+        if line.contains(needle) {
+            assert!(found.is_none(), "`{needle}` is on more than one line");
+            found = Some(index + 1);
+        }
+    }
+    found.unwrap_or_else(|| panic!("`{needle}` is not in the source"))
 }
 
 impl DurableHost for RecordingHost {
@@ -131,6 +193,7 @@ impl DurableHost for RecordingHost {
             request.function.clone(),
             request.args.iter().map(|arg| arg.name.clone()).collect(),
         ));
+        self.sites.lock().unwrap().push(request.site.clone());
         let mut calls = self.calls.lock().unwrap();
         let call_id = format!("c{}", calls.len() + 1);
         calls.insert(call_id.clone(), request);
@@ -176,11 +239,24 @@ impl DurableHost for RecordingHost {
         })
     }
 
-    fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>) {
+    fn thread_started(
+        &self,
+        thread: DurableThreadId,
+        parent: Option<DurableThreadId>,
+        site: Option<&YieldPosition>,
+    ) {
         self.notes
             .lock()
             .unwrap()
             .push(Note::Started(thread, parent));
+        self.spawn_sites
+            .lock()
+            .unwrap()
+            .push((thread, site.cloned()));
+    }
+
+    fn remote_cancelled(&self, cancel: RemoteCancel) {
+        self.cancels.lock().unwrap().push(cancel);
     }
 
     fn thread_ended(&self, thread: DurableThreadId) {
@@ -428,8 +504,13 @@ impl DurableHost for CollectingHost {
         })
     }
 
-    fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>) {
-        self.inner.thread_started(thread, parent);
+    fn thread_started(
+        &self,
+        thread: DurableThreadId,
+        parent: Option<DurableThreadId>,
+        site: Option<&YieldPosition>,
+    ) {
+        self.inner.thread_started(thread, parent, site);
     }
 
     fn thread_ended(&self, thread: DurableThreadId) {
@@ -467,4 +548,84 @@ async fn a_collection_while_a_remote_call_is_pending_keeps_the_caller_intact() {
         result,
         string("Lisbon before | Lisbon before (remote) | Lisbon before (remote) (remote) | 1")
     );
+}
+
+// ============================================================================
+// Contract 10.1: `remote_call` and `thread_started` carry the source location
+// ============================================================================
+
+#[tokio::test]
+async fn a_remote_call_in_a_loop_body_reports_the_call_site() {
+    let engine = engine();
+    let host = RecordingHost::new(Reply::Echo);
+    engine.set_durable_host(Some(host.clone()));
+    engine
+        .call_function("loop_caller", vec![string("Lisbon")], ctx(), true)
+        .await
+        .unwrap();
+
+    let expected = line_of("seen = seen + remote_report(city, day).city;");
+    let sites = host.sites.lock().unwrap().clone();
+    assert_eq!(sites.len(), 2, "the loop body runs twice: {sites:?}");
+    for (index, site) in sites.iter().enumerate() {
+        let site = site
+            .as_ref()
+            .unwrap_or_else(|| panic!("call {index} reported no site"));
+        assert_eq!(site.line, expected, "call {index}: {site:?}");
+        assert_eq!(site.function, "user.loop_caller");
+        assert!(!site.file.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_remote_call_inside_a_called_function_reports_that_function() {
+    let engine = engine();
+    let host = RecordingHost::new(Reply::Echo);
+    engine.set_durable_host(Some(host.clone()));
+    engine
+        .call_function("nested_caller", vec![string("Porto")], ctx(), true)
+        .await
+        .unwrap();
+
+    // The innermost user frame is `helper`, not the `helper(city)` line of
+    // `nested_caller`.
+    let site = host.site(0);
+    assert_eq!(site.line, line_of("remote_report(city, 3).city"));
+    assert_eq!(site.function, "user.helper");
+}
+
+#[tokio::test]
+async fn a_remote_call_inside_a_spawn_reports_the_spawned_body() {
+    let engine = engine();
+    let host = RecordingHost::new(Reply::Echo);
+    engine.set_durable_host(Some(host.clone()));
+    engine
+        .call_function("spawn_caller", vec![string("Faro")], ctx(), true)
+        .await
+        .unwrap();
+
+    let site = host.site(0);
+    assert_eq!(site.line, line_of("let inner = remote_report(city, 4);"));
+    // The site of the call, not the site of the `spawn` that made the thread.
+    let spawn_site = host
+        .only_spawn_site()
+        .expect("the spawned thread reports its spawn site");
+    assert_eq!(spawn_site.line, line_of("let handle = spawn {"));
+    assert_eq!(spawn_site.function, "user.spawn_caller");
+    assert_eq!(spawn_site.file, site.file);
+}
+
+#[tokio::test]
+async fn the_root_thread_of_a_segment_has_no_spawn_site() {
+    let engine = engine();
+    let host = RecordingHost::new(Reply::Echo);
+    engine.set_durable_host(Some(host.clone()));
+    engine
+        .call_function("caller", vec![string("Lisbon")], ctx(), true)
+        .await
+        .unwrap();
+
+    let sites = host.spawn_sites.lock().unwrap().clone();
+    assert_eq!(sites.len(), 1, "only the root thread runs: {sites:?}");
+    assert_eq!(sites[0].1, None);
 }

@@ -46,7 +46,7 @@ use bex_engine::{
     FunctionCallContextBuilder, RuntimeTy,
     durable::{
         DurableHost, DurableThreadId, ParkedKind, PauseProgress, RecordedResult, RemoteCallRequest,
-        RemoteResultWait, RestoredInfo, ResumeOptions, SnapshotFailure, SnapshotMode,
+        RemoteCancel, RemoteResultWait, RestoredInfo, ResumeOptions, SnapshotFailure, SnapshotMode,
         SnapshotParts, SnapshotReport, SnapshotRequest, YieldPosition, YieldReason,
     },
 };
@@ -614,10 +614,19 @@ fn events_terminal(state: &Arc<WorkerState>, event_type: &str, fields: Json) {
         };
         abandoned
             .into_iter()
-            .map(|(call_id, thread)| {
+            .map(|(call_id, thread, site)| {
+                // The engine classified nothing here: the run ended and
+                // nobody will take the result. `unknown` is the honest cause.
+                let (file, line) = CallSite::fields(site.as_ref());
                 (
                     "remote_cancel",
-                    json!({ "call_id": call_id, "thread": thread }),
+                    json!({
+                        "call_id": call_id,
+                        "thread": thread,
+                        "file": file,
+                        "line": line,
+                        "cause": "unknown",
+                    }),
                 )
             })
             .chain(
@@ -917,6 +926,45 @@ struct RemoteCalls {
     results: HashMap<String, Json>,
     /// The thread that waits on a call, once it is known in this process.
     threads: HashMap<String, DurableThreadId>,
+    /// Where each call was made, relative to the project directory. Set when
+    /// the call is announced and when a restored thread registers its wait,
+    /// so that a `remote_cancel` names the call site in either process.
+    sites: HashMap<String, CallSite>,
+}
+
+/// The frame a remote call was made in, ready for an event: the function that
+/// made the call and its `(file, line)`.
+#[derive(Clone, Debug)]
+struct CallSite {
+    function: String,
+    file: String,
+    line: usize,
+}
+
+impl CallSite {
+    /// The frame of a yield, with the file made relative to the project and
+    /// the function in the spelling of a `position` event.
+    fn of(site: &YieldPosition, relative: impl FnOnce(&str) -> String) -> Self {
+        Self {
+            function: WorkerState::display_function(&site.function).to_string(),
+            file: relative(&site.file),
+            line: site.line,
+        }
+    }
+
+    /// `(file, line)` as the event fields, `null` when the site is unknown.
+    fn fields(site: Option<&Self>) -> (Json, Json) {
+        site.map_or((Json::Null, Json::Null), |site| {
+            (json!(site.file), json!(site.line))
+        })
+    }
+
+    /// Contract section 10.3: the function that made the call, so that the app
+    /// names the caller instead of guessing it from the run's entry function.
+    /// `null` when the worker could not attribute the call to a user frame.
+    fn caller(site: Option<&Self>) -> Json {
+        site.map_or(Json::Null, |site| json!(site.function))
+    }
 }
 
 #[derive(Default)]
@@ -1163,7 +1211,7 @@ impl WorkerState {
     /// Forget the remote calls the run still waits on and return them with
     /// their threads, ordered by call id. A result that arrives afterwards is
     /// ignored.
-    fn take_waiting_calls(&self) -> Vec<(String, Option<DurableThreadId>)> {
+    fn take_waiting_calls(&self) -> Vec<(String, Option<DurableThreadId>, Option<CallSite>)> {
         let mut remote = lock(&self.remote);
         remote.results.clear();
         let mut calls: Vec<_> = remote
@@ -1173,10 +1221,11 @@ impl WorkerState {
             .into_iter()
             .map(|call_id| {
                 let thread = remote.threads.remove(&call_id);
-                (call_id, thread)
+                let site = remote.sites.remove(&call_id);
+                (call_id, thread, site)
             })
             .collect();
-        calls.sort();
+        calls.sort_by(|left, right| (&left.0, left.1).cmp(&(&right.0, right.1)));
         calls
     }
 
@@ -1303,12 +1352,20 @@ impl DurableHost for WorkerState {
                 self.run, request.thread_path, request.call_index
             )
         };
+        // Where the call was made, in the spelling of a `position` event.
+        let site = request
+            .site
+            .as_ref()
+            .map(|site| CallSite::of(site, |file| self.relative_file(file)));
         // Registered before the event is written, so a supervisor that answers
         // immediately always finds the call.
         {
             let mut remote = lock(&self.remote);
             remote.waiting.insert(call_id.clone());
             remote.threads.insert(call_id.clone(), request.thread);
+            if let Some(site) = site.clone() {
+                remote.sites.insert(call_id.clone(), site);
+            }
         }
         let engine = self.engine();
         let events = self.events.clone();
@@ -1341,6 +1398,7 @@ impl DurableHost for WorkerState {
                     return Err(message);
                 }
             };
+            let (file, line) = CallSite::fields(site.as_ref());
             events.emit(
                 "remote_call",
                 json!({
@@ -1348,6 +1406,9 @@ impl DurableHost for WorkerState {
                     "thread": request.thread,
                     "function": WorkerState::display_function(&request.function),
                     "args": args,
+                    "file": file,
+                    "line": line,
+                    "caller": CallSite::caller(site.as_ref()),
                 }),
             );
             Ok(call_id)
@@ -1361,6 +1422,12 @@ impl DurableHost for WorkerState {
         let Some(state) = self.this.get().and_then(Weak::upgrade) else {
             return Box::pin(async { Err("the worker is shutting down".to_string()) });
         };
+        // The call site the snapshot carries, for a `remote_cancel` that this
+        // process reports for a call another process made.
+        let site = wait
+            .site
+            .as_ref()
+            .map(|site| CallSite::of(site, |file| self.relative_file(file)));
         Box::pin(async move {
             // A resumed thread registers the call it was parked on, in case
             // the snapshot's run state did not list it.
@@ -1368,6 +1435,9 @@ impl DurableHost for WorkerState {
                 let mut remote = lock(&state.remote);
                 remote.waiting.insert(wait.call_id.clone());
                 remote.threads.insert(wait.call_id.clone(), wait.thread);
+                if let Some(site) = site {
+                    remote.sites.insert(wait.call_id.clone(), site);
+                }
             }
             loop {
                 let changed = state.remote_changed.notified();
@@ -1419,6 +1489,7 @@ impl DurableHost for WorkerState {
             let mut remote = lock(&self.remote);
             remote.waiting.remove(call_id);
             remote.threads.remove(call_id);
+            remote.sites.remove(call_id);
             remote.results.remove(call_id).is_some()
         };
         if consumed {
@@ -1433,20 +1504,40 @@ impl DurableHost for WorkerState {
     /// waiting set, so a result that still arrives is ignored like a result
     /// for an unknown call, and the run state of a later snapshot does not
     /// list it.
-    fn remote_cancelled(&self, call_id: &str, thread: DurableThreadId) {
-        {
+    fn remote_cancelled(&self, cancel: RemoteCancel) {
+        let recorded = {
             let mut remote = lock(&self.remote);
-            remote.waiting.remove(call_id);
-            remote.results.remove(call_id);
-            remote.threads.remove(call_id);
-        }
+            remote.waiting.remove(&cancel.call_id);
+            remote.results.remove(&cancel.call_id);
+            remote.threads.remove(&cancel.call_id);
+            remote.sites.remove(&cancel.call_id)
+        };
+        // The engine's site is the one recorded when the call was made; the
+        // worker's own record answers for a call it only heard about.
+        let site = cancel
+            .site
+            .as_ref()
+            .map(|site| CallSite::of(site, |file| self.relative_file(file)))
+            .or(recorded);
+        let (file, line) = CallSite::fields(site.as_ref());
         self.events.emit(
             "remote_cancel",
-            json!({ "call_id": call_id, "thread": thread }),
+            json!({
+                "call_id": cancel.call_id,
+                "thread": cancel.thread,
+                "file": file,
+                "line": line,
+                "cause": cancel.cause.as_str(),
+            }),
         );
     }
 
-    fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>) {
+    fn thread_started(
+        &self,
+        thread: DurableThreadId,
+        parent: Option<DurableThreadId>,
+        site: Option<&YieldPosition>,
+    ) {
         {
             let mut threads = lock(&self.threads);
             match parent {
@@ -1463,9 +1554,16 @@ impl DurableHost for WorkerState {
             }
             threads.live.insert(thread);
         }
+        let site = site.map(|site| CallSite::of(site, |file| self.relative_file(file)));
+        let (file, line) = CallSite::fields(site.as_ref());
         self.events.emit(
             "thread_started",
-            json!({ "thread": thread, "parent_thread": parent }),
+            json!({
+                "thread": thread,
+                "parent_thread": parent,
+                "file": file,
+                "line": line,
+            }),
         );
     }
 
