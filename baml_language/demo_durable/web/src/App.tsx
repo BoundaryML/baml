@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { httpApi, type Api } from "./api";
+import { CoachBar } from "./components/CoachBar";
 import { Header } from "./components/Header";
 import { LogLanes } from "./components/LogLanes";
 import { RunsPanel } from "./components/RunsPanel";
+import { ScenarioGallery } from "./components/ScenarioGallery";
 import { SourceView, type SourceFocus } from "./components/SourceView";
 import { Split } from "./components/Split";
 import { StateTree } from "./components/StateTree";
 import { isFixtureName, loadFixture, type FixtureName } from "./fixtures";
-import type { JsonObject, Run, Site } from "./protocol";
+import { REGISTRY_SITE, type JsonObject, type Run, type Site } from "./protocol";
+import { scenarioOfFixture } from "./scenarios/catalog";
+import type { RunStart, Scenario } from "./scenarios/engine";
+import { useCoach, type ScenarioSession } from "./scenarios/useCoach";
 import { startFixtureSession, startLiveSession } from "./session";
 import { connectionOf, initialState, reducer, runKey, runTree, splitRunKey, type RunKey } from "./state";
 import { Timeline, type SnapshotRef } from "./timeline/Timeline";
@@ -15,6 +20,21 @@ import { Timeline, type SnapshotRef } from "./timeline/Timeline";
 interface Mode {
   fixture: FixtureName | null;
   speed: number;
+  /** `?scenarios=1` opens the scenario gallery at startup. */
+  gallery: boolean;
+  /** `?autoplay=1` or `?autoplay=0`. `null` leaves the stored preference. */
+  autoplay: boolean | null;
+}
+
+const AUTOPLAY_KEY = "durable-demo:autoplay";
+
+/** The stored autoplay preference. Storage can be unavailable, and the switch then starts off. */
+function storedAutoplay(): boolean {
+  try {
+    return window.localStorage.getItem(AUTOPLAY_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /** `?fixture=<name>` plays a fixture (see `fixtures/index.ts`). `&speed=8` or `&speed=instant` sets the playback rate. */
@@ -23,9 +43,12 @@ function readMode(): Mode {
   const fixture = params.get("fixture");
   const speedParam = params.get("speed");
   const speed = speedParam === "instant" ? Number.POSITIVE_INFINITY : Number(speedParam ?? 4);
+  const autoplay = params.get("autoplay");
   return {
     fixture: isFixtureName(fixture) ? fixture : null,
     speed: Number.isFinite(speed) && speed > 0 ? speed : speedParam === "instant" ? Number.POSITIVE_INFINITY : 4,
+    gallery: params.get("scenarios") === "1",
+    autoplay: autoplay === null ? null : autoplay === "1",
   };
 }
 
@@ -106,23 +129,91 @@ export function App() {
     [api],
   );
 
+  // The scenario gallery and its guide (contract section 9.6).
+  const [galleryOpen, setGalleryOpen] = useState(mode.gallery);
+  const [autoplay, setAutoplayState] = useState<boolean>(() => mode.autoplay ?? storedAutoplay());
+  const setAutoplay = useCallback((on: boolean): void => {
+    setAutoplayState(on);
+    try {
+      window.localStorage.setItem(AUTOPLAY_KEY, on ? "1" : "0");
+    } catch {
+      // The preference is a convenience. Without storage it lasts for the page.
+    }
+  }, []);
+  const [liveSession, setLiveSession] = useState<ScenarioSession | null>(null);
+  const [guideClosed, setGuideClosed] = useState(false);
+  // A recording that plays a scenario brings its guide along.
+  const fixtureSession = useMemo<ScenarioSession | null>(() => {
+    const scenario = fixture ? scenarioOfFixture(fixture.name) : null;
+    return scenario && fixture?.roles?.root ? { scenario, roles: fixture.roles } : null;
+  }, [fixture]);
+  const session = guideClosed ? null : (fixture ? fixtureSession : liveSession);
+
+  const runScenario = useCallback(
+    async (scenario: Scenario): Promise<void> => {
+      const { site, fn, args } = scenario.start;
+      const run = await api.startRun(site, { function: fn, args });
+      const runSite = run.site ?? site;
+      dispatch({ type: "run_response", site, run, ts: Date.now() });
+      dispatch({ type: "select", key: runKey(runSite, run.id) });
+      setLiveSession({ scenario, roles: { root: { site: runSite, id: run.id } } });
+      setGuideClosed(false);
+      setGalleryOpen(false);
+    },
+    [api],
+  );
+  const [coachError, setCoachError] = useState<string | null>(null);
+  const startRole = useCallback(
+    (role: "plain", start: RunStart): void => {
+      setCoachError(null);
+      api
+        .startRun(start.site, { function: start.fn, args: start.args })
+        .then((run) => {
+          const runSite = run.site ?? start.site;
+          dispatch({ type: "run_response", site: start.site, run, ts: Date.now() });
+          dispatch({ type: "select", key: runKey(runSite, run.id) });
+          setLiveSession((current) => (current ? { ...current, roles: { ...current.roles, [role]: { site: runSite, id: run.id } } } : current));
+        })
+        .catch((cause: unknown) => setCoachError(cause instanceof Error ? cause.message : String(cause)));
+    },
+    [api],
+  );
+  const coach = useCoach({ session, state, autoplay, live: api.mode === "live", select, startRole });
+
+  const guided = session !== null;
   const onRunResponse = useCallback((run: Run, requestedOn: Site, selectIt: boolean): void => {
     dispatch({ type: "run_response", site: requestedOn, run, ts: Date.now() });
-    if (selectIt) dispatch({ type: "select", key: runKey(run.site ?? requestedOn, run.id) });
+    // A new fork is selected, except while a scenario guides the user: its next step names the run to act on.
+    if (selectIt && !guided) dispatch({ type: "select", key: runKey(run.site ?? requestedOn, run.id) });
+    else if (selectIt) return;
     // "Resume on <site>" leaves a `migrated` record behind. Follow the run to
     // the site that now hosts it, so that Pause and Kill act on the live run.
     // The record on that site arrives on its event stream a moment later.
     else if (run.status === "migrated" && run.migrated_to) dispatch({ type: "select", key: runKey(run.migrated_to, run.id) });
-  }, []);
+  }, [guided]);
 
   return (
     <div className="app" data-testid="app" data-mode={api.mode}>
-      <Header
-        sites={state.sites}
-        connections={state.connections}
-        fixture={fixture ? { name: fixture.name, title: fixture.title, speed: mode.speed, onReplay: () => setReplay((n) => n + 1) } : null}
-        onStart={onStart}
-      />
+      <div className="top">
+        <Header
+          sites={state.sites}
+          connections={state.connections}
+          fixture={fixture ? { name: fixture.name, title: fixture.title, speed: mode.speed, onReplay: () => setReplay((n) => n + 1) } : null}
+          onStart={onStart}
+          onOpenScenarios={() => setGalleryOpen(true)}
+        />
+        {session && coach && (
+          <CoachBar session={session} coach={coach} autoplay={autoplay} live={api.mode === "live"} onAutoplay={setAutoplay}
+            onStartRole={() => { if (coach.start) startRole(coach.start.action.as, coach.start.action.start); }}
+            onRestart={() => (fixture ? setReplay((n) => n + 1) : void runScenario(session.scenario).catch((cause: unknown) => setCoachError(cause instanceof Error ? cause.message : String(cause))))}
+            onExit={() => setGuideClosed(true)} onOpenGallery={() => setGalleryOpen(true)} />
+        )}
+        {coachError && <div className="error-line" role="alert" data-testid="coach-error">{coachError}</div>}
+      </div>
+      {galleryOpen && (
+        <ScenarioGallery live={api.mode === "live"} connected={connectionOf(state, REGISTRY_SITE).status === "open"} active={session?.scenario.id ?? null}
+          autoplay={autoplay} onAutoplay={setAutoplay} onRun={runScenario} onClose={() => setGalleryOpen(false)} />
+      )}
       <div className="rows">
         <Split id="rows" orientation="vertical" panes={[
           {
@@ -133,7 +224,7 @@ export function App() {
                   id: "runs", defaultSize: "32", minSize: "16",
                   content: (
                     <RunsPanel sites={state.sites} runs={allRuns} events={state.events} selected={selected} tree={stableTree} selectedSnapshot={selectedSnapshot} api={api}
-                      onSelect={select} onRunResponse={onRunResponse} />
+                      onSelect={select} onRunResponse={onRunResponse} coach={coach?.target ?? null} />
                   ),
                 },
                 {

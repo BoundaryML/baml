@@ -6,6 +6,9 @@
 #   cloud   http://127.0.0.1:<PORT_BASE + 1>   run store server/.baml/runs<RUNS_TAG>-cloud
 #   cloud2  http://127.0.0.1:<PORT_BASE + 2>   run store server/.baml/runs<RUNS_TAG>-cloud2
 #
+# Each site also has its own program store (contract section 9.5):
+# server/.baml/programs<RUNS_TAG>-<site>.
+#
 # Environment:
 #   PORT_BASE    first port. Default: 8787
 #   RUNS_TAG     added to the run store names, so that a second instance of the
@@ -19,8 +22,20 @@
 #                Default: ["node","scripts/mock-worker.mjs"] (relative to demo_durable/)
 #                Real worker: WORKER_CMD='["/abs/path/to/baml-cli","worker"]'
 #   PROGRAM_DIR  BAML project that the workers run. Default: ../program
+#   PROGRAMS_DIR_BASE  prefix of the three program stores. Each site gets
+#                <PROGRAMS_DIR_BASE>-<site> as its PROGRAMS_DIR, so the sites never
+#                share a store. Default: .baml/programs<RUNS_TAG>
+#   SLEEP_SUSPEND_MS  passed to every worker as --sleep-suspend-ms: a durable run
+#                suspends itself for a sleep of at least this length. Default:
+#                not set, so the worker's default of 5000 applies. 0 disables.
+#   CHAOS        JSON object with the test knobs of contract section 9.3, for
+#                example CHAOS='{"dispatch_delay_ms":800,"duplicate_results":true}'.
+#                Default: not set.
+#   WORKER_LEGACY=1  the worker predates contract section 9 and gets none of the
+#                flags --program-store, --program-hash, and --sleep-suspend-ms.
 #   BAML_LOG     log level of the site servers (off, error, warn, info, debug). Default: warn
-#   CLEAN=1      delete the three run stores of this instance before starting
+#   CLEAN=1      delete the three run stores and the three program stores of
+#                this instance before starting
 #
 # Two instances must not share a run store: both would write the same meta.json
 # files, and the cleanup of one would end the workers of the other. The script
@@ -60,6 +75,11 @@ fi
 SITE_NAMES=(local cloud cloud2)
 SITE_PORTS=("$PORT_BASE" "$((PORT_BASE + 1))" "$((PORT_BASE + 2))")
 runs_dir() { echo ".baml/runs${RUNS_TAG}-$1"; }
+PROGRAMS_DIR_BASE="${PROGRAMS_DIR_BASE:-.baml/programs${RUNS_TAG}}"
+programs_dir() { echo "${PROGRAMS_DIR_BASE}-$1"; }
+# PROGRAMS_DIR is set per site below. CHAOS, SLEEP_SUSPEND_MS, and WORKER_LEGACY
+# reach the servers through the environment as they are.
+unset PROGRAMS_DIR
 
 # Every site server gets the same registry.
 SITES_JSON="{"
@@ -108,6 +128,7 @@ done
 if [[ "${CLEAN:-0}" == "1" ]]; then
   for site in "${SITE_NAMES[@]}"; do
     rm -rf "$(runs_dir "$site")"
+    rm -rf "$(programs_dir "$site")"
   done
 fi
 
@@ -183,6 +204,7 @@ trap cleanup EXIT INT TERM
 
 for i in 0 1 2; do
   SITE="${SITE_NAMES[$i]}" PORT="${SITE_PORTS[$i]}" RUNS_DIR="$(runs_dir "${SITE_NAMES[$i]}")" \
+    PROGRAMS_DIR="$(programs_dir "${SITE_NAMES[$i]}")" \
     baml run main --log "$LOG_LEVEL" &
   PIDS+=($!)
   STARTED_PORTS+=("${SITE_PORTS[$i]}")
@@ -190,4 +212,7 @@ done
 
 echo "site servers: local http://127.0.0.1:${SITE_PORTS[0]}, cloud http://127.0.0.1:${SITE_PORTS[1]}, cloud2 http://127.0.0.1:${SITE_PORTS[2]} (Ctrl-C stops all three)"
 echo "run stores: $ROOT/server/.baml/runs${RUNS_TAG}-{local,cloud,cloud2}"
+echo "program stores: ${PROGRAMS_DIR_BASE}-{local,cloud,cloud2} (relative to $ROOT/server)"
+if [[ -n "${CHAOS:-}" ]]; then echo "CHAOS: $CHAOS"; fi
+if [[ -n "${SLEEP_SUSPEND_MS:-}" ]]; then echo "SLEEP_SUSPEND_MS: $SLEEP_SUSPEND_MS"; fi
 wait

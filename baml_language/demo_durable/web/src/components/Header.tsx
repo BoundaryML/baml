@@ -11,6 +11,7 @@ interface Props {
   connections: AppState["connections"];
   fixture: { name: string; title: string; speed: number; onReplay(): void } | null;
   onStart(site: Site, fn: string, args: JsonObject): Promise<void>;
+  onOpenScenarios(): void;
 }
 
 const CONNECTION_LABELS = {
@@ -32,7 +33,7 @@ function parseArgs(text: string): { args: JsonObject | null; error: string | nul
   }
 }
 
-export function Header({ sites, connections, fixture, onStart }: Props) {
+export function Header({ sites, connections, fixture, onStart, onOpenScenarios }: Props) {
   // Every site runs the same program. The first site that answered names the functions.
   const info: SiteInfo | null = sites.map((entry) => connectionOf({ connections }, entry.name).info).find((candidate) => candidate !== null) ?? null;
   const functions = useMemo(() => pickerFunctions(info), [info]);
@@ -77,7 +78,13 @@ export function Header({ sites, connections, fixture, onStart }: Props) {
   return (
     <header className="header" data-testid="header">
       <div className="brand">
-        <b>BAML durable functions</b>
+        <div className="brand-row">
+          <b>BAML durable functions</b>
+          <button className="btn small scenarios-btn" data-testid="open-scenarios" onClick={onOpenScenarios}
+            title="Guided scenarios: pause and move a run, fan-out with a durable sleep, race and cancellation, deadline, all settled, kill and recover, fork">
+            <span aria-hidden="true">✦</span> Scenarios
+          </button>
+        </div>
         <div className="conns">
           {sites.map(({ name, url }) => {
             const status = connectionOf({ connections }, name).status;
@@ -147,8 +154,10 @@ export function Header({ sites, connections, fixture, onStart }: Props) {
           fixture <b>{fixture.name}</b>
           <span className="muted">{Number.isFinite(fixture.speed) ? `${fixture.speed}× speed` : "instant"}</span>
           <button className="btn small" onClick={fixture.onReplay}>Replay</button>
+          <a className="btn small" href="?" title="Leave the recording and connect to the site servers">Live</a>
         </div>
       )}
+
     </header>
   );
 }

@@ -20,6 +20,17 @@ function main() -> void {
         forwarding: {},
         importing: {},
         functions: scan_functions(cfg.program_dir),
+        timers: {},
+        timer_seq: 0,
+        placed: 0,
+        programs: {},
+        fetching: {},
+        holding_result: false,
+        results_sent: 0,
+        discarded: {},
+        cancel_requested: {},
+        worker_build: "",
+        lock: baml.spawn.TaskGroup.new(1, name = "state"),
     };
     load_runs(app);
     let server = baml.http.Server.bind(`127.0.0.1:${cfg.port}`);
@@ -28,18 +39,35 @@ function main() -> void {
         `${s.name}=${s.url}`
     });
     baml.io.eprintln(`  sites ${registry.join(" ")}`);
+    let eligible = eligible_sites(cfg);
+    let placement = if (eligible.length() == 0) {
+        "no site"
+    } else {
+        eligible.join(", ") + " in round-robin order"
+    };
     baml.io.eprintln(
-        `  remote pool ${cfg.remote_pool.join(", ")} (remote calls of this site go to ${pick_remote_site(cfg) ?? "no site"})`,
+        `  remote pool ${cfg.remote_pool.join(", ")} (remote calls of this site go to ${placement})`,
     );
     baml.io.eprintln(`  worker ${cfg.worker_cmd.join(" ")} (cwd ${cfg.worker_cwd})`);
     baml.io.eprintln(`  program ${cfg.program_dir}`);
     baml.io.eprintln(`  runs ${cfg.runs_dir} (${app.runs.length()} loaded)`);
+    baml.io.eprintln(`  programs ${cfg.programs_dir}`);
+    if (chaos_active(cfg.chaos)) {
+        baml.io.eprintln(`  CHAOS ${baml.json.stringify(j(cfg.chaos))}`);
+    }
+    ensure_dir(cfg.programs_dir);
     //# Child runs that ended while their parent's site was unreachable
     for (let run in app.runs) {
         finish_child(app, run);
     }
     //# Results for forks that migrated, whose forward did not succeed before the restart
     resume_forwards(app);
+    //# Children of runs that ended without a live server to cancel them
+    for (let run in app.runs) {
+        cancel_children(app, run, `the parent run ${run.id} ended as ${run.status}`);
+    }
+    //# Wake timers of sleeping runs. An overdue run resumes at once
+    rebuild_timers(app);
     //# SSE keepalive every 10 seconds
     spawn with baml.spawn.options(detach = true) {
         let frame = ": keepalive\n\n".to_utf8();

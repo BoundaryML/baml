@@ -25,6 +25,36 @@ class Config {
     /// absolute source paths in this form.
     program_real_dir: string,
     runs_dir: string,
+    /// PROGRAMS_DIR: the content-addressed program store of this site
+    /// (contract section 9.5).
+    programs_dir: string,
+    /// SLEEP_SUSPEND_MS: passed to workers as `--sleep-suspend-ms`. Null leaves
+    /// the worker's default in place.
+    sleep_suspend_ms: string?,
+    /// WORKER_LEGACY=1: the worker predates contract section 9. It gets none of
+    /// the flags `--program-store`, `--program-hash`, and `--sleep-suspend-ms`,
+    /// and always `--project`.
+    legacy_worker: bool,
+    /// CHAOS: the test knobs of contract section 9.3.
+    chaos: Chaos,
+}
+
+/// The test knobs from the environment variable CHAOS (contract section 9.3).
+/// Each delay is applied by the site that sends the named site-to-site request,
+/// before it sends it. Every field is zero or false when CHAOS is not set.
+class Chaos {
+    dispatch_delay_ms: int,
+    result_delay_ms: int,
+    cancel_delay_ms: int,
+    import_delay_ms: int,
+    program_fetch_delay_ms: int,
+    /// Send every `remote_result` twice.
+    duplicate_results: bool,
+    /// Hold one result until the next one was sent.
+    reorder_results: bool,
+    /// Extension: the longest time that `reorder_results` holds a result when no
+    /// other result follows. Default 4000.
+    reorder_hold_ms: int,
 }
 
 /// One SSE subscriber. Frames are queued and written by one drain thread per
@@ -57,6 +87,55 @@ class App {
     /// Run ids whose import is in progress on this site.
     importing: map<string, bool>,
     functions: FunctionInfo[],
+    /// Wake timers of `sleeping` runs: run id to the sequence number of the
+    /// timer thread that may wake the run. A timer thread whose number is not
+    /// the one in this map does nothing.
+    timers: map<string, int>,
+    timer_seq: int,
+    /// Placement counter (contract section 9.3): the number of remote calls
+    /// that this site placed so far.
+    placed: int,
+    /// Program hashes that were verified in the program store of this site.
+    programs: map<string, bool>,
+    /// Program hashes whose fetch from another site is in flight.
+    fetching: map<string, bool>,
+    /// CHAOS `reorder_results`: true while one result is held back, and the
+    /// number of results that this site sent so far.
+    holding_result: bool,
+    results_sent: int,
+    /// `<run id>/<call id>` of results that were discarded, so that a second
+    /// delivery of the same result is not announced again.
+    discarded: map<string, bool>,
+    /// Run ids with a worker process that were asked to cancel, mapped to the
+    /// reason. A worker that has already written its snapshot and is about to
+    /// exit with code 75 cannot act on the command any more, so the exit
+    /// handler finishes the cancellation.
+    cancel_requested: map<string, string>,
+    /// The runtime build of the workers of this site, from the first `hello`
+    /// or from the first program entry that a worker of this site stored.
+    /// Empty until it is known.
+    worker_build: string,
+    /// The state lock: a task group with the limit 1. See `locked`.
+    lock: baml.spawn.TaskGroup,
+}
+
+// ───────────────────────────── the state lock ─────────────────────────────
+// BAML threads run in parallel and are preempted between any two instructions:
+// eight threads that each check a field and then set it all see the old value
+// (measured with toolchain 0.19.1). Every HTTP request, every worker reader, and
+// every timer of this server is its own thread, so a check that is followed by a
+// change needs mutual exclusion. The stdlib has no mutex. A task group with the
+// limit 1 admits one task at a time in FIFO order, which is the same guarantee.
+//
+// Rules for a body that runs under the lock:
+// - It performs no sys-op (no file, no HTTP, no process, no sleep, no print),
+//   so the lock is held for microseconds.
+// - It does not call `locked` again. The second task would wait for the first
+//   one, which waits for the second.
+
+/// Runs `body` while no other `locked` body of this server runs.
+function locked<T>(app: App, body: () -> T throws never) -> T throws never {
+    await spawn with baml.spawn.options(group = app.lock) { body() }
 }
 
 // ───────────────────────────── diagnostics ─────────────────────────────
@@ -275,15 +354,78 @@ function site_url(cfg: Config, site: string) -> string? throws never {
     entry.url
 }
 
-/// Placement of a remote call (contract section 8.2): the first site of
-/// REMOTE_POOL that is not this site, or null when the pool has no other site.
-function pick_remote_site(cfg: Config) -> string? throws never {
-    for (let name in cfg.remote_pool) {
-        if (name != cfg.site) {
-            return name;
-        }
+/// The sites that may host a remote call of this site (contract section 8.2):
+/// REMOTE_POOL in its order without this site.
+function eligible_sites(cfg: Config) -> string[] throws never {
+    cfg.remote_pool.filter((name) -> {
+        name != cfg.site
+    })
+}
+
+/// Placement of a remote call (contract section 9.3): the eligible sites in
+/// round-robin order with one counter per caller site, or null when the pool
+/// has no other site. The caller holds the state lock (`plan_remote_call`), so
+/// two calls that are placed at the same time get different sites.
+function pick_remote_site(app: App) -> string? throws never {
+    let eligible = eligible_sites(app.cfg);
+    if (eligible.length() == 0) {
+        return null;
     }
-    null
+    let target = eligible[app.placed % eligible.length()];
+    app.placed += 1;
+    target
+}
+
+/// The CHAOS knobs. A value that is not a JSON object leaves every knob off.
+function parse_chaos(text: string) -> Chaos throws never {
+    let chaos = Chaos {
+        dispatch_delay_ms: 0,
+        result_delay_ms: 0,
+        cancel_delay_ms: 0,
+        import_delay_ms: 0,
+        program_fetch_delay_ms: 0,
+        duplicate_results: false,
+        reorder_results: false,
+        reorder_hold_ms: 4000,
+    };
+    if (text.trim().length() == 0) {
+        return chaos;
+    }
+    let parsed = jparse(text);
+    if (!(parsed is map<string, json>)) {
+        warn(`CHAOS is not a JSON object: ${text}`);
+        return chaos;
+    }
+    chaos.dispatch_delay_ms = jget_int(parsed, "dispatch_delay_ms", 0);
+    chaos.result_delay_ms = jget_int(parsed, "result_delay_ms", 0);
+    chaos.cancel_delay_ms = jget_int(parsed, "cancel_delay_ms", 0);
+    chaos.import_delay_ms = jget_int(parsed, "import_delay_ms", 0);
+    chaos.program_fetch_delay_ms = jget_int(parsed, "program_fetch_delay_ms", 0);
+    chaos.duplicate_results = baml.json.path_or<bool>(parsed, ".duplicate_results", false);
+    chaos.reorder_results = baml.json.path_or<bool>(parsed, ".reorder_results", false);
+    chaos.reorder_hold_ms = jget_int(parsed, "reorder_hold_ms", 4000);
+    chaos
+}
+
+/// True when any CHAOS knob is on.
+function chaos_active(c: Chaos) -> bool throws never {
+    c.dispatch_delay_ms > 0
+        || c.result_delay_ms > 0
+        || c.cancel_delay_ms > 0
+        || c.import_delay_ms > 0
+        || c.program_fetch_delay_ms > 0
+        || c.duplicate_results
+        || c.reorder_results
+}
+
+/// Sleeps `ms` milliseconds. Used for the CHAOS delays and for short waits.
+function pause_ms(ms: int) -> void throws never {
+    if (ms <= 0) {
+        return;
+    }
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(ms)) catch_all (e) {
+        _ => null
+    };
 }
 
 function load_config() -> Config throws never {
@@ -343,6 +485,18 @@ function load_config() -> Config throws never {
         cmd = ["node", "scripts/mock-worker.mjs"];
     }
     let program_dir = absolute_path(cwd, env_or("PROGRAM_DIR", "../program"));
+    let suspend_text = env_or("SLEEP_SUSPEND_MS", "").trim();
+    let sleep_suspend_ms: string? = null;
+    if (suspend_text.length() > 0) {
+        let parsed_ms = baml.Int.parse(suspend_text) catch_all (e) {
+            _ => -1
+        };
+        if (parsed_ms < 0) {
+            warn(`SLEEP_SUSPEND_MS is not a number of milliseconds: ${suspend_text}`);
+        } else {
+            sleep_suspend_ms = parsed_ms.to_string();
+        }
+    }
     Config {
         site: site,
         port: port,
@@ -354,6 +508,10 @@ function load_config() -> Config throws never {
         program_dir: program_dir,
         program_real_dir: real_dir(program_dir),
         runs_dir: absolute_path(cwd, env_or("RUNS_DIR", ".baml/runs")),
+        programs_dir: absolute_path(cwd, env_or("PROGRAMS_DIR", `.baml/programs-${site}`)),
+        sleep_suspend_ms: sleep_suspend_ms,
+        legacy_worker: env_or("WORKER_LEGACY", "0") == "1",
+        chaos: parse_chaos(env_or("CHAOS", "")),
     }
 }
 
@@ -396,6 +554,17 @@ function is_terminal(status: string) -> bool throws never {
     status == "completed" || status == "failed" || status == "lost" || status == "cancelled"
 }
 
+/// A run without a process whose state lives in its latest snapshot.
+function is_suspended(status: string) -> bool throws never {
+    status == "paused" || status == "sleeping"
+}
+
+/// The statuses whose outstanding remote children are cancelled (contract
+/// section 9.3).
+function abandons_children(status: string) -> bool throws never {
+    status == "cancelled" || status == "failed" || status == "lost"
+}
+
 function latest_snapshot(run: Run) -> SnapshotInfo? throws never {
     run.snapshots.at(run.snapshots.length() - 1)
 }
@@ -411,21 +580,34 @@ function ensure_dir(path: string) -> void throws never {
 /// Writes `meta.json`. Concurrent callers coalesce into one writer per run, so
 /// the file always ends with the newest record.
 function persist(app: App, run: Run) -> void throws never {
-    let w = app.writers.get(run.id);
-    if (w == null) {
-        let created = MetaWriter { writing: false, dirty: false };
-        app.writers.set(run.id, created);
-        w = created;
-    }
-    let writer: MetaWriter = w;
-    if (writer.writing) {
-        writer.dirty = true;
+    let w = locked(app, () -> {
+        let existing = app.writers.get(run.id);
+        if (existing == null) {
+            let created = MetaWriter { writing: false, dirty: false };
+            app.writers.set(run.id, created);
+            created
+        } else {
+            existing
+        }
+    });
+    let writer = w;
+    // One thread writes the file. A caller that finds a writer at work leaves a
+    // mark, and the writer writes once more with the newest record.
+    let mine = locked(app, () -> {
+        if (writer.writing) {
+            writer.dirty = true;
+            false
+        } else {
+            writer.writing = true;
+            writer.dirty = false;
+            true
+        }
+    });
+    if (!mine) {
         return;
     }
-    writer.writing = true;
     let again = true;
     while (again) {
-        writer.dirty = false;
         let text = baml.json.stringify_pretty(run_json(run));
         baml.fs.write(`${run_dir(app, run.id)}/meta.json`, text) catch_all (e) {
             _ => {
@@ -433,9 +615,17 @@ function persist(app: App, run: Run) -> void throws never {
                 0
             }
         };
-        again = writer.dirty;
+        again
+            = locked(app, () -> {
+                if (writer.dirty) {
+                    writer.dirty = false;
+                    true
+                } else {
+                    writer.writing = false;
+                    false
+                }
+            });
     }
-    writer.writing = false;
 }
 
 function append_event(app: App, run_id: string, event: json) -> void throws never {
@@ -478,6 +668,14 @@ function emit_run_event(app: App, run_id: string, event: map<string, json>) -> v
     append_event(app, run_id, event);
 }
 
+/// Sends a server-originated event that belongs to no run (for example
+/// `program_fetched`) to the subscribers.
+function emit_event(app: App, event: map<string, json>) -> void throws never {
+    event.set("ts", now_ms());
+    event.set("site", app.cfg.site);
+    broadcast(app, event);
+}
+
 /// Loads every run from RUNS_DIR. A run that had a process when the server
 /// stopped has none now: it becomes `paused` if it is durable and has a
 /// snapshot, and `lost` otherwise.
@@ -515,8 +713,16 @@ function load_runs(app: App) -> void throws never {
             run.pid = null;
             run.blocked = null;
             if (run.durable && run.snapshots.length() > 0) {
-                run.status = "paused";
-                reset_acks(run);
+                // `wake_at` is set when the worker reports a suspend for a sleep
+                // and cleared when the next segment starts. A live status with
+                // `wake_at` means that the server stopped between that event and
+                // the exit of the worker, so the latest snapshot is the suspend.
+                if (run.wake_at != null) {
+                    run.status = "sleeping";
+                } else {
+                    run.status = "paused";
+                    reset_acks(run);
+                }
             } else {
                 run.status = "lost";
                 run.error = "the site server restarted while the worker was running";
@@ -548,22 +754,43 @@ function sse_frame(event: json) -> uint8array throws never {
     `data: ${baml.json.stringify(event)}\n\n`.to_utf8()
 }
 
-function enqueue(sub: Subscriber, frame: uint8array) -> void throws never {
-    if (sub.dead) {
-        return;
-    }
-    sub.queue.push(frame);
-    if (!sub.draining) {
-        sub.draining = true;
-        spawn with baml.spawn.options(detach = true) { drain(sub) };
+function enqueue(app: App, sub: Subscriber, frame: uint8array) -> void throws never {
+    // The frame joins the queue and the drain thread is claimed in one step, so
+    // frames keep their order and one thread writes to the response.
+    let start = locked(app, () -> {
+        if (sub.dead) {
+            false
+        } else {
+            sub.queue.push(frame);
+            if (sub.draining) {
+                false
+            } else {
+                sub.draining = true;
+                true
+            }
+        }
+    });
+    if (start) {
+        spawn with baml.spawn.options(detach = true) { drain(app, sub) };
     }
 }
 
-function drain(sub: Subscriber) -> void throws never {
-    while (sub.queue.length() > 0 && !sub.dead) {
-        let frame = sub.queue.shift();
+function drain(app: App, sub: Subscriber) -> void throws never {
+    while (true) {
+        // Taking the next frame and giving up the drain role are one step, so a
+        // frame that arrives at the end of the loop is never left behind.
+        let frame = locked(app, () -> {
+            if (sub.dead) {
+                sub.queue.clear();
+            }
+            let next = sub.queue.shift();
+            if (next == null) {
+                sub.draining = false;
+            }
+            next
+        });
         if (frame == null) {
-            break;
+            return;
         }
         let bytes: uint8array = frame;
         sub.res.write(bytes) catch_all (e) {
@@ -573,10 +800,6 @@ function drain(sub: Subscriber) -> void throws never {
             }
         };
     }
-    if (sub.dead) {
-        sub.queue.clear();
-    }
-    sub.draining = false;
 }
 
 function broadcast(app: App, event: json) -> void throws never {
@@ -585,19 +808,21 @@ function broadcast(app: App, event: json) -> void throws never {
 }
 
 function broadcast_frame(app: App, frame: uint8array) -> void throws never {
-    let any_dead = false;
-    for (let sub in app.subs) {
-        if (sub.dead) {
-            any_dead = true;
-        } else {
-            enqueue(sub, frame);
+    // The list is replaced, never changed in place, so this snapshot is stable.
+    let subs = locked(app, () -> {
+        let any_dead = app.subs.some((s) -> {
+            s.dead
+        });
+        if (any_dead) {
+            app.subs
+                = app.subs.filter((s) -> {
+                    !s.dead
+                });
         }
-    }
-    if (any_dead) {
         app.subs
-            = app.subs.filter((s) -> {
-                !s.dead
-            });
+    });
+    for (let sub in subs) {
+        enqueue(app, sub, frame);
     }
 }
 
@@ -613,10 +838,18 @@ function subscribe(app: App) -> baml.http.Response throws never {
         },
     );
     let sub = Subscriber { res: res, queue: [], draining: false, dead: false };
-    // No sys-op runs between building `init` and registering the subscriber, so
-    // the client misses no event and sees none twice.
-    let init: map<string, json> = { "type": "init", "ts": now_ms(), "site": app.cfg.site, "runs": runs_json(app.runs.reverse()) };
-    app.subs.push(sub);
-    enqueue(sub, sse_frame(init));
+    // `init` is built and queued, and the subscriber is registered, in one step
+    // under the lock. Every other frame is queued under the lock too. `init` is
+    // therefore the first frame of the connection, and a change of a run is
+    // either part of `init` or reaches the client as a `run` event.
+    let ts = now_ms();
+    locked(app, () -> {
+        let init: map<string, json> = { "type": "init", "ts": ts, "site": app.cfg.site, "runs": runs_json(app.runs.reverse()) };
+        sub.queue.push(sse_frame(init));
+        sub.draining = true;
+        app.subs = app.subs.concat([sub]);
+        null
+    });
+    spawn with baml.spawn.options(detach = true) { drain(app, sub) };
     res
 }

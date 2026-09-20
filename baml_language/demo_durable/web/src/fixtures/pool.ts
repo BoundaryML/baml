@@ -59,5 +59,5 @@ export function buildPoolFixture(): Fixture {
   b.worker(returnedAt + 25, "cloud", parent, { type: "completed", value: TRIP_VALUE });
   b.exit(returnedAt + 28, "cloud", parent, 0, "completed", { result: TRIP_VALUE });
 
-  return b.build("pool", "Pause on local, resume on cloud, remote call into cloud2");
+  return b.build("pool", "Pause on local, resume on cloud, remote call into cloud2", { roles: { root: { site: "local", id: parent } } });
 }

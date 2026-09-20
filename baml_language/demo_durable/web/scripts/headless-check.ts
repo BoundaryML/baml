@@ -3,7 +3,7 @@
 // contains.
 //
 //   pnpm dev                      # in another terminal
-//   pnpm check:headless           # BASE_URL, OUT_DIR, and LIVE=1 are optional
+//   pnpm check:headless           # BASE_URL, OUT_DIR, SCENES, and LIVE=1 are optional
 //
 // LIVE=1 also drives the central scene against the site servers behind the dev
 // server's proxy (start them with ../scripts/dev.sh). It starts runs there.
@@ -73,8 +73,18 @@ async function timelineCounts(page: Page) {
     automatic: await count(page, '[data-testid="tl-marker"][data-kind="snapshot"][data-automatic="true"]'),
     fork_marker: await count(page, '[data-testid="tl-marker"][data-kind="fork"]'),
     fork_connector: await count(page, '[data-testid="tl-connector"][data-kind="fork"]'),
+    // Contract section 9.6.
+    sleeping: await count(page, '[data-testid="tl-gap"][data-kind="sleeping"]'),
+    wake: await count(page, '[data-testid="tl-marker"][data-kind="wake"]'),
+    thread_link: await count(page, '[data-testid="tl-thread-link"]'),
+    cancel_connector: await count(page, '[data-testid="tl-connector"][data-kind="cancel"]'),
+    cancel_marker: await count(page, '[data-testid="tl-marker"][data-kind="cancel"]'),
+    cancelled_bar: await count(page, '[data-testid="tl-cancelled-hatch"]'),
   };
 }
+
+/** The counts of section 9.6 for a fixture that has none of them. */
+const NO_PHASE3 = { sleeping: 0, wake: 0, thread_link: 0, cancel_connector: 0, cancel_marker: 0, cancelled_bar: 0 };
 
 interface Expected {
   timeline: Awaited<ReturnType<typeof timelineCounts>>;
@@ -88,6 +98,12 @@ interface Expected {
   logSites?: string[];
   /** Connectors as `kind:from>to`, sorted. Checked when present. */
   connectors?: string[];
+  /** Number of run rows that name a parent. Default: 1. */
+  children?: number;
+  /** Number of threads in the state dump of the first snapshot marker. Default: 1. */
+  stateThreads?: number;
+  /** The scenario whose guide the fixture brings along, or `null`. Default: not checked. */
+  scenario?: string | null;
 }
 
 /** The fill of the colored stripe at the left edge of every timeline lane, by site. */
@@ -116,7 +132,16 @@ async function fixtureScenario(browser: Browser, name: string, expected: Expecte
   await page.waitForSelector('[data-testid="tl-segment"]');
   check(scenario, "timeline", await timelineCounts(page), expected.timeline);
   check(scenario, "run rows", await count(page, '[data-testid="run-row"]'), expected.runs);
-  check(scenario, "child row names its parent", await count(page, '[data-testid="run-row"] [data-testid="child-of"] button'), 1);
+  check(scenario, "child rows name their parent", await count(page, '[data-testid="run-row"] [data-testid="child-of"] button'), expected.children ?? 1);
+  // Remote children are listed under their parent, one level deeper.
+  check(scenario, "child rows are nested under a parent", await count(page, '[data-testid="run-row"][data-depth="1"]'), expected.children ?? 1);
+  if (expected.scenario !== undefined) {
+    check(scenario, "scenario guide", await page.locator('[data-testid="coach"]').getAttribute("data-scenario").catch(() => null), expected.scenario);
+    if (expected.scenario !== null) {
+      check(scenario, "the guide is finished when the whole recording was played", await page.locator('[data-testid="coach"]').getAttribute("data-finished"), "true");
+      check(scenario, "the closing hint", (await page.locator('[data-testid="coach-hint"]').innerText()).startsWith("Done."), true);
+    }
+  }
   check(scenario, "fork rows name their source", await count(page, '[data-testid="run-row"] [data-testid="forked-from"]'), expected.forks ?? 0);
   if (expected.ends) {
     const ends = await page.locator('[data-testid="tl-segment"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.endKind ?? ""));
@@ -158,7 +183,7 @@ async function fixtureScenario(browser: Browser, name: string, expected: Expecte
   await page.waitForSelector('[data-testid="state-thread"]');
   await page.mouse.move(5, 5);
   check(scenario, "pause stats shown", await count(page, '[data-testid="timeline-detail"][data-kind="snapshot"] [data-testid="pause-stats"]'), 1);
-  check(scenario, "state threads", await count(page, '[data-testid="state-thread"]'), 1);
+  check(scenario, "state threads", await count(page, '[data-testid="state-thread"]'), expected.stateThreads ?? 1);
   check(scenario, "state locals", (await count(page, '[data-testid="state-frame"] .key')) >= 4, true);
   check(scenario, "heap table", await count(page, '[data-testid="heap-table"]'), 1);
   await page.locator('[data-testid="tl-marker"][data-kind="resume"]').first().hover();
@@ -180,7 +205,8 @@ async function playbackScenario(browser: Browser) {
   check(scenario, "open gap drawn", await count(page, '[data-testid="tl-gap"]'), 1);
   check(scenario, "state tree loads for the paused run", await count(page, '[data-testid="state-thread"]'), 1);
   const enabled = await page.locator('[data-testid="controls"] button:not([disabled])').evaluateAll((nodes) => nodes.map((node) => node.dataset.action));
-  check(scenario, "enabled commands while paused", enabled, ["resume_here", "resume_on", "resume_on", "fork"]);
+  // Section 9.3: a paused run has no process to kill, and it can be cancelled on the site server.
+  check(scenario, "enabled commands while paused", enabled, ["resume_here", "resume_on", "resume_on", "cancel", "fork"]);
   const labels = await page.locator('[data-testid="controls"] button').allInnerTexts();
   check(scenario, "one resume button per other site", labels.filter((label) => label.startsWith("Resume")), ["Resume here", "Resume on cloud", "Resume on cloud2"]);
   await page.locator('[data-testid="controls"] button[data-action="resume_here"]').click();
@@ -227,7 +253,7 @@ async function resumeTargetsScenario(browser: Browser) {
   await page.waitForSelector('[data-testid="controls"] .target .status[data-status="paused"]', { timeout: 5000 });
   check(scenario, "a run on cloud can move to local or cloud2", await resumeLabels(), ["Resume on local", "Resume on cloud2"]);
   const enabled = await page.locator('[data-testid="controls"] button:not([disabled])').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.action));
-  check(scenario, "enabled commands of the paused run on cloud", enabled, ["resume_here", "resume_on", "resume_on", "fork"]);
+  check(scenario, "enabled commands of the paused run on cloud", enabled, ["resume_here", "resume_on", "resume_on", "cancel", "fork"]);
   await finish();
 }
 
@@ -385,6 +411,262 @@ async function interactionScenario(browser: Browser) {
   await finish();
 }
 
+// ---------------------------------------------------------------------------
+// Contract section 9.6: durable sleep, cancellation, threads, futures, scenarios
+// ---------------------------------------------------------------------------
+
+const shot = async (page: Page, name: string): Promise<void> => {
+  if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, `${name}.png`) });
+};
+const enabledActions = (page: Page): Promise<(string | undefined)[]> =>
+  page.locator('[data-testid="controls"] button:not([disabled])').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.action));
+
+// The fan-out while it sleeps: the gap has its own style, names the wake time,
+// and counts down. No parent process exists, and the children keep running.
+async function sleepingScenario(browser: Browser, colorScheme: ColorScheme) {
+  const scenario = `fanout-sleeping-${colorScheme}`;
+  const { page, finish } = await open(browser, scenario, "/?fixture=fanout&speed=2", colorScheme, { width: 1440, height: 900 });
+  const gap = '[data-testid="tl-gap"][data-kind="sleeping"][data-open="true"]';
+  await page.waitForSelector(gap, { timeout: 5000 });
+  const label = page.locator(`${gap} [data-testid="tl-sleep-label"]`);
+  const first = (await label.textContent()) ?? "";
+  check(scenario, "the gap is labeled sleeping until <time> with a countdown", /^sleeping until \d\d:\d\d:\d\d · \d+\.\d s$/.test(first), true);
+  const seconds = (text: string): number => Number(/· (\d+\.\d) s$/.exec(text)?.[1] ?? Number.NaN);
+  await page.waitForTimeout(700);
+  const second = (await label.textContent()) ?? "";
+  check(scenario, "the countdown runs", seconds(second) < seconds(first), true);
+  // The band reaches the wake time, which is to the right of the now line.
+  const geometry = await page.evaluate((selector) => {
+    const band = document.querySelector(`${selector} rect.tl-sleep`)?.getBoundingClientRect();
+    const now = document.querySelector(".tl-now")?.getBoundingClientRect();
+    return band && now ? { bandRight: band.right, now: now.left, bandLeft: band.left } : null;
+  }, gap);
+  check(scenario, "the sleeping band reaches past now, to the wake time", geometry !== null && geometry.bandLeft < geometry.now && geometry.now < geometry.bandRight, true);
+  check(scenario, "no process bar of the parent is open", await count(page, '[data-testid="tl-segment"][data-run="r-fn7q2a"][data-end-kind="open"]'), 0);
+  check(scenario, "children run while the parent sleeps", (await count(page, '[data-testid="tl-segment"][data-end-kind="open"]')) >= 1, true);
+  check(scenario, "status of the run", await page.locator('[data-testid="controls"] .target .status').getAttribute("data-status"), "sleeping");
+  check(scenario, "wake time and countdown next to the status", /^wakes \d\d:\d\d:\d\d · in \d+\.\d s$/.test(await page.locator('[data-testid="controls"] [data-testid="wake-line"]').innerText()), true);
+  check(scenario, "wake time in the run's row", await count(page, '[data-testid="run-row"][data-status="sleeping"] [data-testid="wake-line"]'), 1);
+  // Section 9.3: a sleeping run can be resumed early and cancelled. It has no process to pause or kill.
+  check(scenario, "enabled commands while sleeping", await enabledActions(page), ["resume_here", "resume_on", "resume_on", "cancel", "fork"]);
+  check(scenario, "program hash next to the status", /^prog [0-9a-f]{10}$/.test(await page.locator('[data-testid="program-hash"]').innerText()), true);
+  // The state tree shows the snapshot of a sleeping run without a click: five threads.
+  await page.waitForSelector('[data-testid="state-thread"]');
+  check(scenario, "state threads of the sleeping run", await count(page, '[data-testid="state-thread"]'), 5);
+  check(scenario, "how the threads are parked", (await page.locator('[data-testid="state-summary"]').innerText()).includes("1 sleep, 4 remote_call"), true);
+  check(scenario, "four pending futures", await count(page, '[data-testid="state-future"][data-future="pending"]'), 4);
+  // The guide follows the event stream.
+  check(scenario, "the guide is on the sleep step", await page.locator('[data-testid="coach"]').getAttribute("data-step"), "sleep");
+  const hint = await page.locator('[data-testid="coach-hint"]').innerText();
+  check(scenario, "the hint says that no process exists, and counts", hint.includes("no parent process exists while the run sleeps") && /\d of 4 children have finished/.test(hint) && /wakes the run in \d+\.\d s/.test(hint), true);
+  // The gap has a detail panel.
+  await page.locator(`${gap} .tl-gap-hit`).hover();
+  check(scenario, "detail of the sleeping gap", await page.locator('[data-testid="timeline-detail"][data-kind="gap"]').getAttribute("data-gap-kind"), "sleeping");
+  check(scenario, "the detail names the wake time", (await page.locator('[data-testid="timeline-detail"]').innerText()).includes("wake at"), true);
+  await page.mouse.move(5, 5);
+  await shot(page, `fanout-asleep-${colorScheme}`);
+
+  // The timer resumes the run: the countdown ends, the gap closes, and the threads continue.
+  await page.waitForSelector('[data-testid="tl-marker"][data-kind="wake"]', { timeout: 8000 });
+  await page.waitForSelector('[data-testid="controls"] .target .status[data-status="completed"]', { timeout: 5000 });
+  check(scenario, "the gap is closed after the wake", [await count(page, gap), await count(page, '[data-testid="tl-gap"][data-kind="sleeping"][data-open="false"]')], [0, 1]);
+  check(scenario, "the closed gap states how long the run slept", ((await page.locator('[data-testid="tl-sleep-label"]').textContent()) ?? "").startsWith("slept 12.02 s"), true);
+  check(scenario, "no wake line once the run is awake", await count(page, '[data-testid="wake-line"]'), 0);
+  await page.locator('[data-testid="tl-marker"][data-kind="wake"]').click();
+  await page.mouse.move(5, 5);
+  check(scenario, "detail of the wake marker", (await page.locator('[data-testid="timeline-detail"][data-kind="wake"]').innerText()).includes("woken by"), true);
+  check(scenario, "the guide is finished", await page.locator('[data-testid="coach"]').getAttribute("data-finished"), "true");
+  await finish();
+}
+
+// Threads that continue across a suspension keep their line, and the resume marker names the program source.
+async function threadsScenario(browser: Browser) {
+  const scenario = "fanout-threads";
+  const { page, finish } = await open(browser, scenario, "/?fixture=fanout&speed=instant", "light", { width: 1440, height: 900 });
+  // A link is a horizontal line, which has no height, so it counts as attached, not as visible.
+  await page.waitForSelector('[data-testid="tl-thread-link"]', { state: "attached" });
+  const threads = await page.locator('[data-testid="tl-thread"]').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const data = (node as SVGElement).dataset;
+      return { thread: Number(data.thread), segment: Number(data.segment), subRow: Number(data.subRow), continued: data.continued === "true", continues: data.continues === "true", y: Math.round(node.querySelector("rect")?.getBoundingClientRect().top ?? -1) };
+    }),
+  );
+  for (const id of [2, 3, 4, 5]) {
+    const bars = threads.filter((thread) => thread.thread === id);
+    check(scenario, `thread ${id} has a bar in both segments on one line`, [bars.map((bar) => bar.segment), bars[0]?.continues, bars[1]?.continued, bars[0]?.y === bars[1]?.y], [[1, 2], true, true, true]);
+  }
+  check(scenario, "four thread lines", new Set(threads.filter((thread) => thread.thread <= 5).map((thread) => thread.y)).size, 4);
+  const links = await page.locator('[data-testid="tl-thread-link"] line.tl-thread-link').evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().top)));
+  check(scenario, "each link is on the line of its thread", links.every((y) => threads.some((thread) => Math.abs(thread.y + 3 - y) <= 2)), true);
+  await page.locator('[data-testid="tl-marker"][data-kind="resume"]').hover();
+  check(scenario, "program source in the resume timings", await page.locator('[data-testid="program-source"]').getAttribute("data-source"), "store");
+  check(scenario, "program hash in every run row", await count(page, '[data-testid="row-program"]'), 5);
+  // The children fold away under their parent.
+  await page.locator('[data-testid="group-toggle"]').click();
+  check(scenario, "collapsed group", [await count(page, '[data-testid="run-row"]'), await page.locator('[data-testid="group-toggle"]').getAttribute("aria-expanded")], [1, "false"]);
+  await page.locator('[data-testid="group-toggle"]').click();
+  check(scenario, "expanded group", await count(page, '[data-testid="run-row"]'), 5);
+  await finish();
+}
+
+// Children that run at the same time in one lane get rows of their own, and no label box touches another.
+async function stackingScenario(browser: Browser) {
+  const scenario = "race-stacking";
+  const { page, finish } = await open(browser, scenario, "/?fixture=race&speed=instant", "light", { width: 1440, height: 900 });
+  await page.waitForSelector('[data-testid="tl-segment"]');
+  const boxes = await page.locator('[data-testid="tl-segment"] text.tl-label').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { text: node.textContent ?? "", left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+    }),
+  );
+  const overlaps = boxes.flatMap((a, i) => boxes.slice(i + 1).filter((b) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)).map((b) => `${a.text} / ${b.text}`));
+  check(scenario, "bar labels that overlap", overlaps, []);
+  const rows = await page.locator('[data-testid="tl-segment"] rect.tl-bar').evaluateAll((nodes) => nodes.map((node) => `${(node as SVGElement).dataset.site}:${Math.round(node.getBoundingClientRect().top)}`));
+  check(scenario, "two children of one lane are on rows of their own", new Set(rows.filter((row) => row.startsWith("cloud:"))).size, 2);
+
+  // The cancelled children: their own style, a connector from the parent, and a marker with a detail panel.
+  const hatched = await page.locator('[data-testid="tl-segment"][data-end-kind="cancelled"]').evaluateAll((nodes) => nodes.map((node) => [(node as SVGElement).dataset.run ?? "", node.querySelector('[data-testid="tl-cancelled-hatch"]') !== null] as [string, boolean]));
+  check(scenario, "cancelled bars carry the cancelled style", hatched.sort(), [["r-qs7a1r", true], ["r-qu4z9s", true]]);
+  check(scenario, "a completed bar does not", await count(page, '[data-testid="tl-segment"][data-end-kind="completed"] [data-testid="tl-cancelled-hatch"]'), 0);
+  const stroke = await page.locator('[data-testid="tl-connector"][data-kind="cancel"] path.tl-connector').first().evaluate((node) => [getComputedStyle(node).stroke, getComputedStyle(node).strokeDasharray]);
+  const callStroke = await page.locator('[data-testid="tl-connector"][data-kind="call"] path.tl-connector').first().evaluate((node) => [getComputedStyle(node).stroke, getComputedStyle(node).strokeDasharray]);
+  check(scenario, "a cancel connector does not look like a call connector", stroke[0] !== callStroke[0] && stroke[1] !== callStroke[1], true);
+  await page.locator('[data-testid="tl-marker"][data-kind="cancel"]').first().click();
+  await page.mouse.move(5, 5);
+  const detail = await page.locator('[data-testid="timeline-detail"][data-kind="cancel"]').innerText();
+  check(scenario, "detail of the cancel marker names the call and the child", detail.includes("r-rc3w8n-c2") && detail.includes("cloud2/r-qs7a1r") && detail.includes("race loser"), true);
+  await page.locator('[data-testid="tl-connector"][data-kind="cancel"] .tl-connector-hit').first().hover({ force: true });
+  check(scenario, "detail of the cancel connector", (await page.locator('[data-testid="timeline-detail"][data-kind="cancel"] h4').innerText()).includes("remote cancel"), true);
+  await finish();
+}
+
+// The state tree: futures in three states with their values, a cancel token, enums, maps, and nested instances.
+async function stateTreeScenario(browser: Browser, colorScheme: ColorScheme) {
+  const scenario = `state-tree-${colorScheme}`;
+  const { page, finish } = await open(browser, scenario, "/?fixture=settled&speed=instant", colorScheme, { width: 1440, height: 1000 });
+  await page.waitForSelector('[data-testid="tl-marker"][data-kind="snapshot"]');
+  await page.locator('[data-testid="tl-marker"][data-kind="snapshot"]').click();
+  await page.waitForSelector('[data-testid="state-thread"]');
+  await page.mouse.move(5, 5);
+  check(scenario, "three threads", [await count(page, '[data-testid="state-thread"]'), (await page.locator('[data-testid="state-summary"]').innerText()).includes("2 await, 1 remote_call")], [3, true]);
+  const futures = await page.locator('[data-testid="state-thread"]').first().locator('[data-testid="state-future"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.future));
+  check(scenario, "futures of the main thread, by state", futures, ["resolved", "failed", "pending"]);
+  const resolved = page.locator('[data-testid="state-future"][data-future="resolved"]').first();
+  check(scenario, "a resolved future shows its value", (await resolved.innerText()).includes("Quote"), true);
+  check(scenario, "a failed future shows its error", (await page.locator('[data-testid="state-future"][data-future="failed"]').first().innerText()).includes("QuoteUnavailable"), true);
+  // Open the resolved future: a class instance with an enum, a nested class, a map, and an optional field.
+  await resolved.click();
+  const open1 = page.locator('[data-testid="state-thread"]').first().locator("details details[open]").filter({ has: page.locator('[data-future="resolved"]') }).first();
+  await open1.locator("summary", { hasText: "value" }).first().click();
+  const tree = await page.locator('[data-testid="state-tree"] .tree').innerText();
+  check(scenario, "the value of the future: enum, nested class, map, optional field", ["QuoteRequest {", '"Skyways"', "Money {", "amount", '"insurance": 12', '["flight", "lisbon"]', "note"].every((part) => tree.includes(part)), true);
+  // The request inside the quote: an enum, a nested class with an optional field, and a map.
+  await open1.locator("summary", { hasText: "request" }).first().click();
+  const nested = await page.locator('[data-testid="state-tree"] .tree').innerText();
+  check(scenario, "the nested request: enum and nested class", ["QuoteKind.", "Flight", "Traveler {", "loyalty_tier"].every((part) => nested.includes(part)), true);
+  // A map lists its entries under quoted keys.
+  await page.locator('[data-testid="state-map"]').first().click();
+  check(scenario, "map entries under quoted keys", (await page.locator('[data-testid="state-tree"] .map-key').allInnerTexts()).filter((text) => text !== ""), ['"currency"', '"simulate"']);
+  await page.locator('[data-testid="state-tree"] .panel-body').evaluate((node) => { node.scrollLeft = 0; });
+  check(scenario, "an enum variant is rendered as one", (await count(page, '[data-testid="state-enum"]')) >= 1, true);
+  await shot(page, `settled-state-tree-${colorScheme}`);
+  await finish();
+
+  const token = `cancel-token-${colorScheme}`;
+  const second = await open(browser, token, "/?fixture=deadline&speed=instant", colorScheme, { width: 1440, height: 1000 });
+  await second.page.waitForSelector('[data-testid="tl-marker"][data-kind="snapshot"]');
+  await second.page.locator('[data-testid="tl-marker"][data-kind="snapshot"]').click();
+  await second.page.waitForSelector('[data-testid="state-cancel-token"]');
+  await second.page.mouse.move(5, 5);
+  check(token, "the cancel token of with_timeout, not cancelled yet", (await second.page.locator('[data-testid="state-cancel-token"]').first().innerText()).includes("armed"), true);
+  check(token, "three threads: await, remote_call, sleep", await second.page.locator('[data-testid="state-thread"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.parked)), ["await", "remote_call", "sleep"]);
+  await shot(second.page, `deadline-state-tree-${colorScheme}`);
+  await second.finish();
+}
+
+// The scenario gallery: seven cards, the autoplay switch, and the links to the recordings.
+async function galleryScenario(browser: Browser, colorScheme: ColorScheme) {
+  const scenario = `gallery-${colorScheme}`;
+  const { page, finish } = await open(browser, scenario, "/?fixture=central&speed=instant", colorScheme, { width: 1440, height: 900 });
+  await page.waitForSelector('[data-testid="tl-segment"]');
+  check(scenario, "a fixture that no scenario plays has no guide", await count(page, '[data-testid="coach"]'), 0);
+  await page.locator('[data-testid="open-scenarios"]').click();
+  await page.waitForSelector('[data-testid="scenario-gallery"]');
+  const ids = await page.locator('[data-testid="scenario-card"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.scenario));
+  check(scenario, "the seven scenarios", ids, ["migrate", "fanout", "race", "deadline", "settled", "recover", "fork"]);
+  const cards = await page.locator('[data-testid="scenario-card"]').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      title: (node.querySelector("h3")?.textContent ?? "").length > 0,
+      summary: (node.querySelector("p")?.textContent ?? "").length > 120,
+      starts: /^[a-z_]+\(\{.*\}\) on local$/.test((node.querySelector(".scenario-starts")?.textContent ?? "").trim()),
+      steps: node.querySelectorAll(".scenario-steps li").length >= 3,
+      picture: node.querySelectorAll("svg.mini-tl rect.tl-bar").length >= 2,
+    })),
+  );
+  check(scenario, "every card has a title, a paragraph, the function and its arguments, steps, and a picture", cards.every((card) => Object.values(card).every(Boolean)), true);
+  check(scenario, "a recording cannot start runs", await page.locator('[data-testid="scenario-run"]').evaluateAll((nodes) => nodes.every((node) => (node as HTMLButtonElement).disabled)), true);
+  const hrefs = await page.locator('[data-testid="scenario-play"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href")));
+  check(scenario, "links to the recordings", hrefs, ["pool", "fanout", "race", "deadline", "settled", "recover", "branch"].map((name) => `?fixture=${name}&speed=2`));
+  await page.locator('[data-testid="scenario-gallery"] [data-testid="autoplay"]').click();
+  check(scenario, "the autoplay switch", await page.locator('[data-testid="scenario-gallery"] [data-testid="autoplay"]').getAttribute("aria-checked"), "true");
+  check(scenario, "autoplay is part of the recording link", await page.locator('[data-testid="scenario-play"]').first().getAttribute("href"), "?fixture=pool&speed=2&autoplay=1");
+  check(scenario, "the sheet fits the window", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await shot(page, `gallery-${colorScheme}`);
+  await page.keyboard.press("Escape");
+  check(scenario, "Escape closes the sheet", await count(page, '[data-testid="scenario-gallery"]'), 0);
+  // The preference survives a reload.
+  await page.reload();
+  await page.locator('[data-testid="open-scenarios"]').click();
+  check(scenario, "autoplay survives a reload", await page.locator('[data-testid="scenario-gallery"] [data-testid="autoplay"]').getAttribute("aria-checked"), "true");
+  // A card plays its recording.
+  await page.locator('[data-testid="scenario-card"][data-scenario="race"] [data-testid="scenario-play"]').click();
+  await page.waitForSelector('[data-testid="coach"][data-scenario="race"]');
+  check(scenario, "the recording brings its guide and keeps autoplay", await page.locator('[data-testid="coach"] [data-testid="autoplay"]').getAttribute("aria-checked"), "true");
+  await finish();
+}
+
+// The guide points at the control of the current step. With autoplay it shows that it presses it.
+async function guideScenario(browser: Browser) {
+  const scenario = "guide-race";
+  const { page, finish } = await open(browser, scenario, "/?fixture=race&speed=1&autoplay=0", "light", { width: 1440, height: 900 });
+  const coached = '[data-testid="controls"] button[data-coach]';
+  await page.waitForSelector(`${coached}[data-action="pause"]`, { timeout: 5000 });
+  check(scenario, "without autoplay the pause button is pointed at", await page.locator(coached).evaluateAll((nodes) => nodes.map((node) => [(node as HTMLElement).dataset.action, (node as HTMLElement).dataset.coach])), [["pause", "hint"]]);
+  const hint = await page.locator('[data-testid="coach-hint"]').innerText();
+  check(scenario, "the hint asks for the pause and names the sites", hint.includes("Click Pause now: three children are running on cloud and cloud2"), true);
+  check(scenario, "the hint is marked optional", hint.toLowerCase().startsWith("optional"), true);
+  const ring = await page.locator(coached).evaluate((node) => getComputedStyle(node).borderTopColor);
+  const plain = await page.locator('[data-testid="controls"] button[data-action="fork"]').evaluate((node) => getComputedStyle(node).borderTopColor);
+  check(scenario, "the highlighted button looks different", ring !== plain, true);
+  await shot(page, "race-guide-pause");
+  // The recording pauses at 1.3 s and moves the run at 3.4 s. In between the guide points at "Resume on cloud2".
+  await page.waitForSelector(`${coached}[data-action="resume_on"][data-target-site="cloud2"]`, { timeout: 5000 });
+  check(scenario, "only one control is highlighted at a time", await count(page, coached), 1);
+  await page.locator('[data-testid="coach"] [data-testid="autoplay"]').click();
+  check(scenario, "with autoplay the highlight announces the press", await page.locator(coached).getAttribute("data-coach"), "press");
+  check(scenario, "a recording sends no command", await count(page, '[data-testid="command-error"]'), 0);
+  await shot(page, "race-guide-resume-autoplay");
+  await page.waitForSelector('[data-testid="coach"][data-finished="true"]', { timeout: 8000 });
+  check(scenario, "no control is highlighted at the end", await count(page, coached), 0);
+  check(scenario, "every step is done", await page.locator(".coach-steps li").evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.state)), ["done", "done", "done", "done", "done"]);
+  // The guide can be closed, and the app stays as it is.
+  await page.locator('[data-testid="coach"] button', { hasText: "Exit" }).click();
+  check(scenario, "Exit closes the guide", await count(page, '[data-testid="coach"]'), 0);
+  await finish();
+
+  // The recovery scenario follows a second run: the guide selects it when its step comes.
+  const recover = "guide-recover";
+  const second = await open(browser, recover, "/?fixture=recover&speed=4&autoplay=1", "light", { width: 1440, height: 900 });
+  await second.page.waitForSelector('[data-testid="coach"][data-step="kill-plain"][data-ready="true"]', { timeout: 10000 });
+  check(recover, "the guide selected the plain run for its kill", await second.page.locator('[data-testid="run-row"][aria-selected="true"]').getAttribute("data-run"), "r-rp4n7t");
+  check(recover, "the kill button is highlighted", await second.page.locator(coached).getAttribute("data-action"), "kill");
+  await shot(second.page, "recover-guide-kill-plain");
+  await second.page.waitForSelector('[data-testid="coach"][data-finished="true"]', { timeout: 8000 });
+  check(recover, "the closing hint states the difference", (await second.page.locator('[data-testid="coach-hint"]').innerText()).includes("The plain run is lost"), true);
+  await second.finish();
+}
+
 // The live path against the site servers, with the mock or the real worker (LIVE=1).
 // It starts runs on the servers behind BASE_URL. The scene is the central one:
 // the parent is paused while its remote child runs, the child completes, and
@@ -488,20 +770,41 @@ async function liveScenario(browser: Browser) {
     check(scenario, "blocked reason gone once paused", await count(page, '[data-testid="blocked-reason"]'), 0);
     await page.fill('[data-testid="args"]', '{"city":"Lisbon"}');
   } else {
-    // The real worker cannot write a snapshot while a local holds a future.
-    // `durable_plan_trip_parallel` keeps one until it returns, so the pause
-    // request is answered with `blocked` until the run completes.
+    // `durable_plan_trip_parallel` holds a pending future and a second thread
+    // while it plans. A worker of contract section 9 writes both into the
+    // snapshot. A worker that predates it answers the pause request with
+    // `blocked` until the run completes.
     await start("durable_plan_trip_parallel");
     await page.waitForSelector('[data-testid="tl-thread"]', { timeout: 20000 });
+    await page.waitForSelector('[data-testid="tl-connector"][data-kind="call"]', { timeout: 30000 });
     await page.click(`${controls} button[data-action="pause"]`);
-    await page.waitForSelector('[data-testid="blocked-reason"]', { timeout: 10000 });
-    check(scenario, "status is pausing while blocked", await page.locator(`${controls} .target .status`).getAttribute("data-status"), "pausing");
-    check(scenario, "blocked reason shown", (await page.locator('[data-testid="blocked-reason"]').innerText()).includes("holds a future"), true);
-    check(scenario, "blocked marker drawn", (await count(page, '[data-testid="tl-marker"][data-kind="blocked"]')) >= 1, true);
-    if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, "live-blocked.png") });
-    await waitStatus("completed");
-    check(scenario, "blocked reason gone once the run completed", await count(page, '[data-testid="blocked-reason"]'), 0);
-    check(scenario, "spawned thread drawn as a sub-bar", await count(page, '[data-testid="tl-thread"]'), 1);
+    const answer = await Promise.race([
+      page.waitForSelector('[data-testid="blocked-reason"]', { timeout: 15000 }).then(() => "blocked" as const),
+      waitStatus("paused", 15000).then(() => "paused" as const),
+    ]);
+    console.log(`  live: the worker answered the pause of a run with a pending future with \`${answer}\``);
+    if (answer === "paused") {
+      await page.waitForSelector('[data-testid="state-thread"]');
+      check(scenario, "the snapshot holds both threads: the root in its sleep and the spawned one in its remote call",
+        (await page.locator('[data-testid="state-thread"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.parked ?? ""))).sort(), ["remote_call", "sleep"]);
+      check(scenario, "the local weather_future is a pending future in the state tree", (await page.locator('[data-testid="state-future"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.future))).includes("pending"), true);
+      check(scenario, "no blocked reason and no blocked marker", [await count(page, '[data-testid="blocked-reason"]'), await count(page, '[data-testid="tl-marker"][data-kind="blocked"]')], [0, 0]);
+      if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, "live-parallel-paused.png") });
+      await page.click(`${controls} button[data-action="resume_here"]`);
+      await waitStatus("completed", 40000);
+      const parallel = await timelineCounts(page);
+      check(scenario, "the spawned thread continues across the pause on one sub-row, and its remote call returns once",
+        { threads: parallel.threads, thread_link: parallel.thread_link, call: parallel.call, return: parallel.return, gaps: parallel.gaps }, { threads: 2, thread_link: 1, call: 1, return: 1, gaps: 1 });
+      if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, "live-parallel-resumed.png") });
+    } else {
+      check(scenario, "status is pausing while blocked", await page.locator(`${controls} .target .status`).getAttribute("data-status"), "pausing");
+      check(scenario, "blocked reason shown", (await page.locator('[data-testid="blocked-reason"]').innerText()).includes("holds a future"), true);
+      check(scenario, "blocked marker drawn", (await count(page, '[data-testid="tl-marker"][data-kind="blocked"]')) >= 1, true);
+      if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, "live-blocked.png") });
+      await waitStatus("completed");
+      check(scenario, "blocked reason gone once the run completed", await count(page, '[data-testid="blocked-reason"]'), 0);
+      check(scenario, "spawned thread drawn as a sub-bar", await count(page, '[data-testid="tl-thread"]'), 1);
+    }
   }
   check(scenario, "no command error after kill, fork, cancel, and pause", await commandErrors(), []);
 
@@ -604,7 +907,10 @@ async function livePoolScenario(browser: Browser) {
 
   await live.resumeOn("cloud");
   await live.connector("migration", "local", "cloud");
-  await live.waitStatus("migrated");
+  // The app follows the run to the site that now hosts it, so the controls show the record on cloud.
+  await live.rowStatus("local", id, "migrated");
+  await page.waitForSelector(`${live.row("cloud", id)}[aria-selected="true"]`, { timeout: 30000 });
+  check(scenario, "after Resume on cloud the selection follows the run to cloud", await page.locator('[data-testid="run-row"][aria-selected="true"]').getAttribute("data-site"), "cloud");
   await live.connector("call", "cloud", "cloud2");
   if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, "live-pool-child-running.png") });
   await live.connector("return", "cloud2", "cloud");
@@ -705,23 +1011,188 @@ async function liveSkipScenario(browser: Browser) {
   await finish();
 }
 
+// What each scenario of the gallery must show when autoplay drives it against
+// site servers with a worker of contract section 9 (mock or real). The run
+// records come from the site servers, and the counts from the drawn timeline.
+type GuideOutcome = {
+  scenario: string; page: Page; root: string; pressed: string[]; counts: Awaited<ReturnType<typeof timelineCounts>>; connectors: string[];
+  suspended: { status: string; threads: string[]; futures: string[]; tokens: number; hint: string } | null;
+};
+// The children of a run once none of them has a process. A cancel reaches a
+// child's site a moment after the parent completed, and later with a slow controller (CHAOS).
+const childrenOfRun = async (run: string): Promise<LiveRun[]> => {
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    const children = (await Promise.all(["local", "cloud", "cloud2"].map(liveRuns))).flat().filter((child) => child.parent?.run === run);
+    if (children.every((child) => !["starting", "running", "pausing"].includes(child.status)) || Date.now() > deadline) return children;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+};
+/** True when the site servers delay or reorder their site-to-site requests (CHAOS, contract section 9.3). */
+const liveChaos = async (): Promise<boolean> => {
+  const info = (await (await fetch(`${BASE_URL}/local/api/info`)).json()) as { chaos?: Record<string, number | boolean> };
+  return Object.entries(info.chaos ?? {}).some(([key, value]) => key !== "reorder_hold_ms" && value !== 0 && value !== false);
+};
+const tally = (list: string[]): Record<string, number> => sortKeys(list.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item]: (acc[item] ?? 0) + 1 }), {})) as Record<string, number>;
+type QuoteJson = { vendor: string; request: { kind: string; delay_ms: number }; price: { amount: number; currency: string } };
+const PHASE3_GUIDES: Record<string, (outcome: GuideOutcome) => Promise<void>> = {
+  async fanout({ scenario, root, pressed, suspended, counts, connectors }) {
+    const run = await liveRun("local", root);
+    const report = run.result as { quotes: QuoteJson[]; total: { amount: number }; vendors: Record<string, string>; cheapest: QuoteJson };
+    check(scenario, "autoplay pressed nothing: the run suspends and wakes by itself", pressed, []);
+    check(scenario, "the run completed in a second process with four class-valued quotes in input order", [run.status, run.segment, report.quotes.map((quote) => quote.request.kind), report.total.amount, report.cheapest.vendor, Object.keys(report.vendors).length],
+      ["completed", 2, ["Flight", "Hotel", "Car", "Tour"], 1194, "Rodas", 4]);
+    const children = await childrenOfRun(root);
+    check(scenario, "four children, two on each cloud site, all completed", [tally(children.map((child) => child.site)), tally(children.map((child) => child.status))], [{ cloud: 2, cloud2: 2 }, { completed: 4 }]);
+    check(scenario, "while the run slept, the state tree showed its five threads and their futures", [suspended?.status, suspended?.threads.length, (suspended?.futures.length ?? 0) >= 4, suspended?.hint.includes("no parent process exists")], ["sleeping", 5, true, true]);
+    check(scenario, "timeline: sleeping gap, wake marker, four calls and returns, four threads that continue across the gap",
+      { segments: counts.segments, sleeping: counts.sleeping, wake: counts.wake, call: counts.call, return: counts.return, thread_link: counts.thread_link, pause_request: counts.pause_request },
+      { segments: 6, sleeping: 1, wake: 1, call: 4, return: 4, thread_link: 4, pause_request: 0 });
+    check(scenario, "connectors", connectors, ["call:local>cloud", "call:local>cloud", "call:local>cloud2", "call:local>cloud2", "return:cloud>local", "return:cloud>local", "return:cloud2>local", "return:cloud2>local"].sort());
+  },
+  async race({ scenario, page, root, pressed, suspended }) {
+    check(scenario, "autoplay pressed Pause and then Resume on cloud2", pressed, ["pause", "resume_on:cloud2"]);
+    const run = await liveRun("cloud2", root);
+    const quote = run.result as QuoteJson;
+    check(scenario, "the race settled on cloud2 with the 2 second vendor", [run.status, run.segment, quote.vendor, quote.request.delay_ms, quote.request.kind], ["completed", 2, "Casa Azul", 2000, "Hotel"]);
+    check(scenario, "local keeps a migrated record", (await liveRun("local", root)).status, "migrated");
+    const children = await childrenOfRun(root);
+    // A cancel is a request. With a slow controller the 6 second loser can finish before the cancel reaches it; its result is discarded.
+    const ended = tally(children.map((child) => child.status));
+    check(scenario, "one child completed and the two losers were cancelled on their sites", (await liveChaos()) ? [(ended.cancelled ?? 0) >= 1, children.length] : [ended, children.length], (await liveChaos()) ? [true, 3] : [{ cancelled: 2, completed: 1 }, 3]);
+    await page.waitForTimeout(500);
+    const counts = await timelineCounts(page);
+    check(scenario, "the paused race showed five threads and pending futures in the state tree", [suspended?.status, suspended?.threads.length, (suspended?.futures.filter((state) => state === "pending").length ?? 0) >= 3], ["paused", 5, true]);
+    check(scenario, "timeline: a migration, two cancel connectors, two cancelled bars", { migration: counts.migration, cancel_connector: counts.cancel_connector, cancelled_bar: (await liveChaos()) ? counts.cancelled_bar >= 1 : counts.cancelled_bar, call: counts.call, return: counts.return },
+      { migration: 1, cancel_connector: 2, cancelled_bar: (await liveChaos()) ? true : 2, call: 3, return: 1 });
+  },
+  async deadline({ scenario, page, root, pressed, suspended }) {
+    check(scenario, "autoplay pressed Pause and then Resume here", pressed, ["pause", "resume_here"]);
+    const run = await liveRun("local", root);
+    check(scenario, "the result is built from the Timeout error", [run.status, run.segment, run.result], ["completed", 2, "no tour quote for Lisbon: operation timed out after 2000ms"]);
+    const children = await childrenOfRun(root);
+    await page.waitForSelector('[data-testid="tl-segment"][data-end-kind="cancelled"]', { timeout: 10000 }).catch(() => null);
+    const counts = await timelineCounts(page);
+    check(scenario, "the 6 second child was cancelled on its site", children.map((child) => child.status), ["cancelled"]);
+    // The real worker records a thread inside `await` as `runnable`: it executes the await again. The mock writes `await`.
+    check(scenario, "the paused run showed the cancel token and its threads (the root in its await, the work thread in its remote call, the deadline thread in its sleep)",
+      [suspended?.status, (suspended?.threads ?? []).map((kind) => (kind === "runnable" ? "await" : kind)).sort(), (suspended?.tokens ?? 0) >= 1], ["paused", ["await", "remote_call", "sleep"], true]);
+    check(scenario, "timeline: one cancel connector, one cancelled bar, and the two spawned threads continue across the pause",
+      { cancel_connector: counts.cancel_connector, cancelled_bar: counts.cancelled_bar, thread_link: counts.thread_link, call: counts.call, return: counts.return },
+      { cancel_connector: 1, cancelled_bar: 1, thread_link: 2, call: 1, return: 0 });
+  },
+  async settled({ scenario, root, pressed, suspended, counts }) {
+    check(scenario, "autoplay pressed Pause and then Resume here", pressed, ["pause", "resume_here"]);
+    const run = await liveRun("local", root);
+    const report = run.result as { succeeded: QuoteJson[]; failed: { kind: string; error: string }[] };
+    check(scenario, "two quotes and one typed failure", [run.status, run.segment, report.succeeded.map((quote) => quote.request.kind), report.failed.map((failure) => failure.kind), report.failed[0]?.error.includes("no Car vendor answers in Lisbon")],
+      ["completed", 2, ["Flight", "Tour"], ["Car"], true]);
+    const children = await childrenOfRun(root);
+    check(scenario, "the refusal cancelled nothing", tally(children.map((child) => child.status)), { completed: 2, failed: 1 });
+    const states = tally(suspended?.futures ?? []);
+    // With a slow controller no vendor has answered at the pause, so every future is still pending.
+    check(scenario, "the paused run showed futures in more than one state, one of them pending", [suspended?.status, (states.pending ?? 0) >= 1, Object.keys(states).length >= 2 || (await liveChaos())], ["paused", true, true]);
+    check(scenario, "timeline: three calls, three returns, no cancel", { call: counts.call, return: counts.return, cancel_connector: counts.cancel_connector, cancelled_bar: counts.cancelled_bar, thread_link: counts.thread_link >= 1 },
+      { call: 3, return: 3, cancel_connector: 0, cancelled_bar: 0, thread_link: true });
+  },
+  async recover({ scenario, root, pressed }) {
+    check(scenario, "autoplay killed the durable run, resumed it, started the plain run, and killed it", pressed, ["kill", "resume_here", "start", "kill"]);
+    const run = await liveRun("local", root);
+    check(scenario, "the killed durable run recovered from its automatic snapshot and completed", [run.status, run.segment, sortKeys(run.result)], ["completed", 2, sortKeys(TRIP_PLAN)]);
+    const plain = (await liveRuns("local")).filter((other) => (other as LiveRun & { function?: string }).function === "plan_trip").at(-1);
+    check(scenario, "the plain run is lost", plain?.status, "lost");
+  },
+  async fork({ scenario, root, pressed, counts }) {
+    check(scenario, "autoplay pressed Pause, Fork, and Resume here for both runs", pressed, ["pause", "fork", "resume_here"]);
+    const runs = await liveRuns("local");
+    const fork = runs.find((other) => (other as LiveRun & { forked_from?: { run: string } | null }).forked_from?.run === root);
+    const source = await liveRun("local", root);
+    check(scenario, "the source and the fork both completed with the TripPlan", [source.status, fork?.status, sortKeys(source.result), sortKeys(fork?.result)], ["completed", "completed", sortKeys(TRIP_PLAN), sortKeys(TRIP_PLAN)]);
+    check(scenario, "timeline: a fork marker and connector, and a remote call for each of the two runs", { fork_marker: counts.fork_marker, fork_connector: counts.fork_connector, call: counts.call, return: counts.return },
+      { fork_marker: 1, fork_connector: 1, call: 2, return: 2 });
+  },
+};
+
+// The scenario guide against the site servers (LIVE=1, LIVE_ONLY=guide): the
+// gallery starts the run, and autoplay performs the hinted actions through the
+// buttons of the runs panel. `migrate` needs nothing of contract section 9, so
+// it runs with any worker. `LIVE_GUIDE=race,fanout` names other scenarios.
+async function liveGuideScenario(browser: Browser, id: string) {
+  const scenario = `live-guide-${id}`;
+  const { page, finish } = await open(browser, scenario, "/?autoplay=1", "light", { width: 1440, height: 900 });
+  const live = liveDriver(page);
+  await live.waitSites();
+  await page.locator('[data-testid="open-scenarios"]').click();
+  const card = page.locator(`[data-testid="scenario-card"][data-scenario="${id}"]`);
+  check(scenario, "Run live is offered once local is connected", await card.locator('[data-testid="scenario-run"]').isEnabled(), true);
+  await card.locator('[data-testid="scenario-run"]').click();
+  await page.waitForSelector(`[data-testid="coach"][data-scenario="${id}"]`, { timeout: 15000 });
+  check(scenario, "the gallery closes and the guide follows the new run", [await count(page, '[data-testid="scenario-gallery"]'), await count(page, '[data-testid="run-row"][aria-selected="true"]')], [0, 1]);
+  const root = (await page.locator('[data-testid="run-row"][aria-selected="true"]').getAttribute("data-run")) ?? "";
+
+  // Autoplay highlights the control of each action step before it presses it.
+  const pressed: string[] = [];
+  let suspended: { status: string; threads: string[]; futures: string[]; tokens: number; hint: string } | null = null;
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    if ((await page.locator('[data-testid="coach"]').getAttribute("data-finished")) === "true") break;
+    const highlighted = await page.locator('[data-testid="controls"] button[data-coach="press"], [data-testid="coach-start"][data-coach="press"]').evaluateAll((nodes) =>
+      nodes.map((node) => `${(node as HTMLElement).dataset.action ?? "start"}${(node as HTMLElement).dataset.targetSite ? `:${(node as HTMLElement).dataset.targetSite}` : ""}`),
+    );
+    for (const name of highlighted) if (pressed[pressed.length - 1] !== name) pressed.push(name);
+    // The first time the run has no process (paused or sleeping), read the state tree of its snapshot.
+    if (suspended === null) {
+      const status = await page.locator(`${live.controls} .target .status`).first().getAttribute("data-status").catch(() => null);
+      if ((status === "paused" || status === "sleeping") && (await count(page, '[data-testid="state-thread"]')) > 0) {
+        suspended = {
+          status,
+          threads: await page.locator('[data-testid="state-thread"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.parked ?? "")),
+          futures: await page.locator('[data-testid="state-future"]').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.future ?? "")),
+          tokens: await count(page, '[data-testid="state-cancel-token"]'),
+          hint: await page.locator('[data-testid="coach-hint"]').innerText(),
+        };
+        if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, `${scenario}-suspended.png`) });
+      }
+    }
+    await page.waitForTimeout(120);
+  }
+  if (OUT_DIR) await page.screenshot({ path: join(OUT_DIR, `${scenario}.png`) });
+  check(scenario, "the guide finished", await page.locator('[data-testid="coach"]').getAttribute("data-finished"), "true");
+  check(scenario, "the closing hint", (await page.locator('[data-testid="coach-hint"]').innerText()).startsWith("Done."), true);
+  check(scenario, "no command error", [await live.commandErrors(), await count(page, '[data-testid="coach-error"]')], [[], 0]);
+  if (id === "migrate") {
+    check(scenario, "autoplay pressed Pause and then Resume on cloud", pressed, ["pause", "resume_on:cloud"]);
+    const moved = await liveRun("cloud", root);
+    check(scenario, "the run completed on cloud with the TripPlan", [moved.status, moved.segment, sortKeys(moved.result)], ["completed", 2, sortKeys(TRIP_PLAN)]);
+    check(scenario, "local keeps a migrated record", (await liveRun("local", root)).status, "migrated");
+    check(scenario, "connectors", await live.connectors(), ["call:cloud>cloud2", "migration:local>cloud", "return:cloud2>cloud"]);
+  } else if (PHASE3_GUIDES[id]) {
+    await PHASE3_GUIDES[id]({ scenario, page, root, pressed, suspended, counts: await timelineCounts(page), connectors: await live.connectors() });
+  } else {
+    console.log(`  ${scenario}: autoplay pressed ${JSON.stringify(pressed)}`);
+    console.log(`  ${scenario}: steps ${JSON.stringify(await page.locator(".coach-steps li").evaluateAll((nodes) => nodes.map((node) => `${node.textContent?.trim()}=${(node as HTMLElement).dataset.state}`)))}`);
+    console.log(`  ${scenario}: timeline ${JSON.stringify(await timelineCounts(page))}`);
+  }
+  await finish();
+}
+
 const browser = await chromium.launch();
 try {
   const central = {
-    timeline: { segments: 3, gaps: 1, threads: 0, waits: 1, call: 1, return: 1, migration: 0, pause_request: 1, blocked: 0, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0 },
+    timeline: { segments: 3, gaps: 1, threads: 0, waits: 1, call: 1, return: 1, migration: 0, pause_request: 1, blocked: 0, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0, ...NO_PHASE3 },
     runs: 2,
     enabled: ["fork"],
     ends: ["paused", "completed", "completed"],
   };
   const spawn = {
-    timeline: { segments: 3, gaps: 1, threads: 1, waits: 1, call: 1, return: 1, migration: 1, pause_request: 1, blocked: 2, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0 },
+    timeline: { segments: 3, gaps: 1, threads: 1, waits: 1, call: 1, return: 1, migration: 1, pause_request: 1, blocked: 2, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0, ...NO_PHASE3 },
     runs: 3,
     // The selected record is the origin of the migration. It keeps its snapshot, so it can be forked.
     enabled: ["fork"],
   };
   // A lost process (worker_exit only), three automatic snapshots, a fork, and a cancelled fork.
   const fork = {
-    timeline: { segments: 4, gaps: 2, threads: 0, waits: 1, call: 1, return: 1, migration: 0, pause_request: 0, blocked: 0, snapshot: 3, resume: 2, automatic: 3, fork_marker: 1, fork_connector: 1 },
+    timeline: { segments: 4, gaps: 2, threads: 0, waits: 1, call: 1, return: 1, migration: 0, pause_request: 0, blocked: 0, snapshot: 3, resume: 2, automatic: 3, fork_marker: 1, fork_connector: 1, ...NO_PHASE3, cancelled_bar: 1 },
     runs: 3,
     enabled: ["fork"],
     ends: ["killed", "completed", "cancelled", "completed"],
@@ -729,25 +1200,87 @@ try {
   };
   // The central scene of section 8: paused on local, resumed on cloud, remote child on cloud2.
   const pool = {
-    timeline: { segments: 3, gaps: 1, threads: 0, waits: 1, call: 1, return: 1, migration: 1, pause_request: 1, blocked: 0, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0 },
+    timeline: { segments: 3, gaps: 1, threads: 0, waits: 1, call: 1, return: 1, migration: 1, pause_request: 1, blocked: 0, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0, ...NO_PHASE3 },
     runs: 3,
     enabled: ["fork"],
     ends: ["paused", "completed", "completed"],
     logSites: ["local", "cloud", "cloud2"],
     connectors: ["migration:local>cloud", "call:cloud>cloud2", "return:cloud2>cloud"],
+    scenario: "migrate",
   };
   // One run over all three sites and back. The last migration connects lanes that are not adjacent.
   const chain = {
-    timeline: { segments: 5, gaps: 3, threads: 0, waits: 2, call: 1, return: 1, migration: 3, pause_request: 3, blocked: 0, snapshot: 3, resume: 3, automatic: 0, fork_marker: 0, fork_connector: 0 },
+    timeline: { segments: 5, gaps: 3, threads: 0, waits: 2, call: 1, return: 1, migration: 3, pause_request: 3, blocked: 0, snapshot: 3, resume: 3, automatic: 0, fork_marker: 0, fork_connector: 0, ...NO_PHASE3 },
     runs: 4,
     enabled: ["fork"],
     ends: ["paused", "paused", "paused", "completed", "completed"],
     logSites: ["local", "cloud", "cloud2"],
     connectors: ["migration:local>cloud", "migration:cloud>cloud2", "migration:cloud2>local", "call:cloud2>cloud", "return:cloud>local"],
   };
+  // Contract section 9.6. Every scenario of the gallery has a recording. A wait
+  // in a resumed segment lasts a few milliseconds, and a wait that is narrower
+  // than half a pixel is not drawn, so `waits` counts the ones of this viewport.
+  const base = { segments: 0, gaps: 1, threads: 0, waits: 0, call: 0, return: 0, migration: 0, pause_request: 1, blocked: 0, snapshot: 1, resume: 1, automatic: 0, fork_marker: 0, fork_connector: 0, ...NO_PHASE3 };
+  // Four children on cloud and cloud2, a durable sleep, and four threads that continue across it.
+  const fanout = {
+    timeline: { ...base, segments: 6, threads: 9, waits: 5, call: 4, return: 4, pause_request: 0, sleeping: 1, wake: 1, thread_link: 4 },
+    runs: 5, children: 4, stateThreads: 5, enabled: ["fork"], scenario: "fanout",
+    ends: ["paused", "completed", "completed", "completed", "completed", "completed"],
+    logSites: ["local", "cloud", "cloud2"],
+    connectors: ["call:local>cloud", "call:local>cloud", "call:local>cloud2", "call:local>cloud2", "return:cloud>local", "return:cloud>local", "return:cloud2>local", "return:cloud2>local"],
+  };
+  // A race that is paused on local and settles on cloud2, where it cancels the two losers.
+  const race = {
+    timeline: { ...base, segments: 5, threads: 8, waits: 5, call: 3, return: 1, migration: 1, cancel_connector: 2, cancel_marker: 2, cancelled_bar: 2 },
+    runs: 5, children: 3, stateThreads: 5, enabled: ["fork"], scenario: "race",
+    ends: ["paused", "completed", "completed", "cancelled", "cancelled"],
+    logSites: ["local", "cloud", "cloud2"],
+    connectors: ["call:local>cloud", "call:local>cloud", "call:local>cloud2", "return:cloud>cloud2", "migration:local>cloud2", "cancel:cloud2>cloud2", "cancel:cloud2>cloud"],
+  };
+  const deadline = {
+    timeline: { ...base, segments: 3, threads: 4, waits: 2, call: 1, thread_link: 2, cancel_connector: 1, cancel_marker: 1, cancelled_bar: 1 },
+    runs: 2, children: 1, stateThreads: 3, enabled: ["fork"], scenario: "deadline",
+    ends: ["paused", "completed", "cancelled"],
+    connectors: ["call:local>cloud", "cancel:local>cloud"],
+  };
+  const settled = {
+    timeline: { ...base, segments: 5, threads: 6, waits: 3, call: 3, return: 3, thread_link: 2 },
+    runs: 4, children: 3, stateThreads: 3, enabled: ["fork"], scenario: "settled",
+    ends: ["paused", "completed", "completed", "failed", "completed"],
+    logSites: ["local", "cloud", "cloud2"],
+  };
+  // The durable run of the recovery scenario. The plain run is a tree of its own.
+  const recover = {
+    timeline: { ...base, segments: 3, waits: 1, call: 1, return: 1, pause_request: 0, snapshot: 3, automatic: 3 },
+    runs: 3, children: 1, enabled: ["fork"], scenario: "recover",
+    ends: ["killed", "completed", "completed"],
+  };
+  const branch = {
+    timeline: { ...base, segments: 5, gaps: 2, waits: 2, call: 2, return: 2, resume: 2, fork_marker: 1, fork_connector: 1 },
+    runs: 4, children: 2, forks: 1, enabled: ["fork"], scenario: "fork",
+    ends: ["paused", "completed", "completed", "completed", "completed"],
+    logSites: ["local", "cloud", "cloud2"],
+  };
   // LIVE_ONLY names the live scenes to run and skips the fixture scenes.
   const only = process.env.LIVE === "1" ? (process.env.LIVE_ONLY?.split(",") ?? null) : null;
-  if (only === null) {
+  // SCENES=phase3 or SCENES=base runs one group of the fixture scenes.
+  const groups = process.env.SCENES?.split(",") ?? ["phase3", "base"];
+  if (only === null && groups.includes("phase3")) {
+    for (const [name, expected] of Object.entries({ fanout, race, deadline, settled, recover, branch })) {
+      await fixtureScenario(browser, name, expected, "light");
+      await fixtureScenario(browser, name, expected, "dark");
+    }
+    await sleepingScenario(browser, "light");
+    await sleepingScenario(browser, "dark");
+    await threadsScenario(browser);
+    await stackingScenario(browser);
+    await stateTreeScenario(browser, "light");
+    await stateTreeScenario(browser, "dark");
+    await galleryScenario(browser, "light");
+    await galleryScenario(browser, "dark");
+    await guideScenario(browser);
+  }
+  if (only === null && groups.includes("base")) {
     await fixtureScenario(browser, "pool", pool, "light");
     await fixtureScenario(browser, "pool", pool, "dark");
     await fixtureScenario(browser, "chain", chain, "light");
@@ -772,6 +1305,9 @@ try {
     if (only === null || only.includes("chain")) await liveChainScenario(browser);
     if (only === null || only.includes("skip")) await liveSkipScenario(browser);
     if (only === null || only.includes("central")) await liveScenario(browser);
+    if (only === null || only.includes("guide")) {
+      for (const id of (process.env.LIVE_GUIDE ?? "migrate").split(",")) await liveGuideScenario(browser, id);
+    }
   }
 } finally {
   await browser.close();

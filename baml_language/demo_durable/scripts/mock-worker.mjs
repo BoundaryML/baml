@@ -20,17 +20,35 @@
 //                           milliseconds (not divided by MOCK_SPEED) instead of
 //                           3000 simulated ones. The parent passes it on to the
 //                           child as "mock_sleep_ms".
+//   "mock_nap_ms": n        durable_fan_out sleeps n simulated milliseconds
+//                           instead of 12000.
+//   "mock_exit_delay_ms": n  a run that suspends itself exits n milliseconds after
+//                            its `paused` event and reads no command in between
+//   "mock_fail_after_ms": n the run fails after n simulated milliseconds, while
+//                           its remote children may still run.
 // Mock-only behavior: remote_fetch_weather fails for the city "Atlantis".
+//
+// Contract section 9.2: the flags --sleep-suspend-ms, --program-store, and
+// --program-hash, `hello.program_hash`, `paused.wake`, `remote_cancel`, and
+// `resumed.stats.program_source`. The functions of program/baml_src/quotes.baml
+// run on several simulated threads. The "program" of the mock is the text of
+// the project's .baml files, and its hash is the SHA-256 of that payload.
+//   MOCK_RUNTIME_BUILD=<s>  the runtime build that the mock writes into store
+//                           entries and expects in them (default mock-worker/1)
 //
 // The worker does not know which site hosts it (contract section 8). The site
 // server of the caller places a remote call on a site of the remote pool.
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
 const T0 = performance.now();
-const SOURCE_FILE = "baml_src/trip.baml";
+const TRIP_FILE = "baml_src/trip.baml";
+const QUOTES_FILE = "baml_src/quotes.baml";
+const RUNTIME_BUILD = process.env.MOCK_RUNTIME_BUILD ?? "mock-worker/1";
+const PROGRAM_FORMAT_VERSION = 1;
 const SPEED = Math.max(0.001, Number(process.env.MOCK_SPEED ?? "1") || 1);
 const AUTO_SNAPSHOT = (process.env.MOCK_AUTO_SNAPSHOT ?? "1") !== "0";
 
@@ -43,7 +61,16 @@ const LINES = {
     start_print: 48, spawn: 49, print: 52, sleep: 53, push: 54,
     await_print: 57, await: 58, ret: 59,
   },
+  // Line numbers in program/baml_src/quotes.baml.
+  remote_get_quote: { print: 121, sleep: 130, fail: 132, ret: 147 },
+  durable_fan_out: { print: 158, spawns: [159, 160, 161, 162], nap_print: 163, sleep: 164, await_print: 165, await: 166, ret: 179 },
+  durable_race: { print: 189, spawns: [190, 191, 192], await: 193, after_print: 194, ret: 195 },
+  durable_settled: { print: 199, spawns: [203, 204, 205], await: 206, after_print: 230, ret: 236 },
+  durable_deadline: { print: 240, await: 241, remote: 242, after_print: 247, ret: 248 },
+  durable_nap: { print: 252, sleep: 253, after_print: 254, ret: 255 },
 };
+const QUOTE_FUNCTIONS = new Set(["remote_get_quote", "durable_fan_out", "durable_race", "durable_settled", "durable_deadline", "durable_nap"]);
+const sourceFile = (fn) => (QUOTE_FUNCTIONS.has(fn) ? QUOTES_FILE : TRIP_FILE);
 
 // ---------------------------------------------------------------- arguments
 
@@ -52,7 +79,9 @@ function usage(message) {
   process.stderr.write(
     "usage: mock-worker.mjs --project <dir> --run <run-id> --segment <n> --snapshot-dir <dir>\n" +
     "         ( --start <function> --json-args '<json>' | --resume <snapshot-path> )\n" +
-    "         [--remote-result '<json>']...\n");
+    "         [--remote-result '<json>']... [--sleep-suspend-ms <n>]\n" +
+    "         [--program-store <dir>] [--program-hash <hex>]\n" +
+    "       --project is optional with --program-hash, and with --resume when --program-store is given\n");
   process.exit(2);
 }
 
@@ -73,14 +102,23 @@ function parseArgs(argv) {
       case "--json-args": out.jsonArgs = value(); break;
       case "--resume": out.resume = value(); break;
       case "--remote-result": out.remoteResults.push(value()); break;
+      case "--sleep-suspend-ms": out.sleepSuspendMs = Number(value()); break;
+      case "--program-store": out.programStore = value(); break;
+      case "--program-hash": out.programHash = value(); break;
       default: usage(`unknown argument ${flag}`);
     }
   }
   if (!out.run || !/^[a-z0-9-]+$/.test(out.run)) usage("--run must match [a-z0-9-]+");
   if (!Number.isInteger(out.segment) || out.segment < 1) usage("--segment must be a positive integer");
   if (!out.snapshotDir) usage("--snapshot-dir is required");
-  if (!out.project) usage("--project is required");
   if (!!out.start === !!out.resume) usage("exactly one of --start and --resume is required");
+  if (out.sleepSuspendMs === undefined) out.sleepSuspendMs = 5000;
+  if (!Number.isFinite(out.sleepSuspendMs) || out.sleepSuspendMs < 0) usage("--sleep-suspend-ms must be a number that is not negative");
+  if (out.programHash !== undefined && !/^[0-9a-f]{64}$/.test(out.programHash)) usage("--program-hash must be 64 lowercase hexadecimal characters");
+  if (out.programHash !== undefined && !out.start) usage("--program-hash is only meaningful with --start");
+  if (out.programHash !== undefined && !out.programStore) usage("--program-hash requires --program-store");
+  const projectOptional = out.programHash !== undefined || (!!out.resume && !!out.programStore);
+  if (!out.project && !projectOptional) usage("--project is required");
   return out;
 }
 
@@ -130,14 +168,23 @@ function newState(fn, args) {
     calls: {},
     spawned: null,                  // { thread, call_id, ended } for the parallel variant
     blocked_left: Number(args.mock_blocked ?? process.env.MOCK_BLOCKED ?? 0) || 0,
+    // The functions of quotes.baml:
+    threads: {},                    // thread id -> { parent, name, line, ended }
+    next_thread: 2,
+    sleeps: {},                     // name -> { deadline_ts, thread } (absolute, so it survives a suspend)
+    order: [],                      // call ids in input order of the combinator
+    collector: null,                // thread of baml.future.all / race / all_settled
+    suspend_blocked: false,         // a self-suspend was answered with `blocked` once
+    program_hash: null,
   };
 }
 
 function position(thread, fn, line, reason, op) {
-  const key = `${SOURCE_FILE}:${line}`;
+  const file = sourceFile(state.function);
+  const key = `${file}:${line}`;
   if (lastPosition.get(thread) === key) return;
   lastPosition.set(thread, key);
-  emit("position", { thread, function: fn, file: SOURCE_FILE, line, reason, op: op ?? null });
+  emit("position", { thread, function: fn, file, line, reason, op: op ?? null });
 }
 
 function log(text, thread = 1) {
@@ -196,6 +243,7 @@ function deliverResult(msg) {
   const callId = msg.call_id;
   const result = "error" in msg && msg.error != null ? { error: String(msg.error) } : { value: msg.value ?? null };
   const call = state.calls[callId];
+  if (call && call.cancelled) return; // contract section 9.2: a result for a cancelled call is ignored
   if (!call) {
     // Contract section 7.1: a result for a call id that this worker does not
     // wait on is ignored. After a recovery from an older snapshot the call is
@@ -211,6 +259,8 @@ function deliverResult(msg) {
     state.spawned.ended = true;
     emit("thread_ended", { thread: call.thread });
   }
+  if (call.thread !== 1 && state.threads?.[call.thread]) endThread(call.thread);
+  wakeParked();
   const waiter = resultWaiters.get(callId);
   if (waiter) {
     resultWaiters.delete(callId);
@@ -279,6 +329,7 @@ function currentLine() {
 }
 
 function buildStateDump() {
+  if (QUOTE_FUNCTIONS.has(state.function)) return buildQuotesStateDump();
   const fn = state.function;
   const v = state.vars;
   const pendingCall = Object.entries(state.calls).find(([, c]) => !c.result);
@@ -306,7 +357,7 @@ function buildStateDump() {
   }
   const threads = [{
     thread: 1, name: fn, parked,
-    frames: [{ function: fn, file: SOURCE_FILE, line: currentLine(), locals }],
+    frames: [{ function: fn, file: TRIP_FILE, line: currentLine(), locals }],
   }];
   if (state.spawned && !state.spawned.ended) {
     const call = state.calls[state.spawned.call_id];
@@ -315,7 +366,7 @@ function buildStateDump() {
       name: `${fn}.<spawn>`,
       parked: { kind: "remote_call", detail: `${call.function} ${state.spawned.call_id}` },
       frames: [{
-        function: `${fn}.<spawn>`, file: SOURCE_FILE, line: LINES[fn].spawn,
+        function: `${fn}.<spawn>`, file: TRIP_FILE, line: LINES[fn].spawn,
         locals: [{ name: "city", type: "string", value: dumpValue(v.city) }],
       }],
     });
@@ -378,8 +429,585 @@ async function doPause() {
     await new Promise((r) => setTimeout(r, 250 / SPEED));
   }
   const snap = writeSnapshot(performance.now() - pauseRequestedAt, blocked);
-  emit("paused", { snapshot_path: snap.snapshot_path, state_path: snap.state_path, stats: snap.stats });
+  emit("paused", { snapshot_path: snap.snapshot_path, state_path: snap.state_path, stats: snap.stats, wake: null });
   exitAfterFlush(75);
+}
+
+/** Contract section 9.2: the run suspends itself for a long sleep. */
+function doSuspend() {
+  const sleepEntry = earliestSleep();
+  const snap = writeSnapshot(null, 0);
+  const remaining = Math.max(0, sleepEntry.deadline_ts - Date.now());
+  emit("paused", {
+    snapshot_path: snap.snapshot_path, state_path: snap.state_path, stats: snap.stats,
+    wake: { reason: "sleep", remaining_ms: Math.round(remaining), at_ts: Date.now() + Math.round(remaining) },
+  });
+  // The real worker needs some tens of milliseconds between `paused` and its
+  // exit, and reads no command in that time. `mock_exit_delay_ms` widens the
+  // window so that a test can send a command into it.
+  leaving = true;
+  const delay = Number(state.args.mock_exit_delay_ms);
+  if (Number.isFinite(delay) && delay > 0) setTimeout(() => exitAfterFlush(75), delay);
+  else exitAfterFlush(75);
+}
+
+// ------------------------------------------------ threads, sleeps, and waits
+// The functions of quotes.baml run on several simulated threads. All of their
+// state is in `state`, so a snapshot at any wait resumes correctly.
+
+const SUSPEND = Symbol("suspend");
+const parkedChecks = new Set();     // re-evaluated when a result arrives or a timer fires
+
+function wakeParked() {
+  for (const evaluate of [...parkedChecks]) evaluate();
+}
+
+function startThread(parent, name, line) {
+  const thread = state.next_thread;
+  state.next_thread += 1;
+  state.threads[thread] = { parent, name, line, ended: false };
+  emit("thread_started", { thread, parent_thread: parent });
+  return thread;
+}
+
+function endThread(thread) {
+  const t = state.threads[thread];
+  if (!t || t.ended) return;
+  t.ended = true;
+  for (const [name, entry] of Object.entries(state.sleeps)) {
+    if (entry.thread === thread) delete state.sleeps[name];
+  }
+  emit("thread_ended", { thread });
+}
+
+/** Starts a sleep of `ms` simulated milliseconds on `thread`. The deadline is absolute. */
+function startSleep(name, ms, thread = 1) {
+  if (!state.sleeps[name]) state.sleeps[name] = { deadline_ts: Date.now() + ms / SPEED, thread };
+}
+
+const sleepDone = (name) => !state.sleeps[name] || Date.now() >= state.sleeps[name].deadline_ts;
+
+/** The pending sleep with the earliest deadline, or null. `mock_fail` is a test knob and not a sleep of the program. */
+function earliestSleep() {
+  let best = null;
+  for (const [name, entry] of Object.entries(state.sleeps)) {
+    if (name === "mock_fail") continue;
+    if (!best || entry.deadline_ts < best.deadline_ts) best = { name, ...entry };
+  }
+  return best;
+}
+
+/**
+ * Parks the main flow until `check()` returns a value. Every live thread of
+ * the mock is parked in a wait that can be re-issued while the main flow is
+ * here, so this is also the place of the self-suspend rule (contract 9.2).
+ */
+function park(check) {
+  return new Promise((resolve, reject) => {
+    const timers = [];
+    let settled = false;
+    const cleanup = () => {
+      settled = true;
+      parkedChecks.delete(evaluate);
+      for (const t of timers) clearTimeout(t);
+      interrupt = null;
+    };
+    const evaluate = () => {
+      if (settled) return;
+      if (state.sleeps.mock_fail && sleepDone("mock_fail")) {
+        cleanup();
+        reject(new MockFailure("mock failure requested by mock_fail_after_ms"));
+        return;
+      }
+      const value = check();
+      if (value) {
+        cleanup();
+        resolve(value);
+      }
+    };
+    parkedChecks.add(evaluate);
+    interrupt = () => {
+      cleanup();
+      reject(PAUSE);
+    };
+    for (const entry of Object.values(state.sleeps)) {
+      timers.push(setTimeout(evaluate, Math.max(0, entry.deadline_ts - Date.now()) + 1));
+    }
+    if (pauseRequested) return interrupt();
+    evaluate();
+    if (settled) return;
+    //# Self-suspend: a durable run, every thread parked, the earliest sleep at least --sleep-suspend-ms away
+    const next = earliestSleep();
+    const remainingSimulated = next ? (next.deadline_ts - Date.now()) * SPEED : 0;
+    if (state.durable && opts.sleepSuspendMs > 0 && next && remainingSimulated >= opts.sleepSuspendMs && !state.suspend_blocked) {
+      if (state.blocked_left > 0) {
+        // A blocked snapshot: the threads keep waiting in process, and the
+        // worker reports the reason once.
+        state.blocked_left = 0;
+        state.suspend_blocked = true;
+        emit("blocked", {
+          reason: "value is not serializable: open HTTP response body (mock)",
+          path: [state.function, "local http_response", "baml.http.Response", "_body"],
+        });
+        return;
+      }
+      cleanup();
+      reject(SUSPEND);
+    }
+  });
+}
+
+class MockFailure extends Error {}
+
+/** Starts `fn` as a remote call on its own thread. Returns the call id. */
+function spawnRemote(fn, line, args, name) {
+  const thread = startThread(1, name, line);
+  position(thread, `${state.function}.<spawn>`, line, "remote_call", null);
+  state.call_counter += 1;
+  const callId = `${opts.run}-c${state.call_counter}`;
+  state.calls[callId] = { thread, function: fn, args, result: null, cancelled: false, name };
+  state.order.push(callId);
+  emit("remote_call", { call_id: callId, thread, function: fn, args });
+  return callId;
+}
+
+/** Contract section 9.2: the thread that waited on the call was cancelled. */
+function cancelCall(callId) {
+  const call = state.calls[callId];
+  if (!call || call.result || call.cancelled) return;
+  call.cancelled = true;
+  emit("remote_cancel", { call_id: callId, thread: call.thread });
+  endThread(call.thread);
+}
+
+// ------------------------------------------------------- quotes.baml values
+
+const KINDS = ["Flight", "Hotel", "Car", "Tour"];
+const NIGHTLY = { Flight: 420, Hotel: 135, Car: 48, Tour: 75 };
+const VENDORS = { Flight: "Skyways", Hotel: "Casa Azul", Car: "Rodas", Tour: "Seven Hills Walks" };
+
+function quoteRequest(city, kind, delayMs, options = {}) {
+  return {
+    city, kind, nights: 3, delay_ms: delayMs,
+    traveler: { name: "Ada", loyalty_tier: 2 },
+    options: { currency: "EUR", ...options },
+  };
+}
+
+function quoteFor(request) {
+  const amount = request.kind === "Flight" ? NIGHTLY.Flight : NIGHTLY[request.kind] * request.nights;
+  const tier = request.traveler?.loyalty_tier;
+  return {
+    request,
+    vendor: VENDORS[request.kind],
+    price: { amount, currency: request.options?.currency ?? "USD" },
+    tags: [request.kind.toLowerCase(), String(request.city).toLowerCase()],
+    extras: { insurance: 12, late_checkout: 30 },
+    note: tier === null || tier === undefined ? null : `loyalty tier ${tier} applied for ${request.traveler.name}`,
+  };
+}
+
+/** The text that a parent sees for a failed remote call, as the real worker builds it. */
+const remoteError = (fn, error) => `remote call to \`user.${fn}\` failed: ${error}`;
+
+// ------------------------------------------------------ quotes.baml programs
+
+function mockFailKnob() {
+  const ms = Number(state.args.mock_fail_after_ms);
+  if (Number.isFinite(ms) && ms > 0) startSleep("mock_fail", ms);
+}
+
+/** Re-announces the threads of a resumed run. Thread 1 is announced by main(). */
+function announceLiveThreads() {
+  for (const [id, t] of Object.entries(state.threads)) {
+    if (!t.ended) emit("thread_started", { thread: Number(id), parent_thread: t.parent });
+  }
+}
+
+async function runGetQuote() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const request = state.args.request;
+  if (state.pc === "begin") {
+    position(1, fn, L.print, "sysop", "baml.io.println");
+    log(`[remote] ${request.kind} quote for ${request.city} (${request.delay_ms} ms)`);
+    startSleep("delay", request.delay_ms);
+    state.pc = "sleep";
+  }
+  if (state.pc === "sleep") {
+    position(1, fn, L.sleep, "sysop", "baml.sys.sleep");
+    await park(() => sleepDone("delay"));
+    delete state.sleeps.delay;
+    state.pc = "after";
+  }
+  if (request.options?.simulate === "unavailable") {
+    return fail(`user.QuoteUnavailable {kind: ${request.kind}, city: ${JSON.stringify(request.city)}, reason: "no ${request.kind} vendor answers in ${request.city}"}`, L.fail);
+  }
+  finish(quoteFor(request));
+}
+
+async function runNap() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const seconds = state.args.seconds;
+  if (state.pc === "begin") {
+    position(1, fn, L.print, "sysop", "baml.io.println");
+    log(`going to sleep for ${seconds} seconds`);
+    startSleep("nap", seconds * 1000);
+    state.pc = "sleep";
+  }
+  if (state.pc === "sleep") {
+    position(1, fn, L.sleep, "sysop", "baml.sys.sleep");
+    await park(() => sleepDone("nap"));
+    delete state.sleeps.nap;
+    state.pc = "after";
+  }
+  position(1, fn, L.after_print, "sysop", "baml.io.println");
+  log("woke up");
+  finish(`slept ${seconds} seconds`);
+}
+
+/** The settled calls in input order: `{ callId, call }`. */
+const settledCalls = () => state.order.map((callId) => ({ callId, call: state.calls[callId] })).filter((c) => c.call.result);
+
+async function runFanOut() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const city = state.args.city;
+  if (state.pc === "begin") {
+    mockFailKnob();
+    position(1, fn, L.print, "sysop", "baml.io.println");
+    log(`asking four vendors for ${city}`);
+    const delays = [3000, 5000, 2000, 4000];
+    const names = ["flight", "hotel", "car", "tour"];
+    KINDS.forEach((kind, i) => {
+      const options = kind === state.args.mock_unavailable ? { simulate: "unavailable" } : {};
+      spawnRemote("remote_get_quote", L.spawns[i], { request: quoteRequest(city, kind, delays[i], options) }, names[i]);
+    });
+    position(1, fn, L.nap_print, "sysop", "baml.io.println");
+    const napMs = Number(state.args.mock_nap_ms) > 0 ? Number(state.args.mock_nap_ms) : 12000;
+    log(`sleeping ${Math.round(napMs / 1000)} seconds while the vendors work`);
+    startSleep("nap", napMs);
+    state.pc = "sleep";
+  }
+  if (state.pc === "sleep") {
+    position(1, fn, L.sleep, "sysop", "baml.sys.sleep");
+    await park(() => sleepDone("nap"));
+    delete state.sleeps.nap;
+    state.pc = "await_print";
+  }
+  if (state.pc === "await_print") {
+    position(1, fn, L.await_print, "sysop", "baml.io.println");
+    log("awake again, collecting the quotes");
+    state.collector = startThread(1, "baml.future.all", L.await);
+    state.pc = "await";
+  }
+  if (state.pc === "await") {
+    position(1, fn, L.await, "await", null);
+    // baml.future.all awaits its inputs in input order. The first error that
+    // it observes cancels the inputs that are still pending.
+    const outcome = await park(() => {
+      const values = [];
+      for (const callId of state.order) {
+        const result = state.calls[callId].result;
+        if (!result) return null;
+        if (result.error != null) return { error: result.error };
+        values.push(result.value);
+      }
+      return { values };
+    });
+    if (outcome.error != null) {
+      for (const callId of state.order) cancelCall(callId);
+      endThread(state.collector);
+      return fail(remoteError("remote_get_quote", outcome.error), L.await);
+    }
+    endThread(state.collector);
+    const quotes = outcome.values;
+    let cheapest = null;
+    const vendors = {};
+    let total = 0;
+    for (const q of quotes) {
+      total += q.price.amount;
+      vendors[q.request.kind] = q.vendor;
+      if (cheapest === null || q.price.amount < cheapest.price.amount) cheapest = q;
+    }
+    finish({ city, quotes, total: { amount: total, currency: "EUR" }, vendors, cheapest });
+  }
+}
+
+async function runRace() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const city = state.args.city;
+  if (state.pc === "begin") {
+    mockFailKnob();
+    position(1, fn, L.print, "sysop", "baml.io.println");
+    log(`racing three hotel vendors for ${city}`);
+    const delays = [2000, 6000, 9000];
+    const names = ["fast", "medium", "slow"];
+    delays.forEach((delay, i) => spawnRemote("remote_get_quote", L.spawns[i], { request: quoteRequest(city, "Hotel", delay) }, names[i]));
+    state.collector = startThread(1, "baml.future.race", L.await);
+    state.pc = "await";
+  }
+  if (state.pc === "await") {
+    position(1, fn, L.await, "await", null);
+    const winner = await park(() => settledCalls()[0] ?? null);
+    //# The race is decided: cancel the losers
+    for (const callId of state.order) {
+      if (callId !== winner.callId) cancelCall(callId);
+    }
+    endThread(state.collector);
+    if (winner.call.result.error != null) return fail(remoteError("remote_get_quote", winner.call.result.error), L.await);
+    state.vars.winner = winner.call.result.value;
+    state.pc = "after";
+  }
+  position(1, fn, L.after_print, "sysop", "baml.io.println");
+  log(`the winner answered after ${state.vars.winner.request.delay_ms} ms`);
+  finish(state.vars.winner);
+}
+
+async function runSettled() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const city = state.args.city;
+  const kinds = ["Flight", "Car", "Tour"];
+  if (state.pc === "begin") {
+    position(1, fn, L.print, "sysop", "baml.io.println");
+    log(`asking three vendors for ${city}, one of them will refuse`);
+    const requests = [
+      quoteRequest(city, "Flight", 2000),
+      quoteRequest(city, "Car", 3000, { simulate: "unavailable" }),
+      quoteRequest(city, "Tour", 4000),
+    ];
+    const names = ["flight", "car", "tour"];
+    requests.forEach((request, i) => spawnRemote("remote_get_quote", L.spawns[i], { request }, names[i]));
+    state.collector = startThread(1, "baml.future.all_settled", L.await);
+    state.pc = "await";
+  }
+  if (state.pc === "await") {
+    position(1, fn, L.await, "await", null);
+    // all_settled waits for every input and cancels none.
+    await park(() => (settledCalls().length === state.order.length ? true : null));
+    endThread(state.collector);
+    state.pc = "after";
+  }
+  const report = { city, succeeded: [], failed: [] };
+  state.order.forEach((callId, i) => {
+    const result = state.calls[callId].result;
+    if (result.error != null) report.failed.push({ kind: kinds[i], error: remoteError("remote_get_quote", result.error) });
+    else report.succeeded.push(result.value);
+  });
+  position(1, fn, L.after_print, "sysop", "baml.io.println");
+  log(`${report.succeeded.length} quotes, ${report.failed.length} refused`);
+  finish(report);
+}
+
+async function runDeadline() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const city = state.args.city;
+  if (state.pc === "begin") {
+    position(1, fn, L.print, "sysop", "baml.io.println");
+    log(`asking a slow vendor for ${city} with a 2 second deadline`);
+    // with_timeout runs the body on one thread and the deadline on another.
+    spawnRemote("remote_get_quote", L.remote, { request: quoteRequest(city, "Tour", 6000) }, "work");
+    const deadline = startThread(1, "with_timeout.<deadline>", L.await);
+    position(deadline, "baml.future.with_timeout", L.await, "sysop", "baml.sys.sleep");
+    startSleep("deadline", 2000, deadline);
+    state.vars.deadline_thread = deadline;
+    state.pc = "await";
+  }
+  if (state.pc === "await") {
+    position(1, fn, L.await, "await", null);
+    const callId = state.order[0];
+    const outcome = await park(() => {
+      const result = state.calls[callId].result;
+      if (result) return { result };
+      return sleepDone("deadline") ? { timeout: true } : null;
+    });
+    if (outcome.timeout) {
+      //# The deadline passed: the body's thread is cancelled, and so is its remote call
+      cancelCall(callId);
+      endThread(state.vars.deadline_thread);
+      state.vars.answer = `no tour quote for ${city}: operation timed out after 2000ms`;
+    } else {
+      endThread(state.vars.deadline_thread);
+      if (outcome.result.error != null) return fail(remoteError("remote_get_quote", outcome.result.error), L.remote);
+      state.vars.answer = outcome.result.value.vendor;
+    }
+    state.pc = "after";
+  }
+  position(1, fn, L.after_print, "sysop", "baml.io.println");
+  log(state.vars.answer);
+  finish(state.vars.answer);
+}
+
+// ----------------------------------------------- quotes.baml state dump
+
+const CLASS_FIELDS = {
+  Quote: { request: "QuoteRequest", price: "Money" },
+  QuoteRequest: { kind: "QuoteKind", traveler: "Traveler" },
+  TripReport: { total: "Money", cheapest: "Quote" },
+};
+
+/** A DumpValue for a value of the class `className` (contract section 2.5). */
+function dumpInstance(value, className, depth = 0) {
+  if (value === null || value === undefined) return { kind: "null", preview: "null" };
+  if (className === "QuoteKind") return { kind: "instance", class: "QuoteKind", preview: `QuoteKind.${value}` };
+  if (depth >= 5) return { kind: "omitted", preview: "…" };
+  const fields = CLASS_FIELDS[className] ?? {};
+  return {
+    kind: "instance", class: className, preview: `${className} {…}`,
+    children: Object.entries(value).map(([key, v]) => ({
+      key, value: fields[key] ? dumpInstance(v, fields[key], depth + 1) : dumpValue(v, depth + 1),
+    })),
+  };
+}
+
+function dumpFuture(call) {
+  if (call.cancelled) return { kind: "opaque", preview: "Future(cancelled)" };
+  if (!call.result) return { kind: "opaque", preview: "Future(pending)" };
+  if (call.result.error != null) {
+    return { kind: "opaque", preview: "Future(error)", children: [{ key: "error", value: dumpValue(call.result.error) }] };
+  }
+  return { kind: "opaque", preview: "Future(ready)", children: [{ key: "value", value: dumpInstance(call.result.value, "Quote") }] };
+}
+
+function buildQuotesStateDump() {
+  const fn = state.function;
+  const L = LINES[fn];
+  const file = QUOTES_FILE;
+  const lineOf = { begin: L.print, sleep: L.sleep ?? L.print, await_print: L.await_print ?? L.print, await: L.await ?? L.print, after: L.after_print ?? L.ret };
+  const next = earliestSleep();
+  let parked = { kind: "runnable", detail: "" };
+  if (state.pc === "sleep" && next) parked = { kind: "sysop", detail: `baml.sys.sleep (deadline ${new Date(next.deadline_ts).toISOString()})` };
+  else if (state.pc === "await") parked = { kind: "await", detail: state.collector ? `future of thread ${state.collector}` : "future" };
+  const locals = [];
+  for (const [name, value] of Object.entries(state.args)) {
+    if (name.startsWith("mock_")) continue;
+    locals.push(name === "request"
+      ? { name, type: "QuoteRequest", value: dumpInstance(value, "QuoteRequest") }
+      : { name, type: typeof value === "number" ? "int" : "string", value: dumpValue(value) });
+  }
+  for (const callId of state.order) {
+    const call = state.calls[callId];
+    locals.push({ name: call.name, type: "Future<Quote>", value: dumpFuture(call) });
+  }
+  const threads = [{ thread: 1, name: fn, parked, frames: [{ function: fn, file, line: lineOf[state.pc] ?? L.print, locals }] }];
+  for (const [id, t] of Object.entries(state.threads)) {
+    if (t.ended) continue;
+    const thread = Number(id);
+    const callEntry = Object.entries(state.calls).find(([, c]) => c.thread === thread);
+    const sleepEntry = Object.values(state.sleeps).find((entry) => entry.thread === thread);
+    let threadParked = { kind: "await", detail: "the input futures" };
+    const threadLocals = [];
+    if (callEntry) {
+      threadParked = { kind: "remote_call", detail: `${callEntry[1].function} ${callEntry[0]}` };
+      threadLocals.push({ name: "request", type: "QuoteRequest", value: dumpInstance(callEntry[1].args.request, "QuoteRequest") });
+    } else if (sleepEntry) {
+      threadParked = { kind: "sysop", detail: `baml.sys.sleep (deadline ${new Date(sleepEntry.deadline_ts).toISOString()})` };
+    }
+    threads.push({ thread, name: t.name, parked: threadParked, frames: [{ function: `${fn}.<spawn>`, file, line: t.line, locals: threadLocals }] });
+  }
+  const calls = Object.values(state.calls);
+  const by_kind = {
+    string: { count: 4 + calls.length * 6, bytes: 64 + calls.length * 180 },
+    instance: { count: calls.length * 3 + calls.filter((c) => c.result?.value).length * 5, bytes: calls.length * 220 },
+    map: { count: calls.length * 2, bytes: calls.length * 96 },
+    future: { count: calls.length + (state.collector ? 1 : 0), bytes: 48 * (calls.length + 1) },
+  };
+  const objects = Object.values(by_kind).reduce((n, k) => n + k.count, 0);
+  const bytes = Object.values(by_kind).reduce((n, k) => n + k.bytes, 0);
+  return { run: opts.run, segment: opts.segment, created_ts: Date.now(), threads, heap: { objects, bytes, by_kind } };
+}
+
+// ------------------------------------------------------------ program store
+// Contract section 9.5. The "program" of the mock is a JSON payload with the
+// text of the project's .baml files. Its hash is the SHA-256 of the payload.
+// An entry is `<store>/<first two hex chars>/<hash>.bamlprog`:
+//   "BAMLPROG" | format_version u32 LE | build_len u32 LE | runtime_build | payload_len u64 LE | payload
+// This is the entry layout of the Rust crate bex_program_store.
+
+const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
+
+function compileProject(projectDir) {
+  const files = [];
+  for (const dir of [path.join(projectDir, "baml_src"), projectDir]) {
+    let names = [];
+    try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".baml")).sort(); } catch { continue; }
+    for (const name of names) files.push({ name: path.relative(projectDir, path.join(dir, name)), text: fs.readFileSync(path.join(dir, name), "utf8") });
+    if (files.length > 0) break;
+  }
+  if (files.length === 0) throw new Error(`no .baml files in ${projectDir}`);
+  const payload = Buffer.from(JSON.stringify({ mock_program: 1, files }));
+  return { payload, hash: sha256(payload) };
+}
+
+const storePath = (hash) => path.join(opts.programStore, hash.slice(0, 2), `${hash}.bamlprog`);
+
+/** The payload of the store entry for `hash`, or null. A reader verifies the hash and the runtime build. */
+function readStore(hash) {
+  let bytes;
+  try { bytes = fs.readFileSync(storePath(hash)); } catch { return null; }
+  if (bytes.length < 16 || bytes.subarray(0, 8).toString("latin1") !== "BAMLPROG") return null;
+  const buildLen = bytes.readUInt32LE(12);
+  if (24 + buildLen > bytes.length) return null;
+  const build = bytes.subarray(16, 16 + buildLen).toString("utf8");
+  const payload = bytes.subarray(24 + buildLen);
+  if (bytes.readBigUInt64LE(16 + buildLen) !== BigInt(payload.length)) return null;
+  if (build !== RUNTIME_BUILD) {
+    diag(`the store entry for ${hash} was built by ${build}, not by ${RUNTIME_BUILD}; treating it as missing`);
+    return null;
+  }
+  if (sha256(payload) !== hash) {
+    diag(`the store entry for ${hash} does not match its hash; treating it as missing`);
+    return null;
+  }
+  return payload;
+}
+
+/** Writes to a temporary file in the same directory and renames it. */
+function writeStore(hash, payload) {
+  const file = storePath(hash);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const build = Buffer.from(RUNTIME_BUILD, "utf8");
+  const header = Buffer.alloc(16);
+  header.write("BAMLPROG", 0, "latin1");
+  header.writeUInt32LE(PROGRAM_FORMAT_VERSION, 8);
+  header.writeUInt32LE(build.length, 12);
+  const payloadLen = Buffer.alloc(8);
+  payloadLen.writeBigUInt64LE(BigInt(payload.length), 0);
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, Buffer.concat([header, build, payloadLen, payload]));
+  fs.renameSync(tmp, file);
+}
+
+/**
+ * Loads the program of this segment. `wanted` is the hash from --program-hash
+ * or from the snapshot, or null for a start from --project.
+ * Returns { hash, payload, source: "store" | "compile" } or { error }.
+ */
+function loadProgram(wanted) {
+  if (wanted && opts.programStore) {
+    const payload = readStore(wanted);
+    if (payload) return { hash: wanted, payload, source: "store" };
+  }
+  if (!opts.project) return { error: `program ${wanted} is not in the store` };
+  let compiled;
+  try { compiled = compileProject(opts.project); } catch (err) { return { error: `cannot compile ${opts.project}: ${err.message}` }; }
+  if (wanted && compiled.hash !== wanted) {
+    return { error: `program ${wanted} is not in the store, and ${opts.project} compiles to the different program ${compiled.hash}` };
+  }
+  if (opts.programStore && !readStore(compiled.hash)) writeStore(compiled.hash, compiled.payload);
+  return { hash: compiled.hash, payload: compiled.payload, source: "compile" };
+}
+
+/** True when the program text declares the top-level function `name`. */
+function programHasFunction(payload, name) {
+  try {
+    const program = JSON.parse(payload.toString("utf8"));
+    return program.files.some((f) => new RegExp(`^function ${name}\\(`, "m").test(f.text));
+  } catch { return false; }
 }
 
 // ---------------------------------------------------------------- programs
@@ -392,7 +1020,7 @@ function finish(value) {
 }
 
 function fail(error, line) {
-  emit("failed", { error, stack: [{ function: state.function, file: SOURCE_FILE, line }] });
+  emit("failed", { error, stack: [{ function: state.function, file: sourceFile(state.function), line }] });
   exitAfterFlush(1);
 }
 
@@ -495,13 +1123,35 @@ const PROGRAMS = {
   plan_trip: runPlanTrip,
   durable_plan_trip_parallel: runPlanTripParallel,
   remote_fetch_weather: runFetchWeather,
+  remote_get_quote: runGetQuote,
+  durable_fan_out: runFanOut,
+  durable_race: runRace,
+  durable_settled: runSettled,
+  durable_deadline: runDeadline,
+  durable_nap: runNap,
 };
+
+/** Returns a message when the arguments of `fn` do not fit its parameters. */
+function checkArguments(fn, args) {
+  if (fn === "remote_get_quote") {
+    const r = args.request;
+    const ok = r && typeof r === "object" && typeof r.city === "string" && KINDS.includes(r.kind)
+      && Number.isInteger(r.nights) && Number.isInteger(r.delay_ms) && r.traveler && typeof r.traveler.name === "string"
+      && r.options && typeof r.options === "object";
+    return ok ? null : "missing or malformed argument: request (QuoteRequest)";
+  }
+  if (fn === "durable_nap") return Number.isInteger(args.seconds) && args.seconds >= 0 ? null : "missing argument: seconds (int)";
+  return typeof args.city === "string" ? null : "missing argument: city (string)";
+}
 
 // ---------------------------------------------------------------- commands
 
+/** True once the worker has reported `paused`: it takes no command any more. */
+let leaving = false;
+
 function handleCommand(line) {
   const text = line.trim();
-  if (!text) return;
+  if (!text || leaving) return;
   let msg;
   try {
     msg = JSON.parse(text);
@@ -545,9 +1195,12 @@ function cancel(why) {
 
 function describeParked() {
   const out = [];
-  if (state.pc === "loop_sleep" || state.pc === "sleep") out.push("baml.sys.sleep (parked, can be re-issued)");
+  if (state.pc === "loop_sleep" || (state.pc === "sleep" && !QUOTE_FUNCTIONS.has(state.function))) out.push("baml.sys.sleep (parked, can be re-issued)");
+  for (const name of Object.keys(state.sleeps ?? {})) {
+    if (name !== "mock_fail") out.push(`baml.sys.sleep ${name} (parked, can be re-issued)`);
+  }
   for (const [callId, call] of Object.entries(state.calls)) {
-    if (!call.result) out.push(`remote call ${call.function} ${callId} (parked)`);
+    if (!call.result && !call.cancelled) out.push(`remote call ${call.function} ${callId} (parked)`);
   }
   return out;
 }
@@ -582,13 +1235,14 @@ async function main() {
       return exitAfterFlush(1);
     }
     delete loaded.saved_by;
-    state = loaded;
+    state = { threads: {}, next_thread: 2, sleeps: {}, order: [], collector: null, suspend_blocked: false, program_hash: null, ...loaded };
     const decodeMs = performance.now() - tRead;
     resumeStats = {
       process_start_ms: round(Math.max(0, process.uptime() * 1000 - (performance.now() - T0))),
-      program_load_ms: round(tRead - T0),
+      program_load_ms: null,
       decode_ms: round(decodeMs),
       first_exec_ms: null,
+      program_source: null,
     };
   } else {
     let args;
@@ -602,19 +1256,41 @@ async function main() {
     state = newState(opts.start, args ?? {});
   }
 
-  emit("hello", {
+  //# Load the program: from the store by hash, or by compiling --project (contract section 9.5)
+  const tLoad = performance.now();
+  const wanted = opts.resume ? state.program_hash : (opts.programHash ?? null);
+  const loadedProgram = loadProgram(wanted);
+  const hello = {
     mode: opts.resume ? "resume" : "start", function: state.function, durable: state.durable,
-    // Mock only: lets verify.mjs check the environment that the site server passes on.
+    program_hash: loadedProgram.hash ?? wanted ?? "",
+    // The site server learns the build of its workers from `hello`, and
+    // refuses a fetched program that another build wrote.
+    runtime_build: RUNTIME_BUILD,
+    // Mock only: lets verify.mjs check the environment that the site server passes
+    // on, and where the program of this segment came from.
     mock_env: { allow_direct: process.env.BAML_CLI_ALLOW_DIRECT ?? null, marker: process.env.VERIFY_MARKER ?? null },
-  });
-
-  const program = PROGRAMS[state.function];
-  if (!program) {
-    emit("failed", { error: `function ${state.function} not found in ${opts.project}`, stack: [] });
+    mock_program_source: loadedProgram.source ?? null,
+    mock_project: opts.project ?? null,
+  };
+  emit("hello", hello);
+  if (loadedProgram.error) {
+    emit("failed", { error: loadedProgram.error, stack: [] });
     return exitAfterFlush(1);
   }
-  if (typeof state.vars.city !== "string") {
-    emit("failed", { error: `missing argument: city (string)`, stack: [] });
+  state.program_hash = loadedProgram.hash;
+  if (resumeStats) {
+    resumeStats.program_load_ms = round(performance.now() - tLoad);
+    resumeStats.program_source = loadedProgram.source;
+  }
+
+  const program = PROGRAMS[state.function];
+  if (!program || !programHasFunction(loadedProgram.payload, state.function)) {
+    emit("failed", { error: `function ${state.function} not found in the program ${loadedProgram.hash}`, stack: [] });
+    return exitAfterFlush(1);
+  }
+  const badArguments = checkArguments(state.function, state.args);
+  if (badArguments) {
+    emit("failed", { error: badArguments, stack: [] });
     return exitAfterFlush(1);
   }
 
@@ -626,18 +1302,35 @@ async function main() {
   if (opts.resume && state.spawned && !state.spawned.ended) {
     emit("thread_started", { thread: state.spawned.thread, parent_thread: 1 });
   }
+  if (opts.resume) announceLiveThreads();
+  const startResults = [];
   for (const text of opts.remoteResults) {
     try {
-      deliverResult(JSON.parse(text));
+      startResults.push(JSON.parse(text));
     } catch (err) {
       diag(`ignoring --remote-result that is not JSON: ${err.message}`);
     }
   }
+  if (opts.resume) {
+    //# A restored wait is not announced again: tell the supervisor what this process waits on
+    const offered = new Set(startResults.map((r) => r?.call_id));
+    for (const [callId, call] of Object.entries(state.calls ?? {})) {
+      if (call.result || call.cancelled) continue;
+      emit("remote_wait", { call_id: callId, thread: call.thread, function: call.function, has_result: offered.has(callId) });
+    }
+  }
+  // Results that arrived while the run had no process are taken in the order
+  // of their arrival (`ts`), like the real worker's ordered replay. The sort is
+  // stable, so results without `ts` keep the order of the arguments.
+  startResults.sort((a, b) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0));
+  for (const result of startResults) deliverResult(result);
 
   try {
     await program();
   } catch (err) {
     if (err === PAUSE) return doPause();
+    if (err === SUSPEND) return doSuspend();
+    if (err instanceof MockFailure) return fail(err.message, LINES[state.function].await ?? LINES[state.function].print);
     emit("failed", { error: `mock worker bug: ${err?.stack ?? err}`, stack: [] });
     exitAfterFlush(1);
   }

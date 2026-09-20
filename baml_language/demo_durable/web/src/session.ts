@@ -6,7 +6,7 @@
 import type { Dispatch } from "react";
 import { httpApi, type Api } from "./api";
 import { clock } from "./clock";
-import { TRIP_BAML, TRIP_BAML_FILE } from "./fixtures/trip.baml";
+import { FIXTURE_SOURCES } from "./fixtures/programs";
 import type { Fixture } from "./fixtures";
 import {
   DEFAULT_SITES,
@@ -130,7 +130,7 @@ export function startLiveSession(dispatch: Dispatch<Action>): Session {
 // Fixture playback
 // ---------------------------------------------------------------------------
 
-function fixtureInfo(site: Site): SiteInfo {
+export function fixtureInfo(site: Site): SiteInfo {
   const city = [{ name: "city", type: "string" }];
   return {
     site,
@@ -141,7 +141,13 @@ function fixtureInfo(site: Site): SiteInfo {
       { name: "durable_plan_trip", params: city, durable: true, remote: false },
       { name: "durable_plan_trip_parallel", params: city, durable: true, remote: false },
       { name: "plan_trip", params: city, durable: false, remote: false },
+      { name: "durable_fan_out", params: city, durable: true, remote: false },
+      { name: "durable_race", params: city, durable: true, remote: false },
+      { name: "durable_settled", params: city, durable: true, remote: false },
+      { name: "durable_deadline", params: city, durable: true, remote: false },
+      { name: "durable_nap", params: [{ name: "seconds", type: "int" }], durable: true, remote: false },
       { name: "remote_fetch_weather", params: city, durable: false, remote: true },
+      { name: "remote_get_quote", params: [{ name: "request", type: "QuoteRequest" }], durable: false, remote: true },
     ],
   };
 }
@@ -199,10 +205,10 @@ export function startFixtureSession(fixture: Fixture, dispatch: Dispatch<Action>
           return event.type === "run" ? event.run.id === run : event.run === run;
         }),
       ),
-    source: (_site, file) =>
-      file === TRIP_BAML_FILE
-        ? Promise.resolve({ file, text: TRIP_BAML })
-        : Promise.reject(new Error(`fixture mode: no source for ${file}`)),
+    source: (_site, file) => {
+      const text = FIXTURE_SOURCES[file];
+      return text === undefined ? Promise.reject(new Error(`fixture mode: no source for ${file}`)) : Promise.resolve({ file, text });
+    },
     snapshotState: (site, run, n) => {
       // A run imported by migration serves the state dumps of its origin.
       const elsewhere = Object.keys(fixture.states).find((key) => key.endsWith(`/${run}/${n}`));

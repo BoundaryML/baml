@@ -47,11 +47,24 @@ export function systemLine(event: TimelineEvent): string | null {
     case "blocked":
       return `snapshot blocked: ${event.reason} (${event.path.join(" › ")})`;
     case "paused":
+      if (event.wake) {
+        return `suspended itself for a sleep with ${formatMs(event.wake.remaining_ms)} to go: snapshot written, ${formatBytes(event.stats?.compressed_bytes)}. Process ${event.pid} exits`;
+      }
       return `snapshot written, ${formatBytes(event.stats?.compressed_bytes)} after ${formatMs(event.stats?.pause_latency_ms)}. Process ${event.pid} exits`;
+    case "sleep_scheduled":
+      return `sleeping without a process. The wake timer is set for ${formatClock(event.wake_at)}`;
+    case "woken":
+      return `woken by ${event.reason === "timer" ? "the wake timer" : event.reason === "manual" ? "a resume command" : event.reason === "restart" ? "a restart of the site server" : event.reason}`;
+    case "remote_cancel":
+      return `thread ${event.thread} was cancelled while it waited on ${event.call_id}. The run no longer waits on the call`;
+    case "remote_cancelled":
+      return `cancelled ${event.call_id}: asked ${event.child_site} to cancel ${event.child_run}`;
     case "snapshot":
       return `automatic snapshot written, ${formatBytes(event.stats?.compressed_bytes)}. The process keeps running`;
     case "resumed":
-      return `resumed from snapshot, first exec() after ${formatMs(event.stats?.first_exec_ms)}`;
+      return `resumed from snapshot, first exec() after ${formatMs(event.stats?.first_exec_ms)}${
+        event.stats?.program_source === "store" ? ". The program came from the program store, without a compile" : event.stats?.program_source === "compile" ? ". The program was compiled" : ""
+      }`;
     case "completed":
       return `completed: ${preview(event.value)}`;
     case "failed":

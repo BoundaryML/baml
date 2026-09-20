@@ -10,6 +10,7 @@ const GLYPHS: Record<RunStatus, string> = {
   lost: "✕",
   cancelled: "⊘",
   migrated: "⇢",
+  sleeping: "☾",
 };
 
 /** Status is never shown by color alone: every badge has a glyph and a label. */

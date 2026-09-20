@@ -3,8 +3,9 @@
  * axis ticks. Pure functions, shared by the component and its tests.
  */
 
+import { formatBytes, formatClockShort, formatCountdown, formatMs } from "../format";
 import type { Site } from "../protocol";
-import type { Anchor, Connector, Lane, Marker, SegmentBar, TimelineLayout } from "./layout";
+import type { Anchor, Connector, Gap, Lane, Marker, SegmentBar, TimelineLayout } from "./layout";
 
 export const GUTTER = 62;
 export const RIGHT_PAD = 14;
@@ -274,4 +275,34 @@ export function placeBarLabels(
     });
   }
   return labels;
+}
+
+/** Approximate advance of one character of the 10px monospace font of a gap label. */
+export const GAP_LABEL_CHAR_W = 6.05;
+
+/**
+ * The label inside a sleeping gap: the longest variant that fits into
+ * `available` pixels, or `""`. While the run sleeps, the label names the wake
+ * time and counts down to it. After the wake, it states how long the run had
+ * no process.
+ */
+export function sleepGapLabel(
+  gap: Pick<Gap, "open" | "start" | "end" | "wakeAt" | "snapshotN" | "bytes">,
+  now: number,
+  available: number,
+): string {
+  const candidates: string[] = [];
+  if (gap.open) {
+    const countdown = gap.wakeAt === null ? null : formatCountdown(gap.wakeAt - now);
+    if (gap.wakeAt !== null && countdown !== null) {
+      candidates.push(`sleeping until ${formatClockShort(gap.wakeAt)} · ${countdown}`, `until ${formatClockShort(gap.wakeAt)} · ${countdown}`, countdown);
+    } else {
+      candidates.push("sleeping · no process", "sleeping");
+    }
+  } else {
+    const slept = formatMs(gap.end - gap.start);
+    const snapshot = `snapshot${gap.snapshotN === null ? "" : ` #${gap.snapshotN}`} ${formatBytes(gap.bytes)}`;
+    candidates.push(`slept ${slept} · no process · ${snapshot}`, `slept ${slept} · no process`, `slept ${slept}`);
+  }
+  return candidates.find((candidate) => candidate.length * GAP_LABEL_CHAR_W <= available) ?? "";
 }

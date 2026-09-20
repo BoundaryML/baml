@@ -3,7 +3,8 @@
  *
  * These declarations mirror `documents/durable-poc-contracts.md`, sections
  * 2.3 (worker events), 2.5 (state dump), 3.2 (run record), 3.3 (HTTP API),
- * 3.4 (SSE stream), 7 (accepted extensions), and 8 (named sites). Readers ignore unknown
+ * 3.4 (SSE stream), 7 (accepted extensions), 8 (named sites), and 9 (threads
+ * and futures, durable sleep, remote cancellation, program store). Readers ignore unknown
  * fields, and the app ignores unknown event types, so every parser in this
  * file is tolerant.
  */
@@ -107,7 +108,15 @@ export interface ResumeStats {
   program_load_ms: Stat;
   decode_ms: Stat;
   first_exec_ms: Stat;
+  /**
+   * Section 9.2: where the resumed worker got the program from. `store` is the
+   * content-addressed program store, and `compile` is a compilation of
+   * `--project`. Absent on a worker that predates the program store.
+   */
+  program_source?: ProgramSource | null;
 }
+
+export type ProgramSource = "store" | "compile";
 
 /**
  * Fields of every worker event. The site server adds `site` when it forwards
@@ -130,6 +139,8 @@ export interface HelloEvent extends WorkerEventBase {
   mode: "start" | "resume";
   function: string;
   durable: boolean;
+  /** Section 9.2: the hash of the program that the worker runs, in hex. */
+  program_hash?: string;
 }
 
 export interface LogEvent extends WorkerEventBase {
@@ -186,11 +197,24 @@ export interface BlockedEvent extends WorkerEventBase {
   path: string[];
 }
 
+/**
+ * Section 9.2: the reason a run suspended itself. `remaining_ms` is measured
+ * at the moment of the snapshot, and `at_ts` is the deadline of the sleep on
+ * the worker's clock.
+ */
+export interface SleepWake {
+  reason: "sleep" | (string & {});
+  remaining_ms: number;
+  at_ts: number;
+}
+
 export interface PausedEvent extends WorkerEventBase {
   type: "paused";
   snapshot_path: string;
   state_path: string;
   stats: PauseStats;
+  /** Section 9.2: set when the run suspended itself for a sleep. Absent or `null` for a requested pause. */
+  wake?: SleepWake | null;
 }
 
 /**
@@ -232,6 +256,16 @@ export interface CancelledEvent extends WorkerEventBase {
   type: "cancelled";
 }
 
+/**
+ * Section 9.2: the thread that waited on a remote call was cancelled. The run
+ * no longer waits on `call_id`.
+ */
+export interface RemoteCancelEvent extends WorkerEventBase {
+  type: "remote_cancel";
+  call_id: string;
+  thread: number;
+}
+
 export type WorkerEvent =
   | HelloEvent
   | LogEvent
@@ -247,7 +281,8 @@ export type WorkerEvent =
   | ResumedEvent
   | CompletedEvent
   | FailedEvent
-  | CancelledEvent;
+  | CancelledEvent
+  | RemoteCancelEvent;
 
 export type WorkerEventType = WorkerEvent["type"];
 
@@ -267,7 +302,12 @@ export type DumpValueKind =
   | "instance"
   | "closure"
   | "opaque"
-  | "omitted";
+  | "omitted"
+  // Phase 3 additions of the snapshot core. A future has the preview
+  // `#<id> (<state>)` and, once it settled, one child `value` or `error`.
+  | "future"
+  | "cancel_token"
+  | "task_group";
 
 export interface DumpValue {
   /** One of `DumpValueKind`. A reader must tolerate a kind that it does not know. */
@@ -301,6 +341,12 @@ export interface DumpThread {
   name: string;
   parked: { kind: string; detail: string };
   frames: DumpFrame[];
+  // Phase 3 additions of the snapshot core. Absent in a dump of an earlier worker.
+  parent_thread?: number | null;
+  /** The id of the future that the thread settles when it ends. The preview of a future names the id as `#<id>`. */
+  settles_future?: number | null;
+  /** The thread was cancelled and ends at its next await point. */
+  cancelled?: boolean;
 }
 
 export interface HeapKindTotals {
@@ -329,7 +375,9 @@ export type RunStatus =
   | "failed"
   | "lost"
   | "cancelled"
-  | "migrated";
+  | "migrated"
+  /** Section 9.3: the run suspended itself for a sleep. No process exists, and a timer resumes it at `wake_at`. */
+  | "sleeping";
 
 export interface RunParent {
   site: Site;
@@ -418,6 +466,10 @@ export interface Run {
   blocked: PauseBlocked | null;
   /** Section 8.3: the site that a `migrated` record moved to. Absent on a record that did not move. */
   migrated_to?: Site | null;
+  /** Section 9.3: the time at which the site server resumes a `sleeping` run (Unix ms). */
+  wake_at?: number | null;
+  /** Section 9.3: the hash of the program that the run executes, in hex. */
+  program_hash?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,6 +534,16 @@ export interface RemoteRunRequest {
   function: string;
   args: JsonObject;
   parent: RunParent;
+  // Section 9.5.
+  program_hash?: string;
+  from_site?: Site;
+}
+
+/** Section 9.5: `GET /api/programs/:hash`. Peer to peer. Declared for completeness. */
+export interface ProgramResponse {
+  hash: string;
+  runtime_build: string;
+  program_base64: string;
 }
 
 /** Peer to peer. Declared for completeness. The app does not send it. */
@@ -494,6 +556,9 @@ export interface ImportRunRequest {
   run: Run;
   snapshot_base64: string;
   state: StateDump;
+  // Section 9.5.
+  program_hash?: string;
+  from_site?: Site;
 }
 
 // ---------------------------------------------------------------------------
@@ -579,6 +644,37 @@ export interface ForkedEvent {
   n: number;
 }
 
+/** Section 9.3: the run suspended itself, and the site server set a timer for `wake_at`. */
+export interface SleepScheduledEvent {
+  type: "sleep_scheduled";
+  ts: number;
+  site: Site;
+  run: string;
+  wake_at: number;
+}
+
+export type WakeReason = "timer" | "manual" | "restart";
+
+/** Section 9.3: a `sleeping` run starts its next segment. */
+export interface WokenEvent {
+  type: "woken";
+  ts: number;
+  site: Site;
+  run: string;
+  reason: WakeReason | (string & {});
+}
+
+/** Section 9.3: the parent's site asked the child's site to cancel the child of a cancelled remote call. */
+export interface RemoteCancelledEvent {
+  type: "remote_cancelled";
+  ts: number;
+  site: Site;
+  run: string;
+  call_id: string;
+  child_site: Site;
+  child_run: string;
+}
+
 /** Events that the site server produces about one run. `run` is a run id. */
 export type SiteRunEvent =
   | RemoteDispatchedEvent
@@ -586,7 +682,10 @@ export type SiteRunEvent =
   | MigratedOutEvent
   | MigratedInEvent
   | WorkerExitEvent
-  | ForkedEvent;
+  | ForkedEvent
+  | SleepScheduledEvent
+  | WokenEvent
+  | RemoteCancelledEvent;
 
 /** Every event that belongs to the history of one run. */
 export type RunHistoryEvent = WorkerEvent | SiteRunEvent;
@@ -610,6 +709,7 @@ const WORKER_EVENT_TYPES: ReadonlySet<string> = new Set<WorkerEventType>([
   "completed",
   "failed",
   "cancelled",
+  "remote_cancel",
 ]);
 
 const SITE_RUN_EVENT_TYPES: ReadonlySet<string> = new Set<SiteRunEvent["type"]>([
@@ -619,6 +719,9 @@ const SITE_RUN_EVENT_TYPES: ReadonlySet<string> = new Set<SiteRunEvent["type"]>(
   "migrated_in",
   "worker_exit",
   "forked",
+  "sleep_scheduled",
+  "woken",
+  "remote_cancelled",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -695,10 +798,30 @@ export function normalizeRun(run: Run): Run {
     forked_from: loose.forked_from ?? null,
     result_delivered: loose.result_delivered ?? false,
     blocked: loose.blocked ?? null,
+    wake_at: typeof loose.wake_at === "number" ? loose.wake_at : null,
+    program_hash: typeof loose.program_hash === "string" ? loose.program_hash : null,
   };
 }
 
 /** Statuses in which a worker process exists or is about to exist. */
 export function isLiveStatus(status: RunStatus): boolean {
   return status === "starting" || status === "running" || status === "pausing";
+}
+
+/**
+ * Statuses in which the picture of a run changes with the clock: a process
+ * exists, or a timer counts down to the wake time of a `sleeping` run.
+ */
+export function isTickingStatus(status: RunStatus): boolean {
+  return isLiveStatus(status) || status === "sleeping";
+}
+
+/** Statuses in which a run has no process and continues from a snapshot: by a command, or by its wake timer. */
+export function isSuspendedStatus(status: RunStatus): boolean {
+  return status === "paused" || status === "sleeping";
+}
+
+/** The first characters of a program hash, for a label. The full hash stays in the tooltip. */
+export function shortHash(hash: string | null | undefined, length = 10): string | null {
+  return typeof hash === "string" && hash !== "" ? hash.slice(0, length) : null;
 }

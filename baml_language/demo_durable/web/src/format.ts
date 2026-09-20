@@ -32,3 +32,17 @@ export function formatOffset(ms: number, stepMs = 10): string {
   const digits = stepMs >= 1000 ? 0 : stepMs >= 100 ? 1 : stepMs >= 10 ? 2 : 3;
   return `+${(ms / 1000).toFixed(digits)}s`;
 }
+
+/** Local wall-clock time without milliseconds, for example `17:00:04`. */
+export function formatClockShort(ts: number): string {
+  const date = new Date(ts);
+  return `${pad(date.getHours(), 2)}:${pad(date.getMinutes(), 2)}:${pad(date.getSeconds(), 2)}`;
+}
+
+/** The time that remains until a deadline, for example `8.2 s` or `1:05`. It never goes below zero. */
+export function formatCountdown(ms: number): string {
+  const left = Math.max(ms, 0);
+  if (left < 60_000) return `${(left / 1000).toFixed(1)} s`;
+  const seconds = Math.floor(left / 1000);
+  return `${Math.floor(seconds / 60)}:${pad(seconds % 60, 2)}`;
+}

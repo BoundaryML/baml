@@ -6,6 +6,8 @@
 //   KEEP=1 node scripts/verify.mjs            keep the run stores for inspection
 //   PORT_BASE=<n>                             first port (default 18787)
 //   RUNS_TAG=<tag>                            added to the run store names
+//   ONLY=phase3 | chaos                       phase3: skip the scenes of contract sections 3 to 8
+//                                             chaos: only the CHAOS scenes
 //
 // The script starts its own site servers: local on PORT_BASE, cloud on
 // PORT_BASE + 1, and cloud2 on PORT_BASE + 2, with run stores in
@@ -15,23 +17,39 @@
 // restarts the local server once and the cloud2 server once, and stops
 // everything that it started at the end.
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVER_DIR = path.join(ROOT, "server");
 const PORT_BASE = Number(process.env.PORT_BASE ?? "18787");
 const RUNS_TAG = process.env.RUNS_TAG ?? "";
+const ONLY = process.env.ONLY ?? "";
+if (!["", "phase3", "chaos"].includes(ONLY)) throw new Error(`ONLY must be phase3 or chaos: ${ONLY}`);
 if (!Number.isInteger(PORT_BASE) || PORT_BASE < 1 || PORT_BASE > 65533) throw new Error(`PORT_BASE is not a port number: ${process.env.PORT_BASE}`);
 if (!/^[A-Za-z0-9_-]*$/.test(RUNS_TAG)) throw new Error(`RUNS_TAG may contain only letters, digits, '-' and '_': ${RUNS_TAG}`);
 const SITE_NAMES = ["local", "cloud", "cloud2"];
 const SITES = Object.fromEntries(SITE_NAMES.map((name, i) => [name, {
   port: PORT_BASE + i, base: `http://127.0.0.1:${PORT_BASE + i}`, runs: `.baml/verify${RUNS_TAG}-${name}`,
+  programs: `.baml/verify-programs${RUNS_TAG}-${name}`,
 }]));
+// Passed to every worker as --sleep-suspend-ms. The loop sleeps of trip.baml
+// (1500 ms) and the deadline of durable_deadline (2000 ms) stay in process, and
+// a durable_nap of 3 seconds or more suspends the run. The mock compares the
+// threshold with simulated time, so MOCK_SPEED does not change which sleeps
+// suspend.
+const SLEEP_SUSPEND_MS = 2500;
+const MOCK_SPEED = Math.max(0.001, Number(process.env.MOCK_SPEED ?? "1") || 1);
+// The speed of the workers that the servers start. The CHAOS scenes set it to 1.
+let speed = MOCK_SPEED;
+// A simulated duration of the mock in real milliseconds.
+const real = (ms) => ms / speed;
 // The registry that every site server receives (contract section 8.1).
 const REGISTRY = Object.fromEntries(SITE_NAMES.map((name) => [name, SITES[name].base]));
 const REGISTRY_LIST = SITE_NAMES.map((name) => ({ name, url: SITES[name].base }));
@@ -73,12 +91,13 @@ async function startServer(site, extraEnv = {}) {
   if (await portInUse(cfg.port)) throw new Error(`port ${cfg.port} (site ${site}) is already in use; set PORT_BASE to a free range`);
   // PORT is not set: the server takes its port from its own entry in SITES.
   // PEER_URL is set to an unusable value to show that it is no longer read.
-  const { PORT: _port, REMOTE_POOL: _pool, ...inherited } = process.env;
+  const { PORT: _port, REMOTE_POOL: _pool, CHAOS: _chaos, WORKER_LEGACY: _legacy, ...inherited } = process.env;
   const child = spawn("baml", ["run", "main", "--log", "warn"], {
     cwd: SERVER_DIR,
     env: {
       ...inherited,
       SITE: site, SITES: JSON.stringify(REGISTRY), RUNS_DIR: cfg.runs,
+      PROGRAMS_DIR: cfg.programs, SLEEP_SUSPEND_MS: String(SLEEP_SUSPEND_MS),
       PEER_URL: "http://127.0.0.1:9",
       VERIFY_MARKER: `marker-${site}`,
       BAML_AGENT_SKILL_CHECK: process.env.BAML_AGENT_SKILL_CHECK ?? "off",
@@ -135,6 +154,7 @@ async function claimStores() {
   for (const site of SITE_NAMES) {
     const dir = path.join(SERVER_DIR, SITES[site].runs);
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(path.join(SERVER_DIR, SITES[site].programs), { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(lockPath(site), `${process.pid}\n`);
   }
@@ -145,8 +165,10 @@ function releaseStores(remove) {
   if (!storesClaimed) return;
   for (const site of SITE_NAMES) {
     const dir = path.join(SERVER_DIR, SITES[site].runs);
-    if (remove) fs.rmSync(dir, { recursive: true, force: true });
-    else fs.rmSync(lockPath(site), { force: true });
+    if (remove) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(path.join(SERVER_DIR, SITES[site].programs), { recursive: true, force: true });
+    } else fs.rmSync(lockPath(site), { force: true });
   }
 }
 
@@ -253,8 +275,10 @@ async function routesAndErrors() {
     JSON.stringify({ sites: info.json.sites, remote_pool: info.json.remote_pool }));
   check("info no longer has peer_url and peer_site", !("peer_url" in info.json) && !("peer_site" in info.json));
   const names = info.json.functions.map((f) => f.name).sort().join(",");
-  check("info.functions lists the four demo functions",
-    names === "durable_plan_trip,durable_plan_trip_parallel,plan_trip,remote_fetch_weather", names);
+  check("info.functions lists the demo functions that a run can start, and no helper",
+    names === "durable_deadline,durable_fan_out,durable_nap,durable_plan_trip,durable_plan_trip_parallel,durable_race,durable_settled,plan_trip,remote_fetch_weather,remote_get_quote", names);
+  const rgq = info.json.functions.find((f) => f.name === "remote_get_quote");
+  check("a class-typed parameter is listed with its type", rgq.remote && rgq.params.length === 1 && rgq.params[0].name === "request" && rgq.params[0].type === "QuoteRequest");
   const dpt = info.json.functions.find((f) => f.name === "durable_plan_trip");
   const rfw = info.json.functions.find((f) => f.name === "remote_fetch_weather");
   check("durable/remote flags and params", dpt.durable && !dpt.remote && rfw.remote && !rfw.durable
@@ -280,6 +304,11 @@ async function routesAndErrors() {
   check("mock positions point at real lines",
     lines[23].includes("println") && lines[24].includes("sleep") && lines[28].includes("remote_fetch_weather(city)")
     && lines[48].includes("spawn") && lines[57].includes("await") && lines[14].includes("println") && lines[15].includes("sleep"));
+  const quotes = (await get("local", "/api/source?file=baml_src/quotes.baml")).json.text.split("\n");
+  check("mock positions of quotes.baml point at real lines", quotes[120].includes("println") && quotes[129].includes("sleep") && quotes[131].includes("throw QuoteUnavailable")
+    && [158, 159, 160, 161].every((i) => quotes[i].includes("spawn { remote_get_quote(")) && quotes[163].includes("sleep") && quotes[165].includes("baml.future.all(")
+    && quotes[192].includes("baml.future.race(") && quotes[205].includes("baml.future.all_settled(") && quotes[240].includes("with_timeout") && quotes[241].includes("remote_get_quote(")
+    && quotes[252].includes("sleep") && quotes[253].includes("woke up"));
   // A worker reports an absolute path when it cannot make it relative. The
   // value of `position.file` is accepted as it is.
   const absolute = `${info.json.program_dir}/baml_src/trip.baml`;
@@ -311,7 +340,13 @@ async function routesAndErrors() {
     && (await get("cloud", "/api/runs")).json.length === runsBefore, badParent.text);
 }
 
-async function centralScene(local, cloud) {
+// The SSE streams of the three sites, by site name. Placement is round-robin
+// (contract section 9.3), so a scene takes the site of a child from the
+// `remote_dispatched` event and reads that site's stream.
+const STREAMS = {};
+const inPool = (site, caller) => DEFAULT_POOL.includes(site) && site !== caller;
+
+async function centralScene(local) {
   section("central scene: pause the parent while the remote child runs, resume after it finished");
   const started = await post("local", "/api/runs", { function: "durable_plan_trip", args: { city: "Lisbon" } });
   const id = started.json.id;
@@ -332,21 +367,22 @@ async function centralScene(local, cloud) {
   check("run is running with the worker pid", pid1 === hello.pid && pidAlive(pid1));
 
   const dispatched = await local.waitEvent("remote_dispatched", (e) => e.type === "remote_dispatched" && e.run === id);
-  check("remote_dispatched event", dispatched.child_site === "cloud" && dispatched.function === "remote_fetch_weather"
+  const cs = dispatched.child_site;
+  check("remote_dispatched event", inPool(cs, "local") && dispatched.function === "remote_fetch_weather"
     && dispatched.call_id === `${id}-c1` && dispatched.site === "local" && typeof dispatched.ts === "number");
   const childId = dispatched.child_run;
   const parentNow = (await get("local", `/api/runs/${id}`)).json;
   check("parent.waiting_on records the child", parentNow.waiting_on.length === 1 && parentNow.waiting_on[0].child_run === childId
-    && parentNow.waiting_on[0].function === "remote_fetch_weather" && parentNow.waiting_on[0].child_site === "cloud");
-  const child = (await get("cloud", `/api/runs/${childId}`)).json;
-  check("child run on cloud has parent set", child.site === "cloud" && child.parent.site === "local"
+    && parentNow.waiting_on[0].function === "remote_fetch_weather" && parentNow.waiting_on[0].child_site === cs);
+  const child = (await get(cs, `/api/runs/${childId}`)).json;
+  check("child run on the pool site has parent set", child.site === cs && child.parent.site === "local"
     && child.parent.run === id && child.parent.call_id === `${id}-c1` && child.durable === false);
 
   // Pause while the child is still running.
   const pausing = await post("local", `/api/runs/${id}/pause`);
   check("POST pause returns status pausing", pausing.status === 200 && pausing.json.status === "pausing");
   const paused = await waitStatus("local", id, "paused");
-  const childDuringPause = (await get("cloud", `/api/runs/${childId}`)).json;
+  const childDuringPause = (await get(cs, `/api/runs/${childId}`)).json;
   check("child is still running when the parent is paused", childDuringPause.status === "running", childDuringPause.status);
   check("paused parent has no pid, and its process is gone", paused.pid === null && !pidAlive(pid1));
   const lastSnap = paused.snapshots[paused.snapshots.length - 1];
@@ -368,11 +404,11 @@ async function centralScene(local, cloud) {
   check("snapshot state 404 for an unknown n", noState.status === 404);
 
   // The child finishes while the parent has no process.
-  const childDone = await waitStatus("cloud", childId, "completed");
-  check("child completed on cloud", childDone.result === "sunny in Lisbon");
-  await waitFor("child result delivered", async () => (await get("cloud", `/api/runs/${childId}`)).json.result_delivered);
+  const childDone = await waitStatus(cs, childId, "completed");
+  check("child completed on its site", childDone.result === "sunny in Lisbon");
+  await waitFor("child result delivered", async () => (await get(cs, `/api/runs/${childId}`)).json.result_delivered);
   const returned = await local.waitEvent("remote_returned", (e) => e.type === "remote_returned" && e.run === id);
-  check("remote_returned event", returned.ok === true && returned.child_run === childId && returned.child_site === "cloud" && returned.call_id === `${id}-c1`);
+  check("remote_returned event", returned.ok === true && returned.child_run === childId && returned.child_site === cs && returned.call_id === `${id}-c1`);
   const stored = (await get("local", `/api/runs/${id}`)).json;
   check("result is stored while the parent is paused", stored.status === "paused" && stored.waiting_on.length === 0
     && stored.remote_results.length === 1 && stored.remote_results[0].value === "sunny in Lisbon" && stored.remote_results[0].acked === false);
@@ -407,13 +443,13 @@ async function centralScene(local, cloud) {
   })());
   check("snapshots[].n matches the worker's snap-<n> file names", done.snapshots.every((s) => s.snapshot_path.endsWith(`/snap-${s.n}.bamlsnap`)),
     JSON.stringify(done.snapshots.map((s) => [s.n, path.basename(s.snapshot_path)])));
-  const onCloud2 = (await get("cloud2", "/api/runs")).json.filter((r) => r.parent && r.parent.run === id);
-  const onLocal = (await get("local", "/api/runs")).json.filter((r) => r.parent && r.parent.run === id);
-  check("placement: a parent on local calls into cloud, and no child ran on cloud2 or on local", onCloud2.length === 0 && onLocal.length === 0
-    && (await get("cloud", "/api/runs")).json.filter((r) => r.parent && r.parent.run === id).length === 1);
-  check("cloud stream carried the child's events",
-    !!cloud.find((e) => e.type === "log" && e.run === childId && e.text.includes("looking up weather") && e.site === "cloud")
-    && !!cloud.find((e) => e.type === "run" && e.run.id === childId && e.run.status === "completed"));
+  const childrenOn = {};
+  for (const site of SITE_NAMES) childrenOn[site] = (await get(site, "/api/runs")).json.filter((r) => r.parent && r.parent.run === id).length;
+  check("placement: a parent on local calls into one site of the pool, and no child ran on local or on the other pool site",
+    childrenOn.local === 0 && childrenOn[cs] === 1 && childrenOn.cloud + childrenOn.cloud2 === 1, JSON.stringify(childrenOn));
+  check("the stream of the child's site carried the child's events",
+    !!STREAMS[cs].find((e) => e.type === "log" && e.run === childId && e.text.includes("looking up weather") && e.site === cs)
+    && !!STREAMS[cs].find((e) => e.type === "run" && e.run.id === childId && e.run.status === "completed"));
   check("run events follow every change", local.events.filter((e) => e.type === "run" && e.run.id === id).length >= 8);
   return id;
 }
@@ -507,7 +543,8 @@ async function migrationChain(local, cloud, cloud2) {
   // The child sleeps 4 real seconds (mock-only argument), so both hops finish before it does.
   const id = (await post("local", "/api/runs", { function: "durable_plan_trip", args: { city: "Chaves", mock_remote_sleep_ms: 4000 } })).json.id;
   const dispatched = await local.waitEvent("remote_dispatched", (e) => e.type === "remote_dispatched" && e.run === id);
-  check("the child of the local parent runs on cloud", dispatched.child_site === "cloud");
+  const cs = dispatched.child_site;
+  check("the child of the local parent runs on a site of the pool", inPool(cs, "local"), cs);
   await post("local", `/api/runs/${id}/pause`);
   await waitStatus("local", id, "paused");
   const hop1 = await post("local", `/api/runs/${id}/resume`, { site: "cloud" });
@@ -533,14 +570,14 @@ async function migrationChain(local, cloud, cloud2) {
     && !!(await cloud2.waitEvent("migrated_in", (e) => e.type === "migrated_in" && e.run === id && e.from_site === "cloud")));
   await post("cloud2", `/api/runs/${id}/pause`);
   const onCloud2 = await waitStatus("cloud2", id, "paused");
-  const childNow = (await get("cloud", `/api/runs/${dispatched.child_run}`)).json;
-  check("the run is paused on cloud2 (segment 3, no process) while the child still runs on cloud", onCloud2.pid === null && onCloud2.segment === 3
+  const childNow = (await get(cs, `/api/runs/${dispatched.child_run}`)).json;
+  check("the run is paused on cloud2 (segment 3, no process) while the child still runs on its site", onCloud2.pid === null && onCloud2.segment === 3
     && onCloud2.origin.site === "cloud" && onCloud2.remote_results.length === 0 && onCloud2.waiting_on.length === 1 && childNow.status === "running",
     JSON.stringify({ segment: onCloud2.segment, results: onCloud2.remote_results.length, child: childNow.status }));
 
   // The child posts its result to local (parent.site). Local forwards it to
   // cloud, and cloud forwards it to cloud2, where the run has no process.
-  await waitStatus("cloud", dispatched.child_run, "completed");
+  await waitStatus(cs, dispatched.child_run, "completed");
   const stored = await waitFor("stored result on cloud2", async () => {
     const r = (await get("cloud2", `/api/runs/${id}`)).json;
     return r.remote_results.length === 1 ? r : null;
@@ -548,9 +585,9 @@ async function migrationChain(local, cloud, cloud2) {
   check("the result was forwarded along migrated_to and is stored on the paused run on cloud2", stored.status === "paused" && stored.pid === null
     && stored.remote_results[0].value === "sunny in Chaves" && stored.remote_results[0].acked === false && stored.waiting_on.length === 0);
   const returned = await cloud2.waitEvent("remote_returned on cloud2", (e) => e.type === "remote_returned" && e.run === id);
-  check("remote_returned is emitted by cloud2 only, with the child's site", returned.ok === true && returned.child_site === "cloud" && returned.child_run === dispatched.child_run
+  check("remote_returned is emitted by cloud2 only, with the child's site", returned.ok === true && returned.child_site === cs && returned.child_run === dispatched.child_run
     && !local.find((e) => e.type === "remote_returned" && e.run === id) && !cloud.find((e) => e.type === "remote_returned" && e.run === id));
-  await waitFor("result_delivered on the child", async () => (await get("cloud", `/api/runs/${dispatched.child_run}`)).json.result_delivered);
+  await waitFor("result_delivered on the child", async () => (await get(cs, `/api/runs/${dispatched.child_run}`)).json.result_delivered);
   const left = [(await get("local", `/api/runs/${id}`)).json, (await get("cloud", `/api/runs/${id}`)).json];
   check("the records that stayed behind form the chain local -> cloud -> cloud2", left[0].status === "migrated" && left[0].migrated_to === "cloud"
     && left[1].status === "migrated" && left[1].migrated_to === "cloud2" && left[1].origin.site === "local"
@@ -633,7 +670,7 @@ async function pausedWhileWaiting(city) {
   const waiting = await waitFor(`remote call of ${id}`, async () => (await get("local", `/api/runs/${id}`)).json.waiting_on[0]);
   await post("local", `/api/runs/${id}/pause`);
   await waitStatus("local", id, "paused");
-  return { id, child: waiting.child_run };
+  return { id, child: waiting.child_run, childSite: waiting.child_site };
 }
 
 async function forkAndMigration() {
@@ -643,8 +680,8 @@ async function forkAndMigration() {
   const forkA = (await post("local", `/api/runs/${a.id}/fork`)).json;
   check("a fork of the latest snapshot waits on the same call", forkA.waiting_on.length === 1 && forkA.waiting_on[0].call_id === `${a.id}-c1`);
   const movedA = await post("local", `/api/runs/${forkA.id}/resume`, { site: "cloud2" });
-  const childA = (await get("cloud", `/api/runs/${a.child}`)).json.status;
-  check("the fork migrated to cloud2 while the child still runs on cloud", movedA.json.status === "migrated" && movedA.json.migrated_to === "cloud2"
+  const childA = (await get(a.childSite, `/api/runs/${a.child}`)).json.status;
+  check("the fork migrated to cloud2 while the child still runs on its site", movedA.json.status === "migrated" && movedA.json.migrated_to === "cloud2"
     && childA === "running", `${movedA.json.status} ${movedA.json.migrated_to} ${childA}`);
   const doneA = await waitStatus("cloud2", forkA.id, "completed");
   check("the migrated fork receives the late result on cloud2 (local forwards it to migrated_to)", doneA.result.weather === "sunny in Viseu"
@@ -744,7 +781,7 @@ async function recoveryWithStoredResult(local, cloud) {
   // The latest automatic snapshot was written before the call.
   const killed = await post("local", `/api/runs/${id}/kill`);
   check("killed while waiting on the remote call: paused", killed.json.status === "paused" && killed.json.snapshots.every((s) => s.automatic));
-  await waitStatus("cloud", dispatched.child_run, "completed");
+  await waitStatus(dispatched.child_site, dispatched.child_run, "completed");
   await waitFor("stored result", async () => (await get("local", `/api/runs/${id}`)).json.remote_results.length === 1);
   await post("local", `/api/runs/${id}/resume`);
   const done = await waitStatus("local", id, "completed");
@@ -753,7 +790,7 @@ async function recoveryWithStoredResult(local, cloud) {
   check("the worker ignored the unknown --remote-result and repeated remote_call with the same call_id",
     calls.length === 2 && calls[0].call_id === calls[1].call_id && calls[1].segment === 2
     && !!local.find((e) => e.type === "log" && e.run === id && e.segment === 2 && e.stream === "worker_stderr" && e.text.includes("ignoring a result for the unknown call")));
-  const children = (await get("cloud", "/api/runs")).json.filter((r) => r.parent && r.parent.call_id === `${id}-c1`);
+  const children = (await Promise.all(DEFAULT_POOL.map((site) => get(site, "/api/runs")))).flatMap((r) => r.json).filter((r) => r.parent && r.parent.call_id === `${id}-c1`);
   check("the call was dispatched once", children.length === 1
     && local.events.filter((e) => e.type === "remote_dispatched" && e.run === id).length === 1);
   check("remote_result_received once, in segment 2", local.events.filter((e) => e.type === "remote_result_received" && e.run === id).length === 1);
@@ -815,7 +852,7 @@ async function parallelScenario(local, cloud) {
     && paused.snapshots.at(-1).stats.blocked_attempts === 2);
   const state = (await get("local", `/api/runs/${id}/snapshots/${paused.snapshots.at(-1).n}/state`)).json;
   check("state dump shows two threads", state.threads.length === 2 && state.threads[1].parked.kind === "remote_call");
-  await waitStatus("cloud", dispatched.child_run, "completed");
+  await waitStatus(dispatched.child_site, dispatched.child_run, "completed");
   await local.waitEvent("remote_returned", (e) => e.type === "remote_returned" && e.run === id);
   await post("local", `/api/runs/${id}/resume`);
   const done = await waitStatus("local", id, "completed");
@@ -827,9 +864,9 @@ async function failureScenario(local, cloud) {
   section("failure: the remote child fails, the parent fails");
   const id = (await post("local", "/api/runs", { function: "plan_trip", args: { city: "Atlantis" } })).json.id;
   const dispatched = await local.waitEvent("remote_dispatched", (e) => e.type === "remote_dispatched" && e.run === id);
-  const child = await waitStatus("cloud", dispatched.child_run, "failed");
-  check("child failed on cloud", typeof child.error === "string" && child.error.includes("Atlantis"));
-  check("failed event with a stack was forwarded", !!cloud.find((e) => e.type === "failed" && e.run === child.id && e.stack.length === 1));
+  const child = await waitStatus(dispatched.child_site, dispatched.child_run, "failed");
+  check("child failed on its site", typeof child.error === "string" && child.error.includes("Atlantis"));
+  check("failed event with a stack was forwarded", !!STREAMS[dispatched.child_site].find((e) => e.type === "failed" && e.run === child.id && e.stack.length === 1));
   const returned = await local.waitEvent("remote_returned", (e) => e.type === "remote_returned" && e.run === id);
   check("remote_returned has ok: false", returned.ok === false);
   const parent = await waitStatus("local", id, "failed");
@@ -889,18 +926,807 @@ async function restartScenario() {
   const done = await waitStatus("local", durable, "completed");
   check("the reloaded durable run resumes and completes", done.result.weather === "sunny in Coimbra" && done.result.ideas.length === 3);
   // The child finished while local was down. Cloud retries the delivery.
-  const child = await waitStatus("cloud", childOf.child_run, "completed");
+  const child = await waitStatus(childOf.child_site, childOf.child_run, "completed");
   check("the child completed while the parent's site was down", child.result === "sunny in Guarda");
   const parent = await waitFor("stored result after the redelivery", async () => {
     const r = (await get("local", `/api/runs/${waiting}`)).json;
     return r.remote_results.length === 1 ? r : null;
   }, 20000);
   check("cloud redelivered the result after local came back", parent.status === "paused" && parent.remote_results[0].value === "sunny in Guarda");
-  await waitFor("result_delivered on the child", async () => (await get("cloud", `/api/runs/${childOf.child_run}`)).json.result_delivered);
+  await waitFor("result_delivered on the child", async () => (await get(childOf.child_site, `/api/runs/${childOf.child_run}`)).json.result_delivered);
   await post("local", `/api/runs/${waiting}/resume`);
   const finished2 = await waitStatus("local", waiting, "completed");
   check("the parent resumes after the restart and completes with the stored result", finished2.result.weather === "sunny in Guarda");
   stream.close();
+}
+
+// ------------------------------------------------- contract section 9 scenes
+//
+// Every scene takes a label that is added to its check names, so the same
+// scene can run a second time under CHAOS. The scenes read the SSE streams
+// from STREAMS, which main() replaces after it restarts the servers.
+
+const RATES = { Flight: 420, Hotel: 135, Car: 48, Tour: 75 };
+const VENDORS = { Flight: "Skyways", Hotel: "Casa Azul", Car: "Rodas", Tour: "Seven Hills Walks" };
+
+// The values that program/baml_src/quotes.baml builds. A result that crossed
+// two site servers, a run store, and a resume must still equal them.
+function expectedRequest(city, kind, delayMs, options = {}) {
+  return { city, kind, nights: 3, delay_ms: delayMs, traveler: { name: "Ada", loyalty_tier: 2 }, options: { currency: "EUR", ...options } };
+}
+function expectedQuote(city, kind, delayMs) {
+  return {
+    request: expectedRequest(city, kind, delayMs),
+    vendor: VENDORS[kind],
+    price: { amount: kind === "Flight" ? RATES.Flight : RATES[kind] * 3, currency: "EUR" },
+    tags: [kind.toLowerCase(), city.toLowerCase()],
+    extras: { insurance: 12, late_checkout: 30 },
+    note: "loyalty tier 2 applied for Ada",
+  };
+}
+
+const allEvents = () => SITE_NAMES.flatMap((site) => STREAMS[site]?.events ?? []);
+const eventsOf = (id, type) => allEvents().filter((e) => e.type === type && e.run === id);
+const countBy = (list, key) => list.reduce((m, e) => m.set(e[key], (m.get(e[key]) ?? 0) + 1), new Map());
+const eachOnce = (list, key, wanted) => { const c = countBy(list, key); return wanted.every((k) => c.get(k) === 1) && c.size === wanted.length; };
+
+/** The worker processes of a run that exist right now, from the process table. */
+function workerPids(id) {
+  const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
+  return out.split("\n").filter((l) => l.includes("mock-worker.mjs") && l.includes(` --run ${id} `)).map((l) => Number(l.trim().split(/\s+/)[0]));
+}
+
+/** The children of `parentId` on every site, by call id. */
+async function childrenOf(parentId) {
+  const lists = await Promise.all(SITE_NAMES.map((site) => get(site, "/api/runs")));
+  return lists.flatMap((r) => r.json).filter((r) => r.parent && r.parent.run === parentId);
+}
+
+async function programRoutes() {
+  section("program store: routes");
+  const unknown = await get("cloud", `/api/programs/${"0".repeat(64)}`);
+  check("GET /api/programs/:hash for a program that the site does not hold is 404 {error}", unknown.status === 404 && typeof unknown.json.error === "string", unknown.text);
+  for (const bad of ["abc", "Z".repeat(64), `..%2F${"0".repeat(61)}`]) {
+    const r = await get("cloud", `/api/programs/${bad}`);
+    check(`GET /api/programs/${bad.slice(0, 12)}… is refused: a hash is 64 lowercase hex characters`, r.status === 400 || r.status === 404, `status ${r.status}`);
+  }
+  const info = (await get("cloud", "/api/info")).json;
+  check("info names the program store of the site, the suspend threshold, and the CHAOS knobs", info.programs_dir.endsWith(SITES.cloud.programs.replace(/^\.\//, ""))
+    && info.sleep_suspend_ms === String(SLEEP_SUSPEND_MS) && typeof info.chaos === "object", JSON.stringify({ p: info.programs_dir, s: info.sleep_suspend_ms }));
+}
+
+/** Runs the mock worker directly, with stdin held open, and returns its exit code and events. */
+function runMock(args, env = {}) {
+  return new Promise((resolve) => {
+    const child = spawn("node", [path.join(ROOT, "scripts", "mock-worker.mjs"), ...args], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "ignore"] });
+    let out = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.on("exit", (code) => resolve({ code, events: out.split("\n").filter(Boolean).map((l) => JSON.parse(l)) }));
+  });
+}
+
+// The rules of contract section 9.5 that the worker owns, checked on the mock
+// without a site server.
+async function mockStoreRules() {
+  section("program store: the worker's rules, on the mock worker alone");
+  const dir = fs.mkdtempSync(path.join(SERVER_DIR, ".baml", "verify-mock-store-"));
+  try {
+    const store = path.join(dir, "store");
+    const common = (run) => ["--run", run, "--segment", "1", "--snapshot-dir", path.join(dir, run), "--program-store", store, "--sleep-suspend-ms", "0"];
+    const nap = ["--start", "durable_nap", "--json-args", JSON.stringify({ seconds: 0 })];
+    const compiled = await runMock(["--project", path.join(ROOT, "program"), ...common("r-a"), ...nap]);
+    const hash = compiled.events[0].program_hash;
+    const entry = path.join(store, hash.slice(0, 2), `${hash}.bamlprog`);
+    check("a start from --project compiles, stores the program, and reports program_hash in hello", compiled.code === 0 && /^[0-9a-f]{64}$/.test(hash)
+      && compiled.events[0].mock_program_source === "compile" && fs.existsSync(entry) && fs.readdirSync(path.dirname(entry)).length === 1);
+    const byHash = await runMock([...common("r-b"), "--program-hash", hash, ...nap]);
+    check("a start with --program-hash and without --project loads the program from the store", byHash.code === 0 && byHash.events[0].mock_program_source === "store"
+      && byHash.events.at(-1).value === "slept 0 seconds");
+    const absent = "f".repeat(64);
+    const missing = await runMock([...common("r-c"), "--program-hash", absent, ...nap]);
+    check("neither a store entry nor --project: failed with `program <hash> is not in the store`, exit code 1", missing.code === 1
+      && missing.events.at(-1).type === "failed" && missing.events.at(-1).error === `program ${absent} is not in the store`, JSON.stringify(missing.events.at(-1)));
+    const otherBuild = await runMock([...common("r-d"), "--program-hash", hash, ...nap], { MOCK_RUNTIME_BUILD: "mock-worker/2" });
+    check("an entry that another runtime build wrote is not used: the worker treats it as missing", otherBuild.code === 1
+      && otherBuild.events.at(-1).error === `program ${hash} is not in the store`, JSON.stringify(otherBuild.events.at(-1)));
+    const bytes = fs.readFileSync(entry);
+    bytes[bytes.length - 1] ^= 0xff;
+    fs.writeFileSync(entry, bytes);
+    const corrupt = await runMock([...common("r-e"), "--program-hash", hash, ...nap]);
+    check("an entry whose bytes do not have the hash counts as missing", corrupt.code === 1 && corrupt.events.at(-1).error === `program ${hash} is not in the store`);
+    const repaired = await runMock(["--project", path.join(ROOT, "program"), ...common("r-f"), "--program-hash", hash, ...nap]);
+    check("with --project the worker compiles, checks that the hash matches, and stores the program again", repaired.code === 0
+      && repaired.events[0].mock_program_source === "compile" && (await runMock([...common("r-g"), "--program-hash", hash, ...nap])).events[0].mock_program_source === "store");
+    const wrongProject = await runMock(["--project", path.join(ROOT, "server"), ...common("r-h"), "--program-hash", absent, ...nap]);
+    check("a --project that compiles to another hash is refused", wrongProject.code === 1 && wrongProject.events.at(-1).error.includes("different program"), JSON.stringify(wrongProject.events.at(-1)));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const storeFile = (site, hash) => path.join(SERVER_DIR, SITES[site].programs, hash.slice(0, 2), `${hash}.bamlprog`);
+
+// The first remote calls of a fresh instance. cloud and cloud2 have empty
+// program stores, so each fetches the program from local before its first
+// worker starts. The scene uses durable_settled: three calls, one of them fails.
+async function programFetchAndSettled(label) {
+  section(`${label}program fetch on first use, and all_settled with one failing child`);
+  const fetchedBefore = allEvents().filter((e) => e.type === "program_fetched").length;
+  const id = (await post("local", "/api/runs", { function: "durable_settled", args: { city: "Lisbon" } })).json.id;
+  const hello = await STREAMS.local.waitEvent("hello", (e) => e.type === "hello" && e.run === id);
+  const hash = hello.program_hash;
+  check(`${label}hello carries program_hash, and the run record stores it`, /^[0-9a-f]{64}$/.test(hash)
+    && (await waitFor("program_hash on the record", async () => (await get("local", `/api/runs/${id}`)).json.program_hash)) === hash, hash);
+  check(`${label}the worker got --program-store: the compiled program is in local's store`, hello.mock_program_source === "compile" && fs.existsSync(storeFile("local", hash)));
+  const done = await waitStatus("local", id, "completed", 40000);
+  const kids = await childrenOf(id);
+  check(`${label}three children, placed on cloud, cloud2, cloud in call order or the mirror image`, kids.length === 3 && (() => {
+    const site = Object.fromEntries(kids.map((k) => [k.parent.call_id, k.site]));
+    return inPool(site[`${id}-c1`], "local") && site[`${id}-c1`] !== site[`${id}-c2`] && site[`${id}-c1`] === site[`${id}-c3`];
+  })(), JSON.stringify(kids.map((k) => [k.parent.call_id, k.site])));
+  const fetched = allEvents().filter((e) => e.type === "program_fetched").slice(fetchedBefore);
+  check(`${label}cloud and cloud2 each fetched the program once from local, although two children reached one site at the same time`,
+    fetched.length === 2 && eachOnce(fetched, "site", ["cloud", "cloud2"]) && fetched.every((e) => e.hash === hash && e.from_site === "local" && e.bytes > 0),
+    JSON.stringify(fetched.map((e) => [e.site, e.from_site])));
+  const bytes = SITE_NAMES.map((site) => fs.readFileSync(storeFile(site, hash)));
+  check(`${label}the fetched store entries are byte-identical to the entry that local's worker wrote`, bytes[1].equals(bytes[0]) && bytes[2].equals(bytes[0]));
+  const served = await get("local", `/api/programs/${hash}`);
+  const payload = Buffer.from(served.json?.program_base64 ?? "", "base64");
+  check(`${label}GET /api/programs/:hash returns {hash, runtime_build, program_base64}, and the bytes have the hash`, served.status === 200 && served.json.hash === hash
+    && served.json.runtime_build === "mock-worker/1" && crypto.createHash("sha256").update(payload).digest("hex") === hash, served.text.slice(0, 120));
+  const kidHellos = kids.map((k) => STREAMS[k.site].find((e) => e.type === "hello" && e.run === k.id));
+  check(`${label}the children ran by hash: --program-hash from the store, without --project`, kidHellos.every((h) => h && h.program_hash === hash
+    && h.mock_program_source === "store" && h.mock_project === null) && kids.every((k) => k.program_hash === hash), JSON.stringify(kidHellos.map((h) => [h?.mock_program_source, h?.mock_project])));
+
+  // all_settled: every child settles, none is cancelled.
+  const failedKid = kids.find((k) => k.parent.call_id === `${id}-c2`);
+  check(`${label}the Car child failed with the typed error, the other two completed, and none was cancelled`, failedKid.status === "failed"
+    && failedKid.error.includes("QuoteUnavailable") && failedKid.error.includes("no Car vendor answers in Lisbon")
+    && kids.filter((k) => k.status === "completed").length === 2 && eventsOf(id, "remote_cancel").length === 0 && eventsOf(id, "remote_cancelled").length === 0,
+    JSON.stringify(kids.map((k) => k.status)));
+  check(`${label}the class-valued argument reached the child intact (enum, nested class, optional, map)`,
+    isDeepStrictEqual(failedKid.args.request, expectedRequest("Lisbon", "Car", 3000, { simulate: "unavailable" })), JSON.stringify(failedKid.args));
+  check(`${label}SettledReport: two quotes with nested values, one failure with its kind and the remote error`,
+    isDeepStrictEqual(done.result.succeeded, [expectedQuote("Lisbon", "Flight", 2000), expectedQuote("Lisbon", "Tour", 4000)])
+    && done.result.failed.length === 1 && done.result.failed[0].kind === "Car" && done.result.failed[0].error.includes("no Car vendor answers in Lisbon")
+    && done.result.city === "Lisbon", JSON.stringify(done.result).slice(0, 300));
+  check(`${label}each call was dispatched once and returned once`, eachOnce(eventsOf(id, "remote_dispatched"), "call_id", [1, 2, 3].map((n) => `${id}-c${n}`))
+    && eachOnce(eventsOf(id, "remote_returned"), "call_id", [1, 2, 3].map((n) => `${id}-c${n}`))
+    && eachOnce(eventsOf(id, "remote_result_received"), "call_id", [1, 2, 3].map((n) => `${id}-c${n}`)));
+
+  // Second use: both sites hold the program now.
+  const again = (await post("local", "/api/runs", { function: "plan_trip", args: { city: "Porto" } })).json.id;
+  await waitStatus("local", again, "completed");
+  check(`${label}second use: the program is served from the site's own store, and nothing is fetched again`,
+    allEvents().filter((e) => e.type === "program_fetched").length === fetchedBefore + 2);
+  return hash;
+}
+
+async function napScene(label) {
+  section(`${label}durable sleep: nap -> sleeping -> timer resume -> completed`);
+  const t0 = Date.now();
+  const id = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 3 } })).json.id;
+  const sleeping = await waitStatus("local", id, "sleeping");
+  const pausedEv = eventsOf(id, "paused")[0];
+  const pid1 = eventsOf(id, "hello")[0].pid;
+  check(`${label}the worker suspended itself: paused carries wake {reason: sleep, remaining_ms, at_ts}, and the process is gone`, pausedEv && pausedEv.wake.reason === "sleep"
+    && pausedEv.wake.remaining_ms > 0 && pausedEv.wake.remaining_ms <= real(3000) + 5 && typeof pausedEv.wake.at_ts === "number" && sleeping.pid === null && !pidAlive(pid1), JSON.stringify(pausedEv?.wake));
+  check(`${label}status sleeping with a server-owned wake_at: receipt time plus remaining_ms`, typeof sleeping.wake_at === "number"
+    && Math.abs(sleeping.wake_at - (t0 + real(3000))) < 1200 && sleeping.wake_at >= pausedEv.ts + pausedEv.wake.remaining_ms - 5, `${sleeping.wake_at - t0} ms after the start`);
+  const exit1 = await STREAMS.local.waitEvent("worker_exit", (e) => e.type === "worker_exit" && e.run === id);
+  const scheduled = await STREAMS.local.waitEvent("sleep_scheduled", (e) => e.type === "sleep_scheduled" && e.run === id);
+  check(`${label}worker_exit has exit code 75 and status sleeping, and sleep_scheduled carries the same wake_at`, exit1.exit_code === 75 && exit1.status === "sleeping"
+    && scheduled.wake_at === sleeping.wake_at && scheduled.site === "local");
+  check(`${label}the suspend wrote a snapshot like a pause does`, sleeping.snapshots.length === 1 && sleeping.snapshots[0].automatic === false
+    && fs.existsSync(sleeping.snapshots[0].snapshot_path) && sleeping.snapshots[0].stats.pause_latency_ms === null);
+  const meta = JSON.parse(fs.readFileSync(path.join(SERVER_DIR, SITES.local.runs, id, "meta.json"), "utf8"));
+  check(`${label}meta.json holds status sleeping and wake_at, so a restarted server can rebuild the timer`, meta.status === "sleeping" && meta.wake_at === sleeping.wake_at);
+  const kill = await post("local", `/api/runs/${id}/kill`);
+  const pause = await post("local", `/api/runs/${id}/pause`);
+  check(`${label}kill and pause of a sleeping run are 409`, kill.status === 409 && pause.status === 409, `${kill.status} ${pause.status}`);
+  const done = await waitStatus("local", id, "completed");
+  const woken = eventsOf(id, "woken");
+  check(`${label}the timer resumed the run at wake_at: one woken {reason: timer}, not early and not late`, woken.length === 1 && woken[0].reason === "timer"
+    && woken[0].ts >= sleeping.wake_at && woken[0].ts - sleeping.wake_at < 1500, `${woken[0]?.ts - sleeping.wake_at} ms after wake_at`);
+  const hellos = eventsOf(id, "hello");
+  check(`${label}segment 2 ran in a new process from the snapshot, with the program from the store`, done.segment === 2 && hellos.length === 2 && hellos[1].mode === "resume"
+    && hellos[1].pid !== pid1 && eventsOf(id, "resumed")[0].stats.program_source === "store" && done.wake_at === null);
+  const texts = eventsOf(id, "log").filter((e) => e.stream === "stdout").map((e) => e.text);
+  check(`${label}the result and the output are those of an uninterrupted run`, done.result === "slept 3 seconds"
+    && JSON.stringify(texts) === JSON.stringify(["going to sleep for 3 seconds", "woke up"]), JSON.stringify(texts));
+  const stored = (await get("local", `/api/runs/${id}/events`)).json.map((e) => e.type);
+  check(`${label}sleep_scheduled and woken are in events.jsonl`, stored.includes("sleep_scheduled") && stored.includes("woken"));
+}
+
+async function manualResumeScene(label) {
+  section(`${label}durable sleep: manual resume before the deadline`);
+  // Far from the deadline: the new worker sees at least the threshold and suspends again.
+  const far = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 7 } })).json.id;
+  const first = await waitStatus("local", far, "sleeping");
+  const resumed = await post("local", `/api/runs/${far}/resume`);
+  check(`${label}POST resume works on a sleeping run`, resumed.status === 200 && resumed.json.segment === 2 && resumed.json.status === "starting" && resumed.json.wake_at === null, resumed.text);
+  const second = await waitFor("the second suspend", async () => {
+    const r = (await get("local", `/api/runs/${far}`)).json;
+    return r.status === "sleeping" && r.segment === 2 ? r : null;
+  });
+  await waitFor("the second sleep_scheduled event", () => eventsOf(far, "sleep_scheduled").length === 2);
+  check(`${label}the resumed worker suspends again for the rest of the sleep: the deadline did not move`, Math.abs(second.wake_at - first.wake_at) < 400
+    && second.snapshots.length === 2 && eventsOf(far, "sleep_scheduled").length === 2, `${second.wake_at - first.wake_at} ms`);
+  check(`${label}woken {reason: manual} for the request`, eventsOf(far, "woken").length === 1 && eventsOf(far, "woken")[0].reason === "manual");
+  const farDone = await waitStatus("local", far, "completed");
+  const wokenFar = eventsOf(far, "woken");
+  check(`${label}the timer of the second suspend completes the run in segment 3, and the timer of the first suspend started nothing`, farDone.segment === 3
+    && farDone.result === "slept 7 seconds" && wokenFar.length === 2 && wokenFar[1].reason === "timer" && eachOnce(eventsOf(far, "hello"), "segment", [1, 2, 3]),
+    JSON.stringify(eventsOf(far, "hello").map((e) => e.segment)));
+
+  // Close to the deadline: the worker sleeps the rest in process.
+  const near = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 3 } })).json.id;
+  const nearSleeping = await waitStatus("local", near, "sleeping");
+  await sleep(real(1000));
+  await post("local", `/api/runs/${near}/resume`);
+  const nearDone = await waitStatus("local", near, "completed");
+  const completedEv = eventsOf(near, "completed")[0];
+  check(`${label}a resume with less than the threshold left sleeps the rest in process and completes at the deadline`, nearDone.segment === 2
+    && eventsOf(near, "paused").length === 1 && completedEv.ts >= nearSleeping.wake_at - 300, `${completedEv.ts - nearSleeping.wake_at} ms`);
+  await sleep(Math.max(0, nearSleeping.wake_at + 600 - Date.now()));
+  check(`${label}the timer that fires after the manual resume does nothing`, eventsOf(near, "hello").length === 2 && eventsOf(near, "woken").length === 1
+    && (await get("local", `/api/runs/${near}`)).json.segment === 2);
+}
+
+async function resumeRaceScene(label) {
+  section(`${label}resume is a compare-and-set: double resume, and timer against manual resume`);
+  const id = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 6 } })).json.id;
+  await waitStatus("local", id, "sleeping");
+  const answers = await Promise.all([1, 2, 3, 4, 5].map(() => post("local", `/api/runs/${id}/resume`)));
+  const codes = answers.map((r) => r.status).sort();
+  check(`${label}five resume requests at once: one 200, four 409`, JSON.stringify(codes) === JSON.stringify([200, 409, 409, 409, 409]), JSON.stringify(codes));
+  await STREAMS.local.waitEvent("hello of segment 2", (e) => e.type === "hello" && e.run === id && e.segment === 2);
+  const pids = workerPids(id);
+  check(`${label}exactly one worker process exists for the run`, pids.length <= 1 && eventsOf(id, "hello").filter((e) => e.segment === 2).length === 1, JSON.stringify(pids));
+  const done = await waitStatus("local", id, "completed");
+  check(`${label}every segment started once, and the run completed once`, eachOnce(eventsOf(id, "hello"), "segment", [1, 2, 3]) && done.segment === 3
+    && eventsOf(id, "completed").length === 1 && new Set(eventsOf(id, "hello").map((e) => e.pid)).size === 3, JSON.stringify(eventsOf(id, "hello").map((e) => e.segment)));
+
+  // Timer against request: requests are sent around wake_at, three runs at once.
+  const ids = [];
+  for (let i = 0; i < 3; i++) ids.push((await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 3 } })).json.id);
+  const sleeping = await Promise.all(ids.map((r) => waitStatus("local", r, "sleeping")));
+  await Promise.all(sleeping.map(async (run, i) => {
+    const offsets = [-12 + 4 * i, -2 + 2 * i, 3 + 2 * i];
+    await Promise.all(offsets.map(async (offset) => {
+      await sleep(Math.max(0, run.wake_at + offset - Date.now()));
+      return post("local", `/api/runs/${run.id}/resume`);
+    }));
+  }));
+  const finished = await Promise.all(ids.map((r) => waitStatus("local", r, "completed")));
+  await sleep(300);
+  check(`${label}a manual resume at the moment of the timer: one woken event, one worker for segment 2, and no segment 3`, finished.every((run) => run.segment === 2
+    && run.result === "slept 3 seconds" && eventsOf(run.id, "woken").length === 1 && eachOnce(eventsOf(run.id, "hello"), "segment", [1, 2])
+    && eventsOf(run.id, "completed").length === 1 && eventsOf(run.id, "worker_exit").length === 2),
+    JSON.stringify(finished.map((run) => [run.segment, eventsOf(run.id, "woken").map((e) => e.reason), eventsOf(run.id, "hello").length])));
+  check(`${label}no worker of these runs is left`, [id, ...ids].every((r) => workerPids(r).length === 0));
+}
+
+async function cancelSleepingScene(label) {
+  section(`${label}cancel of a run without a process: sleeping and paused`);
+  const id = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 4 } })).json.id;
+  const sleeping = await waitStatus("local", id, "sleeping");
+  const cancelled = await post("local", `/api/runs/${id}/cancel`);
+  check(`${label}POST cancel on a sleeping run sets cancelled without a process`, cancelled.status === 200 && cancelled.json.status === "cancelled"
+    && cancelled.json.pid === null && cancelled.json.wake_at === null, cancelled.text);
+  const ev = await STREAMS.local.waitEvent("run_cancelled", (e) => e.type === "run_cancelled" && e.run === id);
+  check(`${label}run_cancelled {was: sleeping} is announced and stored`, ev.was === "sleeping" && (await get("local", `/api/runs/${id}/events`)).json.some((e) => e.type === "run_cancelled"));
+  const again = await post("local", `/api/runs/${id}/cancel`);
+  const resume = await post("local", `/api/runs/${id}/resume`);
+  check(`${label}a second cancel and a resume of the cancelled run are 409`, again.status === 409 && resume.status === 409, `${again.status} ${resume.status}`);
+  await sleep(Math.max(0, sleeping.wake_at + 700 - Date.now()));
+  const after = (await get("local", `/api/runs/${id}`)).json;
+  check(`${label}the timer of the cancelled run fires into nothing: no woken event, no second worker`, after.status === "cancelled" && after.segment === 1
+    && eventsOf(id, "woken").length === 0 && eventsOf(id, "hello").length === 1);
+
+  const paused = (await post("local", "/api/runs", { function: "durable_plan_trip", args: { city: "Silves" } })).json.id;
+  await STREAMS.local.waitEvent("first log", (e) => e.type === "log" && e.run === paused);
+  await post("local", `/api/runs/${paused}/pause`);
+  await waitStatus("local", paused, "paused");
+  const c2 = await post("local", `/api/runs/${paused}/cancel`);
+  check(`${label}POST cancel on a paused run sets cancelled without a process`, c2.status === 200 && c2.json.status === "cancelled"
+    && !!STREAMS.local.find((e) => e.type === "run_cancelled" && e.run === paused && e.was === "paused"), c2.text);
+
+  // A remote child that sleeps is cancelled without a process too.
+  const child = (await post("cloud", "/api/remote/runs", { function: "durable_nap", args: { seconds: 30 }, parent: { site: "local", run: "r-ghost", call_id: "r-ghost-c7" } })).json.id;
+  await waitStatus("cloud", child, "sleeping");
+  const c3 = await post("cloud", `/api/runs/${child}/cancel`, { reason: "the caller cancelled the remote call" });
+  check(`${label}a sleeping remote child is cancelled without a process, and the reason is recorded`, c3.status === 200 && c3.json.status === "cancelled"
+    && c3.json.error === "the caller cancelled the remote call" && workerPids(child).length === 0, c3.text);
+}
+
+async function fanOutScene(label, slow = false) {
+  section(`${label}fan-out: four class-valued remote calls, round-robin placement, results stored while the parent sleeps`);
+  const city = "Lisbon";
+  const id = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city, mock_nap_ms: slow ? 13000 : 8000 } })).json.id;
+  const calls = [1, 2, 3, 4].map((n) => `${id}-c${n}`);
+  const sleeping = await waitStatus("local", id, "sleeping");
+  const pid1 = eventsOf(id, "hello")[0].pid;
+  check(`${label}the parent suspended itself with four threads waiting on remote calls: no process`, sleeping.pid === null && !pidAlive(pid1) && workerPids(id).length === 0
+    && eventsOf(id, "thread_started").filter((e) => e.segment === 1).length === 5);
+  const state = (await get("local", `/api/runs/${id}/snapshots/${sleeping.snapshots.at(-1).n}/state`)).json;
+  const main = state.threads[0];
+  const flight = main.frames[0].locals.find((l) => l.name === "flight");
+  check(`${label}the StateDump shows five threads, the futures, and class instances with nested values`, state.threads.length === 5
+    && state.threads.slice(1).every((t) => t.parked.kind === "remote_call" && t.frames[0].locals[0].value.kind === "instance" && t.frames[0].locals[0].value.class === "QuoteRequest")
+    && main.parked.kind === "sysop" && flight && flight.type === "Future<Quote>"
+    && state.threads[1].frames[0].locals[0].value.children.some((c) => c.key === "traveler" && c.value.kind === "instance" && c.value.class === "Traveler"), JSON.stringify(main.parked));
+
+  await waitFor("four dispatches", () => eventsOf(id, "remote_dispatched").length === 4, 20000);
+  const site = Object.fromEntries(eventsOf(id, "remote_dispatched").map((e) => [e.call_id, e.child_site]));
+  check(`${label}round-robin placement in call order: the calls alternate between cloud and cloud2`, inPool(site[calls[0]], "local") && site[calls[0]] !== site[calls[1]]
+    && site[calls[0]] === site[calls[2]] && site[calls[1]] === site[calls[3]], JSON.stringify(site));
+  const kids = await childrenOf(id);
+  check(`${label}four children, two on each pool site, none on local, each with the class-valued argument`, kids.length === 4
+    && kids.filter((k) => k.site === "cloud").length === 2 && kids.filter((k) => k.site === "cloud2").length === 2
+    && ["Flight", "Hotel", "Car", "Tour"].every((kind, i) => {
+      const k = kids.find((c) => c.parent.call_id === calls[i]);
+      return k && isDeepStrictEqual(k.args.request, expectedRequest(city, kind, [3000, 5000, 2000, 4000][i]));
+    }), JSON.stringify(kids.map((k) => [k.site, k.args.request?.kind])));
+  check(`${label}children ran while the parent had no process`, kids.some((k) => is_live(k.status)) || slow, JSON.stringify(kids.map((k) => k.status)));
+
+  const stored = await waitFor("four stored results on the sleeping parent", async () => {
+    const r = (await get("local", `/api/runs/${id}`)).json;
+    return r.remote_results.length === 4 ? r : null;
+  }, 30000);
+  check(`${label}all four results were stored while no process existed: status sleeping, not acknowledged, waiting_on empty`, stored.status === "sleeping"
+    && stored.pid === null && stored.remote_results.every((r) => r.acked === false && r.error === null) && stored.waiting_on.length === 0
+    && eventsOf(id, "remote_result_received").length === 0, stored.status);
+  check(`${label}the stored values are whole Quote objects`, ["Flight", "Hotel", "Car", "Tour"].every((kind, i) =>
+    isDeepStrictEqual(stored.remote_results.find((r) => r.call_id === calls[i]).value, expectedQuote(city, kind, [3000, 5000, 2000, 4000][i]))));
+
+  const done = await waitStatus("local", id, "completed", 40000);
+  const received = eventsOf(id, "remote_result_received");
+  check(`${label}at the resume all four results were delivered, each once, in segment 2`, eachOnce(received, "call_id", calls) && received.every((e) => e.segment === 2)
+    && done.remote_results.every((r) => r.acked) && done.segment === 2 && eventsOf(id, "woken")[0]?.reason === "timer");
+  const quotes = ["Flight", "Hotel", "Car", "Tour"].map((kind, i) => expectedQuote(city, kind, [3000, 5000, 2000, 4000][i]));
+  check(`${label}TripReport: quotes in input order, total, the vendors map, and the cheapest quote with its nested request`, isDeepStrictEqual(done.result, {
+    city, quotes, total: { amount: 1194, currency: "EUR" },
+    vendors: { Flight: "Skyways", Hotel: "Casa Azul", Car: "Rodas", Tour: "Seven Hills Walks" },
+    cheapest: quotes[2],
+  }), JSON.stringify(done.result).slice(0, 200));
+  check(`${label}exactly once: each call dispatched once, returned once, one child per call, one completed event`, eachOnce(eventsOf(id, "remote_dispatched"), "call_id", calls)
+    && eachOnce(eventsOf(id, "remote_returned"), "call_id", calls) && (await childrenOf(id)).length === 4 && eventsOf(id, "completed").length === 1
+    && eventsOf(id, "remote_cancelled").length === 0 && eventsOf(id, "remote_result_discarded").length === 0);
+  await waitFor("result_delivered on every child", async () => (await childrenOf(id)).every((k) => k.result_delivered));
+  check(`${label}every child knows that its result was delivered, so none retries`, true);
+}
+const is_live = (status) => ["starting", "running", "pausing"].includes(status);
+
+async function raceScene(label) {
+  section(`${label}race: the winner settles the run, the losers are cancelled on their sites, late results are discarded`);
+  const city = "Porto";
+  const id = (await post("local", "/api/runs", { function: "durable_race", args: { city } })).json.id;
+  const calls = [1, 2, 3].map((n) => `${id}-c${n}`);
+  const done = await waitStatus("local", id, "completed", 40000);
+  check(`${label}the run returns the Quote of the fastest vendor with its nested values`, isDeepStrictEqual(done.result, expectedQuote(city, "Hotel", 2000)), JSON.stringify(done.result).slice(0, 200));
+  const workerCancels = eventsOf(id, "remote_cancel");
+  check(`${label}the worker reported remote_cancel for both losers`, eachOnce(workerCancels, "call_id", [calls[1], calls[2]]) && workerCancels.every((e) => typeof e.thread === "number"));
+  await waitFor("two remote_cancelled events", () => eventsOf(id, "remote_cancelled").length === 2, 20000);
+  const serverCancels = eventsOf(id, "remote_cancelled");
+  const kids = await waitFor("the losers to end", async () => {
+    const list = await childrenOf(id);
+    return list.length === 3 && list.every((k) => !is_live(k.status)) ? list : null;
+  }, 30000);
+  check(`${label}remote_cancelled names each loser's site and run, once`, eachOnce(serverCancels, "call_id", [calls[1], calls[2]])
+    && serverCancels.every((e) => { const k = kids.find((c) => c.parent.call_id === e.call_id); return k && k.id === e.child_run && k.site === e.child_site; }));
+  const winner = kids.find((k) => k.parent.call_id === calls[0]);
+  // Cancellation is a request. Under CHAOS the cancel reaches the 6 second
+  // loser about 1.5 seconds before it is done, and one retried HTTP request
+  // uses that margin up. That loser may then complete, and its result is
+  // discarded like the result of a cancelled child. The 9 second loser is
+  // always cancelled.
+  const ended = (k) => k.status === "cancelled" && STREAMS[k.site].find((e) => e.type === "worker_exit" && e.run === k.id)?.exit_code === 130;
+  const medium = kids.find((k) => k.parent.call_id === calls[1]);
+  const slowest = kids.find((k) => k.parent.call_id === calls[2]);
+  check(`${label}the losers ended as cancelled on their sites (exit code 130), and the winner completed`, winner.status === "completed"
+    && ended(slowest) && (ended(medium) || (label.startsWith("CHAOS") && medium.status === "completed")),
+    JSON.stringify({
+      kids: kids.map((k) => [k.parent.call_id, k.site, k.status, k.updated_ts - done.created_ts]),
+      returned: eventsOf(id, "remote_returned").map((e) => e.ts - done.created_ts),
+      cancel: eventsOf(id, "remote_cancel").map((e) => e.ts - done.created_ts),
+      cancelled: eventsOf(id, "remote_cancelled").map((e) => e.ts - done.created_ts),
+    }));
+  await waitFor("two discarded results", () => eventsOf(id, "remote_result_discarded").length >= 2, 20000);
+  await waitFor("result_delivered on every child", async () => (await childrenOf(id)).every((k) => k.result_delivered), 20000);
+  await sleep(400);
+  const after = (await get("local", `/api/runs/${id}`)).json;
+  check(`${label}the late results of the cancelled children were discarded, each once: only the winner's result is on the record`,
+    eachOnce(eventsOf(id, "remote_result_discarded"), "call_id", [calls[1], calls[2]]) && after.remote_results.length === 1 && after.remote_results[0].call_id === calls[0]
+    && after.waiting_on.length === 0 && isDeepStrictEqual([...after.cancelled_calls].sort(), [calls[1], calls[2]]), JSON.stringify(after.remote_results.map((r) => r.call_id)));
+  check(`${label}exactly once: three dispatches, one returned result, one acknowledged result, one completed event`, eachOnce(eventsOf(id, "remote_dispatched"), "call_id", calls)
+    && eachOnce(eventsOf(id, "remote_returned"), "call_id", [calls[0]]) && eachOnce(eventsOf(id, "remote_result_received"), "call_id", [calls[0]])
+    && eventsOf(id, "completed").length === 1 && kids.every((k) => workerPids(k.id).length === 0));
+}
+
+// A pause request while several threads wait on remote calls, and a fork of a
+// sleeping run.
+async function pauseRaceScene(label) {
+  section(`${label}pause with four threads: the race is decided after the resume, from a stored result`);
+  const id = (await post("local", "/api/runs", { function: "durable_race", args: { city: "Viseu" } })).json.id;
+  const calls = [1, 2, 3].map((n) => `${id}-c${n}`);
+  await waitFor("three dispatches", () => eventsOf(id, "remote_dispatched").length === 3, 20000);
+  await post("local", `/api/runs/${id}/pause`);
+  const paused = await waitStatus("local", id, "paused");
+  const state = (await get("local", `/api/runs/${id}/snapshots/${paused.snapshots.at(-1).n}/state`)).json;
+  check(`${label}the run paused with five threads: three remote calls, the collector of race, and the main thread`, state.threads.length === 5
+    && state.threads.filter((t) => t.parked.kind === "remote_call").length === 3 && paused.wake_at === null && paused.pid === null, `${state.threads.length} threads`);
+  await waitFor("the winner's result on the paused run", async () => (await get("local", `/api/runs/${id}`)).json.remote_results.length === 1, 20000);
+  check(`${label}no child is cancelled while the parent is paused: the race is not decided without a process`, eventsOf(id, "remote_cancelled").length === 0
+    && (await childrenOf(id)).filter((k) => is_live(k.status)).length === 2);
+  await post("local", `/api/runs/${id}/resume`);
+  const done = await waitStatus("local", id, "completed", 40000);
+  check(`${label}segment 2 takes the stored result, returns the winner, and cancels the two losers`, isDeepStrictEqual(done.result, expectedQuote("Viseu", "Hotel", 2000))
+    && eachOnce(eventsOf(id, "remote_cancel"), "call_id", [calls[1], calls[2]]) && eventsOf(id, "remote_cancel").every((e) => e.segment === 2)
+    && eachOnce(eventsOf(id, "thread_started").filter((e) => e.segment === 2), "thread", [1, 2, 3, 4, 5]), JSON.stringify(eventsOf(id, "remote_cancel").map((e) => [e.segment, e.call_id])));
+  await waitFor("the losers to be cancelled", async () => (await childrenOf(id)).filter((k) => k.status === "cancelled").length === 2, 20000);
+  check(`${label}the children that were dispatched by segment 1 are cancelled by segment 2`, eachOnce(eventsOf(id, "remote_cancelled"), "call_id", [calls[1], calls[2]])
+    && eachOnce(eventsOf(id, "remote_dispatched"), "call_id", calls));
+
+  const napId = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 5 } })).json.id;
+  const sleeping = await waitStatus("local", napId, "sleeping");
+  const fork = await post("local", `/api/runs/${napId}/fork`);
+  check(`${label}a fork of a sleeping run is paused and has no wake_at`, fork.status === 200 && fork.json.status === "paused" && fork.json.wake_at === null
+    && fork.json.program_hash === sleeping.program_hash, fork.text.slice(0, 200));
+  await post("local", `/api/runs/${fork.json.id}/resume`);
+  const [srcDone, forkDone] = await Promise.all([waitStatus("local", napId, "completed"), waitStatus("local", fork.json.id, "completed")]);
+  check(`${label}the fork suspends for the same deadline on its own, and both runs complete`, srcDone.result === "slept 5 seconds" && forkDone.result === "slept 5 seconds"
+    && eventsOf(fork.json.id, "sleep_scheduled").length === 1 && Math.abs(eventsOf(fork.json.id, "sleep_scheduled")[0].wake_at - sleeping.wake_at) < 600);
+}
+
+async function deadlineScene(label) {
+  section(`${label}deadline: with_timeout cancels the remote call`);
+  const id = (await post("local", "/api/runs", { function: "durable_deadline", args: { city: "Faro" } })).json.id;
+  const done = await waitStatus("local", id, "completed", 40000);
+  check(`${label}the function returns a message built from the Timeout error`, done.result === "no tour quote for Faro: operation timed out after 2000ms", JSON.stringify(done.result));
+  check(`${label}the 2 second deadline stayed in process: the run did not suspend`, done.segment === 1 && eventsOf(id, "paused").length === 0);
+  await waitFor("remote_cancelled", () => eventsOf(id, "remote_cancelled").length === 1, 20000);
+  const kids = await waitFor("the child to be cancelled", async () => {
+    const list = await childrenOf(id);
+    return list.length === 1 && list[0].status === "cancelled" ? list : null;
+  }, 20000);
+  await waitFor("the discarded result", () => eventsOf(id, "remote_result_discarded").length === 1, 20000);
+  const after = (await get("local", `/api/runs/${id}`)).json;
+  check(`${label}the child was cancelled on its site, and its late result was discarded`, kids[0].status === "cancelled" && eventsOf(id, "remote_cancel").length === 1
+    && after.remote_results.length === 0 && after.waiting_on.length === 0 && eventsOf(id, "remote_returned").length === 0);
+}
+
+async function cascadeScene(label) {
+  section(`${label}a parent that ends as failed, cancelled, or lost cancels its children`);
+  const failing = (await post("local", "/api/runs", { function: "durable_race", args: { city: "Braga", mock_fail_after_ms: 300 } })).json.id;
+  const cancelling = (await post("local", "/api/runs", { function: "durable_race", args: { city: "Evora" } })).json.id;
+  const losing = (await post("local", "/api/runs", { function: "durable_race", args: { city: "Tomar" } })).json.id;
+  await Promise.all([failing, cancelling, losing].map((id) => waitFor(`three dispatches of ${id}`, () => eventsOf(id, "remote_dispatched").length === 3, 20000)));
+  await post("local", `/api/runs/${cancelling}/cancel`);
+  await post("local", `/api/runs/${losing}/kill`);
+  const ends = await Promise.all([waitStatus("local", failing, "failed"), waitStatus("local", cancelling, "cancelled"), waitStatus("local", losing, "lost")]);
+  check(`${label}the three parents ended as failed, cancelled, and lost`, ends[0].error.includes("mock failure") && ends[1].status === "cancelled" && ends[2].status === "lost");
+  for (const [id, how] of [[failing, "failed"], [cancelling, "cancelled"], [losing, "lost"]]) {
+    const kids = await waitFor(`the children of the ${how} parent to end`, async () => {
+      const list = await childrenOf(id);
+      return list.length === 3 && list.every((k) => !is_live(k.status)) ? list : null;
+    }, 25000);
+    const calls = [1, 2, 3].map((n) => `${id}-c${n}`);
+    const record = (await get("local", `/api/runs/${id}`)).json;
+    // Under CHAOS the cancel reaches the 2 second child about a second before
+    // it is done. One retried HTTP request uses that margin up, the child
+    // completes, and its result is discarded. The other two are always cancelled.
+    const statusOf = (n) => kids.find((k) => k.parent.call_id === calls[n]).status;
+    check(`${label}${how} parent: the server cancelled all three children without a remote_cancel from the worker`, kids.length === 3
+      && statusOf(1) === "cancelled" && statusOf(2) === "cancelled" && (statusOf(0) === "cancelled" || (label.startsWith("CHAOS") && statusOf(0) === "completed"))
+      && eachOnce(eventsOf(id, "remote_cancelled"), "call_id", calls) && eventsOf(id, "remote_cancel").length === 0
+      && record.waiting_on.length === 0 && isDeepStrictEqual([...record.cancelled_calls].sort(), calls), JSON.stringify(kids.map((k) => k.status)));
+    await waitFor(`discarded results of the ${how} parent`, () => eventsOf(id, "remote_result_discarded").length === 3, 25000);
+    check(`${label}${how} parent: the children's late answers were discarded, and nothing was stored`, (await get("local", `/api/runs/${id}`)).json.remote_results.length === 0
+      && kids.every((k) => workerPids(k.id).length === 0));
+  }
+
+  // A sleeping parent has no process. Its cancel still reaches the children.
+  const asleep = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city: "Guarda", mock_nap_ms: 20000 } })).json.id;
+  await waitStatus("local", asleep, "sleeping");
+  await waitFor("four dispatches", () => eventsOf(asleep, "remote_dispatched").length === 4, 20000);
+  const c = await post("local", `/api/runs/${asleep}/cancel`);
+  const kids = await waitFor("the children of the sleeping parent to be cancelled", async () => {
+    const list = await childrenOf(asleep);
+    return list.length === 4 && list.every((k) => k.status === "cancelled") ? list : null;
+  }, 25000);
+  check(`${label}cancel of a sleeping parent cancels its four outstanding children`, c.status === 200 && c.json.status === "cancelled" && kids.length === 4
+    && eachOnce(eventsOf(asleep, "remote_cancelled"), "call_id", [1, 2, 3, 4].map((n) => `${asleep}-c${n}`)));
+}
+
+// A parent of a remote call that fails inside baml.future.all: the first error
+// in input order cancels the inputs that are still pending.
+async function fanOutFailureScene(label) {
+  section(`${label}baml.future.all with a failing child: the remaining children are cancelled`);
+  const id = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city: "Beja", mock_nap_ms: 2400, mock_unavailable: "Flight" } })).json.id;
+  const failed = await waitStatus("local", id, "failed", 40000);
+  check(`${label}the parent fails with the child's typed error`, failed.error.includes("no Flight vendor answers in Beja"), failed.error);
+  const kids = await waitFor("the pending children to be cancelled", async () => {
+    const list = await childrenOf(id);
+    return list.length === 4 && list.every((k) => !is_live(k.status)) ? list : null;
+  }, 25000);
+  const hotel = kids.find((k) => k.args.request.kind === "Hotel");
+  check(`${label}the Hotel child (5 s) was still running and was cancelled`, hotel.status === "cancelled" && kids.find((k) => k.args.request.kind === "Flight").status === "failed",
+    JSON.stringify(kids.map((k) => [k.args.request.kind, k.status])));
+}
+
+// A sleeping run migrates. The import starts a worker on the other site, which
+// suspends again, and the timer of that site completes the run.
+async function sleepingMigrationScene(label) {
+  section(`${label}a sleeping run moves to another site and sleeps on there`);
+  const id = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 7 } })).json.id;
+  const here = await waitStatus("local", id, "sleeping");
+  const moved = await post("local", `/api/runs/${id}/resume`, { site: "cloud2" });
+  check(`${label}resume {site} of a sleeping run migrates it`, moved.status === 200 && moved.json.status === "migrated" && moved.json.wake_at === null, moved.text);
+  const there = await waitFor("the run to sleep on cloud2", async () => {
+    const r = await get("cloud2", `/api/runs/${id}`);
+    return r.json && r.json.status === "sleeping" ? r.json : null;
+  });
+  check(`${label}cloud2 computed its own wake_at for the same deadline, and the program came from its store`, Math.abs(there.wake_at - here.wake_at) < 600
+    && there.program_hash === here.program_hash && STREAMS.cloud2.find((e) => e.type === "hello" && e.run === id)?.mock_project === null, `${there.wake_at - here.wake_at} ms`);
+  const done = await waitStatus("cloud2", id, "completed");
+  await sleep(Math.max(0, here.wake_at + 500 - Date.now()));
+  check(`${label}the run completes on cloud2, and the timer on local started nothing`, done.result === "slept 7 seconds" && done.segment === 3
+    && (await get("local", `/api/runs/${id}`)).json.status === "migrated" && STREAMS.local.events.filter((e) => e.type === "hello" && e.run === id).length === 1);
+}
+
+async function restartWhileSleepingScene() {
+  section("server restart while runs sleep: timers are rebuilt, and an overdue run resumes at once");
+  const later = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 9 } })).json.id;
+  const overdue = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 3 } })).json.id;
+  const [laterRun, overdueRun] = await Promise.all([waitStatus("local", later, "sleeping"), waitStatus("local", overdue, "sleeping")]);
+  await stopServer("local");
+  await sleep(Math.max(0, overdueRun.wake_at + 400 - Date.now()));
+  const restartedAt = Date.now();
+  await startServer("local");
+  const stream = new Stream("local");
+  await stream.open();
+  STREAMS.local = stream;
+  const overdueDone = await waitStatus("local", overdue, "completed");
+  const overdueEvents = (await get("local", `/api/runs/${overdue}/events`)).json;
+  const wokenOverdue = overdueEvents.filter((e) => e.type === "woken");
+  check("the overdue run resumed at once after the restart: woken {reason: restart}", overdueDone.result === "slept 3 seconds" && wokenOverdue.length === 1
+    && wokenOverdue[0].reason === "restart" && wokenOverdue[0].ts - restartedAt < 4000, JSON.stringify(wokenOverdue));
+  const reloaded = (await get("local", `/api/runs/${later}`)).json;
+  check("the other run is still sleeping with the same wake_at", (reloaded.status === "sleeping" && reloaded.wake_at === laterRun.wake_at) || reloaded.status !== "sleeping", `${reloaded.status}`);
+  const laterDone = await waitStatus("local", later, "completed");
+  const laterEvents = (await get("local", `/api/runs/${later}/events`)).json;
+  const wokenLater = laterEvents.filter((e) => e.type === "woken");
+  check("its timer was rebuilt from the run store: sleep_scheduled again with the same wake_at, then woken {reason: timer} at the deadline", laterDone.result === "slept 9 seconds"
+    && laterEvents.filter((e) => e.type === "sleep_scheduled").length === 2 && laterEvents.filter((e) => e.type === "sleep_scheduled").every((e) => e.wake_at === laterRun.wake_at)
+    && wokenLater.length === 1 && wokenLater[0].reason === "timer" && wokenLater[0].ts >= laterRun.wake_at && wokenLater[0].ts - laterRun.wake_at < 1500,
+    JSON.stringify(wokenLater));
+  check("each of the two runs had exactly two segments", eachOnce(overdueEvents.filter((e) => e.type === "hello"), "segment", [1, 2])
+    && eachOnce(laterEvents.filter((e) => e.type === "hello"), "segment", [1, 2]));
+}
+
+// The knobs of contract section 9.3. Every site-to-site request of the scenes
+// below is slow, and every result is sent twice and out of order.
+// The delays are real time, and the scenes depend on how they relate to the
+// sleeps of the program (the cancel must reach the 6 second loser of the race
+// before it is done). The CHAOS scenes therefore run the workers with
+// MOCK_SPEED=1, whatever the speed of the other scenes is.
+const CHAOS = {
+  dispatch_delay_ms: 600, result_delay_ms: 500, cancel_delay_ms: 700, import_delay_ms: 500, program_fetch_delay_ms: 400,
+  // A held result waits at most this long for another result to overtake it.
+  // With the other delays the winner of durable_race still reaches its parent,
+  // and the cancel still reaches the 6 second loser, before that loser is done.
+  duplicate_results: true, reorder_results: true, reorder_hold_ms: 1200,
+};
+
+// Runs one scene. A scene that throws (a wait that timed out) counts as one
+// failed check, and the scenes after it still run.
+// ------------------------------------------------ scenes of the phase 3 review
+
+/** A cancel and a pause that arrive after the worker reported `paused` and before its process has exited. */
+async function lateCommandScene() {
+  section("a cancel and a pause that arrive between the worker's `paused` event and its exit");
+  const nap = (seconds) => post("local", "/api/runs", { function: "durable_nap", args: { seconds, mock_exit_delay_ms: 700 } });
+  const id = (await nap(3)).json.id;
+  await STREAMS.local.waitEvent("paused", (e) => e.type === "paused" && e.run === id && e.wake);
+  const cancel = await post("local", `/api/runs/${id}/cancel`, { reason: "cancelled in the window" });
+  const record = (await get("local", `/api/runs/${id}`)).json;
+  check("the cancel is accepted while the process of the suspended worker still exists", cancel.status === 200 && ["running", "starting"].includes(record.status) && record.pid !== null, `${cancel.status} ${record.status}`);
+  const ended = await waitStatus("local", id, "cancelled", 15000);
+  await sleep(3200);
+  const after = (await get("local", `/api/runs/${id}`)).json;
+  check("the run ends as cancelled with the reason; it never sleeps, never wakes, and never completes", ended.error === "cancelled in the window" && after.status === "cancelled"
+    && after.segment === 1 && after.wake_at === null && eventsOf(id, "woken").length === 0 && eventsOf(id, "sleep_scheduled").length === 0
+    && eventsOf(id, "run_cancelled").length === 1 && eventsOf(id, "completed").length === 0, JSON.stringify([after.status, after.segment]));
+
+  const id2 = (await nap(3)).json.id;
+  await STREAMS.local.waitEvent("paused", (e) => e.type === "paused" && e.run === id2 && e.wake);
+  const pause = await post("local", `/api/runs/${id2}/pause`);
+  const paused = await waitStatus("local", id2, "paused", 15000);
+  await sleep(3200);
+  const still = (await get("local", `/api/runs/${id2}`)).json;
+  check("a pause in the same window leaves the run paused: no timer resumes a run that the user paused", pause.status === 200 && paused.wake_at === null
+    && still.status === "paused" && still.segment === 1 && eventsOf(id2, "woken").length === 0, `${pause.status} ${still.status}`);
+  const resumed = await post("local", `/api/runs/${id2}/resume`);
+  const done = await waitStatus("local", id2, "completed", 20000);
+  check("the paused run resumes by hand and completes", resumed.status === 200 && done.result === "slept 3 seconds", JSON.stringify(done.result));
+}
+
+/** A fork and its source wait on the same child runs. Ending one must not cancel the children of the other. */
+async function sharedChildrenScene() {
+  section("a fork and its source share their remote children");
+  const city = "Lisbon";
+  const start = async () => {
+    const id = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city, mock_nap_ms: 9000 } })).json.id;
+    await waitStatus("local", id, "sleeping");
+    await waitFor("four dispatches", () => eventsOf(id, "remote_dispatched").length === 4, 20000);
+    return id;
+  };
+  // Cancel the fork: the source completes with its four quotes.
+  const source = await start();
+  const fork = (await post("local", `/api/runs/${source}/fork`)).json;
+  check("the fork of a sleeping fan-out inherits the waits of its source", fork.waiting_on.length === 4 && fork.waiting_on.every((w) => w.inherited === true), JSON.stringify(fork.waiting_on));
+  const cancelFork = await post("local", `/api/runs/${fork.id}/cancel`);
+  await sleep(800);
+  const kids = await childrenOf(source);
+  check("cancelling the fork cancels no child of the source", cancelFork.status === 200 && kids.length === 4 && kids.every((k) => k.status !== "cancelled")
+    && eventsOf(fork.id, "remote_cancelled").length === 0 && eventsOf(fork.id, "remote_released").length === 4, JSON.stringify(kids.map((k) => k.status)));
+  const done = await waitStatus("local", source, "completed", 40000);
+  check("the source completes with four quotes", done.result.quotes.length === 4 && done.result.total.amount === 1194, JSON.stringify(done.result).slice(0, 120));
+
+  // The mirror image: cancel the source, and the fork completes.
+  const source2 = await start();
+  const fork2 = (await post("local", `/api/runs/${source2}/fork`)).json;
+  const cancelSource = await post("local", `/api/runs/${source2}/cancel`);
+  await sleep(800);
+  const kids2 = await childrenOf(source2);
+  check("cancelling the source while its fork still waits cancels no child", cancelSource.status === 200 && kids2.every((k) => k.status !== "cancelled")
+    && eventsOf(source2, "remote_released").length === 4 && eventsOf(source2, "remote_released").every((e) => e.shared_with === fork2.id), JSON.stringify(kids2.map((k) => k.status)));
+  await waitFor("four stored results on the fork", async () => (await get("local", `/api/runs/${fork2.id}`)).json.remote_results.length === 4, 30000);
+  const resumeFork = await post("local", `/api/runs/${fork2.id}/resume`);
+  const forkDone = await waitStatus("local", fork2.id, "completed", 40000);
+  check("the fork completes with four quotes after its source was cancelled", resumeFork.status === 200 && forkDone.result.quotes.length === 4 && forkDone.result.total.amount === 1194);
+  // The last waiter does cancel: a fan-out without a fork.
+  const lonely = await start();
+  await post("local", `/api/runs/${lonely}/cancel`);
+  await waitFor("the children of a run without a fork are cancelled", async () => (await childrenOf(lonely)).every((k) => k.status === "cancelled"), 20000);
+  check("a run that is the only waiter cancels its children as before", eventsOf(lonely, "remote_cancelled").length === 4 && eventsOf(lonely, "remote_released").length === 0);
+}
+
+/** A by-hash run whose store entry disappears while it sleeps: the entry is fetched again before the resume. */
+async function lostEntryScene() {
+  section("a store entry that disappears while a by-hash run sleeps");
+  const probe = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 0 } })).json.id;
+  const hash = (await waitStatus("local", probe, "completed")).program_hash;
+  const child = (await post("cloud", "/api/remote/runs", {
+    function: "durable_nap", args: { seconds: 4 }, parent: { site: "local", run: "r-ghost", call_id: "r-ghost-c9" }, program_hash: hash, from_site: "local",
+  })).json.id;
+  await waitStatus("cloud", child, "sleeping", 20000);
+  const fetchedBefore = allEvents().filter((e) => e.type === "program_fetched" && e.site === "cloud").length;
+  fs.rmSync(storeFile("cloud", hash));
+  const done = await waitStatus("cloud", child, "completed", 30000);
+  const fetched = allEvents().filter((e) => e.type === "program_fetched" && e.site === "cloud").length - fetchedBefore;
+  const hellos = eventsOf(child, "hello");
+  check("the timer resume fetched the program again from the parent's site, and the run completed from the store", done.result === "slept 4 seconds" && fetched === 1
+    && fs.existsSync(storeFile("cloud", hash)) && hellos.length === 2 && hellos[1].mock_program_source === "store" && hellos[1].mock_project === null, `${fetched} ${JSON.stringify(done.result)}`);
+}
+
+/** A resumed worker reports its restored remote waits, and results carry their arrival time. */
+async function restoredWaitScene() {
+  section("remote_wait of a resumed worker, and results in arrival order");
+  const id = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city: "Lisbon", mock_nap_ms: 8000 } })).json.id;
+  const done = await waitStatus("local", id, "completed", 60000);
+  const waits = eventsOf(id, "remote_wait");
+  const received = eventsOf(id, "remote_result_received").map((e) => e.call_id);
+  const byArrival = [...done.remote_results].sort((a, b) => a.ts - b.ts).map((r) => r.call_id);
+  check("the resumed worker names the four calls it waits on, and says that it holds their results", waits.length === 4 && waits.every((w) => w.segment === 2 && w.has_result === true
+    && w.function === "remote_get_quote"), JSON.stringify(waits.map((w) => [w.call_id, w.has_result])));
+  check("the results that arrived without a process are taken in the order of their arrival", isDeepStrictEqual(received, byArrival), `${received} / ${byArrival}`);
+}
+
+async function scene(name, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    check(`${name} ran to its end`, false, String(err.message ?? err));
+  }
+}
+
+async function restartAll(extraEnv, wipePrograms) {
+  for (const site of SITE_NAMES) STREAMS[site]?.close();
+  await Promise.all(SITE_NAMES.map(stopServer));
+  for (const site of wipePrograms) fs.rmSync(path.join(SERVER_DIR, SITES[site].programs), { recursive: true, force: true });
+  await Promise.all(SITE_NAMES.map((site) => startServer(site, extraEnv)));
+  for (const site of SITE_NAMES) {
+    STREAMS[site] = new Stream(site);
+    await STREAMS[site].open();
+  }
+}
+
+async function chaosScenes() {
+  section("CHAOS: the same scenes with slow dispatch, slow results, slow cancel, slow import, slow program fetch, duplicated and reordered results");
+  speed = 1;
+  await restartAll({ CHAOS: JSON.stringify(CHAOS), MOCK_SPEED: "1" }, ["cloud", "cloud2"]);
+  const info = (await get("cloud", "/api/info")).json;
+  check("CHAOS: info shows the knobs", info.chaos.dispatch_delay_ms === CHAOS.dispatch_delay_ms && info.chaos.duplicate_results === true && info.chaos.reorder_results === true, JSON.stringify(info.chaos));
+  const L = "CHAOS: ";
+  await scene("CHAOS: program fetch and all_settled", () => programFetchAndSettled(L));
+  await scene("CHAOS: fan-out", () => fanOutScene(L, true));
+  await Promise.all([scene("CHAOS: nap", () => napScene(L)), scene("CHAOS: race", () => raceScene(L)), scene("CHAOS: deadline", () => deadlineScene(L)),
+    scene("CHAOS: migration of a sleeping run", () => sleepingMigrationScene(L))]);
+  await scene("CHAOS: cascade", () => cascadeScene(L));
+  const dup = allEvents().filter((e) => e.type === "remote_returned");
+  check("CHAOS: although every result was sent twice, no call returned twice on any run", [...countBy(dup, "call_id").values()].every((n) => n === 1), JSON.stringify([...countBy(dup, "call_id")].filter(([, n]) => n > 1)));
+
+  // A controller that is slower than the program: the dispatch takes longer
+  // than the deadline of the call, so remote_cancel arrives while the dispatch
+  // is in flight.
+  section("CHAOS: a dispatch that is slower than the deadline of the call");
+  STREAMS.local.close();
+  await stopServer("local");
+  await startServer("local", { CHAOS: JSON.stringify({ dispatch_delay_ms: 3500 }), MOCK_SPEED: "1" });
+  STREAMS.local = new Stream("local");
+  await STREAMS.local.open();
+  const id = (await post("local", "/api/runs", { function: "durable_deadline", args: { city: "Sines" } })).json.id;
+  const done = await waitStatus("local", id, "completed", 40000);
+  const atCompletion = eventsOf(id, "remote_dispatched").length;
+  check("the run completes with the Timeout message before the child even exists", done.result === "no tour quote for Sines: operation timed out after 2000ms" && atCompletion === 0, `${atCompletion}`);
+  const dispatched = await STREAMS.local.waitEvent("remote_dispatched", (e) => e.type === "remote_dispatched" && e.run === id, 20000);
+  const cancelledEv = await STREAMS.local.waitEvent("remote_cancelled", (e) => e.type === "remote_cancelled" && e.run === id, 20000);
+  const kid = await waitStatus(dispatched.child_site, dispatched.child_run, "cancelled", 20000);
+  const record = (await get("local", `/api/runs/${id}`)).json;
+  check("the child that appeared after the cancellation is cancelled right away and never recorded in waiting_on", kid.status === "cancelled" && cancelledEv.child_run === dispatched.child_run
+    && STREAMS.local.events.indexOf(cancelledEv) > STREAMS.local.events.indexOf(dispatched) && record.waiting_on.length === 0 && record.remote_results.length === 0,
+    JSON.stringify(record.waiting_on));
+  // The same slow controller under a fan-out: the parent suspends before any
+  // child exists, and the run still completes correctly.
+  await scene("CHAOS, slow dispatch: fan-out", () => fanOutScene("CHAOS, slow dispatch: ", true));
+  await scene("CHAOS, slow dispatch: fork before the dispatches return", forkDuringDispatchScene);
+  await scene("CHAOS: a program fetch that is slower than the dispatch request", slowFetchScene);
+}
+
+/** local still has `dispatch_delay_ms: 3500`: the run sleeps before any child exists, and a fork taken then knows no child. */
+async function forkDuringDispatchScene() {
+  section("CHAOS, slow dispatch: a fork taken before the dispatches returned");
+  const id = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city: "Lisbon", mock_nap_ms: 13000 } })).json.id;
+  await waitStatus("local", id, "sleeping");
+  const fork = (await post("local", `/api/runs/${id}/fork`)).json;
+  check("the fork was taken while no dispatch had returned: its record lists no child and no result", fork.waiting_on.length === 0 && fork.remote_results.length === 0
+    && fork.calls.length === 4, JSON.stringify([fork.waiting_on.length, fork.calls.length]));
+  const done = await waitStatus("local", id, "completed", 60000);
+  const resumed = await post("local", `/api/runs/${fork.id}/resume`);
+  const forkDone = await waitStatus("local", fork.id, "completed", 60000);
+  check("the resumed fork reports its four restored waits and completes with the quotes of its source, without new children", resumed.status === 200
+    && eventsOf(fork.id, "remote_wait").length === 4 && eventsOf(fork.id, "remote_wait").every((w) => w.has_result === false)
+    && isDeepStrictEqual(forkDone.result, done.result) && (await childrenOf(fork.id)).length === 0 && (await childrenOf(id)).length === 4,
+    JSON.stringify(forkDone.result).slice(0, 120));
+
+  // A fork that resumes while the children of its source still run attaches
+  // itself to them.
+  const id2 = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city: "Lisbon", mock_nap_ms: 13000 } })).json.id;
+  await waitStatus("local", id2, "sleeping");
+  const early = (await post("local", `/api/runs/${id2}/fork`)).json;
+  await waitFor("four dispatches of the source", () => eventsOf(id2, "remote_dispatched").length === 4, 30000);
+  await post("local", `/api/runs/${early.id}/resume`);
+  const attached = await waitFor("the fork attaches to the running children", () => eventsOf(early.id, "remote_attached").length + eventsOf(early.id, "remote_returned").length >= 4 ? true : null, 30000);
+  const earlyDone = await waitStatus("local", early.id, "completed", 60000);
+  const sourceDone = await waitStatus("local", id2, "completed", 60000);
+  check("a fork that resumes while the children run attaches to them: both runs complete with the same quotes from four children", attached === true
+    && isDeepStrictEqual(earlyDone.result, sourceDone.result) && (await childrenOf(id2)).length === 4 && (await childrenOf(early.id)).length === 0);
+}
+
+/** The first use of a program on a site takes longer than the 10 s that a dispatch request waits. */
+async function slowFetchScene() {
+  section("CHAOS: a program fetch of 12 s on first use");
+  await restartAll({ CHAOS: JSON.stringify({ program_fetch_delay_ms: 12000 }), MOCK_SPEED: "1" }, ["cloud", "cloud2"]);
+  const started = Date.now();
+  const id = (await post("local", "/api/runs", { function: "plan_trip", args: { city: "Tomar" } })).json.id;
+  const done = await waitStatus("local", id, "completed", 90000);
+  const kids = await childrenOf(id);
+  const fetched = allEvents().filter((e) => e.type === "program_fetched" && e.at_verify >= started);
+  check("the parent completes although the child's site needed 12 s to fetch the program: one child, one fetch, no failed call", done.status === "completed"
+    && kids.length === 1 && kids[0].status === "completed" && eventsOf(id, "remote_dispatched").length === 1
+    && allEvents().filter((e) => e.type === "program_fetched" && e.site === kids[0].site && e.ts >= started).length === 1, JSON.stringify([kids.length, fetched.length, done.error]));
 }
 
 // ------------------------------------------------------------- scripted site
@@ -920,6 +1746,7 @@ class ScriptedSite {
     this.resultStatuses = new Map();   // run id -> statuses for the next requests
     this.resultDefault = new Map();    // run id -> status once the list is empty
     this.bounceTo = new Map();         // run id -> base URL: play a `migrated` record that names that site
+    this.programs = new Map();         // program hash -> the body of GET /api/programs/:hash
     this.children = 0;
   }
   async start() {
@@ -945,6 +1772,11 @@ class ScriptedSite {
       res.end(JSON.stringify(json));
     };
     const result = /^\/api\/runs\/([a-z0-9-]+)\/remote_result$/.exec(req.url);
+    const program = /^\/api\/programs\/([0-9a-f]+)$/.exec(req.url);
+    if (program) {
+      const served = this.programs.get(program[1]);
+      return served ? reply(200, served) : reply(404, { error: "the scripted site does not hold this program" });
+    }
     if (req.url === "/api/remote/runs") {
       await sleep(this.dispatchDelayMs);
       this.children += 1;
@@ -1124,6 +1956,92 @@ async function routingScene() {
     slow.resultDefault.set("r-nowhere", 200);
     const found = await post("cloud2", "/api/runs/r-nowhere/remote_result", { call_id: "r-nowhere-c3", value: 3 });
     check("the fallback answers with the site that accepted the result", found.status === 200 && found.json.forwarded_to === "slow", found.text);
+
+    // 6. Program store (contract section 9.5). `slow` sends remote calls for a
+    //    program that cloud2 never saw. cloud2 fetches it from `slow`, verifies
+    //    the hash, stores it, and runs it without a project directory.
+    const sha = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
+    const foreign = Buffer.from(JSON.stringify({ mock_program: 1, files: [{ name: "baml_src/elsewhere.baml", text: "function remote_fetch_weather(city: string) -> string {\n    \"written on another machine\"\n}\n" }] }));
+    const goodHash = sha(foreign);
+    const wrongHash = sha(Buffer.from("these are not the bytes that were promised"));
+    const absentHash = sha(Buffer.from("a program that no site holds"));
+    slow.programs.set(goodHash, { hash: goodHash, runtime_build: "mock-worker/1", program_base64: foreign.toString("base64") });
+    slow.programs.set(wrongHash, { hash: wrongHash, runtime_build: "mock-worker/1", program_base64: foreign.toString("base64") });
+    const remoteRun = (hash, call) => post("cloud2", "/api/remote/runs", {
+      function: "remote_fetch_weather", args: { city: "Pinhel" }, parent: { site: "slow", run: "r-far", call_id: `r-far-c${call}` }, program_hash: hash, from_site: "slow",
+    });
+    const countRuns = async () => (await get("cloud2", "/api/runs")).json.length;
+    const runsBefore = await countRuns();
+    // The dispatch answers at once, and the program is fetched before the
+    // worker starts. A fetch that fails ends the child as `failed`, and the
+    // parent's site gets the reason as the result of the call.
+    const failedChild = async (res, call) => {
+      const run = await waitStatus("cloud2", res.json.id, "failed", 20000);
+      const told = await waitFor("the failure reaches the parent's site", () => slow.seen((r) => r.path === "/api/runs/r-far/remote_result" && r.body?.call_id === `r-far-c${call}`)[0], 20000);
+      return { run, told };
+    };
+    const mismatch = await remoteRun(wrongHash, 1);
+    const mismatchEnd = mismatch.status === 200 ? await failedChild(mismatch, 1) : null;
+    check("a fetched program whose bytes do not have the requested hash is rejected: the child fails with the reason, nothing is stored, no worker starts, and the parent is told",
+      mismatch.status === 200 && mismatchEnd.run.error.includes(wrongHash) && String(mismatchEnd.told.body.error ?? "").includes(wrongHash)
+      && !fs.existsSync(storeFile("cloud2", wrongHash)) && (await get("cloud2", `/api/runs/${mismatch.json.id}/events`)).json.every((e) => e.type !== "hello")
+      && slow.seen((r) => r.path === `/api/programs/${wrongHash}`).length === 1, `${mismatch.status} ${mismatch.text}`);
+    const absent = await remoteRun(absentHash, 2);
+    const absentEnd = absent.status === 200 ? await failedChild(absent, 2) : null;
+    check("a program that the sending site does not serve: the child fails with the reason, and no worker starts", absent.status === 200
+      && absentEnd.run.error.includes("did not serve the program") && String(absentEnd.told.body.error ?? "").includes(absentHash), `${absent.status} ${absent.text}`);
+    const notAHash = await remoteRun("../../etc/passwd", 3);
+    check("a program_hash that is not 64 hex characters is refused with 400 before anything is fetched or recorded", notAHash.status === 400 && (await countRuns()) === runsBefore + 2
+      && slow.seen((r) => r.path.startsWith("/api/programs/") && r.path.includes("passwd")).length === 0, `${notAHash.status} ${notAHash.text}`);
+
+    // A peer's header bytes are not trusted: only the program bytes are covered
+    // by the hash. The entry gets a header that cloud2 builds itself.
+    const garbage = Buffer.from(JSON.stringify({ mock_program: 1, files: [{ name: "baml_src/garbage.baml", text: "function remote_fetch_weather(city: string) -> string {\n    \"served with a garbage header\"\n}\n" }] }));
+    const garbageHash = sha(garbage);
+    slow.programs.set(garbageHash, { hash: garbageHash, runtime_build: "mock-worker/1", program_base64: garbage.toString("base64"), header_base64: Buffer.from("XXXX").toString("base64"), format_version: 7 });
+    const withGarbage = await remoteRun(garbageHash, 6);
+    const garbageDone = await waitStatus("cloud2", withGarbage.json.id, "completed", 20000);
+    const garbageEntry = fs.readFileSync(storeFile("cloud2", garbageHash));
+    check("a peer that serves the right bytes with a garbage header: the stored entry has the documented layout and a worker runs it", garbageDone.result === "sunny in Pinhel"
+      && garbageEntry.subarray(0, 8).toString("latin1") === "BAMLPROG" && garbageEntry.readUInt32LE(8) === 1
+      && garbageEntry.subarray(16, 16 + garbageEntry.readUInt32LE(12)).toString("utf8") === "mock-worker/1"
+      && sha(garbageEntry.subarray(24 + garbageEntry.readUInt32LE(12))) === garbageHash);
+    // cloud2 knows the build of its workers by now (from `hello`). A program of
+    // another build would be refused by every worker here, so the site refuses
+    // it and says why.
+    const evil = Buffer.from(JSON.stringify({ mock_program: 1, files: [{ name: "baml_src/evil.baml", text: "function remote_fetch_weather(city: string) -> string {\n    \"another build\"\n}\n" }] }));
+    const evilHash = sha(evil);
+    slow.programs.set(evilHash, { hash: evilHash, runtime_build: "evil/1", program_base64: evil.toString("base64") });
+    const otherBuild = await remoteRun(evilHash, 7);
+    const otherBuildEnd = otherBuild.status === 200 ? await failedChild(otherBuild, 7) : null;
+    check("a program of another runtime build is refused with both build names, and nothing is stored", otherBuild.status === 200
+      && otherBuildEnd.run.error.includes("evil/1") && otherBuildEnd.run.error.includes("mock-worker/1") && !fs.existsSync(storeFile("cloud2", evilHash)), otherBuildEnd?.run.error);
+    const noBuild = Buffer.from(JSON.stringify({ mock_program: 1, files: [] }));
+    slow.programs.set(sha(noBuild), { hash: sha(noBuild), runtime_build: "", program_base64: noBuild.toString("base64") });
+    const unnamed = await remoteRun(sha(noBuild), 8);
+    const unnamedEnd = unnamed.status === 200 ? await failedChild(unnamed, 8) : null;
+    check("a program without a usable runtime build is not stored", unnamed.status === 200 && unnamedEnd.run.error.includes("without a usable runtime build")
+      && !fs.existsSync(storeFile("cloud2", sha(noBuild))), unnamedEnd?.run.error);
+
+    const accepted = await remoteRun(goodHash, 4);
+    check("a program with the right hash: the run is accepted with that program_hash", accepted.status === 200 && accepted.json.program_hash === goodHash, `${accepted.status} ${accepted.text}`);
+    await waitFor("the fetched entry", () => fs.existsSync(storeFile("cloud2", goodHash)), 20000);
+    const entry = fs.readFileSync(storeFile("cloud2", goodHash));
+    check("the stored entry has the header of the documented layout and the program bytes after it", entry.subarray(0, 8).toString("latin1") === "BAMLPROG"
+      && entry.readUInt32LE(8) === 1 && entry.subarray(16, 16 + entry.readUInt32LE(12)).toString("utf8") === "mock-worker/1"
+      && Number(entry.readBigUInt64LE(16 + entry.readUInt32LE(12))) === entry.length - 24 - entry.readUInt32LE(12)
+      && sha(entry.subarray(24 + entry.readUInt32LE(12))) === goodHash);
+    check("no temporary file is left in the shard of a stored entry, and none after a refused one", fs.readdirSync(path.dirname(storeFile("cloud2", goodHash))).every((name) => !name.includes(".tmp-")));
+    stream = new Stream("cloud2");
+    await stream.open();
+    const foreignDone = await waitStatus("cloud2", accepted.json.id, "completed");
+    const foreignHello = (await get("cloud2", `/api/runs/${accepted.json.id}/events`)).json.find((e) => e.type === "hello");
+    check("cloud2 ran a program that it never compiled: the worker loaded it from the store by hash, without --project", foreignDone.result === "sunny in Pinhel"
+      && foreignHello.program_hash === goodHash && foreignHello.mock_program_source === "store" && foreignHello.mock_project === null, JSON.stringify(foreignHello));
+    const secondUse = await remoteRun(goodHash, 5);
+    check("second use: the program is not fetched again", secondUse.status === 200 && slow.seen((r) => r.path === `/api/programs/${goodHash}`).length === 1);
+    await waitStatus("cloud2", secondUse.json.id, "completed");
+    stream.close();
     local.close();
   } finally {
     await slow.stop();
@@ -1141,14 +2059,50 @@ async function main() {
   const cloud = new Stream("cloud");
   const cloud2 = new Stream("cloud2");
   await Promise.all([local.open(), cloud.open(), cloud2.open()]);
+  Object.assign(STREAMS, { local, cloud, cloud2 });
   section("SSE");
   check("content-type is text/event-stream", local.contentType === "text/event-stream");
   check("init is the first message on both streams", local.events[0].type === "init" && local.events[0].site === "local"
     && Array.isArray(local.events[0].runs) && cloud.events[0].type === "init" && cloud.events[0].site === "cloud"
     && cloud2.events[0].type === "init" && cloud2.events[0].site === "cloud2");
 
+  if (ONLY === "chaos") {
+    await scene("CHAOS", chaosScenes);
+    for (const site of SITE_NAMES) STREAMS[site]?.close();
+    return;
+  }
   await routesAndErrors();
-  await centralScene(local, cloud);
+  await programRoutes();
+  await scene("program store rules of the worker", mockStoreRules);
+  // The first remote calls of this instance: cloud and cloud2 fetch the program.
+  await scene("program fetch and all_settled", () => programFetchAndSettled(""));
+  if (ONLY !== "phase3") await earlierScenes(local, cloud, cloud2);
+
+  // Contract section 9. Scenes that make no placement check run side by side.
+  await Promise.all([scene("nap", () => napScene("")), scene("manual resume", () => manualResumeScene("")), scene("resume race", () => resumeRaceScene("")),
+    scene("cancel without a process", () => cancelSleepingScene("")), scene("pause with four threads", () => pauseRaceScene(""))]);
+  await scene("fan-out", () => fanOutScene(""));
+  await Promise.all([scene("race", () => raceScene("")), scene("deadline", () => deadlineScene("")), scene("fan-out failure", () => fanOutFailureScene("")),
+    scene("migration of a sleeping run", () => sleepingMigrationScene(""))]);
+  await scene("cascade", () => cascadeScene(""));
+  await Promise.all([scene("late commands", lateCommandScene), scene("lost store entry", lostEntryScene)]);
+  await scene("shared children", sharedChildrenScene);
+  await scene("restored waits", restoredWaitScene);
+  await invariants(local, cloud, cloud2, t0);
+
+  if (ONLY !== "phase3") await restartScenario();
+  await scene("restart while sleeping", restartWhileSleepingScene);
+  cloud.close();
+  cloud2.close();
+  if (ONLY !== "phase3") await noRemoteSite();
+  await routingScene();
+  await scene("CHAOS", chaosScenes);
+  for (const site of SITE_NAMES) STREAMS[site]?.close();
+}
+
+// The scenes of contract sections 3 to 8.
+async function earlierScenes(local, cloud, cloud2) {
+  await centralScene(local);
   await liveDelivery();
   await migration(local, cloud, cloud2);
   await migrationWhileWaiting(local, cloud);
@@ -1163,7 +2117,9 @@ async function main() {
   await parallelScenario(local, cloud);
   await failureScenario(local, cloud);
   await peerRoutes();
+}
 
+async function invariants(local, cloud, cloud2, t0) {
   section("SSE invariants");
   const elapsed = Date.now() - t0;
   if (elapsed < 16000) await sleep(16000 - elapsed);
@@ -1179,18 +2135,14 @@ async function main() {
     && late.events[0].runs[0].id === runsNow[0].id);
   late.close();
   const seen = new Set([...local.events, ...cloud.events, ...cloud2.events].map((e) => e.type));
-  const wanted = ["hello", "log", "position", "thread_started", "thread_ended", "remote_call", "remote_result_received", "pausing", "blocked", "paused", "resumed", "completed", "failed",
+  const wanted = ["hello", "log", "position", "thread_started", "thread_ended", "remote_call", "remote_result_received", "paused", "resumed", "completed", "failed",
     "init", "run", "remote_dispatched", "remote_returned", "migrated_out", "migrated_in",
-    // Contract section 7.
-    "cancelled", "snapshot", "worker_exit", "forked"];
+    // Contract section 7. Some of them only occur in the scenes of sections 3 to 8.
+    ...(ONLY === "phase3" ? ["cancelled", "worker_exit"] : ["cancelled", "snapshot", "worker_exit", "forked", "pausing", "blocked"]),
+    // Contract section 9, and the server events that this implementation adds.
+    "sleep_scheduled", "woken", "remote_cancel", "remote_cancelled", "remote_result_discarded", "run_cancelled", "program_fetched"];
   check("every contract event type was seen on the streams", wanted.every((t) => seen.has(t)), wanted.filter((t) => !seen.has(t)).join(","));
   local.close();
-
-  await restartScenario();
-  cloud.close();
-  cloud2.close();
-  await noRemoteSite();
-  await routingScene();
 }
 
 let exitCode = 0;

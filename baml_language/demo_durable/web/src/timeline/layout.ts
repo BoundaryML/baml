@@ -7,6 +7,7 @@
 import {
   DEFAULT_SITES,
   isLiveStatus,
+  isTickingStatus,
   type PauseStats,
   type ResumeStats,
   type Run,
@@ -40,7 +41,15 @@ export interface SegmentBar {
   row: number;
   /** The root thread of the segment, when it is known. */
   rootThread: number | null;
+  /** Section 9.2: the hash of the program that the process runs, from `hello`. */
+  programHash: string | null;
 }
+
+/**
+ * Why a run has no process: a pause that a command ends, a sleep that a timer
+ * ends (section 9.3), or a fork that was not resumed yet.
+ */
+export type GapKind = "paused" | "sleeping" | "fork";
 
 /** An interval in which the run has no process. */
 export interface Gap {
@@ -57,6 +66,14 @@ export interface Gap {
   bytes: number | null;
   /** True for the interval between the creation of a fork and its first segment. */
   fork: boolean;
+  kind: GapKind;
+  /**
+   * For a `sleeping` gap: the time at which the site server resumes the run.
+   * An open sleeping gap ends at this time, which can be later than `now`.
+   */
+  wakeAt: number | null;
+  /** For a closed `sleeping` gap: what ended it (`timer`, `manual`, `restart`), when a `woken` event said so. */
+  wakeReason: string | null;
 }
 
 /** A spawned thread, drawn as a thin bar under the run's bar. */
@@ -71,6 +88,26 @@ export interface ThreadBar {
   end: number;
   row: number;
   subRow: number;
+  /** The thread was restored from a snapshot: it started in an earlier segment of the run. */
+  continued: boolean;
+  /** The thread was written to a snapshot at the end of this segment and continues in a later one. */
+  continues: boolean;
+}
+
+/**
+ * The interval without a process between two bars of one thread. A thread that
+ * is parked when its run is suspended continues in the next segment under the
+ * same thread id. The timeline joins the two bars with a thin line.
+ */
+export interface ThreadLink {
+  id: string;
+  site: Site;
+  run: string;
+  thread: number;
+  row: number;
+  subRow: number;
+  start: number;
+  end: number;
 }
 
 /** An interval in which a thread waits for the result of a remote call. */
@@ -86,6 +123,8 @@ export interface WaitInterval {
   row: number;
   /** `null` when the waiting thread is the root thread: the run's main bar is shaded. */
   subRow: number | null;
+  /** The wait ended because the waiting thread was cancelled (section 9.2, `remote_cancel`). */
+  cancelled: boolean;
 }
 
 export interface Anchor {
@@ -99,7 +138,8 @@ export interface Anchor {
 
 export interface Connector {
   id: string;
-  kind: "call" | "return" | "migration" | "fork";
+  /** `cancel`: the parent cancelled a remote call, and the child's site cancelled the child (section 9.3). */
+  kind: "call" | "return" | "migration" | "fork" | "cancel";
   from: Anchor;
   to: Anchor;
   callId: string | null;
@@ -123,10 +163,23 @@ export type Marker = {
 } & (
   | { kind: "pause_request"; waitingOn: string[] }
   | { kind: "blocked"; reason: string; path: string[] }
-  | { kind: "snapshot"; n: number; bytes: number | null; stats: PauseStats | null; automatic: boolean }
+  | {
+      kind: "snapshot"; n: number; bytes: number | null; stats: PauseStats | null; automatic: boolean;
+      /** Set when the run wrote this snapshot to suspend itself for a sleep (section 9.2). */
+      wake: { remainingMs: number; wakeAt: number } | null;
+    }
   | { kind: "resume"; stats: ResumeStats }
   /** The run was created from snapshot `n` of `fromRun` (section 7.2, `forked`). */
   | { kind: "fork"; fromRun: string; n: number }
+  /** Section 9.3, `woken`: a sleeping run starts its next segment. */
+  | { kind: "wake"; reason: string; wakeAt: number | null; sleptMs: number | null }
+  /** Sections 9.2 and 9.3: a remote call of the run was cancelled, and with it the child run. */
+  | {
+      kind: "cancel"; callId: string; function: string; thread: number | null;
+      childSite: Site | null; childRun: string | null;
+      /** `worker`: a thread of the run was cancelled. `site`: the run ended, and its site cancelled the children. */
+      source: "worker" | "site";
+    }
 );
 
 export type MarkerKind = Marker["kind"];
@@ -146,6 +199,7 @@ export interface TimelineLayout {
   segments: SegmentBar[];
   gaps: Gap[];
   threads: ThreadBar[];
+  threadLinks: ThreadLink[];
   waits: WaitInterval[];
   connectors: Connector[];
   markers: Marker[];
@@ -186,14 +240,26 @@ interface RawSegment {
   rootThread: number | null;
   pausedStats: PauseStats | null;
   pausedPath: string | null;
+  /** Set by a `paused` event with `wake`: the run suspended itself for a sleep. */
+  wake: { remainingMs: number; atTs: number } | null;
+  resumedTs: number | null;
+  programHash: string | null;
+  /** Every `thread_started` event of the segment, in order. */
+  threadStarts: { thread: number; parentThread: number | null; ts: number }[];
+  /** The time of the `thread_ended` event, by thread. */
+  threadEnds: Map<number, number>;
 }
 
 interface RawThread {
+  site: Site;
+  run: string;
   segment: number;
   thread: number;
   parentThread: number | null;
   start: number;
   end: number | null;
+  continued: boolean;
+  continues: boolean;
 }
 
 interface RawWait {
@@ -202,6 +268,7 @@ interface RawWait {
   callId: string;
   start: number;
   end: number | null;
+  cancelled: boolean;
 }
 
 interface RawCall {
@@ -216,6 +283,12 @@ interface RawCall {
   receivedSegment: number | null;
   returnedTs: number | null;
   ok: boolean | null;
+  /** The time of the worker's `remote_cancel` event, and the thread that it names. */
+  cancelTs: number | null;
+  cancelThread: number | null;
+  cancelSegment: number | null;
+  /** The time of the site server's `remote_cancelled` event. */
+  cancelledTs: number | null;
   /**
    * True when the record was created from a result event alone. This happens
    * on the destination site of a migration: the call was made on the origin.
@@ -226,7 +299,7 @@ interface RawCall {
 type RawMarker =
   | { kind: "pause_request"; segment: number; t: number; waitingOn: string[]; exact: boolean }
   | { kind: "blocked"; segment: number; t: number; reason: string; path: string[] }
-  | { kind: "snapshot"; segment: number; t: number; path: string; stats: PauseStats; automatic: boolean }
+  | { kind: "snapshot"; segment: number; t: number; path: string; stats: PauseStats; automatic: boolean; wake: RawSegment["wake"] }
   | { kind: "resume"; segment: number; t: number; stats: ResumeStats };
 
 interface RunScan {
@@ -234,7 +307,6 @@ interface RunScan {
   run: string;
   record: Run | null;
   segments: RawSegment[];
-  threads: RawThread[];
   waits: RawWait[];
   calls: Map<string, RawCall>;
   markers: RawMarker[];
@@ -242,13 +314,41 @@ interface RunScan {
   migratedOutTs: number[];
   /** Set for a run that was created by a fork on this site. */
   fork: { ts: number; fromRun: string; n: number } | null;
+  /** The `sleep_scheduled` events: the timer that the site server set for a run that suspended itself. */
+  sleeps: { ts: number; wakeAt: number }[];
+  /** The `woken` events. */
+  wakes: { ts: number; reason: string }[];
+}
+
+/** The time at which a call was cancelled, from the worker's event or, without one, from the site server's. */
+function cancelTime(call: RawCall): number | null {
+  return call.cancelTs ?? call.cancelledTs;
+}
+
+function newCall(init: Pick<RawCall, "callId" | "thread" | "segment" | "ts" | "function"> & Partial<RawCall>): RawCall {
+  return {
+    childSite: null,
+    childRun: null,
+    receivedTs: null,
+    receivedSegment: null,
+    returnedTs: null,
+    ok: null,
+    cancelTs: null,
+    cancelThread: null,
+    cancelSegment: null,
+    cancelledTs: null,
+    stub: false,
+    ...init,
+  };
 }
 
 function scanRun(site: Site, run: string, record: Run | null, events: readonly TimelineEvent[]): RunScan {
   const segments = new Map<number, RawSegment>();
-  const threads: RawThread[] = [];
-  const openThreads = new Map<string, RawThread>();
+  /** The threads of a segment that a `thread_started` event with a parent announced. */
+  const spawned = new Set<string>();
   const waits: RawWait[] = [];
+  const sleeps: RunScan["sleeps"] = [];
+  const wakes: RunScan["wakes"] = [];
   const calls = new Map<string, RawCall>();
   const markers: RawMarker[] = [];
   const migratedOutTs: number[] = [];
@@ -273,12 +373,17 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
         rootThread: null,
         pausedStats: null,
         pausedPath: null,
+        wake: null,
+        resumedTs: null,
+        programHash: null,
+        threadStarts: [],
+        threadEnds: new Map(),
       };
       segments.set(event.segment, segment);
       // A call that is still waiting continues to wait in the new segment.
       for (const call of calls.values()) {
-        if (call.receivedTs === null && !call.stub) {
-          waits.push({ segment: event.segment, thread: call.thread, callId: call.callId, start: event.ts, end: null });
+        if (call.receivedTs === null && !call.stub && cancelTime(call) === null) {
+          waits.push({ segment: event.segment, thread: call.thread, callId: call.callId, start: event.ts, end: null, cancelled: false });
         }
       }
       pendingRequest = null;
@@ -286,6 +391,16 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
     segment.lastTs = Math.max(segment.lastTs, event.ts);
     currentSegment = segment;
     return segment;
+  };
+
+  /** Ends the open waits on a cancelled call. Only the wait of the latest segment was cut short by the cancel. */
+  const cancelWaits = (callId: string, ts: number): void => {
+    const open = waits.filter((wait) => wait.callId === callId && wait.end === null);
+    const latest = Math.max(...open.map((wait) => wait.segment));
+    for (const wait of open) {
+      wait.end = ts;
+      wait.cancelled = wait.segment === latest;
+    }
   };
 
   const requestPause = (segment: number, t: number, exact: boolean): Extract<RawMarker, { kind: "pause_request" }> => {
@@ -312,20 +427,18 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
           call.childSite = event.child_site;
           call.childRun = event.child_run;
         } else {
-          calls.set(event.call_id, {
-            callId: event.call_id,
-            thread: -1,
-            segment: (currentSegment as RawSegment | null)?.segment ?? 1,
-            ts: event.ts,
-            function: event.function,
-            childSite: event.child_site,
-            childRun: event.child_run,
-            receivedTs: null,
-            receivedSegment: null,
-            returnedTs: null,
-            ok: null,
-            stub: false,
-          });
+          calls.set(
+            event.call_id,
+            newCall({
+              callId: event.call_id,
+              thread: -1,
+              segment: (currentSegment as RawSegment | null)?.segment ?? 1,
+              ts: event.ts,
+              function: event.function,
+              childSite: event.child_site,
+              childRun: event.child_run,
+            }),
+          );
         }
         break;
       }
@@ -337,23 +450,58 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
           call.childSite ??= event.child_site;
           call.childRun ??= event.child_run;
         } else {
-          calls.set(event.call_id, {
-            callId: event.call_id,
-            thread: -1,
-            segment: 0,
-            ts: event.ts,
-            function: "",
-            childSite: event.child_site,
-            childRun: event.child_run,
-            receivedTs: null,
-            receivedSegment: null,
-            returnedTs: event.ts,
-            ok: event.ok,
-            stub: true,
-          });
+          calls.set(
+            event.call_id,
+            newCall({
+              callId: event.call_id,
+              thread: -1,
+              segment: 0,
+              ts: event.ts,
+              function: "",
+              childSite: event.child_site,
+              childRun: event.child_run,
+              returnedTs: event.ts,
+              ok: event.ok,
+              stub: true,
+            }),
+          );
         }
         break;
       }
+      case "remote_cancelled": {
+        // The site server's half of a cancellation. It has no segment: the run
+        // may have no process any more when its site cancels the children.
+        const call = calls.get(event.call_id);
+        if (call) {
+          call.cancelledTs = event.ts;
+          call.childSite ??= event.child_site;
+          call.childRun ??= event.child_run;
+        } else {
+          calls.set(
+            event.call_id,
+            newCall({
+              callId: event.call_id,
+              thread: -1,
+              segment: (currentSegment as RawSegment | null)?.segment ?? 1,
+              ts: event.ts,
+              function: "",
+              childSite: event.child_site,
+              childRun: event.child_run,
+              cancelledTs: event.ts,
+              // The call was made on another site, before the run moved here.
+              stub: true,
+            }),
+          );
+        }
+        cancelWaits(event.call_id, event.ts);
+        break;
+      }
+      case "sleep_scheduled":
+        if (typeof event.wake_at === "number") sleeps.push({ ts: event.ts, wakeAt: event.wake_at });
+        break;
+      case "woken":
+        wakes.push({ ts: event.ts, reason: typeof event.reason === "string" ? event.reason : "timer" });
+        break;
       case "migrated_out":
         migratedOutTs.push(event.ts);
         break;
@@ -378,53 +526,48 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
           case "hello":
             segment.mode = event.mode;
             segment.start = Math.min(segment.start, event.ts);
+            if (typeof event.program_hash === "string") segment.programHash = event.program_hash;
             break;
           case "thread_started": {
-            if (event.parent_thread === null) {
-              segment.rootThread = event.thread;
-            } else {
-              const thread: RawThread = {
-                segment: event.segment,
-                thread: event.thread,
-                parentThread: event.parent_thread,
-                start: event.ts,
-                end: null,
-              };
-              threads.push(thread);
-              openThreads.set(`${event.segment}:${event.thread}`, thread);
-            }
+            // The first thread without a parent is the root thread. A resumed
+            // segment can announce every restored thread, and the threads pass
+            // decides there which of them is the root.
+            if (event.parent_thread === null) segment.rootThread ??= event.thread;
+            else spawned.add(`${event.segment}:${event.thread}`);
+            segment.threadStarts.push({ thread: event.thread, parentThread: event.parent_thread, ts: event.ts });
             break;
           }
-          case "thread_ended": {
-            const thread = openThreads.get(`${event.segment}:${event.thread}`);
-            if (thread) {
-              thread.end = event.ts;
-              openThreads.delete(`${event.segment}:${event.thread}`);
-            }
+          case "thread_ended":
+            if (!segment.threadEnds.has(event.thread)) segment.threadEnds.set(event.thread, event.ts);
             break;
-          }
           case "position":
             // Without a `thread_started` event, the first thread that reports a
             // position is taken as the root thread.
-            segment.rootThread ??= openThreads.has(`${event.segment}:${event.thread}`) ? null : event.thread;
+            segment.rootThread ??= spawned.has(`${event.segment}:${event.thread}`) ? null : event.thread;
             break;
           case "remote_call": {
             const known = calls.get(event.call_id);
-            calls.set(event.call_id, {
-              callId: event.call_id,
-              thread: event.thread,
-              segment: event.segment,
-              ts: event.ts,
-              function: event.function,
-              childSite: known?.childSite ?? null,
-              childRun: known?.childRun ?? null,
-              receivedTs: null,
-              receivedSegment: null,
-              returnedTs: known?.returnedTs ?? null,
-              ok: known?.ok ?? null,
-              stub: false,
-            });
-            waits.push({ segment: event.segment, thread: event.thread, callId: event.call_id, start: event.ts, end: null });
+            // A resumed worker that reaches the call again emits `remote_call`
+            // with the same `call_id` (section 7.1). The first event keeps the time of the call.
+            const again = known !== undefined && !known.stub && known.thread !== -1;
+            calls.set(
+              event.call_id,
+              newCall({
+                ...(known ?? {}),
+                callId: event.call_id,
+                thread: event.thread,
+                segment: again ? known.segment : event.segment,
+                ts: again ? known.ts : event.ts,
+                function: event.function,
+                receivedTs: null,
+                receivedSegment: null,
+                stub: false,
+              }),
+            );
+            const waiting = waits.some((wait) => wait.callId === event.call_id && wait.segment === event.segment && wait.end === null);
+            if (!waiting) {
+              waits.push({ segment: event.segment, thread: event.thread, callId: event.call_id, start: event.ts, end: null, cancelled: false });
+            }
             break;
           }
           case "remote_result_received": {
@@ -433,24 +576,51 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
               call.receivedTs = event.ts;
               call.receivedSegment = event.segment;
             } else {
-              calls.set(event.call_id, {
-                callId: event.call_id,
-                thread: event.thread,
-                segment: 0,
-                ts: event.ts,
-                function: "",
-                childSite: null,
-                childRun: null,
-                receivedTs: event.ts,
-                receivedSegment: event.segment,
-                returnedTs: null,
-                ok: null,
-                stub: true,
-              });
+              calls.set(
+                event.call_id,
+                newCall({
+                  callId: event.call_id,
+                  thread: event.thread,
+                  segment: 0,
+                  ts: event.ts,
+                  function: "",
+                  receivedTs: event.ts,
+                  receivedSegment: event.segment,
+                  stub: true,
+                }),
+              );
             }
             for (const wait of waits) {
               if (wait.callId === event.call_id && wait.end === null) wait.end = event.ts;
             }
+            break;
+          }
+          case "remote_cancel": {
+            // The thread that waited on the call was cancelled: a race loser, a
+            // timeout, a cancel token, or `Future.cancel` (section 9.2).
+            const call = calls.get(event.call_id);
+            if (call) {
+              call.cancelTs ??= event.ts;
+              call.cancelThread = event.thread;
+              call.cancelSegment = event.segment;
+            } else {
+              calls.set(
+                event.call_id,
+                newCall({
+                  callId: event.call_id,
+                  thread: event.thread,
+                  segment: event.segment,
+                  ts: event.ts,
+                  function: "",
+                  cancelTs: event.ts,
+                  cancelThread: event.thread,
+                  cancelSegment: event.segment,
+                  // The call was made on another site, before the run moved here.
+                  stub: true,
+                }),
+              );
+            }
+            cancelWaits(event.call_id, event.ts);
             break;
           }
           case "pausing": {
@@ -470,14 +640,22 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
             break;
           case "paused": {
             const latency = event.stats?.pause_latency_ms;
-            const request = requestPause(event.segment, event.ts, false);
-            if (!request.exact && typeof latency === "number") {
-              request.t = Math.max(segment.start, Math.min(request.t, event.ts - latency));
+            // A run that suspended itself for a sleep was not asked to pause
+            // (section 9.2), so it gets a request marker only when one is open.
+            const selfSuspended = typeof event.wake?.remaining_ms === "number";
+            if (!selfSuspended || pendingRequest !== null) {
+              const request = requestPause(event.segment, event.ts, false);
+              if (!request.exact && typeof latency === "number") {
+                request.t = Math.max(segment.start, Math.min(request.t, event.ts - latency));
+              }
             }
             pendingRequest = null;
             segment.terminal = { ts: event.ts, kind: "paused" };
             segment.pausedStats = event.stats ?? null;
             segment.pausedPath = event.snapshot_path;
+            if (event.wake && selfSuspended) {
+              segment.wake = { remainingMs: event.wake.remaining_ms, atTs: event.wake.at_ts };
+            }
             markers.push({
               kind: "snapshot",
               segment: event.segment,
@@ -485,6 +663,7 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
               path: event.snapshot_path,
               stats: event.stats,
               automatic: false,
+              wake: segment.wake,
             });
             break;
           }
@@ -497,9 +676,11 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
               path: event.snapshot_path,
               stats: event.stats,
               automatic: true,
+              wake: null,
             });
             break;
           case "resumed":
+            segment.resumedTs = event.ts;
             markers.push({ kind: "resume", segment: event.segment, t: event.ts, stats: event.stats });
             // A wait that was carried into this segment starts when the thread
             // exists again. The real worker loads the program for about a
@@ -529,13 +710,84 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
     run,
     record,
     segments: [...segments.values()].sort((a, b) => a.segment - b.segment),
-    threads,
     waits,
     calls,
     markers,
     migratedOutTs,
     fork: fork ?? forkFromRecord(record),
+    sleeps,
+    wakes,
   };
+}
+
+/**
+ * The spawned threads of one logical run, over every site that held it.
+ *
+ * A thread that is parked when its run is suspended is written to the snapshot
+ * and continues in the next segment under the same thread id (section 9.1).
+ * The segments are visited in order. A thread that was open at the end of a
+ * suspended segment is carried into the next one: from its `thread_started`
+ * event there, or, when the worker announces only new threads, from the
+ * `resumed` event. The root thread of a resumed segment is the root thread of
+ * the segment before it, because the ids survive the resume.
+ *
+ * The real worker reports every live thread as ended at the time of the
+ * `paused` event, because its process ends, and it announces the restored
+ * threads again after the resume. Such a thread continues when the next
+ * segment announces its id again.
+ */
+const ENDED_BY_PAUSE_SLACK_MS = 5;
+
+function threadsOfRun(segments: readonly RawSegment[]): RawThread[] {
+  const threads: RawThread[] = [];
+  let carried = new Map<number, RawThread>();
+  // Threads that the worker closed together with the `paused` event. They continue only when they are announced again.
+  let closedByPause = new Map<number, RawThread>();
+  let previousRoot: number | null = null;
+  for (const segment of [...segments].sort((a, b) => a.segment - b.segment || a.start - b.start)) {
+    const resumed = segment.mode === "resume" || segment.resumedTs !== null;
+    if (resumed && previousRoot !== null) segment.rootThread = previousRoot;
+    const inSegment = new Map<number, RawThread>();
+    const add = (thread: number, parentThread: number | null, start: number): void => {
+      if (thread === segment.rootThread || inSegment.has(thread)) return;
+      const before = resumed ? (carried.get(thread) ?? closedByPause.get(thread)) : undefined;
+      if (before) before.continues = true;
+      inSegment.set(thread, {
+        site: segment.site,
+        run: segment.run,
+        segment: segment.segment,
+        thread,
+        // A restored thread is announced without its parent. The first segment knows it.
+        parentThread: parentThread ?? before?.parentThread ?? null,
+        start,
+        end: segment.threadEnds.get(thread) ?? null,
+        continued: before !== undefined,
+        continues: false,
+      });
+    };
+    for (const started of segment.threadStarts) {
+      // A thread without a parent is the root, except in a resumed segment, which can announce every restored thread that way.
+      if (started.parentThread === null && !(resumed && (carried.has(started.thread) || closedByPause.has(started.thread)))) continue;
+      add(started.thread, started.parentThread, started.ts);
+    }
+    if (resumed) {
+      for (const thread of carried.values()) add(thread.thread, thread.parentThread, segment.resumedTs ?? segment.start);
+    }
+    threads.push(...inSegment.values());
+    // Only a segment that ended with a snapshot hands its open threads on.
+    const suspended = segment.terminal?.kind === "paused" || (segment.terminal === null && segment.exit?.status === "paused");
+    carried = new Map();
+    closedByPause = new Map();
+    if (suspended) {
+      const pausedTs = segment.terminal?.kind === "paused" ? segment.terminal.ts : null;
+      for (const thread of inSegment.values()) {
+        if (thread.end === null) carried.set(thread.thread, thread);
+        else if (pausedTs !== null && thread.end >= pausedTs - ENDED_BY_PAUSE_SLACK_MS) closedByPause.set(thread.thread, thread);
+      }
+    }
+    previousRoot = segment.rootThread;
+  }
+  return threads;
 }
 
 /**
@@ -633,7 +885,8 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
     }
   }
 
-  const live = input.runs.some((run) => isLiveStatus(run.status));
+  // A sleeping run has no process, but its countdown moves with the clock.
+  const live = input.runs.some((run) => isTickingStatus(run.status));
 
   // Segments of each logical run (one run id over every site that held it), in order.
   const segments: SegmentBar[] = [];
@@ -653,6 +906,7 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
         endKind: "open",
         row: 0,
         rootThread: raw.rootThread,
+        programHash: raw.programHash,
       };
       segments.push(bar);
       rawBySegmentBar.set(bar, raw);
@@ -662,6 +916,13 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
     }
   }
   for (const list of barsByRun.values()) list.sort((a, b) => a.segment - b.segment || a.start - b.start);
+
+  // Spawned threads, per logical run. The pass also settles the root thread of every resumed segment.
+  const rawThreads: RawThread[] = [];
+  for (const id of runIds) {
+    rawThreads.push(...threadsOfRun(scans.filter((scan) => scan.run === id).flatMap((scan) => scan.segments)));
+  }
+  for (const bar of segments) bar.rootThread = (rawBySegmentBar.get(bar) as RawSegment).rootThread;
 
   for (const list of barsByRun.values()) {
     list.forEach((bar, index) => {
@@ -732,12 +993,33 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
     return { n: latest?.n ?? null, bytes: latest?.bytes ?? null };
   };
 
+  /**
+   * The sleep that a gap after `bar` stands for, or `null` for a pause. The
+   * wake time comes from the site server's timer (`sleep_scheduled`), from the
+   * record of a run that still sleeps, or from the worker's `remaining_ms`.
+   */
+  const sleepAfter = (bar: SegmentBar, last: boolean): { wakeAt: number | null } | null => {
+    const raw = rawBySegmentBar.get(bar) as RawSegment;
+    const scan = scanByKey.get(runKey(bar.site, bar.run));
+    const record = records.get(runKey(bar.site, bar.run));
+    const sleepsNow = last && record?.status === "sleeping";
+    if (raw.wake === null && !sleepsNow) return null;
+    const pausedTs = raw.terminal?.ts ?? bar.end;
+    const scheduled = scan?.sleeps.find((sleep) => sleep.ts >= pausedTs - 1)?.wakeAt ?? null;
+    const fromRecord = sleepsNow && typeof record?.wake_at === "number" ? record.wake_at : null;
+    const fromWorker = raw.wake === null ? null : pausedTs + raw.wake.remainingMs;
+    return { wakeAt: scheduled ?? fromRecord ?? fromWorker };
+  };
+  const wakeReasonIn = (bar: SegmentBar, until: number): string | null =>
+    scanByKey.get(runKey(bar.site, bar.run))?.wakes.find((wake) => wake.ts >= bar.end - 1 && wake.ts <= until + 1)?.reason ?? null;
+
   const gaps: Gap[] = [];
   const connectors: Connector[] = [];
   for (const [run, list] of barsByRun) {
     list.forEach((bar, index) => {
       const next = list[index + 1];
       const snapshot = snapshotFor(bar);
+      const sleep = sleepAfter(bar, next === undefined);
       if (next) {
         let end = next.start;
         if (next.site !== bar.site) {
@@ -755,23 +1037,31 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
           snapshotN: snapshot.n,
           bytes: snapshot.bytes,
           fork: false,
+          kind: sleep ? "sleeping" : "paused",
+          wakeAt: sleep?.wakeAt ?? null,
+          wakeReason: sleep ? wakeReasonIn(bar, next.start) : null,
         });
         return;
       }
       const record = records.get(runKey(bar.site, run));
-      const waitsForResume = record?.status === "paused" || record?.status === "migrated";
+      const waitsForResume = record?.status === "paused" || record?.status === "migrated" || record?.status === "sleeping";
       if (waitsForResume && bar.endKind !== "open") {
+        // A sleep ends at a known time, so its gap reaches into the future.
+        const sleeping = sleep !== null && record?.status === "sleeping";
         gaps.push({
           id: `gap:${bar.id}`,
           run,
           site: bar.site,
           row: 0,
           start: bar.end,
-          end: Math.max(openGapEnd, bar.end),
+          end: Math.max(sleeping ? Math.max(sleep.wakeAt ?? now, now) : openGapEnd, bar.end),
           open: true,
           snapshotN: snapshot.n,
           bytes: snapshot.bytes,
           fork: false,
+          kind: sleep ? "sleeping" : "paused",
+          wakeAt: sleep?.wakeAt ?? null,
+          wakeReason: null,
         });
       }
     });
@@ -819,6 +1109,9 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
       snapshotN: scan.fork.n,
       bytes,
       fork: true,
+      kind: "fork",
+      wakeAt: null,
+      wakeReason: null,
     });
   }
 
@@ -868,19 +1161,23 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
   // the segments on the destination site, until the result is received there.
   for (const scan of scans) {
     for (const call of scan.calls.values()) {
-      if (call.stub || call.receivedTs !== null) continue;
+      if (call.stub || call.receivedTs !== null || cancelTime(call) !== null) continue;
       for (const sibling of scans) {
         if (sibling === scan || sibling.run !== scan.run) continue;
-        const receivedTs = sibling.calls.get(call.callId)?.receivedTs ?? null;
+        const there = sibling.calls.get(call.callId);
+        const receivedTs = there?.receivedTs ?? null;
+        const cancelledTs = there ? cancelTime(there) : null;
+        const endTs = receivedTs ?? cancelledTs;
         for (const segment of sibling.segments) {
           if (segment.segment <= call.segment) continue;
-          if (receivedTs !== null && segment.start > receivedTs) continue;
+          if (endTs !== null && segment.start > endTs) continue;
           sibling.waits.push({
             segment: segment.segment,
             thread: call.thread,
             callId: call.callId,
             start: segment.start,
-            end: receivedTs,
+            end: endTs,
+            cancelled: receivedTs === null && cancelledTs !== null,
           });
         }
       }
@@ -892,31 +1189,67 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
     segments.find((bar) => bar.site === site && bar.run === run && bar.segment === segment);
 
   const threads: ThreadBar[] = [];
+  const threadLinks: ThreadLink[] = [];
   const waits: WaitInterval[] = [];
   const subRowOf = new Map<string, number>();
   for (const scan of scans) {
-    const candidates = scan.threads.flatMap((thread) => {
+    // The bars of one thread id that continue each other form a chain. A chain
+    // keeps one sub-row, so a thread stays on its line across a suspension.
+    interface Chain { start: number; end: number; parts: { thread: RawThread; start: number; end: number }[] }
+    const chains: Chain[] = [];
+    const openChain = new Map<number, Chain>();
+    const own = rawThreads
+      .filter((thread) => thread.site === scan.site && thread.run === scan.run)
+      .sort((a, b) => a.segment - b.segment || a.start - b.start);
+    for (const thread of own) {
       const bar = barOf(scan.site, scan.run, thread.segment);
-      if (!bar) return [];
-      return [{ thread, start: thread.start, end: Math.max(thread.end ?? bar.end, thread.start) }];
-    });
-    const subRows = assignRows(candidates);
+      if (!bar) continue;
+      const part = { thread, start: thread.start, end: Math.max(thread.end ?? bar.end, thread.start) };
+      const chain = thread.continued ? openChain.get(thread.thread) : undefined;
+      if (chain) {
+        chain.parts.push(part);
+        chain.end = Math.max(chain.end, part.end);
+      } else {
+        const started: Chain = { start: part.start, end: part.end, parts: [part] };
+        chains.push(started);
+        openChain.set(thread.thread, started);
+      }
+      if (!thread.continues) openChain.delete(thread.thread);
+    }
+    const subRows = assignRows(chains);
     const laneRow = laneOf(scan.site).rows[row(scan.site, scan.run)];
-    for (const [candidate, subRow] of subRows) {
-      const { thread } = candidate;
-      subRowOf.set(`${scan.site}/${scan.run}#${thread.segment}:${thread.thread}`, subRow);
+    for (const [chain, subRow] of subRows) {
       if (laneRow) laneRow.subRows = Math.max(laneRow.subRows, subRow + 1);
-      threads.push({
-        id: `thread:${scan.site}/${scan.run}#${thread.segment}:${thread.thread}`,
-        site: scan.site,
-        run: scan.run,
-        segment: thread.segment,
-        thread: thread.thread,
-        parentThread: thread.parentThread,
-        start: candidate.start,
-        end: candidate.end,
-        row: row(scan.site, scan.run),
-        subRow,
+      chain.parts.forEach((part, index) => {
+        const { thread } = part;
+        subRowOf.set(`${scan.site}/${scan.run}#${thread.segment}:${thread.thread}`, subRow);
+        threads.push({
+          id: `thread:${scan.site}/${scan.run}#${thread.segment}:${thread.thread}`,
+          site: scan.site,
+          run: scan.run,
+          segment: thread.segment,
+          thread: thread.thread,
+          parentThread: thread.parentThread,
+          start: part.start,
+          end: part.end,
+          row: row(scan.site, scan.run),
+          subRow,
+          continued: thread.continued,
+          continues: thread.continues,
+        });
+        const next = chain.parts[index + 1];
+        if (next) {
+          threadLinks.push({
+            id: `threadlink:${scan.site}/${scan.run}#${thread.segment}:${thread.thread}`,
+            site: scan.site,
+            run: scan.run,
+            thread: thread.thread,
+            row: row(scan.site, scan.run),
+            subRow,
+            start: part.end,
+            end: Math.max(next.start, part.end),
+          });
+        }
       });
     }
     for (const wait of scan.waits) {
@@ -934,6 +1267,8 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
                 candidate.thread === wait.thread,
             );
       const limit = threadBar?.end ?? bar.end;
+      // A wait that was carried into a resumed segment starts with the thread that waits.
+      const start = Math.max(wait.start, threadBar?.start ?? wait.start);
       waits.push({
         id: `wait:${scan.site}/${scan.run}#${wait.segment}:${wait.callId}`,
         site: scan.site,
@@ -941,10 +1276,11 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
         segment: wait.segment,
         thread: wait.thread,
         callId: wait.callId,
-        start: wait.start,
-        end: Math.max(Math.min(wait.end ?? limit, limit), wait.start),
+        start,
+        end: Math.max(Math.min(wait.end ?? limit, limit), start),
         row: bar.row,
         subRow,
+        cancelled: wait.cancelled,
       });
     }
   }
@@ -986,11 +1322,52 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
             bytes: raw.stats?.compressed_bytes ?? fromRecord?.bytes ?? null,
             stats: raw.stats ?? null,
             automatic: raw.automatic,
+            wake:
+              raw.wake === null
+                ? null
+                : { remainingMs: raw.wake.remainingMs, wakeAt: scan.sleeps.find((sleep) => sleep.ts >= raw.t - 1)?.wakeAt ?? raw.t + raw.wake.remainingMs },
           });
           break;
         }
       }
     });
+    scan.wakes.forEach((wake, index) => {
+      // The sleep that this wake ends: the latest timer that was set before it.
+      const sleep = [...scan.sleeps].reverse().find((candidate) => candidate.ts <= wake.ts + 1) ?? null;
+      const woke = scan.segments.find((segment) => segment.start >= wake.ts - 1);
+      markers.push({
+        id: `marker:${scan.site}/${scan.run}:wake${index}`,
+        site: scan.site,
+        run: scan.run,
+        segment: woke?.segment ?? 0,
+        t: wake.ts,
+        row: markerRow,
+        kind: "wake",
+        reason: wake.reason,
+        wakeAt: sleep?.wakeAt ?? null,
+        sleptMs: sleep === null ? null : Math.max(wake.ts - sleep.ts, 0),
+      });
+    });
+    for (const call of scan.calls.values()) {
+      const t = cancelTime(call);
+      if (t === null) continue;
+      const child = findChild(call, scan, input.runs);
+      markers.push({
+        id: `marker:${scan.site}/${scan.run}:cancel:${call.callId}`,
+        site: scan.site,
+        run: scan.run,
+        segment: call.cancelSegment ?? 0,
+        t,
+        row: markerRow,
+        kind: "cancel",
+        callId: call.callId,
+        function: call.function,
+        thread: call.cancelThread,
+        childSite: child?.site ?? null,
+        childRun: child?.run ?? null,
+        source: call.cancelTs === null ? "site" : "worker",
+      });
+    }
     if (scan.fork !== null) {
       markers.push({
         id: `marker:${scan.site}/${scan.run}:fork`,
@@ -1032,6 +1409,7 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
         stats: snapshot.stats ?? null,
         // Servers that predate `automatic` list such a snapshot only when it was automatic.
         automatic: snapshot.automatic ?? true,
+        wake: null,
       });
     }
   }
@@ -1077,7 +1455,9 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
   // Remote call and return connectors.
   for (const scan of scans) {
     for (const call of scan.calls.values()) {
-      if (call.stub) continue;
+      // A stub knows the end of a call that was made on another site. It can
+      // still cancel the child from here, after the run moved.
+      if (call.stub && cancelTime(call) === null) continue;
       const child = findChild(call, scan, input.runs);
       if (!child) continue;
       const childBars = barsByRun.get(child.run) ?? [];
@@ -1086,7 +1466,7 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
       const childStart = firstChildBar?.start ?? childRecord?.created_ts ?? null;
       const callSubRow = subRowOf.get(`${scan.site}/${scan.run}#${call.segment}:${call.thread}`) ?? null;
       const parentRow = row(scan.site, scan.run);
-      if (childStart !== null) {
+      if (childStart !== null && !call.stub) {
         connectors.push({
           id: `call:${call.callId}`,
           kind: "call",
@@ -1106,6 +1486,36 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
       }
 
       const lastChildBar = childBars[childBars.length - 1];
+      const cancelAt = cancelTime(call);
+      if (cancelAt !== null && lastChildBar) {
+        // The cancel reaches the child's site, which ends the child. A child
+        // that had settled before has nothing to cancel and gets no connector.
+        const childCancelled = lastChildBar.endKind === "cancelled" || childRecord?.status === "cancelled";
+        const inFlight = lastChildBar.endKind === "open";
+        if (childCancelled || inFlight) {
+          const cancelSubRow =
+            call.cancelSegment === null || call.cancelThread === null
+              ? null
+              : (subRowOf.get(`${scan.site}/${scan.run}#${call.cancelSegment}:${call.cancelThread}`) ?? null);
+          connectors.push({
+            id: `cancel:${call.callId}`,
+            kind: "cancel",
+            from: { site: scan.site, run: scan.run, t: cancelAt, row: parentRow, subRow: cancelSubRow },
+            to: {
+              site: lastChildBar.site,
+              run: child.run,
+              t: inFlight ? Math.max(cancelAt, now) : Math.max(lastChildBar.end, cancelAt),
+              row: lastChildBar.row,
+              subRow: null,
+            },
+            callId: call.callId,
+            ok: null,
+            pending: inFlight,
+            label: `${scan.run} cancels ${child.site}/${child.run}`,
+          });
+        }
+        continue;
+      }
       if (!lastChildBar || (lastChildBar.endKind !== "completed" && lastChildBar.endKind !== "failed")) continue;
       const childEnd = lastChildBar.end;
       const parentBars = barsByRun.get(scan.run) ?? [];
@@ -1171,7 +1581,7 @@ export function computeTimelineLayout(input: LayoutInput): TimelineLayout {
   const t0 = times.length > 0 ? Math.min(...times) : now;
   const t1 = times.length > 0 ? Math.max(...times) : now;
 
-  return { t0, t1: Math.max(t1, t0), live, lanes, segments, gaps, threads, waits, connectors, markers };
+  return { t0, t1: Math.max(t1, t0), live, lanes, segments, gaps, threads, threadLinks, waits, connectors, markers };
 }
 
 function findChild(call: RawCall, scan: RunScan, runs: readonly Run[]): { site: Site; run: string } | null {

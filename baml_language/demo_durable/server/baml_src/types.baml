@@ -32,6 +32,21 @@ class Waiting {
     child_site: string,
     child_run: string,
     func: string,
+    /// True on an entry that a fork copied from its source, or that a run
+    /// attached to a child that another run dispatched. The child belongs to
+    /// the run that dispatched it, so a run never cancels a child through an
+    /// inherited entry.
+    inherited: bool,
+}
+
+/// One remote call that a worker of the run announced: what is needed to
+/// dispatch the call again. A restored thread that waits for the result of a
+/// call does not announce it again and no longer holds its arguments, so the
+/// site server keeps them. A fork copies the list of its source.
+class CallRecord {
+    call_id: string,
+    func: string,
+    args: json,
 }
 
 class SnapshotInfo {
@@ -96,6 +111,18 @@ class Run {
     /// Contract section 8.3: on a record with status `migrated`, the site that
     /// the run moved to. Null on every other record.
     migrated_to: string?,
+    /// Contract section 9.3: the time at which a `sleeping` run is resumed, in
+    /// Unix milliseconds on this server's clock. Null in every other status.
+    wake_at: int?,
+    /// Contract section 9.3: the hash of the program that the run executes, from
+    /// the worker's `hello` event or from the request that created the run.
+    program_hash: string?,
+    /// Extension: the remote calls that the run no longer waits on (a worker
+    /// `remote_cancel` event, or the end of the run as `cancelled`, `failed`, or
+    /// `lost`). A result that arrives for one of them is discarded.
+    cancelled_calls: string[],
+    /// Extension: every remote call that a worker of the run announced.
+    calls: CallRecord[],
 }
 
 /// Returns a copy of `m` in which the key `from` is called `to`. The key order is kept.
@@ -159,6 +186,27 @@ function run_from_json(value: json) -> Run throws baml.json.DecodeError {
         }
         if (!m.has("migrated_to")) {
             m.set("migrated_to", null);
+        }
+        if (!m.has("wake_at")) {
+            m.set("wake_at", null);
+        }
+        if (!m.has("program_hash")) {
+            m.set("program_hash", null);
+        }
+        if (!m.has("cancelled_calls")) {
+            m.set("cancelled_calls", []);
+        }
+        if (!m.has("calls")) {
+            m.set("calls", []);
+        }
+        if let waits: json[] = m.get("waiting_on") {
+            for (let w in waits) {
+                if let wm: map<string, json> = w {
+                    if (!wm.has("inherited")) {
+                        wm.set("inherited", false);
+                    }
+                }
+            }
         }
         if let snaps: json[] = m.get("snapshots") {
             for (let s in snaps) {

@@ -8,6 +8,7 @@
 import {
   DEFAULT_SITES,
   isLiveStatus,
+  isSuspendedStatus,
   normalizeRun,
   type FunctionInfo,
   type PauseBlocked,
@@ -416,14 +417,65 @@ export function validActions(run: Run | null | undefined): Record<RunAction, boo
   if (!run) return none;
   const live = isLiveStatus(run.status);
   const hasSnapshot = run.snapshots.length > 0;
+  // Section 9.3: a `sleeping` run can be resumed before its timer fires, and a
+  // run without a process (`paused`, `sleeping`) can be cancelled. `kill` needs
+  // a process, so it is refused for both.
+  const suspended = isSuspendedStatus(run.status);
   return {
     pause: run.status === "running",
-    resume_here: run.status === "paused" && hasSnapshot,
-    resume_on: run.status === "paused" && hasSnapshot,
+    resume_here: suspended && hasSnapshot,
+    resume_on: suspended && hasSnapshot,
     kill: live,
-    cancel: live,
+    cancel: live || suspended,
     fork: hasSnapshot,
   };
+}
+
+/** One row of the runs list. Remote children follow their parent, one level deeper. */
+export interface RunRow {
+  key: RunKey;
+  run: Run;
+  depth: number;
+  /** Number of remote children that are listed under this row. */
+  children: number;
+}
+
+/**
+ * The runs list, grouped: every run that no listed run called, newest first,
+ * each followed by its remote children in call order, and their children in
+ * turn. A child whose parent is not in the list is a top-level row. A parent
+ * that migrated has one record per site. Its children follow the record on the
+ * site that made the call (`parent.site`), or the first record of that id.
+ */
+export function groupRuns(runs: readonly Run[]): RunRow[] {
+  const byId = new Map<string, Run[]>();
+  for (const run of runs) byId.set(run.id, [...(byId.get(run.id) ?? []), run]);
+  const childrenOf = new Map<RunKey, Run[]>();
+  const top: Run[] = [];
+  for (const run of runs) {
+    const candidates = run.parent ? (byId.get(run.parent.run) ?? []) : [];
+    const parent = candidates.find((candidate) => candidate.site === run.parent?.site) ?? candidates[0];
+    if (!parent || parent === run) {
+      top.push(run);
+      continue;
+    }
+    const key = runKey(parent.site, parent.id);
+    childrenOf.set(key, [...(childrenOf.get(key) ?? []), run]);
+  }
+  const rows: RunRow[] = [];
+  const seen = new Set<RunKey>();
+  const visit = (run: Run, depth: number): void => {
+    const key = runKey(run.site, run.id);
+    if (seen.has(key)) return;
+    seen.add(key);
+    const children = [...(childrenOf.get(key) ?? [])].sort((a, b) => a.created_ts - b.created_ts || a.id.localeCompare(b.id));
+    rows.push({ key, run, depth, children: children.length });
+    for (const child of children) visit(child, depth + 1);
+  };
+  for (const run of [...top].sort((a, b) => b.created_ts - a.created_ts || a.site.localeCompare(b.site))) visit(run, 0);
+  // A cycle of parents cannot happen on a real server. A record that it would hide is still listed.
+  for (const run of runs) visit(run, 0);
+  return rows;
 }
 
 /** The functions to offer in the picker. Remote functions sort last. */

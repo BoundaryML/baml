@@ -27,7 +27,16 @@ export interface Fixture {
   events: SseEvent[];
   /** State dumps by `<site>/<run>/<n>`. */
   states: Record<string, StateDump>;
+  /**
+   * The runs that the scenario guide follows, by role (`root`, and `plain` for
+   * the second run of the recovery scenario). Each names the site that started
+   * the run. Absent on a fixture that no scenario plays.
+   */
+  roles?: Record<string, { site: Site; id: string }>;
 }
+
+/** The program hash that the fixture workers report (section 9.2). Every site runs the same program. */
+export const FIXTURE_PROGRAM_HASH = "9f2c41d7a8e05b36c1d4f7a90b2e6c58d3a1f4079e8b2c6d5a0f3e7b1c9d4a62";
 
 /** A worker event without the fields that the builder fills in. */
 type Omitted = "v" | "ts" | "run" | "segment" | "pid" | "site";
@@ -65,7 +74,7 @@ export class FixtureBuilder {
     id: string,
     fn: string,
     args: JsonObject,
-    extra: Partial<Pick<Run, "parent" | "origin" | "segment" | "snapshots" | "status" | "forked_from" | "position" | "waiting_on" | "remote_results">> = {},
+    extra: Partial<Pick<Run, "parent" | "origin" | "segment" | "snapshots" | "status" | "forked_from" | "position" | "waiting_on" | "remote_results" | "program_hash">> = {},
   ): Run {
     const run: Run = {
       id,
@@ -89,6 +98,8 @@ export class FixtureBuilder {
       forked_from: null,
       result_delivered: false,
       blocked: null,
+      wake_at: null,
+      program_hash: FIXTURE_PROGRAM_HASH,
       ...extra,
     };
     this.runs.set(`${site}/${id}`, run);
@@ -226,10 +237,45 @@ export class FixtureBuilder {
     });
   }
 
-  build(name: string, title: string): Fixture {
+  /**
+   * A run suspends itself for a sleep (sections 9.2 and 9.3): the `paused`
+   * event with `wake`, the exit with code 75, the `sleeping` status with
+   * `wake_at`, and the `sleep_scheduled` event. Returns `wake_at` as an offset.
+   */
+  selfSuspend(at: number, site: Site, id: string, n: number, stats: PauseStats, remainingMs: number, state: Omit<StateDump, "run" | "segment" | "created_ts">): number {
+    const run = this.run(site, id);
+    const base = `.baml/runs/${id}/snap-${n}`;
+    this.states[`${site}/${id}/${n}`] = { run: id, segment: run.segment, created_ts: this.ts(at), ...state };
+    this.worker(at, site, id, {
+      type: "paused",
+      snapshot_path: `${base}.bamlsnap`,
+      state_path: `${base}.json`,
+      stats,
+      wake: { reason: "sleep", remaining_ms: remainingMs, at_ts: this.ts(at + remainingMs) },
+    });
+    // The site server computes `wake_at` as the receipt time plus `remaining_ms`.
+    const wakeAt = at + 3 + remainingMs;
+    this.exit(at + 2, site, id, 75, "sleeping", {
+      wake_at: this.ts(wakeAt),
+      snapshots: [
+        ...run.snapshots,
+        { n, snapshot_path: `${base}.bamlsnap`, state_path: `${base}.json`, bytes: stats.compressed_bytes ?? 0, ts: this.ts(at), stats, segment: run.segment, automatic: false },
+      ],
+    });
+    this.siteEvent(at + 3, { type: "sleep_scheduled", site, run: id, wake_at: this.ts(wakeAt) });
+    return wakeAt;
+  }
+
+  /** The wake timer fires (section 9.3): the `woken` event, and the run starts its next segment. */
+  wake(at: number, site: Site, id: string, reason: "timer" | "manual" | "restart" = "timer"): Run {
+    this.siteEvent(at, { type: "woken", site, run: id, reason });
+    return this.setStatus(at, site, id, "starting", { segment: this.run(site, id).segment + 1, wake_at: null });
+  }
+
+  build(name: string, title: string, extra: Pick<Fixture, "roles"> = {}): Fixture {
     // Stable sort: messages with equal `ts` keep their emission order.
     const events = [...this.events].sort((a, b) => a.ts - b.ts);
-    return { name, title, events, states: this.states };
+    return { name, title, events, states: this.states, ...extra };
   }
 
   private emitRun(at: number, run: Run): void {

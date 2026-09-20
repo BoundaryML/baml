@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clock } from "../clock";
 import { formatBytes, formatClock, formatOffset } from "../format";
-import { isLiveStatus, sitePort, type Run, type Site, type SiteEntry } from "../protocol";
+import { isTickingStatus, sitePort, type Run, type Site, type SiteEntry } from "../protocol";
 import type { AppState, RunKey } from "../state";
 import { runKey } from "../state";
 import { TimelineDetail, type DetailTarget } from "./Detail";
@@ -15,6 +15,7 @@ import {
   placeBarLabels,
   plotGeometry,
   RIGHT_PAD,
+  sleepGapLabel,
   spreadMarkers,
   SUB_H,
   subRowY,
@@ -40,7 +41,7 @@ interface Props {
   onSelectSnapshot(snapshot: SnapshotRef | null): void;
 }
 
-type TargetRef = { kind: DetailTarget["kind"]; id: string };
+type TargetRef = { kind: DetailTarget["kind"] | "threadlink"; id: string };
 
 const END_GLYPHS: Partial<Record<SegmentBar["endKind"], string>> = {
   completed: "✓",
@@ -96,6 +97,12 @@ function resolveTarget(layout: TimelineLayout, ref: TargetRef | null): DetailTar
       const item = find(layout.threads);
       return item ? { kind: "thread", item } : null;
     }
+    case "threadlink": {
+      // The line between two bars of one thread shows the thread that continues.
+      const link = find(layout.threadLinks);
+      const item = link && layout.threads.find((thread) => thread.site === link.site && thread.run === link.run && thread.thread === link.thread && thread.continues);
+      return item ? { kind: "thread", item } : null;
+    }
     case "wait": {
       const item = find(layout.waits);
       return item ? { kind: "wait", item } : null;
@@ -113,7 +120,8 @@ function fitLabel(candidates: string[], available: number): string {
 
 export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, onSelectSnapshot }: Props) {
   const [plotRef, width] = useWidth();
-  const live = runs.some((run) => isLiveStatus(run.status));
+  // A sleeping run has no process, but its countdown moves with the clock.
+  const live = runs.some((run) => isTickingStatus(run.status));
   const tick = useNow(live);
   const siteNames = useMemo(() => sites.map((site) => site.name), [sites]);
   const layout = useMemo(
@@ -257,11 +265,19 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
             </svg>
             no process
           </span>
+          <span>
+            <svg width={22} height={10} aria-hidden="true">
+              <rect className="tl-sleep tl-legend-ink" x={0.5} y={1} width={21} height={8} rx={4} />
+            </svg>
+            sleeping
+          </span>
           <span><LegendMarker kind="pause_request" /> pause</span>
           <span><LegendMarker kind="blocked" /> blocked</span>
           <span><LegendMarker kind="snapshot" /> snapshot</span>
           <span><LegendMarker kind="resume" /> resume</span>
           <span><LegendMarker kind="fork" /> fork</span>
+          <span><LegendMarker kind="wake" /> wake</span>
+          <span><LegendMarker kind="cancel" /> cancel</span>
         </div>
         <span className="spacer" />
         <button className="btn small" onClick={() => zoom(1 / 1.6)} aria-label="Zoom in" title="Zoom in. Ctrl or cmd + wheel zooms around the cursor. Drag or a horizontal wheel pans.">+</button>
@@ -310,6 +326,10 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                 <clipPath id={clipId}>
                   <rect x={GUTTER} y={0} width={Math.max(plotRight - GUTTER + RIGHT_PAD - 2, 0)} height={plot.height} />
                 </clipPath>
+                {/* Diagonal lines in the surface color. On a bar they read as "cancelled". */}
+                <pattern id="tl-hatch" width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line className="tl-hatch-line" x1={0} y1={0} x2={0} y2={5} />
+                </pattern>
               </defs>
 
               {plot.lanes.map((lane) => (
@@ -335,23 +355,33 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                   const row = rowGeometry(gap.site, gap.row);
                   if (!row) return null;
                   const x1 = scale.x(gap.start);
+                  if (gap.kind === "sleeping") {
+                    // A sleep ends at a known time, so the band of an open gap reaches into the future.
+                    const x2 = Math.max(scale.x(gap.end), x1 + 2);
+                    const label = sleepGapLabel(gap, tick, x2 - x1 - 22);
+                    const active = isActive("gap", gap.id);
+                    return (
+                      <g key={gap.id} data-testid="tl-gap" data-kind="sleeping" data-open={gap.open} data-wake-at={gap.wakeAt ?? undefined}
+                        {...hoverProps({ kind: "gap", id: gap.id })}>
+                        <rect className="tl-sleep" data-site={gap.site} data-open={gap.open} x={x1} y={row.barY + 1} width={x2 - x1} height={BAR_H - 2}
+                          rx={(BAR_H - 2) / 2} strokeWidth={active ? 2 : undefined} />
+                        {x2 - x1 > 18 && <text className="tl-sleep-glyph" data-site={gap.site} x={x1 + 5} y={row.barMid + 3.5}>☾</text>}
+                        {label && (
+                          <text className="tl-sleep-label" data-testid="tl-sleep-label" x={x1 + 17} y={row.barMid + 3.5}>{label}</text>
+                        )}
+                        {gap.open && gap.wakeAt !== null && (
+                          <line className="tl-sleep-wake" data-site={gap.site} x1={scale.x(gap.wakeAt)} x2={scale.x(gap.wakeAt)} y1={row.barY - 3} y2={row.barBottom + 3} />
+                        )}
+                        <rect className="tl-gap-hit" x={x1} y={row.barY} width={Math.max(x2 - x1, 0)} height={BAR_H} fill="transparent" />
+                      </g>
+                    );
+                  }
                   const x2 = gap.open ? plotRight : scale.x(gap.end);
-                  const label = fitLabel(
-                    [
-                      `no process · snapshot${gap.snapshotN === null ? "" : ` #${gap.snapshotN}`} ${formatBytes(gap.bytes)}`,
-                      `snapshot ${formatBytes(gap.bytes)}`,
-                      formatBytes(gap.bytes),
-                    ],
-                    x2 - x1 - 8,
-                  );
                   return (
-                    <g key={gap.id} data-testid="tl-gap" {...hoverProps({ kind: "gap", id: gap.id })}>
+                    <g key={gap.id} data-testid="tl-gap" data-kind={gap.kind} {...hoverProps({ kind: "gap", id: gap.id })}>
                       <line className="tl-gap" data-site={gap.site} x1={x1} x2={x2} y1={row.barMid} y2={row.barMid}
                         strokeWidth={isActive("gap", gap.id) ? 2.5 : undefined} />
                       <rect className="tl-gap-hit" x={x1} y={row.barY} width={Math.max(x2 - x1, 0)} height={BAR_H + 12} fill="transparent" />
-                      {label && gap.bytes !== null && (
-                        <text className="tl-gap-label" x={(x1 + x2) / 2} y={row.barMid + 14} textAnchor="middle">{label}</text>
-                      )}
                     </g>
                   );
                 })}
@@ -368,10 +398,13 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                   return (
                     <g key={bar.id} data-testid="tl-segment" data-run={bar.run} data-segment={bar.segment}
                       data-end-kind={bar.endKind} data-end={bar.endKind === "open" ? undefined : bar.end}>
-                      <rect className="tl-bar" data-site={bar.site} x={x1} y={row.barY} width={x2 - x1} height={BAR_H} rx={3}
+                      <rect className="tl-bar" data-site={bar.site} data-end-kind={bar.endKind} x={x1} y={row.barY} width={x2 - x1} height={BAR_H} rx={3}
                         {...hoverProps({ kind: "segment", id: bar.id })}>
                         <title>{`${bar.site}/${bar.run} segment ${bar.segment}, ${pid}`}</title>
                       </rect>
+                      {bar.endKind === "cancelled" && (
+                        <rect className="tl-cancelled-hatch" data-testid="tl-cancelled-hatch" x={x1} y={row.barY} width={x2 - x1} height={BAR_H} rx={3} fill="url(#tl-hatch)" />
+                      )}
                       {isActive("segment", bar.id) && (
                         <rect className="tl-outline" x={x1 - 1.5} y={row.barY - 1.5} width={x2 - x1 + 3} height={BAR_H + 3} rx={4} />
                       )}
@@ -390,16 +423,36 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                   );
                 })}
 
+                {layout.threadLinks.map((link) => {
+                  const row = rowGeometry(link.site, link.row);
+                  if (!row) return null;
+                  const y = subRowY(row, link.subRow) + SUB_H / 2;
+                  return (
+                    <g key={link.id} data-testid="tl-thread-link" data-thread={link.thread} {...hoverProps({ kind: "threadlink", id: link.id })}>
+                      <line className="tl-thread-link" data-site={link.site} x1={scale.x(link.start)} x2={scale.x(link.end)} y1={y} y2={y} />
+                      <line className="tl-connector-hit" x1={scale.x(link.start)} x2={scale.x(link.end)} y1={y} y2={y}>
+                        <title>{`thread ${link.thread} is in the snapshot and continues in the next segment`}</title>
+                      </line>
+                    </g>
+                  );
+                })}
+
                 {layout.threads.map((thread) => {
                   const row = rowGeometry(thread.site, thread.row);
                   if (!row) return null;
                   const y = subRowY(row, thread.subRow);
                   const x1 = scale.x(thread.start);
                   const x2 = Math.max(scale.x(thread.end), x1 + 2);
+                  // A branch joins the thread to the run's bar where the thread starts and where it ends,
+                  // not where a suspension cuts it.
+                  const branch = [
+                    thread.continued ? "" : `M${x1 + 0.75},${row.barBottom} V${y + SUB_H / 2}`,
+                    thread.continues ? "" : `M${x2 - 0.75},${y + SUB_H / 2} V${row.barBottom}`,
+                  ].join(" ").trim();
                   return (
-                    <g key={thread.id} data-testid="tl-thread">
-                      <path className="tl-branch" data-site={thread.site}
-                        d={`M${x1 + 0.75},${row.barBottom} V${y + SUB_H / 2} M${x2 - 0.75},${y + SUB_H / 2} V${row.barBottom}`} />
+                    <g key={thread.id} data-testid="tl-thread" data-thread={thread.thread} data-segment={thread.segment} data-sub-row={thread.subRow}
+                      data-continued={thread.continued || undefined} data-continues={thread.continues || undefined}>
+                      {branch !== "" && <path className="tl-branch" data-site={thread.site} d={branch} />}
                       <rect className="tl-thread" data-site={thread.site} x={x1} y={y} width={x2 - x1} height={SUB_H} rx={2}
                         {...hoverProps({ kind: "thread", id: thread.id })}>
                         <title>{`spawned thread ${thread.thread}`}</title>
@@ -411,6 +464,23 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                   );
                 })}
 
+                {/* The labels of the pauses come after the thread lines, which pass under them. */}
+                {layout.gaps.map((gap) => {
+                  const row = rowGeometry(gap.site, gap.row);
+                  if (!row || gap.kind === "sleeping" || gap.bytes === null) return null;
+                  const x1 = scale.x(gap.start);
+                  const x2 = gap.open ? plotRight : scale.x(gap.end);
+                  const label = fitLabel(
+                    [
+                      `no process · snapshot${gap.snapshotN === null ? "" : ` #${gap.snapshotN}`} ${formatBytes(gap.bytes)}`,
+                      `snapshot ${formatBytes(gap.bytes)}`,
+                      formatBytes(gap.bytes),
+                    ],
+                    x2 - x1 - 8,
+                  );
+                  return label ? <text key={`${gap.id}:label`} className="tl-gap-label" x={(x1 + x2) / 2} y={row.barMid + 14} textAnchor="middle">{label}</text> : null;
+                })}
+
                 {layout.waits.map((wait) => {
                   const row = rowGeometry(wait.site, wait.row);
                   if (!row) return null;
@@ -420,7 +490,7 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                   const y = wait.subRow === null ? row.barY : subRowY(row, wait.subRow);
                   const height = wait.subRow === null ? BAR_H : SUB_H;
                   return (
-                    <rect key={wait.id} className="tl-wait" data-testid="tl-wait" x={x1} y={y} width={x2 - x1} height={height}
+                    <rect key={wait.id} className="tl-wait" data-testid="tl-wait" data-cancelled={wait.cancelled || undefined} x={x1} y={y} width={x2 - x1} height={height}
                       {...hoverProps({ kind: "wait", id: wait.id })}>
                       <title>{`waits on ${wait.callId}`}</title>
                     </rect>
@@ -435,7 +505,7 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
                       data-from-site={connector.from.site} data-to-site={connector.to.site}>
                       <path className="tl-connector" data-kind={connector.kind} data-pending={connector.pending}
                         data-ok={connector.ok === false ? "false" : undefined} d={d} strokeWidth={active ? 2.5 : undefined} />
-                      <path className={`tl-arrow${connector.kind === "migration" || connector.kind === "fork" ? " migration" : ""}`} d={arrow} />
+                      <path className={`tl-arrow${connector.kind === "migration" || connector.kind === "fork" ? " migration" : ""}`} data-kind={connector.kind} d={arrow} />
                       <path className="tl-connector-hit" d={d} {...hoverProps({ kind: "connector", id: connector.id })}>
                         <title>{connector.label}</title>
                       </path>

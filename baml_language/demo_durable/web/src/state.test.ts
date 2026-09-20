@@ -68,7 +68,8 @@ describe("reducer", () => {
     expect(parent.status).toBe("paused");
     expect(parent.pid).toBeNull();
     expect(state.runs[runKey("cloud", CENTRAL_CHILD)]?.status).toBe("running");
-    expect(validActions(parent)).toEqual({ pause: false, resume_here: true, resume_on: true, kill: false, cancel: false, fork: true });
+    // Section 9.3: a paused run has no process to kill, and it can be cancelled on the site server.
+    expect(validActions(parent)).toEqual({ pause: false, resume_here: true, resume_on: true, kill: false, cancel: true, fork: true });
     expect(latestPosition(state.events[runKey("local", CENTRAL_PARENT)])?.reason).toBe("remote_call");
   });
 
@@ -246,6 +247,12 @@ describe("validActions", () => {
     expect(validActions({ ...base, status: "completed" })).toEqual({ pause: false, resume_here: false, resume_on: false, kill: false, cancel: false, fork: true });
     expect(validActions({ ...base, status: "lost", snapshots: [] })).toEqual({ pause: false, resume_here: false, resume_on: false, kill: false, cancel: false, fork: false });
     expect(validActions(null).pause).toBe(false);
+  });
+
+  it("resumes and cancels a sleeping run, and refuses to kill it (section 9.3)", () => {
+    expect(validActions({ ...base, status: "sleeping" })).toEqual({ pause: false, resume_here: true, resume_on: true, kill: false, cancel: true, fork: true });
+    // Without a snapshot there is nothing to resume from.
+    expect(validActions({ ...base, status: "sleeping", snapshots: [] })).toMatchObject({ resume_here: false, resume_on: false, cancel: true });
   });
 });
 
