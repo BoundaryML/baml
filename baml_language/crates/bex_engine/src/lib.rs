@@ -75,7 +75,11 @@ mod future;
 pub use future::LeakedFuture;
 mod inbound_config;
 pub mod logger;
+#[cfg(not(target_arch = "wasm32"))]
+mod telemetry;
 mod thread;
+#[cfg(not(target_arch = "wasm32"))]
+pub use telemetry::TelemetryRecording;
 pub mod trace_heap;
 mod trace_value_encode;
 use std::{
@@ -782,6 +786,8 @@ pub struct BexEngine {
     telemetry_clock: btel_clock::ClockRuntime,
     #[cfg(not(target_arch = "wasm32"))]
     telemetry_runtime: Arc<btel_processor::TelemetryRuntime>,
+    #[cfg(not(target_arch = "wasm32"))]
+    telemetry_recording_id: btel_publisher::RecordingId,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1413,6 +1419,8 @@ impl BexEngine {
             argv,
             None,
             btel_clock::ClockMode::Auto,
+            #[cfg(not(target_arch = "wasm32"))]
+            TelemetryRecording::default(),
         )
     }
 
@@ -1430,6 +1438,8 @@ impl BexEngine {
             argv,
             Some(runtime_compiler),
             btel_clock::ClockMode::Auto,
+            #[cfg(not(target_arch = "wasm32"))]
+            TelemetryRecording::default(),
         )
     }
 
@@ -1447,6 +1457,8 @@ impl BexEngine {
             argv,
             runtime_compiler,
             clock_mode,
+            #[cfg(not(target_arch = "wasm32"))]
+            TelemetryRecording::default(),
         )
     }
 
@@ -1462,6 +1474,7 @@ impl BexEngine {
         argv: Vec<String>,
         runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
         clock_mode: btel_clock::ClockMode,
+        #[cfg(not(target_arch = "wasm32"))] recording: TelemetryRecording,
     ) -> Result<Self, EngineError> {
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
@@ -1619,8 +1632,9 @@ impl BexEngine {
         let telemetry_policies = Arc::new(TelemetryPolicies::new());
         let telemetry_clock = btel_clock::ClockRuntime::new(clock_mode);
         #[cfg(not(target_arch = "wasm32"))]
-        let telemetry_runtime = btel_processor::TelemetryRuntime::new()
-            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
+        let telemetry_recording_id = recording.id();
+        #[cfg(not(target_arch = "wasm32"))]
+        let telemetry_runtime = recording.start(source_snapshot_id.map(|id| id.0))?;
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1783,6 +1797,8 @@ impl BexEngine {
             telemetry_clock,
             #[cfg(not(target_arch = "wasm32"))]
             telemetry_runtime,
+            #[cfg(not(target_arch = "wasm32"))]
+            telemetry_recording_id,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -2449,9 +2465,30 @@ impl BexEngine {
 
         self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
             .await;
-        shutdown.complete();
         #[cfg(not(target_arch = "wasm32"))]
-        self.bex_work.join_worker().await;
+        {
+            // All normal executions and their poll scopes have ended. Joining
+            // may encode/deliver a final file; never block a runtime worker or
+            // hold a heap permit while waiting for the telemetry consumer.
+            let runtime = Arc::clone(&self.telemetry_runtime);
+            // Once admission closes, cancellation must not reopen the engine.
+            // Transfer the shutdown guard to the joining task so it completes
+            // even if this awaiting caller is dropped.
+            match tokio::task::spawn_blocking(move || {
+                let result = runtime.finish();
+                shutdown.complete();
+                result
+            })
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::error!(%error, "telemetry shutdown failed"),
+                Err(error) => tracing::error!(%error, "telemetry shutdown task failed"),
+            }
+            self.bex_work.join_worker().await;
+        }
+        #[cfg(target_arch = "wasm32")]
+        shutdown.complete();
     }
 
     fn enqueue_unhandled_spawn_errors(

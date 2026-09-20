@@ -1268,6 +1268,7 @@ dependencies = [
  "bridge_ctypes",
  "btel_clock",
  "btel_processor",
+ "btel_publisher",
  "btel_types",
  "futures",
  "indexmap",
