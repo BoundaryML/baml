@@ -2783,6 +2783,28 @@ impl Continuation for CallAnyContinuation {
             }
         });
     }
+
+    /// Layout: `types = [expected]`.
+    fn snapshot(&self) -> Option<crate::package_baml::ContinuationState> {
+        let mut state = crate::package_baml::ContinuationState::new("reflect.call_any");
+        state.types.push(self.expected.clone());
+        Some(state)
+    }
+}
+
+/// Inverse of [`CallAnyContinuation::snapshot`]. `None` for a tag that belongs
+/// to another module.
+pub(crate) fn restore_continuation(
+    state: &crate::package_baml::ContinuationState,
+) -> Option<Result<Box<dyn Continuation>, String>> {
+    if state.tag != "reflect.call_any" {
+        return None;
+    }
+    Some(
+        state
+            .ty(0)
+            .map(|expected| Box::new(CallAnyContinuation { expected }) as Box<dyn Continuation>),
+    )
 }
 
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError | CompilationError`.

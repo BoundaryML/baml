@@ -127,6 +127,11 @@ fn live_dump_and_dump_from_bytes_agree() {
         vm: &vm,
         parked: parked.clone(),
         extra_roots: args.clone(),
+        settles_future: None,
+        cancel: bex_snapshot::ThreadCancel::default(),
+        user_cancels: Vec::new(),
+        group: None,
+        engine_state: Vec::new(),
     }];
     let live = bex_snapshot::state_dump(&vm.heap, &threads, "r-test", 1);
     check_dump(&live);

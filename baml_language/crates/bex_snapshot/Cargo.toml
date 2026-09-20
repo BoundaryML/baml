@@ -27,6 +27,7 @@ zstd = { workspace = true }
 
 [dev-dependencies]
 baml_db = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt" ] }
 
 [features]
 default = [  ]

@@ -3,10 +3,17 @@
 //! ```text
 //! compile_time_len  u64      size of the source heap's compile-time region
 //! run_state         Vec<u8>  opaque engine state (readable without a heap)
+//! future_id_span    u64      every future id of the run is below this value
+//! resources         Vec<ResourceWire>   cancel tokens and task groups
 //! object_count      u32
 //! objects           object_count x Vec<u8>   Borsh(Object), one blob each
 //! threads           Vec<ThreadWire>
 //! ```
+//!
+//! The resources come before the objects because an `Object::RustData` blob
+//! is only the id of its resource, and the loader rebuilds the resource first.
+//! A cancel token lists the tokens it was composed from by id, and every
+//! source has a lower id than the composite, so one pass rebuilds them all.
 //!
 //! The object count comes first because the loader has to reserve every
 //! object's slot before it can translate any reference. Each object is its own
@@ -19,13 +26,41 @@
 use baml_type::Span;
 use bex_vm::{
     StackFrame,
-    snapshot::{FrameState, ThrowContextState, VmThreadState},
+    snapshot::{ContinuationState, FrameState, ThrowContextState, VmThreadState},
 };
 use bex_vm_types::{HeapPtr, RealizedTy, Value};
 use borsh::{BorshDeserialize, BorshSerialize};
 
+/// State of a native continuation frame (`bex_vm::snapshot::ContinuationState`).
+#[derive(BorshSerialize, BorshDeserialize)]
+pub(crate) struct ContinuationWire {
+    pub tag: String,
+    pub ptrs: Vec<HeapPtr>,
+    pub values: Vec<Value>,
+    pub types: Vec<RealizedTy>,
+    pub ints: Vec<u64>,
+    pub strings: Vec<String>,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub(crate) enum ResourceWire {
+    CancelToken {
+        cancelled: bool,
+        /// Resource ids of the tokens this one was composed from.
+        sources: Vec<u32>,
+    },
+    TaskGroup {
+        limit: u64,
+        name: Option<String>,
+        /// `(member id, running)`: running members first, then the queue in
+        /// admission order.
+        members: Vec<(u64, bool)>,
+    },
+}
+
 #[derive(BorshSerialize, BorshDeserialize)]
 pub(crate) struct FrameWire {
+    pub native: Option<ContinuationWire>,
     pub function: HeapPtr,
     pub function_name: String,
     pub instruction_ptr: u64,
@@ -72,7 +107,19 @@ pub(crate) struct ThreadWire {
     pub name: String,
     pub parked_kind: String,
     pub parked_payload: Vec<u8>,
+    /// Opaque per-thread engine state.
+    pub engine_state: Vec<u8>,
     pub extra_roots: Vec<Value>,
+    /// Id of the future the thread settles (before the loader's offset).
+    pub settles_future_id: Option<u64>,
+    /// The future object, or null when the snapshot does not hold it.
+    pub settles_future: HeapPtr,
+    pub cancelled: bool,
+    pub cancel_parent: Option<u64>,
+    /// Resource ids of the user cancel tokens linked into the thread's token.
+    pub user_cancels: Vec<u32>,
+    /// `(resource id of the task group, member id)`.
+    pub group: Option<(u32, u64)>,
     pub state: VmStateWire,
 }
 
@@ -126,6 +173,14 @@ impl VmStateWire {
                 .frames
                 .iter()
                 .map(|frame| FrameWire {
+                    native: frame.native.as_ref().map(|native| ContinuationWire {
+                        tag: native.tag.clone(),
+                        ptrs: native.ptrs.clone(),
+                        values: native.values.clone(),
+                        types: native.types.clone(),
+                        ints: native.ints.clone(),
+                        strings: native.strings.clone(),
+                    }),
                     function: frame.function,
                     function_name: frame.function_name.clone(),
                     instruction_ptr: frame.instruction_ptr as u64,
@@ -169,6 +224,14 @@ impl VmStateWire {
                 .into_iter()
                 .map(|frame| {
                     Ok(FrameState {
+                        native: frame.native.map(|native| ContinuationState {
+                            tag: native.tag,
+                            ptrs: native.ptrs,
+                            values: native.values,
+                            types: native.types,
+                            ints: native.ints,
+                            strings: native.strings,
+                        }),
                         function: frame.function,
                         function_name: frame.function_name,
                         instruction_ptr: usize_of(frame.instruction_ptr, "program counter")?,

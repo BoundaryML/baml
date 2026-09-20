@@ -314,6 +314,7 @@ enum DurableStep {
 struct DurableRestore<'a> {
     bytes: &'a [u8],
     program_hash: [u8; 32],
+    options: durable::ResumeOptions,
     on_restored: Box<dyn FnOnce(&durable::RestoredInfo) + Send + 'a>,
 }
 
@@ -1490,13 +1491,33 @@ pub(crate) fn op_error_to_throw_value(
     }
 }
 
+/// Everything the task of a spawned thread owns. See
+/// [`BexEngine::run_spawned_thread`].
+struct SpawnedThreadTask {
+    inactive: InactiveHeapPermit<BexThread>,
+    group_ticket: Option<bex_vm_types::TaskGroupTicket>,
+    durable_live: Option<durable::LiveGuard>,
+    durable_pause: Option<Arc<durable::PauseController>>,
+    child_cancel: CancellationToken,
+    call_id: CallId,
+    future_id: FutureId,
+    prof_thread_id: u64,
+    child_entry_call_id: BexCallId,
+    child_profile_enabled: bool,
+    boundary_lease: Option<ThreadBoundaryLeaseGuard>,
+    call_capture: Option<CallValueCaptureContext>,
+    log_capture: Option<LogCaptureContext>,
+    /// Set for a thread restored from a durable snapshot.
+    durable_resume: Option<durable::ParkedKind>,
+}
+
 /// Decoded `baml.spawn.Params` fields (BEP-034 middleware) — see
 /// [`BexEngine::read_spawn_params`].
 struct SpawnParamsData {
     body: HeapPtr,
     name: Option<String>,
     group: Option<Arc<TaskGroupInner>>,
-    cancel: Option<CancellationToken>,
+    cancel: Option<Arc<bex_vm_types::CancelTokenData>>,
     detach: bool,
 }
 
@@ -4173,7 +4194,12 @@ impl BexEngine {
             thread::DurableThreadCtx {
                 host,
                 parent: None,
+                token_parent: None,
+                user_cancels: Vec::new(),
                 pause: is_run_root.then(|| Arc::clone(&self.durable_pause)),
+                path: "0".to_string(),
+                spawned: 0,
+                remote_calls: 0,
             }
         });
         vm.remote_intercept = durable.is_some();
@@ -4207,27 +4233,6 @@ impl BexEngine {
         copy_objects: bool,
         durable_restore: Option<DurableRestore<'_>>,
     ) -> Result<BexCallResult, EngineError> {
-        // Durable POC: a resumed run installs the snapshot's frames and stack
-        // instead of an entry frame. This is fallible, so it happens before
-        // the root is admitted. `thread` holds its permit from before the
-        // restore until the state is rooted by its VM, so no collection can
-        // see the restored objects unrooted.
-        #[cfg(not(target_arch = "wasm32"))]
-        let durable_resume = match durable_restore {
-            Some(restore) => {
-                let info =
-                    self.durable_restore_into(&mut thread, restore.bytes, restore.program_hash)?;
-                (restore.on_restored)(&info);
-                Some(info.root_parked)
-            }
-            None => None,
-        };
-        #[cfg(target_arch = "wasm32")]
-        let durable_resume: Option<durable::ParkedKind> = match durable_restore {
-            Some(restore) => match restore.never {},
-            None => None,
-        };
-
         // Finish all fallible host type narrowing before durable run
         // admission. Once `run.meta` commits, the path below is straight-line
         // into the balanced root event loop.
@@ -4282,6 +4287,35 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
+        // Durable POC: a resumed run installs the snapshot's frames and stack
+        // instead of an entry frame. This is fallible, so it happens before
+        // the root is admitted, and it is the last fallible step: a restore
+        // registers threads and pending futures with the engine, and an error
+        // return after it would leave them behind. `thread` holds its permit from before the
+        // restore until the state is rooted by its VM, so no collection can
+        // see the restored objects unrooted.
+        #[cfg(not(target_arch = "wasm32"))]
+        let (durable_resume, durable_children) = match durable_restore {
+            Some(restore) => {
+                let run = self
+                    .durable_restore_into(
+                        &mut thread,
+                        restore.bytes,
+                        restore.program_hash,
+                        &restore.options,
+                    )
+                    .await?;
+                (restore.on_restored)(&run.info);
+                (Some(run.info.root_parked), run.children)
+            }
+            None => (None, Vec::new()),
+        };
+        #[cfg(target_arch = "wasm32")]
+        let durable_resume: Option<durable::ParkedKind> = match durable_restore {
+            Some(restore) => match restore.never {},
+            None => None,
+        };
+
         let root_thread_ref = ThreadRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
@@ -4390,6 +4424,77 @@ impl BexEngine {
                 });
         }
 
+        // Durable POC: the other threads of a restored run start as their own
+        // tasks once the root has reported its start, so that an observer
+        // sees the root first. Until then they are rooted by their registered
+        // (inactive) permits.
+        #[cfg(not(target_arch = "wasm32"))]
+        let durable_after_start: Option<Box<dyn FnOnce() + Send>> =
+            durable_resume.is_some().then(|| {
+                let engine = Arc::clone(self);
+                let call_capture = call_capture.clone();
+                let log_capture = log_capture.clone();
+                Box::new(move || {
+                    // Every restored thread that had started before the
+                    // snapshot is announced here, a parent before its
+                    // children, so that an observer never sees a thread whose
+                    // parent it does not know. A thread that was still queued
+                    // in a task group announces itself when it starts.
+                    let host = engine.durable_host();
+                    let mut announced =
+                        std::collections::HashSet::<durable::DurableThreadId>::new();
+                    let mut waiting: Vec<(
+                        durable::DurableThreadId,
+                        Option<durable::DurableThreadId>,
+                    )> = durable_children
+                        .iter()
+                        .filter(|child| child.parked != durable::ParkedKind::Queued)
+                        .map(|child| (child.thread_id, child.parent))
+                        .collect();
+                    let restored: std::collections::HashSet<durable::DurableThreadId> =
+                        waiting.iter().map(|(thread, _)| *thread).collect();
+                    while !waiting.is_empty() {
+                        let before = waiting.len();
+                        waiting.retain(|(thread, parent)| {
+                            let ready = parent.is_none_or(|parent| {
+                                !restored.contains(&parent) || announced.contains(&parent)
+                            });
+                            if ready {
+                                if let Some(host) = host.as_ref() {
+                                    host.thread_started(*thread, *parent);
+                                }
+                                announced.insert(*thread);
+                            }
+                            !ready
+                        });
+                        if waiting.len() == before {
+                            // A cycle of parents cannot come from a real run;
+                            // announce the rest in the order they are in.
+                            for (thread, parent) in waiting.drain(..) {
+                                if let Some(host) = host.as_ref() {
+                                    host.thread_started(thread, parent);
+                                }
+                            }
+                        }
+                    }
+                    for child in durable_children {
+                        Arc::clone(&engine).durable_start_restored_child(
+                            child,
+                            host_call_id,
+                            call_capture.clone(),
+                            log_capture.clone(),
+                        );
+                    }
+                    SpawnedWork::new(
+                        engine.bex_work.register_work(),
+                        Arc::clone(&engine).durable_replay_driver(),
+                    )
+                    .spawn();
+                }) as Box<dyn FnOnce() + Send>
+            });
+        #[cfg(target_arch = "wasm32")]
+        let durable_after_start: Option<Box<dyn FnOnce() + Send>> = None;
+
         // Run the event loop.
         let result = self
             .run_thread_event_loop(
@@ -4403,6 +4508,7 @@ impl BexEngine {
                 &cancel,
                 copy_objects,
                 durable_resume,
+                durable_after_start,
             )
             .await;
 
@@ -4914,6 +5020,10 @@ impl BexEngine {
     /// `function_name`. See `BexEngine::durable_resume`, which validates the
     /// snapshot header first.
     #[cfg(not(target_arch = "wasm32"))]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Mirrors the public resume entry point plus the restore callback."
+    )]
     pub(crate) async fn durable_resume_root(
         self: &Arc<Self>,
         function_name: &str,
@@ -4929,6 +5039,7 @@ impl BexEngine {
             type_defs: _,
         }: FunctionCallContext,
         copy_objects: bool,
+        options: durable::ResumeOptions,
         on_restored: Box<dyn FnOnce(&durable::RestoredInfo) + Send + '_>,
     ) -> Result<BexExternalValue, EngineError> {
         let (call_work, cancel) = RootCallWork::register(Arc::clone(self), host_call_id, cancel)?;
@@ -4966,6 +5077,7 @@ impl BexEngine {
             Some(DurableRestore {
                 bytes,
                 program_hash,
+                options,
                 on_restored,
             }),
         )
@@ -5939,7 +6051,10 @@ impl BexEngine {
             _ => None,
         });
         let cancel = handle_object(instance.load_field(3)).and_then(|obj| match obj {
-            Object::RustData(data) => data.downcast_ref::<CancellationToken>().cloned(),
+            Object::RustData(data) => data
+                .clone()
+                .downcast::<bex_vm_types::CancelTokenData>()
+                .ok(),
             _ => None,
         });
 
@@ -5978,7 +6093,7 @@ impl BexEngine {
         child_cancel: CancellationToken,
         closure: HeapPtr,
         name: Option<String>,
-        user_cancel: Option<CancellationToken>,
+        user_cancel: Option<Arc<bex_vm_types::CancelTokenData>>,
         group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
@@ -6025,7 +6140,7 @@ impl BexEngine {
         child_cancel: CancellationToken,
         closure: HeapPtr,
         name: Option<String>,
-        user_cancel: Option<CancellationToken>,
+        user_cancel: Option<Arc<bex_vm_types::CancelTokenData>>,
         group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
@@ -6045,10 +6160,20 @@ impl BexEngine {
         // only once its task has been scheduled. A snapshot taken in between
         // would silently leave the child out. The guard moves into the task
         // and covers the queued-then-cancelled path and a dropped task.
-        let durable_live = durable
-            .as_ref()
-            .and_then(|ctx| ctx.pause.as_ref())
-            .map(|pause| pause.register(prof_thread_id, false));
+        let durable_pause = durable.as_ref().and_then(|ctx| ctx.pause.clone());
+        let durable_live = durable.as_ref().and_then(|ctx| {
+            ctx.pause.as_ref().map(|pause| {
+                pause.register(
+                    prof_thread_id,
+                    false,
+                    durable::ThreadLinks {
+                        token_parent: ctx.token_parent,
+                        user_cancels: ctx.user_cancels.clone(),
+                        cancel: Some(child_cancel.clone()),
+                    },
+                )
+            })
+        });
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
         // token. Firing the user token cancels the child; the watcher
@@ -6057,14 +6182,8 @@ impl BexEngine {
         // — fresh for `detach = true`, a child of the parent's otherwise — is
         // derived at the dispatch site, where the future is also allocated.)
         if let Some(user) = user_cancel {
-            let linked = child_cancel.clone();
-            let watcher = async move {
-                tokio::select! {
-                    biased;
-                    () = user.cancelled() => linked.cancel(),
-                    () = linked.cancelled() => {}
-                }
-            };
+            let watcher =
+                bex_vm_types::cancel_token::link(user.token().clone(), child_cancel.clone());
             #[cfg(not(target_arch = "wasm32"))]
             tokio::spawn(watcher);
             #[cfg(target_arch = "wasm32")]
@@ -6076,7 +6195,17 @@ impl BexEngine {
         // `active_count()` issued right after `spawn` already observes this
         // member. The returned ticket is `acquire`d (parked on) inside the body
         // task, so a queued task does not hold the heap permit while waiting.
-        let group_ticket = group.map(|group| group.register(child_cancel.clone()));
+        let group_ticket = group.map(|group| {
+            let ticket = group.register(child_cancel.clone());
+            (group, ticket)
+        });
+        let group_seat = group_ticket
+            .as_ref()
+            .map(|(group, ticket)| thread::ThreadGroupSeat {
+                group: Arc::clone(group),
+                member_id: ticket.member_id(),
+            });
+        let group_ticket = group_ticket.map(|(_, ticket)| ticket);
 
         // Build the child VM up-front (synchronously) so the await on the
         // permit only holds Send values across yield points.
@@ -6129,34 +6258,115 @@ impl BexEngine {
         let mut child_thread =
             BexThread::new_child(child_vm, child_cancel.clone(), name, future_id);
         child_thread.durable = durable;
+        child_thread.group = group_seat;
         let inactive = self.heap_permit_manager.new_permit(child_thread).await;
 
+        let task = self.run_spawned_thread(SpawnedThreadTask {
+            inactive,
+            group_ticket,
+            durable_live,
+            durable_pause,
+            child_cancel,
+            call_id,
+            future_id,
+            prof_thread_id,
+            child_entry_call_id,
+            child_profile_enabled,
+            boundary_lease,
+            call_capture,
+            log_capture,
+            durable_resume: None,
+        });
+        SpawnedWork::new(work_guard, task).spawn();
+
+        Ok(())
+    }
+
+    /// The task of a spawned thread: wait for a task group slot, take the heap
+    /// permit, run the engine loop, and settle the future on the paths the
+    /// loop does not settle itself. A thread restored from a durable snapshot
+    /// runs the same task (see [`Self::durable_start_restored_child`]).
+    async fn run_spawned_thread(self: Arc<Self>, task: SpawnedThreadTask) {
+        let engine = self;
+        let SpawnedThreadTask {
+            mut inactive,
+            group_ticket,
+            durable_live,
+            durable_pause,
+            child_cancel,
+            call_id,
+            future_id,
+            prof_thread_id,
+            child_entry_call_id,
+            child_profile_enabled,
+            boundary_lease,
+            call_capture,
+            log_capture,
+            durable_resume,
+        } = task;
         // Return type / throws type are approximated; the future's value is
         // converted on the awaiter side.
-        let engine = self;
         let return_type = RuntimeTy::Null;
-        let task = async move {
-            let _durable_live = durable_live;
-            // Outlives the execution locals (but not SpawnedWork): if dropped at
-            // any await below (before the event loop takes over), the closer
-            // emits the child's EndFunction/BexThreadEnd (follow-up 11).
-            let mut prof_closer = SpawnProfCloser {
-                engine: Arc::clone(&engine),
-                prof_thread_id,
-                entry_call_id: child_entry_call_id,
-                awaited: None,
-                armed: child_profile_enabled,
-                boundary_lease,
-            };
-            // BEP-034 rate limiting: if this spawn joined a `TaskGroup`, park
-            // here — WITHOUT the heap permit, so a queued task doesn't block GC
-            // — until a slot frees. A task cancelled while queued (group/user/
-            // parent) settles its future `Cancelled` and never runs its body.
-            // The permit is held for the body's lifetime and releases the slot
-            // (waking the next FIFO waiter) on drop.
-            let entry_wait_start = child_profile_enabled.then(bex_events::prof::clock::now_ticks);
-            let _group_permit = match group_ticket {
-                Some(ticket) => match ticket.acquire().await {
+        let _durable_live = durable_live;
+        // Outlives the execution locals (but not SpawnedWork): if dropped at
+        // any await below (before the event loop takes over), the closer
+        // emits the child's EndFunction/BexThreadEnd (follow-up 11).
+        let mut prof_closer = SpawnProfCloser {
+            engine: Arc::clone(&engine),
+            prof_thread_id,
+            entry_call_id: child_entry_call_id,
+            awaited: None,
+            armed: child_profile_enabled,
+            boundary_lease,
+        };
+        // BEP-034 rate limiting: if this spawn joined a `TaskGroup`, park
+        // here — WITHOUT the heap permit, so a queued task doesn't block GC
+        // — until a slot frees. A task cancelled while queued (group/user/
+        // parent) settles its future `Cancelled` and never runs its body.
+        // The permit is held for the body's lifetime and releases the slot
+        // (waking the next FIFO waiter) on drop.
+        let entry_wait_start = child_profile_enabled.then(bex_events::prof::clock::now_ticks);
+        let _group_permit = match group_ticket {
+            Some(ticket) => {
+                // Durable POC: a queued thread is part of the run. A pause
+                // parks it here, with its unstarted VM, and the snapshot
+                // records its place in the queue.
+                let queued = durable::WaitKind::Queued {
+                    group: Arc::clone(ticket.group()),
+                    member_id: ticket.member_id(),
+                };
+                let mut admission = Box::pin(ticket.acquire());
+                if let Some(pause) = durable_pause.as_ref() {
+                    pause.enter_wait(prof_thread_id, queued);
+                }
+                let admitted = loop {
+                    tokio::select! {
+                        biased;
+                        permit = &mut admission => {
+                            if let Some(pause) = durable_pause.as_ref() {
+                                pause.leave_wait(prof_thread_id);
+                            }
+                            break permit;
+                        }
+                        () = Self::durable_gate_opened(durable_pause.clone()) => {
+                            let Some(pause) = durable_pause.as_ref() else {
+                                continue;
+                            };
+                            match pause
+                                .park(prof_thread_id, inactive, durable::ParkedKind::Queued)
+                                .await
+                            {
+                                durable::GateReply::Continue(back) => inactive = back,
+                                // The thread now lives in a snapshot.
+                                durable::GateReply::Suspended => {
+                                    prof_closer.defuse();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                };
+                match admitted {
                     Some(permit) => Some(permit),
                     None => {
                         let mut permit = inactive.acquire().await;
@@ -6186,86 +6396,151 @@ impl BexEngine {
                         // runs for a queued-then-cancelled spawn.
                         return;
                     }
-                },
-                None => None,
-            };
-            let mut permit = inactive.acquire().await;
-            if let Some(start_ticks) = entry_wait_start {
-                let end_ticks = bex_events::prof::clock::now_ticks();
-                engine.prof_charge_await(
-                    &mut permit.vm,
-                    child_entry_call_id.0,
-                    start_ticks,
-                    end_ticks,
+                }
+            }
+            None => None,
+        };
+        let mut permit = inactive.acquire().await;
+        if let Some(start_ticks) = entry_wait_start {
+            let end_ticks = bex_events::prof::clock::now_ticks();
+            engine.prof_charge_await(
+                &mut permit.vm,
+                child_entry_call_id.0,
+                start_ticks,
+                end_ticks,
+            );
+        }
+        // The entry call's id was minted by set_entry_point on the
+        // spawning thread; its CallFunction is already in the ring.
+        // BexThreadEnd (ring) is emitted by the run_thread_event_loop
+        // wrapper on every exit path from here on.
+        prof_closer.defuse();
+        match engine
+            .run_thread_event_loop(
+                return_type,
+                None,
+                permit,
+                call_id,
+                None,
+                call_capture,
+                log_capture,
+                &child_cancel,
+                true,
+                durable_resume,
+                None,
+            )
+            .await
+        {
+            Ok(ThreadOutcome::SettledChild(_)) => {}
+            // The abnormal arms close any spans the event loop left open
+            // before the thread ends — the ring BexThreadEnd (emitted by the
+            // run_thread_event_loop wrapper) must never strand open spans.
+            Ok(ThreadOutcome::RootValue(_)) => {
+                tracing::error!(
+                    ?future_id,
+                    "spawn thread returned a root value instead of settling its future"
                 );
             }
-            // The entry call's id was minted by set_entry_point on the
-            // spawning thread; its CallFunction is already in the ring.
-            // BexThreadEnd (ring) is emitted by the run_thread_event_loop
-            // wrapper on every exit path from here on.
-            prof_closer.defuse();
-            match engine
-                .run_thread_event_loop(
-                    return_type,
-                    None,
-                    permit,
-                    call_id,
-                    None,
-                    call_capture,
-                    log_capture,
-                    &child_cancel,
-                    true,
-                    None,
-                )
-                .await
-            {
-                Ok(ThreadOutcome::SettledChild(_)) => {}
-                // The abnormal arms close any spans the event loop left open
-                // before the thread ends — the ring BexThreadEnd (emitted by the
-                // run_thread_event_loop wrapper) must never strand open spans.
-                Ok(ThreadOutcome::RootValue(_)) => {
-                    tracing::error!(
-                        ?future_id,
-                        "spawn thread returned a root value instead of settling its future"
-                    );
-                }
-                // Durable POC: the whole run, this thread included, now lives
-                // in a snapshot. There is nothing left to settle here.
-                Err(EngineError::DurableSuspended) => {}
-                Err(err) => {
-                    tracing::error!(
-                        ?err,
-                        ?future_id,
-                        "spawn thread terminated with engine error"
-                    );
-                    // The event loop settles the future itself on the VM-error
-                    // paths (`InternalError` / `TracedInternalError` /
-                    // unhandled-throw arms), but an `EngineError` escaping
-                    // through any other `?` in the loop arrives here with the
-                    // future still `Pending` — and an unsettled future parks
-                    // every awaiter forever (the parent, its parent, …). This
-                    // arm is the single choke point that restores the
-                    // propagation chain: settle the future with the engine
-                    // error so the awaiter re-raises it, *its* terminal path
-                    // settles the next future up, and the root surfaces the
-                    // original error to the host. The thread's own permit died
-                    // with the event loop, so settle under a fresh rootless
-                    // permit (`()` roots nothing; the future entry itself
-                    // roots the heap object).
-                    let admin = engine.heap_permit_manager.new_permit(()).await;
-                    let active = admin.acquire().await;
-                    engine
-                        .futures
-                        .acquire(active.proof())
-                        .await
-                        .settle_spawn_engine_error(future_id, err);
-                    child_cancel.cancel();
-                }
+            // Durable POC: the whole run, this thread included, now lives
+            // in a snapshot. There is nothing left to settle here.
+            Err(EngineError::DurableSuspended) => {}
+            Err(err) => {
+                tracing::error!(
+                    ?err,
+                    ?future_id,
+                    "spawn thread terminated with engine error"
+                );
+                // The event loop settles the future itself on the VM-error
+                // paths (`InternalError` / `TracedInternalError` /
+                // unhandled-throw arms), but an `EngineError` escaping
+                // through any other `?` in the loop arrives here with the
+                // future still `Pending` — and an unsettled future parks
+                // every awaiter forever (the parent, its parent, …). This
+                // arm is the single choke point that restores the
+                // propagation chain: settle the future with the engine
+                // error so the awaiter re-raises it, *its* terminal path
+                // settles the next future up, and the root surfaces the
+                // original error to the host. The thread's own permit died
+                // with the event loop, so settle under a fresh rootless
+                // permit (`()` roots nothing; the future entry itself
+                // roots the heap object).
+                let admin = engine.heap_permit_manager.new_permit(()).await;
+                let active = admin.acquire().await;
+                engine
+                    .futures
+                    .acquire(active.proof())
+                    .await
+                    .settle_spawn_engine_error(future_id, err);
+                child_cancel.cancel();
             }
-        };
-        SpawnedWork::new(work_guard, task).spawn();
+        }
+    }
 
-        Ok(())
+    /// Durable POC: a fresh VM for a spawned thread that a snapshot restore
+    /// fills. Like the VM of a spawn, without profiling: the restored frames
+    /// carry the call ids of another process.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn durable_restored_child_vm(&self, thread_id: durable::DurableThreadId) -> BexVm {
+        let mut vm = BexVm::new(
+            Arc::clone(&self.heap),
+            VmGlobals::Shared(self.globals.clone()),
+            Arc::clone(&self.park_requested),
+            Arc::clone(&self.argv),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.dynamic_dispatch),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
+        );
+        vm.prof_thread_id = thread_id;
+        vm.prof_suppressed = true;
+        vm.root_profiler =
+            RootProfiler::Inactive(bex_events::prof::backend::InactiveReason::Suppressed);
+        vm.prof_boundary_root_pending = false;
+        vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        vm.remote_intercept = true;
+        vm
+    }
+
+    /// Durable POC: start a restored spawned thread as its own task, the way
+    /// the `Spawn` arm starts a new one.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn durable_start_restored_child(
+        self: Arc<Self>,
+        child: durable::RestoredChild,
+        call_id: CallId,
+        call_capture: Option<CallValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
+    ) {
+        let work_guard = self.bex_work.register_work();
+        let durable::RestoredChild {
+            thread_id,
+            permit,
+            parked,
+            settles_future,
+            cancel,
+            ticket,
+            live,
+            parent: _,
+        } = child;
+        let durable_pause = Some(Arc::clone(&self.durable_pause));
+        let task = self.run_spawned_thread(SpawnedThreadTask {
+            inactive: permit,
+            group_ticket: ticket,
+            durable_live: Some(live),
+            durable_pause,
+            child_cancel: cancel,
+            call_id,
+            future_id: settles_future,
+            prof_thread_id: thread_id,
+            child_entry_call_id: BexCallId(0),
+            child_profile_enabled: false,
+            boundary_lease: None,
+            call_capture,
+            log_capture,
+            // A queued thread has not run yet; it starts like a new thread.
+            durable_resume: (parked != durable::ParkedKind::Queued).then_some(parked),
+        });
+        SpawnedWork::new(work_guard, task).spawn();
     }
 
     /// Runs a thread's event loop (see [`Self::run_thread_event_loop_inner`])
@@ -6289,6 +6564,7 @@ impl BexEngine {
         cancel: &CancellationToken,
         copy_objects: bool,
         durable_resume: Option<durable::ParkedKind>,
+        durable_after_start: Option<Box<dyn FnOnce() + Send>>,
     ) -> Result<ThreadOutcome, EngineError> {
         let profile_thread = thread.vm.prof_ring.is_some();
         let prof_thread_id = thread.vm.prof_thread_id;
@@ -6296,7 +6572,11 @@ impl BexEngine {
         // Durable POC: lifecycle notifications, balanced on every exit path
         // exactly like the profiling BexThreadEnd below.
         let durable_host = thread.durable.as_ref().map(|ctx| {
-            ctx.host.thread_started(prof_thread_id, ctx.parent);
+            // A restored spawned thread was announced by the restore, in
+            // parent-first order (see `durable_after_start` in `run_entry`).
+            if durable_resume.is_none() || ctx.parent.is_none() {
+                ctx.host.thread_started(prof_thread_id, ctx.parent);
+            }
             Arc::clone(&ctx.host)
         });
         // Durable POC: the root thread of the run counts as live for a
@@ -6308,7 +6588,19 @@ impl BexEngine {
             .as_ref()
             .filter(|ctx| ctx.parent.is_none())
             .and_then(|ctx| ctx.pause.as_ref())
-            .map(|pause| pause.register(prof_thread_id, true));
+            .map(|pause| {
+                pause.register(
+                    prof_thread_id,
+                    true,
+                    durable::ThreadLinks {
+                        cancel: Some(cancel.clone()),
+                        ..durable::ThreadLinks::default()
+                    },
+                )
+            });
+        if let Some(after_start) = durable_after_start {
+            after_start();
+        }
         // BexThreadStart was already emitted before this function: roots in
         // run_entry_point (right before `set_entry_point`, §7 decision 7 —
         // BexThreadStart-first is a wire invariant), children at the Spawn
@@ -6705,7 +6997,7 @@ impl BexEngine {
                         .durable
                         .as_ref()
                         .is_some_and(|ctx| ctx.pause.is_some())
-                        .then(|| Self::durable_sleep_deadline(&thread.vm, operation, &args))
+                        .then(|| Self::durable_sleep_duration_ms(&thread.vm, operation, &args))
                         .flatten();
 
                     // Durable POC: reported here rather than at the loop head so
@@ -6754,10 +7046,29 @@ impl BexEngine {
                             };
                             let durable_pause =
                                 thread.durable.as_ref().and_then(|ctx| ctx.pause.clone());
-                            let outcome = if let Some(parked) = durable_sleep {
+                            let outcome = if let Some(duration_ms) = durable_sleep {
                                 // Durable POC: a sleep can be re-issued after
-                                // a resume, so a pause may interrupt it.
+                                // a resume, so a pause may interrupt it. A
+                                // sleep that starts while a restored run
+                                // replays its recorded completions begins at
+                                // the replay's virtual time; when it ends
+                                // before the last recorded completion it
+                                // completes on its turn in the replay queue
+                                // and the timer is not used.
+                                let replayed = durable_pause.as_ref().and_then(|pause| {
+                                    pause.replay_sleep(thread.vm.prof_thread_id, duration_ms)
+                                });
                                 let mut fut = fut;
+                                let parked = match replayed {
+                                    Some(deadline_unix_ms) => {
+                                        fut = Box::pin(async { Ok(BexExternalValue::Null) });
+                                        durable::ParkedKind::Sleep { deadline_unix_ms }
+                                    }
+                                    None => durable::ParkedKind::Sleep {
+                                        deadline_unix_ms: durable::unix_ms_now()
+                                            .saturating_add(duration_ms),
+                                    },
+                                };
                                 match self
                                     .durable_reissuable_wait(thread, cancel, &parked, &mut fut)
                                     .await
@@ -7051,8 +7362,17 @@ impl BexEngine {
                     }
                     drop(args);
 
+                    let (thread_path, call_index) = match thread.durable.as_mut() {
+                        Some(ctx) => {
+                            ctx.remote_calls += 1;
+                            (ctx.path.clone(), ctx.remote_calls)
+                        }
+                        None => (String::new(), 0),
+                    };
                     let announce = host.remote_call(durable::RemoteCallRequest {
                         thread: thread.vm.prof_thread_id,
+                        thread_path,
+                        call_index,
                         function: name.clone(),
                         args: external_args,
                         return_type,
@@ -7067,10 +7387,29 @@ impl BexEngine {
                     }
                     let inactive = thread.release();
                     self.maybe_collect_garbage().await;
+                    // A cancellation does not drop the announcement half way:
+                    // the host may already have made the call known, and only
+                    // the identifier lets the engine tell the host that the
+                    // run abandons it. The announcement is short; a host that
+                    // does not finish it within the grace period loses it.
+                    let mut announce = announce;
                     let announced = tokio::select! {
                         biased;
-                        () = cancel.cancelled() => None,
-                        r = announce            => Some(r),
+                        r = &mut announce       => Some(r),
+                        () = cancel.cancelled() => {
+                            #[cfg(not(target_arch = "wasm32"))]
+                            let finished = tokio::time::timeout(
+                                Self::DURABLE_ANNOUNCE_GRACE,
+                                &mut announce,
+                            )
+                            .await
+                            .ok();
+                            // No timer on this target: the announcement is
+                            // dropped, and the call is not reported.
+                            #[cfg(target_arch = "wasm32")]
+                            let finished = None;
+                            finished
+                        }
                     };
                     thread = inactive.acquire().await;
                     if let Some(pause) = durable_pause.as_ref() {
@@ -7079,6 +7418,11 @@ impl BexEngine {
                     self.prof_refresh_vm_ring(&mut thread.vm);
                     let step = match announced {
                         None => self.durable_cancelled(thread).await?,
+                        // A cancelled thread ends as cancelled; an announced
+                        // call is reported as abandoned by the wait below.
+                        Some(Err(_)) if cancel.is_cancelled() => {
+                            self.durable_cancelled(thread).await?
+                        }
                         Some(Err(message)) => {
                             self.durable_remote_failed(
                                 thread,
@@ -7150,6 +7494,17 @@ impl BexEngine {
                         Some(p) => (p.cancel, p.group, p.detach),
                         None => (None, None, false),
                     };
+                    let durable_user_cancels: Vec<_> = user_cancel.iter().cloned().collect();
+                    // Durable POC: the child's place in the spawn tree. A
+                    // thread spawns its children one after the other, so the
+                    // path is the same in every execution of the program,
+                    // whatever the scheduler does (unlike the thread id, which
+                    // comes from a counter that all threads share).
+                    let durable_child_path = thread.durable.as_mut().map(|ctx| {
+                        let index = ctx.spawned;
+                        ctx.spawned += 1;
+                        format!("{}.{index}", ctx.path)
+                    });
                     // Each spawned thread gets a child cancel token so parent →
                     // child cascade falls out of the token tree without bespoke
                     // tracking. A `detach = true` spawn instead gets a fresh,
@@ -7253,7 +7608,12 @@ impl BexEngine {
                                 thread.durable.as_ref().map(|ctx| thread::DurableThreadCtx {
                                     host: Arc::clone(&ctx.host),
                                     parent: Some(thread.vm.prof_thread_id),
+                                    token_parent: (!detach).then_some(thread.vm.prof_thread_id),
+                                    user_cancels: durable_user_cancels,
                                     pause: ctx.pause.clone(),
+                                    path: durable_child_path.unwrap_or_default(),
+                                    spawned: 0,
+                                    remote_calls: 0,
                                 }),
                             )
                             .await?;
@@ -7309,9 +7669,9 @@ impl BexEngine {
                     }
                     // Tightly-scoped guard so the proof's borrow on `vm`
                     // ends before we release the VM permit below.
-                    let future = {
+                    let (future, durable_probe) = {
                         let mut g = self.futures.acquire(thread.proof()).await;
-                        g.future_ready(future_id)?
+                        (g.future_ready(future_id)?, g.future_probe(future_id))
                     };
                     // Release the VM permit before the SetOnce wait — the
                     // wait is the safepoint. Holding a permit through the
@@ -7325,6 +7685,7 @@ impl BexEngine {
                         )
                     });
                     let durable_pause = thread.durable.as_ref().and_then(|ctx| ctx.pause.clone());
+                    let thread_id = thread.vm.prof_thread_id;
                     let inactive = thread.release();
                     // While parked, run a heuristic-driven GC check (no
                     // permit dance needed since we're already released).
@@ -7339,12 +7700,38 @@ impl BexEngine {
                     // `Await` opcode, which yields again while the future is
                     // pending, so the spurious wake-up is harmless.
                     let durable_gate = Self::durable_gate_opened(durable_pause.clone());
-                    let outcome = tokio::select! {
+                    if let Some(pause) = durable_pause.as_ref() {
+                        pause.enter_wait(
+                            thread_id,
+                            durable::WaitKind::Await {
+                                futures: vec![durable_probe],
+                            },
+                        );
+                    }
+                    let woken = tokio::select! {
                         biased;
-                        () = cancel.cancelled() => AwaitOutcome::Cancelled,
-                        r = future              => AwaitOutcome::Done(r),
-                        () = durable_gate       => AwaitOutcome::Done(Ok(())),
+                        () = cancel.cancelled() => Some(AwaitOutcome::Cancelled),
+                        r = future              => Some(AwaitOutcome::Done(r)),
+                        () = durable_gate       => None,
                     };
+                    let (inactive, outcome) = match woken {
+                        Some(outcome) => (inactive, outcome),
+                        None => {
+                            match Self::durable_park_in_await(
+                                durable_pause.as_ref(),
+                                thread_id,
+                                inactive,
+                            )
+                            .await
+                            {
+                                Some(inactive) => (inactive, AwaitOutcome::Done(Ok(()))),
+                                None => return Err(EngineError::DurableSuspended),
+                            }
+                        }
+                    };
+                    if let Some(pause) = durable_pause.as_ref() {
+                        pause.leave_wait(thread_id);
+                    }
                     thread = inactive.acquire().await;
                     if let Some((call_id, start_ticks)) = prof_await {
                         let end_ticks = bex_events::prof::clock::now_ticks();
@@ -7403,13 +7790,15 @@ impl BexEngine {
                     // is self-contained (clones the future's `Arc<SetOnce>`),
                     // so we can drop the guard and release the permit before
                     // parking — same safepoint discipline as `Await`.
-                    let waiters = {
+                    let (waiters, durable_probes) = {
                         let mut g = self.futures.acquire(thread.proof()).await;
                         let mut ws = Vec::with_capacity(future_ids.len());
+                        let mut probes = Vec::with_capacity(future_ids.len());
                         for future_id in &future_ids {
                             ws.push(g.future_ready(*future_id)?);
+                            probes.push(g.future_probe(*future_id));
                         }
-                        ws
+                        (ws, probes)
                     };
                     let prof_await = thread.vm.root_profiler.is_active().then(|| {
                         (
@@ -7418,9 +7807,18 @@ impl BexEngine {
                         )
                     });
                     let durable_pause = thread.durable.as_ref().and_then(|ctx| ctx.pause.clone());
+                    let thread_id = thread.vm.prof_thread_id;
                     let inactive = thread.release();
                     self.maybe_collect_garbage().await;
-                    let outcome = if waiters.is_empty() {
+                    if let Some(pause) = durable_pause.as_ref() {
+                        pause.enter_wait(
+                            thread_id,
+                            durable::WaitKind::Await {
+                                futures: durable_probes,
+                            },
+                        );
+                    }
+                    let woken = if waiters.is_empty() {
                         // Empty INPUT array: `future_ready` returns a waiter
                         // for every id — already-settled inputs yield
                         // immediately-ready waiters — so empty waiters ⟺
@@ -7436,8 +7834,8 @@ impl BexEngine {
                         let durable_gate = Self::durable_gate_opened(durable_pause.clone());
                         tokio::select! {
                             biased;
-                            () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
-                            () = durable_gate => AwaitAnyOutcome::Done(Ok(())),
+                            () = cancel.cancelled() => Some(AwaitAnyOutcome::Cancelled),
+                            () = durable_gate => None,
                         }
                     } else {
                         let first_settled =
@@ -7446,11 +7844,29 @@ impl BexEngine {
                         let durable_gate = Self::durable_gate_opened(durable_pause.clone());
                         tokio::select! {
                             biased;
-                            () = cancel.cancelled() => AwaitAnyOutcome::Cancelled,
-                            (r, _idx, _rest) = first_settled => AwaitAnyOutcome::Done(r),
-                            () = durable_gate => AwaitAnyOutcome::Done(Ok(())),
+                            () = cancel.cancelled() => Some(AwaitAnyOutcome::Cancelled),
+                            (r, _idx, _rest) = first_settled => Some(AwaitAnyOutcome::Done(r)),
+                            () = durable_gate => None,
                         }
                     };
+                    let (inactive, outcome) = match woken {
+                        Some(outcome) => (inactive, outcome),
+                        None => {
+                            match Self::durable_park_in_await(
+                                durable_pause.as_ref(),
+                                thread_id,
+                                inactive,
+                            )
+                            .await
+                            {
+                                Some(inactive) => (inactive, AwaitAnyOutcome::Done(Ok(()))),
+                                None => return Err(EngineError::DurableSuspended),
+                            }
+                        }
+                    };
+                    if let Some(pause) = durable_pause.as_ref() {
+                        pause.leave_wait(thread_id);
+                    }
                     thread = inactive.acquire().await;
                     if let Some((call_id, start_ticks)) = prof_await {
                         let end_ticks = bex_events::prof::clock::now_ticks();
@@ -7527,12 +7943,39 @@ impl BexEngine {
         }
     }
 
+    /// Durable POC: how long a cancelled thread still waits for the host to
+    /// finish the announcement of a remote call.
+    #[cfg(not(target_arch = "wasm32"))]
+    const DURABLE_ANNOUNCE_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
+
     /// Durable POC: resolves when the pause gate opens; never for a thread
     /// that is not part of the durable run.
     async fn durable_gate_opened(pause: Option<Arc<durable::PauseController>>) {
         match pause {
             Some(pause) => pause.opened().await,
             None => std::future::pending().await,
+        }
+    }
+
+    /// Durable POC: the pause gate woke a thread inside `await` or
+    /// `__await_any`. The thread parks where it is, still counted as waiting
+    /// by the self-suspend rule, and is recorded as runnable: `exec()`
+    /// executes the await opcode again, which yields again while the future is
+    /// pending. `None` when the thread now lives in a snapshot.
+    async fn durable_park_in_await(
+        pause: Option<&Arc<durable::PauseController>>,
+        thread_id: durable::DurableThreadId,
+        inactive: InactiveHeapPermit<BexThread>,
+    ) -> Option<InactiveHeapPermit<BexThread>> {
+        let Some(pause) = pause else {
+            return Some(inactive);
+        };
+        match pause
+            .park(thread_id, inactive, durable::ParkedKind::Runnable)
+            .await
+        {
+            durable::GateReply::Continue(back) => Some(back),
+            durable::GateReply::Suspended => None,
         }
     }
 
@@ -7560,17 +8003,46 @@ impl BexEngine {
         let pause = thread.durable.as_ref().and_then(|ctx| ctx.pause.clone());
         let thread_id = thread.vm.prof_thread_id;
         let mut inactive = thread.release();
+        // The self-suspend rule counts this thread as waiting from here until
+        // the wait ends. The entry is removed before the permit is taken
+        // back; a thread that the gate woke keeps it while it is parked.
+        if let Some(pause) = pause.as_ref() {
+            pause.enter_wait(thread_id, durable::WaitKind::of(parked));
+        }
+        let leave_wait = || {
+            if let Some(pause) = pause.as_ref() {
+                pause.leave_wait(thread_id);
+            }
+        };
+        // A restored run takes what completed while it had no process one at
+        // a time (see `durable::Replay`): the wait ends when `fut` has its
+        // result and the thread's turn has come. Without a replay the turn is
+        // immediate.
+        let turn = pause.clone();
+        let mut fut = std::pin::pin!(async move {
+            let result = fut.await;
+            if let Some(pause) = turn.as_ref() {
+                pause.replay_turn(thread_id).await;
+            }
+            result
+        });
         loop {
             self.maybe_collect_garbage().await;
             let woke = tokio::select! {
                 biased;
                 () = cancel.cancelled() => Woke::Cancelled,
-                r = &mut *fut           => Woke::Done(r),
+                r = &mut fut            => Woke::Done(r),
                 () = Self::durable_gate_opened(pause.clone()) => Woke::Gate,
             };
             match woke {
-                Woke::Cancelled => return DurableWait::Cancelled(inactive.acquire().await),
-                Woke::Done(result) => return DurableWait::Done(inactive.acquire().await, result),
+                Woke::Cancelled => {
+                    leave_wait();
+                    return DurableWait::Cancelled(inactive.acquire().await);
+                }
+                Woke::Done(result) => {
+                    leave_wait();
+                    return DurableWait::Done(inactive.acquire().await, result);
+                }
                 Woke::Gate => {
                     let Some(pause) = pause.as_ref() else {
                         continue;
@@ -7584,13 +8056,9 @@ impl BexEngine {
         }
     }
 
-    /// Durable POC: the deadline of a `baml.sys.sleep`, as the parked state of
-    /// a thread that waits in it. `None` for any other operation.
-    fn durable_sleep_deadline(
-        vm: &BexVm,
-        operation: SysOp,
-        args: &[Value],
-    ) -> Option<durable::ParkedKind> {
+    /// Durable POC: the length of a `baml.sys.sleep` in milliseconds. `None`
+    /// for any other operation.
+    fn durable_sleep_duration_ms(vm: &BexVm, operation: SysOp, args: &[Value]) -> Option<u64> {
         if operation.path() != "baml.sys.sleep" {
             return None;
         }
@@ -7613,9 +8081,7 @@ impl BexEngine {
             },
             _ => return None,
         };
-        Some(durable::ParkedKind::Sleep {
-            deadline_unix_ms: durable::unix_ms_now().saturating_add(nanos / 1_000_000),
-        })
+        Some(nanos / 1_000_000)
     }
 
     /// Durable POC: end a thread whose wait was cancelled, like the
@@ -7718,8 +8184,9 @@ impl BexEngine {
                 .compile_time_index_of(function)
                 .map_or(u64::MAX, |index| index as u64),
         };
+        let thread_id = thread.vm.prof_thread_id;
         let mut result = host.remote_result(durable::RemoteResultWait {
-            call_id: remote_call_id,
+            call_id: remote_call_id.clone(),
             thread: thread.vm.prof_thread_id,
             function: name.clone(),
             return_type: return_type.clone(),
@@ -7729,8 +8196,15 @@ impl BexEngine {
             .await
         {
             DurableWait::Suspended => Err(EngineError::DurableSuspended),
-            DurableWait::Cancelled(thread) => self.durable_cancelled(thread).await,
+            DurableWait::Cancelled(thread) => {
+                // Stop asking for the result before the host is told that the
+                // run has abandoned the call.
+                drop(result);
+                host.remote_cancelled(&remote_call_id, thread_id);
+                self.durable_cancelled(thread).await
+            }
             DurableWait::Done(mut thread, Ok(external)) => {
+                host.remote_result_delivered(&remote_call_id, thread_id);
                 self.prof_refresh_vm_ring(&mut thread.vm);
                 let value = self.convert_external_to_vm_value_with_ty(
                     &mut thread,
@@ -7741,6 +8215,7 @@ impl BexEngine {
                 Ok(DurableStep::Continue(thread))
             }
             DurableWait::Done(mut thread, Err(message)) => {
+                host.remote_result_delivered(&remote_call_id, thread_id);
                 self.prof_refresh_vm_ring(&mut thread.vm);
                 self.durable_remote_failed(
                     thread,
@@ -7770,7 +8245,9 @@ impl BexEngine {
         // position for it before its next yield.
         if let Some(ctx) = thread.durable.as_ref() {
             let (reason, op) = match &parked {
-                durable::ParkedKind::Runnable => (durable::YieldReason::EarlyYield, None),
+                durable::ParkedKind::Runnable | durable::ParkedKind::Queued => {
+                    (durable::YieldReason::EarlyYield, None)
+                }
                 durable::ParkedKind::Sleep { .. } => {
                     (durable::YieldReason::SysOp, Some("baml.sys.sleep"))
                 }
@@ -7783,10 +8260,14 @@ impl BexEngine {
                 .yielded(thread.vm.prof_thread_id, reason, op, position.as_ref());
         }
         match parked {
-            durable::ParkedKind::Runnable => Ok(DurableStep::Continue(thread)),
+            durable::ParkedKind::Runnable | durable::ParkedKind::Queued => {
+                Ok(DurableStep::Continue(thread))
+            }
             #[cfg(not(target_arch = "wasm32"))]
             durable::ParkedKind::Sleep { deadline_unix_ms } => {
                 let remaining = deadline_unix_ms.saturating_sub(durable::unix_ms_now());
+                // A sleep whose deadline has passed completes on its turn in
+                // the ordered replay (see `durable::Replay`).
                 let mut sleep = Box::pin(tokio::time::sleep(std::time::Duration::from_millis(
                     remaining,
                 )));
@@ -7814,6 +8295,17 @@ impl BexEngine {
                 function: name,
                 function_index,
             } => {
+                // The thread was cancelled after it had parked in the wait, or
+                // while the run had no process. The wait is not issued again:
+                // the host hears that the call is abandoned, and the thread
+                // ends like any thread that is cancelled at a yield.
+                if cancel.is_cancelled() {
+                    if let Some(ctx) = thread.durable.as_ref() {
+                        ctx.host
+                            .remote_cancelled(&remote_call_id, thread.vm.prof_thread_id);
+                    }
+                    return self.durable_cancelled(thread).await;
+                }
                 let function = usize::try_from(function_index)
                     .ok()
                     .filter(|index| *index < self.heap.compile_time_len())

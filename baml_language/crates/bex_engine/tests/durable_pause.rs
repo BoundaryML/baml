@@ -403,12 +403,14 @@ async fn a_compute_loop_pauses_at_an_early_yield_and_resumes_elsewhere() {
     let state = &report.committed.state;
     assert_eq!(state["threads"][0]["parked"]["kind"], "runnable");
     assert_eq!(state["threads"][0]["frames"][0]["function"], "user.spin");
-    // The pause landed in the middle of the computation, not at its end.
+    // The pause landed before the computation ended. The pause is requested as
+    // soon as the thread starts, so on a loaded machine it can land before the
+    // first iteration; `i == 0` is a valid pause point.
     let i: i64 = local(state, "i")["value"]["preview"]
         .as_str()
         .and_then(|preview| preview.parse().ok())
         .expect("`i` is an int local");
-    assert!(i > 0 && i < SPIN_N, "paused at i = {i}");
+    assert!((0..SPIN_N).contains(&i), "paused at i = {i}");
     assert!(report.pause_latency_ms < 2_000.0, "{report:?}");
 
     let (result, info, _) = resume("spin", &report.committed, |_, _| {}).await;
@@ -429,15 +431,13 @@ async fn a_sleep_is_interrupted_and_finished_after_the_resume() {
         .await;
 
     let progress = Mutex::new(Vec::new());
-    let requested = std::time::Instant::now();
     let report = snapshot(&engine, hash, SnapshotMode::Suspend, &progress)
         .await
         .expect("a sleep is a clean point");
-    assert!(
-        requested.elapsed() < Duration::from_millis(140),
-        "the pause must not wait for the sleep to end ({:?})",
-        requested.elapsed()
-    );
+    // The pause must not wait for the sleep to end. A wall-clock bound on the
+    // snapshot call fails on a loaded machine, so the test checks the recorded
+    // state instead: a pause that had waited would find the thread past its
+    // sleep, and the snapshot would not record a `sleep` wait (asserted below).
     assert_eq!(
         *progress.lock().unwrap(),
         Vec::new(),
@@ -659,7 +659,7 @@ async fn a_collection_between_restore_and_completion_keeps_the_run_intact() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_pending_future_blocks_the_snapshot_and_the_run_still_completes() {
+async fn a_run_with_a_pending_future_pauses_and_resumes_with_both_threads() {
     let (engine, hash) = engine();
     let (host, shared) = new_host();
     engine.set_durable_host(Some(shared));
@@ -667,45 +667,46 @@ async fn a_pending_future_blocks_the_snapshot_and_the_run_still_completes() {
     host.wait_until(|host| !host.announced.lock().unwrap().is_empty())
         .await;
 
-    let progress = Arc::new(Mutex::new(Vec::new()));
-    let pause = tokio::spawn({
-        let engine = Arc::clone(&engine);
-        let progress = Arc::clone(&progress);
-        async move { snapshot(&engine, hash, SnapshotMode::Suspend, &progress).await }
-    });
-    // Wait for at least two attempts, then let the run finish.
-    tokio::time::sleep(Duration::from_millis(350)).await;
-    host.deliver("r-test-c1", Ok(string("windy in Faro")));
-
-    let result = tokio::time::timeout(Duration::from_secs(30), run)
+    let progress = Mutex::new(Vec::new());
+    let report = snapshot(&engine, hash, SnapshotMode::Suspend, &progress)
         .await
-        .expect("a blocked pause must not stall the run")
-        .unwrap()
-        .unwrap();
-    assert_eq!(result, string("windy in Faro after 4"));
-    let failure = tokio::time::timeout(Duration::from_secs(30), pause)
-        .await
-        .unwrap()
-        .unwrap()
-        .expect_err("the future stays on the stack until the function returns");
-    assert!(matches!(failure, SnapshotFailure::RunEnded), "{failure:?}");
-
-    let progress = progress.lock().unwrap();
-    let blocked: Vec<_> = progress
+        .expect("a pending future and its thread are part of the snapshot");
+    assert_eq!(report.threads, 2);
+    assert_eq!(report.blocked_attempts, 0, "{:?}", progress.lock().unwrap());
+    assert_eq!(
+        run.await.unwrap().unwrap_err(),
+        EngineError::DurableSuspended
+    );
+    let threads = report.committed.state["threads"].as_array().unwrap();
+    assert_eq!(threads.len(), 2);
+    let child = threads
         .iter()
-        .filter_map(|event| match event {
-            PauseProgress::Blocked { reason, path } => Some((reason, path)),
-            PauseProgress::Pausing { .. } => None,
-        })
-        .collect();
-    assert!(!blocked.is_empty(), "{progress:?}");
-    assert!(
-        blocked[0].0.to_lowercase().contains("future"),
-        "{blocked:?}"
+        .find(|thread| !thread["parent_thread"].is_null())
+        .expect("the spawned thread");
+    assert_eq!(child["parked"]["kind"], "remote_call");
+    assert!(child["settles_future"].is_number());
+
+    let (result, info, resumed_host) = resume("parallel", &report.committed, |_, host| {
+        host.deliver("r-test-c1", Ok(string("windy in Faro")));
+    })
+    .await;
+    assert_eq!(result.unwrap(), string("windy in Faro after 4"));
+    assert_eq!(info.threads, 2);
+    assert_eq!(info.pending_futures, 1);
+    // Both threads report their start, the root first, with the ids and the
+    // parentage of the first process.
+    let started = resumed_host.started.lock().unwrap().clone();
+    assert_eq!(started.len(), 2);
+    assert_eq!(started[0], (info.root_thread, None));
+    assert_eq!(started[1].1, Some(info.root_thread));
+    assert_eq!(
+        started[1].0,
+        child["thread"].as_u64().unwrap(),
+        "a restored thread keeps its id"
     );
     assert!(
-        !blocked[0].1.is_empty(),
-        "the path names the value: {blocked:?}"
+        resumed_host.announced.lock().unwrap().is_empty(),
+        "the call is not announced a second time"
     );
 }
 
@@ -843,11 +844,10 @@ async fn a_compute_loop_that_makes_calls_survives_a_chain_of_pauses() {
 }
 
 /// A spawned thread whose future was dropped is not visible to the snapshot
-/// writer through any value. While it is alive the run has two threads, which
-/// `durable_resume` cannot restore, so the pause must not suspend into such a
-/// snapshot. It reports `Blocked` and succeeds once the thread has ended.
+/// writer through any value. It is a thread of the run all the same: the
+/// snapshot holds it and the future it settles, and the resumed run ends it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn a_forgotten_spawned_thread_blocks_the_pause_until_it_ends() {
+async fn a_forgotten_spawned_thread_is_part_of_the_snapshot() {
     let expected = plain("forgetful", vec![string("Braga")]).await;
 
     let (engine, hash) = engine();
@@ -860,35 +860,24 @@ async fn a_forgotten_spawned_thread_blocks_the_pause_until_it_ends() {
     let progress = Mutex::new(Vec::new());
     let report = snapshot(&engine, hash, SnapshotMode::Suspend, &progress)
         .await
-        .expect("the pause succeeds once the forgotten thread has ended");
-    assert_eq!(report.threads, 1);
-    assert!(report.blocked_attempts >= 1, "{report:?}");
-    let progress = progress.into_inner().unwrap();
-    assert!(
-        progress.iter().any(|event| matches!(
-            event,
-            PauseProgress::Blocked { reason, path }
-                if reason.contains("live threads") && path.len() == 2
-        )),
-        "{progress:?}"
-    );
+        .expect("the pause does not wait for the forgotten thread");
+    assert_eq!(report.threads, 2);
+    assert_eq!(report.blocked_attempts, 0, "{:?}", progress.lock().unwrap());
     assert_eq!(
         run.await.unwrap().unwrap_err(),
         EngineError::DurableSuspended
     );
-    assert_eq!(
-        report.committed.state["threads"].as_array().unwrap().len(),
-        1
-    );
 
-    let (result, _, _) = resume("forgetful", &report.committed, |_, _| {}).await;
+    let (result, info, resumed_host) = resume("forgetful", &report.committed, |_, _| {}).await;
     assert_eq!(result.unwrap(), expected);
+    assert_eq!(info.threads, 2);
+    assert_eq!(resumed_host.started.lock().unwrap().len(), 2);
 }
 
-/// An automatic snapshot of a run with a forgotten thread is refused too: it
-/// could not be used to recover the run.
+/// An automatic snapshot of a run with two threads leaves both running and
+/// is a valid starting point.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn an_automatic_snapshot_of_two_threads_is_blocked() {
+async fn an_automatic_snapshot_of_two_threads_can_be_resumed() {
     let (engine, hash) = engine();
     let (host, shared) = new_host();
     engine.set_durable_host(Some(shared));
@@ -899,14 +888,13 @@ async fn an_automatic_snapshot_of_two_threads_is_blocked() {
     let mode = SnapshotMode::KeepRunning {
         park_timeout: Duration::from_secs(5),
     };
-    let failure = snapshot(&engine, hash, mode, &progress)
+    let report = snapshot(&engine, hash, mode, &progress)
         .await
-        .expect_err("two live threads");
-    assert!(
-        matches!(&failure, SnapshotFailure::Blocked { reason, .. } if reason.contains("live threads")),
-        "{failure:?}"
-    );
+        .expect("two live threads are a clean point");
+    assert_eq!(report.threads, 2);
     assert_eq!(run.await.unwrap().unwrap(), string("Braga after 10"));
+    let (result, _, _) = resume("forgetful", &report.committed, |_, _| {}).await;
+    assert_eq!(result.unwrap(), string("Braga after 10"));
 }
 
 /// When the root function has returned, the run is over, even while a thread
@@ -1023,8 +1011,7 @@ async fn a_helper_call_before_the_run_does_not_become_the_run() {
 
 /// `race` over an empty array never settles. The thread inside it waits in an
 /// `AwaitAny` without waiters, which the pause gate has to wake like any other
-/// wait: the pause then gets an answer (here `Blocked`, because of the second
-/// thread) and does not hang without a report.
+/// wait. The snapshot holds the thread, and the resumed run ends the same way.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_thread_in_an_empty_race_does_not_hang_the_pause() {
     let (engine, hash) = engine();
@@ -1037,12 +1024,11 @@ async fn a_thread_in_an_empty_race_does_not_hang_the_pause() {
     let mode = SnapshotMode::KeepRunning {
         park_timeout: Duration::from_secs(5),
     };
-    let failure = snapshot(&engine, hash, mode, &progress)
+    let report = snapshot(&engine, hash, mode, &progress)
         .await
-        .expect_err("two threads");
-    assert!(
-        matches!(failure, SnapshotFailure::Blocked { .. }),
-        "every thread parked, so the attempt got as far as the writer: {failure:?}"
-    );
+        .expect("every thread parks, also the one in the empty race");
+    assert_eq!(report.threads, 2);
     assert_eq!(run.await.unwrap().unwrap(), string("Tomar after 8"));
+    let (result, _, _) = resume("racer", &report.committed, |_, _| {}).await;
+    assert_eq!(result.unwrap(), string("Tomar after 8"));
 }

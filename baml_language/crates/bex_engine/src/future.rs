@@ -150,6 +150,43 @@ impl FutureManager {
     }
 }
 
+/// What a durable snapshot reads from the registry: the id counter and, for
+/// every tracked future, its heap object and its provenance label.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) struct FutureRegistryView {
+    pub(crate) next_future_id: usize,
+    pub(crate) tracked: HashMap<FutureId, (HeapPtr, Arc<str>)>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl FutureManager {
+    /// Read the registry while the caller holds the exclusive heap guard.
+    ///
+    /// No thread holds an active permit while the guard exists, and a
+    /// [`FutureManagerGuard`] cannot outlive the active permit it was created
+    /// from, so nobody else holds the registry mutex or mutates the registry.
+    pub(crate) async fn registry_view(
+        &self,
+        _exclusive: &::bex_heap::HeapGuard<'_>,
+    ) -> FutureRegistryView {
+        let permit = self.permit.lock().await;
+        // SAFETY: the heap guard is the GC-exclusion witness that
+        // `InactiveHeapPermit::holder` asks for (see the method docs).
+        #[allow(unsafe_code)]
+        let inner = unsafe { permit.holder() };
+        FutureRegistryView {
+            next_future_id: inner
+                .next_future_id
+                .load(std::sync::atomic::Ordering::Relaxed),
+            tracked: inner
+                .active_futures
+                .iter()
+                .map(|(id, work)| (*id, (work.future, Arc::clone(&work.origin))))
+                .collect(),
+        }
+    }
+}
+
 pub struct FutureManagerGuard<'a> {
     permit_guard: MutexGuard<'a, InactiveHeapPermit<FutureManagerInner>>,
     /// Caller-supplied witness; `'a` ties the guard's existence to the
@@ -195,6 +232,45 @@ impl FutureManagerGuard<'_> {
             .active_futures
             .insert(id, FutureWork::new(work_guard, ptr, origin));
         (id, ptr)
+    }
+
+    /// Durable POC: the number of future ids issued so far. A restore adds it
+    /// to every future id of the snapshot.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn issued_future_ids(&self) -> usize {
+        self.holder()
+            .next_future_id
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Durable POC: never issue a future id below `next`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn reserve_future_ids(&mut self, next: usize) {
+        self.holder()
+            .next_future_id
+            .fetch_max(next, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Durable POC: track a pending future that a snapshot restore allocated,
+    /// exactly as [`Self::new_future`] tracks one it allocates itself.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn register_restored_future(
+        &mut self,
+        id: FutureId,
+        future: HeapPtr,
+        origin: std::sync::Arc<str>,
+    ) -> Result<(), EngineError> {
+        let inner = self.holder_mut();
+        if inner.active_futures.contains_key(&id) {
+            return Err(EngineError::Other(format!(
+                "future {id} of the snapshot is already tracked by this engine"
+            )));
+        }
+        let work_guard = inner.bex_work.register_work();
+        inner
+            .active_futures
+            .insert(id, FutureWork::new(work_guard, future, origin));
+        Ok(())
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
@@ -413,6 +489,17 @@ impl FutureManagerGuard<'_> {
         let fut_static: &'static bex_vm_types::Future = unsafe { std::mem::transmute(fut) };
         Ok(Some((fut_static, self_ptr)))
     }
+    /// The settle signal of future `id`, for a caller that wants to ask
+    /// later whether the future has settled without waiting on it. `None`
+    /// when the future is not pending any more.
+    pub(crate) fn future_probe(&mut self, id: FutureId) -> Option<PendingJoinHandle> {
+        let inner = self.holder();
+        let entry = inner.active_futures.get(&id)?;
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let future = unsafe { entry.future_ref() }.ok()?;
+        Some(future.ready_waiter())
+    }
+
     /// Returns a Rust future that resolves when the BAML future is ready.
     /// Once it is resolved, the future on the heap will be in a terminal
     /// state (some variant other than `Pending`).

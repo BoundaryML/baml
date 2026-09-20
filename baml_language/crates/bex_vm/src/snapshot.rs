@@ -28,15 +28,24 @@ use std::sync::Arc;
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, Value, types::Function};
 
+pub use crate::package_baml::ContinuationState;
 use crate::{
     BexVm, StackFrame,
-    vm::{BytecodeFrame, Frame, FrameTypeMetadata, ThrowContext, VmCaptureMask},
+    vm::{BytecodeFrame, Frame, FrameTypeMetadata, NativeFrame, ThrowContext, VmCaptureMask},
 };
 
-/// One bytecode call frame in position-independent form (apart from
-/// `function`, which the snapshot crate translates).
+/// One call frame in position-independent form (apart from the heap
+/// references, which the snapshot crate translates).
+///
+/// A bytecode frame has `native: None`. A native continuation frame (the
+/// frame of `Array.map` while its callback runs, for example) has
+/// `native: Some(..)`: `function` is the native function object,
+/// `function_name` its name, and the program counters, `locals_offset`, the
+/// type fields, and the call ids are zero or empty.
 #[derive(Clone, Debug)]
 pub struct FrameState {
+    /// The state of the continuation of a native frame.
+    pub native: Option<ContinuationState>,
     /// The callable the frame runs: an `Object::Function`, or a closure,
     /// bound method, or generic function value that wraps one.
     pub function: HeapPtr,
@@ -130,6 +139,18 @@ impl VmThreadState {
         });
         for frame in &self.frames {
             push_ptr(&mut roots, frame.function);
+            if let Some(native) = &frame.native {
+                for ptr in &native.ptrs {
+                    push_ptr(&mut roots, *ptr);
+                }
+                roots.extend(
+                    native
+                        .values
+                        .iter()
+                        .copied()
+                        .filter(|value| value.is_object()),
+                );
+            }
             for ty in frame.frame_types() {
                 ty.visit_heads(&mut |head| {
                     if head.is_resolved() {
@@ -143,12 +164,13 @@ impl VmThreadState {
 }
 
 impl FrameState {
-    /// Every type the frame carries: its type arguments, then the exact types
-    /// of its runtime-type metadata.
+    /// Every type the frame carries: its type arguments, the exact types of
+    /// its runtime-type metadata, and the types of a native continuation.
     pub fn frame_types(&self) -> impl Iterator<Item = &RealizedTy> {
         self.type_args
             .iter()
             .chain(self.type_metadata.iter().flatten().flatten())
+            .chain(self.native.iter().flat_map(|native| native.types.iter()))
     }
 
     /// Mutable form of [`Self::frame_types`], for the loader's head binding.
@@ -156,6 +178,25 @@ impl FrameState {
         self.type_args
             .iter_mut()
             .chain(self.type_metadata.iter_mut().flatten().flatten())
+            .chain(
+                self.native
+                    .iter_mut()
+                    .flat_map(|native| native.types.iter_mut()),
+            )
+    }
+
+    /// Call `f` on every value a native continuation holds.
+    pub fn visit_native_values(&self, f: &mut impl FnMut(Value)) {
+        if let Some(native) = &self.native {
+            for ptr in &native.ptrs {
+                if !ptr.is_null() {
+                    f(Value::object(*ptr));
+                }
+            }
+            for value in &native.values {
+                f(*value);
+            }
+        }
     }
 }
 
@@ -341,8 +382,8 @@ impl BexVm {
     /// walks the object graph from these values (plus the values the engine
     /// holds outside the VM at the yield).
     ///
-    /// Native continuation frames contribute their function only; their
-    /// continuation roots are not listed because such a VM cannot be exported.
+    /// A native continuation frame contributes its function and everything its
+    /// continuation holds.
     #[must_use]
     pub fn snapshot_roots(&self) -> Vec<Value> {
         self.snapshot_root_paths()
@@ -366,6 +407,19 @@ impl BexVm {
                     value: Value::object(view.function),
                     path: vec![frame_label.clone(), "callee".to_string()],
                 });
+            }
+            if let Frame::Native(native) = frame {
+                for ptr in native.continuation.gc_roots() {
+                    if !ptr.is_null() {
+                        roots.push(SnapshotRoot {
+                            value: Value::object(ptr),
+                            path: vec![
+                                frame_label.clone(),
+                                "a value held by the native call".to_string(),
+                            ],
+                        });
+                    }
+                }
             }
             if let Frame::Bytecode(frame) = frame {
                 for (index, ty) in frame.type_args.iter().enumerate() {
@@ -467,7 +521,8 @@ impl BexVm {
     /// # Errors
     ///
     /// Returns a description of the obstacle when the state cannot be
-    /// represented: a native continuation frame is on the call stack.
+    /// represented: a native continuation frame whose continuation has no
+    /// snapshot form is on the call stack.
     pub fn export_thread_state(&self) -> Result<VmThreadState, String> {
         let mut frames = Vec::with_capacity(self.frames.len());
         for frame in &self.frames {
@@ -477,16 +532,34 @@ impl BexVm {
                     let name = self
                         .snapshot_resolve_function(native.function)
                         .map_or_else(|| "<unknown>".to_string(), |(_, f)| f.name.clone());
-                    return Err(format!(
-                        "a native continuation frame ({name}) is on the call stack; \
-                         native continuations cannot be serialized"
-                    ));
+                    let Some(state) = native.continuation.snapshot() else {
+                        return Err(format!(
+                            "a native continuation frame ({name}, {}) is on the call stack; \
+                             this native continuation cannot be serialized",
+                            native.continuation.snapshot_name()
+                        ));
+                    };
+                    frames.push(FrameState {
+                        native: Some(state),
+                        function: native.function,
+                        function_name: name,
+                        instruction_ptr: 0,
+                        faulting_pc: 0,
+                        compact_pc: false,
+                        locals_offset: 0,
+                        type_args: Vec::new(),
+                        type_metadata: None,
+                        call_id: 0,
+                        parent_call_id: 0,
+                    });
+                    continue;
                 }
             };
             let Some((_, function)) = self.snapshot_resolve_function(frame.function) else {
                 return Err("a call frame does not resolve to a function object".to_string());
             };
             frames.push(FrameState {
+                native: None,
                 function: frame.function,
                 function_name: function.name.clone(),
                 instruction_ptr: frame.instruction_ptr,
@@ -554,6 +627,7 @@ impl BexVm {
 
         // Validate before touching the VM.
         let mut previous_offset = 0usize;
+        let mut continuations = Vec::new();
         for (index, frame) in state.frames.iter().enumerate() {
             let Some((_, function)) = self.snapshot_resolve_function(frame.function) else {
                 return Err(format!(
@@ -566,6 +640,47 @@ impl BexVm {
                     "frame {index} names function {} but the program has {} at that position",
                     frame.function_name, function.name
                 ));
+            }
+            if let Some(native) = &frame.native {
+                if matches!(function.kind, bex_vm_types::FunctionKind::Bytecode) {
+                    return Err(format!(
+                        "frame {index} ({}) is a native continuation of a bytecode function",
+                        function.name
+                    ));
+                }
+                // A continuation calls or reads the objects it points at when
+                // its callback returns, without a check of its own. The bytes
+                // of a snapshot are not trusted, so every pointer must name
+                // what the continuation expects: the callback of an array
+                // combinator is callable, the class walk of `from_json` holds
+                // its class, and the `to_string` and `to_json` walks hold the
+                // values whose overrides are still to run.
+                for (position, ptr) in native.ptrs.iter().enumerate() {
+                    let fits = !ptr.is_null()
+                        && if native.tag == "json.from_json_class" {
+                            matches!(self.get_object(*ptr), Object::Class(_))
+                        } else if native.tag.starts_with("array.") {
+                            self.snapshot_resolve_function(*ptr).is_some()
+                        } else {
+                            true
+                        };
+                    if !fits {
+                        return Err(format!(
+                            "frame {index} ({}): pointer {position} of continuation `{}` is {}",
+                            function.name,
+                            native.tag,
+                            if ptr.is_null() {
+                                "null"
+                            } else {
+                                "not an object the continuation can use"
+                            }
+                        ));
+                    }
+                }
+                let continuation = crate::package_baml::restore_continuation(native)
+                    .map_err(|error| format!("frame {index} ({}): {error}", function.name))?;
+                continuations.push(continuation);
+                continue;
             }
             if !matches!(function.kind, bex_vm_types::FunctionKind::Bytecode) {
                 return Err(format!(
@@ -606,9 +721,9 @@ impl BexVm {
                 .locals_offset
                 .checked_add(function.arity)
                 .and_then(|end| end.checked_add(function.real_local_count));
-            let limit = state
-                .frames
-                .get(index + 1)
+            let limit = state.frames[index + 1..]
+                .iter()
+                .find(|next| next.native.is_none())
                 .map_or(state.stack.len(), |next| next.locals_offset);
             if frame.locals_offset < previous_offset
                 || locals_end.is_none_or(|end| end > limit)
@@ -640,14 +755,29 @@ impl BexVm {
         // lines and exception handlers. A value that is not an instruction of
         // the top frame's function is replaced, not refused.
         let mut cur_pc = state.cur_pc;
-        if let Some(last) = state.frames.last()
+        if let Some(last) = state
+            .frames
+            .iter()
+            .rev()
+            .find(|frame| frame.native.is_none())
             && let Some((_, function)) = self.snapshot_resolve_function(last.function)
             && (cur_pc >= code_len(function) || !is_instruction_boundary(function, cur_pc))
         {
             cur_pc = last.instruction_ptr;
         }
 
+        let mut continuations = continuations.into_iter();
         for frame in state.frames {
+            if frame.native.is_some() {
+                let Some(continuation) = continuations.next() else {
+                    return Err("a native frame lost its continuation".to_string());
+                };
+                self.frames.push(Frame::Native(NativeFrame {
+                    function: frame.function,
+                    continuation,
+                }));
+                continue;
+            }
             let function_id = self
                 .snapshot_resolve_function(frame.function)
                 .map_or(0, |(_, function)| function.function_id);
@@ -851,6 +981,140 @@ mod tests {
         let error = fresh.import_thread_state(broken).unwrap_err();
         assert!(error.contains("exact type arguments"), "{error}");
     }
+    /// A continuation without a snapshot form, standing in for the ones that
+    /// stay process-bound (runtime compilation and test registration).
+    struct ProcessBound;
+
+    impl crate::package_baml::Continuation for ProcessBound {
+        fn call(
+            self: Box<Self>,
+            _vm: &mut BexVm,
+            value: Value,
+        ) -> crate::package_baml::NativeCallResult {
+            crate::package_baml::NativeCallResult::Done(value)
+        }
+        fn gc_roots(&self) -> Vec<bex_vm_types::HeapPtr> {
+            Vec::new()
+        }
+        fn apply_forwarding(
+            &mut self,
+            _: &std::collections::HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
+    }
+
+    /// A native frame whose continuation has no snapshot form blocks the
+    /// export, and the message names the function and the continuation.
+    #[test]
+    fn a_continuation_without_a_snapshot_form_blocks_the_export_with_its_name() {
+        let mut vm = parked_vm();
+        let function = vm.frames[0].function();
+        vm.frames.push(Frame::Native(crate::vm::NativeFrame {
+            function,
+            continuation: Box::new(ProcessBound),
+        }));
+        let error = vm.export_thread_state().unwrap_err();
+        assert!(error.contains("native continuation"), "{error}");
+        assert!(error.contains("ProcessBound"), "{error}");
+        assert!(error.contains("test_fn") || error.contains('('), "{error}");
+    }
+
+    /// Every continuation with a snapshot form restores to a continuation
+    /// that snapshots to the same state, and a payload that does not fit is
+    /// refused instead of being installed.
+    #[test]
+    fn continuation_states_round_trip_through_the_registry() {
+        use crate::package_baml::{ContinuationState, restore_continuation};
+
+        let state = |tag: &str, values: u32, ints: &[u64], strings: &[&str], types: usize| {
+            ContinuationState {
+                tag: tag.to_string(),
+                ptrs: vec![bex_vm_types::HeapPtr::null()],
+                values: (0..values).map(|n| Value::int(i64::from(n))).collect(),
+                types: vec![RealizedTy::Int; types],
+                ints: ints.to_vec(),
+                strings: strings.iter().map(ToString::to_string).collect(),
+            }
+        };
+        let good = [
+            state("array.map", 4, &[3, 1, 1, 0], &[], 1),
+            state("array.filter", 3, &[3, 0, 0, 0], &[], 1),
+            state("array.flat_map", 5, &[2, 3, 1, 0], &[], 1),
+            state("array.some", 2, &[2, 0, 1, 0], &[], 0),
+            state("array.every", 2, &[2, 0, 0, 0], &[], 0),
+            state("array.find", 2, &[2, 0, 1, 1], &[], 0),
+            state("array.find_last", 2, &[2, 0, 0, 0], &[], 0),
+            state("array.reduce", 3, &[3, 0, 2, 0], &[], 0),
+            state("array.sort_by", 6, &[4, 1, 1, 0, 1, 2, 2, 3], &[], 0),
+            state("json.from_json_class", 3, &[1, 2, 1, 1], &[], 3),
+            state("json.from_json_list", 3, &[2, 1, 1], &[], 1),
+            state("json.from_json_map", 3, &[2, 1, 1], &["a", "b", "a"], 1),
+            state("ops.equals", 4, &[], &[], 0),
+        ];
+        for mut expected in good {
+            if expected.tag == "ops.equals" {
+                expected.ptrs = Vec::new();
+            }
+            if expected.tag.starts_with("json.from_json_list")
+                || expected.tag.starts_with("json.from_json_map")
+            {
+                expected.ptrs = Vec::new();
+            }
+            let restored = restore_continuation(&expected)
+                .unwrap_or_else(|error| panic!("{}: {error}", expected.tag));
+            let again = restored.snapshot().expect("still has a snapshot form");
+            assert_eq!(again.tag, expected.tag);
+            assert_eq!(again.values, expected.values, "{}", expected.tag);
+            assert_eq!(again.ints, expected.ints, "{}", expected.tag);
+            assert_eq!(again.strings, expected.strings, "{}", expected.tag);
+            assert_eq!(again.types.len(), expected.types.len(), "{}", expected.tag);
+        }
+
+        // Walks keep their results as text: JSON for `to_json`, strings for
+        // `to_string` and the prompt assembly.
+        let mut walk = state("json.to_json_walk", 1, &[], &["{\"a\":[1,null]}"], 0);
+        walk.ptrs = vec![bex_vm_types::HeapPtr::null(); 2];
+        let again = restore_continuation(&walk).unwrap().snapshot().unwrap();
+        assert_eq!(again.strings, walk.strings);
+        let mut walk = state("root.to_string_walk", 1, &[], &["done"], 0);
+        walk.ptrs = vec![bex_vm_types::HeapPtr::null(); 2];
+        assert!(restore_continuation(&walk).is_ok());
+        let mut prompt = state("prompt.assembly", 3, &[1, 2], &[], 0);
+        prompt.ptrs = vec![bex_vm_types::HeapPtr::null(); 1];
+        assert!(restore_continuation(&prompt).is_ok());
+        assert!(restore_continuation(&state("pass_through", 0, &[], &[], 0)).is_ok());
+        assert!(restore_continuation(&state("json.from_json_identity", 0, &[], &[], 0)).is_ok());
+        assert!(restore_continuation(&state("reflect.call_any", 0, &[], &[], 1)).is_ok());
+
+        let bad = [
+            // A cursor outside the array.
+            state("array.map", 4, &[3, 1, 3, 0], &[], 1),
+            // Lengths that do not add up to the values.
+            state("array.filter", 3, &[5, 0, 0, 0], &[], 1),
+            // Merge cursors outside the source.
+            state("array.sort_by", 6, &[4, 1, 1, 0, 1, 2, 2, 9], &[], 0),
+            // As many results as overrides: no override is outstanding.
+            state("root.to_string_walk", 1, &[], &["done"], 0),
+            state("json.from_json_map", 3, &[2, 1, 1], &["a"], 1),
+            state("ops.equals", 3, &[], &[], 0),
+            state("array.map", 4, &[3, 1, 1, 0], &[], 0),
+            state("no.such.continuation", 0, &[], &[], 0),
+            // Results that do not match the cursor: `map` has one result per
+            // finished element, `filter` at most one.
+            state("array.map", 5, &[3, 2, 1, 0], &[], 1),
+            state("array.filter", 6, &[3, 3, 1, 0], &[], 1),
+            state("json.from_json_list", 5, &[3, 2, 1], &[], 1),
+            state("json.from_json_class", 3, &[0, 2, 1, 0], &[], 2),
+        ];
+        for broken in bad {
+            assert!(
+                restore_continuation(&broken).is_err(),
+                "{} must be refused",
+                broken.tag
+            );
+        }
+    }
+
     /// A fresh VM of the `parked_vm` program, plus the state of a parked one
     /// with the function pointer of the fresh VM.
     fn fresh_vm_and_state() -> (BexVm, VmThreadState) {

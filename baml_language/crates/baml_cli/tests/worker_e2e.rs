@@ -850,55 +850,57 @@ fn a_run_survives_two_pauses() {
     assert_eq!(events.last().unwrap()["value"], expected_plan());
 }
 
-/// A pending future cannot be serialized yet, so a pause of the `spawn`
-/// variant reports `blocked` with the path to the future and the run goes on.
+/// Phase 3: a pause of the `spawn` variant suspends both threads. The spawned
+/// thread waits on the remote call, the parent is in its loop, and the pending
+/// future between them is part of the snapshot. The next segment restores both
+/// threads with the ids they had and takes the remote result.
 #[test]
-fn pausing_the_spawn_variant_is_blocked_and_the_run_completes() {
-    let mut worker = Worker::start("durable_plan_trip_parallel");
+fn pausing_the_spawn_variant_suspends_both_threads_and_the_run_resumes() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_plan_trip_parallel",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
     let call = worker.wait_for("remote_call", is_type("remote_call"));
-    worker.send(&json!({ "type": "pause" }));
-    let blocked = worker.wait_for("blocked", is_type("blocked"));
-    assert!(
-        blocked["reason"]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("future"),
-        "{blocked}"
-    );
-    let path: Vec<_> = blocked["path"]
-        .as_array()
-        .unwrap()
+    let (paused, events) = pause_and_finish(worker);
+    assert!(of_type(&events, "blocked").is_empty(), "{events:#?}");
+    assert_eq!(paused["stats"]["threads"], 2);
+    let state = read_state(&paused);
+    let threads = state["threads"].as_array().unwrap();
+    assert_eq!(threads.len(), 2);
+    let child = threads
         .iter()
-        .map(|p| p.as_str().unwrap().to_string())
-        .collect();
-    assert!(path.iter().any(|p| p.contains("pending")), "{path:?}");
-    // The path uses the names of `position` events and nothing that differs
-    // between processes (no `user.` prefix, no heap address).
-    assert!(
-        path.contains(&"frame durable_plan_trip_parallel".to_string()),
-        "{path:?}"
-    );
-    assert!(
-        path.iter()
-            .all(|p| !p.contains("user.") && !p.contains("0x")),
-        "{path:?}"
-    );
+        .find(|thread| !thread["parent_thread"].is_null())
+        .expect("the spawned thread");
+    assert_eq!(child["parked"]["kind"], "remote_call");
+    assert!(child["settles_future"].is_number());
 
-    worker.wait_for("the parent's await position", |e| {
-        e["type"] == "position" && e["reason"] == "await"
-    });
-    worker.send(&json!({
-        "type": "remote_result",
-        "call_id": call["call_id"],
-        "value": "sunny in Lisbon",
-    }));
+    let result = json!({ "call_id": call["call_id"], "value": "sunny in Lisbon" }).to_string();
+    let worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &result],
+    );
     let (code, events, stderr) = worker.finish();
     assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
-    assert!(of_type(&events, "paused").is_empty());
-    assert_eq!(
-        texts(&events),
-        ["planning day 1", "planning day 2", "planning day 3"]
+    let started = of_type(&events, "thread_started");
+    assert_eq!(started.len(), 2, "{events:#?}");
+    assert!(
+        started[0]["parent_thread"].is_null(),
+        "the root reports first"
+    );
+    assert_eq!(started[1]["thread"], child["thread"]);
+    assert_eq!(started[1]["parent_thread"], child["parent_thread"]);
+    assert!(
+        of_type(&events, "remote_call").is_empty(),
+        "the call is not announced again: {events:#?}"
     );
     let last = events.last().unwrap();
     assert_eq!(last["type"], "completed");
@@ -1121,11 +1123,11 @@ fn cancel_and_a_closed_stdin_end_a_run_in_a_compute_loop() {
 }
 
 /// A spawned thread whose future was dropped is invisible to the snapshot
-/// writer. While it lives, the run has two threads, which a resume cannot
-/// restore: the pause reports `blocked` and succeeds once the thread ended,
-/// with a snapshot that does resume.
+/// writer through any value. It is a thread of the run all the same: the
+/// pause does not wait for it, the snapshot holds both threads, and the
+/// resumed run ends the same way.
 #[test]
-fn a_forgotten_spawned_thread_delays_the_pause_until_it_ended() {
+fn a_forgotten_spawned_thread_is_part_of_the_snapshot() {
     let dirs = RunDirs::new();
     let mut worker = Worker::spawn_segment(
         &dirs,
@@ -1141,20 +1143,11 @@ fn a_forgotten_spawned_thread_delays_the_pause_until_it_ended() {
         e["type"] == "thread_started" && !e["parent_thread"].is_null()
     });
     let (paused, events) = pause_and_finish(worker);
-    let blocked = of_type(&events, "blocked");
-    assert!(!blocked.is_empty(), "{events:#?}");
-    assert!(
-        blocked[0]["reason"]
-            .as_str()
-            .unwrap()
-            .contains("live threads"),
-        "{blocked:?}"
-    );
-    assert_eq!(blocked[0]["path"].as_array().unwrap().len(), 2);
-    assert!(paused["stats"]["blocked_attempts"].as_u64().unwrap() >= 1);
-    assert_eq!(paused["stats"]["threads"], 1);
+    assert!(of_type(&events, "blocked").is_empty(), "{events:#?}");
+    assert_eq!(paused["stats"]["blocked_attempts"], 0);
+    assert_eq!(paused["stats"]["threads"], 2);
     let state = read_state(&paused);
-    assert_eq!(state["threads"].as_array().unwrap().len(), 1);
+    assert_eq!(state["threads"].as_array().unwrap().len(), 2);
 
     let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
     let (code, events, stderr) = worker.finish();
@@ -1177,14 +1170,21 @@ fn a_pause_after_the_root_returned_writes_no_snapshot() {
             r#"{"city":"Lisbon"}"#,
         ],
     );
-    worker.wait_for("the spawned thread", |e| {
-        e["type"] == "thread_started" && !e["parent_thread"].is_null()
+    // The root returns right after the spawn. Under load it can return before
+    // the task of the spawned thread was scheduled. That thread is then never
+    // reported, and the worker completes at once. Otherwise the worker waits
+    // for the thread, and the pause arrives during that wait.
+    let seen = worker.wait_for("the spawned thread or the end of the run", |e| {
+        (e["type"] == "thread_started" && !e["parent_thread"].is_null()) || e["type"] == "completed"
     });
-    std::thread::sleep(Duration::from_millis(300));
-    worker.send(&json!({ "type": "pause" }));
+    if seen["type"] == "thread_started" {
+        std::thread::sleep(Duration::from_millis(300));
+        worker.send(&json!({ "type": "pause" }));
+    }
     let (code, events, stderr) = worker.finish();
     assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
     assert_eq!(events.last().unwrap()["type"], "completed");
+    assert_eq!(events.last().unwrap()["value"], "done early");
     assert!(of_type(&events, "paused").is_empty());
     assert_eq!(
         snapshot_files(&dirs.snapshots()),
@@ -1296,4 +1296,986 @@ fn a_snapshot_that_cannot_be_stored_is_retried() {
     assert_eq!(of_type(&events, "blocked").len(), 1, "one per reason");
     assert!(paused["stats"]["blocked_attempts"].as_u64().unwrap() >= 1);
     assert!(Path::new(paused["snapshot_path"].as_str().unwrap()).exists());
+}
+
+/// Phase 3, contract 9.2: `race` over three remote calls. The pause lands
+/// while all three racers wait, the next segment gets one result, and the two
+/// losers are cancelled in their remote waits: the worker reports
+/// `remote_cancel` for exactly their calls and ignores results that arrive
+/// for them afterwards. Arguments and the result are class values.
+#[test]
+fn race_losers_report_remote_cancel_after_a_resume() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_forecast_race",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 3 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    let (paused, events) = pause_and_finish(worker);
+    assert!(of_type(&events, "blocked").is_empty(), "{events:#?}");
+    assert_eq!(
+        paused["stats"]["threads"], 5,
+        "root, three racers, the race"
+    );
+
+    let winner = calls
+        .iter()
+        .find(|call| call["args"]["source"] == "medium")
+        .expect("the medium call");
+    let forecast = json!({ "city": "Lisbon", "source": "medium", "degrees": 19 });
+    let result = json!({ "call_id": winner["call_id"], "value": forecast }).to_string();
+    let mut worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &result],
+    );
+    let mut cancelled = Vec::new();
+    while cancelled.len() < 2 {
+        cancelled.push(worker.wait_for("remote_cancel", is_type("remote_cancel")));
+    }
+    // A late result for an abandoned call changes nothing.
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": cancelled[0]["call_id"],
+        "value": { "city": "Lisbon", "source": "late", "degrees": 1 },
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    let mut cancelled_ids: Vec<&str> = cancelled
+        .iter()
+        .map(|event| event["call_id"].as_str().unwrap())
+        .collect();
+    cancelled_ids.sort_unstable();
+    let mut loser_ids: Vec<&str> = calls
+        .iter()
+        .filter(|call| call["call_id"] != winner["call_id"])
+        .map(|call| call["call_id"].as_str().unwrap())
+        .collect();
+    loser_ids.sort_unstable();
+    assert_eq!(cancelled_ids, loser_ids);
+    for event in &cancelled {
+        assert!(event["thread"].is_number(), "{event}");
+    }
+    assert_eq!(of_type(&events, "remote_result_received").len(), 1);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], forecast);
+}
+
+// ============================================================================
+// Durable sleep and remote cancellation (contract section 9.2)
+// ============================================================================
+
+fn now_ms() -> u64 {
+    u64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis(),
+    )
+    .unwrap()
+}
+
+fn sleep_until_ms(at_ts: u64) {
+    std::thread::sleep(Duration::from_millis(at_ts.saturating_sub(now_ms()) + 50));
+}
+
+/// Start `function` with `json_args` and the self-suspend threshold `ms`.
+fn start_with_threshold(
+    dirs: &std::rc::Rc<RunDirs>,
+    function: &str,
+    json_args: &str,
+    ms: &str,
+) -> Worker {
+    Worker::spawn_segment(
+        dirs,
+        1,
+        &[
+            "--start",
+            function,
+            "--json-args",
+            json_args,
+            "--sleep-suspend-ms",
+            ms,
+        ],
+    )
+}
+
+/// Drain a worker that suspended itself: exit code 75, `paused` as the last
+/// event. Returns the `paused` event and all events.
+fn finish_self_suspended(worker: Worker) -> (Value, Vec<Value>) {
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 75, "stderr: {stderr}\nevents: {events:#?}");
+    let paused = events.last().unwrap().clone();
+    assert_eq!(paused["type"], "paused", "{events:#?}");
+    assert_eq!(of_type(&events, "paused").len(), 1);
+    assert_eq!(paused["wake"]["reason"], "sleep", "{paused}");
+    (paused, events)
+}
+
+fn quote(vendor: &str, cabin: &str, nights: u64) -> Value {
+    json!({
+        "vendor": vendor,
+        "cabin": cabin,
+        "total": { "amount": nights * 111, "currency": "EUR" },
+        "perks": ["wifi", format!("{nights} breakfasts")],
+        "extras": { "bags": nights, "seat": 12 },
+        "note": if nights > 2 { json!(format!("long stay at {vendor}")) } else { Value::Null },
+    })
+}
+
+/// A durable run in a long sleep suspends itself: `paused` carries `wake`,
+/// the process exits 75, and nobody sent a command. A resume after the
+/// deadline completes the sleep at once.
+#[test]
+fn a_long_sleep_suspends_the_run_and_a_resume_after_the_deadline_completes_at_once() {
+    let dirs = RunDirs::new();
+    let worker = start_with_threshold(&dirs, "durable_nap", r#"{"ms":1500}"#, "400");
+    let (paused, events) = finish_self_suspended(worker);
+    assert_eq!(texts(&events), ["going to sleep"]);
+    assert!(of_type(&events, "blocked").is_empty(), "{events:#?}");
+    assert!(of_type(&events, "pausing").is_empty(), "{events:#?}");
+
+    let wake = &paused["wake"];
+    let remaining = wake["remaining_ms"].as_u64().unwrap();
+    let at_ts = wake["at_ts"].as_u64().unwrap();
+    assert!((400..=1500).contains(&remaining), "{paused}");
+    // `remaining_ms` was measured when the snapshot was written, shortly
+    // before the event.
+    let ts = paused["ts"].as_u64().unwrap();
+    assert!(
+        at_ts >= ts && at_ts - remaining <= ts && ts - (at_ts - remaining) < 1000,
+        "{paused}"
+    );
+    assert_eq!(paused["stats"]["threads"], 1);
+    assert!(paused["stats"]["pause_latency_ms"].is_number());
+    let state = read_state(&paused);
+    assert_eq!(state["threads"][0]["parked"]["kind"], "sleep");
+    assert_eq!(
+        snapshot_files(&dirs.snapshots()),
+        ["snap-1.bamlsnap", "snap-1.json"]
+    );
+
+    sleep_until_ms(at_ts);
+    let worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--sleep-suspend-ms", "400"],
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(texts(&events), ["woke up"]);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], "slept");
+    let resumed = &events[index_of(&events, "resumed", is_type("resumed"))];
+    let took = last["ts"].as_u64().unwrap() - resumed["ts"].as_u64().unwrap();
+    assert!(took < 1000, "the expired sleep took {took} ms: {events:#?}");
+}
+
+/// A manual resume long before the deadline: the new worker sees a sleep that
+/// is still over the threshold and suspends again, with the same deadline. A
+/// resume with a threshold above the remaining time sleeps in the process.
+#[test]
+fn an_early_resume_suspends_again_until_the_remaining_sleep_is_short() {
+    let dirs = RunDirs::new();
+    // The sleep is long compared with the start of a worker process, which
+    // compiles the project, so that the early resume really is early.
+    let worker = start_with_threshold(&dirs, "durable_nap", r#"{"ms":20000}"#, "300");
+    let (first, _) = finish_self_suspended(worker);
+
+    let worker = Worker::resume(
+        &dirs,
+        2,
+        first["snapshot_path"].as_str().unwrap(),
+        &["--sleep-suspend-ms", "300"],
+    );
+    let (second, events) = finish_self_suspended(worker);
+    assert!(texts(&events).is_empty(), "{events:#?}");
+    assert_eq!(second["wake"]["at_ts"], first["wake"]["at_ts"]);
+    assert!(
+        second["wake"]["remaining_ms"].as_u64().unwrap()
+            < first["wake"]["remaining_ms"].as_u64().unwrap()
+    );
+    assert_ne!(second["snapshot_path"], first["snapshot_path"]);
+
+    // The rest of the sleep is below this threshold: the worker waits.
+    let worker = Worker::resume(
+        &dirs,
+        3,
+        second["snapshot_path"].as_str().unwrap(),
+        &["--sleep-suspend-ms", "60000"],
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "paused").is_empty());
+    let last = events.last().unwrap();
+    assert_eq!(last["value"], "slept");
+    assert!(
+        last["ts"].as_u64().unwrap() + 20 >= first["wake"]["at_ts"].as_u64().unwrap(),
+        "the sleep did not end early: {events:#?}"
+    );
+}
+
+/// The parent sleeps while four remote calls are outstanding: the run
+/// suspends itself with all five threads. The results arrive while the run
+/// has no process and are handed to the next worker in another order, one of
+/// them twice. The report holds the nested class values of every call.
+#[test]
+fn a_fan_out_suspends_itself_and_completes_from_shuffled_results() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_fan_out",
+        r#"{"city":"Lisbon","ms":3000}"#,
+        "400",
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 4 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    let (paused, events) = finish_self_suspended(worker);
+    assert!(
+        index_of(&events, "paused", is_type("paused"))
+            > index_of(&events, "the last call", |e| e == &calls[3]),
+        "the run suspends only after every call is announced"
+    );
+    assert_eq!(paused["stats"]["threads"], 5);
+    let state = read_state(&paused);
+    let mut kinds: Vec<&str> = state["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|thread| thread["parked"]["kind"].as_str().unwrap())
+        .collect();
+    kinds.sort_unstable();
+    assert_eq!(
+        kinds,
+        [
+            "remote_call",
+            "remote_call",
+            "remote_call",
+            "remote_call",
+            "sleep"
+        ]
+    );
+
+    // The arguments are class values with an enum.
+    let request = |vendor: &str| {
+        calls
+            .iter()
+            .find(|call| call["args"]["request"]["vendor"] == vendor)
+            .unwrap_or_else(|| panic!("no call for {vendor}: {calls:#?}"))
+    };
+    assert_eq!(
+        request("charlie")["args"]["request"],
+        json!({ "city": "Lisbon", "vendor": "charlie", "cabin": "Business", "nights": 3 })
+    );
+    let quotes = [
+        quote("alfa", "Economy", 1),
+        quote("bravo", "Economy", 2),
+        quote("charlie", "Business", 3),
+        quote("delta", "Business", 4),
+    ];
+    let result = |vendor: &str, index: usize| {
+        json!({ "call_id": request(vendor)["call_id"], "value": quotes[index] }).to_string()
+    };
+    let shuffled = [
+        result("charlie", 2),
+        result("alfa", 0),
+        result("delta", 3),
+        result("alfa", 0),
+        result("bravo", 1),
+    ];
+    let mut extra = vec!["--sleep-suspend-ms", "400"];
+    for result in &shuffled {
+        extra.extend_from_slice(&["--remote-result", result]);
+    }
+    sleep_until_ms(paused["wake"]["at_ts"].as_u64().unwrap());
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &extra);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(of_type(&events, "remote_result_received").len(), 4);
+    assert!(of_type(&events, "remote_call").is_empty(), "no call twice");
+    assert!(of_type(&events, "remote_cancel").is_empty(), "{events:#?}");
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(
+        last["value"],
+        json!({
+            "city": "Lisbon",
+            "quotes": quotes,
+            "cheapest": quotes[0],
+            "by_vendor": {
+                "alfa": quotes[0],
+                "bravo": quotes[1],
+                "charlie": quotes[2],
+                "delta": quotes[3],
+            },
+            "cabins": ["Economy", "Economy", "Business", "Business"],
+        })
+    );
+}
+
+/// A race in one process: the winner's result arrives on stdin, the worker
+/// reports `remote_cancel` for exactly the two losers, and the run then
+/// suspends itself in its trailing sleep. A result for a loser that is handed
+/// to the next worker with `--remote-result` is ignored, like one on stdin.
+#[test]
+fn race_losers_are_cancelled_and_their_late_results_are_ignored() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_quote_race",
+        r#"{"city":"Lisbon","tail_ms":3000}"#,
+        "400",
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 3 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    let winner = calls
+        .iter()
+        .find(|call| call["args"]["request"]["vendor"] == "slow")
+        .unwrap()
+        .clone();
+    let winning_quote = quote("slow", "Business", 3);
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": winner["call_id"],
+        "value": winning_quote,
+    }));
+    let mut cancelled = Vec::new();
+    while cancelled.len() < 2 {
+        cancelled.push(worker.wait_for("remote_cancel", is_type("remote_cancel")));
+    }
+    // Late, on stdin.
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": cancelled[0]["call_id"],
+        "value": quote("late", "Economy", 1),
+    }));
+    let (paused, events) = finish_self_suspended(worker);
+    assert_eq!(paused["stats"]["threads"], 1, "the losers have ended");
+    assert_eq!(of_type(&events, "remote_cancel").len(), 2);
+    assert_eq!(of_type(&events, "remote_result_received").len(), 1);
+
+    let mut cancelled_ids: Vec<&str> = cancelled
+        .iter()
+        .map(|event| event["call_id"].as_str().unwrap())
+        .collect();
+    cancelled_ids.sort_unstable();
+    let mut loser_ids: Vec<&str> = calls
+        .iter()
+        .filter(|call| call["call_id"] != winner["call_id"])
+        .map(|call| call["call_id"].as_str().unwrap())
+        .collect();
+    loser_ids.sort_unstable();
+    assert_eq!(cancelled_ids, loser_ids);
+    // Each `remote_cancel` names the thread that made the call.
+    for event in &cancelled {
+        let call = calls
+            .iter()
+            .find(|call| call["call_id"] == event["call_id"])
+            .unwrap();
+        assert_eq!(event["thread"], call["thread"], "{event}");
+    }
+
+    // Late, as an argument of the next worker.
+    let late = json!({
+        "call_id": cancelled[1]["call_id"],
+        "value": quote("late", "Economy", 1),
+    })
+    .to_string();
+    sleep_until_ms(paused["wake"]["at_ts"].as_u64().unwrap());
+    let worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &late],
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "remote_result_received").is_empty());
+    assert!(of_type(&events, "remote_cancel").is_empty());
+    assert!(
+        stderr.contains("the run does not wait on that call"),
+        "{stderr}"
+    );
+    assert_eq!(events.last().unwrap()["value"], winning_quote);
+}
+
+/// `with_timeout` around a remote call that never answers: the deadline
+/// cancels the waiting thread, the worker reports `remote_cancel` for its
+/// call, and the function returns a value built from the `Timeout` error.
+#[test]
+fn a_timeout_cancels_the_remote_wait_and_the_run_returns_the_timeout_message() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_deadline",
+        r#"{"city":"Lisbon","limit_ms":400}"#,
+        "5000",
+    );
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let cancel = worker.wait_for("remote_cancel", is_type("remote_cancel"));
+    assert_eq!(cancel["call_id"], call["call_id"]);
+    assert_eq!(cancel["thread"], call["thread"]);
+    // Too late: the run does not wait on the call any more.
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": quote("sluggish", "Business", 3),
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "remote_result_received").is_empty());
+    assert!(of_type(&events, "paused").is_empty());
+    assert_eq!(
+        events.last().unwrap()["value"],
+        "no quote for Lisbon: operation timed out after 400ms"
+    );
+}
+
+/// The deadline of `with_timeout` is a sleep like any other: the run suspends
+/// itself with the timer thread, the waiting body and the root. The timer
+/// fires in the next process, which cancels the remote wait there.
+#[test]
+fn a_timeout_longer_than_the_threshold_fires_after_a_self_suspend() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_deadline",
+        r#"{"city":"Lisbon","limit_ms":3000}"#,
+        "400",
+    );
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let (paused, events) = finish_self_suspended(worker);
+    assert!(of_type(&events, "remote_cancel").is_empty());
+    assert_eq!(paused["stats"]["threads"], 3, "root, body, timer");
+
+    sleep_until_ms(paused["wake"]["at_ts"].as_u64().unwrap());
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    let cancels = of_type(&events, "remote_cancel");
+    assert_eq!(cancels.len(), 1, "{events:#?}");
+    assert_eq!(cancels[0]["call_id"], call["call_id"]);
+    assert_eq!(cancels[0]["thread"], call["thread"]);
+    assert_eq!(
+        events.last().unwrap()["value"],
+        "no quote for Lisbon: operation timed out after 3000ms"
+    );
+}
+
+/// `Future.cancel` on a thread in a remote wait, and a parent thread that
+/// fails while its child is in one: both report `remote_cancel`.
+#[test]
+fn a_cancelled_future_and_a_failing_parent_abandon_their_remote_calls() {
+    for (function, value) in [
+        ("durable_cancel_future", "cancelled true"),
+        ("durable_failing_parent", "orphan failed with 503"),
+    ] {
+        let mut worker = Worker::start(function);
+        let call = worker.wait_for("remote_call", is_type("remote_call"));
+        let cancel = worker.wait_for("remote_cancel", is_type("remote_cancel"));
+        assert_eq!(cancel["call_id"], call["call_id"], "{function}");
+        assert_eq!(cancel["thread"], call["thread"], "{function}");
+        let (code, events, stderr) = worker.finish();
+        assert_eq!(code, 0, "{function} stderr: {stderr}\nevents: {events:#?}");
+        assert_eq!(of_type(&events, "remote_cancel").len(), 1, "{function}");
+        assert_eq!(events.last().unwrap()["value"], value, "{function}");
+    }
+}
+
+/// A run that fails while a thread still waits for a remote result reports
+/// the call as abandoned before its terminal event.
+#[test]
+fn a_failing_root_abandons_the_remote_calls_of_its_children() {
+    let mut worker = Worker::start("durable_failing_root");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 1, "stderr: {stderr}\nevents: {events:#?}");
+    let cancels = of_type(&events, "remote_cancel");
+    assert_eq!(cancels.len(), 1, "{events:#?}");
+    assert_eq!(cancels[0]["call_id"], call["call_id"]);
+    assert_eq!(cancels[0]["thread"], call["thread"]);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "failed");
+    assert!(
+        last["error"].as_str().unwrap().contains("QuoteUnavailable"),
+        "{last}"
+    );
+    assert!(
+        index_of(&events, "remote_cancel", is_type("remote_cancel")) < events.len() - 1,
+        "{events:#?}"
+    );
+}
+
+/// `cancel` while the run sleeps in its process (the threshold `0` disables
+/// the self-suspend): exit 130 without a snapshot.
+#[test]
+fn cancel_while_sleeping_exits_130_and_a_disabled_threshold_never_suspends() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(&dirs, "durable_nap", r#"{"ms":60000}"#, "0");
+    worker.wait_for("the first line", |e| e["text"] == "going to sleep");
+    std::thread::sleep(Duration::from_millis(700));
+    worker.send(&json!({ "type": "cancel" }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 130, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "paused").is_empty(), "{events:#?}");
+    assert_eq!(events.last().unwrap()["type"], "cancelled");
+    assert!(snapshot_files(&dirs.snapshots()).is_empty());
+}
+
+/// A cancel that arrives while a fan-out sleeps over its remote waits reports
+/// every outstanding call as abandoned.
+#[test]
+fn cancel_while_sleeping_over_remote_waits_abandons_every_call() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_fan_out",
+        r#"{"city":"Lisbon","ms":60000}"#,
+        "0",
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 4 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    worker.send(&json!({ "type": "cancel" }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 130, "stderr: {stderr}\nevents: {events:#?}");
+    let mut cancelled: Vec<&str> = of_type(&events, "remote_cancel")
+        .iter()
+        .map(|event| event["call_id"].as_str().unwrap())
+        .collect();
+    cancelled.sort_unstable();
+    let mut announced: Vec<&str> = calls
+        .iter()
+        .map(|call| call["call_id"].as_str().unwrap())
+        .collect();
+    announced.sort_unstable();
+    assert_eq!(cancelled, announced, "{events:#?}");
+}
+
+/// A function that is not durable never suspends itself, whatever the
+/// threshold.
+#[test]
+fn a_run_that_is_not_durable_never_suspends_itself() {
+    let dirs = RunDirs::new();
+    let worker = start_with_threshold(&dirs, "plain_nap", r#"{"ms":900}"#, "100");
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "paused").is_empty(), "{events:#?}");
+    assert_eq!(events.last().unwrap()["value"], "slept");
+    assert!(snapshot_files(&dirs.snapshots()).is_empty());
+}
+
+/// A sleep that holds an open file cannot be written to a snapshot. The
+/// worker reports `blocked` once, the thread sleeps in the process, and the
+/// program continues. The next sleep holds no file and suspends the run.
+#[test]
+fn a_blocked_self_suspend_is_reported_once_and_the_sleep_runs_in_the_process() {
+    let dirs = RunDirs::new();
+    let file = dirs.home.path().join("note.txt");
+    std::fs::write(&file, "kept").unwrap();
+    let args = json!({ "path": file, "first_ms": 1200, "second_ms": 3000 }).to_string();
+    let mut worker = start_with_threshold(&dirs, "durable_hold_file", &args, "300");
+    let blocked = worker.wait_for("blocked", is_type("blocked"));
+    assert!(
+        blocked["reason"]
+            .as_str()
+            .unwrap()
+            .contains("host resource"),
+        "{blocked}"
+    );
+    assert!(
+        blocked["path"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|element| element == "frame read_slowly"),
+        "{blocked}"
+    );
+    let (paused, events) = finish_self_suspended(worker);
+    assert_eq!(of_type(&events, "blocked").len(), 1, "{events:#?}");
+    assert_eq!(texts(&events), ["read kept"], "the first sleep ran here");
+    assert!(
+        index_of(&events, "the log line", |e| e["text"] == "read kept")
+            > index_of(&events, "blocked", is_type("blocked"))
+    );
+    assert_eq!(paused["stats"]["blocked_attempts"], 1);
+
+    sleep_until_ms(paused["wake"]["at_ts"].as_u64().unwrap());
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(events.last().unwrap()["value"], "kept");
+}
+
+/// A requested pause reports `wake: null`, also when it lands in a long
+/// sleep.
+#[test]
+fn a_requested_pause_reports_a_null_wake() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(&dirs, "durable_nap", r#"{"ms":60000}"#, "0");
+    worker.wait_for("the first line", |e| e["text"] == "going to sleep");
+    let (paused, _) = pause_and_finish(worker);
+    assert!(paused.as_object().unwrap().contains_key("wake"), "{paused}");
+    assert!(paused["wake"].is_null(), "{paused}");
+}
+
+// ============================================================================
+// Ordered replay, call identities, and restored waits (phase 3 review)
+// ============================================================================
+
+/// The call id of a spawned thread names the thread by its place in the spawn
+/// tree and the call by its number in that thread, so it does not depend on
+/// the order in which the scheduler ran the threads.
+#[test]
+fn call_ids_name_the_spawn_path_and_the_call_number() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_fan_out",
+        r#"{"city":"Lisbon","ms":3000}"#,
+        "400",
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 4 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    let _ = finish_self_suspended(worker);
+    for (index, vendor) in ["alfa", "bravo", "charlie", "delta"].iter().enumerate() {
+        let call = calls
+            .iter()
+            .find(|call| call["args"]["request"]["vendor"] == *vendor)
+            .unwrap();
+        assert_eq!(call["call_id"], format!("{RUN_ID}-c0.{index}-1"), "{call}");
+    }
+}
+
+/// A snapshot taken while a fan-out announces its calls is executed twice: a
+/// resume, and a recovery that starts again from the same snapshot. The
+/// controller answers a call id it has seen from the stored result, by id
+/// only, as the site server does. Every quote must still land in the slot of
+/// its request.
+#[test]
+fn a_recovery_during_the_announcements_keeps_every_result_in_its_slot() {
+    for _ in 0..3 {
+        let dirs = RunDirs::new();
+        let mut worker = Worker::spawn_segment(
+            &dirs,
+            1,
+            &[
+                "--start",
+                "durable_fan_out",
+                "--json-args",
+                r#"{"city":"Lisbon","ms":1200}"#,
+                "--sleep-suspend-ms",
+                "0",
+                "--auto-snapshot-ms",
+                "0",
+            ],
+        );
+        worker.wait_for("the first spawned thread", |event| {
+            event["type"] == "thread_started" && event["parent_thread"].is_number()
+        });
+        let (paused, events) = pause_and_finish(worker);
+        let snapshot = paused["snapshot_path"].as_str().unwrap().to_string();
+        let mut stored: std::collections::BTreeMap<String, Value> = of_type(&events, "remote_call")
+            .into_iter()
+            .map(|call| {
+                let vendor = call["args"]["request"]["vendor"].as_str().unwrap();
+                (
+                    call["call_id"].as_str().unwrap().to_string(),
+                    quote(vendor, "Economy", 1),
+                )
+            })
+            .collect();
+
+        for segment in [2_u64, 3] {
+            let offered: Vec<String> = stored
+                .iter()
+                .map(|(call_id, value)| json!({ "call_id": call_id, "value": value }).to_string())
+                .collect();
+            let mut extra = Vec::new();
+            for result in &offered {
+                extra.push("--remote-result");
+                extra.push(result.as_str());
+            }
+            extra.extend(["--sleep-suspend-ms", "0", "--auto-snapshot-ms", "0"]);
+            let mut worker = Worker::resume(&dirs, segment, &snapshot, &extra);
+            let mut events = Vec::new();
+            loop {
+                let Some(event) = worker.next_event() else {
+                    break;
+                };
+                if event["type"] == "remote_call" {
+                    let call_id = event["call_id"].as_str().unwrap().to_string();
+                    let vendor = event["args"]["request"]["vendor"].as_str().unwrap();
+                    // By id only: a stored result wins over the request.
+                    let value = stored
+                        .entry(call_id.clone())
+                        .or_insert_with(|| quote(vendor, "Economy", 1))
+                        .clone();
+                    worker.send(&json!({
+                        "type": "remote_result", "call_id": call_id, "value": value,
+                    }));
+                }
+                let done = event["type"] == "completed" || event["type"] == "failed";
+                events.push(event);
+                if done {
+                    break;
+                }
+            }
+            let (code, rest, stderr) = worker.finish();
+            events.extend(rest);
+            assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+            let completed = of_type(&events, "completed")[0];
+            let vendors: Vec<&str> = completed["value"]["quotes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|quote| quote["vendor"].as_str().unwrap())
+                .collect();
+            assert_eq!(
+                vendors,
+                ["alfa", "bravo", "charlie", "delta"],
+                "segment {segment}: {stored:#?}"
+            );
+        }
+    }
+}
+
+/// A race is paused, all three results arrive while the run has no process,
+/// and the run is resumed from that snapshot many times. The result that
+/// arrived first wins every time, and the other two calls are abandoned.
+#[test]
+fn a_race_resumed_with_every_result_picks_the_first_arrival_every_time() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_quote_race",
+            "--json-args",
+            r#"{"city":"Lisbon","tail_ms":50}"#,
+        ],
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 3 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    let (paused, _) = pause_and_finish(worker);
+    let snapshot = paused["snapshot_path"].as_str().unwrap().to_string();
+    let call_of = |vendor: &str| {
+        calls
+            .iter()
+            .find(|call| call["args"]["request"]["vendor"] == vendor)
+            .unwrap()["call_id"]
+            .clone()
+    };
+    let base = now_ms();
+    std::thread::sleep(Duration::from_millis(40));
+    // Arrival order: slow, fast, medium. The arguments are passed in another
+    // order, so only `ts` can tell the worker which came first.
+    let results: Vec<String> = [("medium", 30), ("slow", 10), ("fast", 20)]
+        .iter()
+        .map(|(vendor, offset)| {
+            json!({
+                "call_id": call_of(vendor),
+                "value": quote(vendor, "Economy", 1),
+                "ts": base + offset,
+            })
+            .to_string()
+        })
+        .collect();
+    for round in 0..12_u64 {
+        let mut extra = Vec::new();
+        for result in &results {
+            extra.push("--remote-result");
+            extra.push(result.as_str());
+        }
+        let worker = Worker::resume(&dirs, 2 + round, &snapshot, &extra);
+        let (code, events, stderr) = worker.finish();
+        assert_eq!(code, 0, "round {round}: {stderr}\n{events:#?}");
+        let completed = events.last().unwrap();
+        assert_eq!(completed["type"], "completed");
+        assert_eq!(completed["value"]["vendor"], "slow", "round {round}");
+        let received = of_type(&events, "remote_result_received");
+        assert_eq!(received.len(), 1, "round {round}: {events:#?}");
+        assert_eq!(received[0]["call_id"], call_of("slow"));
+        let mut cancelled: Vec<&Value> = of_type(&events, "remote_cancel")
+            .into_iter()
+            .map(|event| &event["call_id"])
+            .collect();
+        cancelled.sort_by_key(|id| id.as_str().unwrap().to_string());
+        let mut losers = [call_of("fast"), call_of("medium")];
+        losers.sort_by_key(|id| id.as_str().unwrap().to_string());
+        assert_eq!(
+            cancelled,
+            losers.iter().collect::<Vec<_>>(),
+            "round {round}"
+        );
+    }
+}
+
+/// A run whose background thread sleeps for a long time suspends itself. A
+/// resume long before the deadline, with the result the root waits for, must
+/// deliver that result and complete. It must not suspend again with the
+/// result unconsumed.
+#[test]
+fn an_early_resume_delivers_a_stored_result_before_it_would_suspend_again() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_background",
+        r#"{"city":"Lisbon","ms":40000}"#,
+        "3000",
+    );
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let (paused, _) = finish_self_suspended(worker);
+    assert_eq!(paused["stats"]["threads"], 3);
+    assert!(paused["wake"]["remaining_ms"].as_u64().unwrap() > 30_000);
+
+    let result = json!({
+        "call_id": call["call_id"],
+        "value": quote("solo", "Business", 3),
+        "ts": now_ms(),
+    })
+    .to_string();
+    let worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &result, "--sleep-suspend-ms", "3000"],
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(of_type(&events, "remote_result_received").len(), 1);
+    assert!(of_type(&events, "paused").is_empty(), "{events:#?}");
+    let completed = events.last().unwrap();
+    assert_eq!(completed["type"], "completed");
+    assert_eq!(completed["value"], quote("solo", "Business", 3));
+}
+
+/// A resumed worker tells its supervisor which remote calls its restored
+/// threads wait on (`remote_wait`) and whether it already holds the result.
+#[test]
+fn a_resumed_worker_reports_its_restored_remote_waits() {
+    let dirs = RunDirs::new();
+    let mut worker = start_with_threshold(
+        &dirs,
+        "durable_fan_out",
+        r#"{"city":"Lisbon","ms":2500}"#,
+        "400",
+    );
+    let mut calls = Vec::new();
+    while calls.len() < 4 {
+        calls.push(worker.wait_for("remote_call", is_type("remote_call")));
+    }
+    let (paused, _) = finish_self_suspended(worker);
+    let alfa = calls
+        .iter()
+        .find(|call| call["args"]["request"]["vendor"] == "alfa")
+        .unwrap();
+    let result =
+        json!({ "call_id": alfa["call_id"], "value": quote("alfa", "Economy", 1) }).to_string();
+    let mut worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &result, "--sleep-suspend-ms", "0"],
+    );
+    let mut waits = Vec::new();
+    while waits.len() < 4 {
+        waits.push(worker.wait_for("remote_wait", is_type("remote_wait")));
+    }
+    for call in &calls {
+        if call["call_id"] != alfa["call_id"] {
+            let vendor = call["args"]["request"]["vendor"].as_str().unwrap();
+            worker.send(&json!({
+                "type": "remote_result",
+                "call_id": call["call_id"],
+                "value": quote(vendor, "Economy", 1),
+            }));
+        }
+    }
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    let mut waited: Vec<(&str, bool)> = waits
+        .iter()
+        .map(|wait| {
+            assert_eq!(wait["function"], "remote_get_quote", "{wait}");
+            assert!(wait["thread"].is_number(), "{wait}");
+            (
+                wait["call_id"].as_str().unwrap(),
+                wait["has_result"].as_bool().unwrap(),
+            )
+        })
+        .collect();
+    waited.sort_unstable();
+    let mut expected: Vec<(&str, bool)> = calls
+        .iter()
+        .map(|call| {
+            (
+                call["call_id"].as_str().unwrap(),
+                call["call_id"] == alfa["call_id"],
+            )
+        })
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(waited, expected);
+}
+
+/// `hello` is the first event also when the arguments are not JSON.
+#[test]
+fn hello_precedes_the_failure_of_unparseable_arguments() {
+    let worker = Worker::spawn(&["--start", "durable_nap", "--json-args", "{nope"]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 1, "{stderr}");
+    assert_eq!(events[0]["type"], "hello", "{events:#?}");
+    assert_eq!(events[0]["mode"], "start");
+    assert_eq!(events[0]["function"], "durable_nap");
+    assert_eq!(events.last().unwrap()["type"], "failed");
+    assert!(
+        events.last().unwrap()["error"]
+            .as_str()
+            .unwrap()
+            .contains("--json-args is not valid JSON"),
+        "{events:#?}"
+    );
+}
+
+/// A sleep of exactly `--sleep-suspend-ms` suspends the run. The rule is
+/// evaluated a moment after the sleep began, when a little less than the
+/// threshold is left, so without a slack such a run suspended only sometimes.
+#[test]
+fn a_sleep_of_exactly_the_threshold_suspends_the_run() {
+    let workers: Vec<(std::rc::Rc<RunDirs>, Worker)> = (0..6)
+        .map(|_| {
+            let dirs = RunDirs::new();
+            let worker = start_with_threshold(&dirs, "durable_nap", r#"{"ms":1500}"#, "1500");
+            (dirs, worker)
+        })
+        .collect();
+    for (_dirs, worker) in workers {
+        let (paused, _) = finish_self_suspended(worker);
+        let remaining = paused["wake"]["remaining_ms"].as_u64().unwrap();
+        assert!((1300..=1500).contains(&remaining), "{paused}");
+    }
 }

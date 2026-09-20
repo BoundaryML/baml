@@ -179,8 +179,15 @@ fn read_header_from(reader: &mut Reader<'_>) -> Result<SnapshotHeader, SnapshotE
     }
     let format_version = reader.u32()?;
     if format_version != FORMAT_VERSION {
+        let hint = if format_version < FORMAT_VERSION {
+            "the snapshot was written by an older runtime and cannot be resumed by this one; \
+             start the run again"
+        } else {
+            "the snapshot was written by a newer runtime"
+        };
         return Err(SnapshotError::Mismatch(format!(
-            "snapshot format version {format_version} is not supported (this build reads {FORMAT_VERSION})"
+            "snapshot format version {format_version} is not supported (this build reads \
+             version {FORMAT_VERSION}): {hint}"
         )));
     }
     let header_len = reader.u32()? as usize;

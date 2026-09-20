@@ -243,6 +243,16 @@ pub(crate) enum Commands {
         hide = true
     )]
     Worker(crate::worker_command::WorkerArgs),
+
+    // Durable functions proof of concept: the site server's access to a
+    // program store (see `program_store_command`). Hidden for the same reason
+    // as `worker`.
+    #[command(
+        name = "program-store",
+        about = "(internal) export, import, or look up a program in a program store",
+        hide = true
+    )]
+    ProgramStore(crate::program_store_command::ProgramStoreArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -361,6 +371,10 @@ impl RuntimeCli {
         if let Commands::Worker(args) = &self.command {
             return args.run();
         }
+        // Machine-to-machine like the worker: stdout is one JSON object.
+        if let Commands::ProgramStore(args) = &self.command {
+            return args.run();
+        }
         if let Commands::Help(args) = &self.command {
             crate::output::init(self.output);
             return args.run(crate::output::policy().stdout.color);
@@ -412,6 +426,8 @@ impl RuntimeCli {
             Commands::FlushTelemetry(args) => args.run(),
             // Handled by the early return above.
             Commands::Worker(args) => args.run(),
+            // Handled by the early return above.
+            Commands::ProgramStore(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }

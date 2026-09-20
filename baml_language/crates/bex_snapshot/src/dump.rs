@@ -9,6 +9,12 @@
 //! The dump is tolerant: it renders runs that [`crate::write_snapshot`] would
 //! refuse (native frames, host resources), so that a blocked pause can still
 //! be inspected.
+//!
+//! Phase 3 additions to the contract's `StateDump`: a thread also has
+//! `parent_thread`, `settles_future` (the id of the future it settles, or
+//! null), and `cancelled`. `DumpValue.kind` also takes `"future"` (the preview
+//! is `#<id> (<state>)`, and a settled future has one child `value` or
+//! `error`), `"cancel_token"`, and `"task_group"`.
 #![allow(unsafe_code)]
 
 use std::{
@@ -52,6 +58,9 @@ struct DumpFrame<'a> {
 
 struct DumpThread<'a> {
     thread_id: u64,
+    parent_thread: Option<u64>,
+    settles_future: Option<u64>,
+    cancelled: bool,
     name: &'a str,
     parked: &'a ParkedAt,
     frames: Vec<DumpFrame<'a>>,
@@ -298,6 +307,57 @@ impl Renderer<'_> {
             }
             Object::Function(function) => leaf("closure", format!("<fn {}>", function.name)),
             Object::GenericFunction(_) => leaf("closure", "<generic function>"),
+            Object::Future(future) => {
+                use bex_vm_types::types::FutureRead;
+                let (state, child) = match future.read() {
+                    FutureRead::Pending(_) => ("pending", None),
+                    FutureRead::Ready(settled) => ("ready", Some(("value", settled))),
+                    FutureRead::Error(settled) => ("failed", Some(("error", settled))),
+                    FutureRead::Cancelled => ("cancelled", None),
+                    FutureRead::InternalError(_) => ("internal error", None),
+                };
+                let preview = format!("#{} ({state})", future.id());
+                let children = self.children(
+                    child
+                        .into_iter()
+                        .map(|(key, settled)| (key.to_string(), settled))
+                        .collect(),
+                    depth,
+                );
+                json!({ "kind": "future", "preview": preview, "children": children })
+            }
+            Object::RustData(data) => match walk::Resource::of(data) {
+                Some(walk::Resource::CancelToken(token)) => {
+                    let state = if token.is_cancelled() {
+                        "cancelled"
+                    } else {
+                        "not cancelled"
+                    };
+                    let sources = match token.sources().len() {
+                        0 => String::new(),
+                        count => format!(", any of {count}"),
+                    };
+                    leaf("cancel_token", format!("<cancel token: {state}{sources}>"))
+                }
+                Some(walk::Resource::TaskGroup(group)) => {
+                    let snapshot = group.snapshot();
+                    let running = snapshot.members.iter().filter(|m| m.active).count();
+                    leaf(
+                        "task_group",
+                        format!(
+                            "<task group {}limit {}, {running} running, {} queued>",
+                            snapshot
+                                .name
+                                .as_deref()
+                                .map(|name| format!("{name:?}, "))
+                                .unwrap_or_default(),
+                            snapshot.limit,
+                            snapshot.members.len() - running,
+                        ),
+                    )
+                }
+                None => leaf("opaque", "<rust_data>"),
+            },
             Object::Variant(variant) => leaf(
                 "opaque",
                 variant_name(self.heap, variant.enm, variant.index),
@@ -378,9 +438,19 @@ fn heap_totals(heap: &BexHeap, threads: &[DumpThread<'_>]) -> Json {
 
     let opaque: std::collections::HashSet<u32> = graph.opaque.iter().copied().collect();
     let objects = graph.objects;
+    // Resources are written as an id, whatever the id is.
+    let resources = objects
+        .iter()
+        // SAFETY: quiescent heap; `ptr` was reached by the walk.
+        .filter_map(|ptr| match unsafe { heap.get_object(*ptr) } {
+            Object::RustData(data) => walk::Resource::of(data).map(|resource| (resource.key(), 0)),
+            _ => None,
+        })
+        .collect();
     let table = WriterTable {
         runtime: graph.ids,
         compile_time: heap.snapshot_compile_time_region(),
+        resources,
     };
     let (sizes, _table) = snapshot_ctx::with_writer(table, || {
         let mut by_kind: BTreeMap<&'static str, (u64, u64)> = BTreeMap::new();
@@ -427,6 +497,9 @@ fn dump(
                 .collect();
             json!({
                 "thread": thread.thread_id,
+                "parent_thread": thread.parent_thread,
+                "settles_future": thread.settles_future,
+                "cancelled": thread.cancelled,
                 "name": thread.name,
                 "parked": { "kind": thread.parked.kind, "detail": parked_detail(thread.parked) },
                 "frames": frames,
@@ -459,8 +532,19 @@ fn live_thread<'a>(thread: &'a ThreadInput<'a>) -> DumpThread<'a> {
         .collect();
     let mut roots = vm.snapshot_roots();
     roots.extend(thread.extra_roots.iter().copied());
+    roots.extend(
+        thread
+            .settles_future
+            .and_then(|future| future.object)
+            .map(Value::object),
+    );
     DumpThread {
         thread_id: thread.thread_id,
+        parent_thread: thread.parent_thread,
+        settles_future: thread
+            .settles_future
+            .map(|future| future.id.as_usize() as u64),
+        cancelled: thread.cancel.cancelled,
         name: &thread.name,
         parked: &thread.parked,
         frames,
@@ -508,7 +592,13 @@ pub fn state_dump_from_bytes(
         .threads
         .iter()
         .map(|thread| {
-            let last = thread.state.frames.len().saturating_sub(1);
+            // The live program counter belongs to the innermost bytecode frame.
+            let last = thread
+                .state
+                .frames
+                .iter()
+                .rposition(|frame| frame.native.is_none())
+                .unwrap_or(0);
             let frames = thread
                 .state
                 .frames
@@ -522,13 +612,23 @@ pub fn state_dump_from_bytes(
                         frame.faulting_pc
                     },
                     compact_pc: frame.compact_pc,
-                    locals_offset: Some(frame.locals_offset),
+                    locals_offset: frame.native.is_none().then_some(frame.locals_offset),
                 })
                 .collect();
             let mut roots = thread.state.roots();
             roots.extend(thread.extra_roots.iter().copied());
+            roots.extend(
+                restored
+                    .futures
+                    .iter()
+                    .filter(|future| Some(future.id) == thread.settles_future)
+                    .map(|future| Value::object(future.object)),
+            );
             DumpThread {
                 thread_id: thread.thread_id,
+                parent_thread: thread.parent_thread,
+                settles_future: thread.settles_future.map(|id| id.as_usize() as u64),
+                cancelled: thread.cancel.cancelled,
                 name: &thread.name,
                 parked: &thread.parked,
                 frames,

@@ -34,6 +34,7 @@ pub(crate) enum Edge {
     MapEntry(u32),
     Capture(u32),
     CellValue,
+    FutureValue,
     Class,
     Enum,
     Function,
@@ -61,6 +62,44 @@ pub(crate) struct Graph {
     pub ids: HashMap<HeapPtr, u32>,
     /// Ids of objects that cannot be serialized (tolerant mode only).
     pub opaque: Vec<u32>,
+    /// How the walk reached each object, in id order.
+    parents: Vec<Parent>,
+}
+
+impl Graph {
+    /// The path from a root to object `id`, outermost element first, ending
+    /// with a description of the object.
+    pub(crate) fn path_to(&self, heap: &BexHeap, roots: &[Root], id: u32) -> Vec<String> {
+        let mut path = path_to(heap, roots, &self.objects, &self.parents, id);
+        // SAFETY: the object was reached by the walk under the walk's contract.
+        path.push(describe(unsafe {
+            heap.get_object(self.objects[id as usize])
+        }));
+        path
+    }
+}
+
+fn path_to(
+    heap: &BexHeap,
+    roots: &[Root],
+    objects: &[HeapPtr],
+    parents: &[Parent],
+    mut id: u32,
+) -> Vec<String> {
+    let mut reversed: Vec<String> = Vec::new();
+    loop {
+        match parents[id as usize] {
+            Parent::Root(root) => {
+                let mut path = roots[root as usize].path.clone();
+                path.extend(reversed.into_iter().rev());
+                return path;
+            }
+            Parent::Object(parent, edge) => {
+                reversed.push(render_edge(heap, objects[parent as usize], edge));
+                id = parent;
+            }
+        }
+    }
 }
 
 /// Short, stable name of an object's kind, used in state dumps.
@@ -95,6 +134,42 @@ pub(crate) fn kind_name(object: &Object) -> &'static str {
     }
 }
 
+/// A `RustData` payload that a snapshot can rebuild in another process.
+#[derive(Clone)]
+pub(crate) enum Resource {
+    CancelToken(std::sync::Arc<bex_vm_types::CancelTokenData>),
+    TaskGroup(std::sync::Arc<bex_vm_types::TaskGroupInner>),
+}
+
+impl Resource {
+    /// The resource behind a `RustData` payload, or `None` for a payload that
+    /// cannot move to another process (a file, a socket, media, ...).
+    pub(crate) fn of(data: &bex_vm_types::snapshot_ctx::RustDataRef) -> Option<Self> {
+        let data = std::sync::Arc::clone(data);
+        match data.downcast::<bex_vm_types::CancelTokenData>() {
+            Ok(token) => Some(Self::CancelToken(token)),
+            Err(data) => data
+                .downcast::<bex_vm_types::TaskGroupInner>()
+                .ok()
+                .map(Self::TaskGroup),
+        }
+    }
+
+    pub(crate) fn key(&self) -> usize {
+        match self {
+            Self::CancelToken(token) => bex_vm_types::snapshot_ctx::resource_key_of(token),
+            Self::TaskGroup(group) => bex_vm_types::snapshot_ctx::resource_key_of(group),
+        }
+    }
+
+    pub(crate) fn into_rust_data(self) -> bex_vm_types::snapshot_ctx::RustDataRef {
+        match self {
+            Self::CancelToken(token) => token,
+            Self::TaskGroup(group) => group,
+        }
+    }
+}
+
 /// Why a runtime object of this kind cannot be written to a snapshot, or
 /// `None` when it can.
 ///
@@ -116,11 +191,11 @@ pub(crate) fn unserializable_reason(object: &Object) -> Option<&'static str> {
         | Object::Type(_) => None,
         Object::GenericFunction(generic) => (!generic.runtime_package.is_null())
             .then_some("a generic function value of a runtime-compiled package"),
-        Object::RustData(_) => Some(
+        Object::RustData(data) => Resource::of(data).is_none().then_some(
             "a host resource or opaque Rust value (file, socket, HTTP response, stream, media, ...)",
         ),
         Object::HostClosure(_) => Some("a callback into the host language process"),
-        Object::Future(_) => Some("a future (spawned task state lives in the engine)"),
+        Object::Future(future) => future.to_snapshot().err(),
         Object::UnscheduledFuture(_) => Some("a spawn request that the engine has not scheduled"),
         Object::Function(_) => Some("a function object created at runtime"),
         Object::Package(_) => Some("a package created at runtime"),
@@ -184,6 +259,17 @@ pub(crate) fn object_edges(
             value(out, Edge::Receiver, bound.receiver);
         }
         Object::Cell(cell) => value(out, Edge::CellValue, cell.load()),
+        Object::Future(future) => {
+            use bex_vm_types::types::FutureRead;
+            match future.read() {
+                FutureRead::Ready(settled) | FutureRead::Error(settled) => {
+                    value(out, Edge::FutureValue, settled);
+                }
+                FutureRead::Pending(_) | FutureRead::Cancelled => {}
+                // Not serializable: the walk never descends into it.
+                FutureRead::InternalError(_) => return,
+            }
+        }
         Object::Variant(variant) => ptr(out, Edge::Enum, variant.enm),
         Object::GenericFunction(generic) => {
             ptr(out, Edge::RuntimePackage, generic.runtime_package);
@@ -194,6 +280,8 @@ pub(crate) fn object_edges(
         | Object::Bigint(_)
         | Object::Uint8Array(_)
         | Object::Float(_) => {}
+        // A resource or an opaque value. Neither holds heap pointers.
+        Object::RustData(_) => return,
         // Not serializable: the walk never descends into these.
         Object::Package(_)
         | Object::Function(_)
@@ -203,9 +291,7 @@ pub(crate) fn object_edges(
         | Object::Enum(_)
         | Object::TypeAlias(_)
         | Object::HostClosure(_)
-        | Object::Future(_)
-        | Object::UnscheduledFuture(_)
-        | Object::RustData(_) => return,
+        | Object::UnscheduledFuture(_) => return,
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => return,
     }
@@ -253,6 +339,7 @@ fn render_edge(heap: &BexHeap, parent: HeapPtr, edge: Edge) -> String {
         },
         Edge::Capture(i) => format!("captured variable {i}"),
         Edge::CellValue => "value".to_string(),
+        Edge::FutureValue => "settled value".to_string(),
         Edge::Class => "class".to_string(),
         Edge::Enum => "enum".to_string(),
         Edge::Function => "function".to_string(),
@@ -306,25 +393,9 @@ pub(crate) fn walk(
         objects: Vec::new(),
         ids: HashMap::new(),
         opaque: Vec::new(),
+        parents: Vec::new(),
     };
     let mut parents: Vec<Parent> = Vec::new();
-
-    let path_to = |graph: &Graph, parents: &[Parent], mut id: u32, tail: Option<String>| {
-        let mut reversed: Vec<String> = tail.into_iter().collect();
-        loop {
-            match parents[id as usize] {
-                Parent::Root(root) => {
-                    let mut path = roots[root as usize].path.clone();
-                    path.extend(reversed.into_iter().rev());
-                    return path;
-                }
-                Parent::Object(parent, edge) => {
-                    reversed.push(render_edge(heap, graph.objects[parent as usize], edge));
-                    id = parent;
-                }
-            }
-        }
-    };
 
     let enqueue = |graph: &mut Graph, parents: &mut Vec<Parent>, ptr: HeapPtr, parent: Parent| {
         if ptr.is_null() || heap.is_compile_time_ptr(ptr) || graph.ids.contains_key(&ptr) {
@@ -363,7 +434,7 @@ pub(crate) fn walk(
                 graph.opaque.push(id);
                 continue;
             }
-            let mut path = path_to(&graph, &parents, id, None);
+            let mut path = path_to(heap, roots, &graph.objects, &parents, id);
             path.push(describe(object));
             return Err(Blocked {
                 reason: format!("the run holds {reason}"),
@@ -381,7 +452,7 @@ pub(crate) fn walk(
         if let Some(tag) = undeclared_head
             && !tolerant
         {
-            let mut path = path_to(&graph, &parents, id, None);
+            let mut path = path_to(heap, roots, &graph.objects, &parents, id);
             path.push(describe(object));
             return Err(Blocked {
                 reason: format!(
@@ -394,5 +465,6 @@ pub(crate) fn walk(
             enqueue(&mut graph, &mut parents, child, Parent::Object(id, edge));
         }
     }
+    graph.parents = parents;
     Ok(graph)
 }

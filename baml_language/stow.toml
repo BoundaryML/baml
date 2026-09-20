@@ -147,7 +147,7 @@ name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
-approved_prefixes = ["events", "prof"]
+approved_prefixes = ["events", "prof", "program"]
 link_crates = ["baml_type", "sys_types"]
 
 # lsp namespace configuration

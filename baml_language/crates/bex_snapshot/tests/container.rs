@@ -44,6 +44,11 @@ fn a_snapshot_with_an_embedded_program_is_self_contained() {
         vm: &vm,
         parked: ParkedAt::runnable(),
         extra_roots: args,
+        settles_future: None,
+        cancel: bex_snapshot::ThreadCancel::default(),
+        user_cancels: Vec::new(),
+        group: None,
+        engine_state: Vec::new(),
     }];
     let (bytes, _) = bex_snapshot::write_snapshot(
         &vm.heap,
@@ -53,6 +58,7 @@ fn a_snapshot_with_an_embedded_program_is_self_contained() {
             embed_program: Some(program_bytes.clone()),
             compress: true,
             run_state: b"call_id_counter=7".to_vec(),
+            future_id_span: 0,
         },
     )
     .expect("snapshot");
@@ -110,6 +116,11 @@ fn threads_share_one_object_table() {
         vm: &vm,
         parked: ParkedAt::runnable(),
         extra_roots: args.clone(),
+        settles_future: None,
+        cancel: bex_snapshot::ThreadCancel::default(),
+        user_cancels: Vec::new(),
+        group: None,
+        engine_state: Vec::new(),
     };
     let single = [thread(1, None)];
     let double = [thread(1, None), thread(2, Some(1))];
@@ -118,6 +129,7 @@ fn threads_share_one_object_table() {
         embed_program: None,
         compress: false,
         run_state: Vec::new(),
+        future_id_span: 0,
     };
     let (_, single_stats) =
         bex_snapshot::write_snapshot(&vm.heap, &single, options(0)).expect("snapshot");

@@ -10,11 +10,19 @@
 //! With no context installed the `HeapPtr` impls keep their original behavior
 //! and return an error, so a malformed packed `Program` still fails.
 //!
+//! Two more things translate through the context. An `Object::RustData` that
+//! the snapshot writer registered as a *resource* (a cancel token, a task
+//! group) is written as its resource id and read back as the rebuilt value, so
+//! that every handle of one resource restores to one resource. A `Future` is
+//! written with its id, and the loader adds [`LoaderTable::future_id_base`] to
+//! it, so that restored futures cannot collide with futures the target engine
+//! has already issued.
+//!
 //! The context is a thread-local, installed by [`with_writer`] or
 //! [`with_loader`] for the duration of one closure and removed afterwards,
 //! also when the closure panics. Contexts do not nest.
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{any::Any, cell::RefCell, collections::HashMap, sync::Arc};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -36,7 +44,7 @@ pub enum SnapRef {
 
 /// The contiguous compile-time region of a heap, described without naming
 /// `BexHeap` (which lives downstream of this crate).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CompileTimeRegion {
     /// Pointer to the compile-time object at index 0. Null when `len == 0`.
     pub base: HeapPtr,
@@ -89,13 +97,33 @@ impl CompileTimeRegion {
     }
 }
 
+/// Payload of an `Object::RustData`.
+pub type RustDataRef = Arc<dyn Any + Send + Sync>;
+
+/// Identity of a `RustData` payload: the address of its allocation. Every
+/// clone of the `Arc` (a GC copy of the heap object, a handle the engine
+/// holds) has the same key.
+#[must_use]
+pub fn resource_key(data: &RustDataRef) -> usize {
+    Arc::as_ptr(data).cast::<()>() as usize
+}
+
+/// [`resource_key`] for a caller that holds the concrete `Arc`.
+#[must_use]
+pub fn resource_key_of<T>(data: &Arc<T>) -> usize {
+    Arc::as_ptr(data).cast::<()>() as usize
+}
+
 /// Pointer-to-reference table used while writing a snapshot.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct WriterTable {
     /// Dense ids of the runtime objects in the snapshot.
     pub runtime: HashMap<HeapPtr, u32>,
     /// Compile-time region of the source heap.
     pub compile_time: CompileTimeRegion,
+    /// Ids of the `RustData` payloads the snapshot can rebuild, keyed by
+    /// [`resource_key`].
+    pub resources: HashMap<usize, u32>,
 }
 
 impl WriterTable {
@@ -114,12 +142,27 @@ impl WriterTable {
 }
 
 /// Reference-to-pointer table used while loading a snapshot.
-#[derive(Debug)]
+#[derive(Default)]
 pub struct LoaderTable {
     /// Address of each snapshot object in the target heap, indexed by id.
     pub runtime: Vec<HeapPtr>,
     /// Compile-time region of the target heap.
     pub compile_time: CompileTimeRegion,
+    /// The rebuilt `RustData` payloads, indexed by resource id.
+    pub resources: Vec<RustDataRef>,
+    /// Added to the id of every restored future.
+    pub future_id_base: usize,
+}
+
+impl std::fmt::Debug for LoaderTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoaderTable")
+            .field("runtime", &self.runtime.len())
+            .field("compile_time", &self.compile_time)
+            .field("resources", &self.resources.len())
+            .field("future_id_base", &self.future_id_base)
+            .finish()
+    }
 }
 
 impl LoaderTable {
@@ -216,6 +259,47 @@ pub(crate) fn encode_ptr(ptr: HeapPtr) -> Option<std::io::Result<SnapRef>> {
     })
 }
 
+/// Whether a writer context is installed on this thread.
+pub(crate) fn writer_active() -> bool {
+    CONTEXT.with(|slot| matches!(&*slot.borrow(), Some(Context::Writer(_))))
+}
+
+/// `Object::RustData` serialize hook. `None` means no writer context is
+/// installed.
+pub(crate) fn encode_resource(data: &RustDataRef) -> Option<std::io::Result<u32>> {
+    CONTEXT.with(|slot| match &*slot.borrow() {
+        Some(Context::Writer(table)) => Some(
+            table
+                .resources
+                .get(&resource_key(data))
+                .copied()
+                .ok_or_else(|| invalid("snapshot writer reached an unregistered Rust value")),
+        ),
+        _ => None,
+    })
+}
+
+/// `Object::RustData` deserialize hook.
+pub(crate) fn decode_resource(id: u32) -> std::io::Result<RustDataRef> {
+    CONTEXT.with(|slot| match &*slot.borrow() {
+        Some(Context::Loader(table)) => table
+            .resources
+            .get(id as usize)
+            .cloned()
+            .ok_or_else(|| invalid(format!("snapshot resource {id} out of bounds"))),
+        _ => Err(invalid("no snapshot loader context is installed")),
+    })
+}
+
+/// The offset a loader adds to restored future ids, or `None` without a
+/// loader context.
+pub(crate) fn loader_future_id_base() -> Option<usize> {
+    CONTEXT.with(|slot| match &*slot.borrow() {
+        Some(Context::Loader(table)) => Some(table.future_id_base),
+        _ => None,
+    })
+}
+
 /// Whether a loader context is installed on this thread. `HeapPtr`'s
 /// deserializer checks this before it consumes any input, so that the default
 /// error path reads nothing.
@@ -259,8 +343,8 @@ mod tests {
         let second = region.ptr_at(1).expect("in bounds");
 
         let writer = WriterTable {
-            runtime: HashMap::new(),
             compile_time: region,
+            ..WriterTable::default()
         };
         let (bytes, _) = with_writer(writer, || borsh::to_vec(&second).expect("serializes"));
         assert_eq!(
@@ -269,8 +353,8 @@ mod tests {
         );
 
         let loader = LoaderTable {
-            runtime: Vec::new(),
             compile_time: region,
+            ..LoaderTable::default()
         };
         let decoded = with_loader(loader, || HeapPtr::try_from_slice(&bytes)).expect("decodes");
         assert_eq!(decoded, second);
@@ -284,8 +368,8 @@ mod tests {
         for reference in [SnapRef::CompileTime(1), SnapRef::Runtime(0)] {
             let bytes = borsh::to_vec(&reference).expect("serializes");
             let loader = LoaderTable {
-                runtime: Vec::new(),
                 compile_time: region,
+                ..LoaderTable::default()
             };
             let err = with_loader(loader, || HeapPtr::try_from_slice(&bytes)).unwrap_err();
             assert!(err.to_string().contains("out of bounds"), "got: {err}");
@@ -299,8 +383,8 @@ mod tests {
         let mut elsewhere = Object::Float(9.0);
         let stray = region_over(std::slice::from_mut(&mut elsewhere)).base;
         let writer = WriterTable {
-            runtime: HashMap::new(),
             compile_time: region,
+            ..WriterTable::default()
         };
         let (result, _) = with_writer(writer, || borsh::to_vec(&stray));
         assert!(result.is_err());

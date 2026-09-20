@@ -311,6 +311,47 @@ impl Continuation for PromptAssembly {
             }
         }
     }
+
+    /// Layout: `values = parts.., values..`, `ptrs = pending`,
+    /// `strings = results`, `ints = [part count, value count]`.
+    fn snapshot(&self) -> Option<super::ContinuationState> {
+        let mut state = super::ContinuationState::new("prompt.assembly");
+        state.values.extend_from_slice(&self.parts);
+        state.values.extend_from_slice(&self.values);
+        state.ptrs.clone_from(&self.pending);
+        state.strings.clone_from(&self.results);
+        state.ints = vec![self.parts.len() as u64, self.values.len() as u64];
+        Some(state)
+    }
+}
+
+/// Inverse of [`PromptAssembly::snapshot`]. `None` for a tag that belongs to
+/// another module.
+pub(super) fn restore_continuation(
+    state: &super::ContinuationState,
+) -> Option<Result<Box<dyn Continuation>, String>> {
+    if state.tag != "prompt.assembly" {
+        return None;
+    }
+    let restore = || {
+        let mut runs = state
+            .value_runs(&[state.int(0)?, state.int(1)?])?
+            .into_iter();
+        let (Some(parts), Some(values)) = (runs.next(), runs.next()) else {
+            return Err(state.invalid("missing values"));
+        };
+        // The assembly is live while override `results.len()` runs.
+        if state.strings.len() >= state.ptrs.len() {
+            return Err(state.invalid("more results than overrides"));
+        }
+        Ok(Box::new(PromptAssembly {
+            parts,
+            values,
+            pending: state.ptrs.clone(),
+            results: state.strings.clone(),
+        }) as Box<dyn Continuation>)
+    };
+    Some(restore())
 }
 
 impl BamlClassPrompt for PackageAiImpl {

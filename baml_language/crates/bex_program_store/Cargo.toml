@@ -1,0 +1,35 @@
+[package]
+name = "bex_program_store"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+description = "Content-addressed, immutable store of compiled BEX programs, keyed by program hash"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+
+# A lookup hashes the whole entry (a program is a few megabytes), so use
+# sha2's hardware backend wherever it builds. MSVC cannot assemble the GAS
+# sources of sha2-asm and keeps the portable implementation. `bex_cache` makes
+# the same choice for the same reason.
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+sha2 = { workspace = true, features = [ "asm" ] }
+
+[target.'cfg(target_env = "msvc")'.dependencies]
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+# Native only: a directory on a local or shared file system.
+[package.metadata.ci]
+wasm_support = false

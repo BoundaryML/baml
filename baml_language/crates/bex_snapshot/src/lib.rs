@@ -33,10 +33,26 @@
 //!
 //! [`write_snapshot`] returns [`SnapshotError::Blocked`] with a root-to-value
 //! path when the run holds something that cannot move to another process:
-//! host resources and other `RustData`, host callbacks, futures, a native
-//! continuation frame on a call stack, or a declaration created at runtime.
-//! The caller is expected to let the run continue and try again at a later
-//! yield.
+//! host resources and other opaque `RustData`, host callbacks, a future that
+//! ended with an internal engine error, a pending future that no thread of the
+//! run settles, a native continuation frame whose continuation has no snapshot
+//! form, or a declaration created at runtime. The caller is expected to let
+//! the run continue and try again at a later yield.
+//!
+//! # Threads, futures, and cancellation (format version 2)
+//!
+//! A snapshot holds every thread of the run. For each thread it records the
+//! future the thread settles, whether its cancel token has fired, the thread
+//! whose token is the parent of its token, the user cancel tokens linked into
+//! it, and its membership in a task group. Futures are heap objects and are
+//! written in every state except the internal-error state. Cancel tokens
+//! (`baml.spawn.CancelToken`) and task groups (`baml.spawn.TaskGroup`) are
+//! *resources*: every handle of one token restores to one token, a cancelled
+//! token stays cancelled, and a composite token (`CancelToken.any`) keeps its
+//! sources. The snapshot crate rebuilds these values and leaves the process
+//! side to the caller: spawning the watcher tasks of composite tokens
+//! ([`Restored::cancel_tokens`]), deriving thread tokens, registering group
+//! members, and registering pending futures.
 //!
 //! # Not covered
 //!
@@ -52,23 +68,25 @@ mod loader;
 mod walk;
 mod wire;
 
-use std::time::Instant;
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use bex_heap::BexHeap;
 use bex_vm::{BexVm, snapshot::VmThreadState};
 use bex_vm_types::{
-    Program, Value,
+    CancelTokenData, HeapPtr, Object, Program, TaskGroupInner, Value,
     snapshot_ctx::{self, WriterTable},
+    types::{FutureId, FutureRead},
 };
 use borsh::BorshSerialize;
 use sha2::{Digest, Sha256};
 
 pub use crate::dump::{state_dump, state_dump_from_bytes};
-use crate::walk::Root;
+use crate::walk::{Resource, Root};
 
 /// Version of the container and state layout. A reader refuses any other
-/// version.
-pub const FORMAT_VERSION: u32 = 1;
+/// version. Version 2 added threads with futures, cancel tokens, task groups,
+/// and native continuation frames.
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Identification of a snapshot, readable without decoding the state.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,6 +123,33 @@ impl ParkedAt {
     }
 }
 
+/// The cancellation state of one thread.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ThreadCancel {
+    /// The thread's cancel token has fired.
+    pub cancelled: bool,
+    /// The thread of this snapshot whose token is the parent of this thread's
+    /// token. `None` for the root thread and for a detached thread.
+    pub parent: Option<u64>,
+}
+
+/// The future a spawned thread settles when its body ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SettledFuture {
+    pub id: FutureId,
+    /// The heap object. `None` when the future was settled from outside
+    /// (`f.cancel()`) and nothing refers to it any more.
+    pub object: Option<HeapPtr>,
+}
+
+/// A thread's seat in a task group.
+#[derive(Clone, Debug)]
+pub struct GroupMembership {
+    pub group: Arc<TaskGroupInner>,
+    /// `TaskGroupTicket::member_id` of the thread's registration.
+    pub member_id: u64,
+}
+
 /// One paused thread handed to the writer.
 pub struct ThreadInput<'a> {
     pub thread_id: u64,
@@ -115,6 +160,37 @@ pub struct ThreadInput<'a> {
     /// Values held outside the VM at the yield, for example the arguments the
     /// VM drained from its stack into `VmExecState::SysOp`.
     pub extra_roots: Vec<Value>,
+    /// `None` for a root thread.
+    pub settles_future: Option<SettledFuture>,
+    pub cancel: ThreadCancel,
+    /// User cancel tokens (`spawn with options(cancel = ...)`) that cancel
+    /// this thread's token when they fire.
+    pub user_cancels: Vec<Arc<CancelTokenData>>,
+    pub group: Option<GroupMembership>,
+    /// Opaque engine state of this thread, for example its path in the spawn
+    /// tree and its counters. The snapshot crate stores it and does not
+    /// interpret it.
+    pub engine_state: Vec<u8>,
+}
+
+impl<'a> ThreadInput<'a> {
+    /// A root thread without cancellation links or a task group.
+    #[must_use]
+    pub fn new(thread_id: u64, vm: &'a BexVm, parked: ParkedAt) -> Self {
+        Self {
+            thread_id,
+            parent_thread: None,
+            name: String::new(),
+            vm,
+            parked,
+            extra_roots: Vec::new(),
+            settles_future: None,
+            cancel: ThreadCancel::default(),
+            user_cancels: Vec::new(),
+            group: None,
+            engine_state: Vec::new(),
+        }
+    }
 }
 
 pub struct WriteOptions {
@@ -125,6 +201,10 @@ pub struct WriteOptions {
     pub compress: bool,
     /// Opaque engine state, for example the `call_id` counter.
     pub run_state: Vec<u8>,
+    /// An upper bound (exclusive) of the future ids the source engine has
+    /// issued. A restoring engine reserves this many ids above its own, so
+    /// that a restored future keeps a unique id.
+    pub future_id_span: u64,
 }
 
 /// Cost of one [`write_snapshot`] call.
@@ -162,6 +242,19 @@ pub enum SnapshotError {
     Mismatch(String),
 }
 
+/// A restored thread's seat in a rebuilt task group.
+#[derive(Clone, Debug)]
+pub struct RestoredGroupMembership {
+    /// The rebuilt group. It has the recorded limit and name and no members.
+    pub group: Arc<TaskGroupInner>,
+    /// True when the thread was running, false when it was queued.
+    pub active: bool,
+    /// Position among the group's members: the caller registers the members
+    /// of one group in this order (`TaskGroupInner::register_restored`) and
+    /// then calls `TaskGroupInner::admit_waiters`.
+    pub order: usize,
+}
+
 /// One restored thread. `state` and `extra_roots` point into the target heap.
 pub struct RestoredThread {
     pub thread_id: u64,
@@ -170,6 +263,27 @@ pub struct RestoredThread {
     pub state: VmThreadState,
     pub parked: ParkedAt,
     pub extra_roots: Vec<Value>,
+    /// Id (in the target engine's id space) of the future the thread settles.
+    pub settles_future: Option<FutureId>,
+    pub cancel: ThreadCancel,
+    pub user_cancels: Vec<Arc<CancelTokenData>>,
+    /// `None` also for a thread whose registration the group had already
+    /// dropped (a queued member that was cancelled).
+    pub group: Option<RestoredGroupMembership>,
+    /// [`ThreadInput::engine_state`] as it was written.
+    pub engine_state: Vec<u8>,
+}
+
+/// One future object of the snapshot, in the target heap.
+#[derive(Clone, Copy, Debug)]
+pub struct RestoredFuture {
+    pub object: HeapPtr,
+    /// Id in the target engine's id space.
+    pub id: FutureId,
+    /// True when the future has not settled. Exactly one restored thread
+    /// settles it. The caller registers it with the engine and gives it the
+    /// cancel token of that thread.
+    pub pending: bool,
 }
 
 pub struct Restored {
@@ -177,6 +291,21 @@ pub struct Restored {
     pub threads: Vec<RestoredThread>,
     pub run_state: Vec<u8>,
     pub embedded_program: Option<Vec<u8>>,
+    pub futures: Vec<RestoredFuture>,
+    /// The restoring engine must not issue future ids below
+    /// `future_id_base + future_id_span`.
+    pub future_id_span: usize,
+    /// Every rebuilt cancel token. The caller spawns
+    /// `CancelTokenData::watchers` for each.
+    pub cancel_tokens: Vec<Arc<CancelTokenData>>,
+}
+
+/// Parameters of [`restore_into_with`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RestoreOptions {
+    /// Added to every future id of the snapshot: the number of future ids
+    /// the target engine has already issued.
+    pub future_id_base: usize,
 }
 
 /// Identifier of the runtime build, for `SnapshotHeader::runtime_build`: the
@@ -240,6 +369,14 @@ fn thread_roots(thread: &ThreadInput<'_>, state: Option<&VmThreadState>) -> Vec<
             ],
         });
     }
+    // Nothing else may refer to the future of a fire-and-forget spawn, and
+    // the thread must still find it after a restore.
+    if let Some(object) = thread.settles_future.and_then(|future| future.object) {
+        roots.push(Root {
+            value: Value::object(object),
+            path: vec![label.clone(), "the future the thread settles".to_string()],
+        });
+    }
     // The exported state is what gets encoded, so make sure that everything
     // it refers to is in the table even if the labelled listing above ever
     // drifts from it.
@@ -252,6 +389,62 @@ fn thread_roots(thread: &ThreadInput<'_>, state: Option<&VmThreadState>) -> Vec<
         }
     }
     roots
+}
+
+/// The resources of one snapshot, in id order. A token's sources are added
+/// before the token, so every source id is lower than the composite's id.
+#[derive(Default)]
+struct ResourceTable {
+    ids: HashMap<usize, u32>,
+    items: Vec<Resource>,
+}
+
+impl ResourceTable {
+    fn add(&mut self, resource: &Resource) {
+        if self.ids.contains_key(&resource.key()) {
+            return;
+        }
+        if let Resource::CancelToken(token) = resource {
+            for source in token.sources() {
+                self.add(&Resource::CancelToken(Arc::clone(source)));
+            }
+        }
+        let id = u32::try_from(self.items.len()).unwrap_or(u32::MAX);
+        self.ids.insert(resource.key(), id);
+        self.items.push(resource.clone());
+    }
+
+    fn wires(&self) -> Vec<wire::ResourceWire> {
+        self.items
+            .iter()
+            .map(|resource| match resource {
+                Resource::CancelToken(token) => wire::ResourceWire::CancelToken {
+                    cancelled: token.is_cancelled(),
+                    sources: token
+                        .sources()
+                        .iter()
+                        .filter_map(|source| {
+                            self.ids
+                                .get(&snapshot_ctx::resource_key_of(source))
+                                .copied()
+                        })
+                        .collect(),
+                },
+                Resource::TaskGroup(group) => {
+                    let snapshot = group.snapshot();
+                    wire::ResourceWire::TaskGroup {
+                        limit: snapshot.limit as u64,
+                        name: snapshot.name,
+                        members: snapshot
+                            .members
+                            .iter()
+                            .map(|member| (member.member_id, member.active))
+                            .collect(),
+                    }
+                }
+            })
+            .collect()
+    }
 }
 
 /// Serialize the state of the paused threads of one run.
@@ -298,6 +491,43 @@ pub fn write_snapshot(
         reason: blocked.reason,
         path: blocked.path,
     })?;
+    // A pending future is settled by a thread. When that thread is not part
+    // of the snapshot, nothing would ever settle the restored future.
+    let producers: std::collections::HashSet<HeapPtr> = threads
+        .iter()
+        .filter_map(|thread| thread.settles_future.and_then(|future| future.object))
+        .collect();
+    let mut resources = ResourceTable::default();
+    for (id, ptr) in graph.objects.iter().enumerate() {
+        // SAFETY: the caller guarantees a quiescent heap; the walk reached `ptr`.
+        #[allow(unsafe_code)]
+        match unsafe { heap.get_object(*ptr) } {
+            Object::Future(future)
+                if matches!(future.read(), FutureRead::Pending(_)) && !producers.contains(ptr) =>
+            {
+                return Err(SnapshotError::Blocked {
+                    reason: "the run holds a pending future that no thread of the run settles"
+                        .to_string(),
+                    path: graph.path_to(heap, &roots, u32::try_from(id).unwrap_or(u32::MAX)),
+                });
+            }
+            Object::RustData(data) => {
+                if let Some(resource) = Resource::of(data) {
+                    resources.add(&resource);
+                }
+            }
+            _ => {}
+        }
+    }
+    for thread in threads {
+        for token in &thread.user_cancels {
+            resources.add(&Resource::CancelToken(Arc::clone(token)));
+        }
+        if let Some(membership) = &thread.group {
+            resources.add(&Resource::TaskGroup(Arc::clone(&membership.group)));
+        }
+    }
+
     // Frame type arguments are not heap objects, so the walk did not see
     // their unresolved heads. The loader must be able to bind them too.
     for (thread, state) in threads.iter().zip(&states) {
@@ -331,9 +561,11 @@ pub fn write_snapshot(
 
     let encode_started = Instant::now();
     let object_count = graph.objects.len();
+    let resource_wires = resources.wires();
     let table = WriterTable {
         runtime: graph.ids,
         compile_time: heap.snapshot_compile_time_region(),
+        resources: resources.ids.clone(),
     };
     let objects = graph.objects;
     let (encoded, _table) = snapshot_ctx::with_writer(table, || -> std::io::Result<Vec<u8>> {
@@ -342,6 +574,8 @@ pub fn write_snapshot(
         // The run state comes before the objects so that `read_run_state` can
         // return it without decoding any object or thread.
         opts.run_state.serialize(&mut out)?;
+        opts.future_id_span.serialize(&mut out)?;
+        resource_wires.serialize(&mut out)?;
         u32::try_from(object_count)
             .map_err(|_| std::io::Error::other("too many objects"))?
             .serialize(&mut out)?;
@@ -364,7 +598,33 @@ pub fn write_snapshot(
                 name: thread.name.clone(),
                 parked_kind: thread.parked.kind.clone(),
                 parked_payload: thread.parked.payload.clone(),
+                engine_state: thread.engine_state.clone(),
                 extra_roots: thread.extra_roots.clone(),
+                settles_future_id: thread
+                    .settles_future
+                    .map(|future| future.id.as_usize() as u64),
+                settles_future: thread
+                    .settles_future
+                    .and_then(|future| future.object)
+                    .unwrap_or_else(HeapPtr::null),
+                cancelled: thread.cancel.cancelled,
+                cancel_parent: thread.cancel.parent,
+                user_cancels: thread
+                    .user_cancels
+                    .iter()
+                    .filter_map(|token| {
+                        resources
+                            .ids
+                            .get(&snapshot_ctx::resource_key_of(token))
+                            .copied()
+                    })
+                    .collect(),
+                group: thread.group.as_ref().and_then(|membership| {
+                    resources
+                        .ids
+                        .get(&snapshot_ctx::resource_key_of(&membership.group))
+                        .map(|id| (*id, membership.member_id))
+                }),
                 state: wire::VmStateWire::from_state(state),
             })
             .collect();
@@ -456,5 +716,19 @@ pub fn restore_into(
     bytes: &[u8],
     program_hash: [u8; 32],
 ) -> Result<Restored, SnapshotError> {
-    loader::restore_into(heap, bytes, program_hash)
+    loader::restore_into(heap, bytes, program_hash, RestoreOptions::default())
+}
+
+/// [`restore_into`] for an engine that has already issued future ids.
+///
+/// # Errors
+///
+/// As for [`restore_into`].
+pub fn restore_into_with(
+    heap: &BexHeap,
+    bytes: &[u8],
+    program_hash: [u8; 32],
+    options: RestoreOptions,
+) -> Result<Restored, SnapshotError> {
+    loader::restore_into(heap, bytes, program_hash, options)
 }

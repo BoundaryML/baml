@@ -16,6 +16,12 @@
 //! run whose function name contains `durable` also takes automatic snapshots
 //! (event `snapshot`) and keeps running.
 //!
+//! A durable run also suspends itself for a long `sleep` (contract section
+//! 9.2): when every thread of the run waits in an operation that a resumed
+//! process can finish, and the earliest sleep deadline is at least
+//! `--sleep-suspend-ms` away, the worker writes a snapshot exactly as for
+//! `pause`, emits `paused` with `wake`, and exits 75.
+//!
 //! The opaque run state inside a snapshot is a JSON object: the function, the
 //! durable flag, the original JSON arguments, the `call_id` counter, the
 //! segment, the remote calls the run waits on, and remote results that
@@ -35,14 +41,13 @@ use std::{
 };
 
 use anyhow::{Context as _, Result, anyhow};
-use baml_db::baml_compiler_diagnostics::Severity;
 use bex_engine::{
     BexEngine, BexExternalValue, CallId, CancellationToken, EngineError,
     FunctionCallContextBuilder, RuntimeTy,
     durable::{
-        DurableHost, DurableThreadId, PauseProgress, RemoteCallRequest, RemoteResultWait,
-        RestoredInfo, SnapshotFailure, SnapshotMode, SnapshotParts, SnapshotReport,
-        SnapshotRequest, YieldPosition, YieldReason,
+        DurableHost, DurableThreadId, ParkedKind, PauseProgress, RecordedResult, RemoteCallRequest,
+        RemoteResultWait, RestoredInfo, ResumeOptions, SnapshotFailure, SnapshotMode,
+        SnapshotParts, SnapshotReport, SnapshotRequest, YieldPosition, YieldReason,
     },
 };
 use clap::Args;
@@ -51,6 +56,11 @@ use serde_json::{Value as Json, json};
 use sys_native::SysOpsExt as _;
 use sys_types::{SysOpContext, SysOpOutput, VmBamlError};
 use tokio::io::AsyncBufReadExt as _;
+
+/// Where the program comes from: the program store or a compile of
+/// `--project` (contract section 9.5).
+#[path = "worker_program.rs"]
+mod worker_program;
 
 const EXIT_COMPLETED: i32 = 0;
 const EXIT_FAILED: i32 = 1;
@@ -136,10 +146,34 @@ pub struct WorkerArgs {
     #[arg(long = "auto-snapshot-ms", value_name = "MS", default_value_t = 2000)]
     pub auto_snapshot_ms: u64,
 
+    /// A durable run suspends itself (snapshot, `paused` with `wake`, exit 75)
+    /// when all of its threads wait and its earliest `sleep` deadline is at
+    /// least this many milliseconds away. `0` disables. Runs whose function
+    /// name does not contain `durable` never suspend themselves.
+    #[arg(long = "sleep-suspend-ms", value_name = "MS", default_value_t = 5000)]
+    pub sleep_suspend_ms: u64,
+
     /// Optimization level of the compile (0, 1 or 2). Only used with
     /// `--start`; a resumed run compiles at the level recorded in its snapshot.
     #[arg(long = "opt-level", value_name = "LEVEL", default_value_t = DEFAULT_OPT_LEVEL, hide = true)]
     pub opt_level: u8,
+
+    /// Content-addressed program store (contract section 9.5). A `--start`
+    /// from `--project` stores the compiled program there. A `--start` with
+    /// `--program-hash` and every `--resume` load the program from it.
+    #[arg(long = "program-store", value_name = "DIR")]
+    pub program_store: Option<PathBuf>,
+
+    /// With `--start`: run the program with this hash from the program store
+    /// instead of compiling `--project`, which is then optional. A `--resume`
+    /// takes the hash from the snapshot header.
+    #[arg(
+        long = "program-hash",
+        value_name = "HEX",
+        requires = "program_store",
+        conflicts_with = "resume"
+    )]
+    pub program_hash: Option<String>,
 
     /// Keep running when stdin reaches end of file. Without this flag a closed
     /// stdin that is not a terminal means the supervisor is gone, and the
@@ -171,14 +205,8 @@ impl WorkerArgs {
                     .start
                     .clone()
                     .expect("clap requires --start when --resume is absent");
-                events.emit(
-                    "hello",
-                    json!({
-                        "mode": "start",
-                        "function": function,
-                        "durable": function.contains("durable"),
-                    }),
-                );
+                // `hello` carries the program hash, so `start_run` emits it
+                // once the program is loaded.
                 self.start_run(&function, events).await
             }
         };
@@ -224,7 +252,23 @@ impl WorkerArgs {
 
     async fn start_run(&self, function: &str, events: &EventSink) -> Result<i32> {
         let json_args: Json = match self.json_args.as_deref() {
-            Some(text) => serde_json::from_str(text).context("--json-args is not valid JSON")?,
+            Some(text) => match serde_json::from_str(text) {
+                Ok(args) => args,
+                Err(error) => {
+                    // `hello` is the first event of every worker, also of one
+                    // that cannot start (contract section 9.5).
+                    events.emit(
+                        "hello",
+                        json!({
+                            "mode": "start",
+                            "function": function,
+                            "durable": function.contains("durable"),
+                            "program_hash": null,
+                        }),
+                    );
+                    return Err(anyhow!(error).context("--json-args is not valid JSON"));
+                }
+            },
             None => json!({}),
         };
 
@@ -237,7 +281,7 @@ impl WorkerArgs {
                 opt_level: self.opt_level.min(2),
             },
         );
-        let engine = Arc::new(compile_project(&self.project_dir(), &state)?);
+        let engine = Arc::new(self.load_engine_for_start(&state)?.engine);
         state.set_engine(&engine);
 
         let info = engine
@@ -301,14 +345,20 @@ impl WorkerArgs {
             Err(error) => {
                 events.emit(
                     "hello",
-                    json!({ "mode": "resume", "function": "", "durable": false }),
+                    json!({ "mode": "resume", "function": "", "durable": false, "program_hash": null }),
                 );
                 return Err(error);
             }
         };
         events.emit(
             "hello",
-            json!({ "mode": "resume", "function": saved.function, "durable": saved.durable }),
+            json!({
+                "mode": "resume",
+                "function": saved.function,
+                "durable": saved.durable,
+                "program_hash": worker_program::hex(&header.program_hash),
+                "runtime_build": bex_engine::durable::runtime_build(),
+            }),
         );
         let this_build = bex_engine::durable::runtime_build();
         if header.runtime_build != this_build {
@@ -328,7 +378,9 @@ impl WorkerArgs {
             },
         );
         let load_started = Instant::now();
-        let engine = Arc::new(compile_project(&self.project_dir(), &state)?);
+        let loaded = self.load_engine(&state, Some(header.program_hash))?;
+        let program_stats = loaded.stats();
+        let engine = Arc::new(loaded.engine);
         state.set_engine(&engine);
         let program_load_ms = ms_since(load_started);
         if header.program_hash != state.program().hash {
@@ -345,9 +397,6 @@ impl WorkerArgs {
         // Results first, so that a thread parked on a remote call finds its
         // result the moment it resumes. A result for a call the run does not
         // wait on is dropped.
-        state
-            .call_counter
-            .store(saved.call_counter, Ordering::Relaxed);
         state.restore_remote_calls(&saved);
         state.restore_partial_logs(&saved);
         for text in &self.remote_result {
@@ -369,23 +418,56 @@ impl WorkerArgs {
             .with_cancel_token(cancel.clone())
             .suppress_internal_profile()
             .build();
+        // The results the run takes in this process arrived at different
+        // times while it had no process. The engine replays them in that
+        // order, merged with the sleeps whose deadline has passed.
+        let options = ResumeOptions {
+            recorded_results: state.recorded_results(),
+            ..ResumeOptions::default()
+        };
         let outcome = engine
-            .durable_resume(
+            .durable_resume_with(
                 &info.qualified_name,
                 &bytes,
                 state.program().hash,
                 call_context,
                 true,
+                options,
                 |restored: &RestoredInfo| {
                     events.emit(
                         "resumed",
-                        json!({ "stats": {
+                        program_stats.added_to(json!({
                             "process_start_ms": null,
                             "program_load_ms": program_load_ms,
                             "decode_ms": restored.decode_ms,
                             "first_exec_ms": ms_since(started),
-                        }}),
+                        })),
                     );
+                    // A restored thread that waits for a remote result does
+                    // not announce the call again. The supervisor learns here
+                    // what this process waits on, so that it can answer from a
+                    // stored result, attach the run to the child that still
+                    // runs, or dispatch the call when neither exists (a fork
+                    // taken before the dispatch had returned, for example).
+                    for thread in &restored.thread_infos {
+                        if let ParkedKind::RemoteCall {
+                            call_id, function, ..
+                        } = &thread.parked
+                        {
+                            if thread.cancelled {
+                                continue;
+                            }
+                            events.emit(
+                                "remote_wait",
+                                json!({
+                                    "call_id": call_id,
+                                    "thread": thread.thread,
+                                    "function": WorkerState::display_function(function),
+                                    "has_result": state.has_result(call_id),
+                                }),
+                            );
+                        }
+                    }
                 },
             )
             .await;
@@ -422,6 +504,14 @@ impl WorkerArgs {
                 Duration::from_millis(self.auto_snapshot_ms),
             )));
         }
+        if state.run_info.durable && self.sleep_suspend_ms > 0 {
+            let task = tokio::spawn(suspend_for_sleeps(
+                Arc::clone(state),
+                Arc::clone(engine),
+                self.sleep_suspend_ms,
+            ));
+            *lock(&state.sleep_task) = Some(task);
+        }
         tasks
     }
 
@@ -436,14 +526,26 @@ impl WorkerArgs {
         return_type: &RuntimeTy,
     ) -> i32 {
         state.finished.store(true, Ordering::Release);
+        state.run_ended.cancel();
+        let sleep_task = lock(&state.sleep_task).take();
         let paused = if matches!(outcome, Err(EngineError::DurableSuspended)) {
-            // The pause task suspended the run; it reports what it wrote.
-            let task = lock(&state.pause_task).take();
-            match task {
+            // The task that suspended the run reports what it wrote: the task
+            // of a `pause` command, or the self-suspend task. The other one
+            // sees that the run has ended and resolves to `None`.
+            let pause_task = lock(&state.pause_task).take();
+            let requested = match pause_task {
                 Some(task) => task.await.ok().flatten(),
                 None => None,
+            };
+            match (requested, sleep_task) {
+                (Some(paused), _) => Some(paused),
+                (None, Some(task)) => task.await.ok().flatten(),
+                (None, None) => None,
             }
         } else {
+            if let Some(task) = sleep_task {
+                task.abort();
+            }
             state.wait_for_threads(THREAD_DRAIN_GRACE).await;
             None
         };
@@ -502,10 +604,28 @@ impl WorkerArgs {
 
 fn events_terminal(state: &Arc<WorkerState>, event_type: &str, fields: Json) {
     state.events.emit_terminal(event_type, fields, || {
-        state
-            .take_live_threads()
+        // A run that ends (completed, failed or cancelled) while a thread
+        // still waits for a remote result abandons that call: nobody will
+        // take the result. A paused run keeps its waits in the snapshot.
+        let abandoned = if event_type == "paused" {
+            Vec::new()
+        } else {
+            state.take_waiting_calls()
+        };
+        abandoned
             .into_iter()
-            .map(|thread| ("thread_ended", json!({ "thread": thread })))
+            .map(|(call_id, thread)| {
+                (
+                    "remote_cancel",
+                    json!({ "call_id": call_id, "thread": thread }),
+                )
+            })
+            .chain(
+                state
+                    .take_live_threads()
+                    .into_iter()
+                    .map(|thread| ("thread_ended", json!({ "thread": thread }))),
+            )
             .collect()
     });
 }
@@ -536,14 +656,18 @@ struct SavedRunState {
     /// uses the same level, or the program hash would differ.
     #[serde(default)]
     opt_level: u8,
-    /// Counter behind `call_id` (`<run-id>-c<counter>`).
+    /// Unused since call ids are derived from the calling thread's path and
+    /// its own call count, which the engine keeps in the snapshot per thread.
+    #[serde(default)]
     call_counter: u64,
     /// Segment that wrote the snapshot.
     segment: u64,
     /// Remote calls that were announced and whose result no thread has taken.
     waiting: Vec<String>,
-    /// Results that arrived for calls in `waiting`: `{"value": ...}` or
-    /// `{"error": "..."}` by call id.
+    /// Results that arrived for calls in `waiting`: `{"value": ..., "ts": n}`
+    /// or `{"error": "...", "ts": n}` by call id. `ts` is the time the result
+    /// arrived at the supervisor, or at this worker when the supervisor did
+    /// not say.
     results: BTreeMap<String, Json>,
     /// Program output that did not end with a newline yet. It has not been
     /// reported as a `log` event; the resumed segment completes the line.
@@ -560,37 +684,9 @@ struct ProgramIdentity {
     bytes: u64,
 }
 
-/// Compile the project at `project_dir` and build an engine whose `baml.io`
-/// output is captured as `log` events.
-fn compile_project(project_dir: &Path, state: &Arc<WorkerState>) -> Result<BexEngine> {
-    let session = crate::project_session::ProjectSession::open(
-        Some(project_dir),
-        crate::project_session::CacheUse::Off,
-    )?;
-    if session.is_empty() {
-        anyhow::bail!("no `.baml` files found in {}", session.root().display());
-    }
-    let errors: Vec<_> = baml_db::collect_diagnostics(&session.db)
-        .into_iter()
-        .filter(|diagnostic| diagnostic.severity == Severity::Error)
-        .collect();
-    if !errors.is_empty() {
-        let rendered = crate::check_command::render_project_diagnostics(&session.db, &errors);
-        anyhow::bail!("compilation errors found:\n{rendered}");
-    }
-    let program = baml_db::baml_compiler2_emit::generate_project_bytecode_with_opt(
-        &session.db,
-        session.package,
-        opt_level(state.run_info.opt_level),
-    )
-    .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-    let program_bytes = borsh::to_vec(&program).context("the program does not serialize")?;
-    state.set_program(ProgramIdentity {
-        hash: bex_engine::durable::program_hash_of_bytes(&program_bytes),
-        bytes: program_bytes.len() as u64,
-    });
-    drop(program_bytes);
-
+/// Build an engine for `program` whose `baml.io` output is captured as `log`
+/// events. [`worker_program`] obtains the program.
+fn build_engine(program: bex_vm_types::Program, state: &Arc<WorkerState>) -> Result<BexEngine> {
     // Always start from the native platform: a run is an ordinary program run
     // and needs every operation. Only `baml.io` is replaced.
     let sys_ops = sys_ops::SysOpsBuilder::from_ops(sys_native::SysOps::native())
@@ -722,6 +818,20 @@ impl EventSink {
         }
     }
 
+    /// Emit the event `build` returns, unless the terminal event was written.
+    /// `build` runs with the sink locked, like the `before` of
+    /// [`Self::emit_terminal`]: state that both change (the set of live
+    /// threads) is reported by exactly one of them.
+    fn emit_with(&self, build: impl FnOnce() -> Option<(&'static str, Json)>) {
+        let closed = lock(&self.closed);
+        if *closed {
+            return;
+        }
+        if let Some((event_type, fields)) = build() {
+            self.send(event_type, fields);
+        }
+    }
+
     /// Emit the terminal event (`completed`, `failed`, or `cancelled`) and
     /// drop every later event. `before` runs with the sink locked and returns
     /// events to write immediately before the terminal one; an [`Self::emit`]
@@ -805,6 +915,8 @@ struct RemoteCalls {
     /// Results that arrived and wait for their thread: `{"value": ...}` or
     /// `{"error": "..."}`. Kept as JSON so that they fit into a snapshot.
     results: HashMap<String, Json>,
+    /// The thread that waits on a call, once it is known in this process.
+    threads: HashMap<String, DurableThreadId>,
 }
 
 #[derive(Default)]
@@ -839,7 +951,6 @@ struct WorkerState {
     this: OnceLock<Weak<WorkerState>>,
     engine: OnceLock<Weak<BexEngine>>,
     program: OnceLock<ProgramIdentity>,
-    call_counter: AtomicU64,
     remote: Mutex<RemoteCalls>,
     remote_changed: tokio::sync::Notify,
     threads: Mutex<ThreadTracker>,
@@ -849,8 +960,14 @@ struct WorkerState {
     /// the `paused` event once the run is suspended.
     pause_task: Mutex<Option<tokio::task::JoinHandle<Option<Json>>>>,
     pause_requested: AtomicBool,
+    /// The task that suspends the run for a long sleep (contract section
+    /// 9.2). Like `pause_task` it resolves to the fields of the `paused`
+    /// event when it suspended the run.
+    sleep_task: Mutex<Option<tokio::task::JoinHandle<Option<Json>>>>,
     /// Set when the root call has returned.
     finished: AtomicBool,
+    /// Cancelled together with `finished`, for tasks that wait.
+    run_ended: CancellationToken,
     auto_blocked: AtomicU64,
     /// Serializes snapshot attempts from the moment the snapshot number is
     /// picked until the files are written, so that a `pause` that overlaps an
@@ -881,7 +998,6 @@ impl WorkerState {
             this: OnceLock::new(),
             engine: OnceLock::new(),
             program: OnceLock::new(),
-            call_counter: AtomicU64::new(0),
             remote: Mutex::new(RemoteCalls::default()),
             remote_changed: tokio::sync::Notify::new(),
             threads: Mutex::new(ThreadTracker::default()),
@@ -889,7 +1005,9 @@ impl WorkerState {
             logs: Mutex::new(LogBuffers::default()),
             pause_task: Mutex::new(None),
             pause_requested: AtomicBool::new(false),
+            sleep_task: Mutex::new(None),
             finished: AtomicBool::new(false),
+            run_ended: CancellationToken::new(),
             auto_blocked: AtomicU64::new(0),
             snapshot_lock: tokio::sync::Mutex::new(()),
         }
@@ -921,7 +1039,7 @@ impl WorkerState {
             durable: self.run_info.durable,
             json_args: self.run_info.json_args.clone(),
             opt_level: self.run_info.opt_level,
-            call_counter: self.call_counter.load(Ordering::Relaxed),
+            call_counter: 0,
             segment: self.segment,
             waiting,
             results: remote
@@ -962,12 +1080,18 @@ impl WorkerState {
             diagnostic(format_args!("remote_result without call_id ignored"));
             return;
         };
+        // When the result arrived at the supervisor. A supervisor that does
+        // not say gets the time the worker saw it.
+        let ts = command
+            .get("ts")
+            .and_then(Json::as_u64)
+            .unwrap_or_else(now_ms);
         let result = match (
             command.get("error").and_then(Json::as_str),
             command.get("value"),
         ) {
-            (Some(error), _) => json!({ "error": error }),
-            (None, value) => json!({ "value": value.cloned().unwrap_or(Json::Null) }),
+            (Some(error), _) => json!({ "error": error, "ts": ts }),
+            (None, value) => json!({ "value": value.cloned().unwrap_or(Json::Null), "ts": ts }),
         };
         {
             let mut remote = lock(&self.remote);
@@ -986,6 +1110,23 @@ impl WorkerState {
             remote.results.insert(call_id.to_string(), result);
         }
         self.remote_changed.notify_waiters();
+    }
+
+    /// The results the worker holds, with their arrival times, for the
+    /// engine's ordered replay.
+    fn recorded_results(&self) -> Vec<RecordedResult> {
+        lock(&self.remote)
+            .results
+            .iter()
+            .map(|(call_id, result)| RecordedResult {
+                call_id: call_id.clone(),
+                at_unix_ms: result.get("ts").and_then(Json::as_u64).unwrap_or(0),
+            })
+            .collect()
+    }
+
+    fn has_result(&self, call_id: &str) -> bool {
+        lock(&self.remote).results.contains_key(call_id)
     }
 
     fn set_engine(&self, engine: &Arc<BexEngine>) {
@@ -1017,6 +1158,26 @@ impl WorkerState {
 
     fn is_helper(&self, thread: DurableThreadId) -> bool {
         lock(&self.threads).helpers.contains(&thread)
+    }
+
+    /// Forget the remote calls the run still waits on and return them with
+    /// their threads, ordered by call id. A result that arrives afterwards is
+    /// ignored.
+    fn take_waiting_calls(&self) -> Vec<(String, Option<DurableThreadId>)> {
+        let mut remote = lock(&self.remote);
+        remote.results.clear();
+        let mut calls: Vec<_> = remote
+            .waiting
+            .drain()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|call_id| {
+                let thread = remote.threads.remove(&call_id);
+                (call_id, thread)
+            })
+            .collect();
+        calls.sort();
+        calls
     }
 
     /// Forget the threads that are still running and return them, lowest id
@@ -1126,24 +1287,60 @@ impl DurableHost for WorkerState {
         &self,
         request: RemoteCallRequest,
     ) -> BoxFuture<'static, Result<String, String>> {
-        let counter = self.call_counter.fetch_add(1, Ordering::Relaxed) + 1;
-        let call_id = format!("{}-c{counter}", self.run);
+        // The id names the call by the calling thread's place in the spawn
+        // tree and by its number among that thread's calls. Both are part of
+        // the thread's snapshot state, so an execution that starts again from
+        // an older snapshot gives every call the id it had before, however
+        // the scheduler interleaves the threads. The supervisor relies on
+        // that when it answers a call it has seen from a stored result. The
+        // root thread's calls are `<run>-c<n>`; a spawned thread's calls are
+        // `<run>-c<path>-<n>`, where the path contains a dot.
+        let call_id = if request.thread_path == "0" || request.thread_path.is_empty() {
+            format!("{}-c{}", self.run, request.call_index)
+        } else {
+            format!(
+                "{}-c{}-{}",
+                self.run, request.thread_path, request.call_index
+            )
+        };
         // Registered before the event is written, so a supervisor that answers
         // immediately always finds the call.
-        lock(&self.remote).waiting.insert(call_id.clone());
+        {
+            let mut remote = lock(&self.remote);
+            remote.waiting.insert(call_id.clone());
+            remote.threads.insert(call_id.clone(), request.thread);
+        }
         let engine = self.engine();
         let events = self.events.clone();
+        let state = self.this.get().and_then(Weak::upgrade);
         Box::pin(async move {
-            let Some(engine) = engine else {
-                return Err("engine is gone".to_string());
-            };
-            let mut args = serde_json::Map::new();
-            for arg in request.args {
-                let value = serialize_json(&engine, arg.value, &arg.ty)
-                    .await
-                    .map_err(|e| format!("cannot serialize argument `{}`: {e:#}", arg.name))?;
-                args.insert(arg.name, value);
+            let serialized = async {
+                let Some(engine) = engine else {
+                    return Err("engine is gone".to_string());
+                };
+                let mut args = serde_json::Map::new();
+                for arg in request.args {
+                    let value = serialize_json(&engine, arg.value, &arg.ty)
+                        .await
+                        .map_err(|e| format!("cannot serialize argument `{}`: {e:#}", arg.name))?;
+                    args.insert(arg.name, value);
+                }
+                Ok(args)
             }
+            .await;
+            let args = match serialized {
+                Ok(args) => args,
+                Err(message) => {
+                    // The call was never announced, so the run does not wait
+                    // on it and nobody is told that it was abandoned.
+                    if let Some(state) = state {
+                        let mut remote = lock(&state.remote);
+                        remote.waiting.remove(&call_id);
+                        remote.threads.remove(&call_id);
+                    }
+                    return Err(message);
+                }
+            };
             events.emit(
                 "remote_call",
                 json!({
@@ -1167,7 +1364,11 @@ impl DurableHost for WorkerState {
         Box::pin(async move {
             // A resumed thread registers the call it was parked on, in case
             // the snapshot's run state did not list it.
-            lock(&state.remote).waiting.insert(wait.call_id.clone());
+            {
+                let mut remote = lock(&state.remote);
+                remote.waiting.insert(wait.call_id.clone());
+                remote.threads.insert(wait.call_id.clone(), wait.thread);
+            }
             loop {
                 let changed = state.remote_changed.notified();
                 tokio::pin!(changed);
@@ -1201,20 +1402,48 @@ impl DurableHost for WorkerState {
                         })
                     }
                 };
-                // Only now is the result consumed: a snapshot taken before
-                // this point still carries it.
-                {
-                    let mut remote = lock(&state.remote);
-                    remote.results.remove(&wait.call_id);
-                    remote.waiting.remove(&wait.call_id);
-                }
-                state.events.emit(
-                    "remote_result_received",
-                    json!({ "call_id": wait.call_id, "thread": wait.thread }),
-                );
+                // The result is consumed in `remote_result_delivered`, once
+                // the engine has taken it: a snapshot that parks the thread
+                // before that point still carries the result.
                 return decoded;
             }
         })
+    }
+
+    fn remote_result_available(&self, call_id: &str) -> bool {
+        lock(&self.remote).results.contains_key(call_id)
+    }
+
+    fn remote_result_delivered(&self, call_id: &str, thread: DurableThreadId) {
+        let consumed = {
+            let mut remote = lock(&self.remote);
+            remote.waiting.remove(call_id);
+            remote.threads.remove(call_id);
+            remote.results.remove(call_id).is_some()
+        };
+        if consumed {
+            self.events.emit(
+                "remote_result_received",
+                json!({ "call_id": call_id, "thread": thread }),
+            );
+        }
+    }
+
+    /// Contract 9.2: the run no longer waits on `call_id`. The call leaves the
+    /// waiting set, so a result that still arrives is ignored like a result
+    /// for an unknown call, and the run state of a later snapshot does not
+    /// list it.
+    fn remote_cancelled(&self, call_id: &str, thread: DurableThreadId) {
+        {
+            let mut remote = lock(&self.remote);
+            remote.waiting.remove(call_id);
+            remote.results.remove(call_id);
+            remote.threads.remove(call_id);
+        }
+        self.events.emit(
+            "remote_cancel",
+            json!({ "call_id": call_id, "thread": thread }),
+        );
     }
 
     fn thread_started(&self, thread: DurableThreadId, parent: Option<DurableThreadId>) {
@@ -1241,19 +1470,22 @@ impl DurableHost for WorkerState {
     }
 
     fn thread_ended(&self, thread: DurableThreadId) {
-        {
+        // Several threads of a paused run end at the same time as the
+        // terminal event is written. The removal from the live set and the
+        // event are one step under the sink lock, so that a thread is
+        // reported either here or by `take_live_threads`, never by neither.
+        self.events.emit_with(|| {
             let mut threads = lock(&self.threads);
             if threads.helpers.remove(&thread) {
-                return;
+                return None;
             }
             threads.last_position.remove(&thread);
             if !threads.live.remove(&thread) {
                 // Already reported by `take_live_threads`.
-                return;
+                return None;
             }
-        }
-        self.events
-            .emit("thread_ended", json!({ "thread": thread }));
+            Some(("thread_ended", json!({ "thread": thread })))
+        });
         self.threads_changed.notify_waiters();
     }
 
@@ -1635,7 +1867,10 @@ async fn pause_run(state: Arc<WorkerState>, engine: Arc<BexEngine>) -> Option<Js
         match result {
             Ok(mut report) => {
                 report.blocked_attempts += failed_attempts;
-                return Some(state.snapshot_event_fields(&report));
+                let mut fields = state.snapshot_event_fields(&report);
+                // Contract section 9.2: a requested pause has no wake time.
+                fields["wake"] = Json::Null;
+                return Some(fields);
             }
             // The root thread has not entered the engine loop yet.
             Err(SnapshotFailure::RunEnded) if !state.finished.load(Ordering::Acquire) => {
@@ -1652,6 +1887,77 @@ async fn pause_run(state: Arc<WorkerState>, engine: Arc<BexEngine>) -> Option<Js
                     last_failure = Some(reason);
                 }
                 tokio::time::sleep(PAUSE_RETRY_INTERVAL).await;
+            }
+        }
+    }
+}
+
+/// Suspend a durable run for a long sleep (contract section 9.2). Resolves to
+/// the fields of the `paused` event, or to `None` when the run ended in
+/// another way.
+///
+/// The engine evaluates the self-suspend rule whenever a thread enters or
+/// leaves a wait. When the rule holds, one snapshot attempt is made on the
+/// same path as `pause`. The engine checks the rule again with every thread
+/// parked: when a thread has left its wait in the meantime, nothing is
+/// written and the run continues. When the snapshot is blocked, the threads
+/// keep waiting in this process, the worker emits one `blocked` event, and
+/// the engine does not report the same sleep again.
+async fn suspend_for_sleeps(
+    state: Arc<WorkerState>,
+    engine: Arc<BexEngine>,
+    min_remaining_ms: u64,
+) -> Option<Json> {
+    loop {
+        tokio::select! {
+            _ = engine.durable_idle_sleep(min_remaining_ms) => {}
+            () = state.run_ended.cancelled() => return None,
+        }
+        if state.pause_requested.load(Ordering::Acquire) {
+            // The task of the `pause` command suspends the run.
+            state.run_ended.cancelled().await;
+            return None;
+        }
+        let mode = SnapshotMode::SuspendIfIdle { min_remaining_ms };
+        match state.take_snapshot(&engine, mode, |_| {}).await {
+            Ok(report) => {
+                let mut fields = state.snapshot_event_fields(&report);
+                // A `pause` command that arrived while this snapshot was
+                // written is served by it, and a requested pause has no wake
+                // time: the supervisor decides when the run continues.
+                fields["wake"] = match report.wake {
+                    Some(wake) if !state.pause_requested.load(Ordering::Acquire) => json!({
+                        "reason": "sleep",
+                        "remaining_ms": wake.remaining_ms,
+                        "at_ts": wake.deadline_unix_ms,
+                    }),
+                    _ => Json::Null,
+                };
+                return Some(fields);
+            }
+            Err(SnapshotFailure::NotIdle) => {}
+            Err(SnapshotFailure::RunEnded) => {
+                tokio::select! {
+                    () = tokio::time::sleep(Duration::from_millis(20)) => {}
+                    () = state.run_ended.cancelled() => return None,
+                }
+            }
+            Err(SnapshotFailure::Blocked { reason, path, .. }) => {
+                state.auto_blocked.fetch_add(1, Ordering::Relaxed);
+                state.events.emit(
+                    "blocked",
+                    json!({
+                        "reason": reason,
+                        "path": WorkerState::localize_blocked_path(path),
+                    }),
+                );
+            }
+            Err(error) => {
+                state.auto_blocked.fetch_add(1, Ordering::Relaxed);
+                state.events.emit(
+                    "blocked",
+                    json!({ "reason": error.to_string(), "path": [] }),
+                );
             }
         }
     }

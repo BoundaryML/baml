@@ -34,6 +34,7 @@ bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
+bex_program_store = { workspace = true }
 bex_project = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_cpp = { workspace = true }

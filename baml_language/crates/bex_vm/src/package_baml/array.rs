@@ -4,7 +4,9 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
 use num_bigint::BigInt;
 
-use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
+use super::{
+    ArrayView, BamlClassArray, Continuation, ContinuationState, NativeCallResult, PackageBamlImpl,
+};
 use crate::{
     BexVm,
     array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
@@ -433,6 +435,17 @@ impl Continuation for MapContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.map",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &self.results,
+            Some(&self.element_ty),
+            false,
+        ))
+    }
 }
 
 // ── filter ────────────────────────────────────────────────────────────────────
@@ -474,6 +487,17 @@ impl Continuation for FilterContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.filter",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &self.results,
+            Some(&self.element_ty),
+            false,
+        ))
+    }
 }
 
 // ── some / every ──────────────────────────────────────────────────────────────
@@ -510,6 +534,17 @@ impl Continuation for SomeContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.some",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &[],
+            None,
+            false,
+        ))
+    }
 }
 
 struct EveryContinuation {
@@ -540,6 +575,17 @@ impl Continuation for EveryContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.every",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &[],
+            None,
+            false,
+        ))
+    }
 }
 
 // ── find / find_index ─────────────────────────────────────────────────────────
@@ -580,6 +626,17 @@ impl Continuation for FindContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.find",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &[],
+            None,
+            self.return_value,
+        ))
+    }
 }
 
 // ── find_last / find_last_index ───────────────────────────────────────────────
@@ -622,6 +679,17 @@ impl Continuation for FindLastContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.find_last",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &[],
+            None,
+            self.return_value,
+        ))
+    }
 }
 
 // ── reduce ────────────────────────────────────────────────────────────────────
@@ -650,6 +718,17 @@ impl Continuation for ReduceContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.reduce",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &[],
+            None,
+            false,
+        ))
+    }
 }
 
 // ── flat_map ──────────────────────────────────────────────────────────────────
@@ -689,6 +768,17 @@ impl Continuation for FlatMapContinuation {
         }
     }
     gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(snapshot_walk(
+            "array.flat_map",
+            self.f_ptr,
+            &self.array,
+            self.idx,
+            &self.results,
+            Some(&self.element_ty),
+            false,
+        ))
+    }
 }
 
 // ─── Array.sort_by continuation ─────────────────────────────────────────────
@@ -805,6 +895,166 @@ impl Continuation for SortByContinuation {
         forward_values(&mut self.source, forwarding);
         forward_values(&mut self.merged, forwarding);
     }
+
+    /// Layout: `ptrs = [comparator]`, `values = receiver, source.., merged..`,
+    /// `ints = [source len, merged len, width, run_start, left, middle, right,
+    /// run_end]`.
+    fn snapshot(&self) -> Option<ContinuationState> {
+        let mut state = ContinuationState::new("array.sort_by");
+        state.ptrs.push(self.f_ptr);
+        state.values.push(self.receiver);
+        state.values.extend_from_slice(&self.source);
+        state.values.extend_from_slice(&self.merged);
+        state.ints = [
+            self.source.len(),
+            self.merged.len(),
+            self.width,
+            self.run_start,
+            self.left,
+            self.middle,
+            self.right,
+            self.run_end,
+        ]
+        .into_iter()
+        .map(|value| value as u64)
+        .collect();
+        Some(state)
+    }
+}
+
+/// Snapshot layout shared by the array walkers: `ptrs = [callback]`,
+/// `values = array.., results..`, `ints = [array len, results len, cursor,
+/// flag]`, `types = [result element type]` when the walker builds an array.
+fn snapshot_walk(
+    tag: &str,
+    f_ptr: HeapPtr,
+    array: &[Value],
+    idx: usize,
+    results: &[Value],
+    element_ty: Option<&bex_vm_types::RealizedTy>,
+    flag: bool,
+) -> ContinuationState {
+    let mut state = ContinuationState::new(tag);
+    state.ptrs.push(f_ptr);
+    state.values.extend_from_slice(array);
+    state.values.extend_from_slice(results);
+    state.ints = vec![
+        array.len() as u64,
+        results.len() as u64,
+        idx as u64,
+        u64::from(flag),
+    ];
+    state.types.extend(element_ty.cloned());
+    state
+}
+
+/// Inverse of the `snapshot` methods in this module. `None` for a tag that
+/// belongs to another module.
+pub(super) fn restore_continuation(
+    state: &ContinuationState,
+) -> Option<Result<Box<dyn Continuation>, String>> {
+    if !state.tag.starts_with("array.") {
+        return None;
+    }
+    Some(restore_array_continuation(state))
+}
+
+fn restore_array_continuation(state: &ContinuationState) -> Result<Box<dyn Continuation>, String> {
+    let f_ptr = state.ptr(0)?;
+    if state.tag == "array.sort_by" {
+        let (source_len, merged_len) = (state.int(0)?, state.int(1)?);
+        let mut runs = state.value_runs(&[1, source_len, merged_len])?.into_iter();
+        let receiver = runs.next().and_then(|run| run.first().copied());
+        let (Some(receiver), Some(source), Some(merged)) = (receiver, runs.next(), runs.next())
+        else {
+            return Err(state.invalid("missing values"));
+        };
+        let sort = SortByContinuation {
+            receiver,
+            f_ptr,
+            source,
+            merged,
+            width: state.int(2)?,
+            run_start: state.int(3)?,
+            left: state.int(4)?,
+            middle: state.int(5)?,
+            right: state.int(6)?,
+            run_end: state.int(7)?,
+        };
+        // `call` reads `source[left]` and `source[right]`: the continuation is
+        // only ever live while a comparison of those two is outstanding.
+        let consistent = sort.width >= 1
+            && sort.run_start <= sort.left
+            && sort.left < sort.middle
+            && sort.middle <= sort.right
+            && sort.right < sort.run_end
+            && sort.run_end <= sort.source.len()
+            && sort.merged.len() <= sort.source.len();
+        if !consistent {
+            return Err(state.invalid("the merge cursors do not fit the array"));
+        }
+        return Ok(Box::new(sort));
+    }
+
+    let (array_len, results_len, idx) = (state.int(0)?, state.int(1)?, state.int(2)?);
+    let flag = state.int(3)? != 0;
+    let mut runs = state.value_runs(&[array_len, results_len])?.into_iter();
+    let (Some(array), Some(results)) = (runs.next(), runs.next()) else {
+        return Err(state.invalid("missing values"));
+    };
+    // Every walker is live while the callback for `array[idx]` runs.
+    if idx >= array.len() {
+        return Err(state.invalid("the cursor is outside the array"));
+    }
+    // `map` has pushed one result per finished element and `filter` at most
+    // one. `flat_map` pushes any number, and the others keep no results.
+    let results_fit = match state.tag.as_str() {
+        "array.map" => results.len() == idx,
+        "array.filter" => results.len() <= idx,
+        _ => true,
+    };
+    if !results_fit {
+        return Err(state.invalid("the results do not match the cursor"));
+    }
+    Ok(match state.tag.as_str() {
+        "array.map" => Box::new(MapContinuation {
+            f_ptr,
+            array,
+            idx,
+            results,
+            element_ty: state.ty(0)?,
+        }),
+        "array.filter" => Box::new(FilterContinuation {
+            f_ptr,
+            array,
+            idx,
+            results,
+            element_ty: state.ty(0)?,
+        }),
+        "array.flat_map" => Box::new(FlatMapContinuation {
+            f_ptr,
+            array,
+            idx,
+            results,
+            element_ty: state.ty(0)?,
+        }),
+        "array.some" => Box::new(SomeContinuation { f_ptr, array, idx }),
+        "array.every" => Box::new(EveryContinuation { f_ptr, array, idx }),
+        "array.find" => Box::new(FindContinuation {
+            f_ptr,
+            array,
+            idx,
+            return_value: flag,
+        }),
+        "array.find_last" => Box::new(FindLastContinuation {
+            f_ptr,
+            array,
+            idx,
+            return_value: flag,
+        }),
+        "array.reduce" => Box::new(ReduceContinuation { f_ptr, array, idx }),
+        other => return Err(format!("unknown native continuation `{other}`")),
+    })
 }
 
 impl BamlClassArray for PackageBamlImpl {

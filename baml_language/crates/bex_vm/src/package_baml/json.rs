@@ -66,7 +66,8 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee,
+    BamlNamespaceJson, Continuation, ContinuationState, NativeCallResult, PackageBamlImpl,
+    make_to_json_callee,
 };
 use crate::{
     BexVm,
@@ -435,6 +436,18 @@ impl Continuation for ToJsonWalkContinuation {
                 *ptr = new_ptr;
             }
         }
+    }
+
+    /// Layout: `values = [root]`, `ptrs = pending`, `strings` = one JSON
+    /// text per result.
+    fn snapshot(&self) -> Option<ContinuationState> {
+        let mut state = ContinuationState::new("json.to_json_walk");
+        state.values.push(self.root);
+        state.ptrs.clone_from(&self.pending);
+        for result in &self.results {
+            state.strings.push(serde_json::to_string(result).ok()?);
+        }
+        Some(state)
     }
 }
 
@@ -1616,6 +1629,9 @@ impl Continuation for IdentityFromJsonCont {
         Vec::new()
     }
     fn apply_forwarding(&mut self, _: &HashMap<HeapPtr, HeapPtr>) {}
+    fn snapshot(&self) -> Option<ContinuationState> {
+        Some(ContinuationState::new("json.from_json_identity"))
+    }
 }
 
 // ── baml.json.to<T> / baml.FromJson dispatch ───────────────────────────────────
@@ -1843,6 +1859,29 @@ impl Continuation for ClassFromJsonCont {
             }
         }
     }
+
+    /// Layout: `ptrs = [class]`, `values = field json.., results..`,
+    /// `types = class type args.., field types..`, `ints = [class type arg
+    /// count, field count, result count, cursor]`.
+    fn snapshot(&self) -> Option<ContinuationState> {
+        let mut state = ContinuationState::new("json.from_json_class");
+        state.ptrs.push(self.class_ptr);
+        state
+            .values
+            .extend(self.fields.iter().map(|(json, _)| *json));
+        state.values.extend_from_slice(&self.results);
+        state.types.extend(self.class_type_args.iter().cloned());
+        state
+            .types
+            .extend(self.fields.iter().map(|(_, ty)| ty.clone()));
+        state.ints = vec![
+            self.class_type_args.len() as u64,
+            self.fields.len() as u64,
+            self.results.len() as u64,
+            self.idx as u64,
+        ];
+        Some(state)
+    }
 }
 
 /// If `ty` is a class/interface type whose `baml.FromJson` rule PROVIDES
@@ -2032,6 +2071,21 @@ impl Continuation for ListFromJsonCont {
             }
         }
     }
+
+    /// Layout: `values = array.., results..`, `types = [element type]`,
+    /// `ints = [array len, result count, cursor]`.
+    fn snapshot(&self) -> Option<ContinuationState> {
+        let mut state = ContinuationState::new("json.from_json_list");
+        state.values.extend_from_slice(&self.array);
+        state.values.extend_from_slice(&self.results);
+        state.types.push(self.elem_ty.clone());
+        state.ints = vec![
+            self.array.len() as u64,
+            self.results.len() as u64,
+            self.idx as u64,
+        ];
+        Some(state)
+    }
 }
 
 // ── Map dispatch ──────────────────────────────────────────────────────────────
@@ -2143,6 +2197,139 @@ impl Continuation for MapFromJsonCont {
                 }
             }
         }
+    }
+
+    /// Layout: `values = entry values.., result values..`, `strings = entry
+    /// keys.., result keys..`, `types = [value type]`, `ints = [entry count,
+    /// result count, cursor]`.
+    fn snapshot(&self) -> Option<ContinuationState> {
+        let mut state = ContinuationState::new("json.from_json_map");
+        state
+            .values
+            .extend(self.entries.iter().map(|(_, value)| *value));
+        state.values.extend(self.results.values().copied());
+        state
+            .strings
+            .extend(self.entries.iter().map(|(key, _)| key.to_string()));
+        state
+            .strings
+            .extend(self.results.keys().map(ToString::to_string));
+        state.types.push(self.val_ty.clone());
+        state.ints = vec![
+            self.entries.len() as u64,
+            self.results.len() as u64,
+            self.idx as u64,
+        ];
+        Some(state)
+    }
+}
+
+/// Inverse of the `snapshot` methods in this module. `None` for a tag that
+/// belongs to another module.
+pub(super) fn restore_continuation(
+    state: &ContinuationState,
+) -> Option<Result<Box<dyn Continuation>, String>> {
+    if !state.tag.starts_with("json.") {
+        return None;
+    }
+    Some(restore_json_continuation(state))
+}
+
+fn restore_json_continuation(state: &ContinuationState) -> Result<Box<dyn Continuation>, String> {
+    match state.tag.as_str() {
+        "json.from_json_identity" => Ok(Box::new(IdentityFromJsonCont)),
+        "json.to_json_walk" => {
+            let root = *state
+                .values
+                .first()
+                .ok_or_else(|| state.invalid("no root value"))?;
+            let results = state
+                .strings
+                .iter()
+                .map(|text| serde_json::from_str(text))
+                .collect::<Result<Vec<serde_json::Value>, _>>()
+                .map_err(|err| state.invalid(&format!("a result is not JSON: {err}")))?;
+            // The walk is live while override `results.len()` runs.
+            if results.len() >= state.ptrs.len() {
+                return Err(state.invalid("more results than overrides"));
+            }
+            Ok(Box::new(ToJsonWalkContinuation {
+                root,
+                pending: state.ptrs.clone(),
+                results,
+            }))
+        }
+        "json.from_json_class" => {
+            let (type_arg_count, field_count) = (state.int(0)?, state.int(1)?);
+            let (result_count, idx) = (state.int(2)?, state.int(3)?);
+            let mut runs = state.value_runs(&[field_count, result_count])?.into_iter();
+            let (Some(field_json), Some(results)) = (runs.next(), runs.next()) else {
+                return Err(state.invalid("missing values"));
+            };
+            if type_arg_count.checked_add(field_count) != Some(state.types.len()) {
+                return Err(state.invalid("the type count does not match"));
+            }
+            if idx >= field_count {
+                return Err(state.invalid("the cursor is outside the fields"));
+            }
+            // One result per finished field.
+            if result_count != idx {
+                return Err(state.invalid("the results do not match the cursor"));
+            }
+            let (class_type_args, field_types) = state.types.split_at(type_arg_count);
+            Ok(Box::new(ClassFromJsonCont {
+                class_ptr: state.ptr(0)?,
+                class_type_args: class_type_args.to_vec(),
+                fields: field_json
+                    .into_iter()
+                    .zip(field_types.iter().cloned())
+                    .collect(),
+                results,
+                idx,
+            }))
+        }
+        "json.from_json_list" => {
+            let (array_len, result_count, idx) = (state.int(0)?, state.int(1)?, state.int(2)?);
+            let mut runs = state.value_runs(&[array_len, result_count])?.into_iter();
+            let (Some(array), Some(results)) = (runs.next(), runs.next()) else {
+                return Err(state.invalid("missing values"));
+            };
+            if idx >= array.len() {
+                return Err(state.invalid("the cursor is outside the array"));
+            }
+            // One result per finished element.
+            if result_count != idx {
+                return Err(state.invalid("the results do not match the cursor"));
+            }
+            Ok(Box::new(ListFromJsonCont {
+                array,
+                elem_ty: state.ty(0)?,
+                results,
+                idx,
+            }))
+        }
+        "json.from_json_map" => {
+            let (entry_count, result_count, idx) = (state.int(0)?, state.int(1)?, state.int(2)?);
+            let mut runs = state.value_runs(&[entry_count, result_count])?.into_iter();
+            let (Some(entry_values), Some(result_values)) = (runs.next(), runs.next()) else {
+                return Err(state.invalid("missing values"));
+            };
+            if entry_count.checked_add(result_count) != Some(state.strings.len()) {
+                return Err(state.invalid("the key count does not match"));
+            }
+            if idx >= entry_count {
+                return Err(state.invalid("the cursor is outside the entries"));
+            }
+            let (entry_keys, result_keys) = state.strings.split_at(entry_count);
+            let key = |text: &String| bex_vm_types::BexStr::from(text.as_str());
+            Ok(Box::new(MapFromJsonCont {
+                entries: entry_keys.iter().map(key).zip(entry_values).collect(),
+                val_ty: state.ty(0)?,
+                results: result_keys.iter().map(key).zip(result_values).collect(),
+                idx,
+            }))
+        }
+        other => Err(format!("unknown native continuation `{other}`")),
     }
 }
 

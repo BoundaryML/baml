@@ -219,6 +219,11 @@ enum ObjectWire {
     /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
     /// so this round trip is exercised only by unit/link tooling.
     Type(Box<crate::RealizedTy>),
+    /// Heap snapshots only: the id of a resource in the snapshot's resource
+    /// table (see `crate::snapshot_ctx`). Appended last, so the encoding of
+    /// every other variant, and with it the hash of a packed program, is
+    /// unchanged.
+    RustData(u32),
 }
 
 impl BorshSerialize for Object {
@@ -253,12 +258,15 @@ impl BorshSerialize for Object {
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
-            Self::RustData(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "RustData cannot be serialized",
-                ));
-            }
+            Self::RustData(data) => match crate::snapshot_ctx::encode_resource(data) {
+                Some(id) => ObjectWire::RustData(id?),
+                None => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "RustData cannot be serialized",
+                    ));
+                }
+            },
             Self::HostClosure(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -315,6 +323,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
+            ObjectWire::RustData(id) => Self::RustData(crate::snapshot_ctx::decode_resource(id)?),
         })
     }
 }

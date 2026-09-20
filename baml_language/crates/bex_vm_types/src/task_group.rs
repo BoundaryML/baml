@@ -58,6 +58,25 @@ struct Member {
     grant: Option<oneshot::Sender<()>>,
 }
 
+/// One member of a group as a heap snapshot records it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TaskGroupMemberSnapshot {
+    /// See [`TaskGroupTicket::member_id`].
+    pub member_id: u64,
+    /// True for a running member, false for a queued one.
+    pub active: bool,
+}
+
+/// The state of a group that a heap snapshot records.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TaskGroupSnapshot {
+    pub limit: usize,
+    pub name: Option<String>,
+    /// Running members in registration order, then queued members in the
+    /// order in which they will be admitted.
+    pub members: Vec<TaskGroupMemberSnapshot>,
+}
+
 /// RAII slot held by a running member. Releasing it (on drop) frees the slot
 /// and wakes the next FIFO waiter.
 pub struct TaskGroupPermit {
@@ -78,6 +97,19 @@ pub struct TaskGroupTicket {
 }
 
 impl TaskGroupTicket {
+    /// The id of this member inside its group, as
+    /// [`TaskGroupInner::snapshot`] reports it.
+    #[must_use]
+    pub fn member_id(&self) -> u64 {
+        self.id
+    }
+
+    /// The group this member waits on.
+    #[must_use]
+    pub fn group(&self) -> &Arc<TaskGroupInner> {
+        &self.group
+    }
+
     /// Await admission. Returns the permit (releasing the slot on drop), or
     /// `None` if the member was cancelled while parked — the caller then
     /// settles the future `Cancelled` and never runs the body.
@@ -232,6 +264,101 @@ impl TaskGroupInner {
         }
     }
 
+    /// The state a heap snapshot records. See [`TaskGroupSnapshot`].
+    #[must_use]
+    pub fn snapshot(&self) -> TaskGroupSnapshot {
+        let st = self.lock();
+        let mut members: Vec<TaskGroupMemberSnapshot> = st
+            .members
+            .iter()
+            .filter(|(_, member)| member.active)
+            .map(|(id, _)| TaskGroupMemberSnapshot {
+                member_id: *id,
+                active: true,
+            })
+            .collect();
+        members.extend(
+            st.waiters
+                .iter()
+                .filter(|id| st.members.get(id).is_some_and(|member| !member.active))
+                .map(|id| TaskGroupMemberSnapshot {
+                    member_id: *id,
+                    active: false,
+                }),
+        );
+        TaskGroupSnapshot {
+            limit: st.limit,
+            name: self.name.clone(),
+            members,
+        }
+    }
+
+    /// Register a member of a group that was rebuilt from a snapshot, in the
+    /// state the snapshot recorded. A running member keeps its slot even when
+    /// the limit was lowered after it had been admitted. A queued member goes
+    /// to the back of the queue, so the caller registers the members in
+    /// snapshot order. After the last member the caller calls
+    /// [`Self::admit_waiters`].
+    pub fn register_restored(
+        self: &Arc<Self>,
+        cancel: CancellationToken,
+        active: bool,
+    ) -> TaskGroupTicket {
+        let mut st = self.lock();
+        let id = st.next_id;
+        st.next_id += 1;
+        if active {
+            st.active += 1;
+            st.members.insert(
+                id,
+                Member {
+                    cancel,
+                    active: true,
+                    grant: None,
+                },
+            );
+            TaskGroupTicket {
+                group: Arc::clone(self),
+                id,
+                rx: None,
+                cancel: CancellationToken::new(),
+            }
+        } else {
+            let (tx, rx) = oneshot::channel();
+            st.members.insert(
+                id,
+                Member {
+                    cancel: cancel.clone(),
+                    active: false,
+                    grant: Some(tx),
+                },
+            );
+            st.waiters.push_back(id);
+            TaskGroupTicket {
+                group: Arc::clone(self),
+                id,
+                rx: Some(rx),
+                cancel,
+            }
+        }
+    }
+
+    /// True when member `id` holds a slot: it was admitted at registration or
+    /// a releaser has granted it one. A parked member that was granted a slot
+    /// runs as soon as its task is polled.
+    #[must_use]
+    pub fn member_is_active(&self, id: u64) -> bool {
+        self.lock()
+            .members
+            .get(&id)
+            .is_some_and(|member| member.active)
+    }
+
+    /// Admit queued members while the group has spare capacity.
+    pub fn admit_waiters(&self) {
+        Self::promote(&mut self.lock());
+    }
+
     /// Cancel path for a member that observed cancellation. If it had already
     /// been granted a slot (a grant raced the cancel), release the slot and
     /// promote the next waiter; otherwise just unqueue it.
@@ -305,6 +432,59 @@ mod tests {
         let (p1, p2, p3) = (t1.acquire().await, t2.acquire().await, t3.acquire().await);
         assert!(p1.is_some() && p2.is_some() && p3.is_some());
         assert_eq!(g.active_count(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_snapshot_lists_running_members_then_the_queue_and_restores_in_that_order() {
+        let g = TaskGroupInner::new(2, Some("quotes".to_string()));
+        let tickets: Vec<_> = (0..5)
+            .map(|_| g.register(CancellationToken::new()))
+            .collect();
+        let snapshot = g.snapshot();
+        assert_eq!(snapshot.limit, 2);
+        assert_eq!(snapshot.name.as_deref(), Some("quotes"));
+        let ids: Vec<(u64, bool)> = snapshot
+            .members
+            .iter()
+            .map(|member| (member.member_id, member.active))
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                (tickets[0].member_id(), true),
+                (tickets[1].member_id(), true),
+                (tickets[2].member_id(), false),
+                (tickets[3].member_id(), false),
+                (tickets[4].member_id(), false),
+            ]
+        );
+
+        let restored = TaskGroupInner::new(snapshot.limit, snapshot.name.clone());
+        let mut restored_tickets: Vec<_> = snapshot
+            .members
+            .iter()
+            .map(|member| restored.register_restored(CancellationToken::new(), member.active))
+            .collect();
+        restored.admit_waiters();
+        assert_eq!(restored.active_count(), 2);
+        assert_eq!(restored.queued_count(), 3);
+        let first = restored_tickets.remove(0).acquire().await.expect("running");
+        drop(first);
+        assert_eq!(restored.active_count(), 2, "the first queued member runs");
+        assert_eq!(restored.queued_count(), 2);
+        let promoted = restored_tickets.remove(1).acquire().await;
+        assert!(promoted.is_some(), "the queue order is the snapshot order");
+    }
+
+    #[tokio::test]
+    async fn a_restored_running_member_keeps_its_slot_above_a_lowered_limit() {
+        let restored = TaskGroupInner::new(1, None);
+        let a = restored.register_restored(CancellationToken::new(), true);
+        let b = restored.register_restored(CancellationToken::new(), true);
+        restored.admit_waiters();
+        assert_eq!(restored.active_count(), 2);
+        assert!(a.acquire().await.is_some());
+        assert!(b.acquire().await.is_some());
     }
 
     #[tokio::test]

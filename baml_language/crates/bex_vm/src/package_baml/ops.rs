@@ -619,6 +619,58 @@ impl Continuation for EqualsDriver {
             })
             .collect();
     }
+
+    /// Layout: `values` = the worklist pairs, flattened; `ptrs` = the visited
+    /// pairs, flattened.
+    fn snapshot(&self) -> Option<super::ContinuationState> {
+        let mut state = super::ContinuationState::new("ops.equals");
+        for (a, b) in &self.stack {
+            state.values.push(*a);
+            state.values.push(*b);
+        }
+        for (pa, pb) in &self.visited {
+            state.ptrs.push(*pa);
+            state.ptrs.push(*pb);
+        }
+        Some(state)
+    }
+}
+
+/// Inverse of [`EqualsDriver::snapshot`]. `None` for a tag that belongs to
+/// another module.
+pub(super) fn restore_continuation(
+    state: &super::ContinuationState,
+) -> Option<Result<Box<dyn Continuation>, String>> {
+    if state.tag != "ops.equals" {
+        return None;
+    }
+    if !state.values.len().is_multiple_of(2) || !state.ptrs.len().is_multiple_of(2) {
+        return Some(Err(state.invalid("a pair is incomplete")));
+    }
+    Some(Ok(Box::new(EqualsDriver {
+        stack: state
+            .values
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| (pair[0], pair[1]))
+            .collect(),
+        // The set is keyed on `(min, max)` of the addresses, which differ in
+        // the restored heap.
+        visited: state
+            .ptrs
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| {
+                if pair[0] < pair[1] {
+                    (pair[0], pair[1])
+                } else {
+                    (pair[1], pair[0])
+                }
+            })
+            .collect(),
+    })))
 }
 
 /// The concrete runtime `RealizedTy` of the class instance or enum value at `ptr` — `Class` with

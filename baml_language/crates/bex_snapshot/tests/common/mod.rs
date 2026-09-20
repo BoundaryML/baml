@@ -145,6 +145,11 @@ impl Harness {
             vm,
             parked,
             extra_roots,
+            settles_future: None,
+            cancel: bex_snapshot::ThreadCancel::default(),
+            user_cancels: Vec::new(),
+            group: None,
+            engine_state: Vec::new(),
         }];
         bex_snapshot::write_snapshot(
             &vm.heap,
@@ -154,6 +159,7 @@ impl Harness {
                 embed_program: None,
                 compress,
                 run_state: seq.to_le_bytes().to_vec(),
+                future_id_span: 0,
             },
         )
     }

@@ -21,44 +21,106 @@ function main() -> int[] {
 }
 "#;
 
+/// Format version 2 writes the native continuation frame of `Array.map`. A
+/// damaged continuation (a cursor outside its array) is refused at import.
 #[test]
-fn a_native_continuation_frame_blocks_the_snapshot_cleanly() {
+fn a_native_continuation_frame_is_written_and_its_cursor_is_checked_at_import() {
     let harness = Harness::new(NATIVE_FRAME_PROGRAM);
-    let (vm, _op, args) = harness.run_to_sysop("user.main", 0);
+    let (vm, _op, args) = harness.run_to_sysop("user.main", 1);
     assert!(
         vm.frames
             .iter()
             .any(|frame| matches!(frame, bex_vm::Frame::Native(_))),
         "the scenario must park with a native frame on the stack"
     );
+    let state = vm
+        .export_thread_state()
+        .expect("`Array.map` has a snapshot form");
+    let native = state
+        .frames
+        .iter()
+        .find_map(|frame| frame.native.as_ref())
+        .expect("a native frame");
+    assert_eq!(native.tag, "array.map");
+    assert_eq!(
+        native.ints,
+        vec![3, 1, 1, 0],
+        "array len, results, cursor, flag"
+    );
 
-    let err = harness
-        .write(&vm, ParkedAt::runnable(), args.clone(), false, 0)
-        .expect_err("a native frame is not a clean point");
-    match &err {
-        SnapshotError::Blocked { reason, path } => {
-            assert!(reason.contains("native continuation"), "reason: {reason}");
-            assert_eq!(path, &vec!["thread 1 (main)".to_string()]);
-        }
-        other => panic!("expected Blocked, got {other:?}"),
+    let (bytes, _) = harness
+        .write(&vm, ParkedAt::runnable(), args, false, 0)
+        .expect("a native frame is a clean point");
+    let target = harness.new_vm();
+    let mut restored =
+        bex_snapshot::restore_into(&target.heap, &bytes, harness.program_hash).expect("restores");
+    let mut state = std::mem::take(&mut restored.threads[0].state);
+    let native = state
+        .frames
+        .iter_mut()
+        .find_map(|frame| frame.native.as_mut())
+        .expect("the native frame is restored");
+    native.ints[2] = 3;
+    let mut target = target;
+    let error = target.import_thread_state(state).unwrap_err();
+    assert!(error.contains("cursor is outside"), "{error}");
+
+    // The callback of the continuation is called when the frame above it
+    // returns. A null pointer, or a pointer at something that cannot be
+    // called, would be dereferenced there, so the import refuses both.
+    let array = vm
+        .stack
+        .0
+        .iter()
+        .filter_map(bex_vm_types::Value::as_object_ptr)
+        .find(|ptr| matches!(vm.get_object(*ptr), bex_vm_types::Object::Array(_)));
+    for (damage, expected) in [
+        (Some(bex_vm_types::HeapPtr::null()), "is null"),
+        (None, "not an object the continuation can use"),
+    ] {
+        let fresh = harness.new_vm();
+        let mut restored = bex_snapshot::restore_into(&fresh.heap, &bytes, harness.program_hash)
+            .expect("restores");
+        let mut state = std::mem::take(&mut restored.threads[0].state);
+        let not_callable = state
+            .stack
+            .iter()
+            .filter_map(bex_vm_types::Value::as_object_ptr)
+            .find(|ptr| {
+                !matches!(
+                    fresh.get_object(*ptr),
+                    bex_vm_types::Object::Function(_)
+                        | bex_vm_types::Object::Closure(_)
+                        | bex_vm_types::Object::BoundMethod(_)
+                        | bex_vm_types::Object::GenericFunction(_)
+                )
+            });
+        let native = state
+            .frames
+            .iter_mut()
+            .find_map(|frame| frame.native.as_mut())
+            .expect("the native frame is restored");
+        let Some(replacement) = damage.or(not_callable) else {
+            // No non-callable object on this stack to point at.
+            assert!(array.is_none());
+            continue;
+        };
+        native.ptrs[0] = replacement;
+        let mut fresh = fresh;
+        let error = fresh.import_thread_state(state).unwrap_err();
+        assert!(error.contains(expected), "{error}");
     }
-    assert!(vm.export_thread_state().is_err());
 
-    // The state dump still works, so that a blocked pause can be inspected.
-    let threads = [bex_snapshot::ThreadInput {
-        thread_id: 1,
-        parent_thread: None,
-        name: "main".to_string(),
-        vm: &vm,
-        parked: ParkedAt::runnable(),
-        extra_roots: args,
-    }];
+    // The state dump lists the native frame.
+    let threads = [bex_snapshot::ThreadInput::new(1, &vm, ParkedAt::runnable())];
     let dump = bex_snapshot::state_dump(&vm.heap, &threads, "r-test", 1);
     assert!(
-        !dump["threads"][0]["frames"]
+        dump["threads"][0]["frames"]
             .as_array()
             .expect("frames")
-            .is_empty()
+            .iter()
+            .any(|frame| frame["function"] == "baml.Array.map"),
+        "{dump}"
     );
 }
 
