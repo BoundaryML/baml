@@ -42,7 +42,7 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     let received = Arc::clone(&files);
     let recording = TelemetryRecording::new(
         RecordingConfig {
-            flush_interval: Duration::from_secs(3600),
+            flush_interval_duration: Duration::from_secs(3600),
             ..RecordingConfig::default()
         },
         move |file| received.lock().unwrap().push(file),
@@ -59,7 +59,7 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
         )
         .unwrap(),
     );
-    assert_eq!(engine.telemetry_recording_id(), id);
+    assert_eq!(engine.telemetry_recording_id(), Some(id));
     assert_eq!(
         engine
             .call_function("main", vec![], context(), true)
@@ -137,7 +137,7 @@ async fn idle_deadline_delivers_without_another_vm_call() {
     let (send, mut receive) = tokio::sync::mpsc::unbounded_channel();
     let recording = TelemetryRecording::new(
         RecordingConfig {
-            flush_interval: Duration::from_millis(10),
+            flush_interval_duration: Duration::from_millis(10),
             ..RecordingConfig::default()
         },
         move |file| send.send(file).unwrap(),
@@ -180,7 +180,7 @@ async fn delivery_failure_is_retained_after_shutdown() {
     let program = baml_db::testing::compile_source("function main() -> int { 1 }");
     let recording = TelemetryRecording::new(
         RecordingConfig {
-            flush_interval: Duration::from_secs(3600),
+            flush_interval_duration: Duration::from_secs(3600),
             ..RecordingConfig::default()
         },
         |_| panic!("test delivery failed"),
@@ -215,7 +215,7 @@ async fn cancelling_shutdown_does_not_reopen_a_closed_transport() {
     let (release, released) = std::sync::mpsc::channel();
     let recording = TelemetryRecording::new(
         RecordingConfig {
-            flush_interval: Duration::from_secs(3600),
+            flush_interval_duration: Duration::from_secs(3600),
             ..RecordingConfig::default()
         },
         move |_| {
@@ -263,4 +263,104 @@ async fn cancelling_shutdown_does_not_reopen_a_closed_transport() {
             .await
             .is_err()
     );
+}
+
+/// Separate processes exercise the real environment reader without racing other
+/// tests or changing process-global environment while runtime threads exist.
+#[test]
+fn telemetry_environment_modes() {
+    const CHILD: &str = "BAML_TEST_TELEMETRY_MODE_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        for mode in [
+            None,
+            Some("off"),
+            Some("low"),
+            Some("auto"),
+            Some("high"),
+            Some("invalid"),
+        ] {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args(["--exact", "telemetry_environment_modes", "--nocapture"])
+                .env(CHILD, "1");
+            if let Some(mode) = mode {
+                command.env("BAML_TELEMETRY", mode);
+            } else {
+                command.env_remove("BAML_TELEMETRY");
+            }
+            let result = command.output().unwrap();
+            assert!(
+                result.status.success(),
+                "mode {mode:?}:\n{}\n{}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+        return;
+    }
+    let mode = std::env::var("BAML_TELEMETRY").unwrap_or_else(|_| "auto".into());
+    tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap().block_on(async {
+        let program = baml_db::testing::compile_source(r#"
+            function leaf() -> int { "abc".length() }
+            function main() -> int { let child = spawn { leaf() }; leaf() + (await child) }
+            function fail() -> int { baml.sys.exit(7); 1 }
+        "#);
+        let files = Arc::new(Mutex::new(Vec::<SealedFile>::new()));
+        let received = Arc::clone(&files);
+        let result = BexEngine::new_with_telemetry_recording(program,
+            Arc::new(sys_native::SysOps::native()), vec![], None,
+            btel_clock::ClockMode::Monotonic,
+            TelemetryRecording::new(RecordingConfig::default(), move |file| received.lock().unwrap().push(file)));
+        if mode == "invalid" {
+            assert!(matches!(result, Err(bex_engine::EngineError::Other(message)) if message.contains("BAML_TELEMETRY")));
+            assert!(files.lock().unwrap().is_empty());
+            return;
+        }
+        let engine = Arc::new(result.unwrap());
+        assert_eq!(engine.telemetry_recording_id().is_none(), mode == "off");
+        assert_eq!(engine.call_function("main", vec![], context(), true).await.unwrap(), BexExternalValue::Int(6));
+        assert!(matches!(engine.call_function("fail", vec![], context(), true).await,
+            Err(bex_engine::EngineError::Exit { code: 7 })));
+        engine.shutdown().await;
+        if mode == "off" {
+            assert_eq!(engine.telemetry_result(), None);
+            assert!(engine.reset_telemetry_clock_after_restore().is_none());
+            assert!(files.lock().unwrap().is_empty());
+            return;
+        }
+        assert_eq!(engine.telemetry_result(), Some(Ok(())));
+        let (mut aggregates, mut spans, mut announcements, mut threads) = (0, 0, 0, 0);
+        for sealed in files.lock().unwrap().iter() {
+            let file = proto::RecordingFile::decode(sealed.bytes()).unwrap();
+            if let Some(batch) = file.aggregates {
+                aggregates += batch.entries.iter().map(|row| row.count).sum::<u64>();
+            }
+            for section in file.spans.unwrap().sections {
+                for event in section.events {
+                    match event.event.unwrap() {
+                        proto::span_event::Event::FunctionCompletion(done) => {
+                            assert!(!CompletionFlags::from_wire(done.completion_flags, false).unwrap().capture_deferred());
+                            spans += 1;
+                        }
+                        proto::span_event::Event::FunctionAnnouncement(entry) => {
+                            assert_ne!(entry.inputs, proto::CaptureState::Deferred as i32);
+                            announcements += 1;
+                        }
+                        proto::span_event::Event::ThreadCompletion(_) => threads += 1,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        assert!(threads >= 3, "root, child, and failing root");
+        if mode == "low" { assert_eq!((aggregates, spans, announcements), (0, 0, 0)); }
+        else if mode == "high" {
+            assert!(spans > 0);
+            assert_eq!(aggregates, spans);
+            assert_eq!(announcements, spans);
+        } else {
+            assert!(aggregates > 0);
+            assert_eq!((spans, announcements), (0, 0));
+        }
+    });
 }

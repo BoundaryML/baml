@@ -9,6 +9,8 @@ use crate::{detection, Calibration, Clock, ClockType, Counter, Monotonic};
 pub struct CalibrationOptions {
     /// Minimum observation interval before accepting convergence.
     pub minimum_duration: Duration,
+    /// Convergence requires strictly more than this many residual samples.
+    pub minimum_samples: u64,
     /// Maximum mean absolute residual plus standard error.
     pub maximum_error: Duration,
     /// Maximum wall time allowed for calibration.
@@ -18,6 +20,7 @@ impl Default for CalibrationOptions {
     fn default() -> Self {
         Self {
             minimum_duration: Duration::ZERO,
+            minimum_samples: crate::MINIMUM_CAL_ROUNDS,
             maximum_error: Duration::from_nanos(crate::MAXIMUM_CAL_ERROR_NS),
             timeout: Duration::from_nanos(crate::MAXIMUM_CAL_TIME_NS),
         }

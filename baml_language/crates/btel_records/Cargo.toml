@@ -16,4 +16,5 @@ workspace = true
 
 [dependencies]
 btel_clock = { workspace = true }
+btel_settings = { workspace = true }
 btel_types = { workspace = true }

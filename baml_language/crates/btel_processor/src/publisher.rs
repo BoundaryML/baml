@@ -34,7 +34,7 @@ pub trait Publisher<I: ?Sized, V> {
         None
     }
     fn max_chunks_per_batch(&self) -> usize {
-        usize::MAX
+        btel_settings::processor::UNLIMITED_PUBLISHER_BATCH
     }
     fn finish(&mut self) {
         self.flush();
@@ -65,7 +65,7 @@ pub struct NoSinkPublisher {
 
 impl Default for NoSinkPublisher {
     fn default() -> Self {
-        Self::new(NonZeroUsize::new(4096).unwrap())
+        Self::new(btel_settings::processor::NO_SINK_MAX_NODES)
     }
 }
 

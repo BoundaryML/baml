@@ -18,10 +18,9 @@ use std::{
     sync::atomic::{AtomicU16, AtomicU64, Ordering},
 };
 
+use btel_settings::identity::ID_RANGE_SIZE;
 pub use function_lookup::{FunctionLookup, FunctionRegistration};
 pub use functions::*;
-
-const ID_RANGE_SIZE: u64 = 4096;
 
 /// Identity of an individually identified telemetry graph node.
 ///
@@ -275,12 +274,7 @@ impl AwaitDuration {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InvocationMode {
-    Hidden,
-    Timing,
-    Span,
-}
+pub use btel_settings::policy::InvocationMode;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvocationOutcome {

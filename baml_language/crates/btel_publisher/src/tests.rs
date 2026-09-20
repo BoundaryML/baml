@@ -41,7 +41,7 @@ impl<F: FnMut(ConvertedBatch)> Publisher<CaptureDeferred, CaptureDeferred>
     fn span(&mut self, t: TelemetryId, r: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
         self.buffer
             .spans
-            .reserve(self.buffer.spans.len() + crate::encoding::MAX_EVENT_BYTES);
+            .reserve(self.buffer.spans.len() + btel_settings::encoding::MAX_EVENT_BYTES);
         self.buffer.span(t, r);
     }
     fn flush(&mut self) {

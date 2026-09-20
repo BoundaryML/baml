@@ -2,7 +2,6 @@ use std::{
     cell::RefCell,
     future::{Future, poll_fn},
     marker::PhantomData,
-    num::NonZeroUsize,
     pin::pin,
     rc::Rc,
     sync::{
@@ -99,17 +98,7 @@ impl TelemetryRuntime {
     where
         P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
     {
-        let producers = std::thread::available_parallelism().map_or(64, |n| n.get().max(64));
-        Self::with_config_and_publisher(
-            Config {
-                chunk_capacity: NonZeroUsize::new(256).unwrap(),
-                timing_chunks: NonZeroUsize::new(producers * 2).unwrap(),
-                span_chunks: NonZeroUsize::new(producers * 2).unwrap(),
-                max_producers: NonZeroUsize::new(producers).unwrap(),
-                preallocate: false,
-            },
-            publisher,
-        )
+        Self::with_config_and_publisher(Config::default(), publisher)
     }
 
     pub fn with_config(config: Config) -> std::io::Result<Arc<Self>> {
@@ -120,6 +109,9 @@ impl TelemetryRuntime {
     where
         P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
     {
+        const {
+            assert!(btel_settings::processor::THREADS_PER_RUNTIME == 1);
+        }
         let result = Arc::new(OnceLock::new());
         let completion = Arc::clone(&result);
         let id = NEXT_RUNTIME
@@ -128,7 +120,8 @@ impl TelemetryRuntime {
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let worker = {
             let copy = pool.clone();
-            let (ready, bound) = std::sync::mpsc::sync_channel(1);
+            let (ready, bound) =
+                std::sync::mpsc::sync_channel(btel_settings::processor::STARTUP_CHANNEL_CAPACITY);
             let worker = std::thread::Builder::new()
                 .name("btel-processor".into())
                 .spawn(move || {
@@ -147,7 +140,7 @@ impl TelemetryRuntime {
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         Processor::with_publisher(
                             consumer,
-                            NonZeroUsize::new(8).unwrap(),
+                            btel_settings::processor::REQUESTED_BATCH_CHUNKS,
                             publisher,
                         )
                         .run()
@@ -346,6 +339,7 @@ impl Drop for TelemetryRuntime {
 #[cfg(test)]
 mod tests {
     use std::{
+        num::NonZeroUsize,
         panic::{AssertUnwindSafe, catch_unwind},
         task::{Context, Poll, Waker},
     };

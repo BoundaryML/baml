@@ -6,17 +6,20 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use btel_settings::{
+    identity::{
+        HASH_MULTIPLIER, RETAINED_CAPACITY_MULTIPLIER, SHARD_BITS, SHARD_COUNT,
+        SHRINK_OCCUPANCY_DIVISOR,
+    },
+    layout::Padded,
+};
 use rustc_hash::FxHashMap;
 
 use crate::{FunctionId, FunctionIdAllocator, FunctionIdExhausted};
 
-const SHARD_BITS: u32 = 6;
-const SHARD_COUNT: usize = 1 << SHARD_BITS;
-
 // Separate independently written locks, including on machines with 128-byte
 // cache lines. These are engine-owned; worker exit cannot discard registrations.
-#[repr(align(128))]
-struct FunctionShard<R>(RwLock<FxHashMap<FunctionId, R>>);
+type FunctionShard<R> = Padded<RwLock<FxHashMap<FunctionId, R>>>;
 
 /// Publication state on one function object. Clone preserves it for moving GC;
 /// constructing a new definition must reset it, together with its identity.
@@ -42,7 +45,7 @@ impl<R> Default for FunctionLookup<R> {
         Self {
             ids: FunctionIdAllocator::default(),
             static_functions: Vec::new(),
-            dynamic: std::array::from_fn(|_| FunctionShard(RwLock::new(FxHashMap::default()))),
+            dynamic: std::array::from_fn(|_| Padded(RwLock::new(FxHashMap::default()))),
         }
     }
 }
@@ -52,7 +55,7 @@ impl<R: Copy> FunctionLookup<R> {
     fn shard(&self, id: FunctionId) -> &RwLock<FxHashMap<FunctionId, R>> {
         // Take the HIGH product bits: masking the original ID (or low product
         // bits) funnels periodically observed functions into the same shard.
-        let index = id.get().wrapping_mul(0x9e37_79b9_7f4a_7c15) >> (u64::BITS - SHARD_BITS);
+        let index = id.get().wrapping_mul(HASH_MULTIPLIER) >> (u64::BITS - SHARD_BITS);
         &self.dynamic[index as usize].0
     }
 
@@ -131,8 +134,8 @@ impl<R: Copy> FunctionLookup<R> {
             dynamic.retain(|_, reference| retain(reference));
             if dynamic.is_empty() {
                 *dynamic = FxHashMap::default();
-            } else if dynamic.len() < dynamic.capacity() / 4 {
-                let target = dynamic.len().saturating_mul(2);
+            } else if dynamic.len() < dynamic.capacity() / SHRINK_OCCUPANCY_DIVISOR {
+                let target = dynamic.len().saturating_mul(RETAINED_CAPACITY_MULTIPLIER);
                 dynamic.shrink_to(target);
             }
         }

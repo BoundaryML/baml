@@ -1,28 +1,23 @@
 //! Bounded append/merge buffers and immutable file sealing, shared by destinations.
 use std::{
     fmt,
-    num::{NonZeroU64, NonZeroUsize},
+    num::NonZeroU64,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_records::{CaptureDeferred, SpanRecord};
+use btel_settings::{encoding, publisher as settings};
 use btel_types::TelemetryId;
 use prost::Message;
+pub use settings::RecordingConfig;
+use settings::{BASE_CHARGE, CHUNK_HEADROOM_PER_RECORD, FILE_OVERHEAD, ITEM_CHARGE};
 
 use crate::{ConversionBuffer, PendingMessages, proto};
-
-// Conservative charged memory, not a promise about process RSS. Accounts for
-// record storage, Vec growth and encoding overlap.
-// Input chunk allocations are independently bounded by the transport pool.
-const ITEM_CHARGE: usize = 4096;
-const CHUNK_HEADROOM_PER_RECORD: usize = 6 * ITEM_CHARGE;
-const BASE_CHARGE: usize = 64 * 1024;
-const FILE_OVERHEAD: usize = 512;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RecordingId([u8; 16]);
 impl RecordingId {
@@ -34,25 +29,6 @@ impl RecordingId {
     }
     pub fn as_bytes(&self) -> &[u8; 16] {
         &self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct RecordingConfig {
-    /// Soft serialized-size target; a complete chunk may overshoot it.
-    pub target_bytes: NonZeroUsize,
-    /// Charged resident budget including retained sealed bytes. Exhaustion is
-    /// terminal, never silent loss. Retained destination/retry bytes count too.
-    pub max_resident_bytes: NonZeroUsize,
-    pub flush_interval: Duration,
-}
-impl Default for RecordingConfig {
-    fn default() -> Self {
-        Self {
-            target_bytes: NonZeroUsize::new(1024 * 1024).unwrap(),
-            max_resident_bytes: NonZeroUsize::new(64 * 1024 * 1024).unwrap(),
-            flush_interval: Duration::from_secs(1),
-        }
     }
 }
 
@@ -125,13 +101,9 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         config: RecordingConfig,
         receive: F,
     ) -> Result<Self, RecordingError> {
-        if config.flush_interval.is_zero()
-            || Instant::now().checked_add(config.flush_interval).is_none()
-            || config.target_bytes.get() >= config.max_resident_bytes.get()
-            || config.max_resident_bytes.get() <= BASE_CHARGE
-        {
-            return Err(RecordingError::InvalidConfig);
-        }
+        config
+            .validate()
+            .map_err(|_| RecordingError::InvalidConfig)?;
         Ok(Self {
             id,
             config,
@@ -178,13 +150,12 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         headroom: usize,
     ) -> Result<(), RecordingError> {
         let needed = self.buffer.spans.len().saturating_add(additional);
-        if needed > crate::encoding::MAX_BUFFER_BYTES {
+        if needed > encoding::MAX_BUFFER_BYTES {
             return Err(RecordingError::BudgetExceeded);
         }
         if needed > self.buffer.spans.capacity() {
-            let target = needed
-                .max(self.buffer.spans.capacity().saturating_mul(2))
-                .clamp(256, crate::encoding::MAX_BUFFER_BYTES);
+            let target = settings::encoding_capacity(self.buffer.spans.capacity(), needed)
+                .min(encoding::MAX_BUFFER_BYTES);
             self.check(
                 target
                     .saturating_add(headroom)
@@ -196,18 +167,14 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         Ok(())
     }
     fn batch_charge(&self, records: usize) -> usize {
-        let record_charge = records
-            .saturating_add(16)
-            .saturating_mul(CHUNK_HEADROOM_PER_RECORD);
+        let record_charge = settings::batch_record_charge(records);
         let needed = self
             .buffer
             .spans
             .len()
-            .saturating_add(records.saturating_mul(crate::encoding::MAX_EVENT_BYTES));
+            .saturating_add(records.saturating_mul(encoding::MAX_EVENT_BYTES));
         let growth = if needed > self.buffer.spans.capacity() {
-            needed
-                .max(self.buffer.spans.capacity().saturating_mul(2))
-                .max(256)
+            settings::encoding_capacity(self.buffer.spans.capacity(), needed)
         } else {
             0
         };
@@ -223,10 +190,7 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         let records = self.pending_span_reservation.max(1);
         let charge = records.saturating_mul(CHUNK_HEADROOM_PER_RECORD);
         self.check(charge)?;
-        self.reserve_encoding(
-            records.saturating_mul(crate::encoding::MAX_EVENT_BYTES),
-            charge,
-        )?;
+        self.reserve_encoding(records.saturating_mul(encoding::MAX_EVENT_BYTES), charge)?;
         self.span_credit = records;
         self.pending_span_reservation = 0;
         Ok(())
@@ -247,8 +211,8 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         let ready = self.buffer.take();
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
-                format_major: 1,
-                format_minor: 0,
+                format_major: encoding::FORMAT_MAJOR,
+                format_minor: encoding::FORMAT_MINOR,
                 recording_id: self.id.0.to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
             }),
@@ -330,12 +294,13 @@ impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for Recor
         self.buffer.span(thread, record);
         let items = match record {
             SpanRecord::ThreadSpanAnnouncement { .. } | SpanRecord::ThreadSpanCompletion { .. } => {
-                4
+                settings::THREAD_ITEMS
             }
             SpanRecord::CallPathDefined { visible_caller, .. } => {
-                2 + usize::from(visible_caller.is_some())
+                settings::CALL_PATH_ITEMS
+                    + usize::from(visible_caller.is_some()) * settings::VISIBLE_CALLER_ITEMS
             }
-            _ => 1,
+            _ => settings::OTHER_ITEMS,
         };
         self.conversion_charge = self.conversion_charge.saturating_add(items * ITEM_CHARGE);
     }
@@ -359,12 +324,12 @@ impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for Recor
         let now = Instant::now();
         if records != 0 {
             self.deadline
-                .get_or_insert(now + self.config.flush_interval);
+                .get_or_insert(now + self.config.flush_interval_duration);
         }
         Self::terminal(self.service(now, false));
     }
     fn max_chunks_per_batch(&self) -> usize {
-        1
+        settings::MAX_BATCH_CHUNKS
     }
     fn manages_flush_deadline(&self) -> bool {
         true
@@ -382,3 +347,5 @@ impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for Recor
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+use std::{num::NonZeroUsize, time::Duration};

@@ -16,3 +16,6 @@ loom = { workspace = true }
 
 [lints]
 workspace = true
+
+[dependencies]
+btel_settings = { workspace = true }

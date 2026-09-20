@@ -39,10 +39,14 @@ impl TelemetryRecording {
         self,
         source_snapshot: Option<[u8; 32]>,
     ) -> Result<Arc<btel_processor::TelemetryRuntime>, EngineError> {
+        let transport = btel_settings::transport::ChunkConfig::default();
+        self.config
+            .validate_transport(&transport)
+            .map_err(|error| EngineError::Other(error.to_owned()))?;
         let publisher = RecordingPublisher::new(self.id, self.config, self.receive)
             .map_err(|error| EngineError::Other(error.to_string()))?
             .with_source_snapshot(source_snapshot);
-        btel_processor::TelemetryRuntime::with_publisher(publisher)
+        btel_processor::TelemetryRuntime::with_config_and_publisher(transport, publisher)
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))
     }
 }
@@ -50,6 +54,7 @@ impl TelemetryRecording {
 impl BexEngine {
     /// Configure encoded-file delivery before initialization executes. Existing
     /// constructors use the same full pipeline with zero destinations.
+    /// `BAML_TELEMETRY=off` disables it even when a recording is supplied.
     pub fn new_with_telemetry_recording(
         program: bex_vm_types::Program,
         sys_ops: Arc<sys_ops::SysOps>,
@@ -64,18 +69,23 @@ impl BexEngine {
             argv,
             runtime_compiler,
             clock_mode,
-            recording,
+            Some(recording),
         )
     }
 
-    pub fn telemetry_recording_id(&self) -> RecordingId {
-        self.telemetry_recording_id
+    /// No recording is created when `BAML_TELEMETRY=off`.
+    pub fn telemetry_recording_id(&self) -> Option<RecordingId> {
+        self.telemetry
+            .as_ref()
+            .map(|telemetry| telemetry.recording_id)
     }
 
-    /// None while processing. After shutdown, Some(Ok(())) means all published
+    /// None when disabled or while processing. After shutdown, Some(Ok(())) means all published
     /// chunks were consumed and pending bytes delivered to the callback. It does
     /// not assert durable storage, complete captures, or final clock validity.
     pub fn telemetry_result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
-        self.telemetry_runtime.result()
+        self.telemetry
+            .as_ref()
+            .and_then(|telemetry| telemetry.runtime.result())
     }
 }

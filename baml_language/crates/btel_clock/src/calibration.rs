@@ -1,12 +1,13 @@
-use super::{
-    CalibrationMetadata, CalibrationQuality, CalibrationStatus, Clock, ClockDomainId, ClockInstant,
-    ClockMode, ClockSource, Duration, FallbackReason, MAX_SAMPLE_UNCERTAINTY, MonotonicNanos,
-    RateErrorPpb, narrow, next_id, scale,
+use btel_settings::{
+    clock as settings,
+    clock::{MAX_RATE_ERROR_PPB, RATE_ERROR_FLOOR_PPB, SCALE_CHECK_INTERVAL_DURATION},
 };
 
-const SCALE_CHECK_INTERVAL: Duration = Duration::from_millis(50);
-const MAX_RATE_ERROR_PPB: u64 = 100_000; // 100 ppm; at most 10 us per 100 ms check interval.
-const RATE_ERROR_FLOOR_PPB: u64 = 10_000; // Statistical calibration is not a hard error bound.
+use super::{
+    CalibrationMetadata, CalibrationQuality, CalibrationStatus, Clock, ClockDomainId, ClockInstant,
+    ClockMode, ClockSource, Duration, FallbackReason, MAX_SAMPLE_UNCERTAINTY_NS, MonotonicNanos,
+    RateErrorPpb, narrow, next_id, scale,
+};
 
 pub(super) struct Calibrated {
     pub clock: Clock,
@@ -32,7 +33,7 @@ pub(super) fn probe(clock: &Clock, reference: &Clock, resolution: u64) -> Probe 
         reference: MonotonicNanos(0),
         uncertainty: u64::MAX,
     };
-    for _ in 0..3 {
+    for _ in 0..settings::PROBE_ATTEMPTS {
         let before = reference.reference_nanos();
         let ticks = ClockInstant::from_ticks(clock.raw());
         let after = reference.reference_nanos();
@@ -47,7 +48,7 @@ pub(super) fn probe(clock: &Clock, reference: &Clock, resolution: u64) -> Probe 
         }
         // The first tight bracket is sufficient; repeated queries primarily
         // help when a sample was descheduled. No need to optimize for perfect phase.
-        if width <= resolution.max(1_000) {
+        if width <= resolution.max(settings::EARLY_PROBE_WIDTH_NS) {
             break;
         }
     }
@@ -60,9 +61,10 @@ impl Calibrated {
             return Self::monotonic(FallbackReason::Requested, None);
         }
         let clock = Clock::new_uncached_with_options(quanta::CalibrationOptions {
-            minimum_duration: Duration::from_millis(20),
-            maximum_error: Duration::from_nanos(100),
-            timeout: Duration::from_millis(200),
+            minimum_duration: settings::CALIBRATION_MIN_DURATION,
+            maximum_error: Duration::from_nanos(u64::from(settings::CALIBRATION_MAX_ERROR_NS)),
+            minimum_samples: settings::CALIBRATION_MIN_SAMPLES,
+            timeout: settings::CALIBRATION_TIMEOUT_DURATION,
         });
         Self::from_clock(clock)
     }
@@ -84,7 +86,7 @@ impl Calibrated {
         // Holdout validation only. The scale still comes entirely from Quanta's
         // unchanged calibration algorithm; we do not fit a second ratio.
         #[cfg(not(target_arch = "wasm32"))]
-        std::thread::sleep(SCALE_CHECK_INTERVAL);
+        std::thread::sleep(SCALE_CHECK_INTERVAL_DURATION);
         let end = probe(&clock, &reference, resolution);
         let Some(rate_error) = scale_quality(metadata, start, end) else {
             return Self::monotonic(FallbackReason::ScaleValidation, Some(metadata.quality));
@@ -117,13 +119,14 @@ impl Calibrated {
 pub(super) fn acceptable_calibration(metadata: CalibrationMetadata) -> bool {
     let quality = metadata.quality;
     quality.status == CalibrationStatus::Converged
-        && quality.samples > 500
+        && quality.samples > settings::CALIBRATION_MIN_SAMPLES
         && quality.elapsed_ns != 0
         && metadata.multiplier != 0
         && metadata.shift < 64
         && quality.mean_residual_ns.is_finite()
         && quality.mean_error_ns.is_finite()
-        && quality.mean_residual_ns.abs() + quality.mean_error_ns.abs() < 100.0
+        && quality.mean_residual_ns.abs() + quality.mean_error_ns.abs()
+            < f64::from(settings::CALIBRATION_MAX_ERROR_NS)
 }
 
 // Calibrated slope uncertainty is estimated from both Quanta's residual over
@@ -140,9 +143,9 @@ pub(super) fn scale_quality(
     end: Probe,
 ) -> Option<RateErrorPpb> {
     let elapsed = end.reference.0.checked_sub(start.reference.0)?;
-    if elapsed < u64::try_from(SCALE_CHECK_INTERVAL.as_nanos()).ok()?
-        || start.uncertainty > MAX_SAMPLE_UNCERTAINTY
-        || end.uncertainty > MAX_SAMPLE_UNCERTAINTY
+    if elapsed < u64::try_from(SCALE_CHECK_INTERVAL_DURATION.as_nanos()).ok()?
+        || start.uncertainty > MAX_SAMPLE_UNCERTAINTY_NS
+        || end.uncertainty > MAX_SAMPLE_UNCERTAINTY_NS
         || end.ticks < start.ticks
     {
         return None;

@@ -13,7 +13,8 @@ pub struct AggregateDelta {
     pub total_io_duration: AwaitDuration,
 }
 
-const _: () = assert!(std::mem::size_of::<AggregateDelta>() == 32);
+const _: () =
+    assert!(std::mem::size_of::<AggregateDelta>() == btel_settings::layout::AGGREGATE_DELTA_BYTES);
 
 impl AggregateDelta {
     /// Contribution to the base path's inclusive duration. The node's actual
@@ -49,7 +50,7 @@ impl AggregateDelta {
 
 // Keep lookup to one mixed index and one full-node comparison; collisions emit
 // a delta. Fully associative scalar/SIMD probes regressed high-cardinality input.
-const SLOTS: usize = 16;
+use btel_settings::{identity::HASH_MULTIPLIER, processor::COMBINING_SLOTS as SLOTS};
 
 pub(crate) struct CombiningCache {
     slots: [AggregateDelta; SLOTS],
@@ -67,9 +68,9 @@ impl Default for CombiningCache {
 
 impl CombiningCache {
     pub(crate) fn observe(&mut self, sample: AggregateDelta, mut emit: impl FnMut(AggregateDelta)) {
-        let hash = sample.node.get().wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let hash = sample.node.get().wrapping_mul(HASH_MULTIPLIER);
         let index =
-            usize::try_from(hash >> (64 - SLOTS.ilog2())).expect("four-bit cache index fits usize");
+            usize::try_from(hash >> (u64::BITS - SLOTS.ilog2())).expect("cache index fits usize");
         let slot = &mut self.slots[index];
         if slot.count != 0 {
             if slot.node == sample.node {

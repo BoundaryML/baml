@@ -268,8 +268,11 @@ pub enum SpanRecord<InputCapture: ?Sized, ValueCapture> {
     },
 }
 
-const _: () = assert!(std::mem::size_of::<TimingRecord>() <= 32);
-const _: () = assert!(std::mem::size_of::<SpanRecord<[()], ()>>() <= 56);
+const _: () =
+    assert!(std::mem::size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
+const _: () = assert!(
+    std::mem::size_of::<SpanRecord<[()], ()>>() <= btel_settings::layout::SPAN_RECORD_MAX_BYTES
+);
 
 // Independently owned captures and retained clock epochs support cross-thread
 // consumption. This does not make a VM-backed payload safe to transfer.

@@ -42,7 +42,9 @@ struct ConversionBuffer {
 }
 impl ConversionBuffer {
     fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
-        self.estimate = self.estimate.saturating_add(128);
+        self.estimate = self
+            .estimate
+            .saturating_add(btel_settings::publisher::SPAN_ESTIMATE_BYTES);
         self.spans.event(thread, event);
     }
 
@@ -56,7 +58,9 @@ impl ConversionBuffer {
     ) {
         // These fixed-schema definitions have a bounded encoded size; no scan
         // of the growing pending file is performed.
-        self.estimate = self.estimate.saturating_add(512);
+        self.estimate = self
+            .estimate
+            .saturating_add(btel_settings::publisher::THREAD_ESTIMATE_BYTES);
         self.pending
             .definitions
             .threads
@@ -79,9 +83,10 @@ impl ConversionBuffer {
     fn aggregate(&mut self, delta: AggregateDelta) {
         // One shared recording window before serialization and sink fan-out.
         // Span callbacks do not enter this map: the processor already counted them.
-        self.estimate = self
-            .estimate
-            .saturating_add(self.aggregates.observe(delta, &mut self.pending.aggregates) * 37);
+        self.estimate = self.estimate.saturating_add(
+            self.aggregates.observe(delta, &mut self.pending.aggregates)
+                * btel_settings::publisher::AGGREGATE_ESTIMATE_BYTES,
+        );
     }
 
     fn span(&mut self, thread: TelemetryId, record: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
@@ -151,7 +156,9 @@ impl ConversionBuffer {
                 callee,
                 edge,
             } => {
-                self.estimate = self.estimate.saturating_add(192);
+                self.estimate = self
+                    .estimate
+                    .saturating_add(btel_settings::publisher::CALL_PATH_ESTIMATE_BYTES);
                 self.pending
                     .definitions
                     .call_paths

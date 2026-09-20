@@ -48,6 +48,14 @@ impl PartialEq for ThreadSpawnContext {
     }
 }
 
+use btel_settings::policy::{
+    AI_DEFAULT_MODE, BYTECODE_DEFAULT_MODE, CALL_PATH_CACHE_SLOTS, NATIVE_DEFAULT_MODE,
+};
+// The resolver below uses the measured single-entry fast path.
+const _: () = assert!(CALL_PATH_CACHE_SLOTS == 1);
+// Native instrumentation is unsupported; changing this requires a producer implementation.
+const _: () = assert!(matches!(NATIVE_DEFAULT_MODE, InvocationMode::Hidden));
+
 const SPAN: u8 = 1 << 0;
 const CAPTURE_OUTPUT: u8 = 1 << 1;
 const CAPTURE_ERROR: u8 = 1 << 2;
@@ -86,8 +94,9 @@ pub struct FrameTelemetry {
     flags: u8,
 }
 
-const _: () = assert!(size_of::<FrameTelemetry>() == 32);
-const _: () = assert!(size_of::<Option<FrameTelemetry>>() == 32);
+const _: () = assert!(size_of::<FrameTelemetry>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
+const _: () =
+    assert!(size_of::<Option<FrameTelemetry>>() == btel_settings::layout::FRAME_TELEMETRY_BYTES);
 
 impl FrameTelemetry {
     #[inline(always)]
@@ -133,8 +142,8 @@ fn capture_value(value: Value) -> CapturedValue {
 type CapturedValue = Value;
 #[cfg(all(not(test), not(target_arch = "wasm32")))]
 type CapturedValue = btel_records::CaptureDeferred;
-const _: () = assert!(size_of::<TimingRecord>() <= 32);
-const _: () = assert!(size_of::<VmSpanRecord>() <= 56);
+const _: () = assert!(size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
+const _: () = assert!(size_of::<VmSpanRecord>() <= btel_settings::layout::SPAN_RECORD_MAX_BYTES);
 
 #[derive(Debug)]
 pub struct ThreadTelemetry {
@@ -149,10 +158,11 @@ pub struct ThreadTelemetry {
 }
 
 pub struct TelemetryState {
+    mode: btel_settings::mode::TelemetryMode,
     thread: ThreadTelemetry,
     call_paths: FxHashMap<CallPathKey, CallPathId>,
     call_path_keys: FxHashMap<CallPathId, CallPathKey>,
-    last_call_path: Option<(CallPathKey, CallPathId)>,
+    last_call_path: [Option<(CallPathKey, CallPathId)>; CALL_PATH_CACHE_SLOTS],
     policies: Arc<TelemetryPolicies>,
     clock: Arc<ClockEpoch>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -169,10 +179,12 @@ impl TelemetryState {
         clock: Arc<ClockEpoch>,
         #[cfg(not(target_arch = "wasm32"))] runtime: Arc<btel_processor::TelemetryRuntime>,
     ) -> Self {
+        assert_ne!(policies.mode(), btel_settings::mode::TelemetryMode::Off);
         clock.attach_thread();
         let id = allocate_telemetry_id();
         let started_at = clock.read();
         Self {
+            mode: policies.mode(),
             thread: ThreadTelemetry {
                 active_id: id,
                 active_call_path: CallPathId::ROOT,
@@ -185,7 +197,7 @@ impl TelemetryState {
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
-            last_call_path: None,
+            last_call_path: [None; CALL_PATH_CACHE_SLOTS],
             policies,
             clock,
             #[cfg(not(target_arch = "wasm32"))]
@@ -273,23 +285,37 @@ impl TelemetryState {
         }
 
         let policy_id = function.telemetry_policy_id.load();
-        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
-        if policy_id == btel_types::TelemetryPolicyId::NONE && !is_ai {
-            return Some(self.enter_timing(
-                callee,
-                visible_caller,
-                caller_pc,
-                caller_is_observed,
-                register,
-            ));
+        if policy_id == btel_types::TelemetryPolicyId::NONE {
+            if self.mode == btel_settings::mode::TelemetryMode::Low {
+                return None;
+            }
+            if self.mode == btel_settings::mode::TelemetryMode::Auto
+                && !matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }))
+            {
+                return Some(self.enter_timing(
+                    callee,
+                    visible_caller,
+                    caller_pc,
+                    caller_is_observed,
+                    register,
+                ));
+            }
         }
-
         let policy = self.policy_by_id(policy_id);
         let mode = default_mode(function, policy);
+        let mode = if self.mode == btel_settings::mode::TelemetryMode::High
+            && mode != InvocationMode::Hidden
+        {
+            InvocationMode::Span
+        } else {
+            mode
+        };
+
         if mode == InvocationMode::Hidden {
             return None;
         }
 
+        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
             && visible_caller == Some(callee)
@@ -317,14 +343,15 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             flags |= SPAN;
         }
-        if policy.capture_output || is_ai {
+        if policy.capture_output || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT) {
             flags |= CAPTURE_OUTPUT;
         }
-        if policy.capture_error || is_ai {
+        if policy.capture_error || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR) {
             flags |= CAPTURE_ERROR;
         }
 
-        let captured_inputs = (mode == InvocationMode::Span && (policy.capture_inputs || is_ai))
+        let captured_inputs = (mode == InvocationMode::Span
+            && (policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)))
             .then(|| {
                 #[cfg(any(test, target_arch = "wasm32"))]
                 {
@@ -597,7 +624,7 @@ impl TelemetryState {
                 ),
             }
             self.thread.active_id = telemetry.saved_parent_id;
-        } else if policy.promotes(elapsed, outcome, self.clock.domain()) {
+        } else if policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
             match (outcome, telemetry.is_reentry()) {
                 (InvocationOutcome::Ok, false) => {
                     self.write_span(SpanRecord::LateFunctionSpanCompletionOk {
@@ -741,7 +768,7 @@ impl TelemetryState {
         key: CallPathKey,
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> CallPathId {
-        if let Some((cached_key, id)) = self.last_call_path
+        if let Some((cached_key, id)) = self.last_call_path[0]
             && cached_key == key
         {
             return id;
@@ -758,7 +785,7 @@ impl TelemetryState {
     ) -> CallPathId {
         if let Some(id) = self.call_paths.get(&key) {
             let id = *id;
-            self.last_call_path = Some((key, id));
+            self.last_call_path[0] = Some((key, id));
             return id;
         }
         // Registration precedes publishing any definition that references it.
@@ -767,7 +794,7 @@ impl TelemetryState {
         let id = allocate_call_path_id(&LAST_CALL_PATH_ID);
         self.call_paths.insert(key, id);
         self.call_path_keys.insert(id, key);
-        self.last_call_path = Some((key, id));
+        self.last_call_path[0] = Some((key, id));
         self.write_span(SpanRecord::CallPathDefined {
             call_path: id,
             parent_call_path: key.parent,
@@ -904,7 +931,7 @@ impl TelemetryState {
             self.call_paths.insert(key, id);
             self.call_path_keys.insert(id, key);
         }
-        self.last_call_path = self.last_call_path.map(|(mut key, id)| {
+        self.last_call_path[0] = self.last_call_path[0].map(|(mut key, id)| {
             if let Some(caller) = key.visible_caller {
                 key.visible_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
             }
@@ -986,15 +1013,15 @@ fn forward_value(value: &mut Value, roots: &HashMap<HeapPtr, HeapPtr>) {
 fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode {
     match function.kind {
         FunctionKind::Native(_) | FunctionKind::SysOp(_) | FunctionKind::NativeUnresolved => {
-            InvocationMode::Hidden
+            NATIVE_DEFAULT_MODE
         }
+        FunctionKind::Bytecode if policy.span_from_entry => InvocationMode::Span,
         FunctionKind::Bytecode
-            if policy.span_from_entry
-                || matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. })) =>
+            if matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. })) =>
         {
-            InvocationMode::Span
+            AI_DEFAULT_MODE
         }
-        FunctionKind::Bytecode => InvocationMode::Timing,
+        FunctionKind::Bytecode => BYTECODE_DEFAULT_MODE,
     }
 }
 
@@ -1132,7 +1159,7 @@ mod tests {
         // Definitions must not keep executable objects alive or need forwarding.
         state.call_paths.clear();
         state.call_path_keys.clear();
-        state.last_call_path = None;
+        state.last_call_path[0] = None;
         roots.clear();
         state.collect_roots(&mut roots);
         assert!(roots.is_empty());
@@ -1180,7 +1207,7 @@ mod tests {
         // Isolate capture roots from the separate executable call-path cache.
         state.call_paths.clear();
         state.call_path_keys.clear();
-        state.last_call_path = None;
+        state.last_call_path[0] = None;
         let mut roots = Vec::new();
         state.collect_roots(&mut roots);
         assert_eq!(roots, [input, output]);
@@ -1324,6 +1351,105 @@ mod tests {
     }
 
     #[test]
+    fn engine_modes_preserve_policy_and_hidden_boundaries() {
+        use btel_settings::mode::TelemetryMode;
+        for mode in [TelemetryMode::Low, TelemetryMode::Auto, TelemetryMode::High] {
+            for ai in [false, true] {
+                let function = function(
+                    FunctionKind::Bytecode,
+                    ai.then(|| FunctionMeta::Llm {
+                        client: "test".into(),
+                    }),
+                );
+                let mut state =
+                    test_state(Arc::new(TelemetryPolicies::with_mode(mode)), test_clock());
+                let parent = state.active_id();
+                let frame = state.enter_bytecode(
+                    &function,
+                    HeapPtr::null(),
+                    None,
+                    0,
+                    false,
+                    &[],
+                    |_, _| {
+                        assert_ne!(mode, TelemetryMode::Low, "hidden entry must not register");
+                        (None, function.telemetry_function_id.unwrap())
+                    },
+                );
+                if mode == TelemetryMode::Low {
+                    assert!(frame.is_none());
+                    assert_eq!(state.active_id(), parent);
+                    assert!(state.span_records().is_empty());
+                    // Explicit policies can observe future entries; an invocation
+                    // that already entered Hidden still has no completion state.
+                    state
+                        .set_policy(
+                            &function,
+                            TelemetryPolicy {
+                                promote_errors: true,
+                                ..TelemetryPolicy::NONE
+                            },
+                        )
+                        .unwrap();
+                    let frame = state
+                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                            (None, function.telemetry_function_id.unwrap())
+                        })
+                        .unwrap();
+                    state.complete_invocation(frame, &function, InvocationOutcome::Errored, None);
+                    assert!(state.span_records().iter().any(|record| matches!(
+                        record,
+                        SpanRecord::LateFunctionSpanCompletionErrored { .. }
+                            | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement { .. }
+                    )));
+                } else {
+                    let frame = frame.unwrap();
+                    assert_eq!(frame.is_span(), ai || mode == TelemetryMode::High);
+                    state.complete_invocation(
+                        frame,
+                        &function,
+                        InvocationOutcome::Ok,
+                        Some(Value::int(1)),
+                    );
+                    if mode == TelemetryMode::High && !ai {
+                        assert!(state.span_records().iter().any(|record| matches!(
+                            record,
+                            SpanRecord::FunctionSpanCompletionOk {
+                                captured_value: None,
+                                ..
+                            }
+                        )));
+                    }
+                }
+            }
+            for mut hidden in [
+                function(FunctionKind::NativeUnresolved, None),
+                function(FunctionKind::Bytecode, None),
+            ] {
+                if matches!(hidden.kind, FunctionKind::Bytecode) {
+                    hidden.telemetry_function_id = None;
+                }
+                let mut state =
+                    test_state(Arc::new(TelemetryPolicies::with_mode(mode)), test_clock());
+                assert!(
+                    state
+                        .enter_bytecode(
+                            &hidden,
+                            HeapPtr::null(),
+                            None,
+                            0,
+                            false,
+                            &[],
+                            |_, _| panic!("hidden function registered")
+                        )
+                        .is_none()
+                );
+                assert!(state.span_records().is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn ai_function_is_a_span_from_entry() {
         let function = function(
             FunctionKind::Bytecode,
@@ -1382,7 +1508,9 @@ mod tests {
                 &function,
                 TelemetryPolicy {
                     span_from_entry: false,
-                    promote_after: Some(state.clock.threshold(std::time::Duration::ZERO)),
+                    promotion_duration_threshold: Some(
+                        state.clock.threshold(std::time::Duration::ZERO),
+                    ),
                     promote_errors: false,
                     capture_inputs: false,
                     capture_output: true,

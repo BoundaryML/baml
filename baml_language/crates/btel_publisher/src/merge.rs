@@ -4,6 +4,7 @@
 use std::collections::hash_map::Entry;
 
 use btel_processor::AggregateDelta;
+use btel_settings::publisher as settings;
 use btel_types::{AwaitDuration, CallPathNodeId, ClockDuration};
 use rustc_hash::FxHashMap;
 
@@ -16,7 +17,8 @@ struct Totals {
     self_await: AwaitDuration,
 }
 
-const _: () = assert!(std::mem::size_of::<Totals>() == 24);
+const _: () =
+    assert!(std::mem::size_of::<Totals>() == btel_settings::layout::AGGREGATE_TOTALS_BYTES);
 
 impl Totals {
     fn from_delta(delta: AggregateDelta) -> Self {
@@ -66,7 +68,10 @@ impl PendingAggregates {
         // Hash-table buckets, occupancy bytes, and spare capacity. The factor
         // covers the table's load factor; BASE_CHARGE covers allocation headers.
         self.nodes.capacity().saturating_mul(
-            2 * (std::mem::size_of::<CallPathNodeId>() + std::mem::size_of::<Totals>() + 1),
+            settings::MAP_CHARGE_FACTOR
+                * (std::mem::size_of::<CallPathNodeId>()
+                    + std::mem::size_of::<Totals>()
+                    + settings::MAP_CONTROL_BYTES),
         )
     }
     pub(crate) fn release_empty_capacity(&mut self) {
@@ -74,8 +79,8 @@ impl PendingAggregates {
         self.nodes = FxHashMap::default();
     }
     pub(crate) fn trim(&mut self) {
-        if self.nodes.capacity() > 8192 {
-            self.nodes.shrink_to(4096);
+        if self.nodes.capacity() > settings::MAP_SHRINK_THRESHOLD {
+            self.nodes.shrink_to(settings::MAP_RETAINED_CAPACITY);
         }
     }
 

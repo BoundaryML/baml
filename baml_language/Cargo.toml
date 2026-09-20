@@ -119,6 +119,7 @@ baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
+btel_settings = { path = "crates/btel_settings" }
 btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }
 btel_records = { path = "crates/btel_records" }

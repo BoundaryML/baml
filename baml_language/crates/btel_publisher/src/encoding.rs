@@ -6,16 +6,13 @@
 //! event bodies contain only bounded scalars, so their lengths fit one byte.
 use std::mem::MaybeUninit;
 
+#[cfg(test)]
+use btel_settings::encoding::MAX_EVENT_BYTES;
+use btel_settings::encoding::{LENGTH_BYTES, MAX_COMPLETION_BYTES};
 use btel_types::TelemetryId;
 use prost::{Message, encoding::uint64};
 
 use crate::proto::span_event::Event;
-
-/// Includes a new `SpanBatch`, `ThreadSection`, selector and the largest current
-/// scalar-only event. Value snapshots are not part of this wire vocabulary.
-pub(crate) const MAX_EVENT_BYTES: usize = 128;
-pub(crate) const MAX_BUFFER_BYTES: usize = u32::MAX as usize;
-const LENGTH_BYTES: usize = 5;
 
 #[derive(Default)]
 pub(crate) struct EncodedSpans {
@@ -66,7 +63,6 @@ impl EncodedSpans {
         // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
         // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
         // Indexing stays checked; only publishing initialized bytes is unsafe.
-        const MAX_COMPLETION_BYTES: usize = 70;
         let start = self.bytes.len();
         let region = &mut self.bytes.spare_capacity_mut()[..MAX_COMPLETION_BYTES];
         let mut writer = CompletionWriter { region, len: 0 };

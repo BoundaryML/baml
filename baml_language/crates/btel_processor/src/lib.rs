@@ -13,7 +13,7 @@ use std::{
     fmt,
     num::NonZeroUsize,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 pub use bex_chunkedringbuffer::DrainStatus as Progress;
@@ -25,9 +25,8 @@ mod aggregate;
 mod publisher;
 pub use aggregate::AggregateDelta;
 use aggregate::CombiningCache;
+use btel_settings::processor::CACHE_FLUSH_INTERVAL_DURATION;
 pub use publisher::{NoSinkPublisher, Publisher, PublisherStats};
-
-const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Default)]
 struct DecoderContext {
@@ -35,7 +34,8 @@ struct DecoderContext {
     span: Option<TelemetryId>,
 }
 
-const _: () = assert!(std::mem::size_of::<DecoderContext>() == 16);
+const _: () =
+    assert!(std::mem::size_of::<DecoderContext>() == btel_settings::layout::DECODER_CONTEXT_BYTES);
 
 struct Processing<P> {
     publisher: P,
@@ -319,7 +319,7 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
                 cache: CombiningCache::default(),
                 contexts,
             },
-            next_flush: Instant::now() + FLUSH_INTERVAL,
+            next_flush: Instant::now() + CACHE_FLUSH_INTERVAL_DURATION,
             finished: false,
         }
     }
@@ -334,7 +334,7 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
     pub fn flush(&mut self) {
         self.consumer
             .guard_processing(|| self.processing.flush::<I, V>());
-        self.next_flush = Instant::now() + FLUSH_INTERVAL;
+        self.next_flush = Instant::now() + CACHE_FLUSH_INTERVAL_DURATION;
     }
 
     /// Consume at most the configured chunk budget without waiting. A callback
@@ -380,7 +380,7 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
                     self.processing
                         .cache
                         .flush(|delta| self.processing.publisher.aggregate(delta));
-                    self.next_flush = now + FLUSH_INTERVAL;
+                    self.next_flush = now + CACHE_FLUSH_INTERVAL_DURATION;
                     // Publishers without their own deadline retain the original
                     // periodic flush behavior (including zero-sink windows).
                     if !self.processing.publisher.manages_flush_deadline() {

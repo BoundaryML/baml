@@ -41,15 +41,7 @@ impl PairId {
     }
 }
 
-/// Capacities are slot counts, not byte counts. No implicit memory allocation defaults.
-#[derive(Clone, Copy, Debug)]
-pub struct Config {
-    pub timing_capacity: NonZeroUsize,
-    pub span_capacity: NonZeroUsize,
-    pub processors: NonZeroUsize,
-    /// Bounds both active and retained reusable pairs.
-    pub max_pairs: NonZeroUsize,
-}
+pub use btel_settings::transport::RingConfig as Config;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SetupError {
@@ -540,7 +532,11 @@ impl<T, S> Consumer<T, S> {
         // Fixed probe budget, no clock read. This avoids park/unpark ping-pong
         // during short producer gaps without permanently consuming an idle CPU.
         // Loom needs only one probe to explore the same arm/recheck protocol.
-        let probes = if cfg!(baml_loom) { 1 } else { 64 };
+        let probes = if cfg!(baml_loom) {
+            btel_settings::transport::MODEL_IDLE_PROBES
+        } else {
+            btel_settings::transport::IDLE_PROBES
+        };
         self.refresh();
         for _ in 0..probes {
             if self.has_work() {

@@ -301,7 +301,7 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
         let p = RecordingPublisher::new(
             RecordingId::generate(),
             RecordingConfig {
-                flush_interval: Duration::from_millis(10),
+                flush_interval_duration: Duration::from_millis(10),
                 ..RecordingConfig::default()
             },
             move |file| {
@@ -624,7 +624,7 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     p.aggregate(delta(path));
     p.span(thread, &event);
     let capacity = p.buffer.spans.capacity();
-    assert!(capacity >= 8 * crate::encoding::MAX_EVENT_BYTES);
+    assert!(capacity >= 8 * btel_settings::encoding::MAX_EVENT_BYTES);
     for _ in 1..8 {
         p.span(thread, &event);
         assert_eq!(p.buffer.spans.capacity(), capacity);

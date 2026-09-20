@@ -80,6 +80,7 @@ mod telemetry;
 mod thread;
 #[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
+mod telemetry_state;
 pub mod trace_heap;
 mod trace_value_encode;
 use std::{
@@ -107,7 +108,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, VmEventSourceLocation, VmExecState, telemetry::TelemetryPolicies};
+use bex_vm::{BexVm, VmEventSourceLocation, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
@@ -120,6 +121,7 @@ pub use inbound_config::{InboundUnionAmbiguityPolicy, register_inbound_union_amb
 use indexmap::IndexMap;
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
+use telemetry_state::EngineTelemetry;
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 
@@ -781,13 +783,8 @@ pub struct BexEngine {
     next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
-    /// One policy namespace for all function objects and VMs in this engine.
-    telemetry_policies: Arc<TelemetryPolicies>,
-    telemetry_clock: btel_clock::ClockRuntime,
-    #[cfg(not(target_arch = "wasm32"))]
-    telemetry_runtime: Arc<btel_processor::TelemetryRuntime>,
-    #[cfg(not(target_arch = "wasm32"))]
-    telemetry_recording_id: btel_publisher::RecordingId,
+    /// Shared telemetry resources; absent for `BAML_TELEMETRY=off`.
+    telemetry: Option<EngineTelemetry>,
     /// Frozen global variables shared across every post-`$init` VM.
     ///
     /// Populated once during `$init` and immutable thereafter; cloning is a
@@ -1398,6 +1395,9 @@ impl BexEngine {
 
     /// Create a new engine with the given program.
     ///
+    /// Reads `BAML_TELEMETRY` once: off, low, auto (default), or high. Invalid
+    /// values fail construction. Off starts no telemetry workers or clock.
+    ///
     /// The engine creates a unified heap containing compile-time objects
     /// (functions, classes, enums). Each function call creates a VM that
     /// shares this heap and allocates runtime objects into its own TLAB.
@@ -1418,9 +1418,9 @@ impl BexEngine {
             sys_ops,
             argv,
             None,
-            btel_clock::ClockMode::Auto,
+            btel_settings::clock::DEFAULT_MODE,
             #[cfg(not(target_arch = "wasm32"))]
-            TelemetryRecording::default(),
+            None,
         )
     }
 
@@ -1437,9 +1437,9 @@ impl BexEngine {
             sys_ops,
             argv,
             Some(runtime_compiler),
-            btel_clock::ClockMode::Auto,
+            btel_settings::clock::DEFAULT_MODE,
             #[cfg(not(target_arch = "wasm32"))]
-            TelemetryRecording::default(),
+            None,
         )
     }
 
@@ -1458,14 +1458,17 @@ impl BexEngine {
             runtime_compiler,
             clock_mode,
             #[cfg(not(target_arch = "wasm32"))]
-            TelemetryRecording::default(),
+            None,
         )
     }
 
     /// Invoke from a generic after-restore hook before resuming work. This
     /// resets telemetry timing only, not the engine's other lifecycle state.
-    pub fn reset_telemetry_clock_after_restore(&self) -> Arc<btel_clock::ClockEpoch> {
-        self.telemetry_clock.reset_after_restore()
+    /// Returns None when `BAML_TELEMETRY=off`.
+    pub fn reset_telemetry_clock_after_restore(&self) -> Option<Arc<btel_clock::ClockEpoch>> {
+        self.telemetry
+            .as_ref()
+            .map(|telemetry| telemetry.clock.reset_after_restore())
     }
 
     fn build(
@@ -1474,8 +1477,10 @@ impl BexEngine {
         argv: Vec<String>,
         runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
         clock_mode: btel_clock::ClockMode,
-        #[cfg(not(target_arch = "wasm32"))] recording: TelemetryRecording,
+        #[cfg(not(target_arch = "wasm32"))] recording: Option<TelemetryRecording>,
     ) -> Result<Self, EngineError> {
+        let telemetry_mode = btel_settings::mode::TelemetryMode::from_env()
+            .map_err(|error| EngineError::Other(error.to_string()))?;
         raise_fd_soft_limit();
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
@@ -1629,12 +1634,22 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let telemetry_policies = Arc::new(TelemetryPolicies::new());
-        let telemetry_clock = btel_clock::ClockRuntime::new(clock_mode);
-        #[cfg(not(target_arch = "wasm32"))]
-        let telemetry_recording_id = recording.id();
-        #[cfg(not(target_arch = "wasm32"))]
-        let telemetry_runtime = recording.start(source_snapshot_id.map(|id| id.0))?;
+        let telemetry = if telemetry_mode == btel_settings::mode::TelemetryMode::Off {
+            None
+        } else {
+            #[cfg(not(target_arch = "wasm32"))]
+            let recording = recording.unwrap_or_default();
+            Some(EngineTelemetry {
+                policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
+                    telemetry_mode,
+                )),
+                clock: btel_clock::ClockRuntime::new(clock_mode),
+                #[cfg(not(target_arch = "wasm32"))]
+                recording_id: recording.id(),
+                #[cfg(not(target_arch = "wasm32"))]
+                runtime: recording.start(source_snapshot_id.map(|id| id.0))?,
+            })
+        };
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1652,10 +1667,7 @@ impl BexEngine {
                     Arc::clone(&dynamic_dispatch),
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
-                    Arc::clone(&telemetry_policies),
-                    telemetry_clock.start_run(),
-                    #[cfg(not(target_arch = "wasm32"))]
-                    Arc::clone(&telemetry_runtime),
+                    telemetry.as_ref().map(EngineTelemetry::new_root),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1663,7 +1675,9 @@ impl BexEngine {
                 loop {
                     match vm.exec() {
                         Ok(VmExecState::Complete(_)) => {
-                            telemetry_clock.validate(vm.telemetry_clock(), true);
+                            if let Some(telemetry) = &telemetry {
+                                telemetry.validate(&vm, true);
+                            }
                             vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
                             // Extract the (potentially mutated) global pool back
                             // so StoreGlobal writes are visible to subsequent calls.
@@ -1683,14 +1697,18 @@ impl BexEngine {
                             continue;
                         }
                         Ok(other) => {
-                            telemetry_clock.validate(vm.telemetry_clock(), true);
+                            if let Some(telemetry) = &telemetry {
+                                telemetry.validate(&vm, true);
+                            }
                             vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' yielded unexpectedly: {other:?}"
                             )));
                         }
                         Err(e) => {
-                            telemetry_clock.validate(vm.telemetry_clock(), true);
+                            if let Some(telemetry) = &telemetry {
+                                telemetry.validate(&vm, true);
+                            }
                             vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
                             return Err(EngineError::InitFailed(format!(
                                 "$init function '{init_name}' failed: {e}"
@@ -1793,12 +1811,7 @@ impl BexEngine {
             source_snapshot_id,
             next_thread_id: AtomicU64::new(1),
             heap,
-            telemetry_policies,
-            telemetry_clock,
-            #[cfg(not(target_arch = "wasm32"))]
-            telemetry_runtime,
-            #[cfg(not(target_arch = "wasm32"))]
-            telemetry_recording_id,
+            telemetry,
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
@@ -2470,20 +2483,24 @@ impl BexEngine {
             // All normal executions and their poll scopes have ended. Joining
             // may encode/deliver a final file; never block a runtime worker or
             // hold a heap permit while waiting for the telemetry consumer.
-            let runtime = Arc::clone(&self.telemetry_runtime);
-            // Once admission closes, cancellation must not reopen the engine.
-            // Transfer the shutdown guard to the joining task so it completes
-            // even if this awaiting caller is dropped.
-            match tokio::task::spawn_blocking(move || {
-                let result = runtime.finish();
+            if let Some(telemetry) = &self.telemetry {
+                let runtime = Arc::clone(&telemetry.runtime);
+                // Once admission closes, cancellation must not reopen the engine.
+                // Transfer the shutdown guard to the joining task so it completes
+                // even if this awaiting caller is dropped.
+                match tokio::task::spawn_blocking(move || {
+                    let result = runtime.finish();
+                    shutdown.complete();
+                    result
+                })
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => tracing::error!(%error, "telemetry shutdown failed"),
+                    Err(error) => tracing::error!(%error, "telemetry shutdown task failed"),
+                }
+            } else {
                 shutdown.complete();
-                result
-            })
-            .await
-            {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => tracing::error!(%error, "telemetry shutdown failed"),
-                Err(error) => tracing::error!(%error, "telemetry shutdown task failed"),
             }
             self.bex_work.join_worker().await;
         }
@@ -3264,10 +3281,7 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            Arc::clone(&self.telemetry_policies),
-            self.telemetry_clock.start_run(),
-            #[cfg(not(target_arch = "wasm32"))]
-            Arc::clone(&self.telemetry_runtime),
+            self.telemetry.as_ref().map(EngineTelemetry::new_root),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3376,7 +3390,10 @@ impl BexEngine {
             .await
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let result = self.telemetry_runtime.scope(execution).await;
+        let result = match &self.telemetry {
+            Some(telemetry) => telemetry.runtime.scope(execution).await,
+            None => execution.await,
+        };
         #[cfg(target_arch = "wasm32")]
         let result = execution.await;
 
@@ -4723,7 +4740,7 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
-        telemetry: bex_vm::telemetry::ThreadSpawnContext,
+        telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
 
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
@@ -4763,7 +4780,7 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         thread_id: u64,
-        telemetry: bex_vm::telemetry::ThreadSpawnContext,
+        telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
 
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
@@ -4811,13 +4828,15 @@ impl BexEngine {
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
-            Arc::clone(&self.telemetry_policies),
-            Arc::clone(&telemetry.clock),
-            #[cfg(not(target_arch = "wasm32"))]
-            Arc::clone(&self.telemetry_runtime),
+            self.telemetry.as_ref().map(|state| {
+                state.new_child(
+                    telemetry
+                        .as_ref()
+                        .expect("enabled parent supplies telemetry spawn context"),
+                )
+            }),
         );
         child_vm.thread_id = thread_id;
-        child_vm.configure_spawn_telemetry(&telemetry);
 
         child_vm.set_entry_point(closure, &[]);
 
@@ -4960,7 +4979,10 @@ impl BexEngine {
             copy_objects,
         );
         #[cfg(not(target_arch = "wasm32"))]
-        return self.telemetry_runtime.scope(execution).await;
+        return match &self.telemetry {
+            Some(telemetry) => telemetry.runtime.scope(execution).await,
+            None => execution.await,
+        };
         #[cfg(target_arch = "wasm32")]
         execution.await
     }
@@ -4988,11 +5010,13 @@ impl BexEngine {
             let mut thread = active.as_mut().expect("active execution permit");
 
             loop {
-                self.telemetry_clock
-                    .validate(thread.vm.telemetry_clock(), false);
+                if let Some(telemetry) = &self.telemetry {
+                    telemetry.validate(&thread.vm, false);
+                }
                 let vm_exec_result = thread.vm.exec();
-                self.telemetry_clock
-                    .validate(thread.vm.telemetry_clock(), false);
+                if let Some(telemetry) = &self.telemetry {
+                    telemetry.validate(&thread.vm, false);
+                }
 
                 let exec_result = match vm_exec_result {
                     Ok(state) => state,
@@ -5270,7 +5294,16 @@ impl BexEngine {
 
                                 thread.vm.begin_sys_op_telemetry_wait();
                                 let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
-                                    (frame, start, Arc::clone(thread.vm.telemetry_clock()))
+                                    (
+                                        frame,
+                                        start,
+                                        Arc::clone(
+                                            thread
+                                                .vm
+                                                .telemetry_clock()
+                                                .expect("observed wait has clock"),
+                                        ),
+                                    )
                                 });
                                 let (resumed, outcome, elapsed) = async {
                                     let inactive =
@@ -5577,7 +5610,16 @@ impl BexEngine {
                         // this future (which needs a permit to write the heap).
 
                         let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
-                            (frame, start, Arc::clone(thread.vm.telemetry_clock()))
+                            (
+                                frame,
+                                start,
+                                Arc::clone(
+                                    thread
+                                        .vm
+                                        .telemetry_clock()
+                                        .expect("observed wait has clock"),
+                                ),
+                            )
                         });
                         let (resumed, outcome, elapsed) = async {
                             let inactive =
@@ -5665,7 +5707,16 @@ impl BexEngine {
                         };
 
                         let wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
-                            (frame, start, Arc::clone(thread.vm.telemetry_clock()))
+                            (
+                                frame,
+                                start,
+                                Arc::clone(
+                                    thread
+                                        .vm
+                                        .telemetry_clock()
+                                        .expect("observed wait has clock"),
+                                ),
+                            )
                         });
                         let (resumed, outcome, elapsed) = async {
                             let inactive =
@@ -5772,8 +5823,9 @@ impl BexEngine {
         thread: &mut BexThread,
         outcome: bex_vm::telemetry::InvocationOutcome,
     ) {
-        self.telemetry_clock
-            .validate(thread.vm.telemetry_clock(), thread.vm.is_telemetry_root());
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.validate(&thread.vm, thread.vm.is_telemetry_root());
+        }
         thread.vm.finish_telemetry(outcome);
         #[cfg(test)]
         self.completed_threads

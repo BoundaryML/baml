@@ -20,10 +20,7 @@ use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use smallvec::SmallVec;
 
 use crate::{
-    telemetry::{
-        ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome, TelemetryPolicies,
-        TelemetryState,
-    },
+    telemetry::{ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome, TelemetryState},
     vec_ext::{CopyVecExt, VecExt},
 };
 
@@ -402,12 +399,12 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
-            telemetry: TelemetryState::new_root(
+            telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::telemetry::test_runtime(),
-            ),
+            )),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
@@ -478,9 +475,9 @@ pub(crate) mod tests {
             matches!(vm.exec().unwrap(), VmExecState::Complete(value) if value == Value::int(42))
         );
         vm.finish_telemetry(InvocationOutcome::Ok);
-        assert!(vm.telemetry.timing_records().is_empty());
+        assert!(vm.telemetry.as_ref().unwrap().timing_records().is_empty());
         assert!(matches!(
-            vm.telemetry.span_records(),
+            vm.telemetry.as_ref().unwrap().span_records(),
             [
                 SpanRecord::ThreadSpanAnnouncement { .. },
                 SpanRecord::ThreadSpanCompletion {
@@ -559,6 +556,8 @@ pub(crate) mod tests {
         }
         let timings: Vec<_> = vm
             .telemetry
+            .as_ref()
+            .unwrap()
             .timing_records()
             .iter()
             .filter_map(|event| match event {
@@ -589,7 +588,7 @@ pub(crate) mod tests {
         );
         assert!(timings[3..].iter().all(|(_, reentry)| !reentry));
         let mut named_paths = HashMap::new();
-        for event in vm.telemetry.span_records() {
+        for event in vm.telemetry.as_ref().unwrap().span_records() {
             if let SpanRecord::CallPathDefined {
                 call_path,
                 visible_caller,
@@ -694,6 +693,8 @@ pub(crate) mod tests {
                 assert!(vm.pending_telemetry_wait.is_none());
                 let waits: Vec<_> = vm
                     .telemetry
+                    .as_ref()
+                    .unwrap()
                     .timing_records()
                     .iter()
                     .filter_map(|event| {
@@ -831,6 +832,8 @@ pub(crate) mod tests {
         assert_eq!(function.telemetry_function_id, None);
         assert!(
             vm.telemetry
+                .as_ref()
+                .unwrap()
                 .set_policy(function, crate::telemetry::TelemetryPolicy::NONE)
                 .is_err()
         );
@@ -1432,7 +1435,7 @@ pub struct BexVm {
     pub thread_id: u64,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
-    telemetry: TelemetryState,
+    telemetry: Option<TelemetryState>,
 
     /// Starts at VM Await suspension, or when the engine receives an async
     /// sys-op. Taken across the heap-permit release; lookup failures leave it
@@ -1557,7 +1560,7 @@ pub enum VmExecState {
     /// single-yield `SysOp` variant below.
     Spawn {
         future: HeapPtr,
-        telemetry: crate::telemetry::ThreadSpawnContext,
+        telemetry: Option<crate::telemetry::ThreadSpawnContext>,
     },
 
     /// BEP-034 phase D′: VM is invoking a sys-op and wants its return
@@ -1976,11 +1979,7 @@ impl BexVm {
         dynamic_dispatch: Arc<crate::package_load::DynDispatchTables>,
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
-        telemetry_policies: Arc<TelemetryPolicies>,
-        telemetry_clock: Arc<btel_clock::ClockEpoch>,
-        #[cfg(not(target_arch = "wasm32"))] telemetry_runtime: Arc<
-            btel_processor::TelemetryRuntime,
-        >,
+        telemetry: Option<TelemetryState>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -2024,12 +2023,7 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
-            telemetry: TelemetryState::new_root(
-                telemetry_policies,
-                telemetry_clock,
-                #[cfg(not(target_arch = "wasm32"))]
-                telemetry_runtime,
-            ),
+            telemetry,
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
@@ -3667,14 +3661,16 @@ impl BexVm {
             Arc::new(crate::package_load::DynDispatchTables::default()),
             error_class_ptrs,
             panic_class_ptrs,
-            Arc::new(TelemetryPolicies::new()),
-            btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
-            #[cfg(not(target_arch = "wasm32"))]
-            btel_processor::TelemetryRuntime::new().map_err(|error| {
-                VmInternalError::BridgeFailure {
-                    message: format!("telemetry processor startup: {error}"),
-                }
-            })?,
+            Some(TelemetryState::new_root(
+                Arc::new(crate::telemetry::TelemetryPolicies::new()),
+                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+                #[cfg(not(target_arch = "wasm32"))]
+                btel_processor::TelemetryRuntime::new().map_err(|error| {
+                    VmInternalError::BridgeFailure {
+                        message: format!("telemetry processor startup: {error}"),
+                    }
+                })?,
+            )),
         ))
     }
 
@@ -3759,7 +3755,7 @@ impl BexVm {
         type_values: IndexMap<String, TypeValue>,
     ) {
         #[cfg(not(target_arch = "wasm32"))]
-        let _telemetry_scope = self.telemetry.execution_scope();
+        let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         debug_assert!(
             matches!(
                 self.get_object(function),
@@ -3780,7 +3776,9 @@ impl BexVm {
         // stack so a nested entry over live frames cannot wipe in-flight
         // throw state.
         if self.frames.is_empty() {
-            self.telemetry.start_thread();
+            if let Some(telemetry) = &mut self.telemetry {
+                telemetry.start_thread();
+            }
             self.thrown_value_causes.clear();
             self.thrown_value_contexts.clear();
             self.preserved_throw_contexts.clear();
@@ -3833,30 +3831,38 @@ impl BexVm {
 
         match callable_kind {
             FunctionKind::Bytecode => {
-                // SAFETY: the active heap permit prevents collection here. A
-                // closure remains in the frame because capture opcodes need it,
-                // while producer identity uses its underlying function.
-                let (function_ref, function_identity) = match unsafe { dispatch_ptr.get() } {
-                    Object::Function(function) => (function.as_ref(), dispatch_ptr),
-                    Object::Closure(closure) => match unsafe { closure.function.get() } {
-                        Object::Function(function) => (function.as_ref(), closure.function),
-                        other => {
-                            unreachable!("closure entry must reference a function, got {other:?}")
-                        }
-                    },
-                    other => unreachable!("bytecode entry must be callable, got {other:?}"),
+                let frame_telemetry = if self.telemetry.is_some() {
+                    // SAFETY: the active heap permit prevents collection here. A
+                    // closure remains in the frame because capture opcodes need it,
+                    // while producer identity uses its underlying function.
+                    let (function_ref, function_identity) = match unsafe { dispatch_ptr.get() } {
+                        Object::Function(function) => (function.as_ref(), dispatch_ptr),
+                        Object::Closure(closure) => match unsafe { closure.function.get() } {
+                            Object::Function(function) => (function.as_ref(), closure.function),
+                            other => {
+                                unreachable!(
+                                    "closure entry must reference a function, got {other:?}"
+                                )
+                            }
+                        },
+                        other => unreachable!("bytecode entry must be callable, got {other:?}"),
+                    };
+                    self.telemetry.as_mut().and_then(|telemetry| {
+                        telemetry.enter_bytecode(
+                            function_ref,
+                            function_identity,
+                            None,
+                            0,
+                            false,
+                            args,
+                            |caller, callee| unsafe {
+                                Self::register_call_path_functions(&self.heap, caller, callee)
+                            },
+                        )
+                    })
+                } else {
+                    None
                 };
-                let frame_telemetry = self.telemetry.enter_bytecode(
-                    function_ref,
-                    function_identity,
-                    None,
-                    0,
-                    false,
-                    args,
-                    |caller, callee| unsafe {
-                        Self::register_call_path_functions(&self.heap, caller, callee)
-                    },
-                );
                 self.pending_call_type_args.clone_from(&effective_type_args);
                 self.pending_call_type_values
                     .clone_from(&effective_type_values);
@@ -5944,38 +5950,43 @@ impl BexVm {
                     closure_type_args
                 };
 
-                let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
-                let actual_caller = self.frame_function_identity(caller_frame_idx);
-                let caller_is_observed = matches!(
-                    self.frames.get(caller_frame_idx),
-                    Some(Frame::Bytecode(BytecodeFrame {
-                        telemetry: Some(_),
-                        ..
-                    }))
-                );
-                let caller_pc = if caller_frame_idx == *frame_idx {
-                    call_site
-                } else {
-                    let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
-                        unreachable!("native continuation retains its bytecode caller");
+                let frame_telemetry = if self.telemetry.is_some() {
+                    let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
+                    let actual_caller = self.frame_function_identity(caller_frame_idx);
+                    let caller_is_observed = matches!(
+                        self.frames.get(caller_frame_idx),
+                        Some(Frame::Bytecode(BytecodeFrame {
+                            telemetry: Some(_),
+                            ..
+                        }))
+                    );
+                    let caller_pc = if caller_frame_idx == *frame_idx {
+                        call_site
+                    } else {
+                        let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
+                            unreachable!("native continuation retains its bytecode caller");
+                        };
+                        caller.faulting_pc
                     };
-                    caller.faulting_pc
+                    let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
+                    let args = &self.stack.0
+                        [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
+                    self.telemetry.as_mut().and_then(|telemetry| {
+                        telemetry.enter_bytecode(
+                            callee,
+                            callee_fn_ptr,
+                            actual_caller,
+                            caller_pc,
+                            caller_is_observed,
+                            args,
+                            |caller, callee| unsafe {
+                                Self::register_call_path_functions(&self.heap, caller, callee)
+                            },
+                        )
+                    })
+                } else {
+                    None
                 };
-                let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
-                let args = &self.stack.0
-                    [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
-                let frame_telemetry = self.telemetry.enter_bytecode(
-                    callee,
-                    callee_fn_ptr,
-                    actual_caller,
-                    caller_pc,
-                    caller_is_observed,
-                    args,
-                    |caller, callee| unsafe {
-                        Self::register_call_path_functions(&self.heap, caller, callee)
-                    },
-                );
-
                 // Construct after reserving capacity so the frame can be written
                 // directly into the vector instead of moved through a temporary.
                 self.frames.extend(std::iter::once_with(|| {
@@ -6367,6 +6378,8 @@ impl BexVm {
         value: Option<Value>,
     ) {
         self.telemetry
+            .as_mut()
+            .expect("observed invocation has telemetry")
             .complete_invocation(telemetry, function, outcome, value);
     }
 
@@ -6409,7 +6422,14 @@ impl BexVm {
         let frame_idx = self.bytecode_caller_index(frame_idx);
         if matches!(&self.frames[frame_idx], Frame::Bytecode(frame) if frame.telemetry.is_some()) {
             debug_assert!(self.pending_telemetry_wait.is_none());
-            self.pending_telemetry_wait = Some((frame_idx, self.telemetry.clock().read()));
+            self.pending_telemetry_wait = Some((
+                frame_idx,
+                self.telemetry
+                    .as_ref()
+                    .expect("observed wait has telemetry")
+                    .clock()
+                    .read(),
+            ));
         }
     }
 
@@ -6421,7 +6441,13 @@ impl BexVm {
 
     fn finish_pending_telemetry_wait(&mut self) {
         if let Some((frame_idx, start)) = self.take_telemetry_wait() {
-            let elapsed = start.elapsed_until(self.telemetry.clock().read());
+            let elapsed = start.elapsed_until(
+                self.telemetry
+                    .as_ref()
+                    .expect("observed wait has telemetry")
+                    .clock()
+                    .read(),
+            );
             self.record_telemetry_wait(Some(frame_idx), elapsed);
         }
     }
@@ -6441,24 +6467,25 @@ impl BexVm {
     /// thread. The engine calls this exactly once when it chooses a terminal
     /// outcome (including cancellation races and explicit process exit).
     pub fn finish_telemetry(&mut self, outcome: InvocationOutcome) {
+        if self.telemetry.is_none() {
+            return;
+        }
         #[cfg(not(target_arch = "wasm32"))]
-        let _telemetry_scope = self.telemetry.execution_scope();
+        let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();
         for frame_idx in (0..self.frames.len()).rev() {
             self.complete_bytecode_invocation(frame_idx, outcome, None);
         }
-        self.telemetry.complete_thread(outcome);
+        self.telemetry.as_mut().unwrap().complete_thread(outcome);
     }
 
-    pub fn telemetry_clock(&self) -> &Arc<btel_clock::ClockEpoch> {
-        self.telemetry.clock()
+    pub fn telemetry_clock(&self) -> Option<&Arc<btel_clock::ClockEpoch>> {
+        self.telemetry.as_ref().map(TelemetryState::clock)
     }
     pub fn is_telemetry_root(&self) -> bool {
-        self.telemetry.is_root_thread()
-    }
-
-    pub fn configure_spawn_telemetry(&mut self, context: &crate::telemetry::ThreadSpawnContext) {
-        self.telemetry.configure_spawn(context);
+        self.telemetry
+            .as_ref()
+            .is_some_and(TelemetryState::is_root_thread)
     }
 
     /// Main VM execution loop.
@@ -6468,7 +6495,7 @@ impl BexVm {
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
         #[cfg(not(target_arch = "wasm32"))]
-        let _telemetry_scope = self.telemetry.execution_scope();
+        let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();
         // Keep GC polling progress across engine handoffs. Returning from
         // exec (for example, to spawn a child) does not necessarily release
@@ -6521,7 +6548,7 @@ impl BexVm {
 
     pub fn try_handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
         #[cfg(not(target_arch = "wasm32"))]
-        let _telemetry_scope = self.telemetry.execution_scope();
+        let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
@@ -7578,21 +7605,29 @@ impl BexVm {
                             .tlab
                             .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
 
-                        let actual_caller = self.frame_function_identity(*frame_idx);
-                        let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
-                        let callee = match self.get_object(closure_ptr) {
-                            Object::Closure(closure) => closure.function,
-                            Object::Function(_) => closure_ptr,
-                            _ => closure_ptr,
+                        let telemetry = if self.telemetry.is_some() {
+                            let actual_caller = self.frame_function_identity(*frame_idx);
+                            let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
+                            let callee = match self.get_object(closure_ptr) {
+                                Object::Closure(closure) => closure.function,
+                                Object::Function(_) => closure_ptr,
+                                _ => closure_ptr,
+                            };
+                            self.telemetry.as_mut().map(|telemetry| {
+                                telemetry.spawn_context(
+                                    actual_caller,
+                                    caller_pc,
+                                    callee,
+                                    |caller, callee| unsafe {
+                                        Self::register_call_path_functions(
+                                            &self.heap, caller, callee,
+                                        )
+                                    },
+                                )
+                            })
+                        } else {
+                            None
                         };
-                        let telemetry = self.telemetry.spawn_context(
-                            actual_caller,
-                            caller_pc,
-                            callee,
-                            |caller, callee| unsafe {
-                                Self::register_call_path_functions(&self.heap, caller, callee)
-                            },
-                        );
                         return Ok(Some(VmExecState::Spawn {
                             future: object_index,
                             telemetry,
@@ -7636,30 +7671,36 @@ impl BexVm {
                                         self.panic_to_exception_value(VmPanic::StackOverflow),
                                     ));
                                 }
-                                let actual_caller = self.frame_function_identity(*frame_idx);
-                                let caller_is_observed = matches!(
-                                    self.frames.get(*frame_idx),
-                                    Some(Frame::Bytecode(BytecodeFrame {
-                                        telemetry: Some(_),
-                                        ..
-                                    }))
-                                );
-                                let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
-                                let args = &self.stack.0[locals_offset.raw()
-                                    ..locals_offset.raw().saturating_add(callee.arity)];
-                                let frame_telemetry = self.telemetry.enter_bytecode(
-                                    callee,
-                                    callee_ptr,
-                                    actual_caller,
-                                    caller_pc,
-                                    caller_is_observed,
-                                    args,
-                                    |caller, callee| unsafe {
-                                        Self::register_call_path_functions(
-                                            &self.heap, caller, callee,
+                                let frame_telemetry = if self.telemetry.is_some() {
+                                    let actual_caller = self.frame_function_identity(*frame_idx);
+                                    let caller_is_observed = matches!(
+                                        self.frames.get(*frame_idx),
+                                        Some(Frame::Bytecode(BytecodeFrame {
+                                            telemetry: Some(_),
+                                            ..
+                                        }))
+                                    );
+                                    let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
+                                    let args = &self.stack.0[locals_offset.raw()
+                                        ..locals_offset.raw().saturating_add(callee.arity)];
+                                    self.telemetry.as_mut().and_then(|telemetry| {
+                                        telemetry.enter_bytecode(
+                                            callee,
+                                            callee_ptr,
+                                            actual_caller,
+                                            caller_pc,
+                                            caller_is_observed,
+                                            args,
+                                            |caller, callee| unsafe {
+                                                Self::register_call_path_functions(
+                                                    &self.heap, caller, callee,
+                                                )
+                                            },
                                         )
-                                    },
-                                );
+                                    })
+                                } else {
+                                    None
+                                };
                                 let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
                                     verifier_unreachable!()
                                 };
@@ -9608,7 +9649,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
-        self.telemetry.collect_roots(roots);
+        if let Some(telemetry) = &self.telemetry {
+            telemetry.collect_roots(roots);
+        }
 
         // Note: Frame locals are stored in the stack at the locals_offset position,
         // so they're already included in the stack iteration above.
@@ -9714,7 +9757,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
         for frame in &mut self.frames {
             frame.forward_roots(roots);
         }
-        self.telemetry.forward_roots(roots);
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.forward_roots(roots);
+        }
     }
 }
 
