@@ -75,6 +75,9 @@
 //      SLEEP_SUSPEND_MS=600000): recovery from an automatic snapshot with five
 //      threads (skipped with USE_RUNNING=1)
 //   7  resume timings: the program from the store against a compile
+//   8  contract section 10.1: remote_call and thread_started carry the call and
+//      the spawn site, remote_cancel carries the call site and the cause. The
+//      expected lines are read from program/baml_src/, not written down here.
 //   y  the local site server restarts while runs sleep (skipped with USE_RUNNING=1)
 //   z  scenes s, t, u again under CHAOS (skipped with USE_RUNNING=1)
 
@@ -1284,6 +1287,14 @@ async function sceneRaceReplay() {
     const received = eventsOf(run, "remote_result_received");
     check(`run ${run}: only the first arrival is taken, and the two later results are abandoned`, received.length === 1 && received[0].call_id === spawnCall(id, 1)
       && eachOnce(eventsOf(run, "remote_cancel"), "call_id", [spawnCall(id, 2), spawnCall(id, 3)]), JSON.stringify(received.map((e) => e.call_id)));
+    // Contract section 10.1: the process that reports the cancellation is not
+    // the one that made the call. The call site travels in the snapshot.
+    const lateCancels = eventsOf(run, "remote_cancel");
+    const expectedSites = ["let medium = spawn", "let slow = spawn"].map((needle) => `baml_src/quotes.baml:${programLine("quotes.baml", needle)}`);
+    check(`run ${run}: the cancellations of the resumed process still carry the call site and the cause`,
+      lateCancels.every((e) => e.segment >= 2 && e.cause === "future_cancel")
+      && sameJson(lateCancels.map((e) => `${e.file}:${e.line}`).sort(), [...expectedSites].sort()),
+      JSON.stringify(lateCancels.map((e) => ({ seg: e.segment, at: `${e.file}:${e.line}`, cause: e.cause }))));
   }
   check("all five executions return the 2 s vendor", winners.every((ms) => ms === 2000), JSON.stringify(winners));
 }
@@ -1475,6 +1486,97 @@ async function sceneKillFanOut() {
   await STREAMS.local.open();
 }
 
+// The 1-based line of the first line of `file` under program/ that contains
+// `needle`. The checks of scene 8 read the demo program instead of repeating
+// its line numbers, so that an edit of the program moves the expectation with
+// it and a wrong line in the worker still fails.
+function programLine(file, needle) {
+  const lines = fs.readFileSync(path.join(ROOT, "program", "baml_src", file), "utf8").split("\n");
+  const i = lines.findIndex((line) => line.includes(needle));
+  if (i < 0) throw new Error(`no line of ${file} contains ${JSON.stringify(needle)}`);
+  return i + 1;
+}
+const at = (events, pred) => events.find(pred) ?? null;
+const site = (e) => (e === null ? null : `${e.file}:${e.line}`);
+
+// Contract section 10.1: remote_call and thread_started carry the call and the
+// spawn site, and remote_cancel carries the call site plus the cause.
+async function sceneCause() {
+  section("8. contract section 10.1: call sites and the cause of a cancellation");
+  const Q = (needle) => `baml_src/quotes.baml:${programLine("quotes.baml", needle)}`;
+
+  // durable_race: three spawns on three lines, and the two losers are cancelled.
+  const raceId = (await post("local", "/api/runs", { function: "durable_race", args: { city: "Sintra" } })).json.id;
+  await waitStatus("local", raceId, "completed", 60000);
+  await waitFor("both losers cancelled", () => eventsOf(raceId, "remote_cancel").length === 2, 30000);
+  const spawnLines = ["let fast = spawn", "let medium = spawn", "let slow = spawn"].map(Q);
+  const raceCalls = [1, 2, 3].map((n) => spawnCall(raceId, n));
+  const callSite = (id, callId) => site(at(eventsOf(id, "remote_call"), (e) => e.call_id === callId));
+  check("every remote_call names the line its spawn is written on",
+    sameJson(raceCalls.map((c) => callSite(raceId, c)), spawnLines), JSON.stringify(raceCalls.map((c) => callSite(raceId, c))));
+  const started = eventsOf(raceId, "thread_started").filter((e) => e.segment === 1);
+  const root = at(started, (e) => e.parent_thread === null);
+  check("the root thread of a segment has no spawn site", root !== null && root.file === null && root.line === null, JSON.stringify(root));
+  const spawnSites = started.filter((e) => e.parent_thread !== null).map(site).sort();
+  check("thread_started of the spawned threads names the spawn site, and the thread that race spawns inside the stdlib names the user await line",
+    sameJson(spawnSites, [...spawnLines, Q("await baml.future.race")].sort()), JSON.stringify(spawnSites));
+  const cancels = eventsOf(raceId, "remote_cancel");
+  check("remote_cancel of a race loser repeats the call site and reports cause future_cancel",
+    cancels.length === 2 && cancels.every((e) => e.cause === "future_cancel")
+    && sameJson(cancels.map((e) => site(e)).sort(), [spawnLines[1], spawnLines[2]].sort()),
+    JSON.stringify(cancels.map((e) => ({ line: site(e), cause: e.cause }))));
+  const raceRun = (await get("local", `/api/runs/${raceId}`)).json;
+  check("contract section 10.2: the site server recorded the call site of every call in the run record",
+    sameJson(raceCalls.map((c) => site(raceRun.calls.find((r) => r.call_id === c))), spawnLines),
+    JSON.stringify(raceRun.calls.map((c) => ({ call: c.call_id, at: site(c) }))));
+
+  // Contract section 10.3: the app names "the calling function". The worker is
+  // the only source of it, so it travels with the event and with the record.
+  // `function` is the callee; `caller` is the function the call is written in.
+  const raceCallers = raceCalls.map((c) => at(eventsOf(raceId, "remote_call"), (e) => e.call_id === c)?.caller ?? null);
+  check("remote_call names the calling function, in the spelling of a position event",
+    sameJson(raceCallers, ["durable_race", "durable_race", "durable_race"]), JSON.stringify(raceCallers));
+  check("the run record keeps the calling function and the callee apart",
+    raceRun.calls.every((c) => c.caller === "durable_race" && c.function === "remote_get_quote"),
+    JSON.stringify(raceRun.calls.map((c) => ({ call: c.call_id, function: c.function, caller: c.caller }))));
+
+  // durable_deadline: with_timeout spawns two threads on its own line, and the
+  // call inside the closure is cancelled by the token of the timeout.
+  const deadlineId = (await post("local", "/api/runs", { function: "durable_deadline", args: { city: "Nazare" } })).json.id;
+  await waitStatus("local", deadlineId, "completed", 60000);
+  await waitFor("the child to be cancelled", () => eventsOf(deadlineId, "remote_cancel").length === 1, 30000);
+  const timeoutLine = Q("baml.future.with_timeout"), innerCall = Q("remote_get_quote(Catalog.request(city, QuoteKind.Tour, 6000))");
+  const deadlineCall = at(eventsOf(deadlineId, "remote_call"), () => true);
+  const deadlineCancel = at(eventsOf(deadlineId, "remote_cancel"), () => true);
+  check("the call inside the with_timeout closure reports the closure's line, not the with_timeout line",
+    site(deadlineCall) === innerCall && innerCall !== timeoutLine, `${site(deadlineCall)} (with_timeout is on ${timeoutLine})`);
+  check("with_timeout: the cancellation reports cause token and the call site",
+    deadlineCancel !== null && deadlineCancel.cause === "token" && site(deadlineCancel) === innerCall,
+    JSON.stringify({ at: site(deadlineCancel), cause: deadlineCancel?.cause }));
+  const deadlineSpawns = eventsOf(deadlineId, "thread_started").filter((e) => e.segment === 1 && e.parent_thread !== null);
+  check("with_timeout spawns the body and the deadline thread at its own line",
+    deadlineSpawns.length === 2 && deadlineSpawns.every((e) => site(e) === timeoutLine), JSON.stringify(deadlineSpawns.map(site)));
+
+  // durable_plan_trip: a direct call of the root thread. Its line is the line
+  // of the position event of the same yield, not the loop the thread ran in.
+  const tripId = (await post("local", "/api/runs", { function: "durable_plan_trip", args: { city: "Aveiro" } })).json.id;
+  await waitStatus("local", tripId, "completed", 60000);
+  const tripCall = at(eventsOf(tripId, "remote_call"), () => true);
+  const tripPos = eventsOf(tripId, "position").filter((e) => e.reason === "remote_call").at(-1);
+  const weatherLine = `baml_src/trip.baml:${programLine("trip.baml", "let weather = remote_fetch_weather(city)")}`;
+  check("a direct remote call reports its own line, which is the line of the position event of the same yield",
+    site(tripCall) === weatherLine && site(tripPos) === weatherLine, JSON.stringify({ call: site(tripCall), position: site(tripPos) }));
+  const tripRun = (await get("local", `/api/runs/${tripId}`)).json;
+  check("the call site of a direct call is recorded on the run record too",
+    site(tripRun.calls[0]) === weatherLine, JSON.stringify(tripRun.calls));
+  check("the calling function of a direct call is the function it is written in",
+    tripCall?.caller === "durable_plan_trip" && tripRun.calls[0]?.caller === "durable_plan_trip",
+    JSON.stringify({ event: tripCall?.caller, record: tripRun.calls[0]?.caller }));
+  const loopPositions = eventsOf(tripId, "position").filter((e) => e.reason === "sysop");
+  check("the call site is not the thread's last position before the call",
+    loopPositions.length > 0 && loopPositions.every((e) => site(e) !== weatherLine), JSON.stringify([...new Set(loopPositions.map(site))]));
+}
+
 async function sceneY() {
   section("y. the local site server restarts while runs sleep");
   const later = (await post("local", "/api/runs", { function: "durable_nap", args: { seconds: 16 } })).json.id;
@@ -1555,7 +1657,7 @@ async function main() {
     }
   }
   if (!PHASE3) console.log("\nthe worker predates contract section 9: scenes x q r s t u v w y z are skipped, and the servers run with WORKER_LEGACY=1");
-  const phase3Scenes = PHASE3 ? { q: sceneQ, r: sceneR, s: sceneS, t: sceneT, u: sceneU, v: sceneV, w: sceneW, 1: sceneRaceReplay, 2: sceneEarlyResume, 3: sceneLateCancel, 4: sceneSharedChildren, 5: sceneParallelMigrate, 7: sceneResumeCost } : {};
+  const phase3Scenes = PHASE3 ? { q: sceneQ, r: sceneR, s: sceneS, t: sceneT, u: sceneU, v: sceneV, w: sceneW, 1: sceneRaceReplay, 2: sceneEarlyResume, 3: sceneLateCancel, 4: sceneSharedChildren, 5: sceneParallelMigrate, 7: sceneResumeCost, 8: sceneCause } : {};
 
   const scenes = { a: sceneA, b: sceneB, c: sceneC, d: sceneD, e: sceneE, f: sceneF, g: sceneG, h: sceneH, i: sceneI, j: sceneJ, k: sceneK, m: sceneM, n: sceneN, o: sceneO, ...phase3Scenes };
   for (const [name, fn] of Object.entries(scenes)) {

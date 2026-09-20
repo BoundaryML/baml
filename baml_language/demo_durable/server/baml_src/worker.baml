@@ -889,12 +889,17 @@ function route_remote_call(
         accept_remote_result(app, run, call_id, null, message, "");
         return;
     }
+    // Contract section 10.2: the entry records where the call was made, so the
+    // app can name the cause of the call after a resume and after a reload.
     let waiting = Waiting {
         call_id: call_id,
         child_site: baml.json.path_or<string>(child, ".site", target_site),
         child_run: jget_str(child, "id"),
         func: func,
         inherited: false,
+        file: jget_str_opt(ev, "file"),
+        line: jget_line_opt(ev, "line"),
+        caller: jget_str_opt(ev, "caller"),
     };
     // A very fast child may have answered before this point. Or the call was
     // cancelled, or the run ended, while the dispatch was in flight: the child
@@ -1080,6 +1085,10 @@ function record_call(app: App, run: Run, ev: map<string, json>) -> void throws n
                     call_id: call_id,
                     func: jget_str(ev, "function"),
                     args: jget(ev, "args"),
+                    // Contract section 10.2: the call site travels with the record.
+                    file: jget_str_opt(ev, "file"),
+                    line: jget_line_opt(ev, "line"),
+                    caller: jget_str_opt(ev, "caller"),
                 },
             );
         }
@@ -1157,7 +1166,15 @@ function reconcile_remote_wait(
                 );
                 return;
             }
-            let ev: map<string, json> = { "call_id": call_id, "function": record.func, "args": record.args };
+            // The re-dispatch keeps the call site that the first announcement reported.
+            let ev: map<string, json> = {
+                "call_id": call_id,
+                "function": record.func,
+                "args": record.args,
+                "file": j(record.file),
+                "line": j(record.line),
+                "caller": j(record.caller),
+            };
             route_remote_call(app, run, ev, RemotePlan { action: "dispatch", target: step.target });
             return;
         }

@@ -11,7 +11,7 @@ between the components is in `documents/durable-poc-contracts.md`.
 | `scripts/mock-worker.mjs` | A mock worker (Node 22, no dependencies) that speaks the worker protocol and simulates the demo program. |
 | `scripts/dev.sh` | Starts the three site servers and stops them on exit. Passes `CHAOS`, `SLEEP_SUSPEND_MS`, and `WORKER_LEGACY` through and gives each site its own program store. |
 | `scripts/verify.mjs` | An end-to-end check of the three site servers with the mock worker. |
-| `scripts/verify-real.mjs` | An end-to-end check of the three site servers with the real worker (`baml-cli worker`). It also prints the measured pause and resume numbers. |
+| `scripts/verify-real.mjs` | An end-to-end check of the three site servers with the real worker (`baml-cli worker`). It also prints the measured pause and resume numbers. Scene 8 checks the call sites and the cancellation causes of contract section 10 against the lines of `program/baml_src/`, which it reads rather than repeating. |
 | `web/` | The React app (TypeScript, Vite, pnpm). |
 
 ## Requirements
@@ -63,6 +63,41 @@ The scenes to show in the app:
    the future. It answers with `blocked`, and the status stays `pausing` until
    the run completes.
 
+Every object on the timeline explains itself (contract section 10.3). Select an
+arrow, a bar, a gap, or a marker: the panel on the right names what made it
+happen in one sentence and offers the source location as a link. Following the
+link opens that file in the source view and highlights the line, in its own
+color and with the tag `▸ why`; the button next to the file name clears it.
+When the worker reported no location, the panel falls back to the last position
+of the thread and says that the location is approximate, and when it cannot
+attribute a location at all it says so instead of guessing.
+
+What the panel says. The sentences below are the ones the app printed for a
+live `durable_race`, `durable_deadline`, `durable_fan_out`, `durable_nap`, and
+`durable_plan_trip` run with the real worker on the demo program. A location
+that the worker reported is exact; one that comes from the last `position` of
+the thread is marked `· approximate` under the link.
+
+| Object | Sentence | Location |
+|---|---|---|
+| call arrow | `durable_race called remote_get_quote at quotes.baml:192, placed on cloud2.` | exact, the call site the worker reported; the rows add the call id, the callee, the calling function, the calling thread, the child run, and the arguments |
+| return arrow, parent running | `remote_get_quote succeeded on cloud2, and thread 3 of the parent took the result at quotes.baml:190.` | approximate: `remote_result_received` carries no line, so the last position of that thread is used |
+| return arrow, no process | `remote_get_quote succeeded on cloud. The result was delivered while the run had no process, taken at resume.` | none: `No source location: The parent had no process when the result arrived, so no line of the program took it.` |
+| cancel arrow, race loser | `remote_get_quote was cancelled because the future was cancelled (a race loser, or Future.cancel). The call was made at quotes.baml:192.` | exact, the call site of the cancelled call (`cause: future_cancel`) |
+| cancel arrow, deadline | `remote_get_quote was cancelled because a cancel token fired (the deadline of with_timeout, or a token of the program). The call was made at quotes.baml:242.` | exact, the line of the call inside the `with_timeout` closure (`cause: token`) |
+| cancel arrow, cause not reported | `remote_get_quote was cancelled, and the worker could not say what fired: the run itself may have been cancelled, or the thread held no link the engine can read. The call was made at quotes.baml:191.` | exact, the call site (`cause: unknown`, which the panel never turns into a claim) |
+| migration arrow | `A "Resume on cloud" command moved r-022ga9 from local to cloud. Its snapshot travelled with it, and it was taken at quotes.baml:253.` | approximate, the last line the run reported on the site it left |
+| fork arrow | `r-drmuea was forked from snapshot #3 of r-e269fw, which was taken at trip.baml:29.` | approximate, the last line the source reported before that snapshot |
+| sleeping gap | `The run suspended itself for a sleep at quotes.baml:164 and wakes at 11:20:16.598.` | approximate: a `position` event is the last sleep the segment reported, not necessarily the one whose deadline the gap ends at |
+| snapshot marker | `No pause was requested. The worker writes this snapshot on its own, and the process keeps running. Thread 2 stood at quotes.baml:193.` | the top user frame of the state dump, which belongs to one thread of it, not to the run |
+| segment bar | `The process started the function and it ran the function to its end. It ran from quotes.baml:189 to quotes.baml:194.` | approximate, the last position of the segment |
+| thread sub-bar | `Thread 6 was spawned by thread 2 at quotes.baml:193.` | exact, the `spawn` site in the parent thread |
+| wait band | `durable_race called remote_get_quote at quotes.baml:190. Thread 3 waited here for 2.62 s.` | exact, the call site |
+
+A cancel arrow of a run that was paused and resumed carries the same location:
+the process that reports the cancellation is not the one that made the call, and
+the call site travels in the snapshot.
+
 The scenario gallery. The "Scenarios" button in the header of the app opens
 seven cards. "Run live" starts the scenario on the site servers and shows a
 guide bar with the next step. The guide follows the event stream, so a hint
@@ -76,8 +111,8 @@ check:headless`, see `web/README.md`).
 |---|---|---|
 | Pause here, resume there | `durable_plan_trip` | Pause inside the loop on `local`, "Resume on cloud". The loop continues on `cloud` at the same line, and the remote call of the moved run goes to `cloud2`. |
 | Fan-out with a durable sleep | `durable_fan_out` | Nothing to press. Four children start, two on `cloud` and two on `cloud2`. The parent suspends itself within a few milliseconds of its last remote call: the status is `sleeping`, no process exists, and the timeline shows the sleeping gap with a countdown. The state panel shows five threads and four futures. The four `Quote` objects are stored on the sleeping run. The timer wakes it 12 seconds later, a new process takes all four results, and the four thread lines continue across the gap. |
-| Race and cancellation | `durable_race` | Pause during the race (five threads, pending futures), "Resume on cloud2". The winner's result was stored while no process existed and travels with the run. `race` settles on `cloud2` and cancels the two losers on their sites: two cancel connectors and two striped bars. |
-| Deadline | `durable_deadline` | Pause (the state panel shows the cancel token, the work thread in its remote call, and the deadline thread in its sleep), "Resume here". The deadline kept counting during the pause. The token fires, the 6 second child is cancelled on its site, and the result is built from the `Timeout` error. |
+| Race and cancellation | `durable_race` | Pause during the race (five threads, pending futures), "Resume on cloud2". The winner's result was stored while no process existed and travels with the run. `race` settles on `cloud2` and cancels the two losers on their sites: two cancel connectors and two striped bars. Click a cancel arrow: the panel says that the future was cancelled and links to the line of the call. |
+| Deadline | `durable_deadline` | Pause (the state panel shows the cancel token, the work thread in its remote call, and the deadline thread in its sleep), "Resume here". The deadline kept counting during the pause. The token fires, the 6 second child is cancelled on its site, and the result is built from the `Timeout` error. Click the cancel arrow: the panel names the cancel token and links to line 242, the call inside the `with_timeout` closure. |
 | All settled, one failure | `durable_settled` | Pause after the refusal, about 3.3 seconds in. The state panel shows the three futures in three states: resolved with a `Quote`, failed with the vendor's error, and pending. After the resume the report holds two quotes and the typed failure of the `Car` vendor. Nothing is cancelled. |
 | Kill and recover | `durable_plan_trip`, then `plan_trip` | "Kill process" after an automatic snapshot: the durable run is `paused` and completes after "Resume here". The plain run is `lost`. |
 | Fork | `durable_plan_trip` | Pause, Fork, and resume both runs. Each of them makes its own remote call and completes. |
@@ -726,6 +761,14 @@ every component may rely on them.
   Worker events that the server acts on: `remote_wait` and
   `hello.runtime_build`. `--remote-result` and the `remote_result` command
   carry `ts`.
+- **Contract section 10.** The site server forwards the new worker fields
+  unchanged, because it forwards every worker event as it is. It records the
+  call site of each remote call in the run record: `waiting_on[].file`,
+  `waiting_on[].line`, `calls[].file`, and `calls[].line`. The values come from
+  the `remote_call` event, and a re-dispatch from `calls` (a restored wait that
+  this site has to place again) carries them along, so the cause of a call
+  survives a resume, a fork, a migration, and a page reload. A record that an
+  older server wrote is loaded with `null` in the four fields.
 
 ## Mock worker
 
@@ -746,6 +789,12 @@ it follows contract section 2.5.
 | `MOCK_AUTO_SNAPSHOT=0` | no automatic snapshots |
 | `MOCK_BLOCKED=<n>` | `n` `blocked` events before a pause succeeds. The run argument `"mock_blocked": n` does the same for one run. |
 | `MOCK_RUNTIME_BUILD=<s>` | the runtime build that the mock writes into program store entries and expects in them (default `mock-worker/1`) |
+
+The run argument `"mock_no_call_site": true` makes every `remote_call` and
+`remote_cancel` of the run report `file: null` and `line: null`, which is what
+a real worker does when no user frame can be attributed. The run argument
+`"mock_cancel_cause": "<cause>"` overrides the `cause` that the mock would
+classify, so that a scene can exercise `unknown`.
 
 The run argument `"mock_remote_sleep_ms": n` makes the remote child of that
 run sleep `n` real milliseconds, which `MOCK_SPEED` does not divide.
@@ -780,8 +829,19 @@ The mock implements contract section 9.2. It accepts `--sleep-suspend-ms`,
   whose deadline has passed at the resume completes at once.
 - **Cancellation.** `race` cancels the losers, `all` cancels the pending inputs
   after the first error in input order, and `with_timeout` cancels its body.
-  Each cancelled call produces `remote_cancel {call_id, thread}` and
-  `thread_ended`, and a later result for it is ignored.
+  Each cancelled call produces `remote_cancel {call_id, thread, file, line,
+  cause}` and `thread_ended`, and a later result for it is ignored. The `cause`
+  is `future_cancel` for a `race` loser and for an input that `all` drops (both
+  cancel the input's own future; `all` runs `futures.map((g) -> { g.cancel() })`
+  in its catch arm, and the inputs were spawned by the calling function, not by
+  the helper thread that `all` runs in), and `token` for `with_timeout`, and
+  `file`/`line` repeat the call site that was recorded when the call was made
+  (contract section 10.1).
+- **Call sites.** `remote_call` carries the `file` and `line` of the call and
+  `caller`, the function the call is written in, and `thread_started` carries
+  the `spawn` site in the parent thread. The root thread of a segment carries
+  `null` for both. A restored thread reports the `spawn` site again, because it
+  travels in the snapshot.
 - **Program store.** The "program" of the mock is a JSON payload with the text
   of the project's `.baml` files, and its hash is the SHA-256 of that payload.
   A start from `--project` compiles, stores the entry, and reports the hash in
@@ -853,7 +913,7 @@ that a run can start appear in the app.
 ### Mock worker
 
 ```bash
-node scripts/verify.mjs              # about 6 minutes, 392 checks
+node scripts/verify.mjs              # about 8 minutes, 404 checks
 ONLY=phase3 node scripts/verify.mjs  # the scenes of contract section 9 only (not timed again after the review scenes were added)
 ONLY=chaos node scripts/verify.mjs   # the CHAOS scenes only: about 2 minutes 30 seconds, 74 checks
 MOCK_SPEED=3 node scripts/verify.mjs # faster simulated sleeps (the CHAOS scenes always run at speed 1)
@@ -1039,6 +1099,23 @@ seconds suspends the run.
   and `program_fetch_delay_ms: 12000`, which is longer than the 10 s that a
   dispatch request waits: `plan_trip` still completes with one child and one
   fetch.
+
+The scene for contract section 10 ("call sites") checks that a `remote_call`
+carries the line of `program/baml_src/quotes.baml` that made the call, that a
+`thread_started` carries the `spawn` site and the root thread of a segment
+carries none, and that the site server records both in `waiting_on` and in
+`calls`. It reads the same values back from `GET /api/runs/:id/events`, which
+is what a page reload reads, and from `meta.json` after a pause, so the call
+site survives a resume. It also checks that `remote_call` names the calling
+function in `caller` and that the record keeps it. It checks the `cause` of
+every cancellation: a `race` loser is `future_cancel`, `with_timeout` is
+`token`, and the inputs that `baml.future.all` drops after an error are
+`future_cancel` too, because `all` cancels their futures rather than a parent
+thread (the engine test `bex_engine::durable_cause::an_input_that_all_drops_after_an_error_reports_a_cancelled_future`
+pins that against the real runtime). A run started with the
+mock-only arguments `mock_no_call_site` and `mock_cancel_cause` shows that a
+worker which cannot attribute a call writes `null` (never a guess) and that a
+cancellation it cannot classify is reported as `unknown`.
 
 The last scene of sections 3 to 8 covers the routing cases that need a request in flight. The
 script itself plays a fourth site named `slow`: an HTTP server on a port that

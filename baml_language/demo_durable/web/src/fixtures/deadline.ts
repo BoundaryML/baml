@@ -41,8 +41,8 @@ export function buildDeadlineFixture(): Fixture {
   println(b, 40, caller, "asking a slow vendor", `asking a slow vendor for ${city} with a 2 second deadline`);
   b.worker(48, "local", parent, { type: "position", thread: 1, function: fn, file: QUOTES_BAML_FILE, line: timeoutLine, reason: "await", op: null });
   // The work thread runs the body. The deadline thread sleeps for the limit.
-  b.worker(50, "local", parent, { type: "thread_started", thread: WORK_THREAD, parent_thread: 1 });
-  b.worker(52, "local", parent, { type: "thread_started", thread: DEADLINE_THREAD, parent_thread: 1 });
+  b.worker(50, "local", parent, { type: "thread_started", thread: WORK_THREAD, parent_thread: 1, file: QUOTES_BAML_FILE, line: timeoutLine });
+  b.worker(52, "local", parent, { type: "thread_started", thread: DEADLINE_THREAD, parent_thread: 1, file: QUOTES_BAML_FILE, line: timeoutLine });
   b.worker(54, "local", parent, { type: "position", thread: WORK_THREAD, function: fn, file: QUOTES_BAML_FILE, line: callLine, reason: "remote_call", op: null });
   b.worker(55, "local", parent, { type: "remote_call", call_id: callId, thread: WORK_THREAD, function: REMOTE_QUOTE_FN, args: { request: quoteRequest(city, VENDOR) } });
   startQuoteChild(b, 62, caller, callId, child, city, VENDOR);
@@ -87,11 +87,14 @@ export function buildDeadlineFixture(): Fixture {
   const resumeAt = 1500;
   b.setStatus(resumeAt, "local", parent, "starting", { segment: 2 });
   resumeProcess(b, resumeAt + 38, "local", parent, fn, 41_803);
-  for (const thread of [WORK_THREAD, DEADLINE_THREAD]) b.worker(resumeAt + 46, "local", parent, { type: "thread_started", thread, parent_thread: 1 });
+  for (const thread of [WORK_THREAD, DEADLINE_THREAD]) {
+    b.worker(resumeAt + 46, "local", parent, { type: "thread_started", thread, parent_thread: 1, file: QUOTES_BAML_FILE, line: timeoutLine });
+  }
 
   // The deadline passes: the token fires, and the work thread is cancelled in its remote wait.
   const fireAt = 2052;
-  cancelQuoteChild(b, fireAt, caller, callId, WORK_THREAD, child);
+  // Section 10.1: `with_timeout` fires a cancel token linked to the work thread.
+  cancelQuoteChild(b, fireAt, caller, callId, WORK_THREAD, child, "token");
   b.worker(fireAt + 1, "local", parent, { type: "thread_ended", thread: WORK_THREAD });
   b.worker(fireAt + 2, "local", parent, { type: "thread_ended", thread: DEADLINE_THREAD });
   const value = `no tour quote for ${city}: operation timed out after 2000ms`;

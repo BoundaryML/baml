@@ -1,7 +1,7 @@
 # Durable functions demo: web app
 
 The React app of the durable functions proof of concept (contract sections
-3.5, 7.7, 8.4, and 9.6 in `documents/durable-poc-contracts.md`). TypeScript, Vite, React, `strict`
+3.5, 7.7, 8.4, 9.6, and 10.3 in `documents/durable-poc-contracts.md`). TypeScript, Vite, React, `strict`
 mode, pnpm. The timeline is drawn with SVG. There is no UI kit and no charting
 library.
 
@@ -166,7 +166,15 @@ cards, the autoplay switch and its persistence, the links to the recordings),
 and the guide (the highlighted button with and without autoplay, the selection
 of the second run of the recovery scenario, Exit). `SCENES=phase3` or
 `SCENES=base` runs one group of the fixture scenes.
+The scenes of contract section 10.3 click a call arrow, a cancel arrow, a
+return arrow, a migration arrow, a fork arrow, a thread sub-bar, a segment bar,
+a snapshot marker, and a sleeping gap, and check the sentence of each panel,
+whether the location is exact or approximate, that following the link opens the
+file and highlights the line with the `cause` mark, and that the highlight can
+be cleared.
 `OUT_DIR=<dir>` writes screenshots, among them `fanout-asleep-<scheme>.png`,
+`cause-call-arrow.png`, `cause-cancel-arrow.png`, `cause-fork-arrow.png`,
+`cause-sleeping-gap.png`,
 `race-guide-pause.png`, `race-guide-resume-autoplay.png`,
 `settled-state-tree-<scheme>.png`, `deadline-state-tree-<scheme>.png`,
 `gallery-<scheme>.png`, and `recover-guide-kill-plain.png`.
@@ -250,6 +258,7 @@ server.
 | `src/session.ts` | The two event sources: live `EventSource` connections (one per site of the registry), and fixture playback. It also loads the site registry. |
 | `src/api.ts` | HTTP commands and queries. |
 | `src/timeline/layout.ts` | Run records and events to timeline geometry in time units: segments, gaps, thread bars, waits, connectors, markers. No React. |
+| `src/timeline/cause.ts` | Contract section 10.3: the cause of one timeline object, as a sentence, rows, and at most one source location. No React. |
 | `src/timeline/geometry.ts` | Time scale, lane and row positions, label and marker placement, and the route of a connector between lanes. No React. |
 | `src/timeline/Timeline.tsx` | The SVG timeline and its detail pane. |
 | `src/stateValue.ts` | Reads the shape of a state dump value: a future with its state, a cancel token, a task group, an enum variant, a map, an array, an instance. One-line summaries. No React. |
@@ -258,6 +267,43 @@ server.
 | `src/fixtures/` | The fixture builder, the eleven fixtures, the building blocks that the trip fixtures share (`scenes.ts`) and that the quote fixtures share (`quotes.ts`), copies of the two program files for the source view (`programs.ts` finds a line by its text), and one recording of real site servers (`recorded/`). |
 
 ## Behavior notes
+
+Contract section 10: why an arrow happened.
+
+- Selecting any object on the timeline shows a cause panel: one sentence that
+  names what made the object happen, the source location as a link, and the
+  rows that carry the detail. The rules live in `src/timeline/cause.ts`, which
+  is pure and unit tested; `src/timeline/Detail.tsx` only renders the result.
+- A location comes from one of three sources, in this order. First the field
+  that the worker reported (`remote_call.file/line`, `remote_cancel.file/line`,
+  `thread_started.file/line` of section 10.1). Then the run record, which keeps
+  the call site of every entry in `waiting_on` and `calls` (section 10.2), so a
+  call site survives a resume and a page reload that has not backfilled the
+  history yet. Both are exact. Last the most recent `position` of the thread
+  before the moment in question, which is labelled `approximate`. When none of
+  the three answers, the panel says so and shows no location. It never shows a
+  location that it cannot attribute.
+- The four `cause` values of `remote_cancel` map to one sentence each: a
+  cancelled future (a race loser, or `Future.cancel`), a cancel token (the
+  deadline of `with_timeout`, or a token of the program), a cancelled ancestor
+  thread, and `unknown`, which stays honest: "the run cancelled this call; the
+  worker could not say what fired". A cancellation that only the site server
+  reported says that the run ended and its site cancelled the children.
+- Following a location opens that file in the source view and highlights the
+  line with its own mark (`data-mark="cause"`, the tag `▸ why`). It is a
+  different color from the paused line and from a frame that the state tree
+  selected, it wins over both on the same line, and the source panel head has a
+  button that clears it. A frame focus ends when the run moves on; a followed
+  location stays until it is cleared.
+- The cause of a snapshot marker names the top user frame of its state dump,
+  which the state tree loads. Before the dump is there, the panel falls back to
+  the last position of the segment and marks it approximate.
+- The sleeping gap takes its `sleep` call site from the last `position` whose
+  `op` is `baml.sys.sleep`. A segment bar names its first and its last
+  position. A thread sub-bar names the `spawn` site in its parent thread, and
+  falls back to the last position of that parent.
+- The hints of the race and the deadline scenario ask the user to click the
+  cancel arrow.
 
 Contract section 9:
 

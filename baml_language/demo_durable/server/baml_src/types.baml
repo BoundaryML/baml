@@ -37,6 +37,16 @@ class Waiting {
     /// the run that dispatched it, so a run never cancels a child through an
     /// inherited entry.
     inherited: bool,
+    /// Contract section 10.2: the call site that the worker reported with the
+    /// `remote_call` event, so the cause of the call survives a resume and a
+    /// page reload. Null when the worker could not attribute the call.
+    file: string?,
+    line: int?,
+    /// Contract section 10.3: the function that made the call, as the
+    /// `remote_call` event reported it. The app names the caller instead of
+    /// guessing it from the run's entry function, which is a different
+    /// function whenever the call is written in a helper.
+    caller: string?,
 }
 
 /// One remote call that a worker of the run announced: what is needed to
@@ -47,6 +57,11 @@ class CallRecord {
     call_id: string,
     func: string,
     args: json,
+    /// Contract section 10.2: the call site of the `remote_call` event.
+    file: string?,
+    line: int?,
+    /// Contract section 10.3: the function that made the call.
+    caller: string?,
 }
 
 class SnapshotInfo {
@@ -157,6 +172,18 @@ function rename_function_keys(value: json, from: string, to: string) -> json thr
             }
             out.set("waiting_on", entries);
         }
+        // Contract section 9.7: `calls: [{ call_id, function, args }]`.
+        if let cs: json[] = out.get("calls") {
+            let records: json[] = [];
+            for (let c in cs) {
+                if let cm: map<string, json> = c {
+                    records.push(renamed(cm, from, to));
+                } else {
+                    records.push(c);
+                }
+            }
+            out.set("calls", records);
+        }
         out
     } else {
         value
@@ -204,6 +231,31 @@ function run_from_json(value: json) -> Run throws baml.json.DecodeError {
                 if let wm: map<string, json> = w {
                     if (!wm.has("inherited")) {
                         wm.set("inherited", false);
+                    }
+                    // Contract section 10.2. A record that an older server wrote names no call site.
+                    if (!wm.has("file")) {
+                        wm.set("file", null);
+                    }
+                    if (!wm.has("line")) {
+                        wm.set("line", null);
+                    }
+                    if (!wm.has("caller")) {
+                        wm.set("caller", null);
+                    }
+                }
+            }
+        }
+        if let recorded: json[] = m.get("calls") {
+            for (let c in recorded) {
+                if let cm: map<string, json> = c {
+                    if (!cm.has("file")) {
+                        cm.set("file", null);
+                    }
+                    if (!cm.has("line")) {
+                        cm.set("line", null);
+                    }
+                    if (!cm.has("caller")) {
+                        cm.set("caller", null);
                     }
                 }
             }
@@ -258,6 +310,29 @@ function jget_int(body: json, key: string, default: int) -> int throws never {
 
 function jget(body: json, key: string) -> json throws never {
     baml.json.field(body, key)
+}
+
+/// A string field that may be absent or null (contract section 10.1).
+function jget_str_opt(body: json, key: string) -> string? throws never {
+    if let s: string = baml.json.field(body, key) {
+        if (s.length() > 0) {
+            s
+        } else {
+            null
+        }
+    } else {
+        null
+    }
+}
+
+/// A 1-based line number that may be absent or null (contract section 10.1).
+function jget_line_opt(body: json, key: string) -> int? throws never {
+    let n = baml.json.path_or<int>(body, `.${key}`, 0);
+    if (n > 0) {
+        n
+    } else {
+        null
+    }
 }
 
 function now_ms() -> int throws never {

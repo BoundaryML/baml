@@ -125,7 +125,10 @@ export function remoteChild(
   const file = TRIP_BAML_FILE;
   b.createRun(at, child.site, child.run, fn, { city: "Lisbon" }, { parent: { site: parent.site, run: parent.run, call_id: parent.callId } });
   b.siteEvent(at + 5, { type: "remote_dispatched", site: parent.site, run: parent.run, call_id: parent.callId, child_site: child.site, child_run: child.run, function: fn });
-  b.update(at + 5, parent.site, parent.run, { waiting_on: [{ call_id: parent.callId, child_site: child.site, child_run: child.run, function: fn }] });
+  const callAtLine = b.callSite(parent.run, parent.callId);
+  b.update(at + 5, parent.site, parent.run, {
+    waiting_on: [{ call_id: parent.callId, child_site: child.site, child_run: child.run, function: fn, inherited: false, ...callAtLine }],
+  });
   b.setStatus(at + 43, child.site, child.run, "running", { pid: child.pid });
   b.worker(at + 45, child.site, child.run, { type: "hello", mode: "start", function: fn, durable: false });
   b.worker(at + 46, child.site, child.run, { type: "thread_started", thread: 1, parent_thread: null });

@@ -135,7 +135,7 @@ export function buildFanoutFixture(width = 4): Fixture {
   println(b, t + 2, caller, "awake again", "awake again, collecting the quotes");
   // `baml.future.all` awaits the inputs on a thread of its own.
   const collector = vendors.length + 2;
-  b.worker(t + 6, "local", parent, { type: "thread_started", thread: collector, parent_thread: 1 });
+  b.worker(t + 6, "local", parent, { type: "thread_started", thread: collector, parent_thread: 1, file: QUOTES_BAML_FILE, line: lineIn(QUOTES_BAML_FILE, fn, "baml.future.all") });
   b.worker(t + 7, "local", parent, { type: "position", thread: 1, function: fn, file: QUOTES_BAML_FILE, line: lineIn(QUOTES_BAML_FILE, fn, "baml.future.all"), reason: "await", op: null });
   b.worker(t + 11, "local", parent, { type: "thread_ended", thread: collector });
   b.worker(t + 13, "local", parent, { type: "position", thread: 1, function: fn, file: QUOTES_BAML_FILE, line: lineIn(QUOTES_BAML_FILE, fn, "TripReport {"), reason: "early_yield", op: null });

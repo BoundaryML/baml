@@ -47,7 +47,14 @@ export function buildCentralFixture(): Fixture {
   b.worker(t + 1, "local", parent, { type: "remote_call", call_id: callId, thread: 1, function: "remote_fetch_weather", args: { city: "Lisbon" } });
   b.createRun(t + 9, "cloud", child, "remote_fetch_weather", { city: "Lisbon" }, { parent: { site: "local", run: parent, call_id: callId } });
   b.siteEvent(t + 14, { type: "remote_dispatched", site: "local", run: parent, call_id: callId, child_site: "cloud", child_run: child, function: "remote_fetch_weather" });
-  b.update(t + 14, "local", parent, { waiting_on: [{ call_id: callId, child_site: "cloud", child_run: child, function: "remote_fetch_weather" }] });
+  // Section 10.2: the run record keeps the call site of the entry and of the call.
+  const callAtLine = b.callSite(parent, callId);
+  // Section 10.3: the record keeps the calling function too.
+  const callFrom = b.caller(parent, callId);
+  b.update(t + 14, "local", parent, {
+    waiting_on: [{ call_id: callId, child_site: "cloud", child_run: child, function: "remote_fetch_weather", inherited: false, ...callAtLine, caller: callFrom }],
+    calls: [{ call_id: callId, function: "remote_fetch_weather", args: { city: "Lisbon" }, ...callAtLine, caller: callFrom }],
+  });
   b.worker(t + 16, "local", parent, { type: "log", stream: "stdout", text: `waiting for remote run ${child} on site cloud`, thread: 1 });
 
   // The child on the cloud site.

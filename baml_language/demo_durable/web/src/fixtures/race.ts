@@ -21,6 +21,7 @@ import { FixtureBuilder, type Fixture } from "./builder";
 import { lineIn } from "./programs";
 import { QUOTES_BAML_FILE } from "./quotes.baml";
 import {
+  callNeedle,
   cancelQuoteChild,
   completeQuoteChild,
   dv,
@@ -72,7 +73,8 @@ export function buildRaceFixture(): Fixture {
     spawnQuoteCall(b, at, onLocal, index + 2, callId(index), city, vendor);
     return startQuoteChild(b, at + 9, onLocal, callId(index), CHILDREN[index] as ChildSpec, city, vendor);
   });
-  b.worker(96, "local", parent, { type: "thread_started", thread: RACE_THREAD, parent_thread: 1 });
+  // `baml.future.race` waits on a thread of its own, spawned at the await line.
+  b.worker(96, "local", parent, { type: "thread_started", thread: RACE_THREAD, parent_thread: 1, file: QUOTES_BAML_FILE, line: raceLine });
   b.worker(98, "local", parent, { type: "position", thread: 1, function: fn, file: QUOTES_BAML_FILE, line: raceLine, reason: "await", op: null });
 
   // The user pauses the run while the three children run.
@@ -121,15 +123,20 @@ export function buildRaceFixture(): Fixture {
   const onCloud2: Caller = { site: "cloud2", run: parent, fn };
   resumeProcess(b, migrateAt + 71, "cloud2", parent, fn, 61_140);
   let t = migrateAt + 78;
-  for (const thread of [2, 3, 4, RACE_THREAD]) b.worker(t, "cloud2", parent, { type: "thread_started", thread, parent_thread: 1 });
+  // A restored thread is announced again, with the `spawn` site it was created at.
+  const spawnLineOf = (thread: number): number =>
+    thread === RACE_THREAD ? raceLine : lineIn(QUOTES_BAML_FILE, fn, callNeedle(VENDORS[thread - 2] as Vendor));
+  for (const thread of [2, 3, 4, RACE_THREAD]) {
+    b.worker(t, "cloud2", parent, { type: "thread_started", thread, parent_thread: 1, file: QUOTES_BAML_FILE, line: spawnLineOf(thread) });
+  }
   b.worker(t + 3, "cloud2", parent, { type: "remote_result_received", call_id: callId(0), thread: 2 });
   b.worker(t + 5, "cloud2", parent, { type: "thread_ended", thread: 2 });
   b.update(t + 5, "cloud2", parent, { remote_results: b.run("cloud2", parent).remote_results.map((result) => ({ ...result, acked: true })) });
   // `race` settles with the winner and cancels the losers.
   t += 9;
-  cancelQuoteChild(b, t, onCloud2, callId(1), 3, CHILDREN[1] as ChildSpec);
+  cancelQuoteChild(b, t, onCloud2, callId(1), 3, CHILDREN[1] as ChildSpec, "future_cancel");
   b.worker(t + 1, "cloud2", parent, { type: "thread_ended", thread: 3 });
-  cancelQuoteChild(b, t + 4, onCloud2, callId(2), 4, CHILDREN[2] as ChildSpec);
+  cancelQuoteChild(b, t + 4, onCloud2, callId(2), 4, CHILDREN[2] as ChildSpec, "future_cancel");
   b.worker(t + 5, "cloud2", parent, { type: "thread_ended", thread: 4 });
   b.worker(t + 9, "cloud2", parent, { type: "thread_ended", thread: RACE_THREAD });
   println(b, t + 12, onCloud2, "the winner answered", "the winner answered after 2000 ms");

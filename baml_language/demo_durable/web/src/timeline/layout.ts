@@ -608,7 +608,9 @@ function scanRun(site: Site, run: string, record: Run | null, events: readonly T
                 event.call_id,
                 newCall({
                   callId: event.call_id,
-                  thread: event.thread,
+                  // Section 9.7: `thread` is null for a call that was outstanding
+                  // at the end of the run. `-1` marks a call without a thread.
+                  thread: event.thread ?? -1,
                   segment: event.segment,
                   ts: event.ts,
                   function: "",

@@ -17,6 +17,7 @@ import { parseSseEvent, type Run, type SseEvent } from "../protocol";
 import { scenarioById } from "../scenarios/catalog";
 import { scenarioProgress, scenarioView } from "../scenarios/engine";
 import { groupRuns, initialState, reducer, runKey, runTree, splitRunKey, type AppState, type RunKey } from "../state";
+import { causeOf, type CauseContext } from "./cause";
 import { computeTimelineLayout } from "./layout";
 
 interface Recording {
@@ -89,6 +90,21 @@ describe("recorded fan-out (mock worker, three site servers)", () => {
     expect(layout.connectors.filter((connector) => connector.kind === "return").every((connector) => !connector.pending && connector.to.t - t0 === 7044)).toBe(true);
     // Two children per cloud lane run at the same time, so each lane has two rows.
     expect(layout.lanes.map((lane) => [lane.site, lane.rows.length])).toEqual([["local", 1], ["cloud", 2], ["cloud2", 2]]);
+  });
+
+  // Contract section 10.3: this recording predates section 10, so no worker
+  // event and no run record names a call site. The cause panel must still
+  // explain a call, from the last position of the calling thread, and it must
+  // say that the location is approximate.
+  it("names the cause of a call of an older recording from the last position, marked approximate", () => {
+    const call = layout.connectors.find((connector) => connector.kind === "call");
+    if (call === undefined) throw new Error("the recording has no call connector");
+    const ctx: CauseContext = { runs, events: state.events, snapshot: null };
+    const cause = causeOf({ kind: "connector", item: call }, ctx, layout.t1);
+    expect(cause.title).toBe("remote call");
+    expect(cause.sentence).toMatch(/^durable_fan_out called remote_get_quote at quotes\.baml:\d+, placed on cloud2?\.$/);
+    expect(cause.location).toMatchObject({ file: "baml_src/quotes.baml", approximate: true });
+    expect(cause.missing).toBeNull();
   });
 
   it("walks the scenario guide to its end", () => {

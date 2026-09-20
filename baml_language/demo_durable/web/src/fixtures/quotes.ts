@@ -4,7 +4,7 @@
  * that makes a remote call, and a remote child from its creation to its end.
  */
 
-import type { DumpChild, DumpFrame, DumpThread, DumpValue, Json, JsonObject, PauseStats, ResumeStats, Site, StateDump } from "../protocol";
+import type { CancelCause, DumpChild, DumpFrame, DumpThread, DumpValue, Json, JsonObject, PauseStats, ResumeStats, Site, StateDump } from "../protocol";
 import { FIXTURE_PROGRAM_HASH, type FixtureBuilder } from "./builder";
 import { lineIn } from "./programs";
 import { QUOTES_BAML_FILE } from "./quotes.baml";
@@ -219,10 +219,14 @@ export function println(b: FixtureBuilder, at: number, caller: Caller, needle: s
   b.worker(at + 1, caller.site, caller.run, { type: "log", stream: "stdout", text, thread });
 }
 
-/** `spawn { remote_get_quote(...) }`: the new thread, its position, and its `remote_call`. */
+/**
+ * `spawn { remote_get_quote(...) }`: the new thread, its position, and its
+ * `remote_call`. The `spawn` site of the thread and the call site of the call
+ * are the same line of the parent (contract section 10.1).
+ */
 export function spawnQuoteCall(b: FixtureBuilder, at: number, caller: Caller, thread: number, callId: string, city: string, vendor: Vendor, onLineOf: Vendor = vendor): void {
   const line = lineIn(QUOTES_BAML_FILE, caller.fn, callNeedle(onLineOf));
-  b.worker(at, caller.site, caller.run, { type: "thread_started", thread, parent_thread: 1 });
+  b.worker(at, caller.site, caller.run, { type: "thread_started", thread, parent_thread: 1, file: QUOTES_BAML_FILE, line });
   b.worker(at + 2, caller.site, caller.run, { type: "position", thread, function: caller.fn, file: QUOTES_BAML_FILE, line, reason: "remote_call", op: null });
   b.worker(at + 3, caller.site, caller.run, { type: "remote_call", call_id: callId, thread, function: REMOTE_QUOTE_FN, args: { request: quoteRequest(city, vendor) } });
 }
@@ -244,8 +248,16 @@ export function startQuoteChild(b: FixtureBuilder, at: number, caller: Caller, c
   b.createRun(at, child.site, child.run, REMOTE_QUOTE_FN, { request: quoteRequest(city, vendor) }, { parent: { site: caller.site, run: caller.run, call_id: callId } });
   b.siteEvent(at + 5, { type: "remote_dispatched", site: caller.site, run: caller.run, call_id: callId, child_site: child.site, child_run: child.run, function: REMOTE_QUOTE_FN });
   const parent = b.run(caller.site, caller.run);
+  // Section 10.2: the site server records the call site of the entry.
+  const site = b.callSite(caller.run, callId);
+  // Section 10.3: the record keeps the calling function too.
+  const from = b.caller(caller.run, callId);
   b.update(at + 5, caller.site, caller.run, {
-    waiting_on: [...parent.waiting_on, { call_id: callId, child_site: child.site, child_run: child.run, function: REMOTE_QUOTE_FN }],
+    waiting_on: [
+      ...parent.waiting_on,
+      { call_id: callId, child_site: child.site, child_run: child.run, function: REMOTE_QUOTE_FN, inherited: false, file: site?.file ?? null, line: site?.line ?? null, caller: from },
+    ],
+    calls: [...(parent.calls ?? []), { call_id: callId, function: REMOTE_QUOTE_FN, args: { request: quoteRequest(city, vendor) }, file: site?.file ?? null, line: site?.line ?? null, caller: from }],
   });
   startProcess(b, at + 40, child.site, child.run, REMOTE_QUOTE_FN, child.pid, false);
   const self: Caller = { site: child.site, run: child.run, fn: REMOTE_QUOTE_FN };
@@ -296,8 +308,10 @@ export function failQuoteChild(b: FixtureBuilder, at: number, caller: Caller, ca
  * the child's site to cancel the child, and emits `remote_cancelled`. The
  * child's worker emits `cancelled` and exits with code 130.
  */
-export function cancelQuoteChild(b: FixtureBuilder, at: number, caller: Caller, callId: string, thread: number, child: ChildSpec): number {
-  b.worker(at, caller.site, caller.run, { type: "remote_cancel", call_id: callId, thread });
+export function cancelQuoteChild(b: FixtureBuilder, at: number, caller: Caller, callId: string, thread: number, child: ChildSpec, cause: CancelCause = "future_cancel"): number {
+  // Section 10.1: the worker names the cause, and repeats the call site that it
+  // recorded when the call was made. The builder fills the call site in.
+  b.worker(at, caller.site, caller.run, { type: "remote_cancel", call_id: callId, thread, cause });
   const parent = b.run(caller.site, caller.run);
   b.update(at + 2, caller.site, caller.run, { waiting_on: parent.waiting_on.filter((entry) => entry.call_id !== callId) });
   b.siteEvent(at + 3, { type: "remote_cancelled", site: caller.site, run: caller.run, call_id: callId, child_site: child.site, child_run: child.run });

@@ -9,7 +9,7 @@ import { SourceView, type SourceFocus } from "./components/SourceView";
 import { Split } from "./components/Split";
 import { StateTree } from "./components/StateTree";
 import { isFixtureName, loadFixture, type FixtureName } from "./fixtures";
-import { REGISTRY_SITE, type JsonObject, type Run, type Site } from "./protocol";
+import { REGISTRY_SITE, type JsonObject, type Run, type Site, type StateDump } from "./protocol";
 import { scenarioOfFixture } from "./scenarios/catalog";
 import type { RunStart, Scenario } from "./scenarios/engine";
 import { useCoach, type ScenarioSession } from "./scenarios/useCoach";
@@ -25,6 +25,9 @@ interface Mode {
   /** `?autoplay=1` or `?autoplay=0`. `null` leaves the stored preference. */
   autoplay: boolean | null;
 }
+
+/** The snapshot whose state dump the state tree holds. */
+type SnapshotState = { site: Site; run: string; n: number; dump: StateDump };
 
 const AUTOPLAY_KEY = "durable-demo:autoplay";
 
@@ -83,14 +86,20 @@ export function App() {
 
   const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotRef | null>(null);
   const [focus, setFocus] = useState<SourceFocus | null>(null);
+  // The dump that the state tree holds. The timeline names the top user frame
+  // of a snapshot marker from it (contract section 10.3).
+  const [snapshotState, setSnapshotState] = useState<SnapshotState | null>(null);
   useEffect(() => {
     setSelectedSnapshot(null);
     setFocus(null);
   }, [selected]);
-  // A frame focus from the state tree ends when the run moves on.
+  // A frame focus from the state tree names a line of a snapshot that the run
+  // has left behind, so it ends when the run moves on. A location that the
+  // user followed from the timeline stays until it is cleared.
   const selectedStatus = selectedRun?.status;
   const selectedSegment = selectedRun?.segment;
-  useEffect(() => setFocus(null), [selectedStatus, selectedSegment]);
+  useEffect(() => setFocus((current) => (current?.origin === "cause" ? current : null)), [selectedStatus, selectedSegment]);
+  const clearFocus = useCallback(() => setFocus(null), []);
 
   // Backfill the history of every run of the selected tree, once per connection generation.
   const backfilled = useRef(new Set<string>());
@@ -231,7 +240,8 @@ export function App() {
                   id: "timeline", defaultSize: "68", minSize: "30",
                   content: (
                     <Timeline key={selected ?? "none"} sites={state.sites} runs={treeRuns} events={state.events} selectedRun={selected}
-                      selectedSnapshot={selectedSnapshot} onSelectSnapshot={setSelectedSnapshot} />
+                      selectedSnapshot={selectedSnapshot} onSelectSnapshot={setSelectedSnapshot} snapshotState={snapshotState}
+                      onOpenSource={setFocus} />
                   ),
                 },
               ]} />
@@ -243,13 +253,16 @@ export function App() {
               <Split id="bottom" orientation="horizontal" panes={[
                 {
                   id: "source", defaultSize: "24", minSize: "14",
-                  content: <SourceView api={api} run={selectedRun} events={selected ? state.events[selected] : undefined} focus={focus} />,
+                  content: (
+                    <SourceView api={api} run={selectedRun} events={selected ? state.events[selected] : undefined} focus={focus}
+                      onClearFocus={clearFocus} />
+                  ),
                 },
                 {
                   id: "state", defaultSize: "21", minSize: "12",
                   content: (
                     <StateTree api={api} run={selectedRun} selectedSnapshot={selectedSnapshot} onSelectSnapshot={setSelectedSnapshot}
-                      onFocusSource={setFocus} />
+                      onFocusSource={setFocus} onStateLoaded={setSnapshotState} />
                   ),
                 },
                 {

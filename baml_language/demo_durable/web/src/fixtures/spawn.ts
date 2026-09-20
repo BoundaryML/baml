@@ -39,7 +39,7 @@ export function buildSpawnFixture(): Fixture {
   b.worker(39, "local", parent, { type: "position", thread: 1, function: fn, file, line: spawnLine, reason: "early_yield", op: null });
 
   // The spawned thread leaves the parent and crosses to the cloud lane.
-  b.worker(58, "local", parent, { type: "thread_started", thread: 2, parent_thread: 1 });
+  b.worker(58, "local", parent, { type: "thread_started", thread: 2, parent_thread: 1, file, line: spawnLine });
   b.worker(60, "local", parent, { type: "position", thread: 2, function: fn, file, line: spawnLine, reason: "remote_call", op: null });
   b.worker(61, "local", parent, { type: "remote_call", call_id: callId, thread: 2, function: childFn, args: { city: "Lisbon" } });
   // The main thread continues its loop in the meantime.
@@ -52,7 +52,13 @@ export function buildSpawnFixture(): Fixture {
 
   b.createRun(70, "cloud", child, childFn, { city: "Lisbon" }, { parent: { site: "local", run: parent, call_id: callId } });
   b.siteEvent(76, { type: "remote_dispatched", site: "local", run: parent, call_id: callId, child_site: "cloud", child_run: child, function: childFn });
-  b.update(76, "local", parent, { waiting_on: [{ call_id: callId, child_site: "cloud", child_run: child, function: childFn }] });
+  const callAtLine = b.callSite(parent, callId);
+  // Section 10.3: the record keeps the calling function too.
+  const callFrom = b.caller(parent, callId);
+  b.update(76, "local", parent, {
+    waiting_on: [{ call_id: callId, child_site: "cloud", child_run: child, function: childFn, inherited: false, ...callAtLine, caller: callFrom }],
+    calls: [{ call_id: callId, function: childFn, args: { city: "Lisbon" }, ...callAtLine, caller: callFrom }],
+  });
 
   b.setStatus(118, "cloud", child, "running", { pid: 52110 });
   b.worker(120, "cloud", child, { type: "hello", mode: "start", function: childFn, durable: false });

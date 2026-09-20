@@ -163,7 +163,8 @@ export const SCENARIOS: readonly Scenario[] = [
       {
         id: "cancel",
         title: "cancel the losers",
-        hint: () => "race settles with the first result and cancels the other futures. The worker reports a remote_cancel for each loser.",
+        hint: () =>
+          "race settles with the first result and cancels the other futures. Click a cancel arrow on the timeline: the panel says the future was cancelled and links to the line the call was made on.",
         done: (view) => cancels(view.root) >= 1,
       },
       {
@@ -212,7 +213,8 @@ export const SCENARIOS: readonly Scenario[] = [
       {
         id: "timeout",
         title: "deadline passes",
-        hint: () => "The deadline passes: the token fires and cancels the work thread in its remote wait. The worker reports remote_cancel.",
+        hint: () =>
+          "The deadline passes: the token fires and cancels the work thread in its remote wait. Click the cancel arrow on the timeline: the panel names the cancel token and links to the with_timeout line.",
         done: (view) => cancels(view.root) >= 1,
       },
       {

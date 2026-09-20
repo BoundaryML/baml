@@ -541,6 +541,169 @@ async function stackingScenario(browser: Browser) {
   await finish();
 }
 
+// ---------------------------------------------------------------------------
+// Contract section 10.3: why an arrow happened
+// ---------------------------------------------------------------------------
+
+/** The cause panel of the object that is selected right now. */
+async function causePanel(page: Page) {
+  const panel = page.locator('[data-testid="timeline-detail"]');
+  const location = panel.locator('[data-testid="cause-location"]');
+  const hasLocation = (await location.count()) > 0;
+  return {
+    kind: await panel.getAttribute("data-kind"),
+    sentence: (await panel.locator('[data-testid="cause-sentence"]').innerText()).trim(),
+    location: hasLocation ? await location.innerText() : null,
+    approximate: hasLocation ? (await location.getAttribute("data-approximate")) === "true" : null,
+    file: hasLocation ? await location.getAttribute("data-file") : null,
+    line: hasLocation ? Number(await location.getAttribute("data-line")) : null,
+    missing: (await panel.locator('[data-testid="cause-missing"]').count()) > 0,
+    // The rows under the sentence, as `{ label: value }`.
+    rows: await panel.locator("table.kv").first().evaluate((node) =>
+      Object.fromEntries(
+        [...node.querySelectorAll("tr")].map((row) => [
+          row.children[0]?.textContent ?? "",
+          row.children[1]?.textContent ?? "",
+        ]),
+      ),
+    ).catch(() => ({}) as Record<string, string>),
+  };
+}
+
+/**
+ * Selects the object and returns its cause panel. A connector is a curved SVG
+ * path whose bounding-box center is usually not on the line, so the click is
+ * dispatched on the element itself. React sees an ordinary bubbling click.
+ */
+async function selectAndRead(page: Page, selector: string, index = 0) {
+  await page.locator(selector).nth(index).dispatchEvent("click");
+  await page.mouse.move(4, 4);
+  await page.waitForSelector('[data-testid="timeline-detail"]');
+  return causePanel(page);
+}
+
+/** The line that the source view highlights as a followed location, and the file it shows. */
+async function followedLine(page: Page) {
+  const marked = page.locator('[data-testid="source-view"] .src-line[data-mark="cause"]');
+  return {
+    lines: await marked.evaluateAll((nodes) => nodes.map((node) => Number((node as HTMLElement).dataset.line))),
+    file: (await page.locator('[data-testid="source-view"] .panel-head .mono.clip').innerText()).trim(),
+    paused: await page.locator('[data-testid="source-view"] .src-line[data-mark="paused"]').count(),
+  };
+}
+
+/**
+ * Every kind of arrow, and every other row of the table in contract section
+ * 10.3: the panel names the cause in one sentence, and its source location is
+ * a link that opens the file and highlights the line.
+ */
+async function causeScenario(browser: Browser) {
+  const scenario = "cause-panel";
+  const { page, finish } = await open(browser, scenario, "/?fixture=race&speed=instant", "light", { width: 1440, height: 900 });
+  await page.waitForSelector('[data-testid="tl-connector"][data-kind="cancel"]');
+
+  // A call arrow.
+  const call = await selectAndRead(page, '[data-testid="tl-connector"][data-kind="call"] .tl-connector-hit');
+  check(scenario, "call arrow: kind", call.kind, "call");
+  check(scenario, "call arrow: sentence", /^durable_race called remote_get_quote at quotes\.baml:\d+, placed on cloud2?\.$/.test(call.sentence), true);
+  // Section 10.3: the calling function is what the worker reported, not the
+  // run's entry function.
+  check(scenario, "call arrow: the rows name the calling function", call.rows?.["calling function"] ?? null, "durable_race");
+  check(scenario, "call arrow: the location is exact", [call.file, call.approximate], ["baml_src/quotes.baml", false]);
+
+  // Following the link opens the file and highlights the line.
+  await page.locator('[data-testid="cause-location"]').click();
+  const followed = await followedLine(page);
+  check(scenario, "following the link highlights the line of the call", followed.lines, [call.line]);
+  check(scenario, "the source view shows the file of the location", followed.file, "baml_src/quotes.baml");
+  check(scenario, "a followed line is its own mark, not the paused one", (await page.locator('[data-testid="source-view"] .src-line[data-mark="cause"] .tag').innerText()).trim(), "▸ why");
+  await shot(page, "cause-call-arrow");
+  // The highlight is clearable.
+  await page.locator('[data-testid="clear-focus"]').click();
+  check(scenario, "the highlight can be cleared", (await followedLine(page)).lines, []);
+
+  // A cancel arrow: the race loser.
+  const cancel = await selectAndRead(page, '[data-testid="tl-connector"][data-kind="cancel"] .tl-connector-hit');
+  check(scenario, "cancel arrow: kind", cancel.kind, "cancel");
+  check(scenario, "cancel arrow: the sentence names the cancelled future", cancel.sentence.includes("cancelled because the future was cancelled (a race loser"), true);
+  check(scenario, "cancel arrow: the sentence names the call site", /The call was made at quotes\.baml:\d+\.$/.test(cancel.sentence), true);
+  check(scenario, "cancel arrow: the location is exact", [cancel.file, cancel.approximate], ["baml_src/quotes.baml", false]);
+  await page.locator('[data-testid="cause-location"]').click();
+  check(scenario, "following a cancel location highlights its line", (await followedLine(page)).lines, [cancel.line]);
+  await shot(page, "cause-cancel-arrow");
+  await page.locator('[data-testid="clear-focus"]').click();
+
+  // A return arrow: the winner's result was stored while the run had no process.
+  const ret = await selectAndRead(page, '[data-testid="tl-connector"][data-kind="return"] .tl-connector-hit');
+  check(scenario, "return arrow: kind", ret.kind, "return");
+  check(scenario, "return arrow: the sentence says where the result was taken", ret.sentence.includes("delivered while the run had no process, taken at resume"), true);
+  check(scenario, "return arrow: no location is claimed, and the panel says why", [ret.location, ret.missing], [null, true]);
+
+  // A migration arrow.
+  const migration = await selectAndRead(page, '[data-testid="tl-connector"][data-kind="migration"] .tl-connector-hit');
+  check(scenario, "migration arrow: kind", migration.kind, "migration");
+  check(scenario, "migration arrow: the sentence names the command", /^A "Resume on cloud2" command moved r-\w+ from local to cloud2\./.test(migration.sentence), true);
+  check(scenario, "migration arrow: the frame of the snapshot is approximate", [migration.file, migration.approximate], ["baml_src/quotes.baml", true]);
+
+  // A thread sub-bar.
+  const thread = await selectAndRead(page, '[data-testid="tl-thread"] rect.tl-thread');
+  check(scenario, "thread sub-bar: the sentence names the spawn site", /^Thread \d+ was spawned by thread 1 at quotes\.baml:\d+\./.test(thread.sentence), true);
+  check(scenario, "thread sub-bar: the spawn site is exact", thread.approximate, false);
+
+  // A segment bar.
+  const segment = await selectAndRead(page, '[data-testid="tl-segment"] rect.tl-bar');
+  check(scenario, "segment bar: the sentence names the first and the last position", /It ran from quotes\.baml:\d+ to quotes\.baml:\d+\.$/.test(segment.sentence), true);
+
+  // A snapshot marker: the state tree loads the dump, and the panel names its top user frame.
+  await page.locator('[data-testid="tl-marker"][data-kind="snapshot"]').first().click();
+  await page.waitForSelector('[data-testid="state-thread"]');
+  await page.mouse.move(4, 4);
+  const snapshot = await causePanel(page);
+  check(scenario, "snapshot marker: the sentence names the pause that asked for it", snapshot.sentence.startsWith("A Pause command asked for this snapshot"), true);
+  check(scenario, "snapshot marker: the location is the top user frame", [snapshot.file, snapshot.approximate], ["baml_src/quotes.baml", false]);
+  // Section 10.3: a phase 3 dump holds every live thread, so the frame belongs
+  // to one of them and the sentence says which.
+  check(scenario, "snapshot marker: the sentence names the thread the frame belongs to", / Thread \d+ stood at quotes\.baml:\d+\.$/.test(snapshot.sentence), true);
+  check(scenario, "snapshot marker: the pause timings are still shown", await count(page, '[data-testid="timeline-detail"][data-kind="snapshot"] [data-testid="pause-stats"]'), 1);
+
+  // The panel stays inside its column, also for a call whose arguments are long.
+  await selectAndRead(page, '[data-testid="tl-connector"][data-kind="call"] .tl-connector-hit');
+  const overflow = await page.locator(".timeline-detail").evaluate((node) => ({
+    horizontal: node.scrollWidth > node.clientWidth + 1,
+    rows: [...node.querySelectorAll("table.kv td:last-child")].filter((cell) => cell.getBoundingClientRect().right > node.getBoundingClientRect().right + 1).length,
+  }));
+  check(scenario, "the cause panel does not overflow its column", overflow, { horizontal: false, rows: 0 });
+  await finish();
+}
+
+/** The fork arrow and the sleeping gap live in other fixtures. */
+async function causeMoreScenario(browser: Browser) {
+  const scenario = "cause-panel-more";
+  const { page, finish } = await open(browser, scenario, "/?fixture=fork&speed=instant", "light", { width: 1440, height: 900 });
+  await page.waitForSelector('[data-testid="tl-connector"][data-kind="fork"]');
+  const fork = await selectAndRead(page, '[data-testid="tl-connector"][data-kind="fork"] .tl-connector-hit');
+  check(scenario, "fork arrow: kind", fork.kind, "fork");
+  check(scenario, "fork arrow: the sentence names the snapshot it started from", /^r-\w+ was forked from snapshot #\d+ of r-\w+, which was taken at trip\.baml:\d+\.$/.test(fork.sentence), true);
+  check(scenario, "fork arrow: the frame is approximate", [fork.file, fork.approximate], ["baml_src/trip.baml", true]);
+  await page.locator('[data-testid="cause-location"]').click();
+  check(scenario, "following the fork location highlights its line", (await followedLine(page)).lines, [fork.line]);
+  await shot(page, "cause-fork-arrow");
+  await finish();
+
+  const sleeping = "cause-panel-sleeping";
+  const open2 = await open(browser, sleeping, "/?fixture=fanout&speed=instant", "light", { width: 1440, height: 900 });
+  await open2.page.waitForSelector('[data-testid="tl-gap"][data-kind="sleeping"]');
+  const gap = await selectAndRead(open2.page, '[data-testid="tl-gap"][data-kind="sleeping"] .tl-gap-hit');
+  check(sleeping, "sleeping gap: the sentence names the sleep call site and the wake time", /^The run suspended itself for a sleep at quotes\.baml:\d+ and wakes at \d\d:\d\d:\d\d\.\d\d\d\.$/.test(gap.sentence), true);
+  // A `position` event is the last sleep the segment reported, not the sleep of
+  // this gap: it is approximate, like every other position-derived location.
+  check(sleeping, "sleeping gap: the sleep call site is approximate", [gap.file, gap.approximate], ["baml_src/quotes.baml", true]);
+  await open2.page.locator('[data-testid="cause-location"]').click();
+  check(sleeping, "following the sleep location highlights its line", (await followedLine(open2.page)).lines, [gap.line]);
+  await shot(open2.page, "cause-sleeping-gap");
+  await open2.finish();
+}
+
 // The state tree: futures in three states with their values, a cancel token, enums, maps, and nested instances.
 async function stateTreeScenario(browser: Browser, colorScheme: ColorScheme) {
   const scenario = `state-tree-${colorScheme}`;
@@ -1276,6 +1439,8 @@ try {
     await stackingScenario(browser);
     await stateTreeScenario(browser, "light");
     await stateTreeScenario(browser, "dark");
+    await causeScenario(browser);
+    await causeMoreScenario(browser);
     await galleryScenario(browser, "light");
     await galleryScenario(browser, "dark");
     await guideScenario(browser);

@@ -36,6 +36,10 @@
   /* The guide of the scenario gallery: the hint bar and the button it points at. */
   --coach: #fab219;
   --coach-soft: rgba(250, 178, 25, 0.2);
+  /* A source location that the user followed from the timeline (contract 10.3). */
+  --focus-line: #17998a;
+  --focus-soft: rgba(23, 153, 138, 0.16);
+  --focus-ink: #0c6155;
 
   --tok-comment: #807e78;
   --tok-string: #8a4b12;
@@ -76,6 +80,9 @@
     --crit-soft: rgba(230, 103, 103, 0.16);
     --sleep-ink: #9db7dc;
     --coach-soft: rgba(250, 178, 25, 0.16);
+    --focus-line: #2ec4b0;
+    --focus-soft: rgba(46, 196, 176, 0.18);
+    --focus-ink: #6fe0d0;
 
     --tok-comment: #908e87;
     --tok-string: #e0a36b;
@@ -384,6 +391,23 @@ a.btn { text-decoration: none; color: inherit; display: inline-block; }
 .crumbs { display: flex; flex-wrap: wrap; gap: 2px 4px; font-family: var(--mono); font-size: 10.5px; margin-top: 4px; }
 .crumbs span + span::before { content: "›"; color: var(--ink-3); margin-right: 4px; }
 
+/* The cause panel: one readable sentence, then the source location as a link. */
+.timeline-detail .cause { margin: 0 0 6px; font-size: 11.5px; line-height: 1.38; overflow-wrap: anywhere; }
+.cause-loc-row { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
+.cause-loc-row .muted { font-size: 10px; }
+.cause-loc {
+  align-self: flex-start; border: 1px solid var(--focus-line); background: var(--focus-soft); color: var(--focus-ink);
+  border-radius: 3px; padding: 1px 5px; font-family: var(--mono); font-size: 11px; cursor: pointer;
+}
+.cause-loc:hover { background: var(--focus-line); }
+.cause-loc[data-approximate="true"] { border-style: dashed; }
+.cause-missing { margin-bottom: 6px; line-height: 1.35; overflow-wrap: anywhere; }
+/* A row of the cause panel can carry a long value (the arguments of a call).
+   It wraps inside the panel instead of pushing the table past its edge. */
+.timeline-detail .kv { table-layout: fixed; }
+.timeline-detail .kv td:first-child { width: 40%; }
+.timeline-detail .kv td:last-child { overflow-wrap: anywhere; }
+
 .tl-lane-bg { fill: var(--surface-2); opacity: 0.55; }
 .tl-lane-label { font: 600 11px var(--sans); fill: var(--ink); }
 .tl-lane-sub { font: 10px var(--mono); fill: var(--ink-3); }
@@ -464,6 +488,9 @@ a.btn { text-decoration: none; color: inherit; display: inline-block; }
 .src-line .code { flex: 1; padding-right: 12px; }
 .src-line[data-mark="thread"] { background: var(--surface-2); }
 .src-line[data-mark="focus"] { background: var(--surface-3); border-left-color: var(--ink-3); }
+.src-line[data-mark="cause"] { background: var(--focus-soft); border-left-color: var(--focus-line); border-left-width: 4px; }
+.src-line[data-mark="cause"] .tag { color: var(--focus-ink); font-weight: 700; }
+.src-line[data-mark="cause"] .ln { color: var(--ink); font-weight: 700; }
 .src-line[data-mark="current"][data-site] { background: var(--site-soft); border-left-color: var(--site); }
 .src-line[data-mark="paused"] { background: var(--warn-soft); border-left-color: var(--warn); border-left-style: double; outline: 1px dashed var(--warn); outline-offset: -1px; }
 .src-line[data-mark="paused"] .tag { color: var(--warn-ink); font-weight: 700; }

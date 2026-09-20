@@ -123,7 +123,13 @@ export function buildForkFixture(): Fixture {
   b.worker(7963, "local", source, { type: "remote_call", call_id: callId, thread: 1, function: childFn, args: { city: "Lisbon" } });
   b.createRun(7971, "cloud", child, childFn, { city: "Lisbon" }, { parent: { site: "local", run: source, call_id: callId } });
   b.siteEvent(7976, { type: "remote_dispatched", site: "local", run: source, call_id: callId, child_site: "cloud", child_run: child, function: childFn });
-  b.update(7976, "local", source, { waiting_on: [{ call_id: callId, child_site: "cloud", child_run: child, function: childFn }] });
+  const callAtLine = b.callSite(source, callId);
+  // Section 10.3: the record keeps the calling function too.
+  const callFrom = b.caller(source, callId);
+  b.update(7976, "local", source, {
+    waiting_on: [{ call_id: callId, child_site: "cloud", child_run: child, function: childFn, inherited: false, ...callAtLine, caller: callFrom }],
+    calls: [{ call_id: callId, function: childFn, args: { city: "Lisbon" }, ...callAtLine, caller: callFrom }],
+  });
   b.setStatus(8018, "cloud", child, "running", { pid: 52231 });
   b.worker(8020, "cloud", child, { type: "hello", mode: "start", function: childFn, durable: false });
   b.worker(8021, "cloud", child, { type: "thread_started", thread: 1, parent_thread: null });

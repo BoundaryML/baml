@@ -1624,6 +1624,140 @@ async function restoredWaitScene() {
   check("the results that arrived without a process are taken in the order of their arrival", isDeepStrictEqual(received, byArrival), `${received} / ${byArrival}`);
 }
 
+// ---------------------------------------------------------------------------
+// Contract section 10: the call site of every remote call
+// ---------------------------------------------------------------------------
+
+/** The 1-based line of the first line of `file` in `program/baml_src` that contains `needle`. */
+function programLine(file, needle) {
+  const text = fs.readFileSync(path.join(ROOT, "program", file), "utf8");
+  const index = text.split("\n").findIndex((line) => line.includes(needle));
+  if (index === -1) throw new Error(`program/${file} has no line that contains ${needle}`);
+  return index + 1;
+}
+
+const QUOTES = "baml_src/quotes.baml";
+
+/**
+ * Contract section 10.1 and 10.2: the worker reports the call site of a remote
+ * call, the `spawn` site of a thread, and the call site plus the `cause` of a
+ * cancellation. The site server forwards the fields unchanged and records the
+ * call site in `waiting_on` and in `calls`, so the cause survives a resume and
+ * a page reload.
+ */
+async function callSiteScene() {
+  section("call sites: remote_call, thread_started, and remote_cancel carry file, line, and cause");
+  const city = "Braga";
+  const spawnLines = [
+    programLine(QUOTES, "let fast = spawn"),
+    programLine(QUOTES, "let medium = spawn"),
+    programLine(QUOTES, "let slow = spawn"),
+  ];
+  const id = (await post("local", "/api/runs", { function: "durable_race", args: { city } })).json.id;
+  const calls = [1, 2, 3].map((n) => `${id}-c${n}`);
+
+  // While the three children run, the record of the parent names every call site.
+  await waitFor("three dispatches", () => eventsOf(id, "remote_dispatched").length === 3, 20000);
+  await waitFor("three waiting_on entries", async () => (await get("local", `/api/runs/${id}`)).json.waiting_on.length === 3, 20000);
+  const waiting = (await get("local", `/api/runs/${id}`)).json;
+  const siteOf = (list) => list.map((e) => [e.call_id, e.file, e.line]).sort();
+  const want = calls.map((callId, i) => [callId, QUOTES, spawnLines[i]]).sort();
+  check("waiting_on records the call site of each entry", isDeepStrictEqual(siteOf(waiting.waiting_on), want), JSON.stringify(siteOf(waiting.waiting_on)));
+  check("calls records the call site of each entry", isDeepStrictEqual(siteOf(waiting.calls), want), JSON.stringify(siteOf(waiting.calls)));
+
+  const spawned = eventsOf(id, "thread_started");
+  check("remote_call carries the call site, unchanged from the worker", isDeepStrictEqual(siteOf(eventsOf(id, "remote_call")), want), JSON.stringify(siteOf(eventsOf(id, "remote_call"))));
+  check("thread_started carries the spawn site, and the root thread of a segment carries none",
+    spawned.filter((e) => e.parent_thread === null).every((e) => e.file === null && e.line === null)
+    && spawnLines.every((line) => spawned.some((e) => e.parent_thread === 1 && e.file === QUOTES && e.line === line)),
+    JSON.stringify(spawned.map((e) => [e.thread, e.parent_thread, e.file, e.line])));
+
+  // The race cancels the two losers: `future_cancel`, with the call site of the cancelled call.
+  const done = await waitStatus("local", id, "completed", 40000);
+  const cancels = eventsOf(id, "remote_cancel");
+  check("remote_cancel names the cause future_cancel and repeats the call site of the cancelled call",
+    eachOnce(cancels, "call_id", [calls[1], calls[2]]) && cancels.every((e) => e.cause === "future_cancel")
+    && isDeepStrictEqual(siteOf(cancels), [[calls[1], QUOTES, spawnLines[1]], [calls[2], QUOTES, spawnLines[2]]].sort()),
+    JSON.stringify(cancels.map((e) => [e.call_id, e.cause, e.file, e.line])));
+  check("the completed run keeps every call site in `calls`", isDeepStrictEqual(siteOf(done.calls), want), JSON.stringify(siteOf(done.calls)));
+
+  // Contract section 10.3: the panel names "the calling function". The only
+  // evidence is what the worker reported, so it travels with the event and
+  // with the record. `function` is the callee; `caller` is the function the
+  // call is written in.
+  const callers = eventsOf(id, "remote_call").map((e) => e.caller);
+  check("remote_call names the calling function", isDeepStrictEqual(callers, ["durable_race", "durable_race", "durable_race"]), JSON.stringify(callers));
+  check("waiting_on and calls keep the calling function, so it survives a resume and a reload",
+    done.calls.every((c) => c.caller === "durable_race") && done.calls.every((c) => c.function === "remote_get_quote"),
+    JSON.stringify(done.calls.map((c) => [c.call_id, c.function, c.caller])));
+
+  // The same list comes back from events.jsonl, which is what a page reload reads.
+  const history = (await get("local", `/api/runs/${id}/events`)).json;
+  check("events.jsonl keeps file, line, and cause, so a page reload sees them",
+    isDeepStrictEqual(siteOf(history.filter((e) => e.type === "remote_call")), want)
+    && history.filter((e) => e.type === "remote_cancel").every((e) => e.cause === "future_cancel" && e.file === QUOTES)
+    && history.some((e) => e.type === "thread_started" && e.file === QUOTES && e.line === spawnLines[0])
+    && history.filter((e) => e.type === "remote_call").every((e) => e.caller === "durable_race"),
+    JSON.stringify(history.filter((e) => e.type === "remote_cancel").map((e) => [e.call_id, e.cause, e.file, e.line])));
+
+  // A resume: the call site is read back from `meta.json` and travels with the run.
+  // The call is inside the closure that `with_timeout` runs, one line below it.
+  const timeout = programLine(QUOTES, "QuoteKind.Tour, 6000");
+  const deadlineId = (await post("local", "/api/runs", { function: "durable_deadline", args: { city } })).json.id;
+  await waitFor("the deadline run to dispatch its call", () => eventsOf(deadlineId, "remote_dispatched").length === 1, 20000);
+  await post("local", `/api/runs/${deadlineId}/pause`);
+  await waitStatus("local", deadlineId, "paused", 20000);
+  const parked = (await get("local", `/api/runs/${deadlineId}`)).json;
+  check("a paused run keeps the call site in waiting_on", isDeepStrictEqual(siteOf(parked.waiting_on), [[`${deadlineId}-c1`, QUOTES, timeout]]),
+    JSON.stringify(siteOf(parked.waiting_on)));
+  await post("local", `/api/runs/${deadlineId}/resume`, {});
+  const deadlineDone = await waitStatus("local", deadlineId, "completed", 40000);
+  const timeoutCancel = eventsOf(deadlineId, "remote_cancel");
+  check("with_timeout reports the cause token, and the call site survived the resume",
+    timeoutCancel.length === 1 && timeoutCancel[0].cause === "token" && timeoutCancel[0].file === QUOTES && timeoutCancel[0].line === timeout
+    && deadlineDone.calls.every((c) => c.file === QUOTES && c.line === timeout),
+    JSON.stringify(timeoutCancel.map((e) => [e.call_id, e.cause, e.file, e.line])));
+  // Section 10.3: the resumed process announces `remote_wait`, not `remote_call`,
+  // so the calling function of that call exists only on the record.
+  check("the calling function survived the resume on the run record",
+    deadlineDone.calls.every((c) => c.caller === "durable_deadline")
+    && deadlineDone.calls.every((c) => c.function === "remote_get_quote"),
+    JSON.stringify(deadlineDone.calls.map((c) => [c.call_id, c.function, c.caller])));
+
+  // `baml.future.all` drops the inputs that are still pending after an error by
+  // cancelling their futures (`futures.map((g) -> { g.cancel() })`). The inputs
+  // were spawned by the calling function, not by the helper thread that `all`
+  // runs in, so the engine classifies this as `future_cancel`, not `parent`.
+  // The engine test bex_engine::durable_cause
+  // `an_input_that_all_drops_after_an_error_reports_a_cancelled_future` pins
+  // that behavior against the real runtime.
+  const failId = (await post("local", "/api/runs", { function: "durable_fan_out", args: { city, mock_nap_ms: 500, mock_unavailable: "Flight" } })).json.id;
+  await waitStatus("local", failId, "failed", 60000);
+  await waitFor("the failed fan-out to cancel its pending inputs", () => eventsOf(failId, "remote_cancel").length > 0, 20000);
+  const failCancels = eventsOf(failId, "remote_cancel");
+  check("the inputs that baml.future.all drops after an error report the cause future_cancel, with their call site",
+    failCancels.every((e) => e.cause === "future_cancel" && e.file === QUOTES && typeof e.line === "number"),
+    JSON.stringify(failCancels.map((e) => [e.call_id, e.cause, e.file, e.line])));
+
+  // A worker that cannot attribute the call writes null, and the site server
+  // stores null. A worker that cannot classify a cancellation writes `unknown`.
+  const blindId = (await post("local", "/api/runs", {
+    function: "durable_race",
+    args: { city, mock_no_call_site: true, mock_cancel_cause: "unknown" },
+  })).json.id;
+  await waitFor("the blind run to dispatch", () => eventsOf(blindId, "remote_dispatched").length === 3, 20000);
+  const blind = (await get("local", `/api/runs/${blindId}`)).json;
+  check("a call without a location is recorded as null, not as a guess",
+    blind.waiting_on.every((w) => w.file === null && w.line === null) && blind.calls.every((c) => c.file === null && c.line === null)
+    && eventsOf(blindId, "remote_call").every((e) => e.file === null && e.line === null),
+    JSON.stringify(blind.waiting_on.map((w) => [w.call_id, w.file, w.line])));
+  await waitStatus("local", blindId, "completed", 40000);
+  const unknown = eventsOf(blindId, "remote_cancel");
+  check("a cancellation that the worker cannot classify reports the cause unknown and no location",
+    unknown.length === 2 && unknown.every((e) => e.cause === "unknown" && e.file === null && e.line === null),
+    JSON.stringify(unknown.map((e) => [e.call_id, e.cause, e.file, e.line])));
+}
+
 async function scene(name, fn) {
   try {
     await fn();
@@ -2088,6 +2222,7 @@ async function main() {
   await Promise.all([scene("late commands", lateCommandScene), scene("lost store entry", lostEntryScene)]);
   await scene("shared children", sharedChildrenScene);
   await scene("restored waits", restoredWaitScene);
+  await scene("call sites", callSiteScene);
   await invariants(local, cloud, cloud2, t0);
 
   if (ONLY !== "phase3") await restartScenario();

@@ -4,7 +4,8 @@ import { formatBytes, formatClock, formatOffset } from "../format";
 import { isTickingStatus, sitePort, type Run, type Site, type SiteEntry } from "../protocol";
 import type { AppState, RunKey } from "../state";
 import { runKey } from "../state";
-import { TimelineDetail, type DetailTarget } from "./Detail";
+import type { CauseContext } from "./cause";
+import { TimelineDetail, type DetailTarget, type SourceFocusRequest } from "./Detail";
 import {
   axisTicks,
   BAR_H,
@@ -39,6 +40,13 @@ interface Props {
   selectedRun: RunKey | null;
   selectedSnapshot: SnapshotRef | null;
   onSelectSnapshot(snapshot: SnapshotRef | null): void;
+  /**
+   * The state dump of the selected snapshot, when the state tree has it. The
+   * cause of a snapshot marker names its top user frame (contract section 10.3).
+   */
+  snapshotState?: CauseContext["snapshot"];
+  /** Opens a source location in the source view and highlights the line. */
+  onOpenSource?: (focus: SourceFocusRequest) => void;
 }
 
 type TargetRef = { kind: DetailTarget["kind"] | "threadlink"; id: string };
@@ -118,7 +126,7 @@ function fitLabel(candidates: string[], available: number): string {
   return candidates.find((candidate) => candidate.length * LABEL_CHAR_W <= available) ?? "";
 }
 
-export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, onSelectSnapshot }: Props) {
+export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, onSelectSnapshot, snapshotState, onOpenSource }: Props) {
   const [plotRef, width] = useWidth();
   // A sleeping run has no process, but its countdown moves with the clock.
   const live = runs.some((run) => isTickingStatus(run.status));
@@ -234,6 +242,10 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
 
   const detail = resolveTarget(layout, hover) ?? resolveTarget(layout, pinned);
   const detailPinned = hover === null && pinned !== null;
+  const causeContext = useMemo<CauseContext>(
+    () => ({ runs, events, snapshot: snapshotState ?? null }),
+    [runs, events, snapshotState],
+  );
   const isActive = (kind: TargetRef["kind"], id: string): boolean =>
     (pinned?.kind === kind && pinned.id === id) || (hover?.kind === kind && hover.id === id);
 
@@ -549,7 +561,7 @@ export function Timeline({ sites, runs, events, selectedRun, selectedSnapshot, o
           )}
         </div>
         <aside className="timeline-detail" aria-live="polite">
-          <TimelineDetail target={detail} pinned={detailPinned} />
+          <TimelineDetail target={detail} pinned={detailPinned} context={causeContext} now={tick} onOpenSource={onOpenSource} />
         </aside>
       </div>
     </section>

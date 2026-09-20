@@ -26,7 +26,23 @@
 //                            its `paused` event and reads no command in between
 //   "mock_fail_after_ms": n the run fails after n simulated milliseconds, while
 //                           its remote children may still run.
+//   "mock_no_call_site": true  every `remote_call` and `remote_cancel` of this
+//                           run reports `file: null` and `line: null`, as a real
+//                           worker does when no user frame can be attributed.
+//   "mock_cancel_cause": "<cause>"  every `remote_cancel` of this run reports
+//                           this cause instead of the one the mock classifies.
+//                           `"unknown"` is what an engine reports when it cannot
+//                           tell what fired.
 // Mock-only behavior: remote_fetch_weather fails for the city "Atlantis".
+//
+// Contract section 10.1: `remote_call` and `thread_started` carry the call site
+// and the `spawn` site, and `remote_cancel` carries the call site of the
+// cancelled call plus `cause`. The mock maps its cancellations to the four
+// cause values: a `race` loser and an input that `baml.future.all` drops after
+// an error are `future_cancel` (both cancel the input's own future), and
+// `with_timeout` is `token`. The run argument "mock_cancel_cause" overrides all
+// of them. `remote_call` also carries `caller`, the function that made the call
+// (contract section 10.3).
 //
 // Contract section 9.2: the flags --sleep-suspend-ms, --program-store, and
 // --program-hash, `hello.program_hash`, `paused.wake`, `remote_cancel`, and
@@ -268,13 +284,28 @@ function deliverResult(msg) {
   }
 }
 
+/**
+ * Contract section 10.1: the call site that a `remote_call` reports. The
+ * mock-only run argument `"mock_no_call_site": true` makes every call report
+ * `null`, which is what a real worker does when it cannot attribute the call
+ * to a user frame. The app then falls back to the thread's last `position`.
+ */
+function callSite(line) {
+  if (state.args?.mock_no_call_site === true) return { file: null, line: null, caller: null };
+  // Contract section 10.3: `caller` is the function the call is written in. A
+  // real worker reports the innermost user frame, which for a `spawn { }` body
+  // is the function that contains the `spawn`.
+  return { file: sourceFile(state.function), line, caller: state.function };
+}
+
 /** Reaches a `remote_` call on `thread`. Returns the call id. */
 function remoteCall(thread, fn, line, args) {
   state.call_counter += 1;
   const callId = `${opts.run}-c${state.call_counter}`;
   position(thread, state.function, line, "remote_call", null);
-  state.calls[callId] = { thread, function: fn, args, result: null };
-  emit("remote_call", { call_id: callId, thread, function: fn, args });
+  const site = callSite(line);
+  state.calls[callId] = { thread, function: fn, args, result: null, file: site.file, line: site.line, caller: site.caller };
+  emit("remote_call", { call_id: callId, thread, function: fn, args, file: site.file, line: site.line, caller: site.caller });
   log(`waiting for remote run of ${fn} (${callId}) on a remote site`, thread);
   return callId;
 }
@@ -465,8 +496,10 @@ function wakeParked() {
 function startThread(parent, name, line) {
   const thread = state.next_thread;
   state.next_thread += 1;
-  state.threads[thread] = { parent, name, line, ended: false };
-  emit("thread_started", { thread, parent_thread: parent });
+  const file = sourceFile(state.function);
+  state.threads[thread] = { parent, name, line, file, ended: false };
+  // Contract section 10.1: the `spawn` site in the parent thread.
+  emit("thread_started", { thread, parent_thread: parent, file, line });
   return thread;
 }
 
@@ -565,20 +598,38 @@ function spawnRemote(fn, line, args, name) {
   position(thread, `${state.function}.<spawn>`, line, "remote_call", null);
   state.call_counter += 1;
   const callId = `${opts.run}-c${state.call_counter}`;
-  state.calls[callId] = { thread, function: fn, args, result: null, cancelled: false, name };
+  const site = callSite(line);
+  state.calls[callId] = { thread, function: fn, args, result: null, cancelled: false, name, file: site.file, line: site.line, caller: site.caller };
   state.order.push(callId);
-  emit("remote_call", { call_id: callId, thread, function: fn, args });
+  emit("remote_call", { call_id: callId, thread, function: fn, args, file: site.file, line: site.line, caller: site.caller });
   return callId;
 }
 
-/** Contract section 9.2: the thread that waited on the call was cancelled. */
-function cancelCall(callId) {
+/**
+ * Contract sections 9.2 and 10.1: the thread that waited on the call was
+ * cancelled. `cause` is one of `future_cancel`, `token`, `parent`, and
+ * `unknown`, and `file`/`line` repeat the call site that was recorded when the
+ * call was made.
+ */
+function cancelCall(callId, cause) {
   const call = state.calls[callId];
   if (!call || call.result || call.cancelled) return;
   call.cancelled = true;
-  emit("remote_cancel", { call_id: callId, thread: call.thread });
+  // The mock-only run argument "mock_cancel_cause" overrides the classification,
+  // so that a scene can exercise the `unknown` case of an engine that cannot
+  // tell what fired.
+  const override = state.args?.mock_cancel_cause;
+  emit("remote_cancel", {
+    call_id: callId,
+    thread: call.thread,
+    file: call.file ?? null,
+    line: call.line ?? null,
+    cause: typeof override === "string" && override.length > 0 ? override : (cause ?? "unknown"),
+  });
   endThread(call.thread);
 }
+
+
 
 // ------------------------------------------------------- quotes.baml values
 
@@ -620,7 +671,8 @@ function mockFailKnob() {
 /** Re-announces the threads of a resumed run. Thread 1 is announced by main(). */
 function announceLiveThreads() {
   for (const [id, t] of Object.entries(state.threads)) {
-    if (!t.ended) emit("thread_started", { thread: Number(id), parent_thread: t.parent });
+    // The `spawn` site travels in the snapshot, so a restored thread reports it again.
+    if (!t.ended) emit("thread_started", { thread: Number(id), parent_thread: t.parent, file: t.file ?? null, line: t.line ?? null });
   }
 }
 
@@ -717,7 +769,12 @@ async function runFanOut() {
       return { values };
     });
     if (outcome.error != null) {
-      for (const callId of state.order) cancelCall(callId);
+      // `baml.future.all` cancels the inputs that are still pending after the
+      // first error: its catch arm runs `futures.map((g) -> { g.cancel() })`.
+      // The inputs were spawned by this function, not by the helper thread
+      // that `all` runs in, so the engine classifies the cancellation as the
+      // cancellation of each input's own future, not as a cancelled parent.
+      for (const callId of state.order) cancelCall(callId, "future_cancel");
       endThread(state.collector);
       return fail(remoteError("remote_get_quote", outcome.error), L.await);
     }
@@ -754,7 +811,8 @@ async function runRace() {
     const winner = await park(() => settledCalls()[0] ?? null);
     //# The race is decided: cancel the losers
     for (const callId of state.order) {
-      if (callId !== winner.callId) cancelCall(callId);
+      // A `race` loser: the future that the thread settles was cancelled.
+      if (callId !== winner.callId) cancelCall(callId, "future_cancel");
     }
     endThread(state.collector);
     if (winner.call.result.error != null) return fail(remoteError("remote_get_quote", winner.call.result.error), L.await);
@@ -827,7 +885,8 @@ async function runDeadline() {
     });
     if (outcome.timeout) {
       //# The deadline passed: the body's thread is cancelled, and so is its remote call
-      cancelCall(callId);
+      // `with_timeout` fires a cancel token that is linked to the body thread.
+      cancelCall(callId, "token");
       endThread(state.vars.deadline_thread);
       state.vars.answer = `no tour quote for ${city}: operation timed out after 2000ms`;
     } else {
@@ -1073,7 +1132,7 @@ async function runPlanTripParallel() {
     position(1, fn, L.start_print, "sysop", "baml.io.println");
     log("starting the weather lookup in the background");
     state.spawned = { thread: 2, call_id: null, ended: false };
-    emit("thread_started", { thread: 2, parent_thread: 1 });
+    emit("thread_started", { thread: 2, parent_thread: 1, file: sourceFile(fn), line: L.spawn });
     state.spawned.call_id = remoteCall(2, "remote_fetch_weather", L.spawn, remoteArgs());
     state.pc = "loop_print";
   }
@@ -1298,9 +1357,16 @@ async function main() {
     resumeStats.first_exec_ms = round(performance.now() - T0);
     emit("resumed", { stats: resumeStats });
   }
-  emit("thread_started", { thread: 1, parent_thread: null });
+  // The root thread of a segment has no `spawn` site (contract section 10.1).
+  emit("thread_started", { thread: 1, parent_thread: null, file: null, line: null });
   if (opts.resume && state.spawned && !state.spawned.ended) {
-    emit("thread_started", { thread: state.spawned.thread, parent_thread: 1 });
+    const spawnLine = LINES[state.function]?.spawn ?? null;
+    emit("thread_started", {
+      thread: state.spawned.thread,
+      parent_thread: 1,
+      file: spawnLine === null ? null : sourceFile(state.function),
+      line: spawnLine,
+    });
   }
   if (opts.resume) announceLiveThreads();
   const startResults = [];

@@ -13,6 +13,12 @@ interface Props {
   selectedSnapshot: SnapshotRef | null;
   onSelectSnapshot(snapshot: SnapshotRef | null): void;
   onFocusSource(focus: SourceFocus): void;
+  /**
+   * The dump that this panel loaded, or `null` while none is loaded. The
+   * timeline uses it to name the top user frame of a snapshot marker
+   * (contract section 10.3).
+   */
+  onStateLoaded?(state: { site: Run["site"]; run: string; n: number; dump: StateDump } | null): void;
 }
 
 /** The panel head has room for this many snapshot chips. Earlier snapshots stay selectable on the timeline. */
@@ -134,7 +140,7 @@ function parkedSummary(dump: StateDump): string {
   return [...counts].map(([kind, count]) => `${count} ${kind}`).join(", ");
 }
 
-export function StateTree({ api, run, selectedSnapshot, onSelectSnapshot, onFocusSource }: Props) {
+export function StateTree({ api, run, selectedSnapshot, onSelectSnapshot, onFocusSource, onStateLoaded }: Props) {
   const latest = run && run.snapshots.length > 0 ? run.snapshots[run.snapshots.length - 1] : undefined;
   const target: SnapshotRef | null =
     selectedSnapshot ?? (run && (run.status === "paused" || run.status === "sleeping") && latest ? { site: run.site, run: run.id, n: latest.n } : null);
@@ -158,6 +164,13 @@ export function StateTree({ api, run, selectedSnapshot, onSelectSnapshot, onFocu
   }, [api, targetKey]);
 
   const dump = loaded !== null && loaded.key === targetKey ? loaded.dump : null;
+  const site = target?.site;
+  const run_id = target?.run;
+  const n = target?.n;
+  useEffect(() => {
+    if (!onStateLoaded) return;
+    onStateLoaded(dump === null || site === undefined || run_id === undefined || n === undefined ? null : { site, run: run_id, n, dump });
+  }, [onStateLoaded, dump, site, run_id, n]);
 
   return (
     <section className="panel" data-testid="state-tree">

@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../api";
 import { tokenizeLine } from "../highlight";
-import type { Run } from "../protocol";
+import type { Run, Site } from "../protocol";
 import { latestPosition, threadPositions, type TimelineEvent } from "../state";
 
+/**
+ * A line that another panel asked to show. `origin` separates the frame that
+ * the state tree selected from the source location of a cause that the
+ * timeline offered (contract section 10.3): the two get their own mark, so a
+ * clicked location is never confused with the paused line.
+ */
 export interface SourceFocus {
   file: string;
   line: number;
+  /** The site whose source to load. Defaults to the site of the selected run. */
+  site?: Site;
+  origin?: "frame" | "cause";
+  /** What the location stands for, for the tooltip and the panel head. */
+  what?: string;
 }
 
 interface Props {
@@ -14,9 +25,11 @@ interface Props {
   run: Run | null;
   events: readonly TimelineEvent[] | undefined;
   focus: SourceFocus | null;
+  /** Clears a focused line. The head shows a button while one is set. */
+  onClearFocus?: () => void;
 }
 
-type Mark = "current" | "paused" | "thread" | "focus";
+type Mark = "current" | "paused" | "thread" | "focus" | "cause";
 
 interface LineMark {
   mark: Mark;
@@ -28,6 +41,7 @@ const MARK_TITLES: Record<Mark, string> = {
   paused: "paused here: the snapshot holds this position",
   thread: "latest position of another thread",
   focus: "frame selected in the state tree",
+  cause: "the source location of the selected timeline object",
 };
 
 const sourceCache = new Map<string, Promise<string>>();
@@ -43,11 +57,13 @@ function loadSource(api: Api, site: Run["site"], file: string): Promise<string> 
   return pending;
 }
 
-export function SourceView({ api, run, events, focus }: Props) {
+export function SourceView({ api, run, events, focus, onClearFocus }: Props) {
   const latest = useMemo(() => latestPosition(events), [events]);
   const position = latest ?? run?.position ?? null;
   const file = focus?.file ?? position?.file ?? null;
-  const site = run?.site ?? null;
+  // A cause can point at a file of another site, for example the source of a
+  // remote child. The link names the site that serves it.
+  const site = focus?.site ?? run?.site ?? null;
 
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +101,12 @@ export function SourceView({ api, run, events, focus }: Props) {
       if (isPaused) result.set(position.line, { mark: "paused", tag: `‖ t${position.thread}` });
       else result.set(position.line, { mark: "current", tag: `▶ t${position.thread}` });
     }
-    if (focus && focus.file === file && !result.has(focus.line)) result.set(focus.line, { mark: "focus", tag: "frame" });
+    // A clicked location wins over every other mark on its line, so that it is
+    // never hidden behind the paused line (contract section 10.3).
+    if (focus && focus.file === file) {
+      const cause = focus.origin === "cause";
+      result.set(focus.line, { mark: cause ? "cause" : "focus", tag: cause ? "▸ why" : "frame" });
+    }
     return result;
   }, [run, file, events, latest, position, focus]);
 
@@ -112,6 +133,12 @@ export function SourceView({ api, run, events, focus }: Props) {
         <span className="panel-title">Source</span>
         <span className="mono clip">{file ?? ""}</span>
         <span className="spacer" />
+        {focus && onClearFocus && (
+          <button className="btn small" data-testid="clear-focus" title={`Clear the highlighted line ${focus.file}:${focus.line}`}
+            onClick={onClearFocus}>
+            ✕ {focus.line}
+          </button>
+        )}
         {position && (
           <span className="mono muted">
             {position.function}:{position.line}

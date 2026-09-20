@@ -15,6 +15,7 @@ import {
   type RunStatus,
   type Site,
   type SiteRunEvent,
+  type SourceLocation,
   type SseEvent,
   type StateDump,
   type WorkerEvent,
@@ -51,6 +52,12 @@ export class FixtureBuilder {
   readonly events: SseEvent[] = [];
   readonly states: Record<string, StateDump> = {};
   private readonly runs = new Map<string, Run>();
+  /** The last `position` of each thread, by `<site>/<run>#<segment>:<thread>`. */
+  private readonly positions = new Map<string, SourceLocation & { function: string }>();
+  /** The call site that a `remote_call` reported, by `<run>:<call_id>` (section 10.1). */
+  private readonly callSites = new Map<string, SourceLocation | null>();
+  /** The calling function that a `remote_call` reported, by `<run>:<call_id>` (section 10.3). */
+  private readonly callers = new Map<string, string | null>();
 
   constructor(private readonly epoch: number = FIXTURE_EPOCH) {
     for (const { name: site } of DEFAULT_SITES) {
@@ -74,7 +81,7 @@ export class FixtureBuilder {
     id: string,
     fn: string,
     args: JsonObject,
-    extra: Partial<Pick<Run, "parent" | "origin" | "segment" | "snapshots" | "status" | "forked_from" | "position" | "waiting_on" | "remote_results" | "program_hash">> = {},
+    extra: Partial<Pick<Run, "parent" | "origin" | "segment" | "snapshots" | "status" | "forked_from" | "position" | "waiting_on" | "remote_results" | "program_hash" | "calls">> = {},
   ): Run {
     const run: Run = {
       id,
@@ -100,6 +107,9 @@ export class FixtureBuilder {
       blocked: null,
       wake_at: null,
       program_hash: FIXTURE_PROGRAM_HASH,
+      // Section 9.7 and 10.2: the remote calls that workers of the run announced, with their call sites.
+      calls: [],
+      cancelled_calls: [],
       ...extra,
     };
     this.runs.set(`${site}/${id}`, run);
@@ -119,14 +129,54 @@ export class FixtureBuilder {
     return this.update(at, site, id, { ...change, status });
   }
 
+  /** The call site that `remote_call` reported for a call, or `null` (section 10.1). */
+  callSite(run: string, callId: string): SourceLocation | null {
+    return this.callSites.get(`${run}:${callId}`) ?? null;
+  }
+
+  /** The calling function that `remote_call` reported for a call, or `null` (section 10.3). */
+  caller(run: string, callId: string): string | null {
+    return this.callers.get(`${run}:${callId}`) ?? null;
+  }
+
   /**
    * Emits a worker event. A `position` or `blocked` event also updates the run
    * record, as the site server does.
+   *
+   * Section 10.1: a `remote_call` that names no call site takes it from the
+   * `position` that the calling thread reported last, which is the frame the
+   * real worker reports it from. A `remote_cancel` that names none repeats the
+   * call site of the call it cancels, and the root thread of a segment has no
+   * `spawn` site. A fixture that wants a missing location passes `null`.
    */
   worker(at: number, site: Site, id: string, body: WorkerEventBody): void {
     const run = this.run(site, id);
     if (run.pid === null) throw new Error(`fixture run ${site}/${id} has no process at ${at}`);
     const event = { v: 1, ts: this.ts(at), run: id, segment: run.segment, pid: run.pid, site, ...body } as WorkerEvent;
+    const threadKey = (thread: number): string => `${site}/${id}#${run.segment}:${thread}`;
+    if (event.type === "position") {
+      this.positions.set(threadKey(event.thread), { file: event.file, line: event.line, function: event.function });
+    }
+    if (event.type === "thread_started" && event.parent_thread === null && !("file" in body)) {
+      event.file = null;
+      event.line = null;
+    }
+    if (event.type === "remote_call") {
+      const from = this.positions.get(threadKey(event.thread)) ?? null;
+      if (!("file" in body)) {
+        event.file = from?.file ?? null;
+        event.line = from?.line ?? null;
+      }
+      // Section 10.3: the calling function, from the same frame as the call site.
+      if (!("caller" in body)) event.caller = from?.function ?? null;
+      this.callSites.set(`${id}:${event.call_id}`, event.file != null && event.line != null ? { file: event.file, line: event.line } : null);
+      this.callers.set(`${id}:${event.call_id}`, event.caller ?? null);
+    }
+    if (event.type === "remote_cancel" && !("file" in body)) {
+      const from = this.callSite(id, event.call_id);
+      event.file = from?.file ?? null;
+      event.line = from?.line ?? null;
+    }
     this.events.push(event);
     if (event.type === "position") {
       this.update(at, site, id, {
@@ -179,6 +229,9 @@ export class FixtureBuilder {
       snapshots: [{ ...snapshot, snapshot_path: `${base}.bamlsnap`, state_path: `${base}.json` }],
       forked_from: { run: source, n },
       position: from.position,
+      // A fork copies the call records of its source, and its inherited waits.
+      calls: from.calls ?? [],
+      waiting_on: from.snapshots.at(-1)?.n === n ? from.waiting_on.map((entry) => ({ ...entry, inherited: true })) : [],
     });
   }
 
@@ -198,6 +251,7 @@ export class FixtureBuilder {
       forked_from: left.forked_from,
       position: left.position,
       waiting_on: left.waiting_on,
+      calls: left.calls ?? [],
       remote_results: left.remote_results.map((result) => ({ ...result, acked: false })),
     });
     const state = latest ? this.states[`${from}/${id}/${latest.n}`] : undefined;

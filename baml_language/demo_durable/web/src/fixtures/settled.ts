@@ -73,7 +73,8 @@ export function buildSettledFixture(): Fixture {
     spawnQuoteCall(b, at, caller, index + 2, callId(index), city, vendor);
     return startQuoteChild(b, at + 9, caller, callId(index), CHILDREN[index] as ChildSpec, city, vendor);
   });
-  b.worker(96, "local", parent, { type: "thread_started", thread: COLLECTOR, parent_thread: 1 });
+  // `baml.future.all_settled` collects on a thread of its own, spawned at the await line.
+  b.worker(96, "local", parent, { type: "thread_started", thread: COLLECTOR, parent_thread: 1, file: QUOTES_BAML_FILE, line: lineIn(QUOTES_BAML_FILE, fn, "all_settled") });
   b.worker(98, "local", parent, { type: "position", thread: 1, function: fn, file: QUOTES_BAML_FILE, line: lineIn(QUOTES_BAML_FILE, fn, "all_settled"), reason: "await", op: null });
 
   // The flight vendor answers, and the car vendor throws. Both results reach the running process.

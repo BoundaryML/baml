@@ -165,6 +165,9 @@ export interface ThreadStartedEvent extends WorkerEventBase {
   type: "thread_started";
   thread: number;
   parent_thread: number | null;
+  /** Section 10.1: the `spawn` site in the parent thread. Null for the root thread of a segment. */
+  file?: string | null;
+  line?: number | null;
 }
 
 export interface ThreadEndedEvent extends WorkerEventBase {
@@ -178,6 +181,22 @@ export interface RemoteCallEvent extends WorkerEventBase {
   thread: number;
   function: string;
   args: JsonObject;
+  /**
+   * Section 10.1: the call site in the calling thread, from the same frame that
+   * the accompanying `position` event describes. `file` is relative to the
+   * project directory. Both are null when the worker cannot attribute the call
+   * to a user frame.
+   */
+  file?: string | null;
+  line?: number | null;
+  /**
+   * Section 10.3: the function the call is written in, in the spelling of a
+   * `position` event. It is the one piece of evidence for "the calling
+   * function", which is not the run's entry function whenever the call is made
+   * in a helper or in a `spawn` body. Null when the worker could not attribute
+   * the call, and absent on a worker that predates the field.
+   */
+  caller?: string | null;
 }
 
 export interface RemoteResultReceivedEvent extends WorkerEventBase {
@@ -257,13 +276,36 @@ export interface CancelledEvent extends WorkerEventBase {
 }
 
 /**
+ * Section 10.1: how the engine classified a cancellation.
+ *
+ * `future_cancel` covers `Future.cancel` and a `race` loser, `token` a user
+ * `baml.spawn.CancelToken` linked to the thread (which covers `with_timeout`),
+ * `parent` an ancestor thread's token, and `unknown` a cancellation that the
+ * engine cannot attribute.
+ */
+export type CancelCause = "future_cancel" | "token" | "parent" | "unknown";
+
+const CANCEL_CAUSES: ReadonlySet<string> = new Set<CancelCause>(["future_cancel", "token", "parent", "unknown"]);
+
+/** The `cause` of a `remote_cancel` event, or `null` when it carries none this app knows. */
+export function cancelCauseOf(value: unknown): CancelCause | null {
+  return typeof value === "string" && CANCEL_CAUSES.has(value) ? (value as CancelCause) : null;
+}
+
+/**
  * Section 9.2: the thread that waited on a remote call was cancelled. The run
  * no longer waits on `call_id`.
  */
 export interface RemoteCancelEvent extends WorkerEventBase {
   type: "remote_cancel";
   call_id: string;
-  thread: number;
+  /** Section 9.7: null for a call that was outstanding at the end of the run. */
+  thread: number | null;
+  /** Section 10.1: the call site of the cancelled call, as recorded when the call was made. */
+  file?: string | null;
+  line?: number | null;
+  /** Section 10.1: why the thread was cancelled. Absent on a worker that predates the field. */
+  cause?: CancelCause | (string & {}) | null;
 }
 
 export type WorkerEvent =
@@ -402,6 +444,27 @@ export interface WaitingOn {
   child_site: Site;
   child_run: string;
   function: string;
+  /** Section 9.7: true on an entry that a fork copied, or that a run attached to a running child. */
+  inherited?: boolean;
+  /** Section 10.2: the call site that the worker reported with `remote_call`, so it survives a resume. */
+  file?: string | null;
+  line?: number | null;
+  /** Section 10.3: the function that made the call, as `remote_call` reported it. */
+  caller?: string | null;
+}
+
+/**
+ * Section 9.7: one remote call that a worker of the run announced. Section 10.2
+ * adds the call site, so the cause of a call survives a resume and a reload.
+ */
+export interface CallRecord {
+  call_id: string;
+  function: string;
+  args: JsonObject;
+  file?: string | null;
+  line?: number | null;
+  /** Section 10.3: the function that made the call, as `remote_call` reported it. */
+  caller?: string | null;
 }
 
 export interface SnapshotRecord {
@@ -470,6 +533,10 @@ export interface Run {
   wake_at?: number | null;
   /** Section 9.3: the hash of the program that the run executes, in hex. */
   program_hash?: string | null;
+  /** Section 9.7: the remote calls that workers of the run announced. A fork copies the list. */
+  calls?: CallRecord[];
+  /** Section 9.7: the remote calls that the run no longer waits on. */
+  cancelled_calls?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -800,6 +867,8 @@ export function normalizeRun(run: Run): Run {
     blocked: loose.blocked ?? null,
     wake_at: typeof loose.wake_at === "number" ? loose.wake_at : null,
     program_hash: typeof loose.program_hash === "string" ? loose.program_hash : null,
+    calls: loose.calls ?? [],
+    cancelled_calls: loose.cancelled_calls ?? [],
   };
 }
 
@@ -819,6 +888,30 @@ export function isTickingStatus(status: RunStatus): boolean {
 /** Statuses in which a run has no process and continues from a snapshot: by a command, or by its wake timer. */
 export function isSuspendedStatus(status: RunStatus): boolean {
   return status === "paused" || status === "sleeping";
+}
+
+/** A source location that a worker event or a run record carries (section 10.1). */
+export interface SourceLocation {
+  file: string;
+  line: number;
+}
+
+/**
+ * The `file` and `line` of a value that may carry them (a `remote_call`, a
+ * `remote_cancel`, a `thread_started`, or a `waiting_on` entry). `null` when
+ * either is missing, so the app never shows half a location.
+ */
+export function locationOf(value: { file?: string | null; line?: number | null } | null | undefined): SourceLocation | null {
+  if (!value) return null;
+  const { file, line } = value;
+  if (typeof file !== "string" || file === "" || typeof line !== "number" || !Number.isFinite(line) || line < 1) return null;
+  return { file, line };
+}
+
+/** The last path segment of a file, for a compact link label. */
+export function baseName(file: string): string {
+  const slash = Math.max(file.lastIndexOf("/"), file.lastIndexOf("\\"));
+  return slash === -1 ? file : file.slice(slash + 1);
 }
 
 /** The first characters of a program hash, for a label. The full hash stays in the tooltip. */
