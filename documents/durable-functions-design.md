@@ -560,6 +560,64 @@ and passes them with `--remote-result` at resume. With both rules, a run that
 waits two hours for a timer or for a remote result holds no process and no
 memory.
 
+The wait bookkeeping of the engine already supports this later phase. The
+self-suspend rule would drop its "at least one thread sleeps" clause, and the
+worker would report a wake reason of `remote_result`. The rule already looks
+through a wait that is satisfied: a run whose worker holds a result that no
+thread has taken yet is not idle, so an early wake delivers the result before
+the run can suspend again.
+
+**A resumed run replays what it missed in order.** A run that had no process
+can come back to several waits that are already satisfied: remote results that
+arrived and sleeps whose deadline passed. An uninterrupted run saw these one at
+a time, and the effects of one landed before the next: a `race` cancelled its
+losers, a timeout cancelled its work. If every satisfied thread simply
+continued after the restore, the task scheduler would pick the winner of a
+race.
+
+- The site server stores the arrival time of every result and passes it to the
+  worker. The engine merges the results with the expired sleep deadlines into
+  one queue ordered by time.
+- A driver task releases one item at a time. It releases the next item when
+  the run is quiescent: every live thread is blocked in a wait that can be
+  re-issued, and no operation is in flight. A thread whose wait is already
+  satisfied does not count as blocked, because it is about to run. The engine
+  decides this from the wait itself (the future has settled, the cancel token
+  has fired, the task group granted the slot, the host holds the result), not
+  from a delay.
+- While the queue is not empty, no other sleep or remote wait completes. What
+  happens now is later than everything that was recorded.
+- The replay keeps a virtual clock, the time of the last released item. A
+  sleep that a thread starts during the replay begins at that time. If it ends
+  before the last recorded item, it joins the queue and is not slept again, so
+  a thread that slept one second between two results still wakes between them.
+  After the queue is empty the clock is the real clock. A run that is resumed
+  late does not rush through the sleeps it starts afterwards.
+- A pause in the middle of a replay needs no extra state. An item that was not
+  released is still a sleep with a past deadline or a result that the worker
+  holds with its time, and the next restore builds the same queue.
+
+**Identifiers that survive a recovery.** The site server answers a remote call
+that it has seen before from the stored result, by call id. A recovery starts
+again from an older snapshot and makes some calls a second time, so a call
+must get the same id in every execution. A counter that all threads share
+does not give that: concurrent threads take numbers in scheduling order. The
+engine therefore gives every thread a path in the spawn tree (`0` for the
+root, the parent's path plus the spawn index for a child) and counts the
+remote calls per thread. Both are part of the thread's snapshot state, and the
+call id is derived from them. A thread spawns its children and makes its calls
+one after the other, so the path and the count do not depend on the scheduler.
+
+**A child run has one owner.** A fork waits on the child runs of its source.
+The child belongs to the run that dispatched it, and the other run holds an
+inherited wait. A run does not cancel a child through an inherited wait, and
+it does not cancel a child that another run of the site still waits on. A
+resumed worker reports the remote waits of its restored threads, and the site
+server settles each one from a stored result, from the child that still runs,
+or with a new dispatch from the recorded arguments. A production system would
+keep the waiters of a child on the child's own site, so that the rule also
+covers a fork that moved to another site and is cancelled there.
+
 **Resume must be idempotent.** A timer can fire late or more than once, for
 example after a server restart, and a user can press Resume while a timer is
 about to fire. The resume path changes the run status from `sleeping` to

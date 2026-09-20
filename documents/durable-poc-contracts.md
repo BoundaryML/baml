@@ -756,6 +756,22 @@ content-addressed and immutable.
   writer writes to a temporary file in the same directory and renames it. A
   reader verifies the hash of the bytes before use and treats a mismatch as a
   missing entry.
+- Entry bytes, all integers little-endian: the magic `BAMLPROG` (8 bytes), the
+  format version (u32, value 1), `build_len` (u32), the runtime build
+  (`build_len` bytes, UTF-8), `payload_len` (u64), and the payload
+  (`payload_len` bytes, the Borsh bytes that the hash covers). The file ends
+  with the payload. The Rust crate `bex_program_store` is the reference
+  implementation, and the site server and the mock worker read and write the
+  same bytes.
+- A worker also creates a build marker next to an entry that it stored,
+  `<hash>.<first 16 hex chars of the SHA-256 of the build name>.build`. A
+  reader uses an entry when its header names the reader's runtime build or
+  when the reader's marker exists. A site server that stores a fetched entry
+  keeps the sender's header bytes and writes no marker.
+- `hello` of a `--start` is emitted after the program is loaded, because it
+  carries `program_hash`. It is still the first event. With a compile it
+  arrives about 0.3 s (optimized build) or 1.3 s (debug build) after the
+  process started.
 - The worker with `--program-store`: a `--start` from `--project` compiles,
   stores the program, and reports `program_hash` in `hello`. A `--start` with
   `--program-hash` and every `--resume` load the program from the store and
@@ -794,3 +810,147 @@ content-addressed and immutable.
 - Runs list and details: the `sleeping` status with its wake time, the program
   hash, and `program_source` in the resume timings.
 - Fixtures for every new scenario, so that each one plays without servers.
+
+### 9.7 Amendments from the phase 3 review
+
+This section records what the review of phase 3 changed or made precise. When
+it and an earlier section disagree, this section wins.
+
+Call ids (replaces the format sentence of 2.3).
+
+- A `call_id` names the calling thread by its place in the spawn tree and the
+  call by its number among the calls of that thread. The root thread has the
+  path `0`. The n-th spawn of a thread (from 0) has the parent's path plus
+  `.<n>`. A call of the root thread is `<run-id>-c<k>`, and a call of a spawned
+  thread is `<run-id>-c<path>-<k>`, for example `r-7k2m9x-c0.2-1`. `k` starts
+  at 1.
+- The path and both counters are part of the thread's snapshot state. An
+  execution that starts again from an older snapshot therefore gives every
+  call the id it had before, whatever the scheduler does. The site server
+  relies on this when it answers a call id it has seen from a stored result.
+- The mock worker keeps `<run-id>-c<counter>`. Its programs are sequential, so
+  its ids are deterministic too. A reader treats a call id as an opaque string.
+
+Ordered replay of a resumed run.
+
+- A `--remote-result` value and a `remote_result` command may carry
+  `ts: number`, the time at which the result arrived at the site server. The
+  site server always sends it (`remote_results[].ts`). A worker that gets no
+  `ts` uses the time at which it saw the result.
+- A resumed worker takes what completed while the run had no process one item
+  at a time, in the order of the recorded times: the results it got at its
+  start, merged with the sleeps whose deadline has passed. It releases the
+  next item only when the run is quiescent after the previous one (every live
+  thread is blocked in a wait that can be re-issued, and no operation is in
+  flight). A `race` whose results all arrived during the pause therefore
+  returns the first arrival, and `with_timeout` returns the value or the
+  timeout according to the recorded times, as an uninterrupted run does.
+- While the replay is active no other sleep and no other remote wait of the
+  run completes. A `sleep` that a thread starts during the replay begins at
+  the time of the last released item. When it ends before the last recorded
+  item it takes its place in the queue and is not slept again. After the
+  queue is empty the run uses the real clock.
+- `remote_result_received` is emitted when the waiting thread has taken the
+  result, not when the worker has decoded it.
+
+Worker events.
+
+| type | Additional fields | Meaning |
+|---|---|---|
+| `hello` | adds `runtime_build: string` | The build of the worker. A site server learns the build of its workers from it. |
+| `remote_wait` | `call_id`, `thread`, `function`, `has_result: bool` | Emitted by a resumed worker after `resumed`, once for every restored thread that waits on a remote result. The worker does not emit `remote_call` for such a call. `has_result` is true when the worker already holds the result. |
+
+- `hello` is the first event of every worker, also of one that fails because
+  `--json-args` is not JSON (`program_hash` is null then).
+- After a resume, `thread_started` of every restored thread that had started
+  before the snapshot is emitted before any thread runs, a parent before its
+  children. A thread that was still queued in a task group announces itself
+  when it starts.
+- `remote_cancel` may precede `completed`, `failed`, or `cancelled` for calls
+  that were outstanding at the end of the run. Its `thread` may be null.
+
+Self-suspend rule (extends 9.2).
+
+- A wait in the queue of a `baml.spawn.TaskGroup` counts as a wait that can be
+  re-issued.
+- A thread whose wait is already satisfied is not idle: a remote wait whose
+  result the worker holds, an `await` on a future that has settled, a thread
+  whose cancel token has fired, and a queued thread that was granted its slot.
+  A resume before the sleep deadline therefore delivers the results it was
+  given before it can suspend again. A run that still replays recorded
+  completions does not suspend itself.
+- The threshold has a slack of 100 ms, so that a sleep of exactly
+  `--sleep-suspend-ms` suspends the run although the rule is evaluated a
+  moment after the sleep began.
+
+Site server.
+
+- `waiting_on[]` adds `inherited: bool`, and the run record adds
+  `calls: [{ call_id, function, args }]`, the remote calls that workers of the
+  run announced. A fork copies `calls`, and its copied `waiting_on` entries
+  are `inherited`.
+- A child run belongs to the run that dispatched it. A run never cancels a
+  child through an inherited entry, and it does not cancel a child while
+  another run of the site (a fork, its source, or the record of a fork that
+  moved away and still waits) has a `waiting_on` entry for the same child. It
+  emits `remote_released { run, call_id, child_site, child_run, inherited,
+  shared_with }` instead of `remote_cancelled`.
+- On a worker `remote_wait` event the site server settles the call from what
+  it knows, in this order: a result stored on the run; a result stored on a
+  run that shares the call id (the source of a fork, or a fork), which is
+  copied; a child that still runs for such a run, to which the run attaches
+  itself with an inherited entry (`remote_attached { run, call_id,
+  child_site, child_run, function }`); a dispatch in flight, which is looked
+  at again when it has returned; and otherwise a new dispatch from `calls`. A
+  fork that was taken before its source's dispatches had returned, or from a
+  snapshot that is not the latest one, therefore completes.
+- `POST /api/runs/:id/cancel` and `POST /api/runs/:id/pause` that are accepted
+  after the worker has reported `paused` and before its process has exited
+  are honoured at the exit: the run becomes `cancelled` (and its children are
+  cancelled), or `paused` without a wake timer. `cancel` on a run that is
+  `starting` without a process (its program is being fetched) is honoured
+  before the worker starts.
+- A result that arrives while the site server starts the worker of a resume is
+  written to the worker's stdin right after the process is registered.
+- `POST /api/remote/runs` answers as soon as the run record exists. The
+  program is fetched before the worker starts. A fetch that fails ends the
+  child as `failed`, and the reason reaches the parent as the error of the
+  call. A `program_hash` that is not 64 hexadecimal characters is refused
+  with 400.
+- Before every start and resume of a run that executes by hash, the site
+  server makes sure that its store holds the program and fetches it again
+  from `origin.site` or `parent.site` when the entry is gone. A resume that
+  cannot get the program leaves the run `paused` with `error` set.
+- `POST /api/runs/import` reads the program hash from the snapshot header and
+  refuses a request that names another hash with 400. The source waits up to
+  45 s for the answer, because the destination may fetch the program first.
+- Program store. The site server reads and writes only the entry layout of
+  9.5 in format version 1, with a runtime build of 1 to 256 bytes on one line.
+  It builds the header of a fetched entry itself from the `runtime_build`
+  that the sender reported, and it ignores header bytes of another site.
+  `GET /api/programs/:hash` returns `{ hash, runtime_build, program_base64,
+  format_version }`. `runtime_build` is the build of the site's own workers
+  when their marker exists next to the entry, and the header's build
+  otherwise. A site that knows the build of its workers refuses a fetched
+  program of another build and names both builds. A temporary file is named
+  `.tmp-<hash>.<random>.partial` and is removed on every failure path. A
+  worker that wrote to the store removes such files when they are older than
+  one hour.
+- `bex_program_store`: a `put` of bytes that the store already serves to this
+  build writes nothing and succeeds, also on a store that cannot be written.
+
+Deviations that the builders of phase 3 reported, now part of the agreement.
+
+- `hello` of a start and `resumed.stats` carry `program_load_ms`, and the
+  other `program_*_ms` timings of the load.
+- `paused.stats` keeps `file_bytes` and `threads`. `blocked_attempts` counts a
+  blocked self-suspend attempt.
+- The hidden subcommand `baml-cli program-store export|import|has` exists. The
+  site server does not use it.
+- Site server events `run_cancelled { run, was, reason }`,
+  `remote_result_discarded { run, call_id, ok, child_run? }`, and
+  `program_fetched { hash, from_site, bytes, ms }`; the run record field
+  `cancelled_calls`; and the configuration `WORKER_LEGACY`.
+- StateDump: threads add `parent_thread`, `settles_future`, and `cancelled`.
+  `DumpValue.kind` adds `future`, `cancel_token`, and `task_group`, and a
+  parked kind `queued` exists.
