@@ -63,14 +63,28 @@ export function WakeLine({ run, now }: { run: Run; now: number }) {
 export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapshot, api, onSelect, onRunResponse, coach }: Props) {
   // Remote children are listed under their parent, in call order.
   const rows = useMemo(() => groupRuns(runs), [runs]);
-  // Rows start collapsed: a parent reports how many runs it holds, and the
-  // selected run's own tree opens so that clicking a parent reveals it. An
-  // explicit toggle wins over that rule, in both directions.
+  // Rows start collapsed and a parent reports how many runs it holds.
+  // Selecting a run opens its tree, and the row STAYS open afterwards:
+  // deriving openness from the selection collapsed the run you came from
+  // every time you clicked another one, which reads as rows appearing and
+  // disappearing. Only an explicit toggle closes a row again.
   const [override, setOverride] = useState<ReadonlyMap<RunKey, boolean>>(new Map());
   const current = runs.find((run) => runKey(run.site, run.id) === selected) ?? null;
   const known = new Set(runs.map((run) => runKey(run.site, run.id)));
   const now = useSleepClock(runs.some((run) => run.status === "sleeping"));
-  const isOpen = (key: RunKey): boolean => override.get(key) ?? tree.includes(key);
+  const isOpen = (key: RunKey): boolean => override.get(key) ?? false;
+  // The selected run's tree opens, and a row the user had collapsed opens
+  // again when the selection moves inside it, so the selected row is always
+  // reachable.
+  useEffect(() => {
+    if (tree.length === 0) return;
+    setOverride((previous) => {
+      if (tree.every((key) => previous.get(key) === true)) return previous;
+      const next = new Map(previous);
+      for (const key of tree) next.set(key, true);
+      return next;
+    });
+  }, [tree]);
   // The runs listed under a row, at any depth: the rows that follow it until
   // one of its own depth. A collapsed row reports their states instead.
   const held = useMemo(() => {
