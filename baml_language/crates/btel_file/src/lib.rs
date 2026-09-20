@@ -236,15 +236,8 @@ fn write_file(directory: &Path, id: RecordingId, file: &SealedFile) -> Result<()
     let sequence = file.sequence().get();
     let destination = directory.join(format!("{sequence:020}.btel"));
     let temporary = directory.join(format!("{sequence:020}.btel.part"));
-    if destination
-        .try_exists()
-        .map_err(|e| io_error(&destination, &e))?
-    {
-        return Err(FileSinkError(format!(
-            "telemetry file already exists: {}",
-            destination.display()
-        )));
-    }
+    // The fresh recording directory has one writer enforcing unique sequences,
+    // so completed destinations cannot collide within this recording.
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
