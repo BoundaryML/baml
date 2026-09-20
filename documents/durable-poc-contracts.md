@@ -954,3 +954,56 @@ Deviations that the builders of phase 3 reported, now part of the agreement.
 - StateDump: threads add `parent_thread`, `settles_future`, and `cancelled`.
   `DumpValue.kind` adds `future`, `cancel_token`, and `task_group`, and a
   parked kind `queued` exists.
+
+## 10. Phase 4: why an arrow happened
+
+Sections 1 to 9 stay in force. This section makes every object on the
+timeline explain its own cause, with a source location where one exists.
+
+### 10.1 Worker event additions
+
+| Event | New fields |
+|---|---|
+| `remote_call` | `file: string \| null`, `line: number \| null` — the call site in the calling thread, from the same frame the accompanying `position` event describes. |
+| `remote_cancel` | `file`, `line` (the call site of the cancelled call, as recorded when the call was made), and `cause: "future_cancel" \| "token" \| "parent" \| "unknown"`. |
+| `thread_started` | `file`, `line` — the `spawn` site in the parent thread. Null for the root thread of a segment. |
+
+The engine classifies `cause` from the token that fired: the future the
+thread settles (`future_cancel`, which covers `Future.cancel` and a `race`
+loser), a user `baml.spawn.CancelToken` linked to the thread (`token`, which
+covers `with_timeout`), an ancestor thread's token (`parent`), or `unknown`
+when it cannot tell. A worker that cannot determine a field writes null
+rather than guessing.
+
+`file` is relative to the project directory, as in `position`. A call made
+from stdlib code reports the innermost user frame, and null when there is
+none.
+
+### 10.2 Site server
+
+The site server forwards the new fields unchanged and records the call site
+of each entry in `waiting_on` and `calls`, so that the cause survives a
+resume and a page reload.
+
+### 10.3 Web app
+
+Selecting any object on the timeline shows a cause panel that names what
+made it happen and, where one exists, a source location that is a link.
+Following the link opens that file in the source view and highlights the
+line.
+
+| Selected object | Cause shown |
+|---|---|
+| call arrow | the calling function and its call site, the callee, the arguments, and the site the call was placed on |
+| return arrow | whether the child succeeded, and where the parent took the result: a line when the parent was running, or "delivered while the run had no process, taken at resume" |
+| cancel arrow | the call site of the cancelled call and a sentence for the cause: a cancelled future, a cancel token, or a cancelled parent |
+| migration arrow | the action that moved the run, the site it moved to, and the frame the snapshot was taken at |
+| fork arrow | the snapshot the fork started from and its frame |
+| sleeping gap | the `sleep` call site and the wake time |
+| snapshot marker | the top user frame of its state dump, and whether the snapshot was requested, automatic, or a self-suspend |
+| segment bar | the first and last position of the segment |
+| thread sub-bar | the `spawn` site that created the thread |
+
+When the worker reports no location, the app falls back to the last known
+`position` of that thread and marks the location as approximate. The panel
+never shows a location it cannot attribute.
