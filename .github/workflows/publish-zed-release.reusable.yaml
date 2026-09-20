@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout upstream zed extensions
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           repository: BoundaryML/zed-extensions
           ref: main
