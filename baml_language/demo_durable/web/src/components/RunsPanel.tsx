@@ -18,6 +18,8 @@ interface Props {
   api: Api;
   onSelect(key: RunKey): void;
   onRunResponse(run: Run, requestedOn: Run["site"], selectIt: boolean): void;
+  /** Delete every run on every site. */
+  onClearAll(): Promise<void>;
   /** The control that the scenario guide points at, or presses when autoplay is on. */
   coach?: CoachTarget | null;
 }
@@ -60,7 +62,7 @@ export function WakeLine({ run, now }: { run: Run; now: number }) {
   );
 }
 
-export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapshot, api, onSelect, onRunResponse, coach }: Props) {
+export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapshot, api, onSelect, onRunResponse, onClearAll, coach }: Props) {
   // Remote children are listed under their parent, in call order.
   const rows = useMemo(() => groupRuns(runs), [runs]);
   // Rows start collapsed and a parent reports how many runs it holds.
@@ -69,6 +71,7 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
   // every time you clicked another one, which reads as rows appearing and
   // disappearing. Only an explicit toggle closes a row again.
   const [override, setOverride] = useState<ReadonlyMap<RunKey, boolean>>(new Map());
+  const [clearing, setClearing] = useState(false);
   const current = runs.find((run) => runKey(run.site, run.id) === selected) ?? null;
   const known = new Set(runs.map((run) => runKey(run.site, run.id)));
   const now = useSleepClock(runs.some((run) => run.status === "sleeping"));
@@ -124,6 +127,15 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
         <span className="muted">all sites, newest first, children under their parent</span>
         <span className="spacer" />
         <span className="num">{runs.length}</span>
+        <button className="btn small" data-testid="clear-runs" disabled={runs.length === 0 || clearing}
+          title="Delete every run on every site: end the workers, drop the sleep timers, and empty the run stores. The program stores are kept, so the next start still skips the compile."
+          onClick={() => {
+            if (clearing) return;
+            setClearing(true);
+            void onClearAll().finally(() => setClearing(false));
+          }}>
+          {clearing ? "clearing…" : "Clear"}
+        </button>
       </div>
       <div className="panel-body">
         {rows.length === 0 ? (

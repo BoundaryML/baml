@@ -30,17 +30,19 @@ export interface Api {
    * that action. `options.snapshot` selects the snapshot of `fork`.
    */
   command(site: Site, run: string, action: RunAction, options?: { snapshot?: number; site?: Site }): Promise<Run>;
+  /** Delete every run of one site. The program store is left alone. */
+  clearRuns(site: Site): Promise<{ cleared: number }>;
 }
 
 function isApiError(value: unknown): value is ApiError {
   return typeof value === "object" && value !== null && typeof (value as ApiError).error === "string";
 }
 
-async function request<T>(site: Site, path: string, body?: unknown): Promise<T> {
+async function request<T>(site: Site, path: string, body?: unknown, method?: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/${site}${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method: method ?? (body === undefined ? "GET" : "POST"),
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -83,6 +85,7 @@ export const httpApi: Api = {
   snapshotState: (site, run, n) =>
     request<StateDump>(site, `/api/runs/${encodeURIComponent(run)}/snapshots/${n}/state`),
   startRun: (site, body) => request<Run>(site, "/api/runs", body),
+  clearRuns: (site) => request<{ cleared: number }>(site, "/api/runs", undefined, "DELETE"),
   command(site, run, action, options) {
     const base = `/api/runs/${encodeURIComponent(run)}`;
     switch (action) {

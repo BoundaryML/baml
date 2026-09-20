@@ -190,6 +190,19 @@ export function App() {
   const coach = useCoach({ session, state, autoplay, live: api.mode === "live", select, startRole });
 
   const guided = session !== null;
+  // Clearing is per site, so every site is asked. The local state is emptied
+  // once they have all answered: the SSE streams send nothing when a run
+  // disappears, so there is no event to wait for.
+  const onClearAll = useCallback(async (): Promise<void> => {
+    const sites = state.sites.map((entry) => entry.name);
+    const results = await Promise.allSettled(sites.map((site) => api.clearRuns(site)));
+    dispatch({ type: "cleared" });
+    const failed = results.flatMap((result, index) =>
+      result.status === "rejected" ? [sites[index] ?? "?"] : [],
+    );
+    if (failed.length > 0) throw new Error(`could not clear ${failed.join(", ")}`);
+  }, [api, state.sites]);
+
   const onRunResponse = useCallback((run: Run, requestedOn: Site, selectIt: boolean): void => {
     dispatch({ type: "run_response", site: requestedOn, run, ts: Date.now() });
     // A new fork is selected, except while a scenario guides the user: its next step names the run to act on.
@@ -233,7 +246,7 @@ export function App() {
                   id: "runs", defaultSize: "32", minSize: "16",
                   content: (
                     <RunsPanel sites={state.sites} runs={allRuns} events={state.events} selected={selected} tree={stableTree} selectedSnapshot={selectedSnapshot} api={api}
-                      onSelect={select} onRunResponse={onRunResponse} coach={coach?.target ?? null} />
+                      onSelect={select} onRunResponse={onRunResponse} onClearAll={onClearAll} coach={coach?.target ?? null} />
                   ),
                 },
                 {

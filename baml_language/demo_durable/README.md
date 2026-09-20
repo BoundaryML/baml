@@ -1239,6 +1239,24 @@ autoplay (`LIVE_GUIDE=migrate,fanout,race,deadline,settled,recover,fork`). The
 scenarios also passed against site servers that ran with the `CHAOS` object
 above.
 
+## Clearing the runs
+
+`DELETE /api/runs` empties one site: it ends that site's worker processes,
+retires the sleep timers so that nothing is resumed afterwards, forgets the
+in-memory state, and deletes the run store from disk. The program store is
+kept, so the next start still loads its program without a compile.
+
+The **Clear** button in the head of the Runs panel calls the route on every
+site of the registry and then empties the app's own state. Each site clears
+itself, so a site that is down is reported and the others still clear.
+
+```bash
+curl -X DELETE http://127.0.0.1:8787/api/runs   # {"cleared": 7}
+```
+
+`scripts/verify.mjs` covers this in the "clear runs" scene, including that a
+run which was sleeping does not come back when its timer would have fired.
+
 ## Release build against debug
 
 Build the worker with `cargo build --release -p baml_cli` for a demo. The

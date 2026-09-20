@@ -1758,6 +1758,41 @@ async function callSiteScene() {
     JSON.stringify(unknown.map((e) => [e.call_id, e.cause, e.file, e.line])));
 }
 
+/**
+ * `DELETE /api/runs` empties one site: the workers end, the sleep timers are
+ * retired so that nothing is resumed afterwards, and the run store is deleted.
+ * The program store is kept, so the next start still skips the compile.
+ */
+async function clearRunsScene() {
+  const started = await api("local", "POST", "/api/runs", { function: "durable_nap", args: { seconds: 30 } });
+  const napId = started.json?.id;
+  await waitStatus("local", napId, ["sleeping"]);
+
+  const before = await api("local", "GET", "/api/runs");
+  check("there are runs to clear", (before.json ?? []).length > 0, `${(before.json ?? []).length}`);
+
+  const cleared = await api("local", "DELETE", "/api/runs");
+  check("DELETE /api/runs answers 200", cleared.status === 200, `${cleared.status}`);
+  check("it reports how many it removed", (cleared.json?.cleared ?? 0) > 0, JSON.stringify(cleared.json));
+
+  const after = await api("local", "GET", "/api/runs");
+  check("the site holds no run afterwards", (after.json ?? []).length === 0, `${(after.json ?? []).length}`);
+  const gone = await api("local", "GET", `/api/runs/${napId}`);
+  check("a cleared run is a 404", gone.status === 404, `${gone.status}`);
+
+  // The nap was sleeping, so a timer of its suspend was pending. A retired
+  // timer must not bring the run back.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const still = await api("local", "GET", "/api/runs");
+  check("the sleep timer of a cleared run does not resurrect it", (still.json ?? []).length === 0, `${(still.json ?? []).length}`);
+
+  const fresh = await api("local", "POST", "/api/runs", { function: "durable_plan_trip", args: { city: "Faro" } });
+  check("a run started after the clear works", fresh.status === 200, `${fresh.status}`);
+  const done = await waitStatus("local", fresh.json?.id, ["completed", "failed"]);
+  check("and it completes", done?.status === "completed", `${done?.status}`);
+  for (const site of SITE_NAMES) await api(site, "DELETE", "/api/runs");
+}
+
 async function scene(name, fn) {
   try {
     await fn();
@@ -2231,6 +2266,7 @@ async function main() {
   cloud2.close();
   if (ONLY !== "phase3") await noRemoteSite();
   await routingScene();
+  await scene("clear runs", clearRunsScene);
   await scene("CHAOS", chaosScenes);
   for (const site of SITE_NAMES) STREAMS[site]?.close();
 }

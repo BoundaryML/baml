@@ -99,6 +99,13 @@ function handle(app: App, req: baml.http.Request) -> baml.http.Response {
         return fail(404, `no route ${method} ${path}`);
     }
 
+    if (method == "DELETE") {
+        if (n == 2 && parts[1] == "runs") {
+            return clear_runs(app);
+        }
+        return fail(404, `no route ${method} ${path}`);
+    }
+
     if (method == "POST") {
         if (n == 2 && parts[1] == "runs") {
             return start_run(app, body, null, null);
@@ -559,6 +566,56 @@ function kill_run(app: App, run: Run) -> baml.http.Response throws never {
         waited += 20;
     }
     respond_run(run)
+}
+
+/// `DELETE /api/runs`. Remove every run of this site: end the worker
+/// processes, drop the sleep timers so that nothing is resumed afterwards,
+/// forget the in-memory state, and delete the run store from disk. The program
+/// store is left alone, so the next start still loads its program without a
+/// compile. Each site clears itself; the web app calls every site.
+function clear_runs(app: App) -> baml.http.Response throws never {
+    //# End every worker of this site before the records go away
+    let ids = app.runs.map((r) -> {
+        r.id
+    });
+    for (let id in ids) {
+        let proc = app.procs.get(id);
+        if (proc != null) {
+            let p: baml.sys.Process = proc;
+            p.kill() catch_all (e) {
+                _ => null
+            };
+        }
+    }
+    // A killed worker's supervisor writes its exit through `on_exit`. Give it a
+    // moment so that it does not write a record back after the store is gone.
+    let waited = 0;
+    while (app.procs.keys().length() > 0 && waited < 3000) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(20n)) catch_all (e) {
+            _ => null
+        };
+        waited += 20;
+    }
+    let removed = locked(app, () -> {
+        let n = app.runs.length();
+        app.runs = [];
+        // A pending timer checks its sequence number against `app.timers`
+        // before it resumes a run. Clearing the map retires every one of them.
+        app.timers = {};
+        app.writers = {};
+        app.dispatching = {};
+        app.forwarding = {};
+        app.importing = {};
+        app.cancel_requested = {};
+        n
+    });
+    //# Delete the run store, then recreate it empty
+    baml.fs.remove_dir_all(app.cfg.runs_dir) catch_all (e) {
+        _ => null
+    };
+    ensure_dir(app.cfg.runs_dir);
+    emit_event(app, { "type": "cleared", "runs": removed });
+    respond(200, { "cleared": removed })
 }
 
 function kill_process(proc: baml.sys.Process) -> string throws baml.errors.Io {

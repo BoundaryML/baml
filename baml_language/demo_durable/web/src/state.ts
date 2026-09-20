@@ -79,6 +79,7 @@ export type Action =
   | { type: "run_response"; site: Site; run: Run; ts: number }
   | { type: "backfill"; site: Site; run: string; events: SseEvent[] }
   | { type: "select"; key: RunKey | null }
+  | { type: "cleared" }
   | { type: "reset" };
 
 const NEW_CONNECTION: SiteConnection = { status: "connecting", generation: 0, info: null };
@@ -299,6 +300,11 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "select":
       return state.selected === action.key ? state : { ...state, selected: action.key };
+    case "cleared":
+      // The sites and their open connections stay; only what the run stores
+      // held goes away. A reset would put the header back to "connecting"
+      // for streams that are still open.
+      return { ...state, runs: {}, events: {}, selected: null };
     case "reset":
       return initialState(state.sites);
   }

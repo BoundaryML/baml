@@ -217,6 +217,7 @@ export function startFixtureSession(fixture: Fixture, dispatch: Dispatch<Action>
     },
     startRun: unavailable,
     command: unavailable,
+    clearRuns: unavailable,
   };
 
   return {
