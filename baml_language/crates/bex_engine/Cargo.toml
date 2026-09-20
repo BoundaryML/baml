@@ -32,6 +32,9 @@ web-time = { workspace = true }
 
 # Native-only: tokio runtime for spawning async tasks
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Durable POC: snapshot writer/loader (links zstd, native only).
+bex_snapshot = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning async tasks
@@ -66,6 +69,7 @@ heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",
   "bex_vm_types/heap_debug",
+  "bex_snapshot/heap_debug",
 ]
 
 [target.'cfg(unix)'.dependencies]

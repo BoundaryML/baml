@@ -20,6 +20,19 @@ pub struct BexThread {
     pub name: Option<String>,
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
+    /// Durable POC: set when the run this thread belongs to has a
+    /// [`crate::durable::DurableHost`]. Spawned children inherit the host.
+    pub durable: Option<DurableThreadCtx>,
+}
+
+/// The durable host of a thread plus the id of the thread that spawned it.
+pub struct DurableThreadCtx {
+    pub host: crate::durable::SharedDurableHost,
+    pub parent: Option<crate::durable::DurableThreadId>,
+    /// Set for the threads of the durable run (the first root thread after the
+    /// host was installed, and its descendants): they park at the pause gate.
+    /// `None` for helper calls the embedder makes while the host is installed.
+    pub(crate) pause: Option<std::sync::Arc<crate::durable::PauseController>>,
 }
 
 impl BexThread {
@@ -30,6 +43,7 @@ impl BexThread {
             name: None,
             cancel,
             settles_future: None,
+            durable: None,
         }
     }
 
@@ -45,6 +59,7 @@ impl BexThread {
             name,
             cancel,
             settles_future: Some(settles_future),
+            durable: None,
         }
     }
 

@@ -48,6 +48,7 @@ pub(crate) mod telemetry_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
 pub(crate) mod util;
+pub(crate) mod worker_command;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;

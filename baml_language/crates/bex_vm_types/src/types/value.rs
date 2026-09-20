@@ -546,7 +546,20 @@ impl BorshDeserialize for Value {
                 )
             })?,
             ValueWire::Bool(b) => Value::bool(b),
-            ValueWire::Object(ptr) => Value::object(ptr),
+            // Only reachable while a snapshot loader context is installed
+            // (`HeapPtr` refuses to deserialize otherwise). A null or
+            // misaligned pointer has no `Value` encoding, so reject it here
+            // instead of tripping the `Value::object` debug assertions.
+            ValueWire::Object(ptr) => {
+                let bits = ptr.as_ptr() as u64;
+                if bits == 0 || bits & 0b111 != 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Value::Object payload is not a valid heap pointer",
+                    ));
+                }
+                Value::object(ptr)
+            }
         })
     }
 }

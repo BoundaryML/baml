@@ -22,6 +22,7 @@ pub mod link;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
+pub mod snapshot_ctx;
 pub mod task_group;
 pub mod type_head;
 pub mod types;

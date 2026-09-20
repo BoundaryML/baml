@@ -1,0 +1,1299 @@
+// End-to-end tests for the hidden `baml-cli worker` subcommand (durable
+// functions proof of concept).
+//
+// Each test starts the real binary on `tests/fixtures/worker_trip`, reads the
+// JSON event lines from its stdout, answers events by writing JSON command
+// lines to its stdin, and checks the protocol of
+// `documents/durable-poc-contracts.md` section 2: one JSON object per stdout
+// line and nothing else, the common event fields, the exit codes, positions
+// with correct file and line values, log capture, remote calls, thread
+// lifecycle events, and pause / resume across processes (`pause` writes a
+// snapshot and exits 75; `--resume` continues the run in a new process).
+
+mod common;
+
+use std::{
+    io::{BufRead as _, BufReader, Read as _, Write as _},
+    path::{Path, PathBuf},
+    process::{Child, ChildStdin, Command, Stdio},
+    sync::mpsc,
+    time::Duration,
+};
+
+use serde_json::{Value, json};
+
+const RUN_ID: &str = "r-e2e";
+const SOURCE_FILE: &str = "baml_src/trip.baml";
+/// Generous: the worker compiles the project (and the stdlib) at startup.
+const EVENT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Copy the fixture project into `dir`. The worker runs with the profiler's
+/// defaults, which write a store under `<project>/.baml/`; a copy keeps the
+/// source tree clean.
+fn copy_fixture_project(dir: &Path) -> PathBuf {
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/worker_trip");
+    let project = dir.join("worker_trip");
+    std::fs::create_dir_all(project.join("baml_src")).unwrap();
+    std::fs::copy(source.join(SOURCE_FILE), project.join(SOURCE_FILE)).unwrap();
+    project
+}
+
+/// The directories one run lives in across its worker processes.
+struct RunDirs {
+    home: tempfile::TempDir,
+}
+
+impl RunDirs {
+    fn new() -> std::rc::Rc<Self> {
+        let home = tempfile::tempdir().unwrap();
+        copy_fixture_project(home.path());
+        std::rc::Rc::new(Self { home })
+    }
+
+    fn project(&self) -> PathBuf {
+        self.home.path().join("worker_trip")
+    }
+
+    fn snapshots(&self) -> PathBuf {
+        self.home.path().join("snapshots")
+    }
+}
+
+struct Worker {
+    child: Child,
+    stdin: Option<ChildStdin>,
+    lines: mpsc::Receiver<String>,
+    events: Vec<Value>,
+    segment: u64,
+    /// Keeps the run's temporary directories alive.
+    _dirs: std::rc::Rc<RunDirs>,
+}
+
+impl Worker {
+    fn spawn(mode_args: &[&str]) -> Self {
+        Self::spawn_segment(&RunDirs::new(), 1, mode_args)
+    }
+
+    /// Start segment `segment` of the run that lives in `dirs`. Automatic
+    /// snapshots are off unless `mode_args` turns them on, so that the
+    /// snapshot numbers of a test are its own.
+    fn spawn_segment(dirs: &std::rc::Rc<RunDirs>, segment: u64, mode_args: &[&str]) -> Self {
+        let home = &dirs.home;
+        let auto: &[&str] = if mode_args.contains(&"--auto-snapshot-ms") {
+            &[]
+        } else {
+            &["--auto-snapshot-ms", "0"]
+        };
+        let mut child = Command::new(common::baml_cli())
+            .args(["worker", "--project"])
+            .arg(dirs.project())
+            .args(["--run", RUN_ID, "--segment", &segment.to_string()])
+            .arg("--snapshot-dir")
+            .arg(dirs.snapshots())
+            .args(auto)
+            .args(mode_args)
+            .env("HOME", home.path())
+            .env("BAML_HOME", home.path().join(".baml-home"))
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("BAML_AGENT_SKILL_CHECK", "off")
+            .env_remove("BAML_LOG")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn baml-cli worker");
+        let stdin = child.stdin.take().unwrap();
+        let stdout = child.stdout.take().unwrap();
+        let (tx, lines) = mpsc::channel();
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                let Ok(line) = line else { break };
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            child,
+            stdin: Some(stdin),
+            lines,
+            events: Vec::new(),
+            segment,
+            _dirs: std::rc::Rc::clone(dirs),
+        }
+    }
+
+    fn start(function: &str) -> Self {
+        Self::spawn(&["--start", function, "--json-args", r#"{"city":"Lisbon"}"#])
+    }
+
+    /// Continue the run of `previous` from `snapshot` in the next segment.
+    fn resume(dirs: &std::rc::Rc<RunDirs>, segment: u64, snapshot: &str, extra: &[&str]) -> Self {
+        let mut args = vec!["--resume", snapshot];
+        args.extend_from_slice(extra);
+        Self::spawn_segment(dirs, segment, &args)
+    }
+
+    fn send(&mut self, command: &Value) {
+        let stdin = self.stdin.as_mut().expect("stdin is open");
+        writeln!(stdin, "{command}").unwrap();
+        stdin.flush().unwrap();
+    }
+
+    fn close_stdin(&mut self) {
+        self.stdin = None;
+    }
+
+    /// Read the next stdout line. Every line must be one JSON object that
+    /// carries the common event fields. `None` at end of output.
+    fn next_event(&mut self) -> Option<Value> {
+        let line = match self.lines.recv_timeout(EVENT_TIMEOUT) {
+            Ok(line) => line,
+            Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let _ = self.child.kill();
+                panic!(
+                    "timed out waiting for a worker event; got so far: {:#?}",
+                    self.events
+                );
+            }
+        };
+        let event: Value = serde_json::from_str(&line)
+            .unwrap_or_else(|e| panic!("stdout line is not JSON ({e}): {line:?}"));
+        assert!(
+            event.is_object(),
+            "stdout line is not a JSON object: {line}"
+        );
+        assert_eq!(event["v"], 1, "{line}");
+        assert_eq!(event["run"], RUN_ID, "{line}");
+        assert_eq!(event["segment"], self.segment, "{line}");
+        assert_eq!(event["pid"], self.child.id(), "{line}");
+        assert!(event["ts"].is_u64(), "{line}");
+        assert!(event["type"].is_string(), "{line}");
+        self.events.push(event.clone());
+        Some(event)
+    }
+
+    /// Read events until one satisfies `pred`; returns it.
+    fn wait_for(&mut self, what: &str, pred: impl Fn(&Value) -> bool) -> Value {
+        loop {
+            let Some(event) = self.next_event() else {
+                panic!(
+                    "worker output ended before {what}; events: {:#?}",
+                    self.events
+                );
+            };
+            if pred(&event) {
+                return event;
+            }
+        }
+    }
+
+    /// Drain the remaining output and return `(exit code, stderr)`.
+    fn finish(mut self) -> (i32, Vec<Value>, String) {
+        while self.next_event().is_some() {}
+        let status = self.child.wait().unwrap();
+        let mut stderr = String::new();
+        if let Some(mut pipe) = self.child.stderr.take() {
+            let _ = pipe.read_to_string(&mut stderr);
+        }
+        (
+            status.code().expect("worker ended by signal"),
+            self.events,
+            stderr,
+        )
+    }
+}
+
+fn is_type(kind: &'static str) -> impl Fn(&Value) -> bool {
+    move |event| event["type"] == kind
+}
+
+fn of_type<'a>(events: &'a [Value], kind: &str) -> Vec<&'a Value> {
+    events
+        .iter()
+        .filter(|event| event["type"] == kind)
+        .collect()
+}
+
+fn index_of(events: &[Value], what: &str, pred: impl Fn(&Value) -> bool) -> usize {
+    events
+        .iter()
+        .position(pred)
+        .unwrap_or_else(|| panic!("no event: {what}; events: {events:#?}"))
+}
+
+fn expected_plan() -> Value {
+    json!({
+        "city": "Lisbon",
+        "ideas": ["day 1 in Lisbon", "day 2 in Lisbon", "day 3 in Lisbon"],
+        "weather": "sunny in Lisbon",
+    })
+}
+
+#[test]
+fn durable_run_answers_remote_call_and_completes() {
+    let mut worker = Worker::start("durable_plan_trip");
+
+    let hello = worker.next_event().expect("hello");
+    assert_eq!(hello["type"], "hello");
+    assert_eq!(hello["mode"], "start");
+    assert_eq!(hello["function"], "durable_plan_trip");
+    assert_eq!(hello["durable"], true);
+
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(call["call_id"], format!("{RUN_ID}-c1"));
+    assert_eq!(call["function"], "remote_fetch_weather");
+    assert_eq!(call["args"], json!({ "city": "Lisbon" }));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+
+    let root = &of_type(&events, "thread_started")[0];
+    assert_eq!(root["parent_thread"], Value::Null);
+    let thread = root["thread"].clone();
+    assert!(thread.is_u64());
+    assert_eq!(call["thread"], thread);
+
+    // Program output is reported as log events, attributed to the thread.
+    let logs: Vec<_> = of_type(&events, "log")
+        .iter()
+        .map(|e| (e["stream"].clone(), e["text"].clone(), e["thread"].clone()))
+        .collect();
+    let expected_logs: Vec<_> = (1..=3)
+        .map(|day| {
+            (
+                json!("stdout"),
+                json!(format!("planning day {day}")),
+                thread.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(logs, expected_logs);
+
+    // Positions: println on line 17 and sleep on line 18, three times, then
+    // the remote call on line 22.
+    let positions: Vec<_> = of_type(&events, "position")
+        .iter()
+        .map(|e| {
+            assert_eq!(e["file"], SOURCE_FILE, "{e}");
+            assert_eq!(e["function"], "durable_plan_trip", "{e}");
+            assert_eq!(e["thread"], thread, "{e}");
+            (
+                e["line"].as_u64().unwrap(),
+                e["reason"].as_str().unwrap().to_string(),
+                e["op"].clone(),
+            )
+        })
+        .collect();
+    let mut expected_positions = Vec::new();
+    for _ in 0..3 {
+        expected_positions.push((17, "sysop".to_string(), json!("baml.io.println")));
+        expected_positions.push((18, "sysop".to_string(), json!("baml.sys.sleep")));
+    }
+    expected_positions.push((22, "remote_call".to_string(), Value::Null));
+    assert_eq!(positions, expected_positions);
+
+    let received = index_of(
+        &events,
+        "remote_result_received",
+        is_type("remote_result_received"),
+    );
+    assert_eq!(events[received]["call_id"], call["call_id"]);
+    assert_eq!(events[received]["thread"], thread);
+    assert!(index_of(&events, "remote_call", is_type("remote_call")) < received);
+
+    assert_eq!(of_type(&events, "thread_ended")[0]["thread"], thread);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], expected_plan());
+}
+
+#[test]
+fn remote_function_started_as_root_runs_locally() {
+    let worker = Worker::start("remote_fetch_weather");
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+
+    assert_eq!(events[0]["type"], "hello");
+    assert_eq!(events[0]["durable"], false);
+    assert!(of_type(&events, "remote_call").is_empty(), "{events:#?}");
+    let logs = of_type(&events, "log");
+    assert_eq!(logs.len(), 1);
+    assert_eq!(logs[0]["text"], "[cloud] looking up weather for Lisbon");
+    let lines: Vec<_> = of_type(&events, "position")
+        .iter()
+        .map(|e| (e["function"].clone(), e["file"].clone(), e["line"].clone()))
+        .collect();
+    assert_eq!(
+        lines,
+        vec![
+            (json!("remote_fetch_weather"), json!(SOURCE_FILE), json!(8)),
+            (json!("remote_fetch_weather"), json!(SOURCE_FILE), json!(9)),
+        ]
+    );
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], "sunny in Lisbon");
+}
+
+#[test]
+fn spawned_remote_call_lets_the_parent_keep_running() {
+    let mut worker = Worker::start("durable_plan_trip_parallel");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    // Hold the result back until the parent has finished its loop and parked
+    // on `await pending`: the parent must make progress while the spawned
+    // thread waits. The line is not asserted: the compiler's line table
+    // currently attributes the `Await` instruction to the line that defines
+    // `pending` (28) instead of the `await` line (36).
+    worker.wait_for("the parent's await position", |e| {
+        e["type"] == "position" && e["reason"] == "await"
+    });
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+
+    let started = of_type(&events, "thread_started");
+    assert_eq!(started.len(), 2, "{events:#?}");
+    let root = started[0]["thread"].clone();
+    let child = started[1]["thread"].clone();
+    assert_eq!(started[0]["parent_thread"], Value::Null);
+    assert_eq!(started[1]["parent_thread"], root);
+    assert_ne!(root, child);
+
+    // The remote call belongs to the spawned thread and is positioned on the
+    // `spawn { remote_fetch_weather(city) }` line.
+    assert_eq!(call["thread"], child);
+    let spawn_position = index_of(&events, "the spawned thread's position", |e| {
+        e["type"] == "position" && e["thread"] == child
+    });
+    assert_eq!(events[spawn_position]["line"], 28);
+    assert_eq!(events[spawn_position]["reason"], "remote_call");
+    assert_eq!(
+        events[spawn_position]["function"],
+        "durable_plan_trip_parallel"
+    );
+
+    // Every log line comes from the root thread.
+    for log in of_type(&events, "log") {
+        assert_eq!(log["thread"], root, "{log}");
+    }
+    // The whole loop ran between the remote call and its result.
+    let call_index = index_of(&events, "remote_call", is_type("remote_call"));
+    let last_log = index_of(&events, "the parent's last log line", |e| {
+        e["type"] == "log" && e["text"] == "planning day 3"
+    });
+    let await_index = index_of(&events, "the parent's await position", |e| {
+        e["type"] == "position" && e["thread"] == root && e["reason"] == "await"
+    });
+    let received = index_of(
+        &events,
+        "remote_result_received",
+        is_type("remote_result_received"),
+    );
+    assert!(call_index < last_log && last_log < await_index && await_index < received);
+
+    let ended: Vec<_> = of_type(&events, "thread_ended")
+        .iter()
+        .map(|e| e["thread"].clone())
+        .collect();
+    assert_eq!(ended, vec![child, root]);
+
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], expected_plan());
+}
+
+#[test]
+fn remote_error_is_thrown_into_the_caller() {
+    // Uncaught: the run fails with a stack that points at the call site.
+    let mut worker = Worker::start("durable_plan_trip");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "error": "cloud is down",
+    }));
+    let (code, events, _) = worker.finish();
+    assert_eq!(code, 1, "{events:#?}");
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "failed");
+    assert!(
+        last["error"].as_str().unwrap().contains("cloud is down"),
+        "{last}"
+    );
+    assert_eq!(
+        last["stack"][0],
+        json!({ "function": "durable_plan_trip", "file": SOURCE_FILE, "line": 22 })
+    );
+
+    // Caught: BAML code handles it like any other thrown error.
+    let mut worker = Worker::start("durable_safe_weather");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "error": "cloud is down",
+    }));
+    let (code, events, _) = worker.finish();
+    assert_eq!(code, 0, "{events:#?}");
+    assert_eq!(events.last().unwrap()["value"], "unknown");
+}
+
+/// A thread that outlives the root function ends with the process. The
+/// worker must still balance its `thread_started`, and the terminal event must
+/// be the last line.
+#[test]
+fn unawaited_spawn_is_reported_ended_before_the_terminal_event() {
+    let worker = Worker::start("durable_detached");
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed", "{events:#?}");
+    assert_eq!(last["value"], "done early");
+    assert_eq!(of_type(&events, "completed").len(), 1);
+
+    let mut started: Vec<u64> = of_type(&events, "thread_started")
+        .iter()
+        .map(|e| e["thread"].as_u64().unwrap())
+        .collect();
+    let mut ended: Vec<u64> = of_type(&events, "thread_ended")
+        .iter()
+        .map(|e| e["thread"].as_u64().unwrap())
+        .collect();
+    started.sort_unstable();
+    ended.sort_unstable();
+    assert_eq!(started, ended, "{events:#?}");
+    // The spawned body never got to print.
+    assert!(of_type(&events, "log").is_empty(), "{events:#?}");
+}
+
+#[test]
+fn cancel_exits_130() {
+    let mut worker = Worker::start("durable_plan_trip");
+    worker.wait_for("remote_call", is_type("remote_call"));
+    worker.send(&json!({ "type": "cancel" }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 130, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "completed").is_empty());
+    assert!(of_type(&events, "failed").is_empty());
+}
+
+/// A supervisor that goes away closes the worker's stdin. The worker must not
+/// stay behind as an orphan, unless a script asked for that.
+#[test]
+fn a_closed_stdin_cancels_the_run_unless_told_otherwise() {
+    let mut worker = Worker::start("durable_plan_trip");
+    worker.wait_for("remote_call", is_type("remote_call"));
+    worker.close_stdin();
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 130, "stderr: {stderr}\nevents: {events:#?}");
+
+    let mut worker = Worker::spawn(&[
+        "--start",
+        "remote_fetch_weather",
+        "--json-args",
+        r#"{"city":"Lisbon"}"#,
+        "--ignore-stdin-eof",
+    ]);
+    worker.close_stdin();
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(events.last().unwrap()["value"], "sunny in Lisbon");
+}
+
+fn texts(events: &[Value]) -> Vec<String> {
+    of_type(events, "log")
+        .iter()
+        .map(|e| e["text"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// Send `pause`, expect `paused` as the terminal event and exit code 75, and
+/// return the `paused` event with everything the segment printed.
+fn pause_and_finish(mut worker: Worker) -> (Value, Vec<Value>) {
+    worker.send(&json!({ "type": "pause" }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 75, "stderr: {stderr}\nevents: {events:#?}");
+    let paused = events.last().unwrap().clone();
+    assert_eq!(paused["type"], "paused", "{events:#?}");
+    for field in [
+        "pause_latency_ms",
+        "walk_ms",
+        "encode_ms",
+        "compress_ms",
+        "write_ms",
+        "objects",
+        "raw_bytes",
+        "compressed_bytes",
+        "program_bytes",
+        "blocked_attempts",
+    ] {
+        assert!(paused["stats"][field].is_number(), "{field}: {paused}");
+    }
+    assert!(paused["stats"]["program_bytes"].as_u64().unwrap() > 0);
+    // Every started thread is reported ended before the terminal event.
+    assert_eq!(
+        of_type(&events, "thread_started").len(),
+        of_type(&events, "thread_ended").len(),
+        "{events:#?}"
+    );
+    (paused, events)
+}
+
+fn read_state(paused: &Value) -> Value {
+    let text = std::fs::read_to_string(paused["state_path"].as_str().unwrap()).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+fn local<'a>(frame: &'a Value, name: &str) -> &'a Value {
+    frame["locals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|local| local["name"] == name)
+        .unwrap_or_else(|| panic!("no local `{name}` in {frame:#}"))
+}
+
+#[test]
+fn a_run_paused_in_its_loop_resumes_in_a_new_process() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_slow_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    let first_pid = worker.child.id();
+    worker.wait_for("the second log line", |e| {
+        e["type"] == "log" && e["text"] == "planning day 2"
+    });
+    let (paused, events) = pause_and_finish(worker);
+    assert_eq!(texts(&events), ["planning day 1", "planning day 2"]);
+
+    // Files: snap-1.bamlsnap and the state dump snap-1.json, in --snapshot-dir.
+    let snapshot_path = paused["snapshot_path"].as_str().unwrap().to_string();
+    assert_eq!(
+        Path::new(&snapshot_path),
+        dirs.snapshots().join("snap-1.bamlsnap")
+    );
+    assert_eq!(
+        Path::new(paused["state_path"].as_str().unwrap()),
+        dirs.snapshots().join("snap-1.json")
+    );
+    let file_len = std::fs::metadata(&snapshot_path).unwrap().len();
+    assert!(file_len > 0 && file_len < 64 * 1024, "{file_len}");
+
+    // The state dump (contract section 2.5): the paused line and the named
+    // locals with their values.
+    let state = read_state(&paused);
+    assert_eq!(state["run"], RUN_ID);
+    assert_eq!(state["segment"], 1);
+    let thread = &state["threads"][0];
+    assert_eq!(thread["parked"]["kind"], "sleep");
+    let frame = &thread["frames"][0];
+    assert_eq!(frame["function"], "durable_slow_trip");
+    assert_eq!(frame["file"], SOURCE_FILE);
+    assert_eq!(frame["line"], 62);
+    assert_eq!(local(frame, "city")["value"]["preview"], "\"Lisbon\"");
+    assert_eq!(local(frame, "day")["value"]["kind"], "int");
+    assert_eq!(local(frame, "day")["value"]["preview"], "2");
+    let ideas = &local(frame, "ideas")["value"];
+    assert_eq!(ideas["kind"], "array");
+    assert_eq!(ideas["children"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        ideas["children"][0]["value"]["preview"],
+        "\"day 1 in Lisbon\""
+    );
+    assert!(state["heap"]["objects"].as_u64().unwrap() > 0);
+
+    // Segment 2: a new process continues the loop.
+    let mut worker = Worker::resume(&dirs, 2, &snapshot_path, &[]);
+    assert_ne!(worker.child.id(), first_pid);
+    let hello = worker.next_event().expect("hello");
+    assert_eq!(hello["type"], "hello");
+    assert_eq!(hello["mode"], "resume");
+    assert_eq!(hello["function"], "durable_slow_trip");
+    assert_eq!(hello["durable"], true);
+    let resumed = worker.next_event().expect("resumed");
+    assert_eq!(resumed["type"], "resumed", "{resumed}");
+    for field in ["program_load_ms", "decode_ms", "first_exec_ms"] {
+        assert!(resumed["stats"][field].is_number(), "{field}: {resumed}");
+    }
+    assert!(resumed["stats"]["process_start_ms"].is_null());
+    let started = worker.next_event().expect("thread_started");
+    assert_eq!(started["type"], "thread_started");
+    assert_eq!(started["parent_thread"], Value::Null);
+    // The restored thread reports where it stands: inside the sleep.
+    let position = worker.next_event().expect("position");
+    assert_eq!(position["type"], "position", "{position}");
+    assert_eq!(position["line"], 62);
+    assert_eq!(position["op"], "baml.sys.sleep");
+
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(call["call_id"], format!("{RUN_ID}-c1"));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    // Only the remaining iteration prints.
+    assert_eq!(texts(&events), ["planning day 3"]);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], expected_plan());
+}
+
+#[test]
+fn a_compute_loop_pauses_and_resumes() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_spin",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("thread_started", is_type("thread_started"));
+    let (paused, events) = pause_and_finish(worker);
+    assert!(texts(&events).is_empty(), "paused before the loop ended");
+    let state = read_state(&paused);
+    assert_eq!(state["threads"][0]["parked"]["kind"], "runnable");
+    let frame = &state["threads"][0]["frames"][0];
+    assert_eq!(frame["function"], "durable_spin");
+    let i: u64 = local(frame, "i")["value"]["preview"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(i < 4_000_000, "paused at i = {i}");
+
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(texts(&events), ["spun for Lisbon"]);
+    let expected: u64 = (0..4_000_000u64).map(|i| i * 2).sum();
+    assert_eq!(events.last().unwrap()["value"], expected);
+}
+
+/// Pause while the run waits for a remote result; the result arrives while
+/// the run has no process and is handed to the next segment at startup.
+#[test]
+fn a_run_paused_in_a_remote_wait_resumes_with_the_stored_result() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_plan_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let (paused, _) = pause_and_finish(worker);
+    let state = read_state(&paused);
+    let thread = &state["threads"][0];
+    assert_eq!(thread["parked"]["kind"], "remote_call");
+    assert!(
+        thread["parked"]["detail"]
+            .as_str()
+            .unwrap()
+            .contains(call["call_id"].as_str().unwrap()),
+        "{thread}"
+    );
+    // The detail is the engine's JSON payload, unshortened.
+    let detail: Value = serde_json::from_str(thread["parked"]["detail"].as_str().unwrap())
+        .unwrap_or_else(|e| panic!("parked.detail is not JSON ({e}): {thread}"));
+    assert_eq!(detail["call_id"], call["call_id"]);
+    assert_eq!(thread["frames"][0]["line"], 22);
+    assert_eq!(local(&thread["frames"][0], "day")["value"]["preview"], "4");
+
+    let result = json!({ "call_id": call["call_id"], "value": "sunny in Lisbon" }).to_string();
+    // A result for a call the run does not wait on is ignored.
+    let stray = json!({ "call_id": "r-e2e-c99", "value": "stray" }).to_string();
+    let worker = Worker::resume(
+        &dirs,
+        2,
+        paused["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &stray, "--remote-result", &result],
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(stderr.contains("r-e2e-c99"), "{stderr}");
+    // The call is not announced again; the result is reported as received by
+    // the resumed segment's root thread.
+    assert!(of_type(&events, "remote_call").is_empty(), "{events:#?}");
+    let root = of_type(&events, "thread_started")[0]["thread"].clone();
+    let received = of_type(&events, "remote_result_received");
+    assert_eq!(received.len(), 1, "{events:#?}");
+    assert_eq!(received[0]["call_id"], call["call_id"]);
+    assert_eq!(received[0]["thread"], root);
+    assert!(texts(&events).is_empty());
+    // The resumed thread reports where it stands: still at the remote call.
+    let positions = of_type(&events, "position");
+    assert_eq!(positions[0]["line"], 22, "{events:#?}");
+    assert_eq!(positions[0]["reason"], "remote_call");
+    assert_eq!(positions[0]["thread"], root);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], expected_plan());
+}
+
+/// As above, but the result arrives after the resume, on stdin.
+#[test]
+fn a_resumed_remote_wait_takes_a_later_result_from_stdin() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_plan_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    let (paused, _) = pause_and_finish(worker);
+
+    let mut worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    worker.wait_for("thread_started", is_type("thread_started"));
+    std::thread::sleep(Duration::from_millis(300));
+    worker.send(&json!({ "type": "remote_result", "call_id": "r-e2e-c99", "value": "stray" }));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+    // A second result for the same call is ignored.
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "rain in Lisbon",
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(of_type(&events, "remote_result_received").len(), 1);
+    assert_eq!(events.last().unwrap()["value"], expected_plan());
+}
+
+/// Two pauses: in the loop (segment 1) and in the remote wait (segment 2).
+/// Segment 3 finishes the run. The call id counter survives both hops.
+#[test]
+fn a_run_survives_two_pauses() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_slow_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("the first log line", is_type("log"));
+    let (first, _) = pause_and_finish(worker);
+    assert!(
+        first["snapshot_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("snap-1.bamlsnap")
+    );
+
+    let mut worker = Worker::resume(&dirs, 2, first["snapshot_path"].as_str().unwrap(), &[]);
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    assert_eq!(call["call_id"], format!("{RUN_ID}-c1"));
+    let (second, _) = pause_and_finish(worker);
+    assert!(
+        second["snapshot_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("snap-2.bamlsnap")
+    );
+    let state = read_state(&second);
+    assert_eq!(state["segment"], 2);
+    assert_eq!(state["threads"][0]["parked"]["kind"], "remote_call");
+
+    let result = json!({ "call_id": call["call_id"], "value": "sunny in Lisbon" }).to_string();
+    let worker = Worker::resume(
+        &dirs,
+        3,
+        second["snapshot_path"].as_str().unwrap(),
+        &["--remote-result", &result],
+    );
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(events[0]["mode"], "resume");
+    assert_eq!(events[0]["function"], "durable_slow_trip");
+    assert_eq!(events.last().unwrap()["value"], expected_plan());
+}
+
+/// A pending future cannot be serialized yet, so a pause of the `spawn`
+/// variant reports `blocked` with the path to the future and the run goes on.
+#[test]
+fn pausing_the_spawn_variant_is_blocked_and_the_run_completes() {
+    let mut worker = Worker::start("durable_plan_trip_parallel");
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    worker.send(&json!({ "type": "pause" }));
+    let blocked = worker.wait_for("blocked", is_type("blocked"));
+    assert!(
+        blocked["reason"]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("future"),
+        "{blocked}"
+    );
+    let path: Vec<_> = blocked["path"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p.as_str().unwrap().to_string())
+        .collect();
+    assert!(path.iter().any(|p| p.contains("pending")), "{path:?}");
+    // The path uses the names of `position` events and nothing that differs
+    // between processes (no `user.` prefix, no heap address).
+    assert!(
+        path.contains(&"frame durable_plan_trip_parallel".to_string()),
+        "{path:?}"
+    );
+    assert!(
+        path.iter()
+            .all(|p| !p.contains("user.") && !p.contains("0x")),
+        "{path:?}"
+    );
+
+    worker.wait_for("the parent's await position", |e| {
+        e["type"] == "position" && e["reason"] == "await"
+    });
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert!(of_type(&events, "paused").is_empty());
+    assert_eq!(
+        texts(&events),
+        ["planning day 1", "planning day 2", "planning day 3"]
+    );
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "completed");
+    assert_eq!(last["value"], expected_plan());
+}
+
+/// A durable run snapshots itself while it runs. After the process is lost
+/// (SIGKILL) the latest automatic snapshot continues the run.
+#[test]
+fn an_automatic_snapshot_recovers_a_run_whose_process_was_lost() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_slow_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+            "--auto-snapshot-ms",
+            "150",
+        ],
+    );
+    worker.wait_for("the second log line", |e| {
+        e["type"] == "log" && e["text"] == "planning day 2"
+    });
+    // The first snapshot taken after day 2 started.
+    let snapshot = worker.wait_for("an automatic snapshot", is_type("snapshot"));
+    assert_eq!(snapshot["automatic"], true);
+    assert!(snapshot["stats"]["objects"].is_number());
+    // Contract section 7.1: nobody requested this snapshot.
+    assert_eq!(snapshot["stats"]["pause_latency_ms"], Value::Null);
+    assert!(snapshot["stats"]["park_ms"].is_number(), "{snapshot}");
+    let logs_before = texts(&worker.events).len();
+    worker.child.kill().unwrap();
+    let status = worker.child.wait().unwrap();
+    assert_eq!(status.code(), None, "the process was lost to a signal");
+
+    let mut worker = Worker::resume(&dirs, 2, snapshot["snapshot_path"].as_str().unwrap(), &[]);
+    let call = worker.wait_for("remote_call", is_type("remote_call"));
+    worker.send(&json!({
+        "type": "remote_result",
+        "call_id": call["call_id"],
+        "value": "sunny in Lisbon",
+    }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(events.last().unwrap()["value"], expected_plan());
+    // The `snapshot` event can be written after a log line that the snapshot
+    // does not contain yet (the run continues while the event is reported),
+    // so the resumed segment may repeat the last line seen, and no more.
+    assert!(texts(&events).len() <= 3 - (logs_before - 1), "{events:#?}");
+
+    // A run whose function name lacks the marker never snapshots itself.
+    let worker = Worker::spawn(&[
+        "--start",
+        "remote_fetch_weather",
+        "--json-args",
+        r#"{"city":"Lisbon"}"#,
+        "--auto-snapshot-ms",
+        "50",
+    ]);
+    let (code, events, _) = worker.finish();
+    assert_eq!(code, 0);
+    assert!(of_type(&events, "snapshot").is_empty(), "{events:#?}");
+}
+
+#[test]
+fn resume_refuses_a_missing_snapshot_and_a_changed_program() {
+    let worker = Worker::spawn(&["--resume", "no-such-file.bamlsnap"]);
+    let (code, events, _) = worker.finish();
+    assert_eq!(code, 1);
+    assert_eq!(events[0]["type"], "hello");
+    assert_eq!(events[0]["mode"], "resume");
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "failed");
+    assert!(
+        last["error"]
+            .as_str()
+            .unwrap()
+            .contains("no-such-file.bamlsnap"),
+        "{last}"
+    );
+
+    // The project changes between the pause and the resume.
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_slow_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("the first log line", is_type("log"));
+    let (paused, _) = pause_and_finish(worker);
+    let source = dirs.project().join(SOURCE_FILE);
+    let mut text = std::fs::read_to_string(&source).unwrap();
+    text.push_str("\nfunction added_later() -> int { 1 }\n");
+    std::fs::write(&source, text).unwrap();
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, _) = worker.finish();
+    assert_eq!(code, 1, "{events:#?}");
+    assert_eq!(events[0]["function"], "durable_slow_trip");
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "failed");
+    assert!(
+        last["error"]
+            .as_str()
+            .unwrap()
+            .contains("program hash differs"),
+        "{last}"
+    );
+}
+
+#[test]
+fn unknown_function_fails_with_exit_code_1() {
+    let worker = Worker::start("no_such_function");
+    let (code, events, _) = worker.finish();
+    assert_eq!(code, 1);
+    let last = events.last().unwrap();
+    assert_eq!(last["type"], "failed");
+    assert!(
+        last["error"].as_str().unwrap().contains("no_such_function"),
+        "{last}"
+    );
+}
+
+/// Names of the files in the snapshot directory, sorted.
+fn snapshot_files(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// The VM checks for an early yield right after a call and right after a
+/// return. A pause that landed there wrote a snapshot that no process could
+/// resume. The run is moved through several processes while it is inside a
+/// loop that makes calls, so that some pauses land on such a boundary.
+#[test]
+fn a_compute_loop_with_calls_survives_a_chain_of_pauses() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_spin_calls",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    let mut tops = Vec::new();
+    for segment in 2..=6u64 {
+        worker.wait_for("thread_started", is_type("thread_started"));
+        // Vary where in the loop the pause lands.
+        std::thread::sleep(Duration::from_millis(7 * segment));
+        let (paused, events) = pause_and_finish(worker);
+        assert!(texts(&events).is_empty(), "paused before the loop ended");
+        let state = read_state(&paused);
+        assert_eq!(state["threads"][0]["parked"]["kind"], "runnable");
+        tops.push(state["threads"][0]["frames"][0]["function"].clone());
+        worker = Worker::resume(
+            &dirs,
+            segment,
+            paused["snapshot_path"].as_str().unwrap(),
+            &[],
+        );
+    }
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(
+        code, 0,
+        "paused in {tops:?}\nstderr: {stderr}\nevents: {events:#?}"
+    );
+    assert_eq!(texts(&events), ["spun with calls for Lisbon"]);
+    assert_eq!(events.last().unwrap()["value"], 500_000);
+}
+
+/// A compute loop has no sys-op or await at which the engine would notice a
+/// cancellation. `cancel` and a closed stdin still end the worker promptly,
+/// through the engine (the VM is asked to yield), not through the worker's
+/// exit-anyway timer.
+#[test]
+fn cancel_and_a_closed_stdin_end_a_run_in_a_compute_loop() {
+    for close_stdin in [false, true] {
+        let mut worker = Worker::start("durable_endless");
+        worker.wait_for("thread_started", is_type("thread_started"));
+        std::thread::sleep(Duration::from_millis(200));
+        let requested = std::time::Instant::now();
+        if close_stdin {
+            worker.close_stdin();
+        } else {
+            worker.send(&json!({ "type": "cancel" }));
+        }
+        let (code, events, stderr) = worker.finish();
+        assert_eq!(code, 130, "stderr: {stderr}\nevents: {events:#?}");
+        assert_eq!(events.last().unwrap()["type"], "cancelled", "{events:#?}");
+        assert!(
+            requested.elapsed() < Duration::from_secs(10),
+            "the worker took {:?} to exit",
+            requested.elapsed()
+        );
+        assert!(
+            !stderr.contains("did not end within"),
+            "the engine did not end the run by itself: {stderr}"
+        );
+        assert_eq!(
+            of_type(&events, "thread_started").len(),
+            of_type(&events, "thread_ended").len(),
+            "{events:#?}"
+        );
+    }
+}
+
+/// A spawned thread whose future was dropped is invisible to the snapshot
+/// writer. While it lives, the run has two threads, which a resume cannot
+/// restore: the pause reports `blocked` and succeeds once the thread ended,
+/// with a snapshot that does resume.
+#[test]
+fn a_forgotten_spawned_thread_delays_the_pause_until_it_ended() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_forgetful",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("the spawned thread", |e| {
+        e["type"] == "thread_started" && !e["parent_thread"].is_null()
+    });
+    let (paused, events) = pause_and_finish(worker);
+    let blocked = of_type(&events, "blocked");
+    assert!(!blocked.is_empty(), "{events:#?}");
+    assert!(
+        blocked[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("live threads"),
+        "{blocked:?}"
+    );
+    assert_eq!(blocked[0]["path"].as_array().unwrap().len(), 2);
+    assert!(paused["stats"]["blocked_attempts"].as_u64().unwrap() >= 1);
+    assert_eq!(paused["stats"]["threads"], 1);
+    let state = read_state(&paused);
+    assert_eq!(state["threads"].as_array().unwrap().len(), 1);
+
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(events.last().unwrap()["value"], "Lisbon after 8");
+}
+
+/// When the root function has returned the run is over, even while a thread
+/// it never awaited still runs. A `pause` then writes nothing.
+#[test]
+fn a_pause_after_the_root_returned_writes_no_snapshot() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_detached",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("the spawned thread", |e| {
+        e["type"] == "thread_started" && !e["parent_thread"].is_null()
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    worker.send(&json!({ "type": "pause" }));
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(events.last().unwrap()["type"], "completed");
+    assert!(of_type(&events, "paused").is_empty());
+    assert_eq!(
+        snapshot_files(&dirs.snapshots()),
+        Vec::<String>::new(),
+        "{events:#?}"
+    );
+}
+
+/// Output without a newline is part of the run state: the segment that pauses
+/// does not report it, and the next segment completes the line.
+#[test]
+fn an_unfinished_output_line_is_completed_by_the_next_segment() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_split_line",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("the sleep", |e| {
+        e["type"] == "position" && e["op"] == "baml.sys.sleep"
+    });
+    let (paused, events) = pause_and_finish(worker);
+    assert!(texts(&events).is_empty(), "{events:#?}");
+
+    let worker = Worker::resume(&dirs, 2, paused["snapshot_path"].as_str().unwrap(), &[]);
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
+    assert_eq!(texts(&events), ["hello Lisbon"]);
+}
+
+/// A `pause` that arrives while an automatic snapshot is in progress gets its
+/// own snapshot number. No two events name the same files.
+#[test]
+fn a_pause_that_overlaps_automatic_snapshots_gets_its_own_number() {
+    let dirs = RunDirs::new();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_slow_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+            "--auto-snapshot-ms",
+            "1",
+        ],
+    );
+    worker.wait_for("the first log line", is_type("log"));
+    std::thread::sleep(Duration::from_millis(80));
+    let (paused, events) = pause_and_finish(worker);
+    let mut paths: Vec<String> = of_type(&events, "snapshot")
+        .iter()
+        .map(|e| e["snapshot_path"].as_str().unwrap().to_string())
+        .collect();
+    assert!(!paths.is_empty(), "{events:#?}");
+    paths.push(paused["snapshot_path"].as_str().unwrap().to_string());
+    let distinct: std::collections::BTreeSet<&String> = paths.iter().collect();
+    assert_eq!(distinct.len(), paths.len(), "{paths:?}");
+    // The paused snapshot is the newest file and it resumes.
+    let header_n = paths.len();
+    assert!(
+        paused["snapshot_path"]
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("snap-{header_n}.bamlsnap")),
+        "{paths:?}"
+    );
+}
+
+/// A snapshot that cannot be stored does not end the pause request: the
+/// worker reports `blocked` and tries again, and the pause succeeds once the
+/// directory is usable.
+#[test]
+fn a_snapshot_that_cannot_be_stored_is_retried() {
+    let dirs = RunDirs::new();
+    // A regular file where the snapshot directory should be.
+    std::fs::write(dirs.snapshots(), b"in the way").unwrap();
+    let mut worker = Worker::spawn_segment(
+        &dirs,
+        1,
+        &[
+            "--start",
+            "durable_slow_trip",
+            "--json-args",
+            r#"{"city":"Lisbon"}"#,
+        ],
+    );
+    worker.wait_for("the first log line", is_type("log"));
+    worker.send(&json!({ "type": "pause" }));
+    let blocked = worker.wait_for("blocked", is_type("blocked"));
+    assert!(
+        blocked["reason"]
+            .as_str()
+            .unwrap()
+            .contains("could not be stored"),
+        "{blocked}"
+    );
+    std::fs::remove_file(dirs.snapshots()).unwrap();
+
+    let (code, events, stderr) = worker.finish();
+    assert_eq!(code, 75, "stderr: {stderr}\nevents: {events:#?}");
+    let paused = events.last().unwrap();
+    assert_eq!(paused["type"], "paused", "{events:#?}");
+    assert_eq!(of_type(&events, "blocked").len(), 1, "one per reason");
+    assert!(paused["stats"]["blocked_attempts"].as_u64().unwrap() >= 1);
+    assert!(Path::new(paused["snapshot_path"].as_str().unwrap()).exists());
+}
