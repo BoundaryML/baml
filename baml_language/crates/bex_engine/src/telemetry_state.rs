@@ -13,8 +13,26 @@ pub(crate) struct EngineTelemetry {
     pub(super) runtime: Arc<btel_processor::TelemetryRuntime>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) recording_id: btel_publisher::RecordingId,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) file_sink: Option<Arc<btel_file::FileSink>>,
 }
 impl EngineTelemetry {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
+        let processing = self.runtime.result();
+        let Some(sink) = &self.file_sink else {
+            return processing;
+        };
+        let delivery = sink
+            .result()
+            .map(|r| r.map_err(|e| btel_processor::RuntimeError(e.to_string())));
+        match (processing, delivery) {
+            (_, Some(Err(error))) | (Some(Err(error)), _) => Some(Err(error)),
+            (Some(Ok(())), Some(Ok(()))) => Some(Ok(())),
+            _ => None,
+        }
+    }
+
     pub(super) fn new_root(&self) -> TelemetryState {
         self.new_state(self.clock.start_run())
     }

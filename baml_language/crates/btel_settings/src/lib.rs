@@ -75,6 +75,7 @@ pub mod clock;
 pub mod encoding;
 pub mod identity;
 pub mod layout;
+pub mod local_files;
 pub mod mode;
 pub mod policy;
 pub mod processor;

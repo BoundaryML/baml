@@ -1268,6 +1268,7 @@ dependencies = [
  "bex_vm_types",
  "bridge_ctypes",
  "btel_clock",
+ "btel_file",
  "btel_processor",
  "btel_publisher",
  "btel_settings",
@@ -1754,6 +1755,18 @@ dependencies = [
  "btel_types",
  "quanta",
  "web-time",
+]
+
+[[package]]
+name = "btel_file"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_processor",
+ "btel_publisher",
+ "btel_settings",
+ "btel_types",
+ "prost",
+ "tempfile",
 ]
 
 [[package]]

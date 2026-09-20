@@ -1639,15 +1639,21 @@ impl BexEngine {
         } else {
             #[cfg(not(target_arch = "wasm32"))]
             let recording = recording.unwrap_or_default();
+            #[cfg(not(target_arch = "wasm32"))]
+            let recording_id = recording.id();
+            #[cfg(not(target_arch = "wasm32"))]
+            let (runtime, file_sink) = recording.start(source_snapshot_id.map(|id| id.0))?;
             Some(EngineTelemetry {
                 policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
                     telemetry_mode,
                 )),
                 clock: btel_clock::ClockRuntime::new(clock_mode),
                 #[cfg(not(target_arch = "wasm32"))]
-                recording_id: recording.id(),
+                recording_id,
                 #[cfg(not(target_arch = "wasm32"))]
-                runtime: recording.start(source_snapshot_id.map(|id| id.0))?,
+                runtime,
+                #[cfg(not(target_arch = "wasm32"))]
+                file_sink,
             })
         };
 
@@ -2485,13 +2491,20 @@ impl BexEngine {
             // hold a heap permit while waiting for the telemetry consumer.
             if let Some(telemetry) = &self.telemetry {
                 let runtime = Arc::clone(&telemetry.runtime);
+                let file_sink = telemetry.file_sink.clone();
                 // Once admission closes, cancellation must not reopen the engine.
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
-                    let result = runtime.finish();
+                    let processing = runtime.finish();
+                    // Drain disk delivery even when processing failed. No VM or
+                    // heap permit survives here; cancellation cannot skip join.
+                    let delivery = file_sink.map_or(Ok(()), |sink| {
+                        sink.finish()
+                            .map_err(|error| btel_processor::RuntimeError(error.to_string()))
+                    });
                     shutdown.complete();
-                    result
+                    delivery.and(processing)
                 })
                 .await
                 {
