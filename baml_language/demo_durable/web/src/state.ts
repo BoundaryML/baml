@@ -431,13 +431,31 @@ export function validActions(run: Run | null | undefined): Record<RunAction, boo
   };
 }
 
-/** One row of the runs list. Remote children follow their parent, one level deeper. */
+/** Why a row is listed under the row above it. */
+export type RunRel = "child" | "fork" | "moved";
+
+/** One row of the runs list. Related runs follow their parent, one level deeper. */
 export interface RunRow {
   key: RunKey;
   run: Run;
   depth: number;
-  /** Number of remote children that are listed under this row. */
+  /** Number of rows listed under this one: remote children, forks, and records left behind by a migration. */
   children: number;
+  /** Why this row is nested, or null for a top-level row. */
+  rel: RunRel | null;
+}
+
+/**
+ * The record of `run.forked_from` to list the fork under. A fork is created on
+ * the site of its source, and a fork that migrated keeps `forked_from`, so the
+ * source can be more than one migration away.
+ */
+export function forkSourceKey(run: Run, known: ReadonlySet<RunKey>): RunKey | null {
+  if (!run.forked_from) return null;
+  const id = run.forked_from.run;
+  const preferred = [runKey(run.site, id), ...(run.origin ? [runKey(run.origin.site, id)] : [])];
+  const anywhere = [...known].filter((key) => key.endsWith(`/${id}`));
+  return [...preferred, ...anywhere].find((key) => known.has(key)) ?? preferred[0] ?? null;
 }
 
 /**
@@ -448,29 +466,56 @@ export interface RunRow {
  * site that made the call (`parent.site`), or the first record of that id.
  */
 export function groupRuns(runs: readonly Run[]): RunRow[] {
+  const keyOf = (run: Run): RunKey => runKey(run.site, run.id);
   const byId = new Map<string, Run[]>();
   for (const run of runs) byId.set(run.id, [...(byId.get(run.id) ?? []), run]);
-  const childrenOf = new Map<RunKey, Run[]>();
+  const known = new Set(runs.map(keyOf));
+  const nested = new Map<RunKey, { run: Run; rel: RunRel }[]>();
+  const relOf = new Map<RunKey, RunRel>();
   const top: Run[] = [];
+  const attach = (parent: Run, run: Run, rel: RunRel): void => {
+    const key = keyOf(parent);
+    nested.set(key, [...(nested.get(key) ?? []), { run, rel }]);
+    relOf.set(keyOf(run), rel);
+  };
   for (const run of runs) {
-    const candidates = run.parent ? (byId.get(run.parent.run) ?? []) : [];
-    const parent = candidates.find((candidate) => candidate.site === run.parent?.site) ?? candidates[0];
-    if (!parent || parent === run) {
-      top.push(run);
-      continue;
+    // A record that a migration left behind belongs under the record that carries the run now.
+    if (run.migrated_to) {
+      const live = (byId.get(run.id) ?? []).find((candidate) => !candidate.migrated_to);
+      if (live && live !== run) {
+        attach(live, run, "moved");
+        continue;
+      }
     }
-    const key = runKey(parent.site, parent.id);
-    childrenOf.set(key, [...(childrenOf.get(key) ?? []), run]);
+    if (run.parent) {
+      const candidates = byId.get(run.parent.run) ?? [];
+      const parent = candidates.find((candidate) => candidate.site === run.parent?.site) ?? candidates[0];
+      if (parent && parent !== run) {
+        attach(parent, run, "child");
+        continue;
+      }
+    }
+    if (run.forked_from) {
+      const sourceKey = forkSourceKey(run, known);
+      const source = sourceKey ? runs.find((candidate) => keyOf(candidate) === sourceKey) : undefined;
+      if (source && source !== run) {
+        attach(source, run, "fork");
+        continue;
+      }
+    }
+    top.push(run);
   }
   const rows: RunRow[] = [];
   const seen = new Set<RunKey>();
   const visit = (run: Run, depth: number): void => {
-    const key = runKey(run.site, run.id);
+    const key = keyOf(run);
     if (seen.has(key)) return;
     seen.add(key);
-    const children = [...(childrenOf.get(key) ?? [])].sort((a, b) => a.created_ts - b.created_ts || a.id.localeCompare(b.id));
-    rows.push({ key, run, depth, children: children.length });
-    for (const child of children) visit(child, depth + 1);
+    const children = [...(nested.get(key) ?? [])].sort(
+      (a, b) => a.run.created_ts - b.run.created_ts || a.run.id.localeCompare(b.run.id),
+    );
+    rows.push({ key, run, depth, children: children.length, rel: relOf.get(key) ?? null });
+    for (const child of children) visit(child.run, depth + 1);
   };
   for (const run of [...top].sort((a, b) => b.created_ts - a.created_ts || a.site.localeCompare(b.site))) visit(run, 0);
   // A cycle of parents cannot happen on a real server. A record that it would hide is still listed.

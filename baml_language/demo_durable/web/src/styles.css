@@ -339,6 +339,8 @@ a.btn { text-decoration: none; color: inherit; display: inline-block; }
 }
 .group-toggle { border: 1px solid var(--line-2); background: var(--surface); border-radius: 3px; padding: 0 4px; margin-right: 5px; font: 600 10px var(--sans); color: var(--ink-2); cursor: pointer; }
 .group-toggle:hover { background: var(--surface-3); }
+/* The states of the runs a collapsed row holds, e.g. "2 ✓ · 1 ⊘". */
+.rollup { color: var(--ink-3); font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .wake-line { color: var(--sleep-ink); font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .site-chip { display: inline-flex; align-items: center; gap: 4px; }
 

@@ -1,6 +1,7 @@
 import type { RunStatus, Site } from "../protocol";
 
-const GLYPHS: Record<RunStatus, string> = {
+/** Status is never shown by color alone. The runs list reuses these for its rollup. */
+export const GLYPHS: Record<RunStatus, string> = {
   starting: "…",
   running: "▶",
   pausing: "‖",

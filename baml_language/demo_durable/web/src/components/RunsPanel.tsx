@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api";
 import { clock } from "../clock";
 import { formatClockShort, formatCountdown } from "../format";
-import { shortHash, type Run, type Site, type SiteEntry } from "../protocol";
-import { groupRuns, pauseBlocked, resumeTargets, runKey, validActions, type AppState, type RunAction, type RunKey } from "../state";
+import { shortHash, type Run, type RunStatus, type Site, type SiteEntry } from "../protocol";
+import { forkSourceKey, groupRuns, pauseBlocked, resumeTargets, runKey, validActions, type AppState, type RunAction, type RunKey, type RunRow } from "../state";
 import type { SnapshotRef } from "../timeline/Timeline";
-import { SiteChip, StatusBadge } from "./StatusBadge";
+import { GLYPHS, SiteChip, StatusBadge } from "./StatusBadge";
 
 interface Props {
   /** The site registry. It names the destinations of "Resume on <site>". */
@@ -63,27 +63,45 @@ export function WakeLine({ run, now }: { run: Run; now: number }) {
 export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapshot, api, onSelect, onRunResponse, coach }: Props) {
   // Remote children are listed under their parent, in call order.
   const rows = useMemo(() => groupRuns(runs), [runs]);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<RunKey>>(new Set());
+  // Rows start collapsed: a parent reports how many runs it holds, and the
+  // selected run's own tree opens so that clicking a parent reveals it. An
+  // explicit toggle wins over that rule, in both directions.
+  const [override, setOverride] = useState<ReadonlyMap<RunKey, boolean>>(new Map());
   const current = runs.find((run) => runKey(run.site, run.id) === selected) ?? null;
   const known = new Set(runs.map((run) => runKey(run.site, run.id)));
   const now = useSleepClock(runs.some((run) => run.status === "sleeping"));
+  const isOpen = (key: RunKey): boolean => override.get(key) ?? tree.includes(key);
+  // The runs listed under a row, at any depth: the rows that follow it until
+  // one of its own depth. A collapsed row reports their states instead.
+  const held = useMemo(() => {
+    const result = new Map<RunKey, Run[]>();
+    rows.forEach((row, index) => {
+      if (row.children === 0) return;
+      const under: Run[] = [];
+      for (let next = index + 1; next < rows.length; next += 1) {
+        const below = rows[next];
+        if (!below || below.depth <= row.depth) break;
+        under.push(below.run);
+      }
+      result.set(row.key, under);
+    });
+    return result;
+  }, [rows]);
   // A collapsed parent hides the rows below it that are deeper, up to the next row of its own depth.
   const visible = useMemo(() => {
-    const result: typeof rows = [];
+    const result: RunRow[] = [];
     let hideBelow: number | null = null;
     for (const row of rows) {
       if (hideBelow !== null && row.depth > hideBelow) continue;
-      hideBelow = collapsed.has(row.key) ? row.depth : null;
+      hideBelow = isOpen(row.key) ? null : row.depth;
       result.push(row);
     }
     return result;
-  }, [rows, collapsed]);
+    // `isOpen` reads both of these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, override, tree]);
   const toggle = (key: RunKey): void =>
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
+    setOverride((current) => new Map(current).set(key, !isOpen(key)));
 
   return (
     <section className="panel" data-testid="runs-panel">
@@ -133,10 +151,10 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
                     <td style={depth > 0 ? { paddingLeft: 6 + Math.min(depth, 3) * 12 } : undefined}>
                       <div className="fn" title={run.function}>
                         {children > 0 && (
-                          <button className="group-toggle" data-testid="group-toggle" aria-expanded={!collapsed.has(key)}
-                            title={`${children} remote ${children === 1 ? "child" : "children"}. Click to ${collapsed.has(key) ? "show" : "hide"} them.`}
+                          <button className="group-toggle" data-testid="group-toggle" aria-expanded={isOpen(key)}
+                            title={`${heldTitle(held.get(key) ?? [])}. Click to ${isOpen(key) ? "hide" : "show"} them.`}
                             onClick={(event) => { event.stopPropagation(); toggle(key); }}>
-                            {collapsed.has(key) ? "▸" : "▾"} {children}
+                            {isOpen(key) ? "▾" : "▸"} {(held.get(key) ?? []).length}
                           </button>
                         )}
                         {run.function}
@@ -147,6 +165,11 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
                           <span className="prog" data-testid="row-program" title={`program ${run.program_hash}`}> · prog {shortHash(run.program_hash, 8)}</span>
                         )}
                       </div>
+                      {children > 0 && !isOpen(key) && (
+                        <div className="rel rollup" data-testid="run-rollup" title={heldTitle(held.get(key) ?? [])}>
+                          {rollup(held.get(key) ?? [])}
+                        </div>
+                      )}
                       {run.status === "sleeping" && <div className="rel"><WakeLine run={run} now={now} /></div>}
                       {run.parent && (
                         <div className="rel mono" data-testid="child-of" title={`remote child of ${run.parent.site}/${run.parent.run}`}>
@@ -198,13 +221,24 @@ export function RunsPanel({ sites, runs, events, selected, tree, selectedSnapsho
   );
 }
 
-/** The record of the run that `run` was forked from: on the same site, on the origin site, or on any site. */
-function forkSourceKey(run: Run, known: ReadonlySet<RunKey>): RunKey | null {
-  if (!run.forked_from) return null;
-  const id = run.forked_from.run;
-  const preferred = [runKey(run.site, id), ...(run.origin ? [runKey(run.origin.site, id)] : [])];
-  const anywhere = [...known].filter((key) => key.endsWith(`/${id}`));
-  return [...preferred, ...anywhere].find((key) => known.has(key)) ?? preferred[0] ?? null;
+
+/** "2 ✓ · 1 ⊘" for the runs a collapsed row holds, in a fixed status order. */
+function rollup(runs: readonly Run[]): string {
+  const counts = new Map<RunStatus, number>();
+  for (const run of runs) counts.set(run.status, (counts.get(run.status) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([status, count]) => `${count} ${GLYPHS[status] ?? "?"}`)
+    .join(" · ");
+}
+
+/** The sentence behind the rollup, naming each run it counts. */
+function heldTitle(runs: readonly Run[]): string {
+  if (runs.length === 0) return "no related runs";
+  const kind = (run: Run): string =>
+    run.parent ? "remote child" : run.forked_from ? "fork" : run.migrated_to ? "record it left behind" : "related run";
+  const lines = runs.map((run) => `  ${run.site}/${run.id} ${run.function} — ${run.status} (${kind(run)})`);
+  return [`${runs.length} run${runs.length === 1 ? "" : "s"} under this one:`, ...lines].join("\n");
 }
 
 interface ControlButton {

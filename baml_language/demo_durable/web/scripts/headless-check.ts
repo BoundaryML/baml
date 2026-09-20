@@ -100,6 +100,14 @@ interface Expected {
   connectors?: string[];
   /** Number of run rows that name a parent. Default: 1. */
   children?: number;
+  /**
+   * Number of top-level run rows. The list nests every related record under
+   * the run that holds it: remote children under their caller, forks under
+   * their source, and a record a migration left behind under the record that
+   * carries the run now. One run lineage is therefore one top-level row.
+   * Default: 1.
+   */
+  topLevel?: number;
   /** Number of threads in the state dump of the first snapshot marker. Default: 1. */
   stateThreads?: number;
   /** The scenario whose guide the fixture brings along, or `null`. Default: not checked. */
@@ -133,8 +141,9 @@ async function fixtureScenario(browser: Browser, name: string, expected: Expecte
   check(scenario, "timeline", await timelineCounts(page), expected.timeline);
   check(scenario, "run rows", await count(page, '[data-testid="run-row"]'), expected.runs);
   check(scenario, "child rows name their parent", await count(page, '[data-testid="run-row"] [data-testid="child-of"] button'), expected.children ?? 1);
-  // Remote children are listed under their parent, one level deeper.
-  check(scenario, "child rows are nested under a parent", await count(page, '[data-testid="run-row"][data-depth="1"]'), expected.children ?? 1);
+  // One run lineage is one top-level row; everything related to it is nested under it.
+  check(scenario, "top-level run rows", await count(page, '[data-testid="run-row"][data-depth="0"]'), expected.topLevel ?? 1);
+  check(scenario, "every other row is nested", await count(page, '[data-testid="run-row"]:not([data-depth="0"])'), expected.runs - (expected.topLevel ?? 1));
   if (expected.scenario !== undefined) {
     check(scenario, "scenario guide", await page.locator('[data-testid="coach"]').getAttribute("data-scenario").catch(() => null), expected.scenario);
     if (expected.scenario !== null) {
@@ -1415,7 +1424,7 @@ try {
   // The durable run of the recovery scenario. The plain run is a tree of its own.
   const recover = {
     timeline: { ...base, segments: 3, waits: 1, call: 1, return: 1, pause_request: 0, snapshot: 3, automatic: 3 },
-    runs: 3, children: 1, enabled: ["fork"], scenario: "recover",
+    runs: 3, children: 1, topLevel: 2, enabled: ["fork"], scenario: "recover",
     ends: ["killed", "completed", "completed"],
   };
   const branch = {

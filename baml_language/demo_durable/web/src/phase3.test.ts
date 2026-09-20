@@ -104,16 +104,34 @@ describe("groupRuns", () => {
     ]);
   });
 
-  it("attaches children to the record on the site that made the call when the parent migrated", () => {
+  it("lists a migrated run once, with the record it left behind and its children under it", () => {
     const state = playFixture(buildRaceFixture());
     const rows = groupRuns(Object.values(state.runs));
-    // The record on cloud2 is newer, so it leads. The children were called from local.
-    expect(rows.map((row) => `${row.run.site}/${row.run.id}:${row.depth}`)).toEqual([
-      `cloud2/${RACE_PARENT}:0`,
-      `local/${RACE_PARENT}:0`,
-      `cloud/${RACE_CHILDREN[0]}:1`,
-      `cloud2/${RACE_CHILDREN[1]}:1`,
-      `cloud/${RACE_CHILDREN[2]}:1`,
+    // The run carries on at cloud2, so that record leads and the whole run is
+    // one top-level entry. The record left behind on local keeps the children,
+    // because local is the site that made the calls.
+    expect(rows.map((row) => `${row.run.site}/${row.run.id}:${row.depth}:${row.rel ?? "top"}`)).toEqual([
+      `cloud2/${RACE_PARENT}:0:top`,
+      `local/${RACE_PARENT}:1:moved`,
+      `cloud/${RACE_CHILDREN[0]}:2:child`,
+      `cloud2/${RACE_CHILDREN[1]}:2:child`,
+      `cloud/${RACE_CHILDREN[2]}:2:child`,
+    ]);
+    // The live record holds all four: the record left behind and its three children.
+    expect(rows[0]?.children).toBe(1);
+    expect(rows[1]?.children).toBe(3);
+  });
+
+  it("lists a fork under the run it was forked from", () => {
+    const run = (id: string, created: number, extra: Partial<Run> = {}): Run =>
+      normalizeRun({ id, site: "local", status: "completed", created_ts: created, ...extra } as Run);
+    const rows = groupRuns([
+      run("source", 1),
+      run("fork", 2, { forked_from: { run: "source", n: 3 } }),
+    ]);
+    expect(rows.map((row) => [row.run.id, row.depth, row.rel])).toEqual([
+      ["source", 0, null],
+      ["fork", 1, "fork"],
     ]);
   });
 
