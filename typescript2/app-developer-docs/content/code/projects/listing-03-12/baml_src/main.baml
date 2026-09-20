@@ -8,13 +8,28 @@ function describe_cost(cents: int) -> string {
 function remaining_budget() -> int {
     // docs:start block-expression
     let remaining = {
-        let limit = 8_000;
-        limit - 512
+        let limit = 8_000; // Block-local
+        limit - 512 // Block value: 7488
     };
     // docs:end block-expression
     remaining
 }
 // docs:end block
+
+// docs:start early-return
+function budget(stop: bool) -> int {
+    let remaining = {
+        if (stop) { return 0; } // Exits budget
+        8_000 - 512             // Block value
+    };
+    remaining + 512             // Continues after the block
+}
+// docs:end early-return
+
+test "return inside a block exits the enclosing function" {
+    assert.equal(budget(true), 0);
+    assert.equal(budget(false), 8000)
+}
 
 test "numeric operations used in the chapter" {
     assert.equal(285 / 100, 2);

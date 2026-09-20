@@ -1241,6 +1241,7 @@ body:has([data-slot="docs"]) footer {
 
 /* Perspective comparisons label the transfer, not whether a language is good. */
 .perspective-note,
+.perspective-section,
 .perspective-key-item {
   --perspective-note-color: var(--muted-foreground);
 }
@@ -1249,22 +1250,53 @@ body:has([data-slot="docs"]) footer {
   margin-block: 1rem;
   border-inline-start: 3px solid var(--perspective-note-color);
 }
-:is(.perspective-note, .perspective-key-item)[data-kind="added"] {
+.perspective-section {
+  padding-inline-start: 0.875rem;
+  border-inline-start: 3px solid var(--perspective-note-color);
+}
+:is(
+    .perspective-note,
+    .perspective-section,
+    .perspective-key-item
+  )[data-kind="added"] {
   --perspective-note-color: #23724e;
 }
-:is(.perspective-note, .perspective-key-item)[data-kind="removed"] {
+:is(
+    .perspective-note,
+    .perspective-section,
+    .perspective-key-item
+  )[data-kind="removed"] {
   --perspective-note-color: #b84457;
 }
-:is(.perspective-note, .perspective-key-item)[data-kind="modified"] {
+:is(
+    .perspective-note,
+    .perspective-section,
+    .perspective-key-item
+  )[data-kind="modified"] {
   --perspective-note-color: #956008;
 }
-.dark :is(.perspective-note, .perspective-key-item)[data-kind="added"] {
+.dark
+  :is(
+    .perspective-note,
+    .perspective-section,
+    .perspective-key-item
+  )[data-kind="added"] {
   --perspective-note-color: #7bcba4;
 }
-.dark :is(.perspective-note, .perspective-key-item)[data-kind="removed"] {
+.dark
+  :is(
+    .perspective-note,
+    .perspective-section,
+    .perspective-key-item
+  )[data-kind="removed"] {
   --perspective-note-color: #f194a2;
 }
-.dark :is(.perspective-note, .perspective-key-item)[data-kind="modified"] {
+.dark
+  :is(
+    .perspective-note,
+    .perspective-section,
+    .perspective-key-item
+  )[data-kind="modified"] {
   --perspective-note-color: #dbb164;
 }
 .perspective-note-header {
@@ -1314,10 +1346,16 @@ body:has([data-slot="docs"]) footer {
   margin-bottom: 0;
 }
 .perspective-note[data-kind="same"] {
-  padding: 0.5rem 0.625rem;
-  border: 1px solid var(--border);
-  border-inline-start: 3px solid var(--perspective-note-color);
-  border-radius: 0.5rem;
+  padding: 0.375rem 0;
+  border: 0;
+}
+.perspective-section-heading .perspective-note-badge {
+  margin-inline-start: 0.625rem;
+  vertical-align: middle;
+  text-decoration: none;
+}
+.perspective-section > :last-child {
+  margin-bottom: 0;
 }
 .perspective-note > summary {
   cursor: pointer;
@@ -1334,7 +1372,6 @@ body:has([data-slot="docs"]) footer {
 .perspective-note-chevron {
   flex-shrink: 0;
   align-self: center;
-  margin-left: auto;
   color: var(--muted-foreground);
 }
 .perspective-note[open] .perspective-note-chevron {

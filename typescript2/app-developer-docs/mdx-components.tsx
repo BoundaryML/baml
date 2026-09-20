@@ -8,7 +8,10 @@ import { CodeComparison } from '@/components/code-comparison';
 import { CodeExample } from '@/components/code-example';
 import { DocsCard } from '@/components/docs-card';
 import { LanguageTabs, ProviderTabs } from '@/components/language-tabs';
-import { PerspectiveNote } from '@/components/perspective-note';
+import {
+  PerspectiveNote,
+  PerspectiveSection,
+} from '@/components/perspective-note';
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
@@ -21,6 +24,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     DocsCard,
     LanguageTabs,
     PerspectiveNote,
+    PerspectiveSection,
     ProviderTabs,
     pre: CodeBlock,
     table: (props) => (
