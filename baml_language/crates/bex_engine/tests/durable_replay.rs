@@ -291,6 +291,17 @@ async fn a_race_decided_without_a_process_picks_the_first_arrival_every_time() {
             vec![call_with_suffix(&site, &calls, "-b")],
             "round {round}: only the winner's result is taken"
         );
+        // The losers are cancelled by `race` on threads of their own, and the
+        // engine does not order the root's result against their teardown: the
+        // run can report its value before both notifications have landed. The
+        // worker drains its threads before it reports a terminal event, so a
+        // site server sees both; a test that drives the engine directly has to
+        // wait for them. Waiting cannot hide a missing cancellation, because a
+        // notification that never arrives still fails the assertion below.
+        site.wait_until("both losers report their cancellation", |site| {
+            site.cancelled.lock().unwrap().len() >= 2
+        })
+        .await;
         let cancelled: BTreeSet<String> = site
             .cancelled
             .lock()
