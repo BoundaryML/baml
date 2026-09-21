@@ -6,6 +6,11 @@ created: 2026-09-19
 
 # Durable functions: snapshot, migrate, and resume BAML runs
 
+The VM and snapshot design in this document is complemented by
+[`durable-cloud-architecture.md`](durable-cloud-architecture.md), which defines
+the proposed Postgres control plane, executor protocol, Fly.io deployment, Modal
+adapter, and hosted-provider concerns.
+
 ## Summary
 
 This document proposes a way to make a running BAML function durable. The
