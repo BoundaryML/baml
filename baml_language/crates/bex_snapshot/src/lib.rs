@@ -309,13 +309,17 @@ pub struct RestoreOptions {
 }
 
 /// Identifier of the runtime build, for `SnapshotHeader::runtime_build`: the
-/// crate version, plus the git revision when the build environment provides
+/// release version, plus the git revision when the build environment provides
 /// one in `BAML_GIT_SHA`.
+///
+/// The version comes from `baml_version`, the one place the repository keeps
+/// it. A snapshot is refused by a build whose identifier differs, so this
+/// value must follow the release and not a crate version of its own.
 #[must_use]
 pub fn runtime_build() -> String {
     match option_env!("BAML_GIT_SHA") {
-        Some(sha) if !sha.is_empty() => format!("{}+{sha}", env!("CARGO_PKG_VERSION")),
-        _ => env!("CARGO_PKG_VERSION").to_string(),
+        Some(sha) if !sha.is_empty() => format!("{}+{sha}", baml_version::CANONICAL_VERSION),
+        _ => baml_version::CANONICAL_VERSION.to_string(),
     }
 }
 

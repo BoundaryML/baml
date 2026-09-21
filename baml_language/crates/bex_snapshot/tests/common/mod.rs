@@ -18,7 +18,6 @@ use std::{
 };
 
 use bex_heap::CollectionLevel;
-
 use bex_snapshot::{
     ParkedAt, RestoredThread, SnapshotError, SnapshotHeader, ThreadInput, WriteOptions, WriteStats,
 };
