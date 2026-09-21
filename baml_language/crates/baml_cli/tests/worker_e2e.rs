@@ -13,6 +13,7 @@
 mod common;
 
 use std::{
+    collections::BTreeSet,
     io::{BufRead as _, BufReader, Read as _, Write as _},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
@@ -444,11 +445,16 @@ fn spawned_remote_call_lets_the_parent_keep_running() {
     );
     assert!(call_index < last_log && last_log < await_index && await_index < received);
 
-    let ended: Vec<_> = of_type(&events, "thread_ended")
+    // Both threads report their end before the terminal event, which is what
+    // the worker guarantees by draining its threads. The order between them is
+    // not guaranteed: the child settles the future the root awaits, and the
+    // two tasks then finish independently.
+    let ended: BTreeSet<u64> = of_type(&events, "thread_ended")
         .iter()
-        .map(|e| e["thread"].clone())
+        .filter_map(|e| e["thread"].as_u64())
         .collect();
-    assert_eq!(ended, vec![child, root]);
+    let expected: BTreeSet<u64> = [&child, &root].iter().filter_map(|v| v.as_u64()).collect();
+    assert_eq!(ended, expected);
 
     let last = events.last().unwrap();
     assert_eq!(last["type"], "completed");

@@ -810,11 +810,19 @@ async fn a_slow_dispatch_between_sites_does_not_lose_a_call() {
 async fn a_cancellation_decided_without_a_process_is_delivered_at_the_resume() {
     let site = Site::new(program(), Remote::Execute);
     let segment = Segment::start(&site, "wait_for_child", vec![string("Mafra")], None);
+    // Wait for the CHILD's own sleep, not for any thread's: the root reaches a
+    // sleep too, and pausing on that one leaves the child parked somewhere
+    // else, which is what the assertions at the end of this test are about.
     segment
         .host
         .wait_until("the child sleeps", |host| {
-            host.started.lock().unwrap().len() == 2
-                && host.saw(YieldReason::SysOp, Some("baml.sys.sleep"))
+            let started = host.started.lock().unwrap();
+            let Some((child, _)) = started.get(1) else {
+                return false;
+            };
+            let child = *child;
+            drop(started);
+            host.saw_on(child, YieldReason::SysOp, Some("baml.sys.sleep"))
         })
         .await;
     let report = segment.pause(&site).await.expect("live");

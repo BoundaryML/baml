@@ -262,6 +262,18 @@ impl Host {
             .any(|(_, r, o)| *r == reason && o.as_deref() == op)
     }
 
+    /// [`Self::saw`] for one thread. A test that pauses a run while a
+    /// particular thread waits has to name that thread: another thread of the
+    /// run can reach the same yield first, and the pause would then land with
+    /// the named one somewhere else.
+    pub(crate) fn saw_on(&self, thread: u64, reason: YieldReason, op: Option<&str>) -> bool {
+        self.yield_log
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(t, r, o)| *t == thread && *r == reason && o.as_deref() == op)
+    }
+
     pub(crate) async fn wait_until(&self, what: &str, condition: impl Fn(&Self) -> bool) {
         tokio::time::timeout(Duration::from_secs(30), async {
             while !condition(self) {
