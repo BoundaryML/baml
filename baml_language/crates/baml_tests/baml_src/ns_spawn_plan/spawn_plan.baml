@@ -114,6 +114,27 @@ test "a modifier bound to a variable still applies" {
     assert.equal(variable_bound_modifier_still_applies(), 42)
 }
 
+// A generic parameter bounded by `Modifier` proves the operand from its bound,
+// and the bound's pins decide the task's types: here `Output = int`.
+function spawn_through_bound<M extends baml.spawn.Modifier<int, never, Output = int, Error = never, ApplyError = never>>(m: M) -> int {
+    let f = spawn with m { 21 };
+    await f
+}
+
+test "a modifier behind a bounded generic applies" {
+    assert.equal(spawn_through_bound(Double {}), 42)
+}
+
+// An existential modifier applies through its own interface.
+function spawn_through_existential(m: baml.spawn.Modifier<int, never, Output = int, Error = never, ApplyError = never>) -> int {
+    let f = spawn with m { 21 };
+    await f
+}
+
+test "a modifier held as an existential applies" {
+    assert.equal(spawn_through_existential(Double {}), 42)
+}
+
 // ─── modifiers that change the types ─────────────────────────────────────────
 
 class Fallback<T> { value: T }

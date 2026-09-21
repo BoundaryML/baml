@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × type `5` does not implement interface `baml.spawn.Modifier<int, never, Output = int>`
+    ╭─[spawn_modifier_operands.baml:21:24]
+ 21 │     let x = spawn with 5 { 1 };
+    ·                        ─
+    ╰────
+
+  [type] E0001
+
+  × type `(x: int) -> int throws never` does not implement interface `baml.spawn.Modifier<int, never, Output = int>`
+    ╭─[spawn_modifier_operands.baml:27:24]
+ 27 │     let x = spawn with helper { 1 };
+    ·                        ──────
+    ╰────
+
+  [type] E0001
+
+  × type `string` does not implement interface `baml.spawn.Modifier<int, never, Output = int>`
+    ╭─[spawn_modifier_operands.baml:34:24]
+ 34 │     let x = spawn with name { 1 };
+    ·                        ────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[spawn_modifier_operands.baml:40:42]
+ 40 │ ╭─▶ function other_instantiation() -> string {
+ 41 │ │       let m = OnlyInts {};
+ 42 │ │       let x = spawn with m { "text" };
+ 43 │ │       await x
+ 44 │ ├─▶ }
+    · ╰──── expected `string`, found `int`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[spawn_modifier_operands.baml:42:26]
+ 42 │     let x = spawn with m { "text" };
+    ·                          ─────┬────
+    ·                               ╰── expected `int`, found `"text"`
+    ╰────
+
+  [type] E0001
+
+  × type `NotAModifier` does not implement interface `baml.spawn.Modifier<int, never, ApplyError = never, Error = never, Output = int>`
+    ╭─[spawn_modifier_operands.baml:50:24]
+ 50 │     let x = spawn with m { 1 };
+    ·                        ─
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[spawn_modifier_operands.baml:56:81]
+ 56 │ ╭─▶ function unpinned_bound<M extends baml.spawn.Modifier<int, never>>(m: M) -> int {
+ 57 │ │       let x = spawn with m { 1 };
+ 58 │ │       await x
+ 59 │ ├─▶ }
+    · ╰──── expected `int`, found `(M as baml.spawn.Modifier<int, never>).Output`
+    ╰────
+
+  [type] E0001
+
+  × type `never` does not implement interface `baml.spawn.Modifier<int, never>`
+    ╭─[spawn_modifier_operands.baml:68:5]
+ 68 │     bounded<never>(baml.sys.panic("unreachable"))
+    ·     ─────────────────────────────────────────────
+    ╰────

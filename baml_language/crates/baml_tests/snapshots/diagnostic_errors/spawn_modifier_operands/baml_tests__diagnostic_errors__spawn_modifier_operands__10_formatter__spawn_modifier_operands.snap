@@ -1,0 +1,78 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A `with` operand must implement `baml.spawn.Modifier` for the plan it is
+// applied to. Each failure reports at the operand, as the nominal verdict
+// (`does not implement`), with the pins nothing solved left out.
+
+class OnlyInts {
+}
+
+implements baml.spawn.Modifier<int, never> for OnlyInts {
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
+        plan
+    }
+}
+
+class NotAModifier {
+}
+
+function helper(x: int) -> int throws never {
+    x
+}
+
+// A literal is judged as its base type, and reported as written.
+function literal_operand() -> int {
+    let x = spawn with 5 { 1 };
+    await x
+}
+
+// A function value is not a modifier.
+function function_operand() -> int {
+    let x = spawn with helper { 1 };
+    await x
+}
+
+// Neither is a variable of some other type.
+function variable_operand() -> int {
+    let name = "limit";
+    let x = spawn with name { 1 };
+    await x
+}
+
+// A modifier written for another instantiation is the one candidate, so it
+// decides the plan's type, and the body is what disagrees with it.
+function other_instantiation() -> string {
+    let m = OnlyInts {  };
+    let x = spawn with m { "text" };
+    await x
+}
+
+// A union operand applies by whichever member it holds, so every member must
+// be a modifier; the one that is not is named.
+function union_operand(flag: bool) -> int {
+    let m = if (flag) {
+        baml.spawn.Root.new()
+    } else {
+        NotAModifier {  }
+    };
+    let x = spawn with m { 1 };
+    await x
+}
+
+// A bound that leaves `Output` unpinned proves the modifier, and the task's
+// value is `M`'s own `Output`, which need not be `int`.
+function unpinned_bound<M extends baml.spawn.Modifier<int, never>>(m: M) -> int {
+    let x = spawn with m { 1 };
+    await x
+}
+
+// Implements is nominal: `never` has no impl, so it cannot instantiate a
+// bounded parameter, even though a `never` value could flow anywhere.
+function bounded<M extends baml.spawn.Modifier<int, never>>(m: M) -> int throws never {
+    0
+}
+
+function never_argument() -> int {
+    bounded<never>(baml.sys.panic("unreachable"))
+}

@@ -26,13 +26,16 @@
 //!
 //! hir_ty's ERROR CHANNEL is asserted too (rust-analyzer's
 //! `check_infer_with_mismatches` discipline): the channel is CLEAN BY
-//! DEFAULT - any recorded `type_mismatches` entry or non-exhaustive match
-//! without a matching annotation fails the fixture - and a fixture typing
-//! an intentionally-invalid program states its errors executable:
+//! DEFAULT - any recorded `type_mismatches` entry, does-not-implement
+//! verdict, or non-exhaustive match without a matching annotation fails
+//! the fixture - and a fixture typing an intentionally-invalid program
+//! states its errors executable:
 //!
 //! ```text
+//!     f(x)
+//! //  ^^^^ mismatch: expected int, got string
 //!     g(n)
-//! //  ^^^^ mismatch: expected user.Need, got int
+//! //  ^^^^ unimplemented: int does not implement user.Need
 //! //  ^^^^ non-exhaustive
 //! ```
 //!
@@ -80,6 +83,10 @@ enum AnnotationKind {
     Ty,
     /// `// ^ mismatch: expected <ty>, got <ty>`
     Mismatch,
+    /// `// ^ unimplemented: <ty> does not implement <interface>` (or `does
+    /// not satisfy <bound>` when a blanket impl's bound is what fails): the
+    /// nominal implements verdict, which is not a subtyping mismatch.
+    Unimplemented,
     /// `// ^ non-exhaustive`
     NonExhaustive,
 }
@@ -124,10 +131,12 @@ pub(crate) fn run_fixture(fixture: &str, render_dump: bool) -> FixtureOutcome {
 }
 
 /// hir_ty's recorded error channel for one file: type mismatches (rendered
-/// `expected X, got Y`, rust-analyzer's wording) and non-exhaustive
-/// matches, each at its expression's source range.
+/// `expected X, got Y`, rust-analyzer's wording), does-not-implement
+/// verdicts, and non-exhaustive matches, each at its expression's source
+/// range.
 pub(crate) struct ErrorChannel {
     pub(crate) mismatches: BTreeMap<(u32, u32), Vec<String>>,
+    pub(crate) unimplemented: BTreeMap<(u32, u32), Vec<String>>,
     pub(crate) non_exhaustive: Vec<TextRange>,
 }
 
@@ -137,6 +146,7 @@ pub(crate) fn collect_hir_ty_error_channel(
 ) -> ErrorChannel {
     let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let mut mismatches: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
+    let mut unimplemented: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
     let mut non_exhaustive = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
         let body = baml_compiler2_ppir::body(db, owner);
@@ -160,6 +170,34 @@ pub(crate) fn collect_hir_ty_error_channel(
                 entry.push(rendered);
             }
         }
+        for diagnostic in &result.diagnostics {
+            use baml_compiler2_hir_ty::diagnostics::{DiagnosticLocation, TirTypeError};
+            let DiagnosticLocation::Expr(expr_id) = diagnostic.primary else {
+                continue;
+            };
+            let rendered = match &diagnostic.error {
+                TirTypeError::TypeDoesNotImplementInterface {
+                    value_type,
+                    interface,
+                } => format!(
+                    "{} does not implement {}",
+                    value_type.render_with(&vp),
+                    interface.render_with(&vp)
+                ),
+                TirTypeError::BlanketBoundNotSatisfied { value_type, bound } => format!(
+                    "{} does not satisfy {}",
+                    value_type.render_with(&vp),
+                    bound.render_with(&vp)
+                ),
+                _ => continue,
+            };
+            let entry = unimplemented
+                .entry(range_key(source_map.expr_span(expr_id)))
+                .or_default();
+            if !entry.contains(&rendered) {
+                entry.push(rendered);
+            }
+        }
         for &expr_id in &result.non_exhaustive_matches {
             let range = source_map.expr_span(expr_id);
             if !non_exhaustive.contains(&range) {
@@ -170,63 +208,53 @@ pub(crate) fn collect_hir_ty_error_channel(
     non_exhaustive.sort_by_key(|range| range_key(*range));
     ErrorChannel {
         mismatches,
+        unimplemented,
         non_exhaustive,
     }
 }
 
 /// The clean-by-default contract, strict in both directions: every
-/// `mismatch:` / `non-exhaustive` annotation must match a recorded entry at
-/// its exact range, and every recorded entry must be annotated - an
-/// UNANNOTATED entry on a supposedly-valid fixture is exactly the silent
-/// disagreement this channel check exists to catch.
+/// `mismatch:` / `unimplemented:` / `non-exhaustive` annotation must match a
+/// recorded entry at its exact range, and every recorded entry must be
+/// annotated - an UNANNOTATED entry on a supposedly-valid fixture is exactly
+/// the silent disagreement this channel check exists to catch.
 fn check_error_channel(
     channel: &ErrorChannel,
     fixture: &str,
     annotations: &[Annotation],
 ) -> Vec<String> {
     let mut failures = Vec::new();
-    let mut covered_mismatches: Vec<(u32, u32)> = Vec::new();
+    check_keyed_channel(
+        "mismatch",
+        &channel.mismatches,
+        AnnotationKind::Mismatch,
+        fixture,
+        annotations,
+        &mut failures,
+    );
+    check_keyed_channel(
+        "unimplemented",
+        &channel.unimplemented,
+        AnnotationKind::Unimplemented,
+        fixture,
+        annotations,
+        &mut failures,
+    );
     let mut covered_non_exhaustive: Vec<(u32, u32)> = Vec::new();
-    for ann in annotations {
-        match ann.kind {
-            AnnotationKind::Ty => {}
-            AnnotationKind::Mismatch => match channel.mismatches.get(&range_key(ann.range)) {
-                None => failures.push(format!(
-                    "line {}: no mismatch recorded at `{}`; annotation expects `{}`",
-                    ann.code_line, &fixture[ann.range], ann.expected
-                )),
-                Some(rendered) if !rendered.contains(&ann.expected) => failures.push(format!(
-                    "line {}: mismatch at `{}` is `{}`, annotation expects `{}`",
-                    ann.code_line,
-                    &fixture[ann.range],
-                    rendered.join("` / `"),
-                    ann.expected
-                )),
-                Some(_) => covered_mismatches.push(range_key(ann.range)),
-            },
-            AnnotationKind::NonExhaustive => {
-                if channel
-                    .non_exhaustive
-                    .iter()
-                    .any(|range| range_key(*range) == range_key(ann.range))
-                {
-                    covered_non_exhaustive.push(range_key(ann.range));
-                } else {
-                    failures.push(format!(
-                        "line {}: no non-exhaustive match recorded at `{}`",
-                        ann.code_line, &fixture[ann.range]
-                    ));
-                }
-            }
-        }
-    }
-    for (&key, rendered) in &channel.mismatches {
-        if !covered_mismatches.contains(&key) {
-            let (start, end) = key;
+    for ann in annotations
+        .iter()
+        .filter(|ann| ann.kind == AnnotationKind::NonExhaustive)
+    {
+        if channel
+            .non_exhaustive
+            .iter()
+            .any(|range| range_key(*range) == range_key(ann.range))
+        {
+            covered_non_exhaustive.push(range_key(ann.range));
+        } else {
             failures.push(format!(
-                "unannotated mismatch at {start}..{end} `{}`: {}; annotate with `mismatch: ...`                  or fix the engine",
-                ellipsize(&fixture[start as usize..end as usize], 30),
-                rendered.join("` / `")
+                "line {}: no non-exhaustive match recorded at `{}`",
+                ann.code_line, &fixture[ann.range]
             ));
         }
     }
@@ -234,12 +262,53 @@ fn check_error_channel(
         if !covered_non_exhaustive.contains(&range_key(*range)) {
             let (start, end) = range_key(*range);
             failures.push(format!(
-                "unannotated non-exhaustive match at {start}..{end} `{}`; annotate with                  `non-exhaustive` or fix the engine",
+                "unannotated non-exhaustive match at {start}..{end} `{}`; annotate with \
+                 `non-exhaustive` or fix the engine",
                 ellipsize(&fixture[start as usize..end as usize], 30)
             ));
         }
     }
     failures
+}
+
+/// One range-keyed channel's half of [`check_error_channel`]: the
+/// annotations of `kind` against the entries of `recorded`, both directions.
+fn check_keyed_channel(
+    label: &str,
+    recorded: &BTreeMap<(u32, u32), Vec<String>>,
+    kind: AnnotationKind,
+    fixture: &str,
+    annotations: &[Annotation],
+    failures: &mut Vec<String>,
+) {
+    let mut covered: Vec<(u32, u32)> = Vec::new();
+    for ann in annotations.iter().filter(|ann| ann.kind == kind) {
+        match recorded.get(&range_key(ann.range)) {
+            None => failures.push(format!(
+                "line {}: no {label} recorded at `{}`; annotation expects `{}`",
+                ann.code_line, &fixture[ann.range], ann.expected
+            )),
+            Some(rendered) if !rendered.contains(&ann.expected) => failures.push(format!(
+                "line {}: {label} at `{}` is `{}`, annotation expects `{}`",
+                ann.code_line,
+                &fixture[ann.range],
+                rendered.join("` / `"),
+                ann.expected
+            )),
+            Some(_) => covered.push(range_key(ann.range)),
+        }
+    }
+    for (&key, rendered) in recorded {
+        if !covered.contains(&key) {
+            let (start, end) = key;
+            failures.push(format!(
+                "unannotated {label} at {start}..{end} `{}`: {}; annotate with `{label}: ...` \
+                 or fix the engine",
+                ellipsize(&fixture[start as usize..end as usize], 30),
+                rendered.join("` / `")
+            ));
+        }
+    }
 }
 
 /// The dump's trailing error-channel section (rust-analyzer's
@@ -254,6 +323,15 @@ fn render_error_channel(channel: &ErrorChannel, fixture: &str) -> String {
         );
         for entry in rendered {
             let _ = writeln!(out, "{start}..{end} '{text}': [mismatch] {entry}");
+        }
+    }
+    for (&(start, end), rendered) in &channel.unimplemented {
+        let text = ellipsize(
+            &fixture[TextRange::new(TextSize::new(start), TextSize::new(end))],
+            15,
+        );
+        for entry in rendered {
+            let _ = writeln!(out, "{start}..{end} '{text}': [unimplemented] {entry}");
         }
     }
     for range in &channel.non_exhaustive {
@@ -425,6 +503,8 @@ fn extract_annotations(text: &str) -> Vec<Annotation> {
             let start = t_offset + caret_col;
             let (kind, expected) = if let Some(rest) = content.strip_prefix("mismatch:") {
                 (AnnotationKind::Mismatch, rest.trim().to_owned())
+            } else if let Some(rest) = content.strip_prefix("unimplemented:") {
+                (AnnotationKind::Unimplemented, rest.trim().to_owned())
             } else if content == "non-exhaustive" {
                 (AnnotationKind::NonExhaustive, String::new())
             } else {

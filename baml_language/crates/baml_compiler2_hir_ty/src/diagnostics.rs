@@ -651,6 +651,13 @@ pub enum TirTypeError {
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
     BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
+    /// More than one implementation could prove that `value_type` implements
+    /// `interface`, and nothing in the program picks one (rustc's E0283).
+    AmbiguousImplementation {
+        value_type: Ty,
+        /// The interface as far as inference determined it.
+        interface: Ty,
+    },
     /// `$id` cannot be the target of a compound assignment (`$id += ...`):
     /// the runtime ID can only be replaced wholesale with an override from
     /// `baml.id.new()` via `$id = ...`.
@@ -1883,6 +1890,16 @@ impl TirTypeError {
                  `implements` rule",
                     value_type.spell(vp),
                     bound.spell(vp)
+                ),
+                TirTypeError::AmbiguousImplementation {
+                    value_type,
+                    interface,
+                } => write!(
+                    f,
+                    "type annotations needed: more than one implementation could make type \
+                 `{}` implement `{}`",
+                    value_type.spell(vp),
+                    interface.spell(vp)
                 ),
                 TirTypeError::RuntimeIdCompoundAssignment => write!(
                     f,

@@ -793,10 +793,19 @@ enum PendingDiag<'db> {
         expr: ExprId,
         target: Ty,
     },
-    /// A written interface qualifier the subject does not implement:
-    /// `x.as<I>` where `x`'s type does not, or `(Base as I).item` where
-    /// `Base` does not.
-    QualifierNotImplemented {
+    /// `value` does not implement `interface` (an existential): a written
+    /// qualifier the subject does not implement (`x.as<I>`, `(Base as
+    /// I).item`), or a failed `Implements` goal - the nominal verdict,
+    /// never re-judged by subtyping.
+    DoesNotImplement {
+        expr: ExprId,
+        value: Ty,
+        interface: Ty,
+    },
+    /// An `Implements` goal on a known subject still pending at
+    /// quiescence: more than one impl or bound could prove it, and nothing
+    /// left to solve picks one.
+    AmbiguousImplementation {
         expr: ExprId,
         value: Ty,
         interface: Ty,
@@ -2365,12 +2374,11 @@ impl<'db> InferenceContext<'db> {
                         // BEP-044's dedicated form: the value's type does
                         // not implement the requested interface - clearer
                         // than the generic mismatch.
-                        self.pending_diags
-                            .push(PendingDiag::QualifierNotImplemented {
-                                expr,
-                                value: base_ty,
-                                interface: target.clone(),
-                            });
+                        self.pending_diags.push(PendingDiag::DoesNotImplement {
+                            expr,
+                            value: base_ty,
+                            interface: target.clone(),
+                        });
                     }
                     target
                 }
@@ -4057,7 +4065,7 @@ impl<'db> InferenceContext<'db> {
                                 ty: goal,
                                 interface: interface.clone(),
                                 at: anchor,
-                                not_concrete_rejects: false,
+                                purpose: obligations::GoalPurpose::Coercion,
                             });
                         }
                         return true;
@@ -7218,12 +7226,11 @@ impl<'db> InferenceContext<'db> {
             crate::interfaces::Determination::Determined(realized) => realized,
             crate::interfaces::Determination::SubjectDoesNotImplementQualifier { .. } => {
                 if self.member_probe_depth == 0 {
-                    self.pending_diags
-                        .push(PendingDiag::QualifierNotImplemented {
-                            expr,
-                            value: qself,
-                            interface,
-                        });
+                    self.pending_diags.push(PendingDiag::DoesNotImplement {
+                        expr,
+                        value: qself,
+                        interface,
+                    });
                 }
                 return Ty::error();
             }
@@ -8178,9 +8185,7 @@ impl<'db> InferenceContext<'db> {
         let bounds = crate::lower::function_generic_bounds(self.db, function);
         // The concreteness rule covers the function's OWN declared params
         // (turbofish or inferred - the user's type arguments). The frame
-        // PREFIX is the receiver's business: `Self` legitimately binds an
-        // existential for virtual dispatch, and class/interface args were
-        // judged at the receiver's own annotation.
+        // PREFIX is the receiver's business (see `call_bound_purpose`).
         let own_start = {
             let frame = crate::lower::function_generic_frame(self.db, function);
             let own = baml_compiler2_ppir::item_data::function_data(self.db, function)
@@ -8200,7 +8205,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface: substitute_interface_params(&bound, instantiation),
                     at,
-                    not_concrete_rejects: (param.index() as usize) >= own_start,
+                    purpose: call_bound_purpose(&param, own_start),
                 });
             }
         }
@@ -8233,7 +8238,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface: substitute_interface_params(&bound, instantiation),
                     at,
-                    not_concrete_rejects: (param.index() as usize) >= own_start,
+                    purpose: call_bound_purpose(param, own_start),
                 });
             }
         }
@@ -8277,7 +8282,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at,
-                    not_concrete_rejects: true,
+                    purpose: obligations::GoalPurpose::ConcreteBound,
                 });
             }
         }
@@ -8801,7 +8806,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at: object,
-                    not_concrete_rejects: true,
+                    purpose: obligations::GoalPurpose::ConcreteBound,
                 });
             }
         }
@@ -10753,6 +10758,7 @@ impl<'db> InferenceContext<'db> {
                     .or_insert((expected, actual));
             }
         }
+        self.settle_stalled_obligations();
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
@@ -10868,6 +10874,19 @@ impl<'db> InferenceContext<'db> {
                     related: Vec::new(),
                 });
             }
+            // Expressions with a nominal does-not-implement verdict: a
+            // mismatch there against an interface existential is the same
+            // fault restated through subtyping (an argument's provisional
+            // check re-judged once its expectation solved), and the verdict
+            // is the precise report.
+            let not_implemented_at: rustc_hash::FxHashSet<ExprId> = self
+                .pending_diags
+                .iter()
+                .filter_map(|pending| match pending {
+                    PendingDiag::DoesNotImplement { expr, .. } => Some(*expr),
+                    _ => None,
+                })
+                .collect();
             for (&expr, (expected, actual)) in &result.type_mismatches {
                 // rustc's tainted_by_errors discipline: a mismatch whose
                 // operand IS the error sentinel is a CASCADE of a reported
@@ -10880,6 +10899,11 @@ impl<'db> InferenceContext<'db> {
                         && matches!(ty.kind(), InferTy::Error { .. } | InferTy::Unknown { .. })
                 };
                 if tainted(expected) || tainted(actual) {
+                    continue;
+                }
+                if matches!(expected.kind(), InferTy::Interface(..))
+                    && not_implemented_at.contains(&expr)
+                {
                     continue;
                 }
                 // A check can fail MID-INFERENCE on still-open variables
@@ -11161,17 +11185,63 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
-                    PendingDiag::QualifierNotImplemented {
+                    PendingDiag::DoesNotImplement {
                         expr,
                         value,
                         interface,
-                    } => (
-                        TirTypeError::TypeDoesNotImplementInterface {
-                            value_type: self.plain_finalized(&value),
-                            interface: self.plain_finalized(&interface),
-                        },
+                    } => {
+                        let interface = self.with_unsolved_pins_elided(&interface);
+                        // A value that ALMOST implements the interface
+                        // through a blanket `implements` rule - the
+                        // implementor shape matches but a generic bound
+                        // fails - names the unsatisfied bound (rustc's
+                        // obligation-cause refinement of a fulfillment
+                        // error) rather than the bare verdict (BEP-044
+                        // wf3 #G18).
+                        let value = self.finalize_ty(&value);
+                        let interface = self.finalize_ty(&interface);
+                        // The for-desugar's iterability goal reads as its
+                        // own message, keyed on the interface as rustc's
+                        // `on_unimplemented` is on the trait.
+                        let iterable =
+                            self.lang_decl(baml_base::LangPackage::Baml, &["iter"], "Iterable");
+                        let error = if let InferTy::Interface(name, ..) = interface.kind()
+                            && iterable.as_ref() == Some(name)
+                        {
+                            TirTypeError::NotIterable {
+                                ty: value.to_plain(),
+                            }
+                        } else {
+                            match self.first_failing_blanket_bound(value.as_ty(), interface.as_ty())
+                            {
+                                Some(bound) => TirTypeError::BlanketBoundNotSatisfied {
+                                    value_type: value.to_plain(),
+                                    bound,
+                                },
+                                None => TirTypeError::TypeDoesNotImplementInterface {
+                                    value_type: value.to_plain(),
+                                    interface: interface.to_plain(),
+                                },
+                            }
+                        };
+                        (error, expr)
+                    }
+                    PendingDiag::AmbiguousImplementation {
                         expr,
-                    ),
+                        value,
+                        interface,
+                    } => {
+                        let interface = self.with_unsolved_pins_elided(&interface);
+                        (
+                            TirTypeError::AmbiguousImplementation {
+                                value_type: self.plain_finalized(&value),
+                                interface: rendered_plain(
+                                    &self.table.resolve_completely(&interface),
+                                ),
+                            },
+                            expr,
+                        )
+                    }
                     PendingDiag::WrongTypeArgArity {
                         expr,
                         callee,
@@ -11947,6 +12017,28 @@ impl<'db> InferenceContext<'db> {
     /// [`finalize_ty`](Self::finalize_ty) + the total plain exit: the
     /// one-step form for diagnostic payloads and other plain-vocabulary
     /// consumers inside `finish`.
+    /// `interface` (an existential) without the pins inference never
+    /// solved. A failed goal leaves its pins open - only the impl that
+    /// proved it would have bound them - so they carry no information, and
+    /// finalizing them would print the error sentinel.
+    fn with_unsolved_pins_elided(&mut self, interface: &Ty) -> Ty {
+        let resolved = self.table.resolve_completely(interface);
+        let InferTy::Interface(name, args, pins, attr) = resolved.kind() else {
+            return resolved;
+        };
+        let pins: Box<[_]> = pins
+            .iter()
+            .filter(|(_, pin)| !pin.has_infer() && !pin.has_error())
+            .cloned()
+            .collect();
+        Ty::intern(InferTy::Interface(
+            name.clone(),
+            args.clone(),
+            pins,
+            attr.clone(),
+        ))
+    }
+
     fn plain_finalized(&mut self, ty: &Ty) -> baml_type::Ty {
         self.finalize_ty(ty).to_plain()
     }
@@ -12077,7 +12169,7 @@ impl<'db> InferenceContext<'db> {
             ty: collection.clone(),
             interface: iterable.clone(),
             at,
-            not_concrete_rejects: false,
+            purpose: obligations::GoalPurpose::Coercion,
         });
         let existential = iterable.existential();
         let projection = Ty::intern(InferTy::AssociatedTypeProjection {
@@ -13626,6 +13718,20 @@ fn widen_fresh_literal(ty: &Ty) -> Ty {
 }
 
 /// The base primitive a literal type belongs to.
+/// The purpose of a call-site bound on frame param `param`, whose own
+/// params start at `own_start`. The callee's OWN params are the user's type
+/// arguments and must be concrete. The frame PREFIX is the receiver's:
+/// `Self` binds whatever the call dispatches on (an existential or a union
+/// dispatches by its run-time member), and class/interface args were judged
+/// at the receiver's own annotation, so it is a coercion of the receiver.
+fn call_bound_purpose(param: &baml_type::ParamTy, own_start: usize) -> obligations::GoalPurpose {
+    if (param.index() as usize) >= own_start {
+        obligations::GoalPurpose::ConcreteBound
+    } else {
+        obligations::GoalPurpose::Coercion
+    }
+}
+
 pub(crate) fn literal_base(literal: &Literal, attr: TyAttr) -> InferTy {
     match literal {
         Literal::Int(_) => InferTy::Int { attr },

@@ -1245,7 +1245,7 @@ test "unbounded_generic_forwarded_to_bounded_call_is_rejected" {
                 }
             `,
         },
-        "expected `Equatable`, found `U`",
+        "type `U` does not implement interface `Equatable`",
     )
 }
 
@@ -1264,7 +1264,7 @@ test "unbounded_generic_forwarded_through_container_is_rejected" {
                 }
             `,
         },
-        "expected `Equatable`, found `U`",
+        "type `U` does not implement interface `Equatable`",
     )
 }
 
@@ -3993,7 +3993,7 @@ test "bounded_blanket_impl_does_not_discharge_against_unrelated_env_param" {
             `,
         },
         "E0001",
-        ["expected `ProbeMarker`, found `int`"],
+        ["type `int` does not implement interface `ProbeMarker`"],
     )
 }
 

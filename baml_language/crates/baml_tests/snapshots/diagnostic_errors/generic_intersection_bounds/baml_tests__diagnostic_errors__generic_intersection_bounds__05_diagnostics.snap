@@ -4,38 +4,34 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × mismatched types
+  × type `OnlyNamed` does not implement interface `Sized`
     ╭─[generic_intersection_bounds.baml:37:5]
  37 │     describe<OnlyNamed>(OnlyNamed { name: "n" })
-    ·     ──────────────────────┬─────────────────────
-    ·                           ╰── expected `Sized`, found `OnlyNamed`
+    ·     ────────────────────────────────────────────
     ╰────
 
   [type] E0001
 
-  × mismatched types
+  × type `OnlySized` does not implement interface `Named`
     ╭─[generic_intersection_bounds.baml:42:5]
  42 │     describe<OnlySized>(OnlySized {})
-    ·     ────────────────┬────────────────
-    ·                     ╰── expected `Named`, found `OnlySized`
+    ·     ─────────────────────────────────
     ╰────
 
   [type] E0001
 
-  × mismatched types
+  × type `OnlyNamed` does not implement interface `Sized`
     ╭─[generic_intersection_bounds.baml:47:13]
  47 │     let f = describe<OnlyNamed>
-    ·             ─────────┬─────────
-    ·                      ╰── expected `Sized`, found `OnlyNamed`
+    ·             ───────────────────
     ╰────
 
   [type] E0001
 
-  × mismatched types
+  × type `OnlyNamed` does not implement interface `Sized`
     ╭─[generic_intersection_bounds.baml:57:13]
  57 │     let h = Holder<OnlyNamed> { item: OnlyNamed { name: "n" } }
-    ·             ─────────────────────────┬─────────────────────────
-    ·                                      ╰── expected `Sized`, found `OnlyNamed`
+    ·             ───────────────────────────────────────────────────
     ╰────
 
   [type] E0001

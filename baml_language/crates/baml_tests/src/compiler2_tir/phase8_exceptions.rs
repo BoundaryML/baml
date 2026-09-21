@@ -1060,18 +1060,9 @@ function f() -> int {
 // -- `spawn ... with` modifier diagnostics -----------------------------------
 // A `with` operand must be a `baml.spawn.Modifier` value. The sugar desugars
 // to `Plan.new(..).with(m)`, so the operand is an ordinary argument checked
-// against the interface existential `Plan.with` declares.
-
-// BUG: a non-modifier operand is currently accepted SILENTLY. `Plan.with`'s
-// associated-type pins (`Output`, `Error`, `ApplyError`) are inference
-// variables at the call, so the failed obligation leaves them unsolved, the
-// call's result type fills with `Error`, and cascade suppression swallows
-// every report downstream. The obligation's own verdict now goes out on the
-// nominal channel (`TypeDoesNotImplementInterface`) instead of being laundered
-// into a subtyping pair, but it never fires for this shape because the pins
-// are still open when the goal is judged. Closing this needs the pin-solving
-// path to fail loudly; the tests below pin what the surface does today so the
-// fix is visible as a diff.
+// against the interface existential `Plan.with` declares. The operands that
+// are NOT modifiers report at the operand; their diagnostics are pinned by
+// `projects/diagnostic_errors/spawn_modifier_operands`.
 
 #[test]
 fn spawn_with_modifier_typechecks() {
