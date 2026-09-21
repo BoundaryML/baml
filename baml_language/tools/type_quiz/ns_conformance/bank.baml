@@ -855,7 +855,7 @@ function depth_report() -> string throws never {
 }
 
 test "bank: nearly every case it can draw turns on a single rule" {
-    assert.equal(depth_report(), `cases=320 rules=["0:0", "1:242", "2:46", "3:16", "4:8", "5:8"]`)
+    assert.equal(depth_report(), `cases=320 rules=["0:0", "1:256", "2:32", "3:16", "4:8", "5:8"]`)
 }
 
 // ─── which sites the bank reaches ────────────────────────────────────────────

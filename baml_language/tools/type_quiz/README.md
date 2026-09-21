@@ -141,8 +141,11 @@ A transfer that maps `Sub`, `Super` and `Unrelated` alike screens off
 everything below it — invariance is exactly that — so `Box<S>` against
 `Box<T>` is answerable knowing only that the two types are written
 differently, and the rule beneath is part of the explanation and no part of
-the question. An equivalence is the exception, since invariance carries it
-through. Each claim carries whether it bears, and the tracer reads only those.
+the question. An equivalence turns it round: invariance carries one through
+unchanged, and so does every other position, so `Box<bool>` against
+`Box<true | false>` turns on knowing the two are one type and not on the
+wrap — which decides nothing there, and is credited to nobody. Each claim
+carries whether it bears, and the tracer reads only those.
 
 Depth therefore comes from wraps that *carry* a relation — a covariant
 position keeps it, a contravariant one turns it round — and the `carried_2`,
@@ -167,8 +170,9 @@ against what measuring them asks for. `exposure` penalises an item each time
 it has already been served, so a rule may come round as often as the estimate
 wants it while the same template does not. Both are measured in the suite: a
 perfect learner's questions do not get shallower over a sitting, no item
-comes round more than six times in ninety-odd questions, and certifying one
-costs 64 to 133 questions, for the reason below.
+comes round more than six times in a hundred-odd questions, and certifying
+one costs 81 to 133 questions — with two sittings in twelve not certified
+inside the budget at all, for the reason below.
 
 Selection cannot see which way a draw's coins fell. Two coins decide the
 answer — which way a pair flows, and which fact of a shape a draw is — and
@@ -191,10 +195,18 @@ holding exactly the rules the tracer reads off its case.
 
 That costs questions, and it is why the default budget is 140. An
 equivalence's rule is evidenced only on the half of its item's draws that
-are the equivalence, so a learner who answers everything right needs 64 to
+are the equivalence, so a learner who answers everything right needs 81 to
 133 questions to be certified where they had needed 60 to 68 — the price of
 the kind of question saying nothing about its answer, over the questions a
 learner is actually asked as well as over the bank.
+
+A wrap costs the same way, for the same reason. Invariance carries an
+equivalence through unchanged, so a case putting an equivalence in a `Box`,
+an array or a map turns on the equivalence and not on the wrap: no reading
+of the wrap would answer it differently. The wrap's rule is therefore
+evidenced only where the wrap decides something — over a strict pair — and
+two sittings in twelve now run out of budget rather than one. The evidence
+those cases used to give was never earned.
 
 ## Interestingness
 

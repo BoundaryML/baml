@@ -159,13 +159,17 @@ class Knobs {
     band: float,
     /// The most questions a sitting may ask.
     ///
-    /// Set so that a learner who answers everything right is certified
-    /// within it. An item that serves an equivalence half the time and its
-    /// near miss the other half evidences the equivalence's rule on half its
-    /// draws, so certifying one costs about twice the questions it would if
-    /// selection could choose the equivalence — which is the choice it is
-    /// kept from, so the kind of question cannot give its answer away.
-    /// Measured over twelve sittings: 64 to 133 questions.
+    /// An item that serves an equivalence half the time and its near miss the
+    /// other half evidences the equivalence's rule on half its draws, so
+    /// certifying one costs about twice the questions it would if selection
+    /// could choose the equivalence — which is the choice it is kept from, so
+    /// the kind of question cannot give its answer away. A wrap over an
+    /// equivalence evidences only the rule it carries, for the same reason:
+    /// the wrap itself decides nothing there.
+    ///
+    /// Measured over twelve sittings: 81 to 133 questions, and two of the
+    /// twelve are not certified inside this budget. Raising it would hide
+    /// that rather than mend it — the estimator is where it would be mended.
     budget: int,
     /// Stop after this many observations that moved no rule's floor, once
     /// at least `minimum` have been made: a sitting is given time to reach

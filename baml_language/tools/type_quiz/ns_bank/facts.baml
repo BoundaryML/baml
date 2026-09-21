@@ -709,19 +709,30 @@ function unfolded_with_wrong_leaf(seed: root.engine.Seed) -> Derived throws neve
     )
 }
 
-/// `type A = A | A[]` against `type L = int | L[]`: the unguarded member is
-/// vacuous and a leaf is not, so the second holds every `int` and the first
-/// holds none. Beside `unguarded_member_is_vacuous`.
+/// `type A = A | int[]` against `type B = B[]`: the unguarded member is
+/// vacuous, so the first is `int[]` and the second every nesting of empty
+/// arrays. `[1]` is an `A` and no `B`, `[[]]` a `B` and no `A`, so neither
+/// holds the other. Beside `unguarded_member_is_vacuous`, from which it
+/// differs by one token: the array holds a leaf rather than the alias.
+///
+/// That token is what lets the subset reading decide. Where both sides recur
+/// on themselves — `type A = A | A[]` against `type L = int | L[]` — the
+/// empty nestings inhabit both, so the first IS a subset of the second and
+/// the pair is unrelated by array invariance alone. A near miss spelled that
+/// way would cite a rule that hands the learner the wrong answer.
 function vacuous_beside_guarded(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     let names = root.engine.pick_distinct(l.next, type_names(), 2);
-    let with_member = root.algebra.AliasDecl.recursive(names.value[0], (self) -> {
-        root.algebra.Union.new([self, root.algebra.Array.new(self)])
+    let with_leaf = root.algebra.AliasDecl.recursive(names.value[0], (self) -> {
+        root.algebra.Union.new([self, root.algebra.Array.new(l.value[0])])
+    });
+    let plain = root.algebra.AliasDecl.recursive(names.value[1], (self) -> {
+        root.algebra.Array.new(self)
     });
     derived(
         root.algebra.pair(
-            root.algebra.Alias { decl: with_member },
-            root.algebra.Alias { decl: list_alias(names.value[1], l.value[0]) },
+            root.algebra.Alias { decl: with_leaf },
+            root.algebra.Alias { decl: plain },
             root.algebra.Relation.Unrelated,
             subset_based(),
         ),

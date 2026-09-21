@@ -359,7 +359,7 @@ function repetition_report() -> string throws never {
 test "learner: the same item comes round again and again" {
     assert.equal(
         repetition_report(),
-        `steps=95 distinct=38 top=["carried_2=6", "param_contravariant=5", "double_contravariance=5", "two_leaves=4", "enum_as_variants=4"]`,
+        `steps=110 distinct=39 top=["param_contravariant=6", "array_element=6", "double_contravariance=6", "carried_2=5", "return_covariant=5"]`,
     )
 }
 
@@ -380,14 +380,14 @@ function mean_of(values: int[]) -> int throws never {
 test "learner: a learner of the axioms is not marched into depth" {
     assert.equal(
         beginner_escalation_report(),
-        `steps=128 depth_first20=135 depth_last20=160 spread=["1:93", "2:26", "3:7", "4:1", "5:1"] chance_last20=6075`,
+        `steps=140 depth_first20=130 depth_last20=145 spread=["1:105", "2:23", "3:9", "4:3", "5:0"] chance_last20=6690`,
     )
 }
 
 test "learner: the questions stop getting harder once the bank runs out of depth" {
     assert.equal(
         escalation_report(),
-        `steps=95 depth_first20=145 depth_last20=150 spread=["1:61", "2:17", "3:11", "4:3", "5:3"] chance_last20=8595`,
+        `steps=110 depth_first20=140 depth_last20=150 spread=["1:74", "2:18", "3:11", "4:4", "5:3"] chance_last20=8720`,
     )
 }
 
@@ -457,16 +457,24 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: certifying a perfect learner costs 64 to 133 questions, and once in twelve does not finish" {
-    // The one that does not finish is the measurement, not a fluke to be tuned
+test "learner: certifying a perfect learner costs 81 to 133 questions, and twice in twelve does not finish" {
+    // The two that do not finish are the measurement, not a fluke to be tuned
     // away: at this budget a learner who answers everything right is still
     // sometimes left uncertified, and three models that sat the quiz said
     // independently that it should have had their measure by about question
     // twenty-five. Raising the budget hides it; the estimator is where it
     // would be fixed.
+    //
+    // It was one in twelve until a wrap over an equivalence stopped bearing
+    // the wrap's own rule (`root.algebra.transfer_decides`). That rule is now
+    // evidenced only where the wrap decides something — over a strict pair —
+    // so it takes about half as many questions' worth of evidence per
+    // question, and two sittings run out of budget rather than one. The
+    // evidence those cases used to give was never earned: the learner could
+    // answer them without knowing the wrap was invariant.
     assert.equal(
         expert_report(),
-        `certified=11 of 12 steps=["Mastered:130", "Mastered:111", "Mastered:95", "Mastered:89", "Mastered:91", "Budget:140", "Mastered:64", "Mastered:81", "Mastered:112", "Mastered:125", "Mastered:87", "Mastered:133"] withheld=0.0 suspected=none`,
+        `certified=10 of 12 steps=["Mastered:130", "Mastered:96", "Mastered:110", "Budget:140", "Mastered:91", "Mastered:97", "Mastered:118", "Mastered:81", "Mastered:99", "Budget:140", "Mastered:110", "Mastered:133"] withheld=0.0 suspected=none`,
     )
 }
 
@@ -481,7 +489,7 @@ test "learner: a learner who never commits is never certified" {
 test "learner: strict coverage costs no fewer questions than an overall picture" {
     assert.equal(
         coverage_report(),
-        "loose_first=true loose_done=Mastered loose_steps=95 strict_done=Mastered strict_steps=95 uncertified=0 rules=31",
+        "loose_first=true loose_done=Mastered loose_steps=110 strict_done=Mastered strict_steps=110 uncertified=0 rules=31",
     )
 }
 
@@ -499,14 +507,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Stalled commits_unsure=96 leading=shape=15,spelling=14,covariant=12,bounds=10,typescript=10,structural=0",
+        "suspected=none why=Stalled commits_unsure=95 leading=spelling=14,shape=12,bounds=10,covariant=5,typescript=4,structural=0",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=57,covariant=16,bounds=0,structural=0,shape=-14,spelling=-25 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=61,bounds=25,covariant=22,structural=0,shape=-16,spelling=-23 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -784,7 +792,7 @@ function orders_report() -> string throws never {
 test "orders: every servable rule has one, and only the carrying variance rules reach four or more" {
     assert.equal(
         orders_report(),
-        `rules=31 of 32 by_order=[26, 2, 0, 1, 2] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
+        `rules=31 of 32 by_order=[27, 1, 0, 1, 2] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
     )
 }
 
@@ -873,5 +881,5 @@ class Sitting {
 }
 
 test "sitting: nothing in the questions a learner is asked leans more than fifteen points" {
-    assert.equal(served_leaning_report(), `compiles=44% of 236 leaning=[]`)
+    assert.equal(served_leaning_report(), `compiles=48% of 237 leaning=[]`)
 }
