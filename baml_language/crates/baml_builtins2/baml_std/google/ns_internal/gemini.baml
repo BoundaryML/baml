@@ -1076,7 +1076,7 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
             // AFTER the TurnMeta above so the folded stop reason and the
             // cumulative usage on the same fragment are both seen first.
             if (stop != null) {
-                out.push(ai.stream.TurnDone {  });
+                out.push(ai.stream.TurnDone {});
                 null
             } else {
                 null

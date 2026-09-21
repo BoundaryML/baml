@@ -3766,18 +3766,39 @@ impl BexVm {
     /// Bootstraps the VM preparing the given callable to run.
     ///
     /// `function` may point to an [`Object::Function`], [`Object::Closure`],
-    /// [`Object::GenericFunction`], or [`Object::HostClosure`]. Closure entry
-    /// points are used by BEP-034
-    /// `spawn { ... }`: the compiler lowers the body to a lambda, wraps it
-    /// in a closure that carries the captured environment, then hands the
-    /// closure pointer to a fresh `BexThread` which calls `set_entry_point`.
+    /// [`Object::GenericFunction`], [`Object::HostClosure`], or
+    /// [`Object::BoundMethod`] - every callable a `() -> T` value can be.
+    /// Closure entry points are the common case for a `spawn { ... }`: the
+    /// compiler lowers the body to a lambda, wraps it in a closure that
+    /// carries the captured environment, then hands the closure pointer to a
+    /// fresh `BexThread` which calls `set_entry_point`. A hand-built plan's
+    /// body, or the wrapper a modifier installs, can be any of the others
+    /// (`plan.wrap(self.around)` is a bound method).
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
-        // BEP-034 spawn entry points can pass a `Closure` (carrying
-        // captured type args from the surrounding scope); host calls
-        // typically pass a bare `Function` and want no type args.
-        // Either way, fan out to `set_entry_point_with_type_args` so
-        // the type-arg-aware host call path
-        // (`BexEngine::call_function_bound_args`) shares one
+        // A bound method enters as its function, with the receiver as the
+        // leading argument and the type arguments it curried at bind time -
+        // the frame `CallIndirect` builds for the same value. Its visible
+        // parameters may be a prefix of the function's (trailing optionals
+        // the function-typed value does not mention), so the arguments are
+        // laid over the callee's slots as for any yielded call.
+        if let Object::BoundMethod(bound) = self.get_object(function) {
+            let inner = bound.function;
+            let type_args = bound.type_args.to_vec();
+            let mut args = args.to_vec();
+            self.resolve_bound_method_callee(function, &mut args)
+                .unwrap_or_else(|error| {
+                    unreachable!(
+                        "the type checker admits a bound method only where its parameters fit: {error}"
+                    )
+                });
+            self.set_entry_point_positional(inner, &args, type_args);
+            return;
+        }
+        // Spawn entry points can pass a `Closure` (carrying captured type
+        // args from the surrounding scope); host calls typically pass a bare
+        // `Function` and want no type args. Either way, fan out to
+        // `set_entry_point_with_type_args` so the type-arg-aware host call
+        // path (`BexEngine::call_function_bound_args`) shares one
         // implementation with the spawn path.
         let positional = match self.get_object(function) {
             Object::Function(_) => vec![],
@@ -3786,6 +3807,17 @@ impl BexVm {
             Object::HostClosure(_) => vec![],
             other => panic!("expect callable as entry point, got {other:?}"),
         };
+        self.set_entry_point_positional(function, args, positional);
+    }
+
+    /// [`Self::set_entry_point`] with the callee's type arguments already in
+    /// positional (De Bruijn) order.
+    fn set_entry_point_positional(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        positional: Vec<bex_vm_types::RealizedTy>,
+    ) {
         // The captured/specialized type args are positional (De Bruijn order);
         // pair each with the callee's generic-param name so they round-trip
         // through the named `set_entry_point_with_type_args` channel. A lambda

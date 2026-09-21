@@ -860,6 +860,12 @@ enum PendingDiag<'db> {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
+    /// A class literal for a class holding `$rust_type` state in `field`.
+    CannotConstructOpaqueClass {
+        expr: ExprId,
+        class_name: baml_type::DeclName,
+        field: baml_type::Name,
+    },
     NotCallable {
         expr: ExprId,
         ty: Ty,
@@ -8617,6 +8623,20 @@ impl<'db> InferenceContext<'db> {
                 });
             return Ty::error();
         }
+        let field_types = crate::lower::class_field_types(db, class);
+        if let Some((field, _)) = field_types
+            .iter()
+            .find(|(_, field_ty)| matches!(field_ty, baml_type::Ty::RustType { .. }))
+        {
+            return self.refuse_opaque_construction(
+                body,
+                object,
+                class_name,
+                field.clone(),
+                fields,
+                spreads,
+            );
+        }
         let generic_count = baml_compiler2_ppir::item_data::class_data(db, class)
             .generic_params
             .len();
@@ -8628,7 +8648,6 @@ impl<'db> InferenceContext<'db> {
             instantiation.push(self.table.new_var_ty());
         }
         self.register_class_bounds(class, &instantiation, object);
-        let field_types = crate::lower::class_field_types(db, class);
         // Fresh (unwritten) instantiation slots that survive to finalize
         // unsolved are uninferrable - report instead of letting the bare
         // sentinel reach lowering. A PHANTOM param (no field mentions it)
@@ -8730,6 +8749,37 @@ impl<'db> InferenceContext<'db> {
         object_ty
     }
 
+    /// A class literal for a class that holds `$rust_type` state in `field`.
+    /// Only the class's own native functions create that state, so a literal
+    /// could only copy a handle out of another value - relabelling what it
+    /// means: `Plan<string, never> { _handle: int_plan._handle }` would type
+    /// an `int` task as `string`, and `Limit { _handle: token._handle }`
+    /// would hand a limit's functions a cancel token. The members are still
+    /// walked, so their own errors report.
+    fn refuse_opaque_construction(
+        &mut self,
+        body: &ExprBody,
+        object: ExprId,
+        class_name: baml_type::DeclName,
+        field: baml_type::Name,
+        fields: &[ObjectExprField],
+        spreads: &[baml_compiler2_ast::SpreadField],
+    ) -> Ty {
+        for member in fields {
+            self.infer_expr(body, member.value, &Expectation::None);
+        }
+        for spread in spreads {
+            self.infer_expr(body, spread.expr, &Expectation::None);
+        }
+        self.pending_diags
+            .push(PendingDiag::CannotConstructOpaqueClass {
+                expr: object,
+                class_name,
+                field,
+            });
+        Ty::error()
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn infer_exported_object(
         &mut self,
@@ -8776,6 +8826,19 @@ impl<'db> InferenceContext<'db> {
                     companion,
                 });
             return Ty::error();
+        }
+        if let Some((field, ..)) = exported_fields
+            .iter()
+            .find(|(_, field_ty, _)| matches!(field_ty, baml_type::Ty::RustType { .. }))
+        {
+            return self.refuse_opaque_construction(
+                body,
+                object,
+                class_name,
+                field.clone(),
+                fields,
+                spreads,
+            );
         }
         let mut instantiation = self.instantiation_args(object, generic_params, None);
         instantiation.truncate(generic_params.len());
@@ -11350,6 +11413,14 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
+                        expr,
+                    ),
+                    PendingDiag::CannotConstructOpaqueClass {
+                        expr,
+                        class_name,
+                        field,
+                    } => (
+                        TirTypeError::CannotConstructOpaqueClass { class_name, field },
                         expr,
                     ),
                     PendingDiag::CannotConstructBuiltinCompanion {

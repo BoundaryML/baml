@@ -406,6 +406,11 @@ pub enum DiagnosticId {
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
+    /// A class literal named a class that holds a `$rust_type` field. That
+    /// state is created only by the class's own native functions; a literal
+    /// could only copy a handle out of another value, which relabels what the
+    /// handle means (its type arguments, or its class).
+    CannotConstructOpaqueClass,
 }
 
 impl DiagnosticId {
@@ -619,6 +624,7 @@ impl DiagnosticId {
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
+            DiagnosticId::CannotConstructOpaqueClass => "E0173",
         }
     }
 }

@@ -196,6 +196,14 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
+    /// A class literal for a class with a `$rust_type` field. Only the
+    /// class's own native functions create that state, so the literal could
+    /// only relabel a handle taken from another value.
+    CannotConstructOpaqueClass {
+        class_name: baml_type::DeclName,
+        /// The first field that holds native state.
+        field: Name,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -1111,6 +1119,12 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
+                TirTypeError::CannotConstructOpaqueClass { class_name, field } => write!(
+                    f,
+                    "class `{}` cannot be built with a class literal: its field `{field}` holds \
+                 state that only the class's own functions create",
+                    class_name.spell(vp)
+                ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =
                         baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(

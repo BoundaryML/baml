@@ -45,7 +45,7 @@ interface Rng {
 class SystemRandom {
     /// Returns a new `SystemRandom` instance using the global system random number generator.
     function get() -> SystemRandom throws never {
-        SystemRandom {  }
+        SystemRandom {}
     }
 
     implements Rng {

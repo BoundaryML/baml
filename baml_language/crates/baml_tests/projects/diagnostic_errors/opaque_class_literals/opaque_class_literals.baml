@@ -1,0 +1,44 @@
+// A class that holds `$rust_type` state is created only by its own functions.
+// A class literal could only copy a handle out of another value, which would
+// relabel what the handle means, so the literal itself is refused.
+
+// Relabelling a plan's type arguments would type an `int` task as `string`.
+function relabelled_plan() -> baml.spawn.Plan<string, never> {
+    let int_plan = baml.spawn.Plan.new(body = () -> int throws never { 42 });
+    baml.spawn.Plan<string, never> { _handle: int_plan._handle }
+}
+
+// The same through a modifier, which is the public way to hand a plan back.
+class Liar {}
+
+implements baml.spawn.Modifier<int, never> for Liar {
+    type Output = string
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<string, never> throws never {
+        baml.spawn.Plan<string, never> { _handle: plan._handle }
+    }
+}
+
+// Pointing an execution at a plan it was not made for would run that plan's
+// body in this task, outside its own admission and cancellation.
+class Retarget { other: baml.spawn.Plan<int, never> }
+
+implements baml.spawn.Modifier<int, never> for Retarget {
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
+        plan.wrap((execution: baml.spawn.Execution<int, never>) -> int throws never {
+            let forged = baml.spawn.Execution<int, never> { _plan: self.other._handle, _handle: execution._handle };
+            forged.run()
+        })
+    }
+}
+
+// A handle moved across classes would hand a limit's functions a cancel token.
+function cross_class_handle() -> int throws never {
+    let token = baml.spawn.CancelToken.new();
+    let fake = baml.spawn.Limit { _handle: token._handle };
+    fake.capacity()
+}
+
+// A spread is the same literal.
+function spread_copy(limit: baml.spawn.Limit) -> baml.spawn.Limit throws never {
+    baml.spawn.Limit { ...limit }
+}

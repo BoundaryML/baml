@@ -106,6 +106,9 @@ Require(
 Done doneResult = await UserFunctions.EchoDoneAsync(new Done());
 Require(doneResult is not null, "iter.Done structural roundtrip changed");
 
+Baml.Spawn.Root rootResult = await UserFunctions.EchoRootAsync(new Baml.Spawn.Root());
+Require(rootResult is not null, "spawn.Root structural roundtrip changed");
+
 Require(
     UserFunctions.EchoCsvErrorKind(Baml.Csv.ErrorKind.FieldCount) == Baml.Csv.ErrorKind.FieldCount,
     "CSV error enum roundtrip changed");

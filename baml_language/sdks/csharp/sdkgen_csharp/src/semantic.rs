@@ -233,6 +233,9 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.csv.Position"
         | "baml.csv.ReaderOptions"
         | "baml.csv.WriterOptions"
+        // A field-less marker a user signature can pass around, like
+        // `baml.iter.Done`.
+        | "baml.spawn.Root"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "baml.spawn.Limit"
@@ -254,7 +257,11 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
         "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
         "ai.Prompt" => Some(BuiltinProjection::Prompt),
-        "baml.csv._NeedData"
+        // A plan and its execution hold a BAML closure: no host can build or
+        // run one, so a signature that mentions either has no host shape.
+        "baml.spawn.Plan"
+        | "baml.spawn.Execution"
+        | "baml.csv._NeedData"
         | "baml.csv._Skip"
         | "baml.csv._Headers"
         | "ai.OutputFormat"

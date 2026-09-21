@@ -15,5 +15,5 @@ function non_exhaustive(t: reflect.Type) -> string {
 }
 
 function kinds_are_not_constructible() -> reflect.class.Type {
-    reflect.class.Type {  }
+    reflect.class.Type {}
 }

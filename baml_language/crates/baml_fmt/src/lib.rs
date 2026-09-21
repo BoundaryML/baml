@@ -1918,6 +1918,19 @@ mod map_literal_format_tests {
     }
 
     #[test]
+    fn test_empty_class_literal_has_no_interior_padding() {
+        // The same rule for a class literal: `Root {}`, not `Root {  }`.
+        let source = "class Root {\n}\n\nfunction f() -> Root {\n    Root {}\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_empty_class_literal_keeps_an_interior_comment_padded() {
+        let source = "class Root {\n}\n\nfunction f() -> Root {\n    Root { /* none */ }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
     fn test_non_empty_map_keeps_interior_padding() {
         // Guard the established behavior: non-empty maps keep `{ ... }` padding.
         let source = "function f() -> int {\n    { \"a\": 1 };\n    0\n}\n";

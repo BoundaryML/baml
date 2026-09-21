@@ -43,7 +43,7 @@ function variable_operand() -> int {
 // A modifier written for another instantiation is the one candidate, so it
 // decides the plan's type, and the body is what disagrees with it.
 function other_instantiation() -> string {
-    let m = OnlyInts {  };
+    let m = OnlyInts {};
     let x = spawn with m { "text" };
     await x
 }
@@ -54,7 +54,7 @@ function union_operand(flag: bool) -> int {
     let m = if (flag) {
         baml.spawn.Root.new()
     } else {
-        NotAModifier {  }
+        NotAModifier {}
     };
     let x = spawn with m { 1 };
     await x

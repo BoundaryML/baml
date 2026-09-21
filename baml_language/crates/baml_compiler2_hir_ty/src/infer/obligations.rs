@@ -331,17 +331,22 @@ impl<'db> InferenceContext<'db> {
             unreachable!("caller-bound selection is for a rigid var subject")
         };
         let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
-        let heads: Vec<InferInterface> = carried
-            .iter()
-            .flat_map(|bound| {
-                crate::impls::requires_heads(
-                    self.db,
-                    &InferInterface::from_constraint(bound),
-                    subject,
-                    8,
-                )
-            })
-            .collect();
+        // One head, one candidate: two bounds whose `requires` closures meet
+        // (a diamond, or `T extends C & A` where `A requires C`) reach the
+        // same head twice, and a head is not ambiguous with itself.
+        let mut heads: Vec<InferInterface> = Vec::new();
+        for bound in &carried {
+            for head in crate::impls::requires_heads(
+                self.db,
+                &InferInterface::from_constraint(bound),
+                subject,
+                8,
+            ) {
+                if !heads.contains(&head) {
+                    heads.push(head);
+                }
+            }
+        }
         let mut applicable = None;
         for head in &heads {
             let probe = self.probe();

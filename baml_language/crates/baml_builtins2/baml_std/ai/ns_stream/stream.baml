@@ -335,7 +335,7 @@ class TurnStream {
         let ready: string[] = [];
         while (true) {
             if (self._done) {
-                return Done {  };
+                return Done {};
             }
             // deliver every decoded event before pulling more from the wire
             while (self._pcursor < self._pending.length()) {
@@ -368,7 +368,7 @@ class TurnStream {
                         if (ready.length() > 0) {
                             return ready;
                         }
-                        return Done {  };
+                        return Done {};
                     },
                     null => null,
                 };
@@ -399,7 +399,7 @@ class TurnStream {
                             // _check_terminal throws rather than completing it.
                             self._finish();
                             self._check_terminal();
-                            return Done {  };
+                            return Done {};
                         },
                         let batch: string => {
                             self._capture_batch(batch);
@@ -427,7 +427,7 @@ class TurnStream {
                         },
                         null => {
                             self._finish();
-                            return Done {  };
+                            return Done {};
                         },
                     }
                 },
@@ -495,12 +495,12 @@ class Stream<TStream, TFinal> {
     function next(self) -> TStream | Done {
         while (true) {
             if (self._finished) {
-                return Done {  };
+                return Done {};
             }
             match (self._next_text()) {
                 null => {
                     self._finished = true;
-                    return Done {  };
+                    return Done {};
                 },
                 let s: string => {
                     self._text = self._text + s;

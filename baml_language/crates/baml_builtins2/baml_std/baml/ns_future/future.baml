@@ -108,7 +108,9 @@ function all_settled<T, E>(
                     // An `await` of a future that has not settled throws only
                     // for the collector's own cancellation, which this
                     // catch-all would otherwise record as the input's outcome.
-                    if (!f.is_settled()) { throw e }
+                    if (!f.is_settled()) {
+                        throw e
+                    }
                     outcomes.push(baml.future.Panicked { panic: panic, context: context });
                     continue;
                 },

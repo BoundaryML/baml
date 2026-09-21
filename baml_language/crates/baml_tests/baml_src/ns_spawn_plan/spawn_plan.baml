@@ -114,6 +114,35 @@ test "a modifier bound to a variable still applies" {
     assert.equal(variable_bound_modifier_still_applies(), 42)
 }
 
+// A wrapper is any `(Execution<T, E>) -> O` value, a bound method included: it
+// enters the task as its function with the receiver as `self`.
+class Offset {
+    by: int,
+
+    function around(self, execution: baml.spawn.Execution<int, never>) -> int throws never {
+        execution.run() + self.by
+    }
+
+    function produce(self) -> int throws never {
+        self.by * 2
+    }
+}
+
+implements baml.spawn.Modifier<int, never> for Offset {
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
+        plan.wrap(self.around)
+    }
+}
+
+function bound_method_wrapper() -> int {
+    let offset = Offset { by: 1 };
+    await spawn with offset { 41 }
+}
+
+test "a modifier may wrap with a bound method" {
+    assert.equal(bound_method_wrapper(), 42)
+}
+
 // A generic parameter bounded by `Modifier` proves the operand from its bound,
 // and the bound's pins decide the task's types: here `Output = int`.
 function spawn_through_bound<M extends baml.spawn.Modifier<int, never, Output = int, Error = never, ApplyError = never>>(m: M) -> int {
@@ -340,39 +369,10 @@ test "a throw out of a wrapper ends its execution's extent" {
     assert.equal(a_throw_closes_the_extent(), "wrapper failed:expired")
 }
 
-class Retarget { other: baml.spawn.Plan<int, never> }
-
-implements baml.spawn.Modifier<int, never> for Retarget {
-    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
-        plan.wrap((execution: baml.spawn.Execution<int, never>) -> int throws never {
-            let forged = baml.spawn.Execution<int, never> { _plan: self.other._handle, _handle: execution._handle };
-            forged.run()
-        })
-    }
-}
-
-// An execution pointed at a plan it was not made for is refused: `other` would
-// otherwise run in this task, outside its own admission and cancellation.
-function a_retargeted_execution_is_refused() -> string {
-    let log = Log { entries: [] };
-    let other = baml.spawn.Plan.new(body = () -> int { log.entries.push("other ran"); 99 });
-    let retarget = Retarget { other: other };
-    let f = spawn with retarget { 1 };
-    let outcome = {
-        let v = await f;
-        `ran:${v}`
-    } catch (e) {
-        baml.panics.UserPanic => e.message,
-    };
-    `${outcome}|${log.entries.length()}`
-}
-
-test "an execution runs only the plan it was made for" {
-    assert.equal(
-        a_retargeted_execution_is_refused(),
-        "baml.spawn.Execution: this execution belongs to a different plan|0",
-    )
-}
+// An `Execution` cannot be pointed at another plan, nor a `Plan` relabelled
+// at other types: both hold native state, and a class holding native state
+// cannot be built with a class literal (pinned as a compile error by
+// `projects/diagnostic_errors/opaque_class_literals`).
 
 // ─── Limit ───────────────────────────────────────────────────────────────────
 
@@ -544,6 +544,17 @@ function one_plan_two_tasks() -> int[] {
 
 test "a plan started twice yields two independent tasks" {
     assert.equal(one_plan_two_tasks(), [1, 2])
+}
+
+// A plan's body is any `() -> T` value, a bound method included.
+function bound_method_body() -> int {
+    let offset = Offset { by: 21 };
+    let plan = baml.spawn.Plan.new(body = offset.produce);
+    await baml.spawn.__spawn(plan)
+}
+
+test "a bound method is a plan body" {
+    assert.equal(bound_method_body(), 42)
 }
 
 function one_limited_plan_started_twice() -> string {
