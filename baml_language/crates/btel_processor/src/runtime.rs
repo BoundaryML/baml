@@ -13,12 +13,13 @@ use std::{
 use bex_chunkedringbuffer::{
     ChunkPool, Config, Producer, SetupError, Stats, TransportFailed, WorkerSlot,
 };
-use btel_records::{CaptureDeferred, SpanRecord, TimingRecord};
+use btel_records::{SpanRecord, TimingRecord};
+use btel_snapshot::Snapshot;
 use btel_types::TelemetryId;
 
 use crate::{NoSinkPublisher, Processor, Publisher};
 
-type Span = SpanRecord<CaptureDeferred, CaptureDeferred>;
+type Span = SpanRecord<Snapshot, Snapshot>;
 type Pool = ChunkPool<TimingRecord, Span>;
 /// Terminal worker failure. Delivery callbacks run on the processor thread;
 /// their panics are reported here as well as making the transport terminal.
@@ -95,6 +96,8 @@ thread_local! {
 /// The last runtime owner closes admission, consumes outstanding chunks and joins.
 pub struct TelemetryRuntime {
     id: u64,
+    snapshots: btel_snapshot::SnapshotPool,
+    snapshot_wait_nanos: AtomicU64,
     pool: Pool,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
     result: Arc<RuntimeStatus>,
@@ -125,7 +128,7 @@ impl TelemetryRuntime {
     /// or record processing. The worker owns the publisher and delivery callback.
     pub fn with_publisher<P>(publisher: P) -> std::io::Result<Arc<Self>>
     where
-        P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
+        P: Publisher<Snapshot, Snapshot> + Send + 'static,
     {
         Self::with_config_and_publisher(Config::default(), publisher)
     }
@@ -136,7 +139,7 @@ impl TelemetryRuntime {
 
     pub fn with_config_and_publisher<P>(config: Config, publisher: P) -> std::io::Result<Arc<Self>>
     where
-        P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
+        P: Publisher<Snapshot, Snapshot> + Send + 'static,
     {
         Self::with_publisher_factory(config, |_| Ok(publisher))
     }
@@ -148,7 +151,7 @@ impl TelemetryRuntime {
         make: impl FnOnce(RecordingControl) -> std::io::Result<P>,
     ) -> std::io::Result<Arc<Self>>
     where
-        P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
+        P: Publisher<Snapshot, Snapshot> + Send + 'static,
     {
         const {
             assert!(btel_settings::processor::THREADS_PER_RUNTIME == 1);
@@ -158,6 +161,10 @@ impl TelemetryRuntime {
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
+        let snapshots = btel_snapshot::SnapshotPool::new(
+            config.max_producers.get() + btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
+            btel_snapshot::Limits::default(),
+        );
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let publisher = make(RecordingControl {
             pool: pool.clone(),
@@ -216,6 +223,8 @@ impl TelemetryRuntime {
         };
         Ok(Arc::new(Self {
             id,
+            snapshots,
+            snapshot_wait_nanos: AtomicU64::new(0),
             pool,
             worker: Mutex::new(Some(worker)),
             result,
@@ -288,6 +297,52 @@ impl TelemetryRuntime {
                 std::panic::panic_any(TransportFailed);
             }
         }
+    }
+
+    /// Capture-only admission. Publish private records before waiting: they may
+    /// own every available snapshot. Never hold a TLS borrow while spinning.
+    pub fn acquire_snapshot(&self) -> Option<btel_snapshot::Builder> {
+        if self.pool.is_disabled() {
+            return None;
+        }
+        if let Some(builder) = self.snapshots.try_acquire() {
+            return Some(builder);
+        }
+        self.acquire_snapshot_slow()
+    }
+    #[cold]
+    fn acquire_snapshot_slow(&self) -> Option<btel_snapshot::Builder> {
+        let start = std::time::Instant::now();
+        BINDINGS.with_borrow_mut(|bindings| {
+            if let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) {
+                if let Some(producer) = &mut binding.producer {
+                    producer.seal();
+                }
+            }
+        });
+        let result = loop {
+            if self.pool.is_disabled() {
+                break None;
+            }
+            if self.pool.is_failed() {
+                std::panic::panic_any(TransportFailed);
+            }
+            if let Some(builder) = self.snapshots.try_acquire() {
+                break Some(builder);
+            }
+            std::hint::spin_loop();
+        };
+        self.snapshot_wait_nanos.fetch_add(
+            u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        result
+    }
+    pub fn snapshot_pool_stats(&self) -> btel_snapshot::PoolStats {
+        self.snapshots.stats()
+    }
+    pub fn snapshot_wait_nanos(&self) -> u64 {
+        self.snapshot_wait_nanos.load(Ordering::Relaxed)
     }
 
     pub fn is_disabled(&self) -> bool {
@@ -443,11 +498,127 @@ mod tests {
         let pool = Pool::new(config()).unwrap();
         let runtime = Arc::new(TelemetryRuntime {
             id: NEXT_RUNTIME.fetch_add(1, Ordering::Relaxed),
+            snapshots: btel_snapshot::SnapshotPool::new(16, btel_snapshot::Limits::default()),
+            snapshot_wait_nanos: AtomicU64::new(0),
             pool: pool.clone(),
             worker: Mutex::new(None),
             result: Arc::new(RuntimeStatus::default()),
         });
         (runtime, pool)
+    }
+
+    fn captured_announcement(runtime: &TelemetryRuntime, id: TelemetryId) -> Span {
+        SpanRecord::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: id,
+            call_path: btel_types::CallPathId::ROOT,
+            entered_at: btel_types::ClockInstant::from_ticks(1),
+            captured_inputs: Some(
+                runtime
+                    .acquire_snapshot()
+                    .unwrap()
+                    .finish_args(0, btel_snapshot::Range::empty()),
+            ),
+        }
+    }
+
+    #[test]
+    fn snapshot_exhaustion_publishes_private_records_before_waiting() {
+        let (mut runtime, pool) = manual_runtime();
+        Arc::get_mut(&mut runtime).unwrap().snapshots =
+            btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let id = allocate_telemetry_id();
+        let execution = runtime.enter();
+        runtime.write_span(id, captured_announcement(&runtime, id));
+        assert_eq!(pool.stats().sealed_records, 0, "capture is still private");
+        let finished = std::sync::atomic::AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            let consumer = scope.spawn(|| {
+                let mut consumer = pool.bind_consumer().unwrap();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    if pool.stats().sealed_records != 0 {
+                        consumer.drain_chunks(
+                            NonZeroUsize::new(8).unwrap(),
+                            |_, chunk| drop(chunk),
+                            |_, _| {},
+                        );
+                        while !finished.load(Ordering::Acquire) {
+                            std::hint::spin_loop();
+                        }
+                        assert!(
+                            consumer
+                                .drain_chunks(
+                                    NonZeroUsize::new(8).unwrap(),
+                                    |_, chunk| drop(chunk),
+                                    |_, _| {}
+                                )
+                                .complete
+                        );
+                        break;
+                    }
+                    if std::time::Instant::now() > deadline {
+                        pool.disable();
+                        panic!("waiting capture failed to publish private records");
+                    }
+                    std::hint::spin_loop();
+                }
+            });
+            let next = runtime
+                .acquire_snapshot()
+                .expect("consumer must release capacity");
+            drop(next);
+            drop(execution);
+            pool.close_admission();
+            finished.store(true, Ordering::Release);
+            consumer.join().unwrap();
+        });
+        assert_eq!(runtime.snapshot_pool_stats().in_use, 0);
+        assert_eq!(runtime.snapshot_pool_stats().allocation_misses, 1);
+    }
+
+    #[test]
+    fn recording_disable_releases_snapshot_admission_without_cancelling_work() {
+        let (mut runtime, pool) = manual_runtime();
+        Arc::get_mut(&mut runtime).unwrap().snapshots =
+            btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let held = runtime
+            .acquire_snapshot()
+            .unwrap()
+            .finish_args(0, btel_snapshot::Range::empty());
+        let id = allocate_telemetry_id();
+        let _scope = runtime.enter();
+        runtime.write_span(
+            id,
+            SpanRecord::FunctionSpanAnnouncement {
+                id,
+                parent_id: id,
+                call_path: btel_types::CallPathId::ROOT,
+                entered_at: btel_types::ClockInstant::from_ticks(1),
+                captured_inputs: None,
+            },
+        );
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                // Publication proves acquire_snapshot entered its slow path.
+                while pool.stats().sealed_records == 0 {
+                    std::hint::spin_loop();
+                }
+                RecordingControl {
+                    pool: pool.clone(),
+                    result: Arc::clone(&runtime.result),
+                }
+                .disable(RuntimeError("disk full".into()));
+            });
+            assert!(runtime.acquire_snapshot().is_none());
+        });
+        drop(held);
+        assert_eq!(runtime.snapshot_pool_stats().in_use, 0);
+        assert!(runtime.is_disabled());
+        assert_eq!(
+            runtime.result.result(),
+            Some(Err(RuntimeError("disk full".into())))
+        );
     }
 
     #[test]
@@ -640,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    fn scopes_publish_context_and_deferred_capture_then_rebind_after_migration() {
+    fn scopes_publish_context_and_owned_capture_then_rebind_after_migration() {
         let (runtime, pool) = manual_runtime();
         let mut consumer = pool.bind_consumer().unwrap();
         let thread_id = allocate_telemetry_id();
@@ -655,7 +826,12 @@ mod tests {
                     parent_id: thread_id,
                     call_path: btel_types::CallPathId::ROOT,
                     entered_at: btel_types::ClockInstant::from_ticks(1),
-                    captured_inputs: Some(Box::new(CaptureDeferred)),
+                    captured_inputs: Some(
+                        runtime
+                            .acquire_snapshot()
+                            .unwrap()
+                            .finish_args(0, btel_snapshot::Range::empty()),
+                    ),
                 },
             );
             drop(nested);

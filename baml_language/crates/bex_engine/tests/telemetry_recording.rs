@@ -99,13 +99,13 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
                         assert!(threads.insert(section.thread_id, done).is_none());
                     }
                     proto::span_event::Event::FunctionAnnouncement(entry) => {
-                        assert_eq!(entry.inputs, proto::CaptureState::Deferred as i32);
+                        assert!(entry.inputs_cas_id.is_some());
                         announcements += 1;
                     }
                     proto::span_event::Event::FunctionCompletion(done) => {
                         let flags =
                             CompletionFlags::from_wire(done.completion_flags, false).unwrap();
-                        assert!(flags.capture_deferred());
+                        assert!(done.value_cas_id.is_some());
                         assert!(flags.requires_announcement());
                         *completions.entry(done.node).or_default() += 1;
                     }
@@ -196,11 +196,11 @@ fn telemetry_environment_modes() {
                 for event in section.events {
                     match event.event.unwrap() {
                         proto::span_event::Event::FunctionCompletion(done) => {
-                            assert!(!CompletionFlags::from_wire(done.completion_flags, false).unwrap().capture_deferred());
+                            assert!(done.value_cas_id.is_none());
                             spans += 1;
                         }
                         proto::span_event::Event::FunctionAnnouncement(entry) => {
-                            assert_ne!(entry.inputs, proto::CaptureState::Deferred as i32);
+                            assert!(entry.inputs_cas_id.is_none());
                             announcements += 1;
                         }
                         proto::span_event::Event::ThreadCompletion(_) => threads += 1,

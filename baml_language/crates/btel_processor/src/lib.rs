@@ -21,6 +21,8 @@ use bex_chunkedringbuffer::{Consumer, ProducerId, SpanChunk, TransportFailed};
 use btel_records::{SpanRecord, TimingRecord};
 use btel_types::{AwaitDuration, CallPathId, CallPathNodeId, ClockInstant, TelemetryId};
 
+mod capture;
+pub use capture::CaptureProcessor;
 mod aggregate;
 mod publisher;
 pub use aggregate::AggregateDelta;
@@ -44,7 +46,7 @@ struct Processing<P> {
 }
 
 impl<P> Processing<P> {
-    fn sample<I: ?Sized, V>(
+    fn sample<I, V>(
         &mut self,
         path: CallPathId,
         entered: ClockInstant,
@@ -64,11 +66,8 @@ impl<P> Processing<P> {
             .observe(delta, |delta| self.publisher.aggregate(delta));
     }
 
-    fn timing<I: ?Sized, V>(
-        &mut self,
-        producer: ProducerId,
-        records: std::vec::Drain<'_, TimingRecord>,
-    ) where
+    fn timing<I, V>(&mut self, producer: ProducerId, records: std::vec::Drain<'_, TimingRecord>)
+    where
         P: Publisher<I, V>,
     {
         let mut thread = self.contexts[producer.index()].timing;
@@ -95,21 +94,21 @@ impl<P> Processing<P> {
         drop(records);
     }
 
-    fn spans<I: ?Sized, V>(
+    fn spans<I, V>(
         &mut self,
         producer: ProducerId,
-        records: SpanChunk<TimingRecord, SpanRecord<I, V>>,
+        mut records: SpanChunk<TimingRecord, SpanRecord<I, V>>,
     ) where
         P: Publisher<I, V>,
     {
         self.publisher.before_span_chunk(records.as_slice().len());
         let initial_thread = self.contexts[producer.index()].span;
         let mut thread = initial_thread;
-        for record in records.as_slice() {
+        records.consume_in_place(|record| {
             match record {
                 SpanRecord::ThreadSelected { thread_id } => {
                     thread = Some(*thread_id);
-                    continue;
+                    return;
                 }
                 SpanRecord::FunctionSpanCompletionOk {
                     call_path,
@@ -247,12 +246,12 @@ impl<P> Processing<P> {
             }
             self.publisher
                 .span(thread.expect("span record without thread selector"), record);
-        }
+        });
         self.contexts[producer.index()].span = thread;
         drop(records);
     }
 
-    fn flush<I: ?Sized, V>(&mut self)
+    fn flush<I, V>(&mut self)
     where
         P: Publisher<I, V>,
     {
@@ -284,7 +283,7 @@ impl std::error::Error for ProcessorError {}
 
 /// One exclusive consumer of a chunk pool, bound to the current OS thread.
 /// No SPSC backend, heap access, record cloning, or dynamic dispatch.
-pub struct Processor<InputCapture: ?Sized, ValueCapture, P = NoSinkPublisher> {
+pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     consumer: Consumer<TimingRecord, SpanRecord<InputCapture, ValueCapture>>,
     max_chunks: NonZeroUsize,
     processing: Processing<P>,
@@ -292,7 +291,7 @@ pub struct Processor<InputCapture: ?Sized, ValueCapture, P = NoSinkPublisher> {
     finished: bool,
 }
 
-impl<I: ?Sized, V> Processor<I, V> {
+impl<I, V> Processor<I, V> {
     pub fn new(
         consumer: Consumer<TimingRecord, SpanRecord<I, V>>,
         max_chunks: NonZeroUsize,
@@ -301,7 +300,7 @@ impl<I: ?Sized, V> Processor<I, V> {
     }
 }
 
-impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
+impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
     pub fn with_publisher(
         consumer: Consumer<TimingRecord, SpanRecord<I, V>>,
         max_chunks: NonZeroUsize,

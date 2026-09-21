@@ -71,6 +71,7 @@ version = "0.0.0-beta"
 
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
+btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
 baml_artifact = { path = "crates/baml_artifact" }
@@ -234,6 +235,7 @@ rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
 rustc-hash = { version = "2.1" }
+xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
 salsa = { version = "0.26", default-features = false, features = [
   "compact_str",
   "macros",

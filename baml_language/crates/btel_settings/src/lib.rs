@@ -78,3 +78,5 @@ pub mod policy;
 pub mod processor;
 pub mod publisher;
 pub mod transport;
+
+pub mod snapshot;

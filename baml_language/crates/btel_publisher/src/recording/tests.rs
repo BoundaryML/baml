@@ -35,7 +35,7 @@ fn metadata(
     let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
     publisher.span(
         thread,
-        &SpanRecord::ThreadSpanAnnouncement {
+        &mut SpanRecord::ThreadSpanAnnouncement {
             id: thread,
             parent_id: None,
             spawn_call_path: CallPathId::ROOT,
@@ -45,7 +45,7 @@ fn metadata(
     );
     publisher.span(
         thread,
-        &SpanRecord::CallPathDefined {
+        &mut SpanRecord::CallPathDefined {
             call_path: path,
             parent_call_path: CallPathId::ROOT,
             visible_caller: None,
@@ -118,7 +118,7 @@ fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
         await_time: AwaitDuration::ZERO,
         captured_value: None,
     };
-    p.span(thread, &completion(child, parent));
+    p.span(thread, &mut completion(child, parent));
     p.flush();
     let first = decode(&files.borrow()[0]);
     assert!(first.definitions.unwrap().threads.is_empty());
@@ -132,15 +132,15 @@ fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
     );
     p.span(
         thread,
-        &SpanRecord::FunctionSpanAnnouncement {
+        &mut SpanRecord::FunctionSpanAnnouncement {
             id: parent,
             parent_id: thread,
             call_path: path,
             entered_at: ClockInstant::from_ticks(1),
-            captured_inputs: Some(Box::new(CaptureDeferred)),
+            captured_inputs: Some(snapshot()),
         },
     );
-    p.span(thread, &completion(parent, thread));
+    p.span(thread, &mut completion(parent, thread));
     p.finish_recording().unwrap();
     let events = decode(&files.borrow()[1])
         .spans
@@ -165,15 +165,13 @@ fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
 #[test]
 fn size_boundary_recycles_the_input_chunk_before_handoff() {
     let pool =
-        ChunkPool::<btel_records::TimingRecord, SpanRecord<CaptureDeferred, CaptureDeferred>>::new(
-            Config {
-                chunk_capacity: nz(8),
-                timing_chunks: nz(1),
-                span_chunks: nz(1),
-                max_producers: nz(1),
-                preallocate: true,
-            },
-        )
+        ChunkPool::<btel_records::TimingRecord, SpanRecord<Snapshot, Snapshot>>::new(Config {
+            chunk_capacity: nz(8),
+            timing_chunks: nz(1),
+            span_chunks: nz(1),
+            max_producers: nz(1),
+            preallocate: true,
+        })
         .unwrap();
     let files = RefCell::new(Vec::new());
     let copy = pool.clone();
@@ -249,15 +247,13 @@ fn sequence_exhaustion_never_wraps_or_reuses_a_file_number() {
 #[test]
 fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
     let pool =
-        ChunkPool::<btel_records::TimingRecord, SpanRecord<CaptureDeferred, CaptureDeferred>>::new(
-            Config {
-                chunk_capacity: nz(8),
-                timing_chunks: nz(1),
-                span_chunks: nz(1),
-                max_producers: nz(1),
-                preallocate: true,
-            },
-        )
+        ChunkPool::<btel_records::TimingRecord, SpanRecord<Snapshot, Snapshot>>::new(Config {
+            chunk_capacity: nz(8),
+            timing_chunks: nz(1),
+            span_chunks: nz(1),
+            max_producers: nz(1),
+            preallocate: true,
+        })
         .unwrap();
     let mut producer = pool.register_producer().unwrap();
     let thread = allocate_telemetry_id();
@@ -310,7 +306,7 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
     let thread = allocate_telemetry_id();
     p.span(
         thread,
-        &SpanRecord::ThreadSpanAnnouncement {
+        &mut SpanRecord::ThreadSpanAnnouncement {
             id: thread,
             parent_id: None,
             spawn_call_path: CallPathId::ROOT,
@@ -321,7 +317,7 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
     runtime.reset_after_restore();
     p.span(
         thread,
-        &SpanRecord::ThreadSpanCompletion {
+        &mut SpanRecord::ThreadSpanCompletion {
             id: thread,
             parent_id: None,
             spawn_call_path: CallPathId::ROOT,
@@ -367,7 +363,7 @@ fn encoded_sections_survive_growth_and_thread_switches() {
         let thread = if !(1024..1536).contains(&n) { a } else { b };
         p.span(
             thread,
-            &SpanRecord::FunctionSpanCompletionOk {
+            &mut SpanRecord::FunctionSpanCompletionOk {
                 id: allocate_telemetry_id(),
                 parent_id: thread,
                 call_path: path,
@@ -385,7 +381,7 @@ fn encoded_sections_survive_growth_and_thread_switches() {
     );
     p.span(
         a,
-        &SpanRecord::FunctionSpanAnnouncement {
+        &mut SpanRecord::FunctionSpanAnnouncement {
             id: allocate_telemetry_id(),
             parent_id: a,
             call_path: path,
@@ -421,7 +417,7 @@ fn encoded_sections_survive_growth_and_thread_switches() {
     // Subsequent files must open a new section even for the same selected thread.
     p.span(
         a,
-        &SpanRecord::FunctionSpanAnnouncement {
+        &mut SpanRecord::FunctionSpanAnnouncement {
             id: allocate_telemetry_id(),
             parent_id: a,
             call_path: path,
@@ -444,7 +440,7 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     })
     .unwrap();
     let (thread, _, path) = ids();
-    let event = SpanRecord::FunctionSpanAnnouncement {
+    let mut event = SpanRecord::FunctionSpanAnnouncement {
         id: allocate_telemetry_id(),
         parent_id: thread,
         call_path: path,
@@ -458,26 +454,26 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
         "timing batches must not reserve span storage"
     );
     p.aggregate(delta(path));
-    p.span(thread, &event);
+    p.span(thread, &mut event);
     let capacity = p.buffer.spans.capacity();
     assert!(capacity >= 8 * btel_settings::encoding::MAX_EVENT_BYTES);
     for _ in 1..8 {
-        p.span(thread, &event);
+        p.span(thread, &mut event);
         assert_eq!(p.buffer.spans.capacity(), capacity);
     }
     p.after_batch(8);
     p.before_batch(8);
-    p.span(thread, &event);
+    p.span(thread, &mut event);
     assert!(p.span_credit > 0);
     p.flush();
     assert_eq!(p.span_credit, 0);
     assert_eq!(p.pending_span_reservation, 0);
     assert_eq!(p.buffer.spans.capacity(), 0);
-    p.span(thread, &event); // Standalone callback must re-admit fresh storage.
+    p.span(thread, &mut event); // Standalone callback must re-admit fresh storage.
     p.flush();
     p.before_batch(1024);
     p.before_span_chunk(1);
-    p.span(thread, &event);
+    p.span(thread, &mut event);
     assert_eq!(
         p.buffer.spans.capacity(),
         256,
@@ -517,7 +513,7 @@ fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
         if round < 2 {
             p.span(
                 thread,
-                &SpanRecord::FunctionSpanCompletionOk {
+                &mut SpanRecord::FunctionSpanCompletionOk {
                     id: allocate_telemetry_id(),
                     parent_id: thread,
                     call_path: path,
@@ -582,7 +578,7 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
             let thread = allocate_telemetry_id();
             p.span(
                 thread,
-                &SpanRecord::ThreadSpanAnnouncement {
+                &mut SpanRecord::ThreadSpanAnnouncement {
                     id: thread,
                     parent_id: None,
                     spawn_call_path: CallPathId::ROOT,
@@ -602,4 +598,114 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
     assert!(files[0].bytes().len() >= target - settings::FILE_ENVELOPE_BYTES);
     // A full batch can cross the soft threshold, but not by a factor of four.
     assert!(files[0].bytes().len() < target + 4096);
+}
+
+fn snapshot() -> btel_snapshot::Snapshot {
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let b = pool.try_acquire().unwrap();
+    b.finish_value(btel_snapshot::SnapshotValue::Int(42))
+}
+
+#[test]
+fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() {
+    use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
+    let snapshots = SnapshotPool::new(2, Limits::default());
+    let make = || {
+        snapshots
+            .try_acquire()
+            .unwrap()
+            .finish_value(SnapshotValue::Int(42))
+    };
+    let first = make();
+    let second = make();
+    let expected = crate::snapshot_id(&first);
+    let chunks =
+        ChunkPool::<btel_records::TimingRecord, SpanRecord<Snapshot, Snapshot>>::new(Config {
+            chunk_capacity: nz(4),
+            timing_chunks: nz(1),
+            span_chunks: nz(1),
+            max_producers: nz(1),
+            preallocate: true,
+        })
+        .unwrap();
+    let mut producer = chunks.register_producer().unwrap();
+    let thread = allocate_telemetry_id();
+    producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+    for captured in [first, second] {
+        producer.write_span(SpanRecord::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: CallPathId::new_non_root(1).unwrap(),
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(captured),
+        });
+    }
+    producer.seal();
+    let received = RefCell::new(Vec::new());
+    let files = RefCell::new(Vec::new());
+    let publisher = RecordingPublisher::with_snapshot_receiver(
+        RecordingId::generate(),
+        RecordingConfig::default(),
+        |file| files.borrow_mut().push(file),
+        |snapshot| {
+            // Input allocation is already back in the bounded pool.
+            assert_eq!(chunks.stats().free_chunks, 2);
+            assert_eq!(snapshots.stats().in_use, 1, "duplicate was recycled");
+            received.borrow_mut().push(snapshot);
+        },
+    )
+    .unwrap();
+    let mut processor =
+        Processor::with_publisher(chunks.bind_consumer().unwrap(), nz(8), publisher);
+    processor.process_available();
+    assert!(files.borrow().is_empty(), "captures cannot wait on sealing");
+    assert_eq!(received.borrow().len(), 1);
+    let snapshot = received.borrow_mut().pop().unwrap();
+    std::thread::spawn(move || assert!(matches!(snapshot.value(), Some(SnapshotValue::Int(42)))))
+        .join()
+        .unwrap();
+    assert_eq!(snapshots.stats().in_use, 0);
+    drop(producer);
+    chunks.close_admission();
+    processor.process_available();
+    let file = decode(&files.borrow()[0]);
+    for event in &file.spans.unwrap().sections[0].events {
+        let proto::span_event::Event::FunctionAnnouncement(entry) = event.event.unwrap() else {
+            panic!()
+        };
+        assert_eq!(entry.inputs_cas_id, Some(expected));
+    }
+}
+
+#[test]
+fn snapshot_receiver_panic_releases_pending_owners() {
+    use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
+    let pool = SnapshotPool::new(2, Limits::default());
+    let mut p = RecordingPublisher::with_snapshot_receiver(
+        RecordingId::generate(),
+        RecordingConfig::default(),
+        |_| {},
+        |_: Snapshot| panic!("receiver failed"),
+    )
+    .unwrap();
+    let thread = allocate_telemetry_id();
+    for n in [1, 2] {
+        let snapshot = pool
+            .try_acquire()
+            .unwrap()
+            .finish_value(SnapshotValue::Int(n));
+        p.span(
+            thread,
+            &mut SpanRecord::FunctionSpanAnnouncement {
+                id: allocate_telemetry_id(),
+                parent_id: thread,
+                call_path: CallPathId::new_non_root(1).unwrap(),
+                entered_at: ClockInstant::from_ticks(1),
+                captured_inputs: Some(snapshot),
+            },
+        );
+    }
+    assert_eq!(pool.stats().in_use, 2);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| p.after_batch(2))).is_err());
+    assert_eq!(pool.stats().in_use, 0);
 }

@@ -17,9 +17,9 @@ use crate::AggregateDelta;
 /// input allocation. A panic fails the transport; partially accepted input is
 /// never replayed. Aggregate deltas may precede supporting definitions. Flush
 /// covers consumed input only, not private chunks or asynchronous delivery.
-pub trait Publisher<I: ?Sized, V> {
+pub trait Publisher<I, V> {
     fn aggregate(&mut self, delta: AggregateDelta);
-    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<I, V>);
+    fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<I, V>);
     fn flush(&mut self);
     /// Admission and delivery hooks run with no input chunk held.
     fn before_batch(&mut self, _max_records: usize) {}
@@ -110,11 +110,11 @@ impl NoSinkPublisher {
     }
 }
 
-impl<I: ?Sized, V> Publisher<I, V> for NoSinkPublisher {
+impl<I, V> Publisher<I, V> for NoSinkPublisher {
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.accept(delta);
     }
-    fn span(&mut self, _: TelemetryId, _: &SpanRecord<I, V>) {
+    fn span(&mut self, _: TelemetryId, _: &mut SpanRecord<I, V>) {
         self.stats.span_records = self.stats.span_records.saturating_add(1);
     }
     fn flush(&mut self) {

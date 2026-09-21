@@ -18,6 +18,8 @@
 
 mod sync;
 
+mod consume;
+
 use std::{collections::VecDeque, marker::PhantomData, mem::size_of, num::NonZeroUsize, rc::Rc};
 
 pub use btel_settings::transport::ChunkConfig as Config;
@@ -625,6 +627,11 @@ pub struct SpanChunk<T, S> {
 }
 
 impl<T, S> SpanChunk<T, S> {
+    /// Consume live records in their original slots, recycling this allocation.
+    /// The callback may take owned fields. Unwinding destroys the live suffix.
+    pub fn consume_in_place(&mut self, visit: impl FnMut(&mut S)) {
+        consume::consume(&mut self.records, visit);
+    }
     pub fn as_slice(&self) -> &[S] {
         &self.records
     }

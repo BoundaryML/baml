@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_publisher::{CompletionFlags, RecordingConfig, proto};
+use btel_publisher::{RecordingConfig, proto};
 use sys_native::SysOpsExt;
 
 fn context() -> bex_engine::FunctionCallContext {
@@ -119,15 +119,11 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
             for event in &section.events {
                 match event.event.as_ref().unwrap() {
                     proto::span_event::Event::FunctionAnnouncement(a) => {
-                        assert_eq!(a.inputs, proto::CaptureState::Deferred as i32);
+                        assert_cas_blob(root.path(), a.inputs_cas_id.unwrap());
                         announcements += 1;
                     }
                     proto::span_event::Event::FunctionCompletion(c) => {
-                        assert!(
-                            CompletionFlags::from_wire(c.completion_flags, false)
-                                .unwrap()
-                                .capture_deferred()
-                        );
+                        assert_cas_blob(root.path(), c.value_cas_id.unwrap());
                         spans += 1;
                         *span_counts.entry(c.node).or_default() += 1;
                     }
@@ -239,4 +235,77 @@ async fn storage_startup_failure_preserves_status_without_preventing_execution()
     );
     engine.shutdown().await;
     assert_eq!(engine.telemetry_result(), Some(Err(failure)));
+}
+
+#[tokio::test]
+async fn cas_storage_failure_disables_recording_but_execution_continues() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".baml/btel")).unwrap();
+    std::fs::write(root.path().join(".baml/btel/cas"), b"not a directory").unwrap();
+    let mut program = baml_db::testing::compile_source(
+        "function leaf() -> int { 7 } function main() -> int { leaf() }",
+    );
+    for object in &mut program.objects.0 {
+        if let bex_vm_types::Object::Function(f) = object {
+            if f.name.rsplit('.').next() == Some("leaf") {
+                f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
+                    client: "test".into(),
+                });
+            }
+        }
+    }
+    let engine = engine(
+        program,
+        TelemetryRecording::local_files(root.path(), RecordingConfig::default()),
+    );
+    assert_eq!(
+        engine
+            .call_function("main", vec![], context(), true)
+            .await
+            .unwrap(),
+        BexExternalValue::Int(7)
+    );
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while engine.telemetry_result().is_none_or(|r| r.is_ok()) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        engine
+            .call_function("main", vec![], context(), true)
+            .await
+            .unwrap(),
+        BexExternalValue::Int(7)
+    );
+    tokio::time::timeout(Duration::from_secs(5), engine.shutdown())
+        .await
+        .unwrap();
+    assert!(engine.telemetry_result().unwrap().is_err());
+}
+
+fn assert_cas_blob(project: &std::path::Path, id: proto::SnapshotId) {
+    use std::fmt::Write as _;
+    let bytes: Vec<_> = id
+        .low
+        .to_le_bytes()
+        .into_iter()
+        .chain(id.high.to_le_bytes())
+        .collect();
+    let mut name = String::with_capacity(32);
+    for byte in &bytes {
+        write!(&mut name, "{byte:02x}").unwrap();
+    }
+    let path = project
+        .join(".baml/btel/cas/v1")
+        .join(&name[..2])
+        .join(&name[2..4])
+        .join(&name[4..6])
+        .join(name);
+    let blob =
+        std::fs::read(path).expect("every published CAS reference must have a completed blob");
+    assert!(blob.len() >= 35);
+    assert_eq!(&blob[..8], b"BTELCAS\0");
+    assert_eq!(&blob[12..28], bytes);
 }

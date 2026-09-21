@@ -3849,7 +3849,8 @@ impl BexVm {
                         },
                         other => unreachable!("bytecode entry must be callable, got {other:?}"),
                     };
-                    self.telemetry.as_mut().and_then(|telemetry| {
+                    // SAFETY: arguments and callable remain live under the heap permit.
+                    self.telemetry.as_mut().and_then(|telemetry| unsafe {
                         telemetry.enter_bytecode(
                             function_ref,
                             function_identity,
@@ -3857,7 +3858,7 @@ impl BexVm {
                             0,
                             false,
                             args,
-                            |caller, callee| unsafe {
+                            |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
                         )
@@ -5973,7 +5974,8 @@ impl BexVm {
                     let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
                     let args = &self.stack.0
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
-                    self.telemetry.as_mut().and_then(|telemetry| {
+                    // SAFETY: arguments and callable remain live under the heap permit.
+                    self.telemetry.as_mut().and_then(|telemetry| unsafe {
                         telemetry.enter_bytecode(
                             callee,
                             callee_fn_ptr,
@@ -5981,7 +5983,7 @@ impl BexVm {
                             caller_pc,
                             caller_is_observed,
                             args,
-                            |caller, callee| unsafe {
+                            |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
                         )
@@ -6379,10 +6381,13 @@ impl BexVm {
         outcome: InvocationOutcome,
         value: Option<Value>,
     ) {
-        self.telemetry
-            .as_mut()
-            .expect("observed invocation has telemetry")
-            .complete_invocation(telemetry, function, outcome, value);
+        // SAFETY: completion holds the heap permit and the result/error is live.
+        unsafe {
+            self.telemetry
+                .as_mut()
+                .expect("observed invocation has telemetry")
+                .complete_invocation(telemetry, function, outcome, value);
+        }
     }
 
     fn telemetry_outcome_for_exception(&self, value: Value) -> InvocationOutcome {
@@ -7713,7 +7718,8 @@ impl BexVm {
                                     let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
                                     let args = &self.stack.0[locals_offset.raw()
                                         ..locals_offset.raw().saturating_add(callee.arity)];
-                                    self.telemetry.as_mut().and_then(|telemetry| {
+                                    // SAFETY: arguments and callable remain live under the heap permit.
+                                    self.telemetry.as_mut().and_then(|telemetry| unsafe {
                                         telemetry.enter_bytecode(
                                             callee,
                                             callee_ptr,
@@ -7721,7 +7727,7 @@ impl BexVm {
                                             caller_pc,
                                             caller_is_observed,
                                             args,
-                                            |caller, callee| unsafe {
+                                            |caller, callee| {
                                                 Self::register_call_path_functions(
                                                     &self.heap, caller, callee,
                                                 )

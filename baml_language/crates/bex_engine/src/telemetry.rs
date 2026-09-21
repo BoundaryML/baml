@@ -17,37 +17,48 @@ pub struct TelemetryRecording {
     destination: Destination,
 }
 enum Destination {
-    LocalFiles(PathBuf),
+    LocalFiles { recordings: PathBuf, cas: PathBuf },
     UserFiles,
 }
 
 impl TelemetryRecording {
     /// Write to `<project-root>/.baml/btel/recordings/<recording-id>`.
+    /// Snapshots share `<project-root>/.baml/btel/cas/v1` across recordings.
     /// The caller supplies the resolved BAML project root; the engine does not
     /// rediscover it from the working directory or source paths. Packed binary
     /// hosts without a project root should use [`Self::user_files`].
     /// File output remains explicitly enabled.
     pub fn local_files(project_root: impl AsRef<Path>, config: RecordingConfig) -> Self {
-        Self::local_files_in(
-            project_root
-                .as_ref()
-                .join(btel_settings::local_files::RECORDINGS_DIRECTORY),
-            config,
-        )
-    }
-
-    /// Override the standard root with `<directory>/<recording-id>`. No I/O or worker
-    /// starts until engine construction; `BAML_TELEMETRY=off` ignores this output.
-    /// Existing recording directories are never reused. Shutdown awaits writes.
-    pub fn local_files_in(directory: impl Into<PathBuf>, config: RecordingConfig) -> Self {
         Self {
             id: RecordingId::generate(),
             config,
-            destination: Destination::LocalFiles(directory.into()),
+            destination: Destination::LocalFiles {
+                recordings: project_root
+                    .as_ref()
+                    .join(btel_settings::local_files::RECORDINGS_DIRECTORY),
+                cas: project_root
+                    .as_ref()
+                    .join(btel_settings::local_files::CAS_DIRECTORY),
+            },
+        }
+    }
+
+    /// Override the root: recordings use `<directory>/<recording-id>` and shared
+    /// CAS uses `<directory>/cas/v1`. No I/O or worker
+    /// starts until engine construction; `BAML_TELEMETRY=off` ignores this output.
+    /// Existing recording directories are never reused. Shutdown awaits writes.
+    pub fn local_files_in(directory: impl Into<PathBuf>, config: RecordingConfig) -> Self {
+        let recordings = directory.into();
+        let cas = recordings.join("cas");
+        Self {
+            id: RecordingId::generate(),
+            config,
+            destination: Destination::LocalFiles { recordings, cas },
         }
     }
 
     /// Write beneath the current user's home: `~/.baml/btel/recordings`.
+    /// Packed programs share `~/.baml/btel/cas/v1` on this machine.
     /// Resolve the home directory only when the enabled engine starts recording.
     /// Fail explicitly if no home directory can be determined; never fall back
     /// to the working directory. Intended for packed programs without a project.
@@ -79,17 +90,23 @@ impl TelemetryRecording {
             .map_err(|error| EngineError::Other(error.to_owned()))?;
         let root = match self.destination {
             Destination::UserFiles => std::env::home_dir()
-                .map(|home| home.join(btel_settings::local_files::RECORDINGS_DIRECTORY))
+                .map(|home| {
+                    (
+                        home.join(btel_settings::local_files::RECORDINGS_DIRECTORY),
+                        home.join(btel_settings::local_files::CAS_DIRECTORY),
+                    )
+                })
                 .ok_or_else(|| std::io::Error::other("cannot determine telemetry home directory")),
-            Destination::LocalFiles(root) => Ok(root),
+            Destination::LocalFiles { recordings, cas } => Ok((recordings, cas)),
         };
         let mut sink = None;
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let failure = control.clone();
-                let writer = root.and_then(|root| {
-                    btel_file::FileSink::create_with_failure_handler(
+                let writer = root.and_then(|(root, cas)| {
+                    btel_file::FileSink::create_with_cas(
                         &root,
+                        &cas,
                         self.id,
                         btel_file::FileSinkConfig::default(),
                         move |error| {
@@ -102,7 +119,7 @@ impl TelemetryRecording {
                     Ok(mut writer) => {
                         let sender = writer.take_sender();
                         sink = Some(Arc::new(writer));
-                        Some(sender)
+                        Some(Arc::new(sender))
                     }
                     Err(error) => {
                         // Failure to create the directory/file worker also must not
@@ -114,13 +131,27 @@ impl TelemetryRecording {
                         None
                     }
                 };
-                RecordingPublisher::new(self.id, self.config, move |file| {
-                    if let Some(sender) = &sender {
-                        if let Err(error) = sender.send(file) {
-                            control.disable(btel_processor::RuntimeError(error.to_string()));
+                let snapshot_sender = sender.clone();
+                let snapshot_control = control.clone();
+                RecordingPublisher::with_snapshot_receiver(
+                    self.id,
+                    self.config,
+                    move |file| {
+                        if let Some(sender) = &sender {
+                            if let Err(error) = sender.send(file) {
+                                control.disable(btel_processor::RuntimeError(error.to_string()));
+                            }
                         }
-                    }
-                })
+                    },
+                    move |snapshot| {
+                        if let Some(sender) = &snapshot_sender {
+                            if let Err(error) = sender.send_snapshot(snapshot) {
+                                snapshot_control
+                                    .disable(btel_processor::RuntimeError(error.to_string()));
+                            }
+                        }
+                    },
+                )
                 .map(|publisher| publisher.with_source_snapshot(source_snapshot))
                 .map_err(std::io::Error::other)
             })

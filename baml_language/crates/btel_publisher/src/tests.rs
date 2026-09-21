@@ -32,13 +32,11 @@ impl<F: FnMut(ConvertedBatch)> ProtobufPublisher<F> {
         }
     }
 }
-impl<F: FnMut(ConvertedBatch)> Publisher<CaptureDeferred, CaptureDeferred>
-    for ProtobufPublisher<F>
-{
+impl<F: FnMut(ConvertedBatch)> Publisher<Snapshot, Snapshot> for ProtobufPublisher<F> {
     fn aggregate(&mut self, d: AggregateDelta) {
         self.buffer.aggregate(d);
     }
-    fn span(&mut self, t: TelemetryId, r: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
+    fn span(&mut self, t: TelemetryId, r: &mut SpanRecord<Snapshot, Snapshot>) {
         self.buffer
             .spans
             .reserve(self.buffer.spans.len() + btel_settings::encoding::MAX_EVENT_BYTES);
@@ -82,235 +80,235 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
     for captured in [false, true] {
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionOk {
+            &mut SpanRecord::FunctionSpanCompletionOk {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Ok, false, false, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+            &mut SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Ok, false, true, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionOkReentry {
+            &mut SpanRecord::FunctionSpanCompletionOkReentry {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Ok, true, false, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
+            &mut SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Ok, true, true, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionErrored {
+            &mut SpanRecord::FunctionSpanCompletionErrored {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Errored, false, false, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+            &mut SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Errored, false, true, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionErroredReentry {
+            &mut SpanRecord::FunctionSpanCompletionErroredReentry {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Errored, true, false, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
+            &mut SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Errored, true, true, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionCancelled {
+            &mut SpanRecord::FunctionSpanCompletionCancelled {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Cancelled, false, false, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+            &mut SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Cancelled, false, true, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionCancelledReentry {
+            &mut SpanRecord::FunctionSpanCompletionCancelledReentry {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Cancelled, true, false, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+            &mut SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Cancelled, true, true, false, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::LateFunctionSpanCompletionOk {
+            &mut SpanRecord::LateFunctionSpanCompletionOk {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Ok, false, false, true, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::LateFunctionSpanCompletionOkReentry {
+            &mut SpanRecord::LateFunctionSpanCompletionOkReentry {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Ok, true, false, true, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::LateFunctionSpanCompletionErrored {
+            &mut SpanRecord::LateFunctionSpanCompletionErrored {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Errored, false, false, true, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::LateFunctionSpanCompletionErroredReentry {
+            &mut SpanRecord::LateFunctionSpanCompletionErroredReentry {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Errored, true, false, true, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::LateFunctionSpanCompletionCancelled {
+            &mut SpanRecord::LateFunctionSpanCompletionCancelled {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Cancelled, false, false, true, captured));
         publisher.span(
             parent_id,
-            &SpanRecord::LateFunctionSpanCompletionCancelledReentry {
+            &mut SpanRecord::LateFunctionSpanCompletionCancelledReentry {
                 id,
                 parent_id,
                 call_path,
                 entered_at,
                 exited_at,
                 await_time,
-                captured_value: captured.then(|| Box::new(CaptureDeferred)),
+                captured_value: captured.then(snapshot),
             },
         );
         expected.push((InvocationOutcome::Cancelled, true, false, true, captured));
@@ -333,8 +331,8 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
         };
         let flags = CompletionFlags::from_wire(completion.completion_flags, is_late).unwrap();
         assert_eq!(flags.outcome(), outcome);
+        assert_eq!(completion.value_cas_id.is_some(), captured);
         assert_eq!(flags.requires_announcement(), dependency);
-        assert_eq!(flags.capture_deferred(), captured);
         assert_eq!(is_late, late);
         assert_eq!(
             completion.node,
@@ -356,11 +354,16 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
         // Rust enum layout and prost decoding's interpretation of the value.
         let bytes = completion.encode_to_vec();
         assert_eq!(
-            &bytes[bytes.len() - 2..],
+            &bytes[bytes.len()
+                - completion
+                    .value_cas_id
+                    .as_ref()
+                    .map_or(0, |id| prost::encoding::message::encoded_len(8, id))
+                - 2..][..2],
             &[0x38, u8::try_from(completion.completion_flags).unwrap()]
         );
     }
-    for bits in [0, 4, 8, 12, 16, u32::MAX] {
+    for bits in [0, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, u32::MAX] {
         assert!(CompletionFlags::from_wire(bits, false).is_none());
     }
     for bits in [9, 10, 11, 13, 14, 15] {
@@ -428,7 +431,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
             entered_at: ClockInstant::from_ticks(2),
             exited_at: ClockInstant::from_ticks(7),
             await_time: AwaitDuration::ZERO,
-            captured_value: Some(Box::new(CaptureDeferred)),
+            captured_value: Some(snapshot()),
         },
     );
     producer.seal();
@@ -449,7 +452,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         parent_id,
         call_path: path,
         entered_at: ClockInstant::from_ticks(4),
-        captured_inputs: Some(Box::new(CaptureDeferred)),
+        captured_inputs: Some(snapshot()),
     };
     producer.write_span(announcement(thread));
     producer.write_span(SpanRecord::ThreadSelected { thread_id: child });
@@ -674,4 +677,10 @@ fn overflow_spills_whole_delta_without_partial_updates_or_mid_callback_flush() {
         }
     }
     assert_eq!(actual, expected);
+}
+
+fn snapshot() -> btel_snapshot::Snapshot {
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let b = pool.try_acquire().unwrap();
+    b.finish_value(btel_snapshot::SnapshotValue::Int(42))
 }

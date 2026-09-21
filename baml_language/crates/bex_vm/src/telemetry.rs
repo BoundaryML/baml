@@ -1,8 +1,8 @@
 //! VM-side telemetry producer state.
 //!
 //! Native execution publishes typed records through chunk-backed transport.
-//! Captures remain explicitly deferred until owned snapshots are implemented.
-//! WASM transport integration is deferred; tests retain VM-local capture values.
+//! Captures own frozen pooled graphs independent of the VM heap.
+//! WASM transport integration is deferred; tests retain the same owned records.
 
 #![allow(unsafe_code)]
 #![allow(
@@ -117,31 +117,8 @@ impl FrameTelemetry {
 
 pub use btel_records::{SpanRecord, TimingRecord};
 
-/// Shallow VM-backed captures, NOT independent snapshots. Retained test records
-/// are rooted/forwarded with the VM and may migrate with it. A background
-/// processor must instantiate `SpanRecord` with owned snapshot handles instead.
-#[cfg(any(test, target_arch = "wasm32"))]
-type VmSpanRecord = SpanRecord<[Value], Value>;
-#[cfg(all(not(test), not(target_arch = "wasm32")))]
-type VmSpanRecord = SpanRecord<btel_records::CaptureDeferred, btel_records::CaptureDeferred>;
-
-#[inline]
-fn capture_value(value: Value) -> CapturedValue {
-    #[cfg(any(test, target_arch = "wasm32"))]
-    {
-        value
-    }
-    #[cfg(all(not(test), not(target_arch = "wasm32")))]
-    {
-        let _ = value;
-        btel_records::CaptureDeferred
-    }
-}
-
-#[cfg(any(test, target_arch = "wasm32"))]
-type CapturedValue = Value;
-#[cfg(all(not(test), not(target_arch = "wasm32")))]
-type CapturedValue = btel_records::CaptureDeferred;
+mod snapshot;
+type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
 const _: () = assert!(size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
 const _: () = assert!(size_of::<VmSpanRecord>() <= btel_settings::layout::SPAN_RECORD_MAX_BYTES);
 
@@ -158,6 +135,9 @@ pub struct ThreadTelemetry {
 }
 
 pub struct TelemetryState {
+    capture_scratch: snapshot::Scratch,
+    #[cfg(target_arch = "wasm32")]
+    snapshots: btel_snapshot::SnapshotPool,
     mode: btel_settings::mode::TelemetryMode,
     thread: ThreadTelemetry,
     call_paths: FxHashMap<CallPathKey, CallPathId>,
@@ -184,6 +164,12 @@ impl TelemetryState {
         let id = allocate_telemetry_id();
         let started_at = clock.read();
         Self {
+            capture_scratch: snapshot::Scratch::default(),
+            #[cfg(target_arch = "wasm32")]
+            snapshots: btel_snapshot::SnapshotPool::new(
+                btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
+                Default::default(),
+            ),
             mode: policies.mode(),
             thread: ThreadTelemetry {
                 active_id: id,
@@ -207,6 +193,20 @@ impl TelemetryState {
             #[cfg(test)]
             span_records: Vec::new(),
         }
+    }
+
+    #[cold]
+    fn capture(&mut self, input: snapshot::Input<'_>) -> Option<btel_snapshot::Snapshot> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let builder = self.runtime.acquire_snapshot()?;
+        #[cfg(target_arch = "wasm32")]
+        let builder = self
+            .snapshots
+            .try_acquire()
+            .expect("synchronous WASM capture consumption");
+        // SAFETY: invocation entry/completion run with the VM heap permit held.
+        // Scratch traversal never releases it or triggers VM allocation/GC.
+        Some(unsafe { self.capture_scratch.capture(builder, input) })
     }
 
     pub fn configure_spawn(&mut self, context: &ThreadSpawnContext) {
@@ -268,7 +268,10 @@ impl TelemetryState {
         clippy::too_many_arguments,
         reason = "entry data plus a statically dispatched cold registration hook"
     )]
-    pub fn enter_bytecode(
+    /// # Safety
+    /// Every argument and its reachable objects must remain live under the VM
+    /// heap permit throughout this call. Capture may traverse that graph.
+    pub unsafe fn enter_bytecode(
         &mut self,
         function: &Function,
         callee: HeapPtr,
@@ -352,17 +355,8 @@ impl TelemetryState {
 
         let captured_inputs = (mode == InvocationMode::Span
             && (policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)))
-            .then(|| {
-                #[cfg(any(test, target_arch = "wasm32"))]
-                {
-                    args.to_vec().into_boxed_slice()
-                }
-                #[cfg(all(not(test), not(target_arch = "wasm32")))]
-                {
-                    let _ = args;
-                    Box::new(btel_records::CaptureDeferred)
-                }
-            });
+            .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
+            .flatten();
         if captured_inputs.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
@@ -432,7 +426,10 @@ impl TelemetryState {
     }
 
     #[inline(always)]
-    pub fn complete_invocation(
+    /// # Safety
+    /// The result/error and its reachable objects must remain live under the VM
+    /// heap permit throughout this call. Capture may traverse that graph.
+    pub unsafe fn complete_invocation(
         &mut self,
         telemetry: FrameTelemetry,
         function: &Function,
@@ -472,6 +469,8 @@ impl TelemetryState {
         };
 
         if telemetry.is_span() {
+            let captured_value =
+                capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             let id = self.thread.active_id;
             match (
                 outcome,
@@ -486,8 +485,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Ok, false, true) => {
@@ -498,8 +496,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Ok, true, false) => {
@@ -510,8 +507,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Ok, true, true) => self.write_span(
@@ -522,8 +518,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     },
                 ),
                 (InvocationOutcome::Errored, false, false) => {
@@ -534,8 +529,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Errored, false, true) => {
@@ -546,8 +540,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Errored, true, false) => {
@@ -558,8 +551,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Errored, true, true) => self.write_span(
@@ -570,8 +562,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     },
                 ),
                 (InvocationOutcome::Cancelled, false, false) => {
@@ -582,8 +573,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Cancelled, false, true) => self.write_span(
@@ -594,8 +584,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     },
                 ),
                 (InvocationOutcome::Cancelled, true, false) => {
@@ -606,8 +595,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Cancelled, true, true) => self.write_span(
@@ -618,13 +606,14 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     },
                 ),
             }
             self.thread.active_id = telemetry.saved_parent_id;
         } else if policy::promotes(policy, elapsed, outcome, self.clock.domain()) {
+            let captured_value =
+                capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             match (outcome, telemetry.is_reentry()) {
                 (InvocationOutcome::Ok, false) => {
                     self.write_span(SpanRecord::LateFunctionSpanCompletionOk {
@@ -634,8 +623,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Ok, true) => {
@@ -646,8 +634,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Errored, false) => {
@@ -658,8 +645,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Errored, true) => {
@@ -670,8 +656,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Cancelled, false) => {
@@ -682,8 +667,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
                 (InvocationOutcome::Cancelled, true) => {
@@ -694,8 +678,7 @@ impl TelemetryState {
                         entered_at: telemetry.entered_at,
                         exited_at,
                         await_time: telemetry.await_duration,
-                        captured_value: capture_value
-                            .map(|value| Box::new(self::capture_value(value))),
+                        captured_value,
                     });
                 }
             }
@@ -872,66 +855,6 @@ impl TelemetryState {
             roots.extend(key.visible_caller);
             roots.push(key.callee);
         }
-        #[cfg(test)]
-        for event in &self.span_records {
-            match event {
-                SpanRecord::FunctionSpanAnnouncement {
-                    captured_inputs, ..
-                } => roots.extend(
-                    captured_inputs
-                        .iter()
-                        .flat_map(|capture| capture.iter())
-                        .filter_map(Value::as_object_ptr),
-                ),
-                SpanRecord::FunctionSpanCompletionOk { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
-                    captured_value, ..
-                }
-                | SpanRecord::FunctionSpanCompletionOkReentry { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionErrored { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionErroredReentry { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionCancelled { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionCancelledReentry { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::LateFunctionSpanCompletionOk { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionOkReentry { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionErrored { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionErroredReentry { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionCancelled { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionCancelledReentry {
-                    captured_value, ..
-                } => {
-                    roots.extend(
-                        captured_value
-                            .iter()
-                            .filter_map(|capture| capture.as_object_ptr()),
-                    );
-                }
-                SpanRecord::CallPathDefined { .. }
-                | SpanRecord::ThreadSpanAnnouncement { .. }
-                | SpanRecord::ThreadSpanCompletion { .. }
-                | SpanRecord::ThreadSelected { .. } => {}
-            }
-        }
     }
 
     pub(crate) fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
@@ -952,74 +875,6 @@ impl TelemetryState {
             key.callee = roots.get(&key.callee).copied().unwrap_or(key.callee);
             (key, id)
         });
-        #[cfg(test)]
-        for event in &mut self.span_records {
-            match event {
-                SpanRecord::FunctionSpanAnnouncement {
-                    captured_inputs, ..
-                } => {
-                    if let Some(capture) = captured_inputs {
-                        for value in capture {
-                            forward_value(value, roots);
-                        }
-                    }
-                }
-                SpanRecord::FunctionSpanCompletionOk { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
-                    captured_value, ..
-                }
-                | SpanRecord::FunctionSpanCompletionOkReentry { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionErrored { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionErroredReentry { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionCancelled { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::FunctionSpanCompletionCancelledReentry { captured_value, .. }
-                | SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
-                    captured_value,
-                    ..
-                }
-                | SpanRecord::LateFunctionSpanCompletionOk { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionOkReentry { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionErrored { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionErroredReentry { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionCancelled { captured_value, .. }
-                | SpanRecord::LateFunctionSpanCompletionCancelledReentry {
-                    captured_value, ..
-                } => {
-                    if let Some(value) = captured_value {
-                        forward_value(value, roots);
-                    }
-                }
-                SpanRecord::CallPathDefined { .. }
-                | SpanRecord::ThreadSpanAnnouncement { .. }
-                | SpanRecord::ThreadSpanCompletion { .. }
-                | SpanRecord::ThreadSelected { .. } => {}
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-fn forward_value(value: &mut Value, roots: &HashMap<HeapPtr, HeapPtr>) {
-    if let Some(ptr) = value.as_object_ptr()
-        && let Some(&forwarded) = roots.get(&ptr)
-    {
-        *value = Value::object(forwarded);
     }
 }
 
@@ -1190,7 +1045,7 @@ mod tests {
     }
 
     #[test]
-    fn retained_span_captures_remain_gc_roots_after_record_split() {
+    fn owned_captures_survive_collection_without_being_gc_roots() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let function = function(
             FunctionKind::Bytecode,
@@ -1201,8 +1056,8 @@ mod tests {
         let input = vm.tlab.alloc_string("input");
         let output = vm.tlab.alloc_string("output");
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
-        let frame = state
-            .enter_bytecode(
+        let frame = unsafe {
+            state.enter_bytecode(
                 &function,
                 HeapPtr::null(),
                 None,
@@ -1211,20 +1066,23 @@ mod tests {
                 &[Value::object(input)],
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
-            .unwrap();
-        state.complete_invocation(
-            frame,
-            &function,
-            InvocationOutcome::Ok,
-            Some(Value::object(output)),
-        );
+        }
+        .unwrap();
+        unsafe {
+            state.complete_invocation(
+                frame,
+                &function,
+                InvocationOutcome::Ok,
+                Some(Value::object(output)),
+            );
+        };
         // Isolate capture roots from the separate executable call-path cache.
         state.call_paths.clear();
         state.call_path_keys.clear();
         state.last_call_path[0] = None;
         let mut roots = Vec::new();
         state.collect_roots(&mut roots);
-        assert_eq!(roots, [input, output]);
+        assert!(roots.is_empty());
         // SAFETY: exclusive test heap, and the retained captures are its only
         // live objects. No bytecode or other VM/heap mutation runs concurrently.
         let (_, _, forwarding) = unsafe {
@@ -1234,20 +1092,15 @@ mod tests {
         state.forward_roots(&forwarding);
         roots.clear();
         state.collect_roots(&mut roots);
-        assert_eq!(roots, [forwarding[&input], forwarding[&output]]);
+        assert!(roots.is_empty());
+        drop(vm);
         assert!(state.span_records().iter().any(|record| matches!(record,
             SpanRecord::FunctionSpanAnnouncement { captured_inputs: Some(capture), .. }
-            if capture[0] == Value::object(forwarding[&input]))));
+            if matches!(capture.roots()[0], btel_snapshot::SnapshotValue::String(s) if capture.string(s).as_str() == "input"))));
         assert!(state.span_records().iter().any(|record| matches!(record,
             SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { captured_value: Some(capture), .. }
-            if **capture == Value::object(forwarding[&output]))));
+            if matches!(capture.roots()[0], btel_snapshot::SnapshotValue::String(s) if capture.string(s).as_str() == "output"))));
         drop(state);
-        // SAFETY: dropping the record owner removed all remaining roots.
-        let (stats, _, _) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
-        };
-        assert_eq!(stats.live_count, 0);
     }
 
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
@@ -1307,17 +1160,12 @@ mod tests {
             .publish(&function.telemetry_policy_id, policy)
             .unwrap();
         assert!(
-            state
-                .enter_bytecode(
-                    &function,
-                    HeapPtr::null(),
-                    None,
-                    0,
-                    false,
-                    &[],
-                    |_, _| panic!("unsupported function tried to register")
-                )
-                .is_none()
+            unsafe {
+                state.enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                    panic!("unsupported function tried to register")
+                })
+            }
+            .is_none()
         );
         assert!(state.span_records().is_empty());
         assert!(state.timing_records().is_empty());
@@ -1338,15 +1186,18 @@ mod tests {
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let thread_id = state.active_id();
-        let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 7, false, &[], |_, _| {
+        let frame = unsafe {
+            state.enter_bytecode(&function, HeapPtr::null(), None, 7, false, &[], |_, _| {
                 (None, function.telemetry_function_id.unwrap())
             })
-            .unwrap();
+        }
+        .unwrap();
 
         assert!(!frame.is_span());
         assert_eq!(state.active_id(), thread_id);
-        state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::NULL));
+        unsafe {
+            state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::NULL));
+        };
 
         assert_eq!(
             state
@@ -1378,18 +1229,12 @@ mod tests {
                 let mut state =
                     test_state(Arc::new(TelemetryPolicies::with_mode(mode)), test_clock());
                 let parent = state.active_id();
-                let frame = state.enter_bytecode(
-                    &function,
-                    HeapPtr::null(),
-                    None,
-                    0,
-                    false,
-                    &[],
-                    |_, _| {
+                let frame = unsafe {
+                    state.enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
                         assert_ne!(mode, TelemetryMode::Low, "hidden entry must not register");
                         (None, function.telemetry_function_id.unwrap())
-                    },
-                );
+                    })
+                };
                 if mode == TelemetryMode::Low {
                     assert!(frame.is_none());
                     assert_eq!(state.active_id(), parent);
@@ -1405,12 +1250,26 @@ mod tests {
                             },
                         )
                         .unwrap();
-                    let frame = state
-                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
-                            (None, function.telemetry_function_id.unwrap())
-                        })
-                        .unwrap();
-                    state.complete_invocation(frame, &function, InvocationOutcome::Errored, None);
+                    let frame = unsafe {
+                        state.enter_bytecode(
+                            &function,
+                            HeapPtr::null(),
+                            None,
+                            0,
+                            false,
+                            &[],
+                            |_, _| (None, function.telemetry_function_id.unwrap()),
+                        )
+                    }
+                    .unwrap();
+                    unsafe {
+                        state.complete_invocation(
+                            frame,
+                            &function,
+                            InvocationOutcome::Errored,
+                            None,
+                        );
+                    };
                     assert!(state.span_records().iter().any(|record| matches!(
                         record,
                         SpanRecord::LateFunctionSpanCompletionErrored { .. }
@@ -1419,12 +1278,14 @@ mod tests {
                 } else {
                     let frame = frame.unwrap();
                     assert_eq!(frame.is_span(), ai || mode == TelemetryMode::High);
-                    state.complete_invocation(
-                        frame,
-                        &function,
-                        InvocationOutcome::Ok,
-                        Some(Value::int(1)),
-                    );
+                    unsafe {
+                        state.complete_invocation(
+                            frame,
+                            &function,
+                            InvocationOutcome::Ok,
+                            Some(Value::int(1)),
+                        );
+                    };
                     if mode == TelemetryMode::High && !ai {
                         assert!(state.span_records().iter().any(|record| matches!(
                             record,
@@ -1446,17 +1307,18 @@ mod tests {
                 let mut state =
                     test_state(Arc::new(TelemetryPolicies::with_mode(mode)), test_clock());
                 assert!(
-                    state
-                        .enter_bytecode(
+                    unsafe {
+                        state.enter_bytecode(
                             &hidden,
                             HeapPtr::null(),
                             None,
                             0,
                             false,
                             &[],
-                            |_, _| panic!("hidden function registered")
+                            |_, _| panic!("hidden function registered"),
                         )
-                        .is_none()
+                    }
+                    .is_none()
                 );
                 assert!(state.span_records().is_empty());
             }
@@ -1474,8 +1336,8 @@ mod tests {
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();
-        let frame = state
-            .enter_bytecode(
+        let frame = unsafe {
+            state.enter_bytecode(
                 &function,
                 HeapPtr::null(),
                 None,
@@ -1484,24 +1346,27 @@ mod tests {
                 &[Value::int(3)],
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
-            .unwrap();
+        }
+        .unwrap();
         let span_id = state.active_id();
 
         assert!(frame.is_span());
         assert_ne!(span_id, parent_id);
-        state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(5)));
+        unsafe {
+            state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(5)));
+        };
         assert_eq!(state.active_id(), parent_id);
         assert!(state.span_records().iter().any(|event| matches!(
             event,
             SpanRecord::FunctionSpanAnnouncement { id, parent_id: parent, captured_inputs, .. }
                 if *id == span_id
                     && *parent == parent_id
-                    && captured_inputs.as_ref().is_some_and(|capture| capture.as_ref() == [Value::int(3)])
+                    && captured_inputs.as_ref().is_some_and(|capture| matches!(capture.roots()[0],btel_snapshot::SnapshotValue::Int(3)))
         )));
         assert!(state.span_records().iter().any(|event| matches!(
             event,
             SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { id, captured_value: Some(value), .. }
-                if *id == span_id && **value == Value::int(5)
+                if *id == span_id && matches!(value.roots()[0],btel_snapshot::SnapshotValue::Int(5))
         )));
     }
 
@@ -1511,11 +1376,12 @@ mod tests {
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();
-        let frame = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+        let frame = unsafe {
+            state.enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
                 (None, function.telemetry_function_id.unwrap())
             })
-            .unwrap();
+        }
+        .unwrap();
         let updater = test_state(Arc::clone(&state.policies), Arc::clone(&state.clock));
         updater
             .set_policy(
@@ -1539,7 +1405,9 @@ mod tests {
             later.policy_by_id(function.telemetry_policy_id.load()),
             state.policy_by_id(function.telemetry_policy_id.load())
         );
-        state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(9)));
+        unsafe {
+            state.complete_invocation(frame, &function, InvocationOutcome::Ok, Some(Value::int(9)));
+        };
 
         assert_eq!(state.active_id(), parent_id);
         assert!(state.span_records().iter().any(|event| matches!(
@@ -1548,7 +1416,7 @@ mod tests {
                 parent_id: parent,
                 captured_value: Some(value),
                 ..
-            } if *parent == parent_id && **value == Value::int(9)
+            } if *parent == parent_id && matches!(value.roots()[0],btel_snapshot::SnapshotValue::Int(9))
         )));
         assert!(
             !state
@@ -1563,13 +1431,14 @@ mod tests {
         let function = function(FunctionKind::Bytecode, None);
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
-        let mut outer = state
-            .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+        let mut outer = unsafe {
+            state.enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
                 (None, function.telemetry_function_id.unwrap())
             })
-            .unwrap();
-        let mut inner = state
-            .enter_bytecode(
+        }
+        .unwrap();
+        let mut inner = unsafe {
+            state.enter_bytecode(
                 &function,
                 HeapPtr::null(),
                 Some(HeapPtr::null()),
@@ -1578,12 +1447,17 @@ mod tests {
                 &[],
                 |_, _| (None, function.telemetry_function_id.unwrap()),
             )
-            .unwrap();
+        }
+        .unwrap();
         outer.add_await(ClockDuration::from_ticks(3));
         inner.add_await(ClockDuration::from_ticks(7));
 
-        state.complete_invocation(inner, &function, InvocationOutcome::Ok, None);
-        state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+        unsafe {
+            state.complete_invocation(inner, &function, InvocationOutcome::Ok, None);
+        };
+        unsafe {
+            state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+        };
 
         let measurements: Vec<_> = state
             .timing_records()
@@ -1624,8 +1498,8 @@ mod tests {
                             },
                         )
                         .unwrap();
-                    let outer = state
-                        .enter_bytecode(
+                    let outer = unsafe {
+                        state.enter_bytecode(
                             &function,
                             HeapPtr::null(),
                             None,
@@ -1634,10 +1508,11 @@ mod tests {
                             &[Value::int(3)],
                             |_, _| (None, function.telemetry_function_id.unwrap()),
                         )
-                        .unwrap();
+                    }
+                    .unwrap();
                     let inner = reentry.then(|| {
-                        state
-                            .enter_bytecode(
+                        unsafe {
+                            state.enter_bytecode(
                                 &function,
                                 HeapPtr::null(),
                                 Some(HeapPtr::null()),
@@ -1651,7 +1526,8 @@ mod tests {
                                     )
                                 },
                             )
-                            .unwrap()
+                        }
+                        .unwrap()
                     });
                     let frame = inner.unwrap_or(outer);
                     let id = state.active_id();
@@ -1666,7 +1542,9 @@ mod tests {
                             },
                         )
                         .unwrap();
-                    state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
+                    unsafe {
+                        state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
+                    };
                     let completed = state.span_records().last().unwrap().completion().unwrap();
                     assert_eq!(completed.id, id);
                     assert_eq!(completed.outcome, outcome);
@@ -1677,7 +1555,14 @@ mod tests {
                         SpanRecord::FunctionSpanAnnouncement {id: announced, captured_inputs, ..}
                         if *announced == id && captured_inputs.is_some() == inputs)));
                     if reentry {
-                        state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+                        unsafe {
+                            state.complete_invocation(
+                                outer,
+                                &function,
+                                InvocationOutcome::Ok,
+                                None,
+                            );
+                        };
                     }
                 }
             }
@@ -1695,14 +1580,15 @@ mod tests {
                 let function = function(FunctionKind::Bytecode, None);
                 let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
                 state.start_thread();
-                let outer = state
-                    .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
+                let outer = unsafe {
+                    state.enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
                         (None, function.telemetry_function_id.unwrap())
                     })
-                    .unwrap();
+                }
+                .unwrap();
                 let inner = reentry.then(|| {
-                    state
-                        .enter_bytecode(
+                    unsafe {
+                        state.enter_bytecode(
                             &function,
                             HeapPtr::null(),
                             Some(HeapPtr::null()),
@@ -1716,7 +1602,8 @@ mod tests {
                                 )
                             },
                         )
-                        .unwrap()
+                    }
+                    .unwrap()
                 });
                 state
                     .set_policy(
@@ -1728,7 +1615,9 @@ mod tests {
                         },
                     )
                     .unwrap();
-                state.complete_invocation(inner.unwrap_or(outer), &function, outcome, None);
+                unsafe {
+                    state.complete_invocation(inner.unwrap_or(outer), &function, outcome, None);
+                };
                 let completed = state.span_records().last().unwrap().completion().unwrap();
                 assert_eq!(completed.outcome, outcome);
                 assert_eq!(completed.reentry, reentry);
@@ -1741,7 +1630,9 @@ mod tests {
                     ))
                 );
                 if reentry {
-                    state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+                    unsafe {
+                        state.complete_invocation(outer, &function, InvocationOutcome::Ok, None);
+                    };
                 }
             }
         }
@@ -1783,11 +1674,18 @@ mod tests {
                         ..TelemetryPolicy::NONE
                     };
                     state.set_policy(&function, policy(initial)).unwrap();
-                    let frame = state
-                        .enter_bytecode(&function, HeapPtr::null(), None, 0, false, &[], |_, _| {
-                            (None, function.telemetry_function_id.unwrap())
-                        })
-                        .unwrap();
+                    let frame = unsafe {
+                        state.enter_bytecode(
+                            &function,
+                            HeapPtr::null(),
+                            None,
+                            0,
+                            false,
+                            &[],
+                            |_, _| (None, function.telemetry_function_id.unwrap()),
+                        )
+                    }
+                    .unwrap();
                     // Updating to zero must not erase an entry requirement.
                     state
                         .set_policy(
@@ -1799,13 +1697,17 @@ mod tests {
                             },
                         )
                         .unwrap();
-                    state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
+                    unsafe {
+                        state.complete_invocation(frame, &function, outcome, Some(Value::int(7)));
+                    };
                     let recorded = state.span_records().last().unwrap().completion().unwrap();
                     assert!(!recorded.late, "an entry-selected span must remain a span");
                     assert_eq!(recorded.outcome, outcome);
                     assert_eq!(
-                        recorded.captured_value.copied(),
-                        (initial || current).then_some(Value::int(7))
+                        recorded
+                            .captured_value
+                            .map(|s| matches!(s.roots()[0], btel_snapshot::SnapshotValue::Int(7))),
+                        (initial || current).then_some(true)
                     );
                 }
             }

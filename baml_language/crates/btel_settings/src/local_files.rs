@@ -6,7 +6,7 @@ use std::num::NonZeroUsize;
 /// Each recording gets its own ID directory beneath this path.
 pub const RECORDINGS_DIRECTORY: &str = ".baml/btel/recordings";
 
-/// **Tune first for disk bursts.** Queued sealed files, excluding the one being
+/// **Tune first for disk bursts.** Queued files or snapshot owners, excluding the one being
 /// written. More slots absorb short disk stalls but retain more encoded memory.
 /// Exhaustion blocks downstream delivery after input chunks have been released.
 /// Increasing this limit absorbs bursts; it cannot fix sustained writer lag.
@@ -23,3 +23,9 @@ impl Default for FileSinkConfig {
         }
     }
 }
+
+/// Project root (CLI) or home directory (packed executables), shared across recordings.
+/// The file sink appends the blob format version before the digest shards.
+pub const CAS_DIRECTORY: &str = ".baml/btel/cas";
+/// Writer buffering for scalar-heavy snapshot blobs; does not constrain capture size.
+pub const CAS_WRITE_BUFFER_BYTES: usize = 64 * 1024;
