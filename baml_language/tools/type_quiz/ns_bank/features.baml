@@ -1,13 +1,12 @@
 // What the sampler scores a case by. Names are the contract with
 // `weights.baml`; the engine only sees numbers.
 
-/// The features of a case: how many distinct rules its explanation uses
-/// (without the flow rule every flow item ends with), how many times its
-/// derivation flips a subtype into a supertype, the structural size of the
-/// types it renders, and the models its pair lures — in either direction,
-/// never this one alone, so that the two directions of one draw score alike
-/// (`root.engine.Candidate.lures`). The feature names keep the word the
-/// weights were written against.
+/// The features of one casting of a draw: how many distinct rules its
+/// explanation uses (without the flow rule every flow item ends with), how
+/// many times its derivation flips a subtype into a supertype, the
+/// structural size of the types it renders, and the models it traps. A
+/// draw's score is the mean over its castings, so it is the same whichever
+/// of them is served (`root.engine.score_of`).
 function features_of(
     trace: root.engine.Claim[],
     flips: int,

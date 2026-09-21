@@ -177,17 +177,22 @@ function parsed_step(printed: string) -> root.Step? throws never {
 
 function driven_first_steps() -> string throws never {
     let opening = parsed_step(root.adaptive_step(11, ""));
-    let after = parsed_step(root.adaptive_step(11, "compiles"));
     let first = root.next_prompt(root.fresh_profile(), root.engine.default_knobs(), 11, 0);
-    let same = match (first) {
-        let next: root.Next => {
-            match (opening?.asked) {
-                let asked: root.Asked => {
-                    asked.programs == [next.prompt.program.values().join("\n")]
-                },
-                null => false,
-            }
-        },
+    let none: string[] = [];
+    let programs = match (first) {
+        let next: root.Next => root.programs_of(next.prompt),
+        null => none,
+    };
+    // An answer of the kind the first question asks for: which of two
+    // programs compiles, or whether the one does.
+    let answer = if (programs.length() > 1) {
+        "first"
+    } else {
+        "compiles"
+    };
+    let after = parsed_step(root.adaptive_step(11, answer));
+    let same = match (opening?.asked) {
+        let asked: root.Asked => programs.length() > 0 && asked.programs == programs,
         null => false,
     };
     `same_first=${same} opening_marked=${opening?.marked == null} second_marked=${after?.marked != null}`

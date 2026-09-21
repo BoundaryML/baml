@@ -127,7 +127,7 @@ function put(
     knobs: Knobs,
     seed: Seed,
 ) -> Put throws never {
-    let alone = Put { posed: candidate.case, traps: candidate.traps };
+    let alone = Put { posed: candidate.case, traps: candidate.served.traps };
     if (!choosing(knobs, seed)) {
         return alone;
     }

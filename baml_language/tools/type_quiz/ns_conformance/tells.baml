@@ -193,12 +193,12 @@ function surfaced(seeds: int) -> Surfaced[] throws never {
                 let out: string[] = [];
                 let seen: string[] = [];
                 note(out, `site:${root.algebra.site_phrase(drawn.site)}`);
-                gather_kinds(one.flow.source, seen, out);
-                gather_kinds(one.flow.target, seen, out);
+                gather_kinds(one.cast.flow.source, seen, out);
+                gather_kinds(one.cast.flow.target, seen, out);
                 for (let feature in text_features(source_of(one.case))) {
                     note(out, feature);
                 }
-                Surfaced { fact: fact.name, compiles: one.compiles, features: out }
+                Surfaced { fact: fact.name, compiles: one.cast.compiles, features: out }
             })
             .collect()
     })
@@ -319,67 +319,127 @@ function leaning_of(
 }
 
 test "tells: nothing on the surface of a case leans more than ten points from the rest" {
-    assert.equal(leaning_features(128, 100, 10), "compiles=49% of 6912 leaning=[]")
+    assert.equal(leaning_features(128, 100, 10), "compiles=50% of 7424 leaning=[]")
 }
 
 // ─── what selection can see ──────────────────────────────────────────────────
 //
 // A bank that says nothing with its surface is not enough. Selection prefers
-// some cases to others, and the naive models are lopsided: one that accepts
+// some cases to others, and what a case is decides both its answer and why
+// selection would want it. The naive models are lopsided — one that accepts
 // too much is wrong only about rejected cases, one that accepts too little
-// only about compiling ones. A selection that could see which direction of a
-// draw fools somebody served that direction, and sittings asked about
-// function types that were rejected ten times in eleven, from a bank in
-// which they are rejected half the time.
+// only about compiling ones — so a selection that could see which direction
+// of a draw fools somebody served that direction: function types rejected
+// ten times in eleven. And the tracer wants evidence per rule, and a rule
+// that concludes an equivalence can only be evidenced by a case that
+// compiles, so a selection that could see which fact of a shape it had drawn
+// served the equivalences: unions accepted seven times in ten. Both from a
+// bank in which every kind of question answers both ways.
+//
+// So selection reads a draw's castings — every way its coins could have
+// served it — and never the case. What is held here is that it cannot do
+// otherwise: whichever way the coins fall, what it makes of the draw is the
+// same, number for number.
 
-/// Every draw whose two directions selection could tell apart: by the
-/// features the sampler scores, or by the models it counts as lured.
-function castings_told_apart(seeds: int) -> string[] throws never {
-    root.bank.facts().flat_map((fact) -> {
+/// A profile with something to say: a short sitting of the learner who
+/// reasons as TypeScript does, so its rules stand unevenly and one model is
+/// suspected. A fresh profile holds every rule alike and would let a
+/// selection that read the served casting look blind by accident.
+function telling_profile() -> root.engine.Profile throws never {
+    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), practice: true, budget: 12 };
+    sit(typescripter, knobs, 5).profile
+}
+
+/// What selection makes of `candidate` drawn for `item` at `seed`: every
+/// number it would act on.
+function selection_view(
+    item: string,
+    seed: root.engine.Seed,
+    candidate: root.engine.Candidate,
+    profile: root.engine.Profile,
+) -> string throws never {
+    let score = root.engine.score_of(candidate, root.bank.default_weights())
+        ?? return "capped";
+    let scored = root.engine.Scored { item, seed, candidate, score };
+    `score=${score} fit=${root.engine.fit(profile, root.engine.default_knobs(), scored)}`
+}
+
+/// Every draw of every item that selection could tell apart from itself: a
+/// way its coins could fall under which selection would make something
+/// different of it. With how many draws had outcomes that DO differ in what
+/// they were served as, so the check is known not to pass by having nothing
+/// to see.
+function outcomes_told_apart(seeds: int) -> string throws never {
+    let profile = telling_profile();
+    let found = root.bank.shapes().flat_map((shape) -> {
+        let item = `flow/${shape.name}`;
         baml.iter.Range.new(0, seeds)
             .filter_map((i) -> {
-                let seed = root.engine.seed_for(`flow/${fact.name}`, i);
-                let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
+                let seed = root.engine.seed_for(item, i);
+                let dealt = root.bank.deal(shape, root.algebra.all_sites(), seed)
                     ?? return null;
-                let one = root.bank.candidate_of(drawn, false);
-                let other = root.bank.candidate_of(drawn, true);
-                if (one.features == other.features && one.lures == other.lures) {
+                let outcomes = baml.iter.Range.new(0, dealt.all.length()).collect().flat_map((chosen) -> {
+                    [false, true].map((reversed) -> {
+                        root.bank.candidate_of(dealt.all, chosen, reversed)
+                    })
+                });
+                let views = outcomes.map((candidate) -> {
+                    selection_view(item, seed, candidate, profile)
+                });
+                let blind = views.every((view) -> {
+                    view == views[0]
+                })
+                    && outcomes.every((candidate) -> {
+                        candidate.castings == outcomes[0].castings
+                    });
+                let differ = outcomes.some((candidate) -> {
+                    candidate.served != outcomes[0].served
+                });
+                if (blind) {
+                    if (differ) {
+                        "differs"
+                    } else {
+                        "same"
+                    }
+                } else {
+                    `${shape.name}#${i}`
+                }
+            })
+            .collect()
+    });
+    let seen_apart = found.filter((f) -> {
+        f != "differs" && f != "same"
+    });
+    `told_apart=${seen_apart} outcomes_that_differ=${found.filter((f) -> {
+        f == "differs"
+    }).length()} of ${found.length()}`
+}
+
+test "selection: whichever way a draw's coins fall, it makes the same of it" {
+    assert.equal(outcomes_told_apart(8), "told_apart=[] outcomes_that_differ=194 of 320")
+}
+
+/// Every draw of every item whose served casting is not what the tracer
+/// reads off the case it served. The two are worked out apart — one from
+/// the derivation before anything is rendered, the other from the case —
+/// and selection's view is only honest while they agree.
+function served_misread(seeds: int) -> string[] throws never {
+    root.bank.items().flat_map((item) -> {
+        let id = item.id();
+        baml.iter.Range.new(0, seeds)
+            .filter_map((i) -> {
+                let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
+                    ?? return null;
+                if (candidate.served.rules == root.tracer_rules(candidate.case)) {
                     null
                 } else {
-                    `${fact.name}#${i}`
+                    `${id}#${i}: ${candidate.served.rules} against ${root.tracer_rules(candidate.case)}`
                 }
             })
             .collect()
     })
 }
 
-/// How many draws have directions that fool different models — the draws
-/// for which the check above is not vacuous.
-function castings_that_differ(seeds: int) -> int throws never {
-    root.bank.facts()
-        .flat_map((fact) -> {
-            baml.iter.Range.new(0, seeds)
-                .filter_map((i) -> {
-                    let seed = root.engine.seed_for(`flow/${fact.name}`, i);
-                    let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
-                        ?? return null;
-                    if (
-                        root.bank.candidate_of(drawn, false).traps
-                            == root.bank.candidate_of(drawn, true).traps
-                    ) {
-                        null
-                    } else {
-                        fact.name
-                    }
-                })
-                .collect()
-        })
-        .length()
-}
-
-test "selection: the two directions a draw could be served in look the same to it" {
-    assert.equal(castings_told_apart(8).join(" "), "");
-    // Not vacuous: plenty of draws fool different models each way, and those
-    // are exactly the ones a direction-aware selection would have sorted.
-    assert.is_true(castings_that_differ(8) > 20);
+test "selection: a casting holds the rules the tracer reads off its case" {
+    assert.equal(served_misread(8).join("\n"), "")
 }

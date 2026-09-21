@@ -609,12 +609,8 @@ function traced(compiles: bool, source: string, names: string[]) -> root.engine.
 
 /// A candidate whose item has a second program to offer.
 function paired(compiles: bool) -> root.engine.Candidate throws never {
-    root.engine.Candidate {
-        case: traced(compiles, "one", ["axiom", "one-way"]),
-        features: {},
-        traps: ["spelling"],
-        lures: ["spelling"],
-    }
+    let served = root.engine.Casting { rules: ["axiom", "one-way"], traps: ["spelling"], features: {} };
+    root.engine.Candidate.new(traced(compiles, "one", ["axiom", "one-way"]), served, [served])
 }
 
 /// The foil that answers the other way.

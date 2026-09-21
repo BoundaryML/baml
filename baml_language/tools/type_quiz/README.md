@@ -56,9 +56,8 @@ shown both and asked which one compiles can read nothing off their surface.
 An equivalence or an unrelated pair reads the same in both directions and so
 has no foil, and neither does anything at the coherence site, where the
 reverse draw is the same two blocks the other way up. Twenty-two of the
-bank's fifty-four served items pair; thirty answer both ways across their
-seeds, eleven always compile and thirteen never do — and an item that
-answers one way is no longer a shape that does, which is the next section.
+bank's forty served items pair, and every one of the forty answers both
+ways across its seeds, which the next section is about.
 
 ## What a case's surface may not say
 
@@ -84,6 +83,15 @@ near miss cites the rule that decides it — most often that subtyping is a
 subset relation and neither side is a subset of the other — and not the rule
 it resembles: the explanation says why the compiler answered, and what the
 case resembled is the learner's to notice.
+
+A fact and its near miss are one item, a *shape*: each draw of it is one or
+the other, on a coin. Two separate items would each answer one way, and
+nothing that re-weights items could then be trusted to leave the kinds of
+question balanced — selection re-weights them on every step, for good
+reasons of its own. As one item, the balance is the item's, and every one
+of the forty the bank serves answers both ways. The invariant wrappers are
+shapes too: `Box<S>` against `Box<T>` over a strict pair, which is always
+rejected, beside the same over an equivalent pair, which always compiles.
 
 The suite holds the bank to it (`ns_conformance/tells.baml`). Over 128 seeds
 of every fact, no feature of a case's surface — a construct, a declaration, a
@@ -158,32 +166,35 @@ rate instead (`aim`): the rate at which people are said to learn best, as
 against what measuring them asks for. `exposure` penalises an item each time
 it has already been served, so a rule may come round as often as the estimate
 wants it while the same template does not. Both are measured in the suite: a
-perfect learner's questions get deeper over a sitting, no item comes round
-more than three times in sixty-odd questions, and certifying one costs 60 to
-68 questions where it had cost 79 and failed one sitting in two.
+perfect learner's questions do not get shallower over a sitting, no item
+comes round more than six times in ninety-odd questions, and certifying one
+costs 64 to 133 questions, for the reason below.
 
-Selection cannot see which way a pair is served. The naive models are
-lopsided — one that accepts too much is wrong only about rejected cases, one
-that accepts too little only about compiling ones — and what a case traps
-reaches selection three ways: the bank's score, the information (a trap makes
-a case harder), and the bonus for a suspected model. Reading the traps of the
-case itself, it served whichever direction fooled somebody, and sittings asked
-about function types that were rejected ten times in eleven from a bank that
-rejects them half the time. So a candidate carries two lists: `traps`, who
-THIS case fools, which is what an answer is evidence about; and `lures`, who
-either direction of the same draw would fool, which is all selection reads.
-The direction is then the seed's coin and nothing else, and the suite holds
-the two directions of every draw to looking identical to it.
+Selection cannot see which way a draw's coins fell. Two coins decide the
+answer — which way a pair flows, and which fact of a shape a draw is — and
+both would be read by a selection that read the case: the naive models are
+lopsided, so it served whichever direction fooled one of them (sittings
+asked about function types that were rejected ten times in eleven), and the
+tracer wants evidence per rule while an equivalence's rule is only ever
+evidenced by a case that compiles, so it served the equivalences (unions
+accepted seven times in ten). Both from a bank in which every kind of
+question answers both ways. So a candidate carries its *castings*: every
+way its draw could have been served, each with the rules the tracer would
+read off it, the models it would fool and the numbers the sampler scores it
+by. Selection reads those and nothing else, and scores the draw as the
+lottery it is: its expected information, and the mean of every other term;
+the bank's score is the mean over castings, and a draw is dropped when any
+casting is past a hard cap. What an answer is evidence about is still the
+case that was served. The suite holds every draw, under every way its coins
+could fall, to scoring the same to the last digit, and every casting to
+holding exactly the rules the tracer reads off its case.
 
-What is NOT mended is recorded in the suite against its bar
-(`sitting: what the questions a learner is asked still give away`): selection
-serves what the tracer wants evidence about, which is rules, and a rule that
-concludes an equivalence can only be evidenced by cases that compile. There
-are a dozen of those to the one rule that decides every near miss, so a
-sitting asks for the equivalences about twice as often as the near misses
-beside them, and a union is still accepted seven times in ten. The bank is
-balanced and the served questions are not yet, for a reason selection cannot
-settle: it is a question of what a near miss is evidence OF.
+That costs questions, and it is why the default budget is 140. An
+equivalence's rule is evidenced only on the half of its item's draws that
+are the equivalence, so a learner who answers everything right needs 64 to
+133 questions to be certified where they had needed 60 to 68 — the price of
+the kind of question saying nothing about its answer, over the questions a
+learner is actually asked as well as over the bank.
 
 ## Interestingness
 

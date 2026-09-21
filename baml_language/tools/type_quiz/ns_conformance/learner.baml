@@ -359,7 +359,7 @@ function repetition_report() -> string throws never {
 test "learner: the same item comes round again and again" {
     assert.equal(
         repetition_report(),
-        `steps=61 distinct=43 top=["return_covariant=3", "class_arg_invariant=3", "double_contravariance=3", "map_value_invariant=2", "array_of_unknown=2"]`,
+        `steps=95 distinct=38 top=["carried_2=6", "param_contravariant=5", "double_contravariance=5", "two_leaves=4", "enum_as_variants=4"]`,
     )
 }
 
@@ -380,14 +380,14 @@ function mean_of(values: int[]) -> int throws never {
 test "learner: a learner of the axioms is not marched into depth" {
     assert.equal(
         beginner_escalation_report(),
-        `steps=80 depth_first20=120 depth_last20=140 spread=["1:61", "2:14", "3:4", "4:1", "5:0"] chance_last20=6350`,
+        `steps=128 depth_first20=135 depth_last20=160 spread=["1:93", "2:26", "3:7", "4:1", "5:1"] chance_last20=6075`,
     )
 }
 
 test "learner: the questions stop getting harder once the bank runs out of depth" {
     assert.equal(
         escalation_report(),
-        `steps=61 depth_first20=120 depth_last20=160 spread=["1:43", "2:11", "3:4", "4:1", "5:2"] chance_last20=8595`,
+        `steps=95 depth_first20=145 depth_last20=150 spread=["1:61", "2:17", "3:11", "4:3", "5:3"] chance_last20=8595`,
     )
 }
 
@@ -457,7 +457,7 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: certifying a perfect learner costs 60 to 68 questions, and once in twelve does not finish" {
+test "learner: certifying a perfect learner costs 64 to 133 questions, and once in twelve does not finish" {
     // The one that does not finish is the measurement, not a fluke to be tuned
     // away: at this budget a learner who answers everything right is still
     // sometimes left uncertified, and three models that sat the quiz said
@@ -466,7 +466,7 @@ test "learner: certifying a perfect learner costs 60 to 68 questions, and once i
     // would be fixed.
     assert.equal(
         expert_report(),
-        `certified=11 of 12 steps=["Mastered:66", "Mastered:68", "Mastered:61", "Budget:80", "Mastered:66", "Mastered:67", "Mastered:66", "Mastered:62", "Mastered:62", "Mastered:60", "Mastered:66", "Mastered:66"] withheld=0.0 suspected=none`,
+        `certified=11 of 12 steps=["Mastered:130", "Mastered:111", "Mastered:95", "Mastered:89", "Mastered:91", "Budget:140", "Mastered:64", "Mastered:81", "Mastered:112", "Mastered:125", "Mastered:87", "Mastered:133"] withheld=0.0 suspected=none`,
     )
 }
 
@@ -478,10 +478,10 @@ test "learner: a learner who never commits is never certified" {
     assert.equal(silent_report(), "why=Stalled mastered=0 committed=0 commits_unsure=2")
 }
 
-test "learner: strict coverage costs more questions than an overall picture" {
+test "learner: strict coverage costs no fewer questions than an overall picture" {
     assert.equal(
         coverage_report(),
-        "loose_first=true loose_done=Mastered loose_steps=61 strict_done=Mastered strict_steps=62 uncertified=0 rules=31",
+        "loose_first=true loose_done=Mastered loose_steps=95 strict_done=Mastered strict_steps=95 uncertified=0 rules=31",
     )
 }
 
@@ -499,14 +499,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Budget commits_unsure=93 leading=shape=17,typescript=10,spelling=2,covariant=2,structural=0,bounds=0",
+        "suspected=none why=Stalled commits_unsure=96 leading=shape=15,spelling=14,covariant=12,bounds=10,typescript=10,structural=0",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=67,covariant=28,bounds=22,structural=-6,shape=-17,spelling=-21 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=57,covariant=16,bounds=0,structural=0,shape=-14,spelling=-25 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -784,26 +784,21 @@ function orders_report() -> string throws never {
 test "orders: every servable rule has one, and only the carrying variance rules reach four or more" {
     assert.equal(
         orders_report(),
-        `rules=31 of 32 by_order=[26, 2, 0, 0, 3] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
+        `rules=31 of 32 by_order=[26, 2, 0, 1, 2] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
     )
 }
 
 // ─── what a sitting's questions give away ────────────────────────────────────
 //
 // The bank is held to saying nothing with its surface (the tells suite), and
-// selection can still undo that, because it prefers some cases to others. It
-// did so twice over. It could see which direction of a draw fooled a naive
-// model and served that one — function types rejected ten times in eleven,
-// from a bank that rejects them half the time — which is mended, and held
-// mended, by its reading what either direction would fool
-// (`Candidate.lures`). And it serves what the tracer wants evidence about,
-// which is RULES: a rule that concludes an equivalence has only compiling
-// cases to be evidenced by, there are a dozen of them to one rule that
-// decides every near miss, and so a sitting asks for many more equivalences
-// than near misses though the bank holds as many of each. That one is NOT
-// mended. It is recorded here, with the bar it misses, until it is: a rule
-// would have to be evidenced by both answers, which is a question about what
-// a near miss is evidence OF, and not one selection can settle.
+// selection could still undo that, because it prefers some cases to others.
+// It did so twice over until it was kept from seeing the coins that decide a
+// case's answer: it served whichever direction of a draw fooled a naive
+// model — function types rejected ten times in eleven — and whichever fact
+// of a shape held the rule the tracer wanted evidence on, which for an
+// equivalence is always a case that compiles — unions accepted seven times
+// in ten. It reads a draw's castings now (`root.engine.Candidate`), and this
+// holds the questions a learner is actually asked to the bar.
 
 /// The question put at `t`, as its surface and its answer, when it asked for
 /// a verdict. The surface here is the words in the source: a served question
@@ -866,9 +861,8 @@ function served_leaning_report() -> string throws never {
             opening(sitting.learner, session, 24)
         })
     });
-    // Pass `true` to see which items carry each lean and how often each was
-    // asked: that is where it shows that the equivalences are served twice
-    // as often as the near misses beside them.
+    // Pass `true` to see which items carry a lean and how often each was
+    // asked, which is where a lean says what it is made of.
     leaning_of(asked, 40, 15, false)
 }
 
@@ -878,10 +872,6 @@ class Sitting {
     sessions: int[],
 }
 
-test "sitting: what the questions a learner is asked still give away, against a bar of fifteen points" {
-    // The bar is `leaning=[]`. What is listed is what is left: see above.
-    assert.equal(
-        served_leaning_report(),
-        `compiles=52% of 225 leaning=["text:interface 23% of 48", "text:| 70% of 122"]`,
-    )
+test "sitting: nothing in the questions a learner is asked leans more than fifteen points" {
+    assert.equal(served_leaning_report(), `compiles=44% of 236 leaning=[]`)
 }

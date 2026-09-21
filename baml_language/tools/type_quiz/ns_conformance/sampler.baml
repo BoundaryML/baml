@@ -113,21 +113,25 @@ function streams_are_distinct() -> bool throws never {
         == states.length()
 }
 
+/// A casting with nothing in it.
+function nothing() -> root.engine.Casting throws never {
+    root.engine.Casting { rules: [], traps: [], features: {} }
+}
+
 /// A candidate with nothing but a score, for the picker.
 function scored(score: float) -> root.engine.Scored throws never {
     root.engine.Scored {
         item: "synthetic",
         seed: root.engine.seed_from(0),
-        candidate: root.engine.Candidate {
-            case: root.engine.Case {
+        candidate: root.engine.Candidate.new(
+            root.engine.Case {
                 files: root.engine.one_file("case.baml", ""),
                 key: root.engine.Compiles { tests: [] },
                 trace: [],
             },
-            features: {},
-            traps: [],
-            lures: [],
-        },
+            nothing(),
+            [nothing()],
+        ),
         score,
     }
 }
@@ -353,7 +357,7 @@ function dead_overrides() -> string[] throws never {
     root.bank.models().flat_map((model) -> {
         override_keys(model).filter_map((key) -> {
             let live = candidates.some((c) -> {
-                c.traps.includes(model.id)
+                c.served.traps.includes(model.id)
                     && c.case.trace.some((claim) -> {
                         claim.rule.name == key
                     })
@@ -393,7 +397,7 @@ function two_sided_models() -> string[] throws never {
     root.bank.models().filter_map((model) -> {
         let share = compiling_share(
             candidates.filter((c) -> {
-                c.traps.includes(model.id)
+                c.served.traps.includes(model.id)
             }),
         );
         if (share.hits > 0 && share.hits < share.total) {
@@ -462,13 +466,13 @@ function check(label: string, share: Share, low: float, high: float) -> string? 
 }
 
 function size_of(c: root.engine.Candidate) -> float throws never {
-    c.features.get("size") ?? 0.0
+    c.served.features.get("size") ?? 0.0
 }
 
 function balance_report() -> string[] throws never {
     let cases = served_candidates();
     let traps = cases.filter((c) -> {
-        c.traps.length() > 0
+        c.served.traps.length() > 0
     });
     let sizes = cases
         .map((c) -> {
@@ -590,7 +594,7 @@ function boring_share() -> float throws never {
     }
     let boring = cases
         .filter((c) -> {
-            (c.features.get("boring") ?? 0.0) > 0.5
+            (c.served.features.get("boring") ?? 0.0) > 0.5
         })
         .length();
     boring * 1.0 / (cases.length() * 1.0)

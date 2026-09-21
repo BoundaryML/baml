@@ -165,8 +165,8 @@ function draw_flow(
     }
 }
 
-/// One direction of a fact at a site: the program it renders, what the
-/// compiler must say about it, and why.
+/// One direction of a drawn pair at its site, before anything is rendered:
+/// which type meets which slot, where, and what the compiler must say.
 ///
 /// The site travels with it. What a site does with a relation is the site's
 /// own question — a flow site accepts what flows into it, and the coherence
@@ -174,11 +174,23 @@ function draw_flow(
 /// a belief about these types would predict has to ask that question, and
 /// cannot ask it without the site. Carrying it here is what stops a reader
 /// of this value reaching for the flow-site answer at a site that inverts it.
-class Flowed {
+class Cast {
     flow: Oriented,
     site: root.algebra.SiteKind,
-    case: root.engine.Case,
     compiles: bool,
+}
+
+/// `drawn`'s pair flowing one way at its site.
+function cast_of(drawn: Drawn, reversed: bool) -> Cast throws never {
+    let flow = orient(drawn.d, drawn.relation, reversed);
+    Cast { flow, site: drawn.site, compiles: root.algebra.compiles_when(drawn.site, flow.relation) }
+}
+
+/// One direction of a fact at a site as a program: the cast, and the case
+/// that renders it.
+class Flowed {
+    cast: Cast,
+    case: root.engine.Case,
 }
 
 /// Whether a fact drawn at this site renders two programs that answer
@@ -194,105 +206,221 @@ function pairs(site: root.algebra.SiteKind, relation: root.algebra.Relation) -> 
             != root.algebra.compiles_when(site, root.algebra.mirror(relation))
 }
 
+/// The explanation of `cast`: its derivation's `claims`, then what the site
+/// makes of the pair.
+function trace_of(claims: root.engine.Claim[], cast: Cast) -> root.engine.Claim[] throws never {
+    claims.concat([site_claim(cast.site, cast.flow, cast.compiles)])
+}
+
 /// The pair of `drawn` flowing one way at its site, as a case.
 function flowed(drawn: Drawn, reversed: bool) -> Flowed throws never {
-    let flow = orient(drawn.d, drawn.relation, reversed);
-    let probe = root.algebra.probe(drawn.site, flow.source, flow.target, drawn.names);
-    let compiles = root.algebra.compiles_when(drawn.site, flow.relation);
+    let cast = cast_of(drawn, reversed);
+    let probe = root.algebra.probe(cast.site, cast.flow.source, cast.flow.target, drawn.names);
     let file = "case.baml";
-    let key: root.engine.Verdict = if (compiles) {
+    let key: root.engine.Verdict = if (cast.compiles) {
         root.engine.Compiles { tests: [] }
     } else {
         root.engine.Rejected {
-            code: rejection_code(drawn.site),
+            code: rejection_code(cast.site),
             more: [],
             at: root.engine.Region { file, start: probe.start, end: probe.end },
         }
     };
-    let trace = root.algebra.claims(drawn.d).concat([site_claim(drawn.site, flow, compiles)]);
     Flowed {
-        flow,
-        site: drawn.site,
-        case: root.engine.Case { files: root.engine.one_file(file, probe.source), key, trace },
-        compiles,
+        cast,
+        case: root.engine.Case {
+            files: root.engine.one_file(file, probe.source),
+            key,
+            trace: trace_of(root.algebra.claims(drawn.d), cast),
+        },
     }
 }
 
-/// What a model's beliefs predict the compiler will say about `one`.
-///
-/// The model's belief about the pair, read at the site the case stands at.
-/// Null when the model's overrides leave the pair undecided, which is not a
+/// What one naive model believes of a pair: `null` when its overrides leave
+/// the pair undecided.
+class Belief {
+    model: string,
+    relation: root.algebra.Relation?,
+}
+
+/// What every naive model believes of `d`'s pair. A belief does not depend
+/// on which way the pair then flows, so it is replayed once and read both
+/// ways.
+function beliefs(d: root.algebra.Derivation) -> Belief[] throws never {
+    models().map((model) -> {
+        Belief { model: model.id, relation: root.algebra.decided(root.algebra.under(d, model)) }
+    })
+}
+
+/// What `belief` predicts the compiler will say about `cast`, read at the
+/// site the cast stands at. Null for an undecided belief, which is not a
 /// prediction and so cannot be wrong.
-function predicted(
-    d: root.algebra.Derivation,
-    one: Flowed,
-    model: root.algebra.Model,
-) -> bool? throws never {
-    let believed = root.algebra.decided(root.algebra.under(d, model))
+function predicted(belief: Belief, cast: Cast) -> bool? throws never {
+    let believed = belief.relation
         ?? return null;
-    root.algebra.compiles_when(one.site, in_direction(believed, one.flow))
+    root.algebra.compiles_when(cast.site, in_direction(believed, cast.flow))
 }
 
-/// The naive models that read one program's verdict the other way.
-function flow_traps(d: root.algebra.Derivation, one: Flowed) -> string[] throws never {
-    models().filter_map((model) -> {
-        let says = predicted(d, one, model)
+/// The naive models, of those that hold `believed`, that read `cast`'s
+/// verdict the other way.
+function traps_of(believed: Belief[], cast: Cast) -> string[] throws never {
+    believed.filter_map((belief) -> {
+        let says = predicted(belief, cast)
             ?? return null;
-        if (says != one.compiles) {
-            model.id
+        if (says != cast.compiles) {
+            belief.model
         } else {
             null
         }
     })
 }
 
-/// The naive models that either direction of `drawn` would fool.
-///
-/// A model's belief about the pair does not depend on which way it flows, so
-/// it is replayed once and read both ways; nothing is rendered.
-function pair_lures(drawn: Drawn) -> string[] throws never {
-    let castings = [orient(drawn.d, drawn.relation, false), orient(drawn.d, drawn.relation, true)];
-    models().filter_map((model) -> {
-        let believed = root.algebra.decided(root.algebra.under(drawn.d, model))
-            ?? return null;
-        let fooled = castings.some((flow) -> {
-            root.algebra.compiles_when(drawn.site, in_direction(believed, flow))
-                != root.algebra.compiles_when(drawn.site, flow.relation)
-        });
-        if (fooled) {
-            model.id
-        } else {
-            null
-        }
+/// The naive models that read `cast`'s verdict the other way.
+function flow_traps(d: root.algebra.Derivation, cast: Cast) -> string[] throws never {
+    traps_of(beliefs(d), cast)
+}
+
+/// The rules the tracer reads a question by: `names` without the rule its
+/// site contributed, which frames every question and is the subject of
+/// none. The one reading of a question's rules, whether the question is a
+/// case, a choice, or a casting that was never rendered.
+function without_site_rules(names: string[]) -> string[] throws never {
+    names.filter((name) -> {
+        !is_site_rule(name)
     })
 }
 
-/// `drawn` flowing one way, as a candidate. Its features are the pair's and
-/// its traps the case's, so the two directions differ in nothing a sampler
-/// scores by.
-function candidate_of(drawn: Drawn, reversed: bool) -> root.engine.Candidate throws never {
-    let chosen = flowed(drawn, reversed);
-    let lures = pair_lures(drawn);
-    root.engine.Candidate {
-        case: chosen.case,
-        features: features_of(
-            chosen.case.trace,
-            root.algebra.flips(drawn.d),
-            [chosen.flow.source, chosen.flow.target],
-            lures,
-        ),
-        traps: flow_traps(drawn.d, chosen),
-        lures,
+/// A casting from what explains it, so that what selection reads of a
+/// casting is what the tracer would read of the case: the rules its answer
+/// would be evidence about, the models it would fool, and the numbers the
+/// sampler scores it by.
+function casting(
+    trace: root.engine.Claim[],
+    flips: int,
+    tys: root.algebra.Ty[],
+    traps: string[],
+) -> root.engine.Casting throws never {
+    root.engine.Casting {
+        rules: without_site_rules(root.engine.bearing_rules(trace)),
+        traps,
+        features: features_of(trace, flips, tys, traps),
     }
+}
+
+/// `cast` as selection sees it, given its derivation's `claims` and what is
+/// `believed` of its pair: nothing is rendered.
+function casting_of(
+    drawn: Drawn,
+    claims: root.engine.Claim[],
+    believed: Belief[],
+    cast: Cast,
+) -> root.engine.Casting throws never {
+    let traps = traps_of(believed, cast);
+    casting(
+        trace_of(claims, cast),
+        root.algebra.flips(drawn.d),
+        [cast.flow.source, cast.flow.target],
+        traps,
+    )
+}
+
+/// A member of a draw with what every casting of it reads: its derivation's
+/// claims and what the models believe of its pair. Worked out once a member,
+/// since both are the same whichever way the pair flows.
+class Replayed {
+    drawn: Drawn,
+    claims: root.engine.Claim[],
+    believed: Belief[],
+}
+
+function replayed(drawn: Drawn) -> Replayed throws never {
+    Replayed { drawn, claims: root.algebra.claims(drawn.d), believed: beliefs(drawn.d) }
+}
+
+/// `replay`'s pair flowing the way `reversed` says, as selection sees it.
+function cast_in(replay: Replayed, reversed: bool) -> root.engine.Casting throws never {
+    casting_of(replay.drawn, replay.claims, replay.believed, cast_of(replay.drawn, reversed))
+}
+
+/// Member `chosen` of `all`, served in the direction `reversed`: the case
+/// rendered, and every casting of every member — both directions of each —
+/// worked out without rendering anything else.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if `all` has no member `chosen`.
+function candidate_of(
+    all: Drawn[],
+    chosen: int,
+    reversed: bool,
+) -> root.engine.Candidate throws never {
+    let replays = all.map((drawn) -> {
+        replayed(drawn)
+    });
+    let own = replays.at(chosen)
+        ?? throw baml.panics.Unreachable { message: `no member ${chosen} of a draw of ${all.length()}` };
+    root.engine.Candidate.new(
+        flowed(own.drawn, reversed).case,
+        cast_in(own, reversed),
+        replays.flat_map((replay) -> {
+            [false, true].map((direction) -> {
+                cast_in(replay, direction)
+            })
+        }),
+    )
+}
+
+/// What a seed makes of a shape: every member drawn at it, and which of them
+/// it serves.
+class Dealt {
+    all: Drawn[],
+    chosen: int,
+
+    /// The member served.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.Unreachable` if `chosen` is no member of `all`, which
+    ///   `deal` never builds.
+    function served(self) -> Drawn throws never {
+        self.all.at(self.chosen)
+            ?? throw baml.panics.Unreachable { message: `no member ${self.chosen} of a draw of ${self.all.length()}` }
+    }
+}
+
+/// `shape` dealt at `seed`: each member drawn from a stream of its own, and
+/// which of them is served decided by a coin that nothing drawn can see.
+///
+/// `null` unless every member draws. A draw missing a member would show
+/// selection a lottery of the members that remained, which may all answer
+/// one way — the very thing a shape exists to hide.
+function deal(
+    shape: Shape,
+    sites: root.algebra.SiteKind[],
+    seed: root.engine.Seed,
+) -> Dealt? throws never {
+    let members = shape.members();
+    let coins = root.engine.split(seed);
+    let seeds = root.engine.streams(coins.right, members.length());
+    let all = baml.iter.Range.new(0, members.length())
+        .filter_map((i) -> {
+            draw_flow(members[i], sites, seeds[i])
+        })
+        .collect();
+    if (all.length() != members.length()) {
+        return null;
+    }
+    let pick = root.engine.below(coins.left, all.length());
+    Dealt { all, chosen: pick.value }
 }
 
 /// What differs between the two directions of one fact, in the learner's
 /// terms. It says which two types swap places and not which way round the
 /// compiler wants them: that is the question.
-function flow_difference(site: root.algebra.SiteKind, one: Flowed) -> string throws never {
-    let a = `\`${root.algebra.render(one.flow.source)}\``;
-    let b = `\`${root.algebra.render(one.flow.target)}\``;
-    `the same program twice with the two types swapped: at ${root.algebra.site_phrase(site)}, one of them lets a value of type ${a} meet a slot of type ${b}, and the other a value of type ${b} meet a slot of type ${a}`
+function flow_difference(cast: Cast) -> string throws never {
+    let a = `\`${root.algebra.render(cast.flow.source)}\``;
+    let b = `\`${root.algebra.render(cast.flow.target)}\``;
+    `the same program twice with the two types swapped: at ${root.algebra.site_phrase(cast.site)}, one of them lets a value of type ${a} meet a slot of type ${b}, and the other a value of type ${b} meet a slot of type ${a}`
 }
 
 /// The naive models that would pick the wrong one of two directions.
@@ -301,37 +429,35 @@ function flow_difference(site: root.algebra.SiteKind, one: Flowed) -> string thr
 /// let both flow, or neither, it has no pick to be wrong about: a choice
 /// does not trap a model that a single program does, and crediting it would
 /// hold a learner's answer against a belief that could not have produced it.
-function choice_traps(
-    d: root.algebra.Derivation,
-    one: Flowed,
-    other: Flowed,
-) -> string[] throws never {
-    models().filter_map((model) -> {
-        let says_one = predicted(d, one, model)
+function choice_traps(believed: Belief[], one: Cast, other: Cast) -> string[] throws never {
+    believed.filter_map((belief) -> {
+        let says_one = predicted(belief, one)
             ?? return null;
-        let says_other = predicted(d, other, model)
+        let says_other = predicted(belief, other)
             ?? return null;
         if (says_one == says_other || says_one == one.compiles) {
             null
         } else {
-            model.id
+            belief.model
         }
     })
 }
 
-/// A fact exercised at a flow site. Half the seeds flow the pair forwards
-/// and half backwards, so a strict-subtype fact yields a compiling case as
-/// often as a rejected one and the shape never gives the verdict away. The
+/// A shape exercised at a flow site. A coin chooses which of its facts a
+/// draw is, and another which way that fact's pair flows: half the seeds
+/// forwards and half backwards, so a strict fact yields a compiling case as
+/// often as a rejected one, and a fact that answers one way in either
+/// direction stands in its shape beside one that answers the other. The
 /// direction is part of the explanation: the flow claim names which type
 /// meets which slot.
 class FlowItem {
-    fact: Fact,
+    shape: Shape,
     status: root.engine.Status,
     sites: root.algebra.SiteKind[],
 
     implements root.engine.Item {
         function id(self) -> string throws never {
-            `flow/${self.fact.name}`
+            `flow/${self.shape.name}`
         }
 
         function status(self) -> root.engine.Status throws never {
@@ -339,14 +465,15 @@ class FlowItem {
         }
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
-            let drawn = draw_flow(self.fact, self.sites, seed)
+            let dealt = deal(self.shape, self.sites, seed)
                 ?? return null;
-            candidate_of(drawn, drawn.reversed)
+            candidate_of(dealt.all, dealt.chosen, dealt.served().reversed)
         }
 
         function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
-            let drawn = draw_flow(self.fact, self.sites, seed)
+            let dealt = deal(self.shape, self.sites, seed)
                 ?? return null;
+            let drawn = dealt.served();
             // Exactly one direction of a strict relation compiles, so a
             // strict fact, and only a strict fact, has a second program to
             // offer. That the two do answer differently is held to by the
@@ -358,8 +485,8 @@ class FlowItem {
             let other = flowed(drawn, !drawn.reversed);
             root.engine.Foil {
                 case: other.case,
-                difference: flow_difference(drawn.site, chosen),
-                traps: choice_traps(drawn.d, chosen, other),
+                difference: flow_difference(chosen.cast),
+                traps: choice_traps(beliefs(drawn.d), chosen.cast, other.cast),
             }
         }
     }
@@ -419,8 +546,11 @@ class UnguardedCycleItem {
                     bearing: true,
                 },
             ];
-            root.engine.Candidate {
-                case: root.engine.Case {
+            // A cycle has no direction and no counterpart, so the one way it
+            // can be served is the only casting there is.
+            let only = casting(trace, 0, [ty], []);
+            root.engine.Candidate.new(
+                root.engine.Case {
                     files: root.engine.one_file(file, source),
                     key: root.engine.Rejected {
                         code: "E0068",
@@ -429,10 +559,9 @@ class UnguardedCycleItem {
                     },
                     trace,
                 },
-                features: features_of(trace, 0, [ty], []),
-                traps: [],
-                lures: [],
-            }
+                only,
+                [only],
+            )
         }
 
         /// A cycle has no neighbouring program that compiles: what would
@@ -477,7 +606,7 @@ class NestedUnionLetItem {
                 site: root.algebra.SiteKind.Let,
                 names: site_names(streams.right, none),
             };
-            candidate_of(drawn, true)
+            candidate_of([drawn], 0, true)
         }
 
         /// The other direction is rejected by the spec and the compiler

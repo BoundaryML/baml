@@ -131,24 +131,57 @@ function one_file(name: string, source: string) -> map<string, string> throws ne
     files
 }
 
-/// A case together with the numbers the sampler scores it by.
+/// One way a draw could be served, as selection sees it: the rules an answer
+/// to it would be evidence about, the naive models it would fool, and the
+/// numbers the sampler scores it by. The bank defines the feature names.
+class Casting {
+    rules: string[],
+    traps: string[],
+    features: map<string, float>,
+}
+
+/// A case, and every way the draw it came from could have been served.
+///
+/// A draw has hidden coins — which way its pair flows, and for an item of
+/// several facts which of them it is — and they decide the answer.
+/// Selection reads `castings` and nothing else about the draw, so what it
+/// prefers is the same whichever way the coins fell. Were it to read the
+/// case itself it would serve whichever casting a naive model gets wrong, or
+/// whichever holds the rule the tracer wants evidence on, and the kind of
+/// question would give its answer away: sittings asked about function types
+/// rejected ten times in eleven, and about unions that compiled seven in
+/// ten, from a bank in which each answers both ways.
+///
+/// What an answer IS evidence about is `served`: this case's own rules and
+/// traps.
 class Candidate {
     case: Case,
-    /// Feature values keyed by feature name. The bank defines both.
-    features: map<string, float>,
-    /// Ids of naive models whose prediction differs from `case.key`: who
-    /// THIS case fools, which is what an answer to it is evidence about.
-    traps: string[],
-    /// Ids of naive models that some casting of the same draw would fool:
-    /// this case, or the one the seed's coin could equally have made of it —
-    /// the same pair flowing the other way. Selection reads these and never
-    /// `traps`. A model that accepts too much is wrong only about rejected
-    /// cases and one that accepts too little only about compiling ones, so a
-    /// selection that could see which casting fools somebody would serve
-    /// that one, and the kind of question would give its answer away:
-    /// function types rejected, unions accepted. Reading what either
-    /// casting would do leaves the coin a coin.
-    lures: string[],
+    /// How `case` itself looks. Always one of `castings`.
+    served: Casting,
+    /// Every way the draw could have been served, `served` among them, in an
+    /// order the draw fixes and its coins do not.
+    castings: Casting[],
+
+    /// `case`, served as `served`, from a draw that could have been served
+    /// as any of `castings`.
+    ///
+    /// # Panics
+    ///
+    /// - `baml.panics.Unreachable` if `served` is not among `castings`: a
+    ///   case is always one of the ways its own draw could be served, and
+    ///   selection, reading only `castings`, would be scoring a draw that
+    ///   did not include what it serves.
+    function new(case: Case, served: Casting, castings: Casting[]) -> Candidate throws never {
+        // `==`, not `includes`: `includes` compares class instances by
+        // reference, and `served` is worked out apart from the list.
+        let among = castings.some((casting) -> {
+            casting == served
+        });
+        if (!among) {
+            throw baml.panics.Unreachable { message: "a candidate served as something its draw could not be" }
+        }
+        Candidate { case, served, castings }
+    }
 }
 
 /// A case's opposite: the same program with the one thing that decides its
@@ -241,11 +274,19 @@ function cases_of(posed: Posed) -> Case[] throws never {
 /// reasoning they never had to do. This is what keeps a case from looking
 /// deeper than it is.
 function rules_of(posed: Posed) -> string[] throws never {
-    shared_claims(
-        cases_of(posed).map((case) -> {
-            case.trace
-        }),
+    bearing_rules(
+        shared_claims(
+            cases_of(posed).map((case) -> {
+                case.trace
+            }),
+        ),
     )
+}
+
+/// The rules of `trace` that its answer turns on, in order. What `rules_of`
+/// reads a question by, for a trace that has not been made into a program.
+function bearing_rules(trace: Claim[]) -> string[] throws never {
+    trace
         .filter((claim) -> {
             claim.bearing
         })

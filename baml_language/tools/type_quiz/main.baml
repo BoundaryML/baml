@@ -316,9 +316,7 @@ function candidate_of(item: string, seed: bigint) -> root.engine.Candidate? thro
 /// The rules a posed question holds as the tracer reads them: its trace,
 /// inner rule first, without the rule the site itself contributed.
 function tracer_rules(posed: root.engine.Posed) -> string[] throws never {
-    root.engine.rules_of(posed).filter((name) -> {
-        !root.bank.is_site_rule(name)
-    })
+    root.bank.without_site_rules(root.engine.rules_of(posed))
 }
 
 /// The next case to put to a learner, and the rule to teach before it when
@@ -342,19 +340,16 @@ function next_prompt(
     let verified = bank_items().filter((item) -> {
         item.status() is root.engine.Verified
     });
-    let reads = root.engine
-        .batch(verified, streams.left, root.bank.default_weights(), root.bank.default_budget())
-        .map((scored) -> {
-            root.engine.Read { scored, rules: tracer_rules(scored.candidate.case) }
-        });
-    let chosen = root.engine.choose(profile, knobs, reads, streams.right)
+    let drawn = root.engine.batch(
+        verified,
+        streams.left,
+        root.bank.default_weights(),
+        root.bank.default_budget(),
+    );
+    let chosen = root.engine.choose(profile, knobs, drawn, streams.right)
         ?? return null;
-    let put = put_at(knobs, chosen.scored.item, chosen.scored.seed.state * 1n);
-    let question = root.engine.Question {
-        item: chosen.scored.item,
-        seed: chosen.scored.seed.state,
-        posed: put.posed,
-    };
+    let put = put_at(knobs, chosen.item, chosen.seed.state * 1n);
+    let question = root.engine.Question { item: chosen.item, seed: chosen.seed.state, posed: put.posed };
     // The stuck rule is taught only before a case that turns on it: the
     // selection leans toward such a case but does not insist, and the spec's
     // words on one rule shown before a case about another would mislead.
