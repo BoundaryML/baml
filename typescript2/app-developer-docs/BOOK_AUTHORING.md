@@ -137,8 +137,8 @@ add `<chapter>/<new-perspective>.mdx` wherever that perspective is useful.
 
 ### Keep experienced-reader perspectives brief
 
-Write perspectives for what the reader already knows. Use `PerspectiveNote` at the
-concept or example level; don't group the whole chapter into three buckets:
+Write perspectives for what the reader already knows. Classify individual
+concepts; don't group the whole chapter into three buckets:
 
 - `kind="same"`: a narrowly stated behavior that transfers unchanged. The summary
   stays visible; the explanation and example are collapsed by default.
@@ -148,9 +148,27 @@ concept or example level; don't group the whole chapter into three buckets:
 
 The reading-perspective selector automatically shows a shared key whenever the
 reader selects a non-basics perspective. Don't add a key to chapter content.
-Added is green, removed is rose, modified is amber, and same is muted. Each note
-uses the matching label and a vertical bar beside its explanation and examples;
-the words and symbols make the distinction without relying on color alone.
+Added is green, removed is rose, modified is amber, and same is muted. The words
+and symbols make the distinction without relying on color alone.
+
+When a section explains one kind of change, wrap its normal Markdown heading and
+content in `PerspectiveSection kind="added|removed|modified"`. The heading must be
+the first child. Its badge appears beside the title, without another label row.
+A matching vertical bar spans the heading, explanation, and examples. The Markdown
+heading still supplies the section anchor and TOC text.
+For sections with several kinds of changes, use `PerspectiveNote` around each
+changed portion; its colored bar identifies the relevant text and examples.
+Use `PerspectiveNote kind="same"` for a collapsed disclosure row without a bar.
+
+```mdx
+<PerspectiveSection kind="added">
+
+## Blocks
+
+Comparison and a short explanation.
+
+</PerspectiveSection>
+```
 
 Anchor differences in an idiom the reader already uses. Show the TypeScript
 IIFE next to the BAML block expression, or the ternary next to the BAML `if`.
@@ -160,6 +178,16 @@ logos, and stack on narrow screens. Use inline pairs or small mapping tables for
 one-token changes. Don't make the reader reconstruct the comparison from prose.
 
 Give each note a short `summary`. These labels describe similarity, not quality.
+Use short topic headings such as "Variables," "Functions," and "Blocks."
+Start each modified or removed concept with one short sentence naming the exact
+change from the reader's language, before the code or table. For example:
+"BAML's `for...in` visits values, like TypeScript's `for...of`." State the rule
+directly; avoid slogans, and don't repeat the same sentence after the example.
+Keep each comparison to one difference and the smallest useful examples, usually
+two to six lines. Match names and values across languages. Put scope notes,
+results, and other local explanations in code comments beside the relevant line.
+Use a sentence for rules the code cannot show; don't repeat what the examples
+already demonstrate. Keep extended explanations in the basics perspective.
 Put exceptions outside collapsed notes. Prefer short canonical snippet regions over
 repeating a complete beginner walkthrough. Avoid restating the same difference in
 an introduction, example explanation, and closing checklist.

@@ -1,14 +1,21 @@
 // docs:start all
 // docs:start client
-client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = env.OPENAI_API_KEY);
+client Fast = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = env.OPENAI_API_KEY
+);
 
 // docs:end client
 
 // docs:start summarize
 function summarize(transcript: string) -> string {
     client: Fast
-    prompt: `${role("system")}Summarize this conversation in one sentence.
-${role("user")}${transcript}`
+    prompt: `
+        ${role("system")}
+        Summarize this conversation in one sentence.
+        ${role("user")}
+        ${transcript}
+    `
 }
 
 // docs:end summarize

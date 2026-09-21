@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, type ReactNode } from 'react';
 
 const treatments = {
   added: {
@@ -24,6 +24,42 @@ const treatments = {
   },
 } as const;
 
+function PerspectiveBadge({ kind }: { kind: keyof typeof treatments }) {
+  return (
+    <span className="perspective-note-badge">
+      <span aria-hidden="true">{treatments[kind].symbol}</span>
+      {treatments[kind].label}
+    </span>
+  );
+}
+
+/** Keep a section's classification beside its normal MDX heading. */
+export function PerspectiveSection({
+  children,
+  kind,
+}: {
+  children: ReactNode;
+  kind: Exclude<keyof typeof treatments, 'same'>;
+}) {
+  const [heading, ...body] = Children.toArray(children);
+  if (!isValidElement<{ children?: ReactNode; className?: string }>(heading))
+    throw new Error('PerspectiveSection must start with an MDX heading');
+  return (
+    <section className="perspective-section" data-kind={kind}>
+      {cloneElement(heading, {
+        children: (
+          <>
+            {heading.props.children}
+            <PerspectiveBadge kind={kind} />
+          </>
+        ),
+        className: `${heading.props.className ?? ''} perspective-section-heading`,
+      })}
+      {body}
+    </section>
+  );
+}
+
 /** A compact key for readers entering a language-specific perspective. */
 export function PerspectiveKey() {
   return (
@@ -38,10 +74,7 @@ export function PerspectiveKey() {
           key={kind}
           title={treatments[kind].description}
         >
-          <span className="perspective-note-badge">
-            <span aria-hidden="true">{treatments[kind].symbol}</span>
-            {treatments[kind].label}
-          </span>
+          <PerspectiveBadge kind={kind} />
           <span className="sr-only">{treatments[kind].description}</span>
         </div>
       ))}
@@ -59,13 +92,9 @@ export function PerspectiveNote({
   kind: keyof typeof treatments;
   summary: string;
 }) {
-  const treatment = treatments[kind];
   const heading = (
     <>
-      <span className="perspective-note-badge">
-        <span aria-hidden="true">{treatment.symbol}</span>
-        {treatment.label}
-      </span>
+      <PerspectiveBadge kind={kind} />
       <span className="perspective-note-summary">{summary}</span>
     </>
   );

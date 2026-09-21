@@ -2,34 +2,45 @@
 title: Common programming concepts
 description: Chapter 3 · Variables, types, functions, and control flow.
 sectionKeys:
-  variables: variables-and-shadowing
-  types: numbers-are-not-all-number
-  strings: strings-and-booleans
-  functions: function-signatures-and-defaults
-  returns: return-values-and-blocks
+  variables: variables
+  types: numbers
+  strings: strings
+  functions: functions
+  returns: blocks
   ai: ai-functions
-  comments: documentation-comments
-  branching: replace-ternaries-with-if
-  loops: for-in-iterates-values
+  comments: comments
+  branching: ternaries
+  loops: loops
 ---
 
-BAML adds block expressions and named arguments. It splits TypeScript's `number` into `int` and `float`, and uses `for...in` to iterate values.
+Run these examples on [Canary](/baml/get-started).
 
-Run the examples on Canary. The token counts are estimates.
+<span id="variables-and-shadowing" />
 
-## Variables and shadowing
+## Variables
 
-<PerspectiveNote kind="same" summary="Local type inference and reassignment">
+<PerspectiveNote kind="same" summary="Type inference, reassignment, and block scope">
 
-`let remaining = 8_000;` infers a numeric type. Reassignment updates the value, not its type. Block-local names stay in their block.
+```typescript
+let remaining = 8_000;
+remaining = remaining - 512;
+```
 
-<BamlProject id="listing-03-01" file="baml_src/main.baml" regions={["all"]} />
+The same code works in BAML. Both languages reject assigning a string to `remaining`.
 
 </PerspectiveNote>
 
-<PerspectiveNote kind="added" summary="A second let can reuse the same name">
+<PerspectiveNote kind="modified" summary="Declarations">
 
-Where you might give each transformation a new name in TypeScript, BAML can reuse one:
+BAML requires an initial value for every `let`.
+
+Use `let`. Canary's `const` currently allows reassignment.
+
+</PerspectiveNote>
+
+<PerspectiveSection kind="added">
+
+### Shadowing
 
 <CodeComparison from="TypeScript">
 <div>
@@ -49,87 +60,159 @@ const length = trimmed.length;
 </div>
 </CodeComparison>
 
-Both end with `27`. BAML creates a new binding at each `let`; TypeScript rejects redeclaring `let` in the same scope.
+Each BAML `let` creates a new binding, which can have a different type.
 
-- Every BAML `let` needs an initializer.
-- Use `let`. Canary accepts `const` too, but it **allows reassignment**; it isn't TypeScript's `const`.
+</PerspectiveSection>
 
-</PerspectiveNote>
+<span id="numbers-are-not-all-number" />
 
-## Numbers are not all number
+<PerspectiveSection kind="modified">
 
-<PerspectiveNote kind="modified" summary="int and float change arithmetic">
+## Numbers
 
-| Expression | TypeScript | BAML |
+BAML splits TypeScript's `number` into `int` for integers and `float` for floating-point values.
+
+| TypeScript | BAML | BAML result |
 | --- | --- | --- |
-| `285 / 100` | `2.85` | `2` (integer division) |
-| `285 / 100.0` | `2.85` | `2.85` (float division) |
-| `2 == 2.0` | `true` | `false` (distinct numeric types) |
-| `2 < 2.5` | `true` | Compile error: types must match |
+| `285 / 100` | `285 / 100` | `2` (integer division) |
+| `285 / 100` | `285 / 100.0` | `2.85` |
+| `2 === 2.0` | `2 == 2.0` | `false` (different types) |
+| `2 < 2.5` | `2 < 2.5` | Compile error: types must match |
+| `2 ** 10` | `2.pow(10)` | `1024` |
 
-An annotation doesn't convert a value: `let dollars: float = cents / 100;` fails. Change the divisor to `100.0`.
+- A `float` annotation doesn't convert an integer. Use `285 / 100.0`.
+- Integers range from −2⁶² to 2⁶²−1. Overflow panics.
+- Division by zero panics for both numeric types.
 
-`int` ranges from −2⁶² to 2⁶²−1. Arithmetic overflow and division by zero panic, including float division by zero. Use `2.pow(10)` for exponentiation.
+</PerspectiveSection>
 
-</PerspectiveNote>
+<PerspectiveNote kind="same" summary="Floating-point rounding">
 
-<PerspectiveNote kind="same" summary="Floating-point rounding still applies">
-
-`0.1 + 0.2` produces `0.30000000000000004`. Keep integer units when you need exact accounting.
-
-</PerspectiveNote>
-
-## Strings and booleans
-
-<PerspectiveNote kind="same" summary="Backtick interpolation and literal double quotes">
-
-Backticks interpolate `${expression}`; double quotes keep it literal. `\n` inserts a newline.
-
-<BamlProject id="listing-03-12" file="baml_src/main.baml" regions={["strings"]} />
+`0.1 + 0.2` produces `0.30000000000000004` in both languages.
 
 </PerspectiveNote>
 
-<PerspectiveNote kind="modified" summary="Type names, string syntax, and operators">
+<span id="strings-and-booleans" />
 
-| In TypeScript | In BAML |
+## Strings
+
+<PerspectiveNote kind="same" summary="Double quotes, backticks, and escapes">
+
+```typescript
+"Hello\nworld"         // Newline
+`Hello ${name}`        // Interpolation
+"Hello ${name}"        // Literal text
+```
+
+</PerspectiveNote>
+
+<PerspectiveNote kind="modified" summary="String operations">
+
+BAML calls `.length()` and uses interpolation to combine text with numbers.
+
+| TypeScript | BAML |
+| --- | --- |
+| `text.length` | `text.length()` |
+| `"cost: " + cents` | `` `cost: ${cents}` `` |
+
+</PerspectiveNote>
+
+<PerspectiveNote kind="removed" summary="Single-quoted strings">
+
+BAML doesn't accept single-quoted strings; use double quotes or backticks.
+
+</PerspectiveNote>
+
+<PerspectiveSection kind="modified">
+
+## Booleans
+
+BAML uses `bool` and has one pair of equality operators: `==` and `!=`.
+
+| TypeScript | BAML |
 | --- | --- |
 | `boolean` | `bool` |
-| `text.length` | `text.length()` |
-| `'text'` | `"text"`. Single quotes aren't supported. |
-| `a === b` | `a == b`. There's no separate strict-equality operator. |
-| `"cost: " + cents` | `` `cost: ${cents}` ``. Use interpolation to include numbers. |
+| `a === b` | `a == b` |
+| `a !== b` | `a != b` |
 
-</PerspectiveNote>
+</PerspectiveSection>
 
-## Function signatures and defaults
+<span id="function-signatures-and-defaults" />
 
-<PerspectiveNote kind="modified" summary="Required return types and named default overrides">
+<PerspectiveSection kind="modified">
 
-<BamlProject id="listing-03-05" file="baml_src/main.baml" regions={["estimate"]} annotation="basics-function" />
+## Functions
 
-- Declare the return type with `->`, including `-> void` when there's no value.
-- The final expression supplies the return value.
-- Required arguments can be named and reordered.
+BAML requires explicit return types, so an LLM reading the source can see what a function returns without an LSP.
 
-Your TypeScript call `estimateTokens(text, 3)` becomes `estimate_tokens(text, chars_per_token = 3)`. Defaults must be overridden **by name**; BAML rejects the positional `3`. You don't need an options object just to name that argument.
+<CodeComparison from="TypeScript">
+<div>
 
-Use `snake_case` for function and variable names.
+```typescript
+function add(
+  left: number, right = 1
+) {
+  return left + right;
+}
+```
 
-</PerspectiveNote>
+</div>
+<div>
 
-## Return values and blocks
+<BamlProject id="listing-03-13" file="baml_src/main.baml" regions={["function"]} />
 
-<PerspectiveNote kind="added" summary="A block can produce a value">
+</div>
+</CodeComparison>
 
-To calculate a value while keeping intermediate variables local, you might use an immediately invoked arrow function in TypeScript:
+Use `-> void` for no value. Function and variable names conventionally use `snake_case`.
+
+</PerspectiveSection>
+
+<PerspectiveSection kind="added">
+
+### Named arguments
+
+<CodeComparison from="TypeScript">
+<div>
+
+```typescript
+add(4);    // 5
+add(4, 2); // 6
+```
+
+</div>
+<div>
+
+<BamlProject id="listing-03-13" file="baml_src/main.baml" regions={["arguments"]} />
+
+</div>
+</CodeComparison>
+
+Pass `left` positionally; override the default for `right` by name.
+
+Passing `right` positionally with `add(4, 2)` fails:
+
+```text
+E0005: defaulted parameter `right` must be passed by name
+```
+
+</PerspectiveSection>
+
+<span id="return-values-and-blocks" />
+
+<PerspectiveSection kind="added">
+
+## Blocks
+
+BAML blocks produce a value from their final expression. This lets you compute a value in several steps and keep temporary variables local, without creating and calling an extra function.
 
 <CodeComparison from="TypeScript">
 <div>
 
 ```typescript
 const remaining = (() => {
-  const limit = 8_000;
-  return limit - 512;
+  const limit = 8_000; // Block-local
+  return limit - 512; // Returns 7488
 })();
 ```
 
@@ -141,41 +224,77 @@ const remaining = (() => {
 </div>
 </CodeComparison>
 
-Both assign `7488` and keep `limit` local. BAML uses the block’s final expression, so the arrow function, `return`, and invocation `()` disappear.
+### Early returns
 
-</PerspectiveNote>
+A final expression gives the block a value and execution continues. An explicit `return` exits the enclosing function, even from inside a block.
 
-<PerspectiveNote kind="same" summary="Early return exits the function">
+<BamlProject id="listing-03-12" file="baml_src/main.baml" regions={["early-return"]} />
 
-Use `return value;` for an early result, or `return;` in a `-> void` function.
+`budget(true)` returns `0`; `budget(false)` continues after the block and returns `8000`. In the TypeScript example above, `return` exits only the immediately invoked arrow function.
 
-<BamlProject id="listing-03-11" file="baml_src/main.baml" regions={["early"]} />
+</PerspectiveSection>
 
-</PerspectiveNote>
+<PerspectiveSection kind="added">
 
 ## AI functions
 
-<PerspectiveNote kind="added" summary="A typed function can declare a prompt as its body">
-
 <BamlProject id="listing-03-06" file="baml_src/main.baml" regions={["client", "summarize"]} />
 
-Inside BAML, `summarize(transcript)` returns a `string` when the provider call completes. No `async` or `Promise` wrapper is needed. Explicit concurrent work uses [spawn and await](/baml/book/concurrency).
+- `summarize(text)` calls the model and returns a `string` inside BAML.
+- `summarize@parse(response)` parses supplied text without a model call.
+- `summarize@render_prompt(text)` renders messages without a model call.
 
-`summarize@parse(response)` parses supplied text; `summarize@render_prompt(transcript)` renders the messages. Both run offline. Calling `summarize` itself requires provider credentials.
+Model calls need provider credentials. For concurrent calls, use [spawn and await](/baml/book/concurrency).
+
+</PerspectiveSection>
+
+<span id="documentation-comments" />
+
+## Comments
+
+<PerspectiveNote kind="same" summary="Line and block comments">
+
+```typescript
+// Line comment
+/* Block comment */
+```
+
+Block comments don't nest.
 
 </PerspectiveNote>
 
-## Documentation comments
+<PerspectiveNote kind="modified" summary="Documentation comments">
 
-<PerspectiveNote kind="modified" summary="Documentation comments use /// instead of JSDoc">
+BAML uses `///` for documentation instead of JSDoc's `/** ... */`.
 
-`//` and non-nesting `/* ... */` comments work as in TypeScript. Use **`///`**, not JSDoc's `/** ... */`, for declaration documentation. `//#` names a step inside a function. Read the documentation with `baml describe function_name`.
+<CodeComparison from="TypeScript">
+<div>
+
+```typescript
+/** Adds two integers. */
+```
+
+</div>
+<div>
+
+<BamlProject id="listing-03-13" file="baml_src/main.baml" regions={["comments"]} />
+
+</div>
+</CodeComparison>
+
+Read docs with `baml describe add`; label function steps with `//# Step name`.
 
 </PerspectiveNote>
 
-## Replace ternaries with if
+<span id="replace-ternaries-with-if" />
 
-<PerspectiveNote kind="removed" summary="No ternary operator; use an if expression">
+<span id="conditions" />
+
+<PerspectiveSection kind="removed">
+
+## Ternaries
+
+BAML replaces `condition ? a : b` with an `if` expression.
 
 <CodeComparison from="TypeScript">
 <div>
@@ -183,57 +302,51 @@ Inside BAML, `summarize(transcript)` returns a `string` when the provider call c
 ```typescript
 const model = tokens <= 8_000
   ? "mini"
-  : tokens <= 100_000
-    ? "standard"
-    : "long-context";
+  : "standard";
 ```
 
 </div>
 <div>
 
-<BamlProject id="listing-03-08" file="baml_src/main.baml" regions={["choice"]} />
+<BamlProject id="listing-03-13" file="baml_src/main.baml" regions={["condition"]} />
 
 </div>
 </CodeComparison>
 
-Your ternary branches become blocks. Include `else` when using the result. Branches with different types produce a union, which the surrounding return type or annotation must accept.
+Include `else` when using the result. Different branch types produce a union.
 
-</PerspectiveNote>
+</PerspectiveSection>
 
-## For in iterates values
+<span id="for-in-iterates-values" />
 
-<PerspectiveNote kind="modified" summary="Use in where TypeScript uses of">
+<PerspectiveSection kind="modified">
+
+## Loops
+
+BAML's `for...in` visits values, like TypeScript's `for...of`.
 
 <CodeComparison from="TypeScript">
 <div>
 
 ```typescript
-for (const message of messages) {
-  if (message.trim() === "") {
-    continue;
-  }
-  total += estimateTokens(message);
+let total = 0;
+for (const value of values) { // Values
+  total = total + value;
 }
 ```
 
 </div>
 <div>
 
-<BamlProject id="listing-03-09" file="baml_src/main.baml" regions={["loop"]} />
+<BamlProject id="listing-03-13" file="baml_src/main.baml" regions={["loop"]} />
 
 </div>
 </CodeComparison>
 
-Use `in` to visit each value, as you would with TypeScript's `of`. BAML’s `message` is the value, unlike TypeScript’s `for...in` key.
-
-</PerspectiveNote>
+</PerspectiveSection>
 
 <PerspectiveNote kind="same" summary="while, break, and continue">
 
-`while` repeats while its condition holds. `break` exits; `continue` skips to the next iteration. Loops don't produce a result value.
-
-<BamlProject id="listing-03-10" file="baml_src/main.baml" regions={["all"]} />
-
-For a positive window, `count_chunks(26_000, 8_000)` returns `4`.
+`while` repeats while its condition holds. `break` exits the loop; `continue` skips to the next iteration.
 
 </PerspectiveNote>
