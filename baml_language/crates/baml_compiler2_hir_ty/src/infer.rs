@@ -57,9 +57,9 @@ use crate::{
     },
     diagnostics::ScopedTypeEscapeKind,
     extern_loc::{
-        ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_row,
-        extern_function_row, extern_interface_method, mounted_class_loc, mounted_class_method,
-        mounted_enum_loc,
+        ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_method,
+        extern_class_row, extern_function_row, extern_interface_method, mounted_class_loc,
+        mounted_class_method, mounted_enum_loc,
     },
     facts::Facts,
     infer::unify::InferenceTable,
@@ -7445,94 +7445,108 @@ impl<'db> InferenceContext<'db> {
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        // Preserve the ordinary source-backed fast path. Runtime compilation
-        // has no stdlib source classes, so only it falls through to the
-        // serialized external surface below.
-        if let Some(source) = self.source_class_static_value(prefix, member, own, anchor, record_at)
-        {
-            return Some(source);
-        }
-        let exported_class = self
-            .lower
-            .resolve_exported_type_definition(prefix)
-            .map(|exported| (exported, None))
-            .or_else(|| {
-                self.static_external_class_for(prefix)
-                    .map(|(exported, args)| (exported, Some(args)))
-            });
-        if let Some((exported, pinned)) = exported_class
-            && let crate::package_interface::ExportedType::Class { qtn, .. } = exported.as_ref()
-            && let Some(method) = mounted_class_method(self.db, qtn, member)
-        {
-            let callable = DeclRef::External(method);
-            let row = extern_function_row(self.db, method);
-            let frame = callable_generic_frame(self.db, callable).params;
-            let position = if self.is_reflect_package_get_function(callable) {
-                crate::lower::TypePosition::ExtractionContract
-            } else {
-                crate::lower::TypePosition::Existential
-            };
-            let (instantiation, own_offset) = match (own, pinned) {
-                (OwnArgs::Call(call), Some(owner_args)) => {
-                    let own_args = self.instantiation_args_at(
-                        call,
-                        &row.generic_params,
-                        Some(member),
-                        position,
-                    );
-                    let own_offset = owner_args.len();
-                    let mut instantiation = owner_args;
-                    instantiation.extend(own_args);
-                    (instantiation, own_offset)
-                }
-                (OwnArgs::Call(call), None) => {
-                    let instantiation =
-                        self.instantiation_args_at(call, &frame, Some(member), position);
-                    (instantiation, 0)
-                }
-                (OwnArgs::Fresh, Some(mut owner_args)) => {
-                    owner_args.extend(
-                        row.generic_params
-                            .iter()
-                            .map(|param| self.fresh_generic_arg(param)),
-                    );
-                    let offset = owner_args.len() - row.generic_params.len();
-                    (owner_args, offset)
-                }
-                (OwnArgs::Fresh, None) => (
-                    frame
-                        .iter()
-                        .map(|param| self.fresh_generic_arg(param))
-                        .collect(),
-                    0,
-                ),
-            };
-            let instantiation = if let OwnArgs::Call(call) = own {
-                let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
-                self.register_callable_bounds(callable, &instantiation, anchor);
-                instantiation
-            } else {
-                instantiation
-            };
-            if let Some(record_at) = record_at {
-                self.write_member_resolution(
-                    record_at,
-                    MemberResolution::Method {
-                        callee: MethodCallee::Inherent(callable),
-                        receiver: Receiver::Unbound,
-                    },
-                );
-            }
-            return Some(instantiate_callable_signature(
-                self.db,
-                callable,
-                &instantiation,
-            ));
+        // The qualifier is resolved ONCE, to the class it denotes wherever
+        // that class is declared; each tier below then reads that class.
+        let (class, pinned) = self.static_class_for(prefix)?;
+        let inherent = match class {
+            DeclRef::Source(class) => self.source_class_static_value(
+                class,
+                pinned.clone(),
+                member,
+                own,
+                anchor,
+                record_at,
+            ),
+            DeclRef::External(class) => self.extern_class_static_value(
+                class,
+                pinned.clone(),
+                member,
+                own,
+                anchor,
+                record_at,
+            ),
+        };
+        if inherent.is_some() {
+            return inherent;
         }
         // TIER: a type-qualified implements-block member on a class, wherever
         // it is declared - the bare spelling of the `(C as I).item` projection
         // with the interface INFERRED.
-        self.class_impl_static_value(prefix, member, own, anchor, record_at)
+        self.class_impl_static_value(class, pinned, member, own, anchor, record_at)
+    }
+
+    /// The inherent tier of [`Self::class_static_value`] for a class served
+    /// from its package's interface: the method's exported row.
+    fn extern_class_static_value(
+        &mut self,
+        class: crate::extern_loc::ExternClassLoc<'db>,
+        pinned: Option<Vec<Ty>>,
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
+        let method = extern_class_method(self.db, class.head(self.db), member)?;
+        let callable = DeclRef::External(method);
+        let row = extern_function_row(self.db, method);
+        let frame = callable_generic_frame(self.db, callable).params;
+        let position = if self.is_reflect_package_get_function(callable) {
+            crate::lower::TypePosition::ExtractionContract
+        } else {
+            crate::lower::TypePosition::Existential
+        };
+        let (instantiation, own_offset) = match (own, pinned) {
+            (OwnArgs::Call(call), Some(owner_args)) => {
+                let own_args =
+                    self.instantiation_args_at(call, &row.generic_params, Some(member), position);
+                let own_offset = owner_args.len();
+                let mut instantiation = owner_args;
+                instantiation.extend(own_args);
+                (instantiation, own_offset)
+            }
+            (OwnArgs::Call(call), None) => {
+                let instantiation =
+                    self.instantiation_args_at(call, &frame, Some(member), position);
+                (instantiation, 0)
+            }
+            (OwnArgs::Fresh, Some(mut owner_args)) => {
+                owner_args.extend(
+                    row.generic_params
+                        .iter()
+                        .map(|param| self.fresh_generic_arg(param)),
+                );
+                let offset = owner_args.len() - row.generic_params.len();
+                (owner_args, offset)
+            }
+            (OwnArgs::Fresh, None) => (
+                frame
+                    .iter()
+                    .map(|param| self.fresh_generic_arg(param))
+                    .collect(),
+                0,
+            ),
+        };
+        let instantiation = if let OwnArgs::Call(call) = own {
+            let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
+            self.register_callable_bounds(callable, &instantiation, anchor);
+            instantiation
+        } else {
+            instantiation
+        };
+        if let Some(record_at) = record_at {
+            self.write_member_resolution(
+                record_at,
+                MemberResolution::Method {
+                    callee: MethodCallee::Inherent(callable),
+                    receiver: Receiver::Unbound,
+                },
+            );
+        }
+        Some(instantiate_callable_signature(
+            self.db,
+            callable,
+            &instantiation,
+        ))
     }
 
     /// The impl tier of [`Self::class_static_value`]: `C.item` /
@@ -7554,13 +7568,13 @@ impl<'db> InferenceContext<'db> {
     /// member could depend on the very arguments inference has not solved.
     fn class_impl_static_value(
         &mut self,
-        prefix: &[baml_type::Name],
+        class: ClassRef<'db>,
+        pinned: Option<Vec<Ty>>,
         member: &baml_type::Name,
         own: OwnArgs,
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        let (class, pinned) = self.static_class_for(prefix)?;
         let frame = self.class_ref_generic_frame(class);
         // The class arguments and whether the call's written type-arg channel
         // was consumed for them (the hoisted-receiver-args spelling).
@@ -7663,15 +7677,13 @@ impl<'db> InferenceContext<'db> {
 
     fn source_class_static_value(
         &mut self,
-        prefix: &[baml_type::Name],
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        pinned: Option<Vec<Ty>>,
         member: &baml_type::Name,
         own: OwnArgs,
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        let (DeclRef::Source(class), pinned) = self.static_class_for(prefix)? else {
-            return None;
-        };
         let method = baml_compiler2_hir::item_data::class_data(self.db, class)
             .methods
             .iter()
@@ -7741,26 +7753,6 @@ impl<'db> InferenceContext<'db> {
             DeclRef::Source(method),
             &instantiation,
         ))
-    }
-
-    /// Source-less counterpart of [`Self::static_class_for`] for primitive or
-    /// alias qualifiers. Fully qualified external classes resolve in the
-    /// ordinary exported-type tier above; this bridge handles spellings such
-    /// as `string.from` whose methods live on `baml.String`.
-    fn static_external_class_for(
-        &self,
-        prefix: &[baml_type::Name],
-    ) -> Option<(Box<crate::package_interface::ExportedType>, Vec<Ty>)> {
-        if prefix
-            .first()
-            .is_some_and(|name| self.scoped_type_param(name).is_some())
-        {
-            return None;
-        }
-        let ty = self.static_qualifier_ty(prefix)?;
-        let (qtn, args) = crate::method_resolution::external_class_for_type(&self.facts, &ty, 8)?;
-        let exported = crate::package_interface::mounted_type_row(self.db, &qtn)?.clone();
-        Some((Box::new(exported), args))
     }
 
     /// TIER: an enum variant value (`Shape.Rectangle`) - the singleton

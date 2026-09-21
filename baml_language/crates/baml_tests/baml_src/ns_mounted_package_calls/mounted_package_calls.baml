@@ -386,3 +386,75 @@ test "mounted interface fields read through an existential and inherent statics 
     let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
     assert.equal(main(), "lbl:0")
 }
+
+// An ALIAS of a mounted class is a static qualifier exactly as the class is
+// (an alias is transparent in every position): an inherent static, the class
+// arguments an alias pins, an alias of an alias, and an implements-block
+// static all resolve on the class the alias denotes. `Mine` and `MyBox` are
+// the controls — the consumer's own aliases of the mounted classes. The
+// library is this block's own, so the shared one's surface tests stay
+// independent of it.
+test "an alias of a mounted class qualifies its statics" {
+    let app = reflect.Package.compile(
+        {
+            "lib.baml": `
+                interface Makeable {
+                    function make(x: int) -> Self throws never
+                }
+
+                class Maker {
+                    n int
+
+                    function twice(n: int) -> int throws never {
+                        n * 2
+                    }
+
+                    implements Makeable {
+                        function make(x: int) -> Self throws never {
+                            Maker { n: x }
+                        }
+                    }
+                }
+
+                class Box<T> {
+                    item T
+
+                    function of(item: T) -> Box<T> throws never {
+                        Box { item: item }
+                    }
+
+                    function kind() -> string throws never {
+                        reflect.Type.of<T>().to_string()
+                    }
+                }
+
+                type MakerAlias = Maker
+                type MakerAliasAlias = MakerAlias
+                type IntBox = Box<int>
+            `,
+        },
+    );
+    assert.equal(app.diagnostics().length(), 0);
+    let consumer = reflect.Package.compile(
+        {
+            "main.baml": `
+                type Mine = app.Maker
+                type MyBox = app.Box<string>
+
+                function main() -> string throws never {
+                    app.MakerAlias.twice(3).to_string()
+                        + ":" + app.MakerAliasAlias.twice(4).to_string()
+                        + ":" + app.IntBox.of(7).item.to_string()
+                        + ":" + app.IntBox.kind()
+                        + ":" + app.MakerAlias.make(5).n.to_string()
+                        + ":" + Mine.twice(6).to_string()
+                        + ":" + MyBox.kind()
+                }
+            `,
+        },
+        packages = { "app": app },
+    );
+    assert.equal(consumer.diagnostics().length(), 0);
+    let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    assert.equal(main(), "6:8:7:int:5:12:string")
+}
