@@ -174,11 +174,11 @@ The important change is inside `map`: `spawn` returns immediately, so `map` can 
 
 ## Limit active work
 
-Starting many file operations at once can saturate storage or exhaust file descriptors. Put the spawned work in a `TaskGroup` to cap the number of active group members:
+Starting many file operations at once can saturate storage or exhaust file descriptors. Give the spawned work a `Limit` to cap how many run at once:
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-52"]} />
 
-Every `spawn` still returns a future immediately. When the group reaches `limit` active members, later members wait in the group's FIFO queue. The group name is diagnostic metadata; passing `group` in `baml.spawn.options` is what adds a task to the group.
+Every `spawn` still returns a future immediately. When the limit's slots are all taken, later tasks wait in line and start as earlier ones finish. Naming the limit after `with` is what admits a task through it, and two spawns share a cap only when they use the same `Limit` value. A limit admits at least one task, so `Limit.new` rejects a capacity below `1`.
 
 ## Cancel work you no longer need
 
@@ -186,7 +186,7 @@ Call `cancel()` when a pending result is no longer useful, then handle `baml.pan
 
 <BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-53"]} />
 
-If `cancel()` returns `false`, the future was already settled. A successful future still returns its value at `await`; it does not enter the cancellation handler. In the handler, `requested == false` means the future was already cancelled.
+`cancel()` returns `false` when the future has already settled, or when cancellation was already requested. A successful future still returns its value at `await`; it does not enter the cancellation handler. In the handler, `requested == false` means someone else asked first.
 
 For the precise cancellation and parent-child rules, continue to [Cancellation and task lifetimes](#cancellation-and-task-lifetimes).
 
@@ -255,16 +255,8 @@ For several futures, `baml.future.all` preserves input order, not completion ord
 
 ### Cancellation and task lifetimes
 
-`Future.cancel()` settles a pending future as cancelled and signals its running thread to stop. The task doesn't need explicit cancellation checks. Cancellation can interrupt long-running BAML loops at runtime scheduling checkpoints.
+`Future.cancel()` asks a task to stop: it signals the running thread, and the task itself settles the future once it unwinds, so the future stays pending until then and `await` is how you observe the outcome. The task doesn't need explicit cancellation checks. Cancellation is delivered at checkpoints — an `await` or an IO call — and repeats at every one after that, so catching `baml.panics.Cancelled` does not un-cancel the task. A `defer` block runs shielded from it, which is what makes cleanup reliable.
 
 Spawned threads are children of their parent by default. If the parent fails or is cancelled, its running children are cancelled too. This relationship keeps concurrent work within the operation that started it.
 
-`baml.spawn.options(detach = true)` opts a child out of cancellation caused by its parent. It doesn't make the task immune to an explicit `cancel()`, and the root doesn't wait for detached work to finish. Unhandled errors from detached work are reported globally; they do not replace the root call’s result. Use detachment only for work whose cancellation policy must be independent of its immediate parent.
-
-### Dynamic task-group limits
-
-Call `set_limit` to change how many members a task group can admit:
-
-<BamlProject id="listing-12-01" file="baml_src/main.baml" regions={["excerpt-57"]} />
-
-Raising the limit admits more queued tasks. Lowering it prevents new admissions until the active count is below the new limit. Futures created before the change remain valid.
+Spawning `with baml.spawn.Root.new()` opts a child out of cancellation caused by its parent. It doesn't make the task immune to an explicit `cancel()`, and the root doesn't wait for detached work to finish. Unhandled errors from detached work are reported globally; they do not replace the root call’s result. Use detachment only for work whose cancellation policy must be independent of its immediate parent.

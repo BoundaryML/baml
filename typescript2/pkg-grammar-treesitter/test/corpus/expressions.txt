@@ -472,12 +472,12 @@ function f() -> json {
                               (identifier))))))))))))))))
 
 ==================
-spawn, await, spawn with options and named arguments
+spawn, await, spawn with a name and several modifiers
 ==================
 
 function f() -> int {
   let fut = spawn { run_turn(history, msg) };
-  let g = spawn with baml.spawn.options(cancel = tok, detach = true) { 42 };
+  let g = spawn "worker" with tok, limiter(cap = 2, strict = true) { 42 };
   (await fut) + (await g)
 }
 
@@ -507,16 +507,14 @@ function f() -> int {
           (type_path
             (identifier)))
         (spawn_expression
+          (string)
+          (identifier)
           (call_expression
-            (member_expression
-              (member_expression
-                (identifier)
-                (property_identifier))
-              (property_identifier))
+            (identifier)
             (arguments
               (assignment_expression
                 (identifier)
-                (identifier))
+                (number))
               (named_argument
                 (identifier)
                 (boolean))))

@@ -3,14 +3,14 @@
 import { useAnimateInView } from '../../learn3/_lib/use-animate-in-view';
 
 /**
- * Minimalist task-group scheduling vignette: two lanes, six blocks, no
+ * Minimalist spawn-limit scheduling vignette: two lanes, six blocks, no
  * labels, no frame. Each bar draws itself in at its scheduled time; a thin
  * sweep line marks "now". The whole timeline loops every PERIOD seconds.
  *
  * Per-bar keyframes are generated from the static schedule below (the
  * percentages differ per bar, so they can't share one @keyframes). The
  * schedule itself is the point: lane capacity 2, extras start exactly when
- * a lane frees up — the same fifo behaviour as a TaskGroup with a cap.
+ * a lane frees up — the same behaviour as a spawn Limit with a cap.
  */
 
 const PERIOD = 8; // seconds

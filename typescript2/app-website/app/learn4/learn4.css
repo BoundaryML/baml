@@ -518,7 +518,7 @@
   }
 }
 
-/* ---- pool schedule (TaskGroup limit animation) ---- */
+/* ---- pool schedule (spawn Limit animation) ---- */
 .l4-pool {
   border: 1.6px solid var(--l4-ink);
   border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;

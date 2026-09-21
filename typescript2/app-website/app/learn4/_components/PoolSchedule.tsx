@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useAnimateInView } from '../../learn3/_lib/use-animate-in-view';
 
 /**
- * Six tasks through a TaskGroup with limit = 2: two run, the rest queue
- * FIFO and start as slots free up. Timeline per task: queued (amber) until
+ * Six tasks through a spawn Limit of 2: two run, the rest wait
+ * and start as slots free up. Timeline per task: queued (amber) until
  * its start time, then a fill, then a check. CSS delays only; replay
  * remounts. Illustrative timing — every task takes one tick.
  */
@@ -20,7 +20,7 @@ export function PoolSchedule() {
     <div className={`l4-pool${holdClass}`} ref={ref}>
       <div className="l4-pool-head">
         <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#8A8580]">
-          TaskGroup.new(2) · six spawns
+          Limit.new(2) · six spawns
         </span>
         <button
           type="button"

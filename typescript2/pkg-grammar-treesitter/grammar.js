@@ -152,6 +152,12 @@ module.exports = grammar({
     [$.while_statement, $.const_identifier],
     [$.if_expression, $.const_identifier],
     [$._for_in_header, $.template_for_open],
+    // `spawn { .. }`: a block is an expression, so it could read as the
+    // task's name with the body still to come. The body is required, so
+    // the name-first parse only completes when a second block follows;
+    // the negative dynamic precedence on the name settles that tie the
+    // way the real parser's condition position does.
+    [$._expression, $.spawn_expression],
   ],
 
   rules: {
@@ -855,7 +861,7 @@ module.exports = grammar({
 
     arguments: ($) => seq('(', commaSep(choice($._expression, $.named_argument)), ')'),
 
-    // `baml.spawn.options(cancel = tok)`
+    // `f(limit = 2)`
     named_argument: ($) =>
       seq(field('name', $.identifier), '=', field('value', $._expression)),
 
@@ -1066,11 +1072,19 @@ module.exports = grammar({
     await_expression: ($) =>
       prec(PREC.UNARY, seq('await', field('value', $._expression))),
 
-    // `spawn { ... }` | `spawn with baml.spawn.options(...) { ... }`
+    // `spawn { ... }` | `spawn NAME { ... }` |
+    // `spawn NAME? with MODIFIER, MODIFIER { ... }`
+    //
+    // The name labels the task and the modifiers transform its plan; both are
+    // ordinary expressions, so the `{` that opens the body is what ends the
+    // list. As in a condition position, a name that could also read as a
+    // constructor (`spawn Foo { .. }`) parses as the name plus the body: the
+    // other split leaves the body missing, so GLR discards it.
     spawn_expression: ($) =>
       seq(
         'spawn',
-        optional(seq('with', field('options', $._expression))),
+        optional(field('name', prec.dynamic(-1, $._expression))),
+        optional(seq('with', commaSep1(field('modifier', $._expression)))),
         field('body', $.block),
       ),
 

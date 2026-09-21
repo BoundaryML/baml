@@ -108,31 +108,14 @@ function read_all(paths: string[]) -> string[] {
 
 
 // docs:start excerpt-52
-function read_all_limited(paths: string[], limit: int) -> string[] {
-    let group = baml.spawn.TaskGroup.new(limit, name = "document reads");
+function read_all_limited(paths: string[], at_once: int) -> string[] {
+    let limit = baml.spawn.Limit.new(at_once);
     let futures = paths.map((path) -> {
-        spawn `read ${path}` with baml.spawn.options(group = group) { baml.fs.read(path) }
+        spawn `read ${path}` with limit { baml.fs.read(path) }
     });
     await baml.future.all(futures)
 }
 // docs:end excerpt-52
-
-
-
-// docs:start excerpt-57
-function read_all_with_dynamic_limit(
-    paths: string[],
-    initial_limit: int,
-    new_limit: int,
-) -> string[] {
-    let group = baml.spawn.TaskGroup.new(initial_limit, name = "document reads");
-    let futures = paths.map((path) -> {
-        spawn `read ${path}` with baml.spawn.options(group = group) { baml.fs.read(path) }
-    });
-    group.set_limit(new_limit);
-    await baml.future.all(futures)
-}
-// docs:end excerpt-57
 
 
 
@@ -198,12 +181,18 @@ function cancel_task() -> string {
 
 
 
-function grouped_tasks() -> int[] {
-    let group = baml.spawn.TaskGroup.new(0, name = "reads");
-    let first_future = spawn "grouped first" with baml.spawn.options(group = group) { 1 };
-    let second_future = spawn "grouped second" with baml.spawn.options(group = group) { 2 };
-    let queued = group.queued_count();
-    group.set_limit(2);
+function limited_tasks() -> int[] {
+    let limit = baml.spawn.Limit.new(1) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
+    };
+    // Holds the only slot, so both reads below wait in line.
+    let holder = spawn "holder" with limit {
+        baml.sys.sleep(baml.time.Duration.from_seconds(60n))
+    };
+    let first_future = spawn "limited first" with limit { 1 };
+    let second_future = spawn "limited second" with limit { 2 };
+    let queued = limit.queued_count();
+    holder.cancel();
     let values = await baml.future.all([first_future, second_future]);
     [queued, values[0], values[1]]
 }
@@ -213,5 +202,5 @@ test "concurrency behavior" {
     assert.equal(main(), ["contents of notes.md", "contents of outline.md"]);
     assert.equal(handle_task_error(), "not found: missing");
     assert.equal(cancel_task(), "cancelled");
-    assert.equal(grouped_tasks(), [2, 1, 2]);
+    assert.equal(limited_tasks(), [2, 1, 2]);
 }
