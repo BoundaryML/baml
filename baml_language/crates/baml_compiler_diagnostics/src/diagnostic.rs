@@ -40,7 +40,8 @@ pub enum DiagnosticPhase {
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a
-/// wire-format break gated by the cache's `FORMAT_VERSION`.
+/// wire-format break gated by the cache's `FORMAT_VERSION`. A new variant is
+/// therefore appended at the end, whichever group below it belongs with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticId {
     // Parse errors (E0009, E0010)
@@ -338,13 +339,6 @@ pub enum DiagnosticId {
     /// package. References type from the mounted interface; callables without
     /// a loc-free bytecode link contract report this diagnostic.
     MountedPackageCallUnsupported,
-    /// Reserved (E0173): a value path into a package served from its
-    /// compiled interface that names a declaration the interface does not
-    /// carry. Not produced today — the interface cannot yet tell such a
-    /// declaration from a misspelling, so the path reports as an unresolved
-    /// name, as in source. Returns once the interface carries the names of
-    /// its unexported declarations.
-    ServedInterfaceExportsFunctionsOnly,
 
     // Projection bases (E0156)
     /// The dotted projection shorthand (`Base.Member`) was written with the
@@ -410,6 +404,13 @@ pub enum DiagnosticId {
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
+    /// Reserved (E0173): a value path into a package served from its
+    /// compiled interface that names a declaration the interface does not
+    /// carry. Not produced today — the interface cannot yet tell such a
+    /// declaration from a misspelling, so the path reports as an unresolved
+    /// name, as in source. Returns once the interface carries the names of
+    /// its unexported declarations.
+    ServedInterfaceExportsFunctionsOnly,
 }
 
 impl DiagnosticId {
@@ -924,6 +925,12 @@ mod tests {
             vec![0]
         );
         assert_eq!(borsh::to_vec(&DiagnosticId::TypeMismatch).unwrap(), vec![3]);
+        // A late variant, so an insertion anywhere before it is caught too:
+        // new variants are appended.
+        assert_eq!(
+            borsh::to_vec(&DiagnosticId::ScopedTypeEscapesBlock).unwrap(),
+            vec![140]
+        );
         assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
         assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
         assert_eq!(borsh::to_vec(&DiagnosticPhase::Parse).unwrap(), vec![0]);

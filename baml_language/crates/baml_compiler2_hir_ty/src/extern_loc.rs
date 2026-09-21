@@ -475,7 +475,16 @@ impl<'db> ExternFunctionLoc<'db> {
             ExternRowAddr::Declared(_) => None,
             ExternRowAddr::ImplProvided {
                 package, identity, ..
-            } => Some(ExternImplLoc::new(db, *package, identity.clone())),
+            } => Some(
+                extern_impl_block(db, *package, identity.clone()).unwrap_or_else(|| {
+                    panic!(
+                        "internal error: no exported impl row for {}; an impl-provided \
+                         `ExternFunctionLoc` is minted only from a block in the current \
+                         revision's package interface",
+                        spell_impl(db, *package, identity)
+                    )
+                }),
+            ),
         }
     }
 }

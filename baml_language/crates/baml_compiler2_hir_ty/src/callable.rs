@@ -464,15 +464,10 @@ pub struct CallableFrame<'db> {
 
 /// The frame a call instantiates.
 ///
-/// `own_start` is computed per lane exactly as the two bound-registration
-/// roads did before they shared this surface, and the formulas DIVERGE: a
-/// source item's own count is its DECLARED parameters (`function_data`), so
-/// a synthetic effect parameter elaborated onto the signature counts as
-/// part of the prefix; an exported row's own count is its whole `generic_params`
-/// (effect parameters included), so `own_start` is the owner frame's length.
-/// The difference only feeds the concreteness rule on effect slots, which
-/// no bound constrains; preserved verbatim rather than unified here, so the
-/// unification is its own reviewable change.
+/// `own_start` is the OWNER frame's length in both lanes: everything after
+/// it is the callable's own — its declared parameters, then the synthetic
+/// effect parameters elaborated onto the signature — which is also exactly
+/// what an exported row lists as its `generic_params`.
 pub fn callable_generic_frame<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     callable: FunctionRef<'db>,
@@ -484,11 +479,13 @@ pub fn callable_generic_frame<'db>(
                 &params,
                 &crate::lower::function_generic_bounds(db, function),
             );
-            let own = baml_compiler2_hir::item_data::function_data(db, function)
-                .generic_params
-                .len();
+            // The frame is `owner ++ declared ++ synthetic effect`, so the
+            // owner's length is what the callable's own two groups leave.
+            let own = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
+            let own = own.user_generic_params.len() + own.synthetic_effect_params.len();
+            debug_assert!(own <= params.len());
             CallableFrame {
-                own_start: params.len().saturating_sub(own),
+                own_start: params.len() - own,
                 params: Cow::Owned(params),
                 bounds: Cow::Owned(bounds),
             }
