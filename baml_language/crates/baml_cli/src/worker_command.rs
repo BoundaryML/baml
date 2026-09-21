@@ -1186,10 +1186,23 @@ impl WorkerState {
     }
 
     /// `file` relative to the project directory when it lies inside it.
+    /// The path an event carries: relative to the project when it lies inside
+    /// it, and always with `/` as the separator. A site server resolves this
+    /// string against its own project directory and a source view builds a URL
+    /// from it, so the same program must name a file the same way on every
+    /// platform. Without the normalization a Windows worker reports
+    /// `baml_src\\trip.baml` where every other platform reports
+    /// `baml_src/trip.baml`.
     fn relative_file(&self, file: &str) -> String {
         let path = Path::new(file);
-        path.strip_prefix(&self.project_root)
-            .map_or_else(|_| file.to_string(), |p| p.to_string_lossy().into_owned())
+        let relative = path
+            .strip_prefix(&self.project_root)
+            .map_or_else(|_| file.to_string(), |p| p.to_string_lossy().into_owned());
+        if std::path::MAIN_SEPARATOR == '/' {
+            relative
+        } else {
+            relative.replace(std::path::MAIN_SEPARATOR, "/")
+        }
     }
 
     /// The name a caller would write: the qualified name without the `user.`
