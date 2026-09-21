@@ -136,9 +136,23 @@ impl Worker {
     }
 
     fn send(&mut self, command: &Value) {
+        assert!(
+            self.try_send(command),
+            "the worker closed its stdin before the command was written"
+        );
+    }
+
+    /// [`Self::send`] for a command that races the worker's own exit. False
+    /// when the pipe was already closed, which is a broken pipe rather than a
+    /// failure of the test.
+    fn try_send(&mut self, command: &Value) -> bool {
         let stdin = self.stdin.as_mut().expect("stdin is open");
-        writeln!(stdin, "{command}").unwrap();
-        stdin.flush().unwrap();
+        let written = writeln!(stdin, "{command}").and_then(|()| stdin.flush());
+        match written {
+            Ok(()) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => false,
+            Err(error) => panic!("writing {command} to the worker failed: {error}"),
+        }
     }
 
     fn close_stdin(&mut self) {
@@ -985,7 +999,17 @@ fn an_automatic_snapshot_recovers_a_run_whose_process_was_lost() {
     let logs_before = texts(&worker.events).len();
     worker.child.kill().unwrap();
     let status = worker.child.wait().unwrap();
-    assert_eq!(status.code(), None, "the process was lost to a signal");
+    // The process must not have ended by one of the worker's own exits, so
+    // that the run is recovered from a snapshot the worker wrote on its own.
+    // The platforms report a kill differently: on Unix the process carries a
+    // signal and no exit code, while on Windows `Child::kill` is
+    // `TerminateProcess(1)`, which is indistinguishable from an exit code of
+    // 1. Naming the worker's own codes covers both without a cfg.
+    let code = status.code();
+    assert!(
+        !matches!(code, Some(0 | 75 | 130)),
+        "the process was killed, so it did not complete, pause or cancel: {code:?}"
+    );
 
     let mut worker = Worker::resume(&dirs, 2, snapshot["snapshot_path"].as_str().unwrap(), &[]);
     let call = worker.wait_for("remote_call", is_type("remote_call"));
@@ -1227,7 +1251,10 @@ fn a_pause_after_the_root_returned_writes_no_snapshot() {
     });
     if seen["type"] == "thread_started" {
         std::thread::sleep(Duration::from_millis(300));
-        worker.send(&json!({ "type": "pause" }));
+        // The spawned thread can finish inside that pause, and the worker then
+        // completes and closes its stdin before the command is written. Either
+        // way no snapshot is written, which is what this test is about.
+        worker.try_send(&json!({ "type": "pause" }));
     }
     let (code, events, stderr) = worker.finish();
     assert_eq!(code, 0, "stderr: {stderr}\nevents: {events:#?}");
