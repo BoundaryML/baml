@@ -8438,20 +8438,25 @@ impl<'db> LoweringContext<'db> {
     /// paths in `lower_call`. `string.from` is total (`throws never`) and honors any
     /// `baml.ToString` override via its runtime shim, so it matches a real call.
     /// Returns `true` (and emits the call) when it handled the expression.
+    ///
+    /// `callee_expr` is the caller's NORMALIZED view of `callee`: for
+    /// `x?.to_string()` it is the plain `x.to_string` member access (the null
+    /// guard has already run), while the arena node is still the
+    /// `OptionalMemberAccess` — reading that instead misses the sugar shape.
     fn try_lower_to_string_fallback(
         &mut self,
         expr_id: AstExprId,
         callee: AstExprId,
+        callee_expr: &AstExpr,
         args: &[AstExprId],
         dest: &Place,
     ) -> Lowered<bool> {
         if !args.is_empty() {
             return Ok(false);
         }
-        let callee_expr = self.body.exprs[callee].clone();
         // Trigger shape (shared with TIR type inference + throws analysis): a
         // `to_string` member/path call.
-        if !is_sugar_callee(&callee_expr, "to_string") {
+        if !is_sugar_callee(callee_expr, "to_string") {
             return Ok(false);
         }
         // Fires when the checker resolved the call through the sugar tier
@@ -8471,7 +8476,7 @@ impl<'db> LoweringContext<'db> {
         if !sugar {
             return Ok(false);
         }
-        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
+        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
@@ -8605,14 +8610,14 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         callee: AstExprId,
+        callee_expr: &AstExpr,
         args: &[AstExprId],
         dest: &Place,
     ) -> Lowered<bool> {
         if !args.is_empty() {
             return Ok(false);
         }
-        let callee_expr = self.body.exprs[callee].clone();
-        if !is_sugar_callee(&callee_expr, "to_json") {
+        if !is_sugar_callee(callee_expr, "to_json") {
             return Ok(false);
         }
         // Fires when the checker desugared the call or left the callee untyped
@@ -8625,7 +8630,7 @@ impl<'db> LoweringContext<'db> {
         if !sugar {
             return Ok(false);
         }
-        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
+        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
@@ -8746,20 +8751,20 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         callee: AstExprId,
+        callee_expr: &AstExpr,
         args: &[AstExprId],
         dest: &Place,
     ) -> Lowered<bool> {
         if args.len() != 1 {
             return Ok(false);
         }
-        let callee_expr = self.body.exprs[callee].clone();
-        if !is_sugar_callee(&callee_expr, "from_json") {
+        if !is_sugar_callee(callee_expr, "from_json") {
             return Ok(false);
         }
         // Fire only for a type-name receiver (`Type.from_json`), never a value
         // call (`x.from_json`) — rewriting the latter would silently drop `x`.
         // Mirrors the guard in the TIR sugar that types this call.
-        let static_receiver = match &callee_expr {
+        let static_receiver = match callee_expr {
             AstExpr::MemberAccess { base, .. } => match &self.body.exprs[*base] {
                 AstExpr::Path(segs) if !segs.is_empty() => {
                     self.binding_id_for_path(*base, &segs[0]).is_none()
@@ -9324,15 +9329,15 @@ impl<'db> LoweringContext<'db> {
         // after all real dispatch (interface/union above, method resolution below)
         // has been attempted, so a `baml.ToString` implementor always wins first;
         // only a `to_string` call with no resolved method reaches the fallback.
-        if self.try_lower_to_string_fallback(expr_id, callee, args, &dest)? {
+        if self.try_lower_to_string_fallback(expr_id, callee, callee_expr, args, &dest)? {
             return Ok(());
         }
         // Same fallback for `recv.to_json()` -> `baml.json.from(recv)`.
-        if self.try_lower_to_json_fallback(expr_id, callee, args, &dest)? {
+        if self.try_lower_to_json_fallback(expr_id, callee, callee_expr, args, &dest)? {
             return Ok(());
         }
         // Static-constructor `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
-        if self.try_lower_from_json_static_fallback(expr_id, callee, args, &dest)? {
+        if self.try_lower_from_json_static_fallback(expr_id, callee, callee_expr, args, &dest)? {
             return Ok(());
         }
 
