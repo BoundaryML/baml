@@ -20,11 +20,8 @@
 //! - `ResolvedName::Item(Definition::TypeAlias(_))` — builds `TypeInfo::TypeAlias`
 //!   with the expansion type from `resolve_type_alias`.
 //!
-//! - `ResolvedName::Item(Definition::TemplateString(_))` — builds
-//!   `TypeInfo::TemplateString` (no further info available).
-//!
-//! - `ResolvedName::Item(Definition::Client(_) | Generator(_) | ...)` — builds
-//!   `TypeInfo::OtherItem` with the kind label.
+//! - `ResolvedName::Item(Definition::Let(_))` — builds `TypeInfo::OtherItem`
+//!   with the kind label the binding was written as (`client` or `let`).
 //!
 //! - `ResolvedName::Local { definition_site: Some(Parameter(idx)) }` — builds
 //!   `TypeInfo::LocalVar` with the parameter type from `function_signature`.
@@ -162,8 +159,6 @@ pub enum TypeInfo {
         expansion: String,
         owner: Option<String>,
     },
-    /// A template string: name only (no further type info).
-    TemplateString { name: String },
     /// A named binding or member slot: a local, a parameter, or a field.
     LocalVar {
         name: String,
@@ -189,7 +184,7 @@ pub enum TypeInfo {
     },
     /// Concise language documentation for a primitive, literal, or keyword.
     Documentation { label: String, detail: String },
-    /// A non-structural top-level item (client, generator, test, `retry_policy`).
+    /// A non-structural top-level item (a `client` or `let` binding).
     OtherItem { name: String, kind: &'static str },
 }
 
@@ -205,9 +200,7 @@ impl TypeInfo {
             | TypeInfo::Interface { owner, .. }
             | TypeInfo::TypeAlias { owner, .. }
             | TypeInfo::Symbol { owner, .. } => owner.as_deref(),
-            TypeInfo::TemplateString { .. }
-            | TypeInfo::Documentation { .. }
-            | TypeInfo::OtherItem { .. } => None,
+            TypeInfo::Documentation { .. } | TypeInfo::OtherItem { .. } => None,
         }
     }
 
@@ -220,7 +213,6 @@ impl TypeInfo {
             | TypeInfo::Symbol { docstring, .. } => docstring.as_deref(),
             TypeInfo::Enum { .. }
             | TypeInfo::TypeAlias { .. }
-            | TypeInfo::TemplateString { .. }
             | TypeInfo::LocalVar { .. }
             | TypeInfo::Documentation { .. }
             | TypeInfo::OtherItem { .. } => None,
@@ -371,7 +363,6 @@ impl TypeInfo {
             TypeInfo::TypeAlias {
                 name, expansion, ..
             } => format!("type {name} = {expansion}"),
-            TypeInfo::TemplateString { name } => format!("template_string {name}"),
             TypeInfo::LocalVar {
                 name, ty, is_let, ..
             } => {
@@ -454,7 +445,7 @@ form stringifies each value and produces a `string`."
     // and navigation provably agree on `+`/`<`/`[` too.
     if token.kind() != SyntaxKind::WORD {
         let target = crate::resolve::symbol_at(db, file, offset)?;
-        return target_type_info(db, viewer, target);
+        return target_type_info(db, viewer, file, target);
     }
 
     let name_text = token.text();
@@ -473,17 +464,25 @@ form stringifies each value and produces a `string`."
     let Some(target) = crate::resolve::symbol_at(db, file, offset) else {
         return template_frame_param_info(db, file, offset, &name);
     };
-    target_type_info(db, viewer, target)
+    target_type_info(db, viewer, file, target)
 }
 
 /// Build `TypeInfo` for a resolved [`SymbolTarget`]. Every arm reads
 /// recorded compiler data (firewall items, source maps, inference records) —
 /// no span-equality matching, no name heuristics.
+/// `reader` is the file the hover is asked from: a served package's rows
+/// have no file of their own, so their types are spelled for the reader.
 fn target_type_info(
     db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
+    reader: SourceFile,
     target: crate::resolve::SymbolTarget<'_>,
 ) -> Option<TypeInfo> {
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::extern_loc::{
+        extern_class_row, extern_enum_row, extern_function_row, extern_interface_row,
+    };
+
     use crate::resolve::SymbolTarget;
 
     match target {
@@ -493,7 +492,10 @@ fn target_type_info(
             func_scope,
             binding,
         } => local_target_type_info(db, func, func_scope, binding),
-        SymbolTarget::Field { class, field_index } => {
+        SymbolTarget::Field {
+            class: DeclRef::Source(class),
+            field_index,
+        } => {
             let class_data = item_data::class_data(db, class);
             let field = class_data.fields.get(field_index)?;
             // Resolved field types (Salsa-cached), canonical — matching the
@@ -515,7 +517,7 @@ fn target_type_info(
             })
         }
         SymbolTarget::Variant {
-            enum_loc,
+            enum_loc: DeclRef::Source(enum_loc),
             variant_index,
         } => {
             let enum_data = item_data::enum_data(db, enum_loc);
@@ -533,7 +535,9 @@ fn target_type_info(
                 docstring: variant.docstring.clone(),
             })
         }
-        SymbolTarget::Method { func } => Some(TypeInfo::Symbol {
+        SymbolTarget::Method {
+            func: DeclRef::Source(func),
+        } => Some(TypeInfo::Symbol {
             declaration: resolved_function_sig_parts(db, func, None).render(
                 db,
                 func.file(db),
@@ -557,7 +561,10 @@ fn target_type_info(
                 docstring: None,
             })
         }
-        SymbolTarget::InterfaceField { iface, field_index } => {
+        SymbolTarget::InterfaceField {
+            iface: DeclRef::Source(iface),
+            field_index,
+        } => {
             let iface_data = item_data::interface_data(db, iface);
             let field = iface_data.fields.get(field_index)?;
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -570,6 +577,60 @@ fn target_type_info(
                 ty: render::display_type_ref(&iface_data.type_refs, field.type_ref),
                 is_let: false,
                 owner: Some(render::canonical_path(db, &qtn)),
+            })
+        }
+        // A served package's rows, read whole: the resolved signature or
+        // field type and the owner, rendered as the source lane renders its
+        // own. A callable row carries no docstring; a field row's rides
+        // completion (a field hover has no docstring slot in either lane).
+        SymbolTarget::Field {
+            class: DeclRef::External(class),
+            field_index,
+        } => {
+            let row = extern_class_row(db, class);
+            let (name, ty, _) = row.fields.get(field_index)?;
+            Some(TypeInfo::LocalVar {
+                name: name.as_str().to_string(),
+                ty: render::display_ty_canonical_for_file(db, reader, ty),
+                is_let: false,
+                owner: Some(render::canonical_path(db, class.head(db))),
+            })
+        }
+        SymbolTarget::Variant {
+            enum_loc: DeclRef::External(enum_loc),
+            variant_index,
+        } => {
+            let row = extern_enum_row(db, enum_loc);
+            let variant = row.variants.get(variant_index)?;
+            let head = enum_loc.head(db);
+            Some(TypeInfo::Symbol {
+                declaration: format!("{}: {}", variant.as_str(), head.name().as_str()),
+                owner: Some(render::canonical_path(db, head)),
+                docstring: None,
+            })
+        }
+        SymbolTarget::Method {
+            func: DeclRef::External(func),
+        } => Some(TypeInfo::Symbol {
+            declaration: FnSigParts::of_exported(extern_function_row(db, func)).render(
+                db,
+                reader,
+                hover_sig_style(),
+            ),
+            owner: extern_owner_path(db, func),
+            docstring: None,
+        }),
+        SymbolTarget::InterfaceField {
+            iface: DeclRef::External(iface),
+            field_index,
+        } => {
+            let row = extern_interface_row(db, iface);
+            let (name, ty, _) = row.fields.get(field_index)?;
+            Some(TypeInfo::LocalVar {
+                name: name.as_str().to_string(),
+                ty: render::display_ty_canonical_for_file(db, reader, ty),
+                is_let: false,
+                owner: Some(render::canonical_path(db, iface.head(db))),
             })
         }
     }
@@ -848,6 +909,38 @@ fn method_owner_path(
             Some(render::display_owner_ty(
                 db,
                 &facts.for_ty_pattern.to_plain(),
+            ))
+        }
+    }
+}
+
+/// The owner a served package's callable hovers under — the same shape
+/// [`method_owner_path`] renders for source: a class method under the
+/// class's own type (its declared generics as its params), an interface
+/// method under the interface, an impl-provided method under the
+/// IMPLEMENTOR (the impl's for-target), a free function under none.
+fn extern_owner_path(
+    db: &dyn baml_compiler2_hir::Db,
+    func: baml_compiler2_hir_ty::extern_loc::ExternFunctionLoc<'_>,
+) -> Option<String> {
+    use baml_compiler2_hir_ty::{
+        callable::ExternalCallTarget,
+        extern_loc::{ExternRowAddr, extern_impl_row},
+        package_interface::mounted_type_row,
+    };
+    match func.addr(db) {
+        ExternRowAddr::Declared(ExternalCallTarget::Free { .. }) => None,
+        ExternRowAddr::Declared(ExternalCallTarget::Method { class, .. }) => Some(
+            render::display_owner_ty(db, &mounted_type_row(db, class)?.to_ty()),
+        ),
+        ExternRowAddr::Declared(ExternalCallTarget::Interface { interface, .. }) => {
+            Some(render::canonical_path(db, interface))
+        }
+        ExternRowAddr::ImplProvided { .. } => {
+            let block = func.impl_block(db)?;
+            Some(render::display_owner_ty(
+                db,
+                &extern_impl_row(db, block).for_ty_pattern,
             ))
         }
     }
@@ -1217,34 +1310,10 @@ pub fn type_info_for_definition(
             }
         }
 
-        Definition::TemplateString(ts_loc) => {
-            let ts_data = baml_compiler2_hir::item_data::template_string_data(db, ts_loc);
-            TypeInfo::TemplateString {
-                name: ts_data.name.as_str().to_string(),
-            }
-        }
-
-        Definition::Client(loc) => {
-            let data = baml_compiler2_hir::item_data::client_data(db, loc);
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "client",
-            }
-        }
-
-        Definition::RetryPolicy(loc) => {
-            let data = baml_compiler2_hir::item_data::retry_policy_data(db, loc);
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "retry_policy",
-            }
-        }
-
         Definition::Let(loc) => {
             let data = baml_compiler2_hir::item_data::let_data(db, loc);
             let kind = match data.origin {
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
-                baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
                 baml_compiler2_ast::ast::LetOrigin::Source => "let",
             };
             TypeInfo::OtherItem {
@@ -1644,23 +1713,30 @@ pub(crate) fn collect_type_surface<'db>(
             methods: imp
                 .methods
                 .into_iter()
-                .map(|body| match body {
-                    ImplMethodBody::Source { method, exported } => collect_source(method, exported),
+                .map(|func| match func {
+                    baml_compiler2_hir::loc::DeclRef::Source(method) => {
+                        collect_source(method, impl_method_row(db, func))
+                    }
                     // A mounted/precompiled impl's method: fully resolved
                     // signature, no docstring and no source to point at.
-                    ImplMethodBody::Exported(exported) => CollectedMethod {
-                        name: exported.name.as_str().to_string(),
-                        signature: render::FnSigParts::of_exported(&exported).render(
-                            db,
-                            file,
-                            method_sig_style(),
-                        ),
-                        docstring: None,
-                        location: None,
-                        is_instance: baml_compiler2_hir_ty::package_interface::exported_takes_self(
-                            &exported,
-                        ),
-                    },
+                    baml_compiler2_hir::loc::DeclRef::External(method) => {
+                        let exported =
+                            baml_compiler2_hir_ty::extern_loc::extern_function_row(db, method);
+                        CollectedMethod {
+                            name: exported.name.as_str().to_string(),
+                            signature: render::FnSigParts::of_exported(exported).render(
+                                db,
+                                file,
+                                method_sig_style(),
+                            ),
+                            docstring: None,
+                            location: None,
+                            is_instance:
+                                baml_compiler2_hir_ty::package_interface::exported_takes_self(
+                                    exported,
+                                ),
+                        }
+                    }
                 })
                 .collect(),
         })
@@ -1801,17 +1877,42 @@ pub(crate) fn impl_is_for_type(
     }
 }
 
-/// Where one impl-provided method's body lives.
-pub(crate) enum ImplMethodBody<'db> {
-    /// A source block's method item, paired with its exported descriptor
-    /// from the package interface's IMPL rows (`None` on mid-edit skew).
-    Source {
-        method: baml_compiler2_hir::loc::FunctionLoc<'db>,
-        exported: Option<&'db ExportedFunction>,
-    },
-    /// A mounted or precompiled impl's method: a descriptor with no source
-    /// item in this database (boxed: the descriptor dwarfs the source arm).
-    Exported(Box<ExportedFunction>),
+/// The exported descriptor of an impl-provided method, wherever its body
+/// lives: a served package's row itself; a source method's row from its own
+/// package's interface, paired through the impl's coherence identity
+/// (interface instantiation + for-target + constraint set — the ONE
+/// identity an exported impl row is addressed by, so this cannot drift from
+/// it). `None` on mid-edit skew, when the interface has not caught up with
+/// the source.
+pub(crate) fn impl_method_row<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+) -> Option<&'db ExportedFunction> {
+    use baml_compiler2_hir::{item_data::MethodOwner, loc::DeclRef};
+    use baml_compiler2_hir_ty::{
+        extern_loc::{exported_impl_identity, extern_function_row, impl_identity},
+        impls::{ResolvedImplFacts, impl_facts},
+    };
+
+    match func {
+        DeclRef::External(func) => Some(extern_function_row(db, func)),
+        DeclRef::Source(method) => {
+            let MethodOwner::Impl(block) = item_data::method_owner(db, method)? else {
+                return None;
+            };
+            let facts = impl_facts(db, block).resolved()?;
+            let identity = impl_identity(&ResolvedImplFacts::Source { block, facts });
+            let root = baml_compiler2_hir::file_package::file_package(db, block.file(db)).root;
+            let name = &item_data::function_data(db, method).name;
+            baml_compiler2_hir_ty::package_interface::package_interface(db, root)
+                .impls
+                .iter()
+                .find(|row| exported_impl_identity(row) == identity)?
+                .methods
+                .iter()
+                .find(|exported| exported.name == *name)
+        }
+    }
 }
 
 /// One impl that applies to a concrete type declaration, with the methods it
@@ -1830,8 +1931,9 @@ pub(crate) struct TypeImpl<'db> {
     /// The impl's field links, `(interface field, class field)`; a source
     /// block's only.
     pub(crate) field_links: Vec<(String, String)>,
-    /// The provided methods in declaration order.
-    pub(crate) methods: Vec<ImplMethodBody<'db>>,
+    /// The provided methods in declaration order, wherever their bodies
+    /// live; [`impl_method_row`] reads each one's exported descriptor.
+    pub(crate) methods: Vec<baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>>,
 }
 
 /// Every impl that applies to a concrete type declaration, impls OF the type
@@ -1848,16 +1950,12 @@ pub(crate) fn type_impls<'db>(
     viewer: baml_base::SourceRoot,
     definition: Definition<'db>,
 ) -> Vec<TypeImpl<'db>> {
-    use baml_compiler2_hir_ty::impls::{ResolvedImplFacts, ResolvedImplOrigin};
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::impls::ResolvedImplFacts;
 
     let Some(self_ty) = baml_compiler2_hir_ty::lower::declaration_self_ty(db, definition) else {
         return Vec::new();
     };
-    let file = definition.file(db);
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = pkg_info.root;
-    let iface = baml_compiler2_hir_ty::package_interface::package_interface(db, pkg_id);
-
     let (own, other): (Vec<_>, Vec<_>) =
         baml_compiler2_hir_ty::method_resolution::impls_of_type(db, viewer, &self_ty)
             .into_iter()
@@ -1885,42 +1983,10 @@ pub(crate) fn type_impls<'db>(
                     )
                 })
                 .collect();
-            let (block, field_links, methods) = match &resolved.origin {
-                ResolvedImplOrigin::Source { block, methods } => {
-                    let row = match &resolved.facts {
-                        ResolvedImplFacts::Source(facts) => {
-                            let for_ty = facts.for_ty_pattern.to_plain();
-                            let fact_iface = facts.interface.to_plain();
-                            iface.impls.iter().find(|row| {
-                                row.interface.name == fact_iface.name
-                                    && row.for_ty_pattern == for_ty
-                                    && row.interface.generics == fact_iface.generics
-                                    // The constraint set is part of the impl
-                                    // identity (`ImplCoherenceKey`'s
-                                    // invariant): two same-head rows may one
-                                    // day differ only by bounds, and matching
-                                    // the wrong one would pair this block's
-                                    // methods with the other impl's exported
-                                    // signatures. Positional compare is exact
-                                    // here — both sides lower the same
-                                    // declaration.
-                                    && row.param_bounds.len() == facts.generic_params.len()
-                                    && row
-                                        .param_bounds
-                                        .iter()
-                                        .zip(facts.generic_params.iter())
-                                        .all(|(exported, (_, fact))| {
-                                            exported.len() == fact.len()
-                                                && exported
-                                                    .iter()
-                                                    .zip(fact.iter())
-                                                    .all(|(e, f)| *e == f.to_plain())
-                                        })
-                            })
-                        }
-                        ResolvedImplFacts::Mounted(_) | ResolvedImplFacts::Precompiled(_) => None,
-                    };
-                    let methods = methods
+            let (block, field_links, methods) = match &resolved.facts {
+                ResolvedImplFacts::Source { block, facts } => {
+                    let methods = facts
+                        .methods
                         .iter()
                         .copied()
                         .filter(|&method_loc| {
@@ -1928,21 +1994,12 @@ pub(crate) fn type_impls<'db>(
                                 .metadata
                                 .is_language_internal
                         })
-                        .map(|method_loc| ImplMethodBody::Source {
-                            method: method_loc,
-                            exported: row.and_then(|row| {
-                                let name = &item_data::function_data(db, method_loc).name;
-                                row.methods.iter().find(|ef| ef.name == *name)
-                            }),
-                        })
+                        .map(DeclRef::Source)
                         .collect();
                     (Some(*block), impl_field_links(db, *block), methods)
                 }
-                ResolvedImplOrigin::Mounted { methods } => {
-                    (None, Vec::new(), exported_bodies(methods))
-                }
-                ResolvedImplOrigin::Precompiled { methods, .. } => {
-                    (None, Vec::new(), exported_bodies(methods))
+                ResolvedImplFacts::External { block, .. } => {
+                    (None, Vec::new(), exported_bodies(db, *block))
                 }
             };
             TypeImpl {
@@ -1974,11 +2031,22 @@ pub(crate) fn impl_field_links(
         .collect()
 }
 
-/// The bodies of a mounted/precompiled impl: each method IS its descriptor.
-fn exported_bodies<'db>(methods: &[ExportedFunction]) -> Vec<ImplMethodBody<'db>> {
-    methods
+/// The bodies of an external impl: each provided method's row identity.
+fn exported_bodies<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    block: baml_compiler2_hir_ty::extern_loc::ExternImplLoc<'db>,
+) -> Vec<baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>> {
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::extern_loc::{extern_impl_method, extern_impl_row};
+    extern_impl_row(db, block)
+        .methods
         .iter()
-        .map(|exported| ImplMethodBody::Exported(Box::new(exported.clone())))
+        .map(|exported| {
+            DeclRef::External(
+                extern_impl_method(db, block, &exported.name)
+                    .unwrap_or_else(|| unreachable!("a provided row of the block mints")),
+            )
+        })
         .collect()
 }
 

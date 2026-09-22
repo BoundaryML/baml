@@ -7101,6 +7101,18 @@ impl BexEngine {
                         message: format!("mounted type `{export_name}` carries an unresolved head"),
                     });
                 }
+                // BUG: a head is not spelled by its package's identity. A
+                // compiled head's declared name is spelled from ITS
+                // artifact's viewpoint, and a runtime declaration (below) is
+                // spelled `Local` outright, so a declaration of the HOST
+                // program or of ANOTHER runtime package reaches the mount's
+                // wire as `Local` — which the importer reads as the MOUNT's
+                // own package. `enrich_runtime_mount` drops a witness whose
+                // local interface the mount does not declare, so a runtime
+                // class's witness of another runtime package's interface is
+                // never served (E0001 where the consumer relies on it), and a
+                // path collision with the mount's own interface would
+                // attribute it to the wrong declaration.
                 if vm.heap.is_compile_time_ptr(head.ptr()) {
                     let name = head
                         .declared_name()

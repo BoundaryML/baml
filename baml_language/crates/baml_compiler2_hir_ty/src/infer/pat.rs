@@ -1502,17 +1502,28 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn class_pattern_field_types(&self, qtn: &baml_type::DeclName, args: &[Ty]) -> Vec<Ty> {
-        match self.facts.definition_of(qtn) {
-            Some(baml_compiler2_hir::contributions::Definition::Class(class)) => {
-                crate::lower::class_field_types(self.db, class)
+        if let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+            self.facts.definition_of(qtn)
+        {
+            return crate::lower::class_field_types(self.db, class)
+                .iter()
+                .map(|(_, field_ty)| {
+                    crate::lower::substitute_params(&crate::impls::interned_ty(field_ty), args)
+                })
+                .collect();
+        }
+        // A served package's class: its row's fields, in declaration order.
+        crate::extern_loc::mounted_class_loc(self.db, qtn)
+            .map(|class| {
+                crate::extern_loc::extern_class_row(self.db, class)
+                    .fields
                     .iter()
-                    .map(|(_, field_ty)| {
-                        crate::lower::substitute_params(&crate::impls::interned_ty(field_ty), args)
+                    .map(|(_, field_ty, _)| {
+                        crate::lower::substitute_params(&Ty::from_plain(field_ty), args)
                     })
                     .collect()
-            }
-            _ => Vec::new(),
-        }
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -1587,34 +1598,50 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let Some(Definition::Class(class)) = facts.definition_of(class_qtn) else {
             return None;
         };
-        let Some(Definition::Interface(iface_loc)) = facts.definition_of(iface_qtn) else {
-            return None;
+        // The interface's declared field list, whichever lane declares it.
+        let iface_fields: Vec<baml_type::Name> = match facts.definition_of(iface_qtn) {
+            Some(Definition::Interface(iface_loc)) => {
+                baml_compiler2_hir::item_data::interface_data(db, iface_loc)
+                    .fields
+                    .iter()
+                    .map(|field| field.name.clone())
+                    .collect()
+            }
+            _ => {
+                let interface = crate::extern_loc::mounted_interface_loc(db, iface_qtn)?;
+                crate::extern_loc::extern_interface_row(db, interface)
+                    .fields
+                    .iter()
+                    .map(|(name, ..)| name.clone())
+                    .collect()
+            }
         };
         let class_data = baml_compiler2_hir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
-        // The class's implements block for THIS interface supplies the
-        // `field as class_field` links (default: the same name).
+        // The class's block for that interface, matched by HEAD: the block's
+        // written target lowers to a name, which is the same whether the
+        // interface is declared in source or served from its rows.
         let block = class_data.implements.iter().find(|block| {
-            crate::interfaces::resolve_ref_to_interface(
+            crate::interfaces::resolve_ref_to_interface_name(
                 db,
                 &class_data.type_refs,
                 block.target,
                 pkg_items,
                 &pkg.namespace_path,
-            ) == Some(iface_loc)
+            )
+            .as_ref()
+                == Some(iface_qtn)
         })?;
-        let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
-        iface_data
-            .fields
+        iface_fields
             .iter()
             .map(|field| {
                 let class_field = block
                     .field_links
                     .iter()
-                    .find(|link| link.interface_field == field.name)
+                    .find(|link| link.interface_field == *field)
                     .map(|link| link.class_field.clone())
-                    .unwrap_or_else(|| field.name.clone());
+                    .unwrap_or_else(|| field.clone());
                 class_data
                     .fields
                     .iter()
@@ -1669,8 +1696,26 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let baml_type::Ty::Interface(qtn, args, pins) = iface_ty else {
             return Vec::new();
         };
-        let Some(Definition::Interface(interface)) = self.infer.facts.definition_of(qtn) else {
-            return Vec::new();
+        // The interface's declared field list, whichever lane declares it;
+        // each field's type comes from the same member lookup either way.
+        let field_names: Vec<baml_type::Name> = match self.infer.facts.definition_of(qtn) {
+            Some(Definition::Interface(interface)) => {
+                baml_compiler2_hir::item_data::interface_data(self.infer.db, interface)
+                    .fields
+                    .iter()
+                    .map(|field| field.name.clone())
+                    .collect()
+            }
+            _ => match crate::extern_loc::mounted_interface_loc(self.infer.db, qtn) {
+                Some(interface) => {
+                    crate::extern_loc::extern_interface_row(self.infer.db, interface)
+                        .fields
+                        .iter()
+                        .map(|(name, ..)| name.clone())
+                        .collect()
+                }
+                None => return Vec::new(),
+            },
         };
         let head = Ty::from_plain(iface_ty);
         let target = InferInterface::new(
@@ -1683,8 +1728,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
                 .collect(),
         );
-        baml_compiler2_hir::item_data::interface_data(self.infer.db, interface)
-            .fields
+        field_names
             .iter()
             .map(|field| {
                 crate::method_resolution::member_on_interface(
@@ -1692,7 +1736,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                     &self.infer.facts,
                     &target,
                     &head,
-                    &field.name,
+                    field,
                     true,
                 )
                 // Instantiation of a closed scrutinee head is closed; an

@@ -1457,7 +1457,6 @@ pub type Literal = baml_base::Literal;
 pub enum LetOrigin {
     Source,
     Client,
-    RetryPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1605,9 +1604,6 @@ pub enum Item {
     Enum(EnumDef),
     Interface(InterfaceDef),
     TypeAlias(TypeAliasDef),
-    Client(ClientDef),
-    TemplateString(TemplateStringDef),
-    RetryPolicy(RetryPolicyDef),
     Let(LetDef),
     ImplementsFor(ImplementsForDef),
 }
@@ -1965,39 +1961,8 @@ pub struct TypeAliasDef {
     pub docstring: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClientDef {
-    pub name: Name,
-    pub config_items: Vec<ConfigItemDef>,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigItemDef {
-    pub key: Name,
-    pub value: std::string::String,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateStringDef {
-    pub name: Name,
-    pub params: Vec<Param>,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetryPolicyDef {
-    pub name: Name,
-    pub config_items: Vec<ConfigItemDef>,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
 /// A top-level let binding. Source `let` declarations and compiler-generated
-/// client/retry-policy bindings share the same `$init` pipeline.
+/// client bindings share the same `$init` pipeline.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LetDef {

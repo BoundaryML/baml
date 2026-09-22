@@ -8,10 +8,7 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
@@ -27,7 +24,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callable::{ExternalCallTarget, ExternalLinkability},
+    extern_loc::{ExternFunctionLoc, extern_function_named},
     lower::qualify_def,
+    render::{Spell, Viewpoint},
 };
 
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
@@ -427,74 +426,27 @@ pub enum ResolvedSource {
     Builtin,
 }
 
-/// Common output for resolved function signatures.
-#[derive(Clone)]
-pub struct ResolvedFunction {
-    pub name: Name,
-    pub params: Vec<FunctionParamTy>,
-    pub return_type: Ty,
-    pub callable_throws: Ty,
-    pub generic_params: Vec<ParamTy>,
-    pub generic_param_bounds: Vec<Vec<baml_type::Interface>>,
-    pub builtin_kind: Option<BuiltinKind>,
-    pub external: Option<Arc<crate::callable::ExternalCallable>>,
-}
-
-/// A value lookup never lies about source ownership. Source-backed results
-/// retain their real definition; mounted results carry only owned symbolic
-/// callable facts.
+/// A value lookup never lies about source ownership: a source-backed result
+/// is its real definition; a served package's result is the identity of its
+/// exported row, whose facts every consumer reads through
+/// [`crate::extern_loc::extern_function_row`].
 pub enum ResolvedValue<'db> {
     Source(Definition<'db>),
-    Exported(Box<ResolvedFunction>),
-}
-
-/// Common output for resolved method lookups (includes class context).
-pub struct ResolvedMethod {
-    pub function: ResolvedFunction,
-    pub class_name: Name,
-    pub class_generic_params: Vec<ParamTy>,
+    External(ExternFunctionLoc<'db>),
 }
 
 /// Whether an exported function declares a `self` receiver, and is therefore
 /// an instance method rather than a static one.
 ///
 /// The receiver is an ordinary first parameter named `self` (there is no
-/// separate receiver slot), so this is the whole test — for the dispatch
-/// shape `resolved_exported_function` records and for the member
-/// enumeration alike.
+/// separate receiver slot), so this is the whole test — the row-side twin of
+/// [`crate::callable::callable_takes_self`], for readers holding a row.
 pub fn exported_takes_self(function: &ExportedFunction) -> bool {
     function
         .params
         .first()
         .and_then(|param| param.name.as_ref())
         .is_some_and(|name| name.as_str() == "self")
-}
-
-pub(crate) fn resolved_exported_function(
-    function: &ExportedFunction,
-    owner_generic_params: Vec<ParamTy>,
-    owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
-) -> ResolvedFunction {
-    let takes_self = exported_takes_self(function);
-    ResolvedFunction {
-        name: function.name.clone(),
-        params: function.params.clone(),
-        return_type: function.return_type.clone(),
-        callable_throws: function.callable_throws.clone(),
-        generic_params: function.generic_params.clone(),
-        generic_param_bounds: function.generic_param_bounds.clone(),
-        builtin_kind: function.builtin_kind,
-        external: Some(Arc::new(crate::callable::ExternalCallable {
-            target: function.target.clone(),
-            linkability: function.linkability,
-            builtin_kind: function.builtin_kind,
-            takes_self,
-            owner_generic_params,
-            owner_generic_param_bounds,
-            generic_params: function.generic_params.clone(),
-            generic_param_bounds: function.generic_param_bounds.clone(),
-        })),
-    }
 }
 
 /// Bundles a package's own items with its dependencies' pre-resolved interfaces.
@@ -585,34 +537,483 @@ impl<N: Head> PackageInterface<N> {
     }
 }
 
-/// A wire head an importing root cannot reach: the explicit
-/// unspellable-from-here outcome of [`import_interface`].
+/// Why [`import_interface`] refused a wire interface: it is not a faithful
+/// export of the root it is being mounted as. Every spelling is canonical.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnresolvedHead(pub TypeName);
+pub enum ImportError {
+    /// A wire head the importing root cannot reach: the explicit
+    /// unspellable-from-here outcome.
+    UnresolvedHead(TypeName),
+    /// A row claims an identity other than the key it is exported under
+    /// (a type row's `qtn`, a callable row's `target`), so a consumer
+    /// minting from the key and one reading the row would disagree about
+    /// what the row names.
+    RowIdentity {
+        kind: &'static str,
+        key: String,
+        claimed: String,
+    },
+    /// Two rows of one family share a key, so the key names no single row.
+    DuplicateRow { kind: &'static str, key: String },
+    /// A row's per-parameter bound lists do not pair with its parameters.
+    UnpairedBounds {
+        kind: &'static str,
+        key: String,
+        params: usize,
+        bound_lists: usize,
+    },
+    /// An impl claims to be declared in the body of a class this package
+    /// does not export.
+    DanglingImplOrigin { interface: String, class: String },
+    /// An interface row frames `Self` as something other than slot 0 named
+    /// `Self` — the one convention every reader of a frame assumes (the
+    /// one-`Self` test, the projection tier, the owner frame).
+    InterfaceSelfParam { interface: String, claimed: String },
+    /// Two impl rows have one identity — the degenerate overlap coherence
+    /// rejects at the source compile, so the blob is not the export of a
+    /// checked package; served, the identity would name no single row.
+    DuplicateImpl { identity: String },
+    /// An impl row's header pins associated types. A header names the
+    /// interface and its arguments only (E0001 at the source compile); the
+    /// row's bindings are its `associated_types`, and the identity is built
+    /// from a header that carries none.
+    ImplHeaderPins { interface: String },
+    /// An impl row implements a name that is not an interface: its own
+    /// package exports no such interface (the blob contradicts itself), or a
+    /// package this world can see exports it as something else.
+    UnexportedImplInterface { interface: String },
+    /// An impl row provides a method its interface does not declare (E0115
+    /// at the source compile): the row's dispatch slot would name a member
+    /// the interface does not have.
+    UndeclaredImplMethod { interface: String, method: String },
+    /// An impl row omits a method its interface requires (E0113 at the
+    /// source compile): dispatch through the row would reach nothing.
+    MissingImplMethod { interface: String, method: String },
+    /// A row is exported under a namespace the interface does not list, so a
+    /// source-less resolver walking `namespaces` would never find it.
+    UnlistedNamespace { kind: &'static str, key: String },
+}
 
-impl std::fmt::Display for UnresolvedHead {
+impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "the interface names `{}`, whose package this package cannot reach",
-            self.0
-        )
+        match self {
+            Self::UnresolvedHead(name) => write!(
+                f,
+                "the interface names `{name}`, whose package this package cannot reach"
+            ),
+            Self::RowIdentity { kind, key, claimed } => {
+                write!(
+                    f,
+                    "the {kind} row exported as `{key}` claims to be `{claimed}`"
+                )
+            }
+            Self::DuplicateRow { kind, key } => {
+                write!(f, "the interface exports two {kind} rows as `{key}`")
+            }
+            Self::UnpairedBounds {
+                kind,
+                key,
+                params,
+                bound_lists,
+            } => write!(
+                f,
+                "the {kind} row `{key}` declares {params} generic parameter(s) but {bound_lists} bound list(s)"
+            ),
+            Self::DuplicateImpl { identity } => {
+                write!(f, "the interface exports two impl rows for {identity}")
+            }
+            Self::ImplHeaderPins { interface } => write!(
+                f,
+                "an impl of `{interface}` pins associated types in its header; a header names the \
+                 interface and its arguments only"
+            ),
+            Self::UnexportedImplInterface { interface } => write!(
+                f,
+                "an impl row implements `{interface}`, which its package does not export as an interface"
+            ),
+            Self::UndeclaredImplMethod { interface, method } => write!(
+                f,
+                "an impl of `{interface}` provides `{method}`, which the interface does not declare"
+            ),
+            Self::MissingImplMethod { interface, method } => write!(
+                f,
+                "an impl of `{interface}` does not provide `{method}`, which the interface requires"
+            ),
+            Self::UnlistedNamespace { kind, key } => write!(
+                f,
+                "the {kind} row `{key}` is exported under a namespace the interface does not list"
+            ),
+            Self::InterfaceSelfParam { interface, claimed } => write!(
+                f,
+                "the interface row exported as `{interface}` frames `Self` as `{claimed}`; `Self` is \
+                 frame slot 0 in every lane"
+            ),
+            Self::DanglingImplOrigin { interface, class } => write!(
+                f,
+                "an impl of `{interface}` claims the body of `{class}`, which this package does not export as a class"
+            ),
+        }
     }
 }
 
 /// A wire interface as seen from `root`: the artifact's own declarations
-/// are `root`'s, its dependencies resolve through `root`'s edges.
+/// are `root`'s, its dependencies resolve through `root`'s edges, and every
+/// row is the row its key says it is (`validate_row_identities`).
+///
+/// Coherence AMONG the rows is NOT judged here, beyond the degenerate case
+/// of two rows with ONE identity, which needs no oracle
+/// ([`ImportError::DuplicateImpl`]). Deciding whether two DISTINCT
+/// identities overlap needs the normalization oracle — enum variants,
+/// alias bodies, bound witnesses — and that oracle reads the very root
+/// being imported, which is already installed when its interface is
+/// validated, so consulting it from here is a query cycle rather than an
+/// answer. Until the source lane and the mount lane share one overlap
+/// engine over one fact environment, a served root's own rows are trusted
+/// to be what its compile checked.
 pub fn import_interface(
     db: &dyn baml_compiler2_hir::Db,
     root: baml_base::SourceRoot,
     wire: &PackageInterface<TypeName>,
-) -> Result<PackageInterface, UnresolvedHead> {
+) -> Result<PackageInterface, ImportError> {
     let spelling = baml_compiler2_hir::package::spelling(db);
-    wire.try_map_heads(&mut |name| {
+    let interface = wire.try_map_heads(&mut |name| {
         spelling
             .resolve(db, root, name)
-            .ok_or_else(|| UnresolvedHead(name.clone()))
-    })
+            .ok_or_else(|| ImportError::UnresolvedHead(name.clone()))
+    })?;
+    validate_row_identities(db, root, &interface)?;
+    Ok(interface)
+}
+
+/// Every row's claimed identity must be the key it is exported under: a
+/// type row's `qtn`; a callable row's `target` (a free function's item, a
+/// class method's class, an interface method's interface, an impl-provided
+/// method's slot on the impl's own interface); an in-body impl's class. One
+/// key names one row. Export builds key and claim from one definition, so a
+/// faithful blob always passes; a blob that disagrees is refused at the
+/// mount boundary, and after import the key and the row are one fact that
+/// a consumer may read from either side.
+///
+/// A row is also well-formed the way a consumer presumes without looking:
+/// its bound lists pair with its parameters, its members are named once,
+/// its namespace is listed, and an impl row's header is pin-free and its
+/// methods are exactly a subset of its interface's that covers the required
+/// ones — judged wherever that interface's declaration is visible here. Each
+/// is an error at the source compile, so a faithful export of a checked
+/// package has none.
+fn validate_row_identities(
+    db: &dyn baml_compiler2_hir::Db,
+    root: baml_base::SourceRoot,
+    interface: &PackageInterface,
+) -> Result<(), ImportError> {
+    let viewpoint = Viewpoint::canonical(db);
+    let spell = |head: &DeclName| head.spell(&viewpoint);
+    let spell_target = |target: &ExternalCallTarget| match target {
+        ExternalCallTarget::Free { function } => spell(function),
+        ExternalCallTarget::Method { class, name } => format!("{}.{}", spell(class), name.as_str()),
+        ExternalCallTarget::Interface { interface, method } => {
+            format!("{}.{}", spell(interface), method.as_str())
+        }
+    };
+    // One callable row against the target its key gives it. Every callable
+    // family — free functions included — goes through this, so a row's
+    // bound lists pair with its parameters wherever the row lives: readers
+    // zip the two and would silently drop the unpaired bounds.
+    let check_callable = |kind: &'static str,
+                          row: &ExportedFunction,
+                          expected: &ExternalCallTarget|
+     -> Result<(), ImportError> {
+        if row.generic_params.len() != row.generic_param_bounds.len() {
+            return Err(ImportError::UnpairedBounds {
+                kind,
+                key: spell_target(expected),
+                params: row.generic_params.len(),
+                bound_lists: row.generic_param_bounds.len(),
+            });
+        }
+        if row.target != *expected {
+            return Err(ImportError::RowIdentity {
+                kind,
+                key: spell_target(expected),
+                claimed: spell_target(&row.target),
+            });
+        }
+        Ok(())
+    };
+    // The callable rows of one owner; two rows of one owner may not share a
+    // name.
+    let check_callables = |kind: &'static str,
+                           rows: &mut dyn Iterator<Item = &ExportedFunction>,
+                           expected: &dyn Fn(&Name) -> ExternalCallTarget|
+     -> Result<(), ImportError> {
+        let mut seen = FxHashSet::default();
+        for row in rows {
+            let expected = expected(&row.name);
+            check_callable(kind, row, &expected)?;
+            if !seen.insert(&row.name) {
+                return Err(ImportError::DuplicateRow {
+                    kind,
+                    key: spell_target(&expected),
+                });
+            }
+        }
+        Ok(())
+    };
+    // The members of one row, by name: readers address a member by its
+    // position in the row, so a repeated name makes the index mean a member
+    // the name does not (E0012 at the source compile).
+    let unique_members = |kind: &'static str,
+                          owner: &DeclName,
+                          names: &mut dyn Iterator<Item = &Name>|
+     -> Result<(), ImportError> {
+        let mut seen = FxHashSet::default();
+        for member in names {
+            if !seen.insert(member) {
+                return Err(ImportError::DuplicateRow {
+                    kind,
+                    key: format!("{}.{}", spell(owner), member.as_str()),
+                });
+            }
+        }
+        Ok(())
+    };
+    let listed = |kind: &'static str, namespace: &[Name], key: &DeclName| {
+        if interface.namespaces.contains(namespace) {
+            Ok(())
+        } else {
+            Err(ImportError::UnlistedNamespace {
+                kind,
+                key: spell(key),
+            })
+        }
+    };
+    for (namespace, types) in &interface.types {
+        for (name, row) in types {
+            let key = DeclName::in_root(root, namespace.clone(), name.clone());
+            let (kind, claimed) = match row {
+                ExportedType::Class { qtn, .. } => ("class", qtn),
+                ExportedType::Enum { qtn, .. } => ("enum", qtn),
+                ExportedType::TypeAlias { qtn, .. } => ("type alias", qtn),
+                ExportedType::Interface { qtn, .. } => ("interface", qtn),
+            };
+            if *claimed != key {
+                return Err(ImportError::RowIdentity {
+                    kind,
+                    key: spell(&key),
+                    claimed: spell(claimed),
+                });
+            }
+            listed(kind, namespace, &key)?;
+            match row {
+                ExportedType::Class { fields, .. } => {
+                    unique_members(
+                        "class field",
+                        &key,
+                        &mut fields.iter().map(|(field, ..)| field),
+                    )?;
+                }
+                ExportedType::Enum { variants, .. } => {
+                    unique_members("enum variant", &key, &mut variants.iter())?;
+                }
+                ExportedType::Interface {
+                    associated_types,
+                    fields,
+                    ..
+                } => {
+                    unique_members(
+                        "associated type",
+                        &key,
+                        &mut associated_types.iter().map(|associated| &associated.name),
+                    )?;
+                    unique_members(
+                        "interface field",
+                        &key,
+                        &mut fields.iter().map(|(field, ..)| field),
+                    )?;
+                }
+                ExportedType::TypeAlias { .. } => {}
+            }
+            let (params, bound_lists) = match row {
+                ExportedType::Class {
+                    generic_params,
+                    generic_param_bounds,
+                    ..
+                } => (generic_params.len(), generic_param_bounds.len()),
+                ExportedType::Interface {
+                    generic_params,
+                    param_bounds,
+                    ..
+                } => (generic_params.len(), param_bounds.len()),
+                ExportedType::Enum { .. } | ExportedType::TypeAlias { .. } => (0, 0),
+            };
+            if params != bound_lists {
+                return Err(ImportError::UnpairedBounds {
+                    kind,
+                    key: spell(&key),
+                    params,
+                    bound_lists,
+                });
+            }
+            if let ExportedType::Interface { self_param, .. } = row
+                && *self_param != ParamTy::new(0, Name::new("Self"))
+            {
+                return Err(ImportError::InterfaceSelfParam {
+                    interface: spell(&key),
+                    claimed: format!("`{}` at slot {}", self_param.as_str(), self_param.index()),
+                });
+            }
+            match row {
+                ExportedType::Class { methods, .. } => {
+                    check_callables("class method", &mut methods.iter(), &|name| {
+                        ExternalCallTarget::Method {
+                            class: key.clone(),
+                            name: name.clone(),
+                        }
+                    })?;
+                }
+                ExportedType::Interface {
+                    required_methods,
+                    default_methods,
+                    ..
+                } => {
+                    check_callables(
+                        "interface method",
+                        &mut required_methods.iter().chain(default_methods),
+                        &|name| ExternalCallTarget::Interface {
+                            interface: key.clone(),
+                            method: name.clone(),
+                        },
+                    )?;
+                }
+                ExportedType::Enum { .. } | ExportedType::TypeAlias { .. } => {}
+            }
+        }
+    }
+    for (namespace, functions) in &interface.functions {
+        for (name, row) in functions {
+            let key = DeclName::in_root(root, namespace.clone(), name.clone());
+            listed("function", namespace, &key)?;
+            if row.name != *name {
+                return Err(ImportError::RowIdentity {
+                    kind: "function",
+                    key: spell(&key),
+                    claimed: spell(&DeclName::in_root(
+                        root,
+                        namespace.clone(),
+                        row.name.clone(),
+                    )),
+                });
+            }
+            check_callable("function", row, &ExternalCallTarget::Free { function: key })?;
+        }
+    }
+    let mut impl_identities = FxHashSet::default();
+    for exported in &interface.impls {
+        let slot_owner = &exported.interface.name;
+        if exported.generic_params.len() != exported.param_bounds.len() {
+            return Err(ImportError::UnpairedBounds {
+                kind: "impl",
+                key: spell(slot_owner),
+                params: exported.generic_params.len(),
+                bound_lists: exported.param_bounds.len(),
+            });
+        }
+        check_callables("impl method", &mut exported.methods.iter(), &|name| {
+            ExternalCallTarget::Interface {
+                interface: slot_owner.clone(),
+                method: name.clone(),
+            }
+        })?;
+        if !exported.interface.associated_types.is_empty() {
+            return Err(ImportError::ImplHeaderPins {
+                interface: spell(slot_owner),
+            });
+        }
+        // The provided methods against the interface's own declaration,
+        // wherever this world can see one. This package's own interface is
+        // the value in hand, and a row naming one it does not export
+        // contradicts the blob itself. A dependency's is read from that
+        // dependency (the graph is acyclic, so this never reads the root under
+        // import); a package the mount names but this world did not mount is
+        // an opaque root with no declarations, which leaves nothing to judge
+        // against — and nothing here can name that interface to dispatch
+        // through the row.
+        let own = slot_owner.root() == root;
+        let declaring = if own {
+            interface.lookup_type(slot_owner.namespace(), slot_owner.name())
+        } else {
+            package_interface(db, slot_owner.root())
+                .lookup_type(slot_owner.namespace(), slot_owner.name())
+        };
+        let declared = match declaring {
+            Some(ExportedType::Interface {
+                required_methods,
+                default_methods,
+                ..
+            }) => Some((required_methods, default_methods)),
+            Some(
+                ExportedType::Class { .. }
+                | ExportedType::Enum { .. }
+                | ExportedType::TypeAlias { .. },
+            ) => {
+                return Err(ImportError::UnexportedImplInterface {
+                    interface: spell(slot_owner),
+                });
+            }
+            None if own => {
+                return Err(ImportError::UnexportedImplInterface {
+                    interface: spell(slot_owner),
+                });
+            }
+            None => None,
+        };
+        if let Some((required_methods, default_methods)) = declared {
+            if let Some(undeclared) = exported.methods.iter().find(|provided| {
+                !required_methods
+                    .iter()
+                    .chain(default_methods)
+                    .any(|declared| declared.name == provided.name)
+            }) {
+                return Err(ImportError::UndeclaredImplMethod {
+                    interface: spell(slot_owner),
+                    method: undeclared.name.to_string(),
+                });
+            }
+            if let Some(missing) = required_methods.iter().find(|required| {
+                !exported
+                    .methods
+                    .iter()
+                    .any(|provided| provided.name == required.name)
+            }) {
+                return Err(ImportError::MissingImplMethod {
+                    interface: spell(slot_owner),
+                    method: missing.name.to_string(),
+                });
+            }
+        }
+        if let ExportedImplOrigin::InBodyClass { class_qtn } = &exported.origin
+            && !(class_qtn.root() == root
+                && matches!(
+                    interface.lookup_type(class_qtn.namespace(), class_qtn.name()),
+                    Some(ExportedType::Class { .. })
+                ))
+        {
+            return Err(ImportError::DanglingImplOrigin {
+                interface: spell(slot_owner),
+                class: spell(class_qtn),
+            });
+        }
+        // The bound-list pairing and the pin-free header above are what
+        // `exported_impl_facts` — and so the identity — presumes; they are
+        // checked first for that reason.
+        let identity = crate::extern_loc::exported_impl_identity(exported);
+        if !impl_identities.insert(identity.clone()) {
+            return Err(ImportError::DuplicateImpl {
+                identity: crate::extern_loc::spell_impl_identity(&identity, &viewpoint),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// `root`'s interface spelled for the wire: every head by its root's
@@ -679,7 +1080,7 @@ impl<N: Head> ExportedType<N> {
     }
 }
 
-fn plain_bounds(
+pub(crate) fn plain_bounds(
     params: &[ParamTy],
     bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Vec<Vec<baml_type::Interface>> {
@@ -704,25 +1105,19 @@ fn external_target<'db>(
         function: DeclName::in_root(package.root, package.namespace_path.clone(), name.clone()),
     };
     match baml_compiler2_hir::item_data::method_owner(db, function) {
-        Some(MethodOwner::Class(class)) => {
-            if let Some(target) = crate::lower::owner_impl_target(db, function, frame) {
-                ExternalCallTarget::Interface {
-                    interface: target.name,
-                    method: name,
-                }
-            } else {
-                ExternalCallTarget::Method {
-                    class: DeclName::in_root(
-                        package.root,
-                        package.namespace_path.clone(),
-                        baml_compiler2_hir::item_data::class_data(db, class)
-                            .name
-                            .clone(),
-                    ),
-                    name,
-                }
-            }
-        }
+        // A class-owned method is inherent: post-erasure an `implements`
+        // block's method is owned by the block (`MethodOwner::Impl`), never by
+        // the class, so no class method carries an impl target.
+        Some(MethodOwner::Class(class)) => ExternalCallTarget::Method {
+            class: DeclName::in_root(
+                package.root,
+                package.namespace_path.clone(),
+                baml_compiler2_hir::item_data::class_data(db, class)
+                    .name
+                    .clone(),
+            ),
+            name,
+        },
         Some(MethodOwner::Interface(interface)) => ExternalCallTarget::Interface {
             interface: crate::lower::interface_qualified_name(db, interface),
             method: name,
@@ -979,6 +1374,12 @@ fn lower_interface_export<'db>(
         .first()
         .cloned()
         .expect("interface frame starts with Self");
+    // The one-`Self` test over an exported signature
+    // (`callable_breaks_one_self`) recognizes `Self` as frame slot 0 by
+    // this exact identity; a rename of the slot must be loud here, and
+    // `import_interface` refuses a row that frames it otherwise
+    // (`ImportError::InterfaceSelfParam`), so a blob cannot smuggle one in.
+    debug_assert_eq!(self_param, ParamTy::new(0, Name::new("Self")));
     let generic_params = crate::lower::interface_declared_params(db, interface_loc);
     let bounds = crate::lower::interface_scope_bounds(db, interface_loc);
     let ctx = crate::lower::lower_ctx_for_file(db, interface_loc.file(db))
@@ -1187,10 +1588,23 @@ pub fn package_interface(
         && let Some(name) = pkg_id.self_name(db)
         && let Some(seeds) = db.seeded_stdlib_interface()
         && let Some(bytes) = seeds.by_package(db).get(name.as_str())
-        && let Ok(wire) = borsh::from_slice::<PackageInterface<TypeName>>(bytes)
-        && let Ok(iface) = import_interface(db, pkg_id, &wire)
     {
-        return iface;
+        // The seed is keyed by this compiler's fingerprint, so a blob that
+        // does not decode or is not a faithful export is a compiler bug,
+        // never a stale cache: fail loud rather than silently deriving the
+        // package from source.
+        let wire = borsh::from_slice::<PackageInterface<TypeName>>(bytes).unwrap_or_else(|error| {
+            panic!(
+                "seeded interface for stdlib package `{}` does not decode: {error}",
+                name.as_str()
+            )
+        });
+        return import_interface(db, pkg_id, &wire).unwrap_or_else(|error| {
+            panic!(
+                "seeded interface for stdlib package `{}` is not a faithful export of its root: {error}",
+                name.as_str()
+            )
+        });
     }
 
     // A package served from its interface has no source rows. Its serialized
@@ -1285,7 +1699,11 @@ fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
 
 /// Lower the package's implementation registry into a canonical, loc-free
 /// export. Malformed headers have no `ImplFacts` row and are skipped; their
-/// source diagnostics remain owned by the declaration checker.
+/// source diagnostics remain owned by the declaration checker. Coherence is
+/// not judged here either: every resolved row is exported, and a blob built
+/// from an incoherent package is refused where it is mounted
+/// ([`ImportError::DuplicateImpl`]) rather than quietly thinned to a
+/// coherent subset here.
 fn exported_impls(
     db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
@@ -1618,11 +2036,13 @@ impl<'db> PackageResolutionContext<'db> {
         pkg_name: &Name,
     ) -> Option<&'db PackageItems<'db>> {
         let package = accessible_package(db, self.own, pkg_name)?;
-        Some(if package == self.own {
-            &self.own_items
-        } else {
-            baml_compiler2_hir::package::package_items(db, package)
-        })
+        if package == self.own {
+            return Some(&self.own_items);
+        }
+        // A served dependency has no semantic items for a consumer: its
+        // files, when present, are link-only stubs; its rows are the answer.
+        (!is_served_from_interface(db, package))
+            .then(|| baml_compiler2_hir::package::package_items(db, package))
     }
 
     /// The items of the package `root`, when this package can see it: itself
@@ -1635,10 +2055,9 @@ impl<'db> PackageResolutionContext<'db> {
         if root == self.own {
             return Some(&self.own_items);
         }
-        self.dep_interfaces
-            .iter()
-            .any(|(_, dep, _)| *dep == root)
-            .then(|| baml_compiler2_hir::package::package_items(db, root))
+        (self.dep_interfaces.iter().any(|(_, dep, _)| *dep == root)
+            && !is_served_from_interface(db, root))
+        .then(|| baml_compiler2_hir::package::package_items(db, root))
     }
 
     /// Resolve a type by path. Own-package via `PackageItems`, then deps.
@@ -1741,13 +2160,15 @@ impl<'db> PackageResolutionContext<'db> {
                     return Some(ResolvedValue::Source(def));
                 }
             }
-            for (dep_name, dep_root, dep_iface) in &self.dep_interfaces {
+            for (dep_name, dep_root, _) in &self.dep_interfaces {
                 if &path[0] == dep_name {
                     if is_served_from_interface(db, *dep_root) {
-                        let function = dep_iface.lookup_function(&path[1..path.len() - 1], item)?;
-                        return Some(ResolvedValue::Exported(Box::new(
-                            resolved_exported_function(function, Vec::new(), Vec::new()),
-                        )));
+                        return Some(ResolvedValue::External(extern_function_named(
+                            db,
+                            *dep_root,
+                            &path[1..path.len() - 1],
+                            item,
+                        )?));
                     }
                     let dep_items = baml_compiler2_hir::package::package_items(db, *dep_root);
                     if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
@@ -1755,88 +2176,6 @@ impl<'db> PackageResolutionContext<'db> {
                     }
                 }
             }
-        }
-        None
-    }
-
-    /// Look up a class method. Dual dispatch.
-    pub fn lookup_class_method(
-        &self,
-        db: &'db dyn baml_compiler2_hir::Db,
-        class_name: &DeclName,
-        method_name: &Name,
-    ) -> Option<ResolvedMethod> {
-        if class_name.root() == self.own {
-            self.lookup_own_class_method(db, class_name, method_name)
-        } else {
-            for (_, dep_root, dep_iface) in &self.dep_interfaces {
-                if *dep_root != class_name.root() {
-                    continue;
-                }
-                if let Some(ExportedType::Class {
-                    methods,
-                    generic_params,
-                    generic_param_bounds,
-                    ..
-                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
-                {
-                    if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
-                        return Some(ResolvedMethod {
-                            function: resolved_exported_function(
-                                method,
-                                generic_params.clone(),
-                                generic_param_bounds.clone(),
-                            ),
-                            class_name: class_name.name().clone(),
-                            class_generic_params: generic_params.clone(),
-                        });
-                    }
-                }
-            }
-            None
-        }
-    }
-
-    fn lookup_own_class_method(
-        &self,
-        db: &'db dyn baml_compiler2_hir::Db,
-        class_name: &DeclName,
-        method_name: &Name,
-    ) -> Option<ResolvedMethod> {
-        let def = self
-            .own_items
-            .lookup_type(class_name.namespace(), class_name.name())?;
-        let Definition::Class(class_loc) = def else {
-            return None;
-        };
-        let class_data = baml_compiler2_hir::item_data::class_data(db, class_loc);
-
-        for &method_loc in &class_data.methods {
-            let method_data = baml_compiler2_hir::item_data::function_data(db, method_loc);
-            if &method_data.name != method_name {
-                continue;
-            }
-            let exported = exported_function(
-                db,
-                method_loc,
-                &method_data.name,
-                crate::lower::class_generic_frame(db, class_loc).len(),
-            );
-
-            return Some(ResolvedMethod {
-                function: ResolvedFunction {
-                    name: exported.name,
-                    params: exported.params,
-                    return_type: exported.return_type,
-                    callable_throws: exported.callable_throws,
-                    generic_params: exported.generic_params,
-                    generic_param_bounds: exported.generic_param_bounds,
-                    builtin_kind: exported.builtin_kind,
-                    external: None,
-                },
-                class_name: class_name.name().clone(),
-                class_generic_params: crate::lower::class_generic_frame(db, class_loc),
-            });
         }
         None
     }
@@ -1860,11 +2199,7 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_hir::Db, def: Definition<'db>) -> 
         Definition::TypeAlias(loc) => baml_compiler2_hir::item_data::type_alias_data(db, loc)
             .name
             .clone(),
-        Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => return None,
+        Definition::Function(_) | Definition::Let(_) => return None,
     };
     match def {
         Definition::Class(loc) => {
@@ -1885,10 +2220,6 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_hir::Db, def: Definition<'db>) -> 
         Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, &name))),
         Definition::TypeAlias(_) => Some(Ty::TypeAlias(qualify_def(db, def, &name))),
         // The non-type definitions returned above, before `name` was bound.
-        Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
-        | Definition::Let(_) => None,
+        Definition::Function(_) | Definition::Let(_) => None,
     }
 }

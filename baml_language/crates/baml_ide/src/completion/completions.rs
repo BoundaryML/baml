@@ -68,15 +68,38 @@ impl<'db> Completions<'db> {
     /// A member reached through a dot — of a value or of a type; `form`
     /// says which, and decides how its signature reads.
     pub(super) fn add_member(&mut self, candidate: &MemberCandidate<'_>, form: MemberForm) {
+        use baml_compiler2_hir::loc::DeclRef;
+
         let (detail, documentation) = render::member(self.db, self.file, &candidate.decl, form);
+        // A served package exports rows, not source: there is no file to
+        // point at, and no served package is the stdlib's source.
         let declared_in = match candidate.decl {
-            MemberDecl::Method(function) => Some(function.file(self.db)),
-            MemberDecl::ClassField { class, .. } => Some(class.file(self.db)),
-            MemberDecl::InterfaceField { interface, .. } => Some(interface.file(self.db)),
-            MemberDecl::EnumVariant { enum_loc, .. } => Some(enum_loc.file(self.db)),
-            // A mounted package exports rows, not source: there is no
-            // stdlib file to point at, and no mounted package is one.
-            MemberDecl::Mounted => None,
+            MemberDecl::Method(DeclRef::Source(function)) => Some(function.file(self.db)),
+            MemberDecl::ClassField {
+                class: DeclRef::Source(class),
+                ..
+            } => Some(class.file(self.db)),
+            MemberDecl::InterfaceField {
+                interface: DeclRef::Source(interface),
+                ..
+            } => Some(interface.file(self.db)),
+            MemberDecl::EnumVariant {
+                enum_loc: DeclRef::Source(enum_loc),
+                ..
+            } => Some(enum_loc.file(self.db)),
+            MemberDecl::Method(DeclRef::External(_))
+            | MemberDecl::ClassField {
+                class: DeclRef::External(_),
+                ..
+            }
+            | MemberDecl::InterfaceField {
+                interface: DeclRef::External(_),
+                ..
+            }
+            | MemberDecl::EnumVariant {
+                enum_loc: DeclRef::External(_),
+                ..
+            } => None,
         };
         let item = Completion {
             label: candidate.name.as_str().to_string(),
@@ -346,13 +369,12 @@ fn definition_kind(kind: DefinitionKind) -> CompletionKind {
         DefinitionKind::Interface => CompletionKind::Interface,
         DefinitionKind::TypeAlias => CompletionKind::TypeAlias,
         DefinitionKind::Client => CompletionKind::Client,
-        DefinitionKind::RetryPolicy => CompletionKind::RetryPolicy,
         DefinitionKind::Let => CompletionKind::Local,
         DefinitionKind::Method => CompletionKind::Method,
         DefinitionKind::Field => CompletionKind::Field,
         DefinitionKind::Variant => CompletionKind::EnumVariant,
         DefinitionKind::Parameter => CompletionKind::Parameter,
         DefinitionKind::Binding => CompletionKind::Local,
-        DefinitionKind::TemplateString | DefinitionKind::AssociatedType => CompletionKind::Other,
+        DefinitionKind::AssociatedType => CompletionKind::Other,
     }
 }

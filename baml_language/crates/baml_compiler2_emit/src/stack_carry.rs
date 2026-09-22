@@ -1622,7 +1622,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn make_generic_function(
         &mut self,
-        _item: &baml_compiler2_mir::ItemRef<'a>,
+        _func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'a>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         // Pops `ntypeargs` type-arg values, pushes one generic-function object.

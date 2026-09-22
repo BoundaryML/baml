@@ -232,23 +232,29 @@ fn evaluated_calls_impl<'db>(
 fn resolved_function<'db>(
     resolution: &crate::infer::MemberResolution<'db>,
 ) -> Option<FunctionLoc<'db>> {
-    use crate::infer::MemberResolution;
-    match resolution {
+    use baml_compiler2_hir::loc::DeclRef;
+
+    use crate::infer::{MemberResolution, MethodCallee};
+    let func = match resolution {
         MemberResolution::Free { func }
-        | MemberResolution::BoundMethod { func, .. }
-        | MemberResolution::UnboundMethod { func, .. }
-        | MemberResolution::InterfaceConcreteMethod { func, .. } => Some(*func),
-        MemberResolution::Field { .. }
+        | MemberResolution::Method {
+            callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
+            ..
+        } => *func,
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { .. },
+            ..
+        }
+        | MemberResolution::Field { .. }
         | MemberResolution::Variant { .. }
-        | MemberResolution::InterfaceVirtualMethod { .. }
-        | MemberResolution::InterfaceVirtualField { .. } => None,
-        // BEP-066 source-less (externally minted) members: no FunctionLoc to
-        // walk, so the analysis skips them — same deliberate under-
-        // approximation as virtual dispatch (module docs).
-        MemberResolution::External(_)
-        | MemberResolution::ExternalField { .. }
-        | MemberResolution::ExternalVariant { .. }
-        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
+        | MemberResolution::InterfaceVirtualField { .. } => return None,
+    };
+    match func {
+        DeclRef::Source(func) => Some(func),
+        // A callee of a package served from its interface: no body to walk,
+        // so the analysis skips it — the same deliberate under-approximation
+        // as virtual dispatch (module docs).
+        DeclRef::External(_) => None,
     }
 }
 

@@ -6,10 +6,10 @@
 //! 3. Infallible operand-prefix materialization at O1 and above
 //! 4. RPO block reordering
 
-use std::collections::{HashMap, HashSet, VecDeque};
-
-#[cfg(debug_assertions)]
-use baml_base::Name;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    fmt,
+};
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind,
@@ -20,33 +20,37 @@ mod effects;
 mod values;
 
 /// Run all optimization passes on a MIR function.
-pub(crate) fn optimize_function(func: &mut MirFunction, opt: crate::OptLevel) {
+pub(crate) fn optimize_function(
+    db: &dyn crate::Db,
+    func: &mut MirFunction<'_>,
+    opt: crate::OptLevel,
+) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
     optimize_body(body, func.arity, opt);
 
-    #[cfg(debug_assertions)]
-    verify_mir(body, func.arity, &func.item_ref);
+    // `cfg!`, not `#[cfg]`: the verifier stays type-checked in every
+    // profile and the call folds away in release.
+    if cfg!(debug_assertions) {
+        verify_mir(db, body, func.arity, &func.identity.display(db));
+    }
 }
 
 /// Run all cleanup phases directly on a `MirFunctionBody`.
 ///
 /// Used for let-binding initializers, which are lowered as bodies without
 /// the enclosing `MirFunction` wrapper (arity = 0).
-pub(crate) fn optimize_function_body(body: &mut MirFunctionBody, opt: crate::OptLevel) {
+pub(crate) fn optimize_function_body(
+    db: &dyn crate::Db,
+    body: &mut MirFunctionBody,
+    opt: crate::OptLevel,
+) {
     optimize_body(body, 0, opt);
 
-    #[cfg(debug_assertions)]
-    verify_mir(
-        body,
-        0,
-        &crate::ItemRef::Free {
-            package: Name::new("$init_let"),
-            namespace: vec![],
-            name: Name::new("_"),
-        },
-    );
+    if cfg!(debug_assertions) {
+        verify_mir(db, body, 0, &"$init_let._");
+    }
 }
 
 fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
@@ -1678,10 +1682,15 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 
 /// Verify MIR structural invariants after optimization.
 ///
-/// Debug-only — catches invariant drift between lowering, optimization, and
-/// downstream consumers. Modeled after V1's `verifier.rs`.
-#[cfg(debug_assertions)]
-fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
+/// Called only under debug assertions — catches invariant drift between
+/// lowering, optimization, and downstream consumers. Modeled after V1's
+/// `verifier.rs`. `name` is rendered only inside a failing assertion.
+fn verify_mir(
+    db: &dyn crate::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    name: &dyn fmt::Display,
+) {
     let num_blocks = body.blocks.len();
     let num_locals = body.locals.len();
 
@@ -2017,7 +2026,7 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
     );
 
     // 10. Every read is definitely assigned; every captured access has its cell.
-    verify_definite_assignment(body, arity, name);
+    verify_definite_assignment(db, body, arity, name);
 }
 
 /// Every read of a local is dominated by a write to it, and every read, write,
@@ -2038,8 +2047,12 @@ fn verify_mir(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
 /// body block's end-of-statements state flows there too; that over-counts
 /// what the handler can rely on only for locals declared inside the protected
 /// body, which the handler cannot name.
-#[cfg(debug_assertions)]
-fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &crate::ItemRef) {
+fn verify_definite_assignment(
+    db: &dyn crate::Db,
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    name: &dyn fmt::Display,
+) {
     #[derive(Clone)]
     struct State {
         assigned: Vec<bool>,
@@ -2091,7 +2104,7 @@ fn verify_definite_assignment(body: &MirFunctionBody<'_>, arity: usize, name: &c
                 panic!(
                     "{}\n\n{}",
                     format_args!($($arg)+),
-                    crate::pretty::display_body(body, arity)
+                    crate::pretty::display_body(db, body, arity)
                 );
             }
         };

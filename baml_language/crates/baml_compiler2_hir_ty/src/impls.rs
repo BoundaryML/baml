@@ -32,16 +32,19 @@
 //! match's bindings, where an unbound impl param is unreachable, never a
 //! stand-in type.
 
-use baml_compiler2_hir::{
-    loc::ImplLoc,
-    package::{is_precompiled_stdlib, lang_roots},
-};
+use baml_compiler2_hir::{loc::ImplLoc, package::lang_roots};
 use baml_type::{
     DeclName, Name, ParamTy,
-    interned::{ClosedInterface, ClosedTy, InferInterface, InferTy, Ty},
+    interned::{
+        ClosedInterface, ClosedTy, InferInterface, InferTy, InterfaceVocabulary, Ty, TyVocabulary,
+    },
     normalize::{TypeContext, equivalent_interned},
 };
 use rustc_hash::FxHashMap;
+
+use crate::extern_loc::{
+    ExternImplLoc, exported_impl_identity, extern_impl_block, extern_impl_facts, extern_impl_method,
+};
 
 /// Recursion budget for verifying blanket bounds: a bounded blanket can
 /// itself be satisfied by another blanket, so bound-checking re-enters
@@ -295,11 +298,13 @@ pub fn impl_facts<'db>(
                     crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, *for_target));
                 // E0138, decided on the LOWERED form — never the normalized
                 // one. Lowering is exactly the right amount of resolution:
-                // it expands aliases and applies the builtin bridges (so
-                // `Future<T>` and `E.A` are seen for what they denote), while
-                // leaving unions uncollapsed (so `true | false` stays a union
-                // rather than becoming the valid subject `bool`). It is the
-                // collapse that made this gate and coherence disagree.
+                // it applies the builtin bridges (so `Future<T>` and `E.A`
+                // are seen for what they denote) and leaves alias heads in
+                // place — the gate expands those itself
+                // (`subject_head_is_implementor`) — while leaving unions
+                // uncollapsed (so `true | false` stays a union rather than
+                // becoming the valid subject `bool`). It is the collapse
+                // that made this gate and coherence disagree.
                 //
                 // The subject is REPLACED by the Error sentinel rather than
                 // withheld: the rest of the header still lowers, so the IDE
@@ -665,110 +670,81 @@ unsafe impl salsa::Update for MountedImplFacts {
     }
 }
 
+/// A resolved impl's identity WITH its facts, split once by where it is
+/// declared: the two lanes carry different fact payloads, so the block and
+/// the facts that describe it travel together and cannot disagree.
 #[derive(Clone, PartialEq)]
 pub enum ResolvedImplFacts<'db> {
-    Source(&'db ImplFacts<'db>),
-    Mounted(Box<MountedImplFacts>),
-    /// Compiler-built source-less facts are re-hydrated from a tracked row and
-    /// borrowed, keeping the memoized candidate entry fact-free like Source.
-    Precompiled(&'db MountedImplFacts),
+    /// A source block and its lowered facts.
+    Source {
+        block: ImplLoc<'db>,
+        facts: &'db ImplFacts<'db>,
+    },
+    /// An exported impl row of a package served from its interface — a
+    /// runtime mount and the precompiled stdlib alike: its identity is the
+    /// block, and its provided methods mint through it. Its facts are
+    /// re-hydrated through the tracked [`extern_impl_facts`] and borrowed —
+    /// the memoized candidate entry stays fact-free, as for Source.
+    External {
+        block: ExternImplLoc<'db>,
+        facts: &'db MountedImplFacts,
+    },
 }
 
-impl ResolvedImplFacts<'_> {
+impl<'db> ResolvedImplFacts<'db> {
+    /// The block these facts describe, wherever it is declared.
+    pub fn block(&self) -> crate::extern_loc::ImplRef<'db> {
+        match self {
+            Self::Source { block, .. } => baml_compiler2_hir::loc::DeclRef::Source(*block),
+            Self::External { block, .. } => baml_compiler2_hir::loc::DeclRef::External(*block),
+        }
+    }
+
     pub fn interface(&self) -> &baml_type::interned::ClosedInterface {
         match self {
-            Self::Source(facts) => &facts.interface,
-            Self::Mounted(facts) => &facts.interface,
-            Self::Precompiled(facts) => &facts.interface,
+            Self::Source { facts, .. } => &facts.interface,
+            Self::External { facts, .. } => &facts.interface,
         }
     }
 
     pub fn for_ty_pattern(&self) -> &baml_type::interned::ClosedTy {
         match self {
-            Self::Source(facts) => &facts.for_ty_pattern,
-            Self::Mounted(facts) => &facts.for_ty_pattern,
-            Self::Precompiled(facts) => &facts.for_ty_pattern,
+            Self::Source { facts, .. } => &facts.for_ty_pattern,
+            Self::External { facts, .. } => &facts.for_ty_pattern,
         }
     }
 
     pub fn generic_params(&self) -> &[(ParamTy, Vec<baml_type::interned::ClosedInterface>)] {
         match self {
-            Self::Source(facts) => &facts.generic_params,
-            Self::Mounted(facts) => &facts.generic_params,
-            Self::Precompiled(facts) => &facts.generic_params,
+            Self::Source { facts, .. } => &facts.generic_params,
+            Self::External { facts, .. } => &facts.generic_params,
         }
     }
 
     pub fn associated_types(&self) -> &[(Name, baml_type::interned::ClosedTy)] {
         match self {
-            Self::Source(facts) => &facts.associated_types,
-            Self::Mounted(facts) => &facts.associated_types,
-            Self::Precompiled(facts) => &facts.associated_types,
+            Self::Source { facts, .. } => &facts.associated_types,
+            Self::External { facts, .. } => &facts.associated_types,
         }
     }
-}
-
-/// The dispatch identity retained after matching an impl.
-#[derive(Clone, PartialEq)]
-pub enum ResolvedImplOrigin<'db> {
-    Source {
-        block: ImplLoc<'db>,
-        methods: &'db [baml_compiler2_hir::loc::FunctionLoc<'db>],
-    },
-    Mounted {
-        methods: Vec<crate::package_interface::ExportedFunction>,
-    },
-    /// A compiler-built immutable interface row. Methods and facts borrow from
-    /// tracked artifact queries; unlike a live mount, no owned fact payload is
-    /// retained in each impl-cache entry.
-    Precompiled {
-        package: baml_base::SourceRoot,
-        row: u32,
-        methods: &'db [crate::package_interface::ExportedFunction],
-    },
 }
 
 /// One resolved impl plus the generic instantiation the match pinned.
 #[derive(Clone, PartialEq)]
 pub struct ResolvedImpl<'db> {
-    pub origin: ResolvedImplOrigin<'db>,
     pub facts: ResolvedImplFacts<'db>,
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
-/// A method an impl provides, by where its body lives: a source block's
-/// function item, or a mounted/precompiled row's exported descriptor.
-#[derive(Debug, Clone, Copy)]
-pub enum ProvidedMethod<'db, 'a> {
-    Source {
-        block: ImplLoc<'db>,
-        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    },
-    Mounted(&'a crate::package_interface::ExportedFunction),
-}
-
-#[derive(Clone, PartialEq)]
-enum CachedResolvedImplOrigin<'db> {
-    /// Deliberately fact-free: source facts are Salsa-derived and must be
-    /// re-hydrated by `impls_for_type` so the caller records their live query
-    /// dependency rather than retaining a stale borrowed result here.
-    Source { block: ImplLoc<'db> },
-    /// Mounted facts are owned imported data with no Salsa query from which to
-    /// re-hydrate them, so this arm retains the facts alongside the methods.
-    Mounted {
-        methods: Vec<crate::package_interface::ExportedFunction>,
-        facts: Box<MountedImplFacts>,
-    },
-    /// Fact-free identity for an immutable compiler-built interface row.
-    Precompiled {
-        package: baml_base::SourceRoot,
-        row: u32,
-    },
-}
-
+/// A memoized candidate: the impl's identity and the match's bindings.
+/// Deliberately fact-free: source facts are Salsa-derived and must be
+/// re-hydrated by `impls_for_type` so the caller records their live query
+/// dependency rather than retaining a stale borrowed result here; an
+/// exported row's facts re-hydrate through the tracked
+/// [`extern_impl_facts`].
 #[derive(Clone, PartialEq)]
 struct CachedResolvedImpl<'db> {
-    origin: CachedResolvedImplOrigin<'db>,
+    block: crate::extern_loc::ImplRef<'db>,
     bindings: FxHashMap<ParamTy, Ty>,
 }
 
@@ -798,7 +774,10 @@ impl ResolvedImpl<'_> {
     /// per-member (`resolved_pin`); [`Self::implemented_view`] is the
     /// complete spelling.
     pub fn implemented(&self) -> InferInterface {
-        realized(self.facts.interface(), &self.bindings)
+        self.facts
+            .interface()
+            .as_reference()
+            .substitute_bindings(&self.bindings)
     }
 
     /// The COMPLETE realized view of the implemented interface for
@@ -850,34 +829,25 @@ impl<'db> ResolvedImpl<'db> {
         &self,
         db: &'db dyn baml_compiler2_hir::Db,
         name: &Name,
-    ) -> Option<ProvidedMethod<'db, '_>> {
-        match &self.origin {
-            ResolvedImplOrigin::Source { block, methods } => methods
+    ) -> Option<crate::extern_loc::FunctionRef<'db>> {
+        match &self.facts {
+            ResolvedImplFacts::Source { facts, .. } => facts
+                .methods
                 .iter()
                 .copied()
                 .find(|&method| {
                     baml_compiler2_hir::item_data::function_data(db, method).name == *name
                 })
-                .map(|func| ProvidedMethod::Source {
-                    block: *block,
-                    func,
-                }),
-            ResolvedImplOrigin::Mounted { methods } => methods
-                .iter()
-                .find(|method| method.name == *name)
-                .map(ProvidedMethod::Mounted),
-            ResolvedImplOrigin::Precompiled { methods, .. } => methods
-                .iter()
-                .find(|method| method.name == *name)
-                .map(ProvidedMethod::Mounted),
+                .map(baml_compiler2_hir::loc::DeclRef::Source),
+            ResolvedImplFacts::External { block, .. } => {
+                extern_impl_method(db, *block, name).map(baml_compiler2_hir::loc::DeclRef::External)
+            }
         }
     }
 
-    pub fn source_block(&self) -> Option<ImplLoc<'db>> {
-        match self.origin {
-            ResolvedImplOrigin::Source { block, .. } => Some(block),
-            ResolvedImplOrigin::Mounted { .. } | ResolvedImplOrigin::Precompiled { .. } => None,
-        }
+    /// The block this impl is, wherever it is declared.
+    pub fn block(&self) -> crate::extern_loc::ImplRef<'db> {
+        self.facts.block()
     }
 }
 
@@ -897,7 +867,7 @@ pub(crate) fn resolved_pin(
         .iter()
         .find(|(name, _)| name == member)
     {
-        return Some(substitute_bindings(declared, &resolved.bindings));
+        return Some(declared.as_ty().substitute_bindings(&resolved.bindings));
     }
     realized_assoc_default(db, &resolved.implemented(), self_ty, member)
 }
@@ -929,7 +899,11 @@ pub(crate) fn realized_assoc_default(
             .find(|assoc| &assoc.name == member)?
             .default
             .as_ref()?;
-        let instantiation = mounted_interface_instantiation(target, self_ty, generic_params)?;
+        let instantiation = crate::method_resolution::interface_instantiation(
+            self_ty,
+            target,
+            generic_params.len(),
+        )?;
         return Some(crate::lower::substitute_params(
             &Ty::from_plain(default),
             &instantiation,
@@ -939,7 +913,11 @@ pub(crate) fn realized_assoc_default(
     let lowered = crate::lower::interface_assoc_default(db, interface, member.clone())
         .0
         .as_ref()?;
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data)?;
+    let instantiation = crate::method_resolution::interface_instantiation(
+        self_ty,
+        target,
+        data.generic_params.len(),
+    )?;
     // Declaration-side lowering is plain now; the engine's substitution
     // ingests it (plain→interned, the total direction).
     Some(crate::lower::substitute_params(
@@ -1004,7 +982,11 @@ pub(crate) fn realized_assoc_bound(
             .find(|assoc| &assoc.name == member)?
             .bound
             .as_ref()?;
-        let instantiation = mounted_interface_instantiation(target, self_ty, generic_params)?;
+        let instantiation = crate::method_resolution::interface_instantiation(
+            self_ty,
+            target,
+            generic_params.len(),
+        )?;
         let bound_ty = Ty::intern(InferTy::Interface(
             bound.name.clone(),
             bound.generics.iter().map(Ty::from_plain).collect(),
@@ -1020,7 +1002,11 @@ pub(crate) fn realized_assoc_bound(
     let lowered = crate::lower::interface_assoc_bound(db, interface, member.clone())
         .0
         .as_ref()?;
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data)?;
+    let instantiation = crate::method_resolution::interface_instantiation(
+        self_ty,
+        target,
+        data.generic_params.len(),
+    )?;
     // Declaration-side lowering is plain now; the engine's substitution
     // ingests it (plain→interned, the total direction).
     Some(crate::lower::substitute_params(
@@ -1048,35 +1034,6 @@ fn assoc_realization_env<'db>(
     };
     let data = baml_compiler2_hir::item_data::interface_data(db, interface);
     Some((interface, data))
-}
-
-/// The mounted twin of [`crate::method_resolution::interface_instantiation`]:
-/// `[Self, args..]` - associated types are projection-only, reduced by the
-/// oracle at use rather than substituted as slots.
-///
-/// `None` only on a reference whose generic arity diverges from the
-/// declaration - a construction bug (lowering's `enforce_arity` and
-/// engine-built references both pin arity to the declaration), asserted and
-/// answered conservatively.
-pub(crate) fn mounted_interface_instantiation(
-    target: &InferInterface,
-    self_ty: &Ty,
-    generic_params: &[ParamTy],
-) -> Option<Vec<Ty>> {
-    if generic_params.len() != target.generics.len() {
-        debug_assert!(
-            false,
-            "interface reference `{:?}` carries {} generic args; its declaration takes {}",
-            target.name,
-            target.generics.len(),
-            generic_params.len(),
-        );
-        return None;
-    }
-    let mut out = vec![self_ty.clone()];
-    out.extend(target.generics.iter().cloned());
-
-    Some(out)
 }
 
 /// Every impl an admissible `concrete` type matches, across every package
@@ -1179,48 +1136,9 @@ pub fn impls_for_type<'db>(
     }
     impls_for_type_cached(db, ImplTypeKey::new(db, viewer, concrete.clone()))
         .iter()
-        .map(|cached| match &cached.origin {
-            CachedResolvedImplOrigin::Source { block } => {
-                let facts = impl_facts(db, *block)
-                    .resolved()
-                    .expect("cached source impl remains well formed");
-                ResolvedImpl {
-                    origin: ResolvedImplOrigin::Source {
-                        block: *block,
-                        methods: &facts.methods,
-                    },
-                    facts: ResolvedImplFacts::Source(facts),
-                    bindings: cached.bindings.clone(),
-                }
-            }
-            CachedResolvedImplOrigin::Mounted { methods, facts } => ResolvedImpl {
-                origin: ResolvedImplOrigin::Mounted {
-                    methods: methods.clone(),
-                },
-                facts: ResolvedImplFacts::Mounted(facts.clone()),
-                bindings: cached.bindings.clone(),
-            },
-            CachedResolvedImplOrigin::Precompiled { package, row } => {
-                let row_index = usize::try_from(*row).expect("precompiled impl row fits usize");
-                let interface = crate::package_interface::mounted_interface(db, *package)
-                    .expect("cached precompiled package remains installed");
-                let exported = interface
-                    .impls
-                    .get(row_index)
-                    .expect("cached precompiled impl row remains present");
-                let facts = precompiled_impl_facts(db, *package, *row)
-                    .as_ref()
-                    .expect("cached precompiled impl facts remain present");
-                ResolvedImpl {
-                    origin: ResolvedImplOrigin::Precompiled {
-                        package: *package,
-                        row: *row,
-                        methods: &exported.methods,
-                    },
-                    facts: ResolvedImplFacts::Precompiled(facts),
-                    bindings: cached.bindings.clone(),
-                }
-            }
+        .map(|cached| ResolvedImpl {
+            facts: matched_impl_facts(db, cached.block),
+            bindings: cached.bindings.clone(),
         })
         .filter(|resolved| {
             // `AnyClass` is an explicit narrowing surface, not another
@@ -1315,7 +1233,7 @@ fn impls_for_type_cached<'db>(
         // Do not short-circuit this iterator: `impl_facts` dependencies are
         // registered lazily as source rows are visited. This memoized query
         // must exhaust every visible package so later fact changes invalidate it.
-        for (origin, facts) in package_impl_candidates(db, package) {
+        for facts in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
             if !pattern_has_typevar && !eq_admitted(pattern, &concrete, &eq) {
@@ -1375,20 +1293,10 @@ fn impls_for_type_cached<'db>(
                 params.iter().all(|param| bindings.contains_key(param)),
                 "accepted impl candidate left a declared generic unbound"
             );
-            let origin = match (origin, facts) {
-                (ResolvedImplOrigin::Source { block, .. }, ResolvedImplFacts::Source(_)) => {
-                    CachedResolvedImplOrigin::Source { block }
-                }
-                (ResolvedImplOrigin::Mounted { methods }, ResolvedImplFacts::Mounted(facts)) => {
-                    CachedResolvedImplOrigin::Mounted { methods, facts }
-                }
-                (
-                    ResolvedImplOrigin::Precompiled { package, row, .. },
-                    ResolvedImplFacts::Precompiled(_),
-                ) => CachedResolvedImplOrigin::Precompiled { package, row },
-                _ => unreachable!("impl candidate origin and facts have the same provenance"),
-            };
-            out.push(CachedResolvedImpl { origin, bindings });
+            out.push(CachedResolvedImpl {
+                block: facts.block(),
+                bindings,
+            });
         }
     }
     out
@@ -1397,60 +1305,33 @@ fn impls_for_type_cached<'db>(
 fn package_impl_candidates(
     db: &dyn baml_compiler2_hir::Db,
     package: baml_base::SourceRoot,
-) -> impl Iterator<Item = (ResolvedImplOrigin<'_>, ResolvedImplFacts<'_>)> + '_ {
+) -> impl Iterator<Item = ResolvedImplFacts<'_>> + '_ {
     let source = package_impl_locs(db, package)
         .iter()
         .filter_map(move |&block| {
             let facts = impl_facts(db, block).resolved()?;
-            Some((
-                ResolvedImplOrigin::Source {
+            Some(ResolvedImplFacts::Source { block, facts })
+        });
+    // ONE external lane: a runtime mount and the precompiled stdlib differ
+    // in trust DATA on their rows, never in how their impls are reached.
+    let external = crate::package_interface::mounted_interface(db, package)
+        .into_iter()
+        .flat_map(move |interface| {
+            interface.impls.iter().map(move |row| {
+                let block = extern_impl_block(db, package, exported_impl_identity(row))
+                    .unwrap_or_else(|| unreachable!("an exported impl row mints its block"));
+                ResolvedImplFacts::External {
                     block,
-                    methods: &facts.methods,
-                },
-                ResolvedImplFacts::Source(facts),
-            ))
-        });
-    let precompiled = is_precompiled_stdlib(db, package);
-    let immutable = precompiled
-        .then(|| crate::package_interface::mounted_interface(db, package))
-        .into_iter()
-        .flatten()
-        .flat_map(move |interface| {
-            interface
-                .impls
-                .iter()
-                .enumerate()
-                .filter_map(move |(index, row)| {
-                    let row_index = u32::try_from(index).ok()?;
-                    let facts = precompiled_impl_facts(db, package, row_index).as_ref()?;
-                    Some((
-                        ResolvedImplOrigin::Precompiled {
-                            package,
-                            row: row_index,
-                            methods: &row.methods,
-                        },
-                        ResolvedImplFacts::Precompiled(facts),
-                    ))
-                })
-        });
-    let mounted = (!precompiled)
-        .then(|| crate::package_interface::mounted_interface(db, package))
-        .into_iter()
-        .flatten()
-        .flat_map(move |interface| {
-            interface.impls.iter().map(|row| {
-                (
-                    ResolvedImplOrigin::Mounted {
-                        methods: row.methods.clone(),
-                    },
-                    ResolvedImplFacts::Mounted(Box::new(exported_impl_facts(row))),
-                )
+                    facts: extern_impl_facts(db, block),
+                }
             })
         });
-    source.chain(immutable).chain(mounted)
+    source.chain(external)
 }
 
-fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedImplFacts {
+pub(crate) fn exported_impl_facts(
+    row: &crate::package_interface::ExportedImpl,
+) -> MountedImplFacts {
     let generic_params = row
         .generic_params
         .iter()
@@ -1476,23 +1357,6 @@ fn exported_impl_facts(row: &crate::package_interface::ExportedImpl) -> MountedI
             .map(|(name, ty)| (name.clone(), ClosedTy::from_plain(ty)))
             .collect(),
     }
-}
-
-/// Rehydrate an immutable compiler-built impl row through a tracked query.
-/// Cache entries retain only `(package, row)`; all callers borrow this shared
-/// fact value and record the live package-interface dependency.
-#[salsa::tracked(returns(ref))]
-fn precompiled_impl_facts(
-    db: &dyn baml_compiler2_hir::Db,
-    package: baml_base::SourceRoot,
-    row: u32,
-) -> Option<MountedImplFacts> {
-    if !is_precompiled_stdlib(db, package) {
-        return None;
-    }
-    let interface = crate::package_interface::mounted_interface(db, package)?;
-    let row = interface.impls.get(usize::try_from(row).ok()?)?;
-    Some(exported_impl_facts(row))
 }
 
 /// Every impl block implementing `interface_name`, drawn from the
@@ -1627,18 +1491,14 @@ fn resolve_within_depth<'db>(
     let eq = AliasOnlyFacts::memoized(db);
     let mut resolved = None;
     'search: for package in search_roots(db, concrete, interface) {
-        for (origin, facts) in package_impl_candidates(db, package) {
+        for facts in package_impl_candidates(db, package) {
             let Some(bindings) = match_impl_head(db, &facts, concrete, interface, &eq) else {
                 continue;
             };
             if !bounds_hold(db, &facts, &bindings, depth, in_progress) {
                 continue;
             }
-            resolved = Some(ResolvedImpl {
-                origin,
-                facts,
-                bindings,
-            });
+            resolved = Some(ResolvedImpl { facts, bindings });
             break 'search;
         }
     }
@@ -1749,9 +1609,12 @@ fn match_impl_head(
             .iter()
             .find(|(declared_name, _)| declared_name == name)
         {
-            Some((_, declared)) => Some(substitute_bindings(declared, &bindings)),
+            Some((_, declared)) => Some(declared.as_ty().substitute_bindings(&bindings)),
             None => {
-                let implemented = realized(facts.interface(), &bindings);
+                let implemented = facts
+                    .interface()
+                    .as_reference()
+                    .substitute_bindings(&bindings);
                 realized_assoc_default(db, &implemented, concrete, name)
             }
         };
@@ -1870,7 +1733,7 @@ fn match_pattern(
     // already can be compared semantically (union normalization no
     // structural descent sees).
     if pattern_fully_bound(pattern, params, bindings) {
-        let substituted = substitute_bindings(pattern, bindings);
+        let substituted = pattern.substitute_bindings(bindings);
         if eq_admitted(&substituted, target, eq) {
             return true;
         }
@@ -2025,45 +1888,87 @@ fn pattern_fully_bound(
     all_bound
 }
 
-/// An interface reference REALIZED through impl-param bindings: name
-/// kept, generics and pins substituted - the one spelling of the
-/// five hand-copied blocks this replaces.
-pub(crate) fn realized(
-    reference: &InferInterface,
-    bindings: &FxHashMap<ParamTy, Ty>,
-) -> InferInterface {
-    InferInterface::new(
-        reference.name.clone(),
-        reference
-            .generics
-            .iter()
-            .map(|arg| substitute_bindings(arg, bindings))
-            .collect::<Vec<_>>()
-            .into_boxed_slice(),
-        reference
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), substitute_bindings(ty, bindings)))
-            .collect(),
-    )
+/// The facts of a MATCHED block, wherever it is declared — the block a
+/// resolution names. Total: a source block reaches a resolution only
+/// through [`impls_for_type`], which admits headers that resolved; an
+/// exported row's facts re-hydrate through the tracked
+/// [`extern_impl_facts`].
+pub fn matched_impl_facts<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    block: crate::extern_loc::ImplRef<'db>,
+) -> ResolvedImplFacts<'db> {
+    match block {
+        baml_compiler2_hir::loc::DeclRef::Source(block) => ResolvedImplFacts::Source {
+            block,
+            facts: impl_facts(db, block)
+                .resolved()
+                .unwrap_or_else(|| unreachable!("a matched impl's header resolved")),
+        },
+        baml_compiler2_hir::loc::DeclRef::External(block) => ResolvedImplFacts::External {
+            block,
+            facts: extern_impl_facts(db, block),
+        },
+    }
 }
 
-/// Substitutes impl-param bindings into a type by PARAM IDENTITY (the
-/// registry's frame is not positional at use sites, unlike signature
-/// instantiation).
-pub fn substitute_bindings(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
-    if !ty.has_typevar() {
-        return ty.clone();
+/// The `(Self, interface)` a statically matched impl's method is reached
+/// through, realized at the frame the resolution carries
+/// (`MemberDeclarer::ImplMethod::frame_type_args`, the instantiation of
+/// `func`'s owner frame). What a type-keyed virtual reference resolves the
+/// same impl from at runtime: a reference reached through a concrete type
+/// keys on the type, never on the body — coherence guarantees the same
+/// impl answers.
+///
+/// Total, in the closed vocabulary: the carried frame is plain (ground
+/// after writeback), so its image is closed by construction and so is
+/// everything realized through it.
+pub fn concrete_callee_target<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    block: crate::extern_loc::ImplRef<'db>,
+    func: crate::extern_loc::FunctionRef<'db>,
+    frame: &[baml_type::Ty],
+) -> (ClosedTy, ClosedInterface) {
+    use crate::callable::{CallableOwnerKind, callable_owner_kind};
+    let facts = matched_impl_facts(db, block);
+    match callable_owner_kind(db, func) {
+        // An adopted default: the interface's own frame, `[Self,
+        // interface generics..]`, already realized.
+        CallableOwnerKind::Interface => {
+            let Some((self_ty, interface_args)) = frame.split_first() else {
+                unreachable!("an interface method's frame opens with `Self`")
+            };
+            (
+                ClosedTy::from_plain(self_ty),
+                ClosedInterface::new(
+                    facts.interface().name.clone(),
+                    interface_args.iter().map(ClosedTy::from_plain).collect(),
+                    Box::new([]),
+                ),
+            )
+        }
+        // A provided method: the impl's generics, bound in declaration
+        // order; the for-target and interface target realize through them.
+        CallableOwnerKind::Impl => {
+            let params = facts.generic_params();
+            debug_assert_eq!(
+                params.len(),
+                frame.len(),
+                "a matched impl binds every declared generic"
+            );
+            let bindings: FxHashMap<ParamTy, ClosedTy> = params
+                .iter()
+                .zip(frame)
+                .map(|((param, _), ty)| (param.clone(), ClosedTy::from_plain(ty)))
+                .collect();
+            (
+                facts.for_ty_pattern().substitute_bindings(&bindings),
+                facts.interface().substitute_bindings(&bindings),
+            )
+        }
+        CallableOwnerKind::Free | CallableOwnerKind::Class => {
+            unreachable!("a statically matched impl's method is impl- or interface-owned")
+        }
     }
-    if let InferTy::TypeVar(param) = ty.kind()
-        && let Some(bound) = bindings.get(param)
-    {
-        return bound.clone();
-    }
-    Ty::intern(
-        ty.kind()
-            .map_children(|child| substitute_bindings(child, bindings)),
-    )
 }
 
 /// Verifies a matched impl's declared bounds at the realized bindings.
@@ -2081,7 +1986,7 @@ fn bounds_hold(
             continue;
         };
         for bound in bounds {
-            let bound = realized(bound, bindings);
+            let bound = bound.as_reference().substitute_bindings(bindings);
             if !is_realized(actual) || !bound.generics.iter().all(is_realized) {
                 continue;
             }
@@ -2223,7 +2128,8 @@ fn direct_requires(
         ..
     }) = crate::package_interface::mounted_type_row(db, &of.name)
     {
-        let Some(instantiation) = mounted_interface_instantiation(of, self_ty, generic_params)
+        let Some(instantiation) =
+            crate::method_resolution::interface_instantiation(self_ty, of, generic_params.len())
         else {
             return Vec::new();
         };
@@ -2259,7 +2165,8 @@ fn direct_requires(
     let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
         .with_frame(crate::lower::interface_frame(db, interface))
         .with_bounds(crate::lower::interface_scope_bounds(db, interface));
-    let Some(instantiation) = crate::method_resolution::interface_instantiation(self_ty, of, data)
+    let Some(instantiation) =
+        crate::method_resolution::interface_instantiation(self_ty, of, data.generic_params.len())
     else {
         return Vec::new();
     };

@@ -62,7 +62,7 @@ use baml_compiler2_ast::{
     ast::{AstSourceMap, ExprBody, FunctionOrigin},
 };
 use baml_compiler2_hir::{
-    body::FunctionBody, contributions::Definition, item_data, package::package_items,
+    body::FunctionBody, contributions::Definition, item_data, loc::DeclRef, package::package_items,
     scope::FileScopeId,
 };
 use baml_compiler2_hir_ty::ide::infer_for_scope;
@@ -537,8 +537,12 @@ fn parameter_definition(
     parameter: &str,
 ) -> Option<(SourceFile, TextRange)> {
     let offset = callee_span.end() - TextSize::from(1);
+    // Only a source-lane function has a parameter span to link to; a method
+    // served from a package interface (`DeclRef::External`) has no source.
     let (SymbolTarget::Item(Definition::Function(function))
-    | SymbolTarget::Method { func: function }) = crate::resolve::symbol_at(db, file, offset)?
+    | SymbolTarget::Method {
+        func: DeclRef::Source(function),
+    }) = crate::resolve::symbol_at(db, file, offset)?
     else {
         return None;
     };

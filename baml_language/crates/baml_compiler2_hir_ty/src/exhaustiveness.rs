@@ -591,17 +591,24 @@ pub fn render_witness_pat(
     use std::fmt::Write as _;
     match &w.ctor {
         Ctor::Class(qtn, args) => {
-            let names: Vec<baml_type::Name> = {
-                match crate::facts::definition_of(db, qtn) {
-                    Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
-                        baml_compiler2_hir::item_data::class_data(db, class_loc)
+            let names: Vec<baml_type::Name> = match crate::facts::definition_of(db, qtn) {
+                Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) => {
+                    baml_compiler2_hir::item_data::class_data(db, class_loc)
+                        .fields
+                        .iter()
+                        .map(|f| f.name.clone())
+                        .collect()
+                }
+                // A served package's class: its row's field names.
+                _ => crate::extern_loc::mounted_class_loc(db, qtn)
+                    .map(|class| {
+                        crate::extern_loc::extern_class_row(db, class)
                             .fields
                             .iter()
-                            .map(|f| f.name.clone())
+                            .map(|(name, ..)| name.clone())
                             .collect()
-                    }
-                    _ => Vec::new(),
-                }
+                    })
+                    .unwrap_or_default(),
             };
             let qtn_str = class_witness_head(vp, qtn, args);
             if w.fields.is_empty() {
