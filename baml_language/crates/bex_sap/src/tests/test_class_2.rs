@@ -512,3 +512,71 @@ Actions:
 // - test_streaming_not_null_list_partial_2 (uses streaming behavior annotations)
 // - test_streaming_not_null_list_partial_3_0 (uses streaming behavior annotations)
 // - test_streaming_not_null_list_partial_3_1 (uses streaming behavior annotations)
+
+// --- Regression for #4790: compact (whitespace-free) input with unquoted
+// scalar values. The unquoted value heuristic used to swallow the `,` after
+// `null`/numbers when no whitespace followed, gluing the rest of the object
+// into one string and dropping every later field.
+
+fn make_page_routes_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class PageRoute {
+            id: string,
+            schema_id: (string | null),
+            reason: string,
+        }
+        class PageRoutes {
+            routes: [PageRoute],
+        }
+    }
+}
+
+test_deserializer!(
+    test_compact_unquoted_key_null_value_single_entry,
+    r#"{routes:[{id:"001",schema_id:null,reason:"amount -1.617,98"}]}"#,
+    baml_tyannotated!(PageRoutes),
+    make_page_routes_db(),
+    {
+        "routes": [
+            {
+                "id": "001",
+                "schema_id": null,
+                "reason": "amount -1.617,98"
+            }
+        ]
+    }
+);
+
+test_deserializer!(
+    test_compact_unquoted_key_null_value_two_entries,
+    r#"{routes:[{id:"001",schema_id:null,reason:"first"},{id:"002",schema_id:null,reason:"second"}]}"#,
+    baml_tyannotated!(PageRoutes),
+    make_page_routes_db(),
+    {
+        "routes": [
+            {
+                "id": "001",
+                "schema_id": null,
+                "reason": "first"
+            },
+            {
+                "id": "002",
+                "schema_id": null,
+                "reason": "second"
+            }
+        ]
+    }
+);
+
+test_deserializer!(
+    test_compact_unquoted_numeric_values,
+    r#"{a:1,b:2}"#,
+    baml_tyannotated!(CompactPair),
+    baml_db! {
+        class CompactPair {
+            a: int,
+            b: int,
+        }
+    },
+    { "a": 1, "b": 2 }
+);
