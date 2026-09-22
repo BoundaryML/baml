@@ -97,7 +97,12 @@ export async function resolveSlackChannelId(
       ({ name }) => name === normalizedChannelName,
     );
     if (channel?.id) return channel.id;
-    cursor = result.response_metadata?.next_cursor?.trim() || undefined;
+    const nextCursor =
+      result.response_metadata?.next_cursor?.trim() || undefined;
+    if (nextCursor && nextCursor === cursor) {
+      throw new Error('Slack conversations.list returned a repeated cursor');
+    }
+    cursor = nextCursor;
   } while (cursor);
 
   throw new Error(`Slack channel #${normalizedChannelName} was not found`);
