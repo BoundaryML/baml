@@ -336,6 +336,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
     }
 
+    /// Reject a value binding that takes one of [`DESUGAR_PATH_ROOTS`]: the
+    /// compiler emits paths rooted at those names, and a local shadows a
+    /// package root where an item does not, so the binding would break every
+    /// desugared path in scope.
+    fn reject_reserved_binding_name(&mut self, name: &Name, span: TextRange) {
+        if baml_base::lang::DESUGAR_PATH_ROOTS.contains(&name.as_str()) {
+            self.diagnostics.push(Hir2Diagnostic::ReservedBindingName {
+                name: name.clone(),
+                span,
+            });
+        }
+    }
+
     /// Emit `DuplicateDefinition` diagnostics for any name with more than one site.
     fn emit_duplicate_diagnostics(&mut self, seen: FxHashMap<Name, Vec<MemberSite>>) {
         let scope = self.current_scope_path();
@@ -847,6 +860,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         for (name, (name_range, bind_pattern)) in names.names {
+            self.reject_reserved_binding_name(&name, name_range);
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
@@ -1136,6 +1150,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let scope_id = self.current_scope_id();
         self.lambda_scopes.push((key, scope_id));
         for (idx, param) in lambda.params.iter().enumerate() {
+            self.reject_reserved_binding_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
@@ -1289,6 +1304,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.record_scope_owner(scope_id, ItemScopeOwner::Function(local_id));
 
         for (idx, param) in f.params.iter().enumerate() {
+            self.reject_reserved_binding_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));

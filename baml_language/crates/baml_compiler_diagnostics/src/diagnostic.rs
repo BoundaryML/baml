@@ -406,6 +406,9 @@ pub enum DiagnosticId {
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
+    /// A value binding took a name the compiler emits as a path root in its
+    /// desugars, which the binding would shadow.
+    ReservedBindingName,
     /// A class literal named a class that holds a `$rust_type` field. That
     /// state is created only by the class's own native functions; a literal
     /// could only copy a handle out of another value, which relabels what the
@@ -625,6 +628,7 @@ impl DiagnosticId {
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
             DiagnosticId::CannotConstructOpaqueClass => "E0173",
+            DiagnosticId::ReservedBindingName => "E0174",
         }
     }
 }

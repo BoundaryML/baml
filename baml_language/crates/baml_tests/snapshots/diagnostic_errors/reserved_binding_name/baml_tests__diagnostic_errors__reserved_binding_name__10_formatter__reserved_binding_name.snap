@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// The compiler spells `baml` in the paths its desugars emit (`spawn { .. }`
+// lowers to `baml.spawn.Plan.new(..)`, `$env.X` to `baml.env.ref(..)`), and
+// those paths resolve in the user's own scope. A local binding named `baml`
+// wins over the package, so every desugared path in the function would fail
+// against the local's type. The binding is refused instead.
+
+function local_binding() -> int {
+    let baml = 5;
+    baml
+}
+
+function parameter(baml: int) -> int throws never {
+    baml
+}
+
+function lambda_parameter() -> int throws never {
+    let f = (baml: int) -> int throws never {
+        baml
+    };
+    f(1)
+}
+
+class Box {
+    baml: int,
+}
+
+function destructured(b: Box) -> int throws never {
+    let Box { baml } = b;
+    baml
+}
+
+function for_in_binding(xs: int[]) -> int throws never {
+    let total = 0;
+    for (let baml in xs) {
+        total += baml;
+    }
+    total
+}
+
+function catch_binding() -> string {
+    {
+        throw "x"
+    } catch (baml) {
+        _ => "caught"
+    }
+}
+
+// An ITEM may still take the name: an item does not shadow a package root the
+// way a local does, so these are legal and produce no diagnostic.
+class baml {
+    label: string,
+}
+
+function baml_item() -> int throws never {
+    7
+}
+
+// Only the roots the compiler emits are reserved. `#4543` ruled that a
+// language root is otherwise an ordinary package a user name may shadow, so a
+// local named `reflect` stays legal (pinned by `ns_fixtures/ns_reflect_shadowing`).
+function reflect_local() -> int throws never {
+    let reflect = 1;
+    reflect + 1
+}
