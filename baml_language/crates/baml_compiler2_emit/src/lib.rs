@@ -3881,6 +3881,13 @@ struct EmitTables {
     interface_object_indices: HashMap<baml_type::TypeName, usize>,
     /// Per-package structure the loader builds `Object::Package` from.
     program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+    /// Every rendered key the program's name-keyed global maps
+    /// (`function_global_indices`, `let_global_indices`) hold so far — a
+    /// spliced base's included. Those maps are keyed by rendered name until
+    /// link resolves by identity, so two declarations rendering to one key
+    /// would silently share an entry (last written wins); Pass 1 rejects the
+    /// second instead, across every file group of the program.
+    link_names: HashSet<String>,
 }
 
 impl EmitTables {
@@ -3901,6 +3908,16 @@ impl EmitTables {
     /// entries stay valid exactly as the class/enum/interface ones do.
     fn from_stdlib_program(base: &Program) -> Self {
         let mut tables = EmitTables::default();
+
+        // The base's named globals stay in the program the user group is
+        // emitted into, so a user declaration rendering to one of their keys
+        // collides exactly as it would against a builtin group emitted here.
+        tables.link_names.extend(
+            base.function_global_indices
+                .keys()
+                .chain(base.let_global_indices.keys())
+                .cloned(),
+        );
 
         for (idx, obj) in base.objects.iter().enumerate() {
             match obj {
@@ -4033,6 +4050,7 @@ fn emit_file_group<'db>(
         enum_object_indices,
         interface_object_indices,
         program_packages,
+        link_names,
     } = tables;
 
     // --- Pass 1: Build globals map (function name -> global index) ---
@@ -4044,12 +4062,10 @@ fn emit_file_group<'db>(
     // items, so `program.globals.len()` is the only correct starting point.
     let mut global_idx = program.globals.len();
 
-    // The runtime name maps are still keyed by rendered name (until link
-    // resolves by identity), so two definitions rendering to one key would
-    // silently share a wire entry (last-written wins at Pass 4): a collision
-    // is rejected here rather than shadowed. Upstream duplicate-definition /
-    // coherence checks make this unreachable for accepted projects.
-    let mut link_names: HashSet<String> = HashSet::new();
+    // A rendered key two declarations share is rejected here rather than
+    // shadowed at Pass 4 (`EmitTables::link_names`). Upstream
+    // duplicate-definition / coherence checks make this unreachable for
+    // accepted projects.
 
     // First sub-pass: assign slots to all functions across all files.
     // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
@@ -4527,7 +4543,7 @@ fn emit_file_group<'db>(
             placements,
             file_references,
             opt,
-        );
+        )?;
     } else {
         emit_functions_serial(
             db,
@@ -4544,7 +4560,7 @@ fn emit_file_group<'db>(
             placements,
             file_references,
             opt,
-        );
+        )?;
     }
 
     // Stage 6 (`SkipClean`) / design §9 R2: the `$init` / `$init_test` tail is a
@@ -5611,7 +5627,7 @@ fn emit_functions_serial<'db>(
     placements: &mut FunctionPlacements<'db>,
     file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
-) {
+) -> Result<(), LoweringError> {
     for file in files {
         let rel_path = relative_source_path(db, *file);
         // A clean file (incremental compile) is not emitted here at all — its
@@ -5635,7 +5651,7 @@ fn emit_functions_serial<'db>(
             if baml_compiler2_hir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
-            let mir = lower_function(db, func_loc, opt);
+            let mir = lowered(db, func_loc, lower_function(db, func_loc, opt))?;
             let fq_name = mir.identity.link_name(db);
 
             let mut compiled_fn = match &mir.kind {
@@ -5731,6 +5747,7 @@ fn emit_functions_serial<'db>(
             placements.insert(func_loc, PlacedFunction::Live { object: obj_idx });
         }
     }
+    Ok(())
 }
 
 /// One function's Pass-4 state carried from the lowering stage to the
@@ -5768,8 +5785,46 @@ fn lower_seed<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     seed: &FnSeed,
     opt: OptLevel,
-) -> &'db baml_compiler2_mir::MirFunction<'db> {
-    lower_function(db, FunctionLoc::new(db, seed.file, seed.local_id), opt)
+) -> Result<&'db baml_compiler2_mir::MirFunction<'db>, LoweringError> {
+    let function = FunctionLoc::new(db, seed.file, seed.local_id);
+    lowered(db, function, lower_function(db, function, opt))
+}
+
+/// A function's MIR, or the compile failure its lowering reported: an
+/// internal inconsistency leaves a function with no MIR to emit.
+fn lowered<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    function: FunctionLoc<'db>,
+    mir: &'db Result<baml_compiler2_mir::MirFunction<'db>, baml_compiler2_mir::MirInternalError>,
+) -> Result<&'db baml_compiler2_mir::MirFunction<'db>, LoweringError> {
+    mir.as_ref().map_err(|error| {
+        internal_lowering_error(
+            db,
+            function.file(db),
+            &definition_link_name(db, Definition::Function(function)),
+            error,
+        )
+    })
+}
+
+/// The compile failure for an item of `file` whose lowering reported an
+/// internal inconsistency, located by line where the inconsistency was found.
+fn internal_lowering_error(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    item: &str,
+    error: &baml_compiler2_mir::MirInternalError,
+) -> LoweringError {
+    let path = relative_source_path(db, file);
+    let at = error.span.map_or_else(
+        || path.clone(),
+        |span| {
+            let line_starts = build_line_starts(file.text(db));
+            let line = line_starts.partition_point(|&start| start <= u32::from(span.range.start()));
+            format!("{path}:{line}")
+        },
+    );
+    LoweringError::Internal(format!("lowering `{item}` ({at}): {error}"))
 }
 
 /// Stage A driver: lower every seed's function to MIR, returned in seed order.
@@ -5792,7 +5847,7 @@ fn lower_seed_mirs<'db>(
     db: &'db dyn crate::Db,
     seeds: &[FnSeed],
     opt: OptLevel,
-) -> Vec<&'db baml_compiler2_mir::MirFunction<'db>> {
+) -> Result<Vec<&'db baml_compiler2_mir::MirFunction<'db>>, LoweringError> {
     // Small chunks keep rayon's work-stealing effective — bodies vary a lot
     // in inference cost — while amortizing the per-task handle clone.
     const CHUNK: usize = 4;
@@ -5822,14 +5877,16 @@ fn lower_seed_mirs<'db>(
 
     // Warm the shared file/package-level memos before fanning out, so cold
     // workers don't all block on the same shared memo slots.
-    lower_seed(db, first, opt);
+    lower_seed(db, first, opt)?;
 
     rayon::scope(move |s| {
         for (chunk, handle) in chunks.into_iter().zip(handles) {
             s.spawn(move |_| {
                 let db: &dyn baml_compiler2_mir::Db = &*handle;
                 for seed in chunk {
-                    lower_seed(db, seed, opt);
+                    // Warming only: the re-read below reports a failure, at
+                    // this thread's own `'db`.
+                    let _ = lower_seed(db, seed, opt);
                 }
             });
         }
@@ -5882,7 +5939,7 @@ fn emit_functions_parallel<'db>(
     placements: &mut FunctionPlacements<'db>,
     file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
-) {
+) -> Result<(), LoweringError> {
     use rayon::prelude::*;
 
     // --- Stage A: lower every function to MIR (parallel: salsa queries on
@@ -5918,7 +5975,7 @@ fn emit_functions_parallel<'db>(
             });
         }
     }
-    let mirs = lower_seed_mirs(db, &seeds, opt);
+    let mirs = lower_seed_mirs(db, &seeds, opt)?;
     let work: Vec<FnWorkItem> = seeds
         .into_iter()
         .zip(mirs)
@@ -6077,6 +6134,7 @@ fn emit_functions_parallel<'db>(
         );
         placements.insert(func_loc, PlacedFunction::Live { object: obj_idx });
     }
+    Ok(())
 }
 
 /// Interning table for pooled `Object::GenericFunction`s, bucketed by target
@@ -6464,7 +6522,8 @@ fn compile_init_function<'db>(
         };
 
         // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
-        let maybe_body = lower_let_body(db, *let_loc, opt);
+        let maybe_body = lower_let_body(db, *let_loc, opt)
+            .map_err(|error| internal_lowering_error(db, *file, fq_name, &error))?;
 
         let helper_fn = match maybe_body {
             Some((mir_body, lambdas)) => {

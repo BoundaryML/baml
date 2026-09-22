@@ -179,6 +179,26 @@ pub struct RuntimeInterfaceBound {
     pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
 }
 
+/// A point where lowering could not produce code for a CHECKED program: what
+/// the checker recorded and what lowering finds disagree, which is a compiler
+/// bug and never a user error (lowering runs only on a program with no
+/// errors). A function or initializer that hits one has no MIR — lowering
+/// answers with this instead, and the compile fails.
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+pub struct MirInternalError {
+    pub message: String,
+    /// The source being lowered when the inconsistency was found.
+    pub span: Option<Span>,
+}
+
+impl std::fmt::Display for MirInternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for MirInternalError {}
+
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction<'db> {

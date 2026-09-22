@@ -26,10 +26,18 @@ use crate::{
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, FunctionOwner, IndexKind,
         IntrinsicOp, Local, LocalDecl, LogLevel, MirFunction, MirFunctionBody, MirFunctionId,
-        MirFunctionKind, Operand, Place, Rvalue, StatementKind, SyntheticKind, Terminator,
+        MirFunctionKind, MirInternalError, Operand, Place, Rvalue, StatementKind, SyntheticKind,
+        Terminator,
     },
     optimize,
 };
+
+/// What lowering one construct yields: the value, or the internal
+/// inconsistency that abandons the whole unit. `?` propagates it straight to
+/// the entry point, which answers with the error instead of MIR; the
+/// half-built graph it leaves behind (an unterminated block, a lambda's
+/// swapped-out builder) is dropped with the context and observed by nothing.
+type Lowered<T> = Result<T, MirInternalError>;
 
 /// Classifies what kind of switch a match/catch expression lowers to.
 ///
@@ -2155,15 +2163,18 @@ impl<'db> LoweringContext<'db> {
     /// The declaration an enum head names, wherever it lives. TIR admits an
     /// enum type only by resolving its declaration, so a head that names
     /// none here is an internal inconsistency, never a state to fall open on.
-    fn enum_ref_of(&self, qtn: &DeclName) -> EnumRef<'db> {
+    fn enum_ref_of(&self, qtn: &DeclName) -> Lowered<EnumRef<'db>> {
         match self.source_definition(qtn) {
-            Some(Definition::Enum(enum_loc)) => DeclRef::Source(enum_loc),
-            _ => DeclRef::External(mounted_enum_loc(self.db, qtn).unwrap_or_else(|| {
-                unreachable!(
-                    "TIR admitted the enum `{}`, which no declaration in this compilation names",
-                    qtn.name()
-                )
-            })),
+            Some(Definition::Enum(enum_loc)) => Ok(DeclRef::Source(enum_loc)),
+            _ => mounted_enum_loc(self.db, qtn)
+                .map(DeclRef::External)
+                .ok_or_else(|| {
+                    self.internal_error_here(&format!(
+                        "TIR admitted the enum `{}`, which no declaration in this compilation \
+                         names",
+                        qtn.name()
+                    ))
+                }),
         }
     }
 
@@ -2357,10 +2368,10 @@ impl<'db> LoweringContext<'db> {
         collection: AstExprId,
         body: AstExprId,
         iterable_view: InterfaceTypeView,
-    ) {
+    ) -> Lowered<()> {
         let coll_ty = self.expr_ty(collection);
         let coll_local = self.builder.temp(coll_ty);
-        self.lower_expr(collection, Place::local(coll_local));
+        self.lower_expr(collection, Place::local(coll_local))?;
 
         let (iterable_tn, iterable_args, iterable_assoc) = iterable_view;
         // A bare `Iterable` view pins nothing — iterating a `T extends Iterable`
@@ -2401,7 +2412,7 @@ impl<'db> LoweringContext<'db> {
             &[],
             None,
             &Place::local(iter_local),
-        );
+        )?;
 
         let bb_header = self.builder.create_block();
         let bb_body = self.builder.create_block();
@@ -2433,7 +2444,7 @@ impl<'db> LoweringContext<'db> {
             &[],
             None,
             &Place::local(next_local),
-        );
+        )?;
         self.emit_is_type_branch(next_local, Self::baml_iter_done_ty(), bb_exit, bb_body);
 
         self.builder.set_current_block(bb_body);
@@ -2442,10 +2453,10 @@ impl<'db> LoweringContext<'db> {
             Place::local(elem_local),
             Rvalue::Use(Operand::Copy(Place::Local(next_local))),
         );
-        self.bind_pattern(elem_local, binding, DefinitionSite::Statement(stmt_id));
+        self.bind_pattern(elem_local, binding, DefinitionSite::Statement(stmt_id))?;
 
         let body_temp = self.builder.temp(RuntimeTy::Void);
-        self.lower_expr(body, Place::local(body_temp));
+        self.lower_expr(body, Place::local(body_temp))?;
 
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_header);
@@ -2453,6 +2464,7 @@ impl<'db> LoweringContext<'db> {
 
         self.loop_context = prev_loop;
         self.builder.set_current_block(bb_exit);
+        Ok(())
     }
 
     /// Populate `class_fields` and `enum_variants` from a single package's items.
@@ -2908,16 +2920,15 @@ impl<'db> LoweringContext<'db> {
         site: DefinitionSite,
         name: &Name,
         ty: RuntimeTy,
-    ) -> Local {
-        let binding_id = self.binding_id_for_pattern_site_name(pattern, site, name);
-        debug_assert!(
-            binding_id.is_some(),
-            "no HIR binding for `{name}` at {site:?} within scope {:?}",
-            self.current_scope
-        );
-        let Some(binding_id) = binding_id else {
-            return self.builder.declare_local(Some(name.clone()), ty, None);
-        };
+    ) -> Lowered<Local> {
+        let binding_id = self
+            .binding_id_for_pattern_site_name(pattern, site, name)
+            .ok_or_else(|| {
+                self.internal_error_here(&format!(
+                    "no HIR binding for `{name}` at {site:?} within scope {:?}",
+                    self.current_scope
+                ))
+            })?;
         let local = if self.binding_is_captured(binding_id) {
             self.builder
                 .declare_captured_local(Some(name.clone()), ty, None)
@@ -2925,7 +2936,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.declare_local(Some(name.clone()), ty, None)
         };
         self.binding_locals.insert(binding_id, local);
-        local
+        Ok(local)
     }
 
     /// Declare the local for parameter `param_idx` of the function or lambda
@@ -2954,20 +2965,22 @@ impl<'db> LoweringContext<'db> {
         site: DefinitionSite,
         name: &Name,
         local: Local,
-    ) {
-        let binding_id = self.binding_id_for_pattern_site_name(pattern, site, name);
-        debug_assert!(
-            binding_id.is_some(),
-            "no HIR binding for `{name}` at {site:?} within scope {:?}",
-            self.current_scope
-        );
-        if let Some(binding_id) = binding_id {
-            debug_assert!(
-                !self.binding_is_captured(binding_id),
+    ) -> Lowered<()> {
+        let binding_id = self
+            .binding_id_for_pattern_site_name(pattern, site, name)
+            .ok_or_else(|| {
+                self.internal_error_here(&format!(
+                    "no HIR binding for `{name}` at {site:?} within scope {:?}",
+                    self.current_scope
+                ))
+            })?;
+        if self.binding_is_captured(binding_id) {
+            return Err(self.internal_error_here(&format!(
                 "`{name}` is captured; it needs its own local from `declare_binding`"
-            );
-            self.binding_locals.insert(binding_id, local);
+            )));
         }
+        self.binding_locals.insert(binding_id, local);
+        Ok(())
     }
 
     fn path_resolution(&self, expr_id: AstExprId) -> Option<PathResolution> {
@@ -3081,10 +3094,10 @@ impl<'db> LoweringContext<'db> {
     /// the stack; the owning `lower_scoped_block` truncates, while divergent callers leave it
     /// (a dead block follows). If a replayed body diverges (e.g. `throw`), the
     /// remaining defers are emitted on the resulting dead block and eliminated.
-    fn replay_defers_to_depth(&mut self, defer_depth: usize) {
+    fn replay_defers_to_depth(&mut self, defer_depth: usize) -> Lowered<()> {
         let defers: Vec<AstExprId> = self.defer_stack[defer_depth..].to_vec();
         if defers.is_empty() {
-            return;
+            return Ok(());
         }
         // Inline replay (the non-throwing exits) runs the defers OUTSIDE their
         // own scope's unwind pads: a defer that throws here must not be routed
@@ -3097,9 +3110,10 @@ impl<'db> LoweringContext<'db> {
                 break;
             }
             let tmp = self.builder.temp(RuntimeTy::Void);
-            self.lower_expr(body, Place::local(tmp));
+            self.lower_expr(body, Place::local(tmp))?;
         }
         self.catch_context = saved_catch;
+        Ok(())
     }
 
     /// Every binding HIR registered in the scopes this body lowers has a
@@ -3728,19 +3742,32 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         use crate::inference_provider::MemberResolution;
         let Some(MemberResolution::Method {
             callee: item,
             receiver: Receiver::Unbound,
         }) = self.tir_resolution(self.expr_metadata_key(callee)).cloned()
         else {
-            return false;
+            return Ok(false);
         };
         match item {
+            // The checker resolved this call to a virtual slot, so it lowers
+            // through the slot or not at all. Declining here would hand it to
+            // the ordinary call road, which names the interface's own
+            // DECLARATION of the method: a required method has no body to
+            // call, and a default body would run in place of the
+            // implementor's own method. A frame the checker's plan and the
+            // interface's shape disagree about is an internal inconsistency.
             MethodCallee::Virtual { interface, method } => {
                 let Some(shape) = self.interface_method_shape(interface, &method) else {
-                    return false;
+                    return Err(self.internal_error(
+                        &format!(
+                            "a call resolved to the interface method \
+                             `{method}`, which its interface does not declare"
+                        ),
+                        expr_id,
+                    ));
                 };
                 if shape.dispatches_on_first {
                     // The receiver road derives `Self` from the first
@@ -3750,10 +3777,25 @@ impl<'db> LoweringContext<'db> {
                     // the virtual-call machinery itself.
                     let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
                     else {
-                        return false;
+                        return Err(self.internal_error(
+                            &format!(
+                                "a call resolved to the interface \
+                                 method `{method}` has no call plan"
+                            ),
+                            expr_id,
+                        ));
                     };
                     if plan.type_args.len() != shape.frame_len {
-                        return false;
+                        return Err(self.internal_error(
+                            &format!(
+                                "the call plan of the interface method \
+                                 `{method}` instantiates {} frame slot(s), but its frame `[Self] \
+                                 ++ interface generics ++ own generics` has {}",
+                                plan.type_args.len(),
+                                shape.frame_len,
+                            ),
+                            expr_id,
+                        ));
                     }
                     let iface_args: Vec<Tir2Ty> =
                         plan.type_args[1..=shape.interface_generics].to_vec();
@@ -3769,10 +3811,16 @@ impl<'db> LoweringContext<'db> {
                     );
                 }
                 let Some(rvalue) = self.virtual_function_rvalue(expr_id, interface, &method) else {
-                    return false;
+                    return Err(self.internal_error(
+                        &format!(
+                            "a call resolved to the interface method \
+                             `{method}` has no resolvable frame"
+                        ),
+                        expr_id,
+                    ));
                 };
-                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue);
-                true
+                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue)?;
+                Ok(true)
             }
             MethodCallee::Concrete {
                 impl_block,
@@ -3787,10 +3835,10 @@ impl<'db> LoweringContext<'db> {
                     );
                 }
                 let rvalue = self.type_keyed_function_rvalue(expr_id, &self_ty, &view, &method);
-                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue);
-                true
+                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue)?;
+                Ok(true)
             }
-            MethodCallee::Inherent(_) => false,
+            MethodCallee::Inherent(_) => Ok(false),
         }
     }
 
@@ -3837,8 +3885,8 @@ impl<'db> LoweringContext<'db> {
         iface_tn: &TypeName,
         iface_args: &[Tir2Ty],
         method: &Name,
-    ) -> bool {
-        let mut arg_operands = self.lower_call_arg_operands(expr_id, args);
+    ) -> Lowered<bool> {
+        let mut arg_operands = self.lower_call_arg_operands(expr_id, args)?;
         if arg_operands.is_empty() {
             // Every other bail-out on this road returns before any lowering;
             // this one cannot. The arguments are already emitted into the
@@ -3847,12 +3895,11 @@ impl<'db> LoweringContext<'db> {
             // `self`-taking method always carries its receiver as the first
             // written argument, so an empty list is an internal
             // inconsistency — fail at the origin.
-            self.emit_panic_call(
-                "internal compiler error: self-taking interface item call has no receiver \
+            return Err(self.internal_error(
+                "self-taking interface item call has no receiver \
                  argument",
                 expr_id,
-            );
-            return true;
+            ));
         }
         let receiver = arg_operands.remove(0);
         self.emit_virtual_call_with_value_operands(
@@ -3877,8 +3924,8 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: &Place,
         rvalue: Rvalue<'db>,
-    ) {
-        let arg_operands = self.lower_call_arg_operands(expr_id, args);
+    ) -> Lowered<()> {
+        let arg_operands = self.lower_call_arg_operands(expr_id, args)?;
         let callable = self.builder.temp(RuntimeTy::unknown());
         self.builder.assign(Place::local(callable), rvalue);
         self.emit_resolved_indirect_call(
@@ -3887,7 +3934,8 @@ impl<'db> LoweringContext<'db> {
             expr_id,
             runtime_id,
             dest,
-        );
+        )?;
+        Ok(())
     }
 
     /// Assign the type-keyed resolution of an UNBOUND interface-item
@@ -3898,7 +3946,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: &MethodCallee<'db>,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let rvalue = match callee {
             MethodCallee::Virtual { interface, method } => {
                 let (interface, method) = (*interface, method.clone());
@@ -3918,15 +3966,16 @@ impl<'db> LoweringContext<'db> {
                 unreachable!("an inherent method is not an interface item")
             }
         };
-        match rvalue {
-            Some(rvalue) => self.builder.assign(dest, rvalue),
-            // TIR admitted it, so an unresolvable frame is an internal
-            // inconsistency — never the generic null placeholder.
-            None => self.emit_panic_call(
-                "internal compiler error: interface method reference has no resolvable frame",
+        // TIR admitted it, so an unresolvable frame is an internal
+        // inconsistency — never the generic null placeholder.
+        let rvalue = rvalue.ok_or_else(|| {
+            self.internal_error(
+                "interface method reference has no resolvable frame",
                 expr_id,
-            ),
-        }
+            )
+        })?;
+        self.builder.assign(dest, rvalue);
+        Ok(())
     }
 
     /// The [`Rvalue::MakeVirtualFunction`] resolving `method` of `view` on
@@ -3983,15 +4032,18 @@ impl<'db> LoweringContext<'db> {
 
     /// Whether a method callee takes a `self` receiver, wherever it is
     /// declared.
-    fn callee_takes_self(&self, callee: &MethodCallee<'db>) -> bool {
+    fn callee_takes_self(&self, callee: &MethodCallee<'db>) -> Lowered<bool> {
         match callee {
             MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => {
-                callable_takes_self(self.db, *func)
+                Ok(callable_takes_self(self.db, *func))
             }
             MethodCallee::Virtual { interface, method } => self
                 .virtual_slot_takes_self(*interface, method)
-                .unwrap_or_else(|| {
-                    unreachable!("a recorded virtual slot names a method its interface declares")
+                .ok_or_else(|| {
+                    self.internal_error_here(&format!(
+                        "a call resolved to the virtual slot `{method}`, which its interface \
+                         does not declare"
+                    ))
                 }),
         }
     }
@@ -4118,25 +4170,31 @@ impl<'db> LoweringContext<'db> {
         &self,
         expr_id: AstExprId,
         value_count: usize,
-    ) -> Option<baml_type::CallLayout> {
-        let plan = self.tir_call_plan(self.expr_metadata_key(expr_id))?;
+    ) -> Lowered<Option<baml_type::CallLayout>> {
+        let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)) else {
+            return Ok(None);
+        };
         let mut layout = plan.argument_layout.clone();
         match value_count.checked_sub(layout.len()) {
             Some(0) => {}
             Some(1) => layout.0.insert(0, None),
             // The layout has one slot per declared parameter while `value_count`
             // is what the call site pushes, so they can only disagree when the
-            // call is arity-wrong — which a CHECKED program cannot contain, and
-            // lowering only ever runs on one. Carrying on with no layout would
-            // emit a call whose slots nothing describes, so this stays fatal.
-            _ => unreachable!(
-                "lowered a call whose {value_count} operand(s) do not match its {} \
-                 checked parameter slot(s): this program reached MIR with a live \
-                 arity error, so a caller lowered without checking first",
-                layout.len(),
-            ),
+            // call is arity-wrong — which a CHECKED program cannot contain.
+            // Carrying on with no layout would emit a call whose slots nothing
+            // describes.
+            _ => {
+                return Err(self.internal_error(
+                    &format!(
+                        "lowered a call whose {value_count} operand(s) do not match its {} \
+                         checked parameter slot(s)",
+                        layout.len(),
+                    ),
+                    expr_id,
+                ));
+            }
         }
-        Some(layout)
+        Ok(Some(layout))
     }
 
     /// Emit an ordinary indirect call of an already-resolved callable value:
@@ -4150,11 +4208,11 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         runtime_id: Option<AstExprId>,
         dest: &Place,
-    ) {
-        let argument_layout = self.call_argument_layout(expr_id, arg_operands.len());
+    ) -> Lowered<()> {
+        let argument_layout = self.call_argument_layout(expr_id, arg_operands.len())?;
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
         match dest {
             Place::Local(_) => {
                 self.builder.call_with_type_args_and_runtime_id(
@@ -4187,6 +4245,7 @@ impl<'db> LoweringContext<'db> {
                     .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
             }
         }
+        Ok(())
     }
 
     /// The interface view a WRITTEN qualifier names, for either spelling that
@@ -4807,11 +4866,17 @@ impl<'db> LoweringContext<'db> {
     /// call's callee path is typed by the callee road, which does not record a
     /// root, so `unknown` is the honest fallback there — the receiver is passed
     /// as an ordinary argument and the callee's own signature governs it.
-    fn load_top_level_let_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Local> {
-        let definition = self.top_level_let_at(expr_id, name)?;
+    fn load_top_level_let_root(
+        &mut self,
+        expr_id: AstExprId,
+        name: &Name,
+    ) -> Lowered<Option<Local>> {
+        let Some(definition) = self.top_level_let_at(expr_id, name) else {
+            return Ok(None);
+        };
         let root_ty = self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown);
         let root_local = self.builder.temp(root_ty.clone());
-        self.lower_item_ref(expr_id, definition, Place::local(root_local));
+        self.lower_item_ref(expr_id, definition, Place::local(root_local))?;
         // Hand out a *materialized* copy rather than the global-read local.
         // `lower_item_ref` defines the first temp as `Use(Constant::GlobalItem)`,
         // which emit's analysis classifies as a pure constant and virtualizes —
@@ -4827,7 +4892,7 @@ impl<'db> LoweringContext<'db> {
             Place::local(materialized),
             Rvalue::Use(Operand::Copy(Place::local(root_local))),
         );
-        Some(materialized)
+        Ok(Some(materialized))
     }
 
     /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
@@ -4892,7 +4957,7 @@ impl<'db> LoweringContext<'db> {
 
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
-    fn lower_function_body(&mut self) -> MirFunction<'db> {
+    fn lower_function_body(&mut self) -> Lowered<MirFunction<'db>> {
         let func_loc = self
             .func_loc
             .expect("lower_function_body called on non-function LoweringContext");
@@ -5009,12 +5074,12 @@ impl<'db> LoweringContext<'db> {
 
         let parameter_defaults =
             baml_compiler2_hir::signature::function_parameter_defaults(self.db, func_loc);
-        self.lower_default_parameter_prologue(func_data, &parameter_defaults);
+        self.lower_default_parameter_prologue(func_data, &parameter_defaults)?;
 
         // Lower root expression into return place
         let root_expr = self.body.root_expr;
         if let Some(root) = root_expr {
-            self.lower_expr(root, Place::local(ret));
+            self.lower_expr(root, Place::local(ret))?;
         } else {
             self.builder.assign(
                 Place::local(ret),
@@ -5044,14 +5109,14 @@ impl<'db> LoweringContext<'db> {
         // index into this vec.
         mir.lambdas = std::mem::take(&mut self.pending_lambdas);
 
-        mir
+        Ok(mir)
     }
 
     fn lower_default_parameter_prologue(
         &mut self,
         func_data: &baml_compiler2_hir::item_data::FunctionData,
         parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
-    ) {
+    ) -> Lowered<()> {
         for index in 0..func_data.params.len() {
             let Some(default_ref) = parameter_defaults.param_default(index) else {
                 continue;
@@ -5088,13 +5153,14 @@ impl<'db> LoweringContext<'db> {
                 default_ref.expr.expr(),
                 &parameter_defaults.defaults,
                 param_value,
-            );
+            )?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(next_block);
             }
 
             self.builder.set_current_block(next_block);
         }
+        Ok(())
     }
 
     fn lower_default_expr(
@@ -5102,15 +5168,16 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         defaults: &baml_compiler2_ast::FunctionDefaults,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let saved_body = std::mem::replace(&mut self.body, defaults.exprs.clone());
         let saved_source_map = self.source_map.replace(defaults.source_map.clone());
         let saved_metadata_scope = self.current_metadata_scope;
         self.current_metadata_scope = MetadataScope::ParameterDefault(self.current_scope);
-        self.lower_expr(expr_id, dest);
+        self.lower_expr(expr_id, dest)?;
         self.current_metadata_scope = saved_metadata_scope;
         self.source_map = saved_source_map;
         self.body = saved_body;
+        Ok(())
     }
 
     /// Lower a top-level let binding's initializer into a zero-arg `MirFunctionBody`.
@@ -5119,7 +5186,7 @@ impl<'db> LoweringContext<'db> {
     /// and evaluates the initializer expression, leaving the result in `_0`.
     /// This is used by `compile_init_function` to compile let initializers into bytecode
     /// that can then be called and have their result stored via `StoreGlobal`.
-    fn lower_let_body_inner(&mut self) -> MirFunctionBody<'db> {
+    fn lower_let_body_inner(&mut self) -> Lowered<MirFunctionBody<'db>> {
         // Return place _0 (type unknown — let bodies don't have type annotations)
         let ret = self
             .builder
@@ -5133,7 +5200,7 @@ impl<'db> LoweringContext<'db> {
 
         // Lower root expression into return place
         if let Some(root) = self.body.root_expr {
-            self.lower_expr(root, Place::local(ret));
+            self.lower_expr(root, Place::local(ret))?;
         } else {
             self.builder.assign(
                 Place::local(ret),
@@ -5157,7 +5224,7 @@ impl<'db> LoweringContext<'db> {
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut body = builder.build_body();
         optimize::optimize_function_body(self.db, &mut body, self.opt);
-        body
+        Ok(body)
     }
 
     /// Lower a lambda expression into a nested `MirFunction` and emit a
@@ -5175,7 +5242,7 @@ impl<'db> LoweringContext<'db> {
         func_def: &baml_compiler2_ast::LambdaDef,
         expr_id: AstExprId,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let lambda_identity = MirFunctionId::Synthetic {
             parent: Box::new(self.builder.owner().clone()),
             kind: SyntheticKind::Lambda,
@@ -5208,8 +5275,7 @@ impl<'db> LoweringContext<'db> {
         // owns no `ExprBody`, so there is nothing to swap in.
         let Some(lambda_root) = func_def.body else {
             // No body — emit a panic stub and return.
-            self.emit_panic_call("lambda without body", expr_id);
-            return;
+            return Err(self.internal_error("lambda without body", expr_id));
         };
 
         // Read HIR captures for this lambda scope.
@@ -5314,9 +5380,22 @@ impl<'db> LoweringContext<'db> {
                 throws,
                 ..
             }) => (params, *ret, *throws),
-            _ => panic!("MIR lowering requires a type-checked lambda signature"),
+            _ => {
+                return Err(
+                    self.internal_error("TIR recorded no function type for this lambda", expr_id)
+                );
+            }
         };
-        assert_eq!(param_types.len(), func_def.params.len());
+        if param_types.len() != func_def.params.len() {
+            return Err(self.internal_error(
+                &format!(
+                    "TIR typed this lambda with {} parameter(s), but it declares {}",
+                    param_types.len(),
+                    func_def.params.len()
+                ),
+                expr_id,
+            ));
+        }
         let sig_return_type = sig_template(self, &return_type);
         let sig_display_return_type = return_type.render_with(&self.viewpoint());
         let ret_local_ty = self.convert_tir_ty_for_runtime(&return_type);
@@ -5346,7 +5425,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(entry);
 
         // Lower the body expression into the return place.
-        self.lower_expr(lambda_root, Place::local(ret));
+        self.lower_expr(lambda_root, Place::local(ret))?;
 
         // Terminate: goto exit, then return.
         if !self.builder.is_current_terminated() {
@@ -5446,10 +5525,12 @@ impl<'db> LoweringContext<'db> {
                 // The operand is the cell pointer, which the local holds only
                 // because HIR's capture analysis marked the binding when it
                 // was declared. A miss here is a HIR/MIR disagreement.
-                debug_assert!(
-                    self.builder.local_decl(local).is_captured,
-                    "closure captures {local}, which was not declared captured"
-                );
+                if !self.builder.local_decl(local).is_captured {
+                    return Err(self.internal_error(
+                        &format!("closure captures {local}, which was not declared captured"),
+                        expr_id,
+                    ));
+                }
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
@@ -5493,6 +5574,7 @@ impl<'db> LoweringContext<'db> {
                 type_arg_templates,
             },
         );
+        Ok(())
     }
 }
 
@@ -5552,7 +5634,7 @@ impl<'db> LoweringContext<'db> {
         body: AstExprId,
         segments: &[baml_compiler2_ast::TemplateSegment],
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         // ── Resolve the tag function. TIR (M4d.3) already validated it is a
         //    //baml:tagged_string fn whose first param is
         //    `body: (...) -> baml.TaggedString`; resolve again for its callee
@@ -5594,8 +5676,9 @@ impl<'db> LoweringContext<'db> {
         let Some(tag_func_loc) = tag_func_loc else {
             // Unreachable in well-typed programs (TIR rejects non-function
             // tags); guard so codegen never proceeds on a malformed tag.
-            self.emit_panic_call("tagged-template tag did not resolve to a function", expr_id);
-            return;
+            return Err(
+                self.internal_error("tagged-template tag did not resolve to a function", expr_id)
+            );
         };
         let tag_callee = DeclRef::Source(tag_func_loc);
 
@@ -5649,7 +5732,7 @@ impl<'db> LoweringContext<'db> {
 
         // ── Hand-roll the body closure → an Operand. ──
         let closure_op =
-            self.build_tagged_body_closure(expr_id, body, &body_params, closure_ty, static_layout);
+            self.build_tagged_body_closure(expr_id, body, &body_params, closure_ty, static_layout)?;
 
         // ── Emit `tag(closure)` → dest. The result is the template's value. ──
         let callee = Operand::Constant(Constant::Function(tag_callee));
@@ -5671,6 +5754,7 @@ impl<'db> LoweringContext<'db> {
                     .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
             }
         }
+        Ok(())
     }
 
     /// Flatten text/interpolation segments into `(parts, value_exprs)` honoring
@@ -5713,7 +5797,7 @@ impl<'db> LoweringContext<'db> {
         body_params: &[(Name, RuntimeTy)],
         closure_ty: RuntimeTy,
         static_layout: Option<(Vec<String>, Vec<AstExprId>)>,
-    ) -> Operand<'db> {
+    ) -> Lowered<Operand<'db>> {
         let lambda_identity = MirFunctionId::Synthetic {
             parent: Box::new(self.builder.owner().clone()),
             kind: SyntheticKind::Tagged,
@@ -5734,14 +5818,15 @@ impl<'db> LoweringContext<'db> {
             // function's captures. Disambiguate by preferring the lambda scope
             // nested within the function currently being lowered; fall back to
             // the first range match.
-            let found = index
+            index
                 .lambda_scope_for_within(self.current_scope, span)
-                .or_else(|| index.lambda_scope_for(span));
-            debug_assert!(
-                found.is_some(),
-                "no HIR Lambda scope for tagged template at {span:?}"
-            );
-            found.unwrap_or(self.current_scope)
+                .or_else(|| index.lambda_scope_for(span))
+                .ok_or_else(|| {
+                    self.internal_error(
+                        &format!("no HIR lambda scope for the tagged template at {span:?}"),
+                        expr_id,
+                    )
+                })?
         } else {
             self.current_scope
         };
@@ -5857,7 +5942,7 @@ impl<'db> LoweringContext<'db> {
                 let value_ops: Vec<Operand<'db>> = value_exprs
                     .iter()
                     .map(|&e| self.lower_to_operand(e))
-                    .collect();
+                    .collect::<Lowered<Vec<_>>>()?;
                 self.current_metadata_scope = prev_metadata_scope;
                 let values_local = self.builder.declare_local(
                     Some(Name::new("__tt_values")),
@@ -5902,7 +5987,7 @@ impl<'db> LoweringContext<'db> {
                 // map-element access) hit the recorded entries.
                 let prev_metadata_scope = self.current_metadata_scope;
                 self.current_metadata_scope = saved_metadata_scope;
-                self.lower_expr(body, Place::local(ret));
+                self.lower_expr(body, Place::local(ret))?;
                 self.current_metadata_scope = prev_metadata_scope;
             }
         }
@@ -5953,10 +6038,12 @@ impl<'db> LoweringContext<'db> {
             Vec::with_capacity(extended_hir_captures.len());
         for (_, binding_id) in &extended_hir_captures {
             if let Some(&local) = self.binding_locals.get(binding_id) {
-                debug_assert!(
-                    self.builder.local_decl(local).is_captured,
-                    "closure captures {local}, which was not declared captured"
-                );
+                if !self.builder.local_decl(local).is_captured {
+                    return Err(self.internal_error(
+                        &format!("closure captures {local}, which was not declared captured"),
+                        expr_id,
+                    ));
+                }
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
@@ -5991,7 +6078,7 @@ impl<'db> LoweringContext<'db> {
                 type_arg_templates,
             },
         );
-        Operand::Copy(Place::Local(closure_local))
+        Ok(Operand::Copy(Place::Local(closure_local)))
     }
 }
 
@@ -6003,7 +6090,7 @@ impl<'db> LoweringContext<'db> {
         stmts: &[AstStmtId],
         tail_expr: Option<AstExprId>,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let type_binding_scope_start = self.scoped_type_binding_params.len();
         let defer_depth = self.defer_stack.len();
 
@@ -6076,7 +6163,7 @@ impl<'db> LoweringContext<'db> {
                     });
                 }
                 None => {
-                    self.lower_stmt(stmt_id);
+                    self.lower_stmt(stmt_id)?;
                     if self.builder.is_current_terminated() {
                         break;
                     }
@@ -6088,17 +6175,16 @@ impl<'db> LoweringContext<'db> {
         // runs the block's defers via the pad path.
         if !self.builder.is_current_terminated() {
             match tail_expr {
-                Some(tail) => self.lower_expr(tail, dest),
-                None => {
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                }
+                Some(tail) => self.lower_expr(tail, dest)?,
+                None => self
+                    .builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null))),
             }
         }
 
         // Normal (non-throwing) fall-through: replay defers inline.
         if !self.builder.is_current_terminated() {
-            self.replay_defers_to_depth(defer_depth);
+            self.replay_defers_to_depth(defer_depth)?;
         }
 
         // Emit the landing pads out of line (reached via the exception table).
@@ -6129,7 +6215,7 @@ impl<'db> LoweringContext<'db> {
                 // block the body lowers into (the pad plus any it creates) so
                 // the cause pre-walk covers them all.
                 let pad_body_lo = self.builder.num_blocks();
-                self.lower_expr(body, Place::local(tmp));
+                self.lower_expr(body, Place::local(tmp))?;
                 if !self.builder.is_current_terminated() {
                     let error =
                         shared_error.expect("a defer pad implies a shared error local exists");
@@ -6178,6 +6264,7 @@ impl<'db> LoweringContext<'db> {
         self.defer_stack.truncate(defer_depth);
         self.scoped_type_binding_params
             .truncate(type_binding_scope_start);
+        Ok(())
     }
 
     fn planned_call_args(
@@ -6195,15 +6282,21 @@ impl<'db> LoweringContext<'db> {
         (ordinary_args, runtime_id)
     }
 
-    fn lower_runtime_id_operand(&mut self, runtime_id: Option<AstExprId>) -> Option<Operand<'db>> {
-        runtime_id.map(|expr_id| {
-            let operand = self.lower_to_operand(expr_id);
-            let ty = self.expr_ty(expr_id);
-            Operand::Copy(Place::Local(self.operand_to_local(operand, ty)))
-        })
+    fn lower_runtime_id_operand(
+        &mut self,
+        runtime_id: Option<AstExprId>,
+    ) -> Lowered<Option<Operand<'db>>> {
+        let Some(expr_id) = runtime_id else {
+            return Ok(None);
+        };
+        let operand = self.lower_to_operand(expr_id)?;
+        let ty = self.expr_ty(expr_id);
+        Ok(Some(Operand::Copy(Place::Local(
+            self.operand_to_local(operand, ty),
+        ))))
     }
 
-    fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
+    fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) -> Lowered<()> {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
             self.builder.current_source_span = Some(span);
@@ -6228,7 +6321,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Path(segments) => {
-                self.lower_path_expr(expr_id, &segments, dest);
+                self.lower_path_expr(expr_id, &segments, dest)?;
             }
 
             AstExpr::If {
@@ -6236,7 +6329,7 @@ impl<'db> LoweringContext<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.lower_if(expr_id, condition, then_branch, else_branch, dest);
+                self.lower_if(expr_id, condition, then_branch, else_branch, dest)?;
             }
 
             AstExpr::IfLet {
@@ -6245,25 +6338,27 @@ impl<'db> LoweringContext<'db> {
                 then_branch,
                 else_branch,
             } => {
-                self.lower_if_let(expr_id, pattern, scrutinee, then_branch, else_branch, dest);
+                self.lower_if_let(expr_id, pattern, scrutinee, then_branch, else_branch, dest)?;
             }
 
             AstExpr::Binary { op, lhs, rhs } => {
-                self.lower_binary(expr_id, op, lhs, rhs, dest);
+                self.lower_binary(expr_id, op, lhs, rhs, dest)?;
             }
 
             AstExpr::Unary { op, expr } => {
-                self.lower_unary(expr_id, op, expr, dest);
+                self.lower_unary(expr_id, op, expr, dest)?;
             }
 
             AstExpr::Call { callee, args, .. } => {
                 let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
-                self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest);
+                self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest)?;
             }
 
             AstExpr::Array { elements } => {
-                let operands: Vec<Operand<'db>> =
-                    elements.iter().map(|&e| self.lower_to_operand(e)).collect();
+                let operands: Vec<Operand<'db>> = elements
+                    .iter()
+                    .map(|&e| self.lower_to_operand(e))
+                    .collect::<Lowered<Vec<_>>>()?;
                 let element_ty = self.array_element_template(expr_id);
                 self.builder
                     .assign(dest, Rvalue::Array(element_ty, operands));
@@ -6273,12 +6368,12 @@ impl<'db> LoweringContext<'db> {
                 let pairs: Vec<(Operand<'db>, Operand<'db>)> = entries
                     .iter()
                     .map(|entry| {
-                        (
-                            self.lower_to_operand(entry.key),
-                            self.lower_to_operand(entry.value),
-                        )
+                        Ok((
+                            self.lower_to_operand(entry.key)?,
+                            self.lower_to_operand(entry.value)?,
+                        ))
                     })
-                    .collect();
+                    .collect::<Lowered<Vec<_>>>()?;
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id);
                 self.builder
                     .assign(dest, Rvalue::Map(key_ty, value_ty, pairs));
@@ -6291,17 +6386,17 @@ impl<'db> LoweringContext<'db> {
                 spreads,
                 ..
             } => {
-                self.lower_object(expr_id, &type_name, &type_args, &fields, &spreads, dest);
+                self.lower_object(expr_id, &type_name, &type_args, &fields, &spreads, dest)?;
             }
 
             AstExpr::MemberAccess { base, member } => {
-                self.lower_member_access(expr_id, base, &member, dest);
+                self.lower_member_access(expr_id, base, &member, dest)?;
             }
 
             AstExpr::Upcast { base, .. } => {
                 // `.as<I>` is a static type projection. Runtime representation
                 // is the original value.
-                self.lower_expr(base, dest);
+                self.lower_expr(base, dest)?;
             }
 
             AstExpr::QualifiedPath { .. } => {
@@ -6319,49 +6414,49 @@ impl<'db> LoweringContext<'db> {
                     .tir_resolution(self.expr_metadata_key(expr_id))
                     .cloned()
                 {
-                    self.lower_type_keyed_item_reference(expr_id, &callee, dest);
+                    self.lower_type_keyed_item_reference(expr_id, &callee, dest)?;
                 } else {
                     // TIR admitted this reference, so a frame that fails to
                     // resolve here is an internal inconsistency, not a user
                     // error — surface it at the origin rather than as a
                     // `null` callable that fails somewhere downstream.
-                    self.emit_panic_call(
-                        "internal compiler error: qualified item reference has no resolvable frame",
+                    return Err(self.internal_error(
+                        "qualified item reference has no resolvable frame",
                         expr_id,
-                    );
+                    ));
                 }
             }
 
             AstExpr::GenericApply { base, type_args } => {
-                self.lower_generic_apply(expr_id, base, &type_args, dest);
+                self.lower_generic_apply(expr_id, base, &type_args, dest)?;
             }
 
             AstExpr::OptionalMemberAccess { base, member } => {
-                self.lower_optional_member_access(expr_id, base, &member, dest);
+                self.lower_optional_member_access(expr_id, base, &member, dest)?;
             }
 
             AstExpr::OptionalIndex { base, index } => {
-                self.lower_optional_index(base, index, dest);
+                self.lower_optional_index(base, index, dest)?;
             }
 
             AstExpr::OptionalCall { callee, args } => {
                 let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
-                self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest);
+                self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest)?;
             }
 
             AstExpr::Index { base, index } => {
-                self.lower_index(base, index, dest);
+                self.lower_index(base, index, dest)?;
             }
 
             AstExpr::Block { stmts, tail_expr } => {
-                self.lower_scoped_block(&stmts, tail_expr, dest);
+                self.lower_scoped_block(&stmts, tail_expr, dest)?;
             }
 
             AstExpr::Match {
                 scrutinee, arms, ..
             } => {
                 let arms_owned = arms;
-                self.lower_match(expr_id, scrutinee, &arms_owned, dest);
+                self.lower_match(expr_id, scrutinee, &arms_owned, dest)?;
             }
 
             AstExpr::Is { scrutinee, pattern } => {
@@ -6370,17 +6465,20 @@ impl<'db> LoweringContext<'db> {
                 // We reuse `lower_pattern_test`, the same engine match-arm
                 // dispatch uses, with two terminal blocks that write the
                 // boolean constant into `dest` and jump to a join.
-                let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
-                    let op = self.lower_to_operand(scrutinee);
-                    let ty = self.expr_ty(scrutinee);
-                    self.operand_to_local(op, ty)
-                });
+                let scrutinee_local = match self.try_resolve_to_local(scrutinee) {
+                    Some(local) => local,
+                    None => {
+                        let op = self.lower_to_operand(scrutinee)?;
+                        let ty = self.expr_ty(scrutinee);
+                        self.operand_to_local(op, ty)
+                    }
+                };
 
                 let bb_true = self.builder.create_block();
                 let bb_false = self.builder.create_block();
                 let bb_join = self.builder.create_block();
 
-                self.lower_pattern_test(scrutinee_local, pattern, bb_true, bb_false);
+                self.lower_pattern_test(scrutinee_local, pattern, bb_true, bb_false)?;
 
                 self.builder.set_current_block(bb_true);
                 self.builder.assign(
@@ -6399,11 +6497,11 @@ impl<'db> LoweringContext<'db> {
 
             AstExpr::Catch { base, clauses } => {
                 let clauses_owned = clauses;
-                self.lower_catch(expr_id, base, &clauses_owned, &dest);
+                self.lower_catch(expr_id, base, &clauses_owned, &dest)?;
             }
 
             AstExpr::Throw { value } => {
-                let val_op = self.lower_throw_operand(value);
+                let val_op = self.lower_throw_operand(value)?;
                 // Route every throw through the exception funnel (like
                 // `AstStmt::Throw`) rather than a static jump to
                 // `catch_context.unwind_target`. The funnel computes the
@@ -6427,14 +6525,14 @@ impl<'db> LoweringContext<'db> {
 
             AstExpr::Return { value } => {
                 // A `return` expression (e.g. a braceless `catch`/`match` arm
-                // value, `_ => return 0`) transfers control to the enclosing
+                // value, `_ => return 0` transfers control to the enclosing
                 // function's exit. Unlike `throw`, it is NOT routed through
                 // `catch_context` — it returns from the function rather than
                 // being handled by the surrounding `catch`. This mirrors
-                // `AstStmt::Return`; `dest` is never written because we diverge.
+                // `AstStmt::Return`); `dest` is never written because we diverge.
                 let ret = Local(0); // _0 is always the return place
                 match value {
-                    Some(e) => self.lower_expr(e, Place::local(ret)),
+                    Some(e) => self.lower_expr(e, Place::local(ret))?,
                     // A bare `return` in a void function returns null. Write
                     // it: the return place is defined by the IR, never by the
                     // frame's zeroed slots.
@@ -6444,7 +6542,7 @@ impl<'db> LoweringContext<'db> {
                     ),
                 }
                 // Run pending defers (LIFO) before jumping to the exit.
-                self.replay_defers_to_depth(0);
+                self.replay_defers_to_depth(0)?;
                 self.builder.goto(self.exit_block);
                 // Subsequent code is unreachable; lower it into a dead block.
                 let dead = self.builder.create_block();
@@ -6452,26 +6550,26 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Lambda(func_def) => {
-                self.lower_lambda(&func_def, expr_id, dest);
+                self.lower_lambda(&func_def, expr_id, dest)?;
             }
 
             AstExpr::OptionalChain { expr } => {
-                self.lower_optional_chain(expr_id, expr, dest);
+                self.lower_optional_chain(expr_id, expr, dest)?;
             }
 
             AstExpr::Missing => {
-                self.emit_panic_call("parse error", expr_id);
+                return Err(self.internal_error("parse error", expr_id));
             }
 
             AstExpr::Template { tag, segments } => match tag {
                 baml_compiler2_ast::TemplateTag::Custom { tag, body } => {
-                    self.lower_tagged_template(expr_id, tag, body, &segments, dest);
+                    self.lower_tagged_template(expr_id, tag, body, &segments, dest)?;
                 }
                 // Untagged (BEP §11): the value is the desugared `elaborated`
                 // concat (built at AST lowering and type-checked by TIR). Lower
                 // it directly — the structured `segments` were diagnostics-only.
                 baml_compiler2_ast::TemplateTag::Default { elaborated } => {
-                    self.lower_expr(elaborated, dest);
+                    self.lower_expr(elaborated, dest)?;
                 }
             },
 
@@ -6480,15 +6578,16 @@ impl<'db> LoweringContext<'db> {
                 with_exprs,
                 body,
             } => {
-                self.lower_spawn(expr_id, name, &with_exprs, body, dest);
+                self.lower_spawn(expr_id, name, &with_exprs, body, dest)?;
             }
 
             AstExpr::Await { future } => {
-                self.lower_await(expr_id, future, dest);
+                self.lower_await(expr_id, future, dest)?;
             }
         }
 
         self.builder.current_source_span = prev_span;
+        Ok(())
     }
 
     fn operand_is_marked_rethrow(&self, operand: &Operand<'db>) -> bool {
@@ -6513,21 +6612,21 @@ impl<'db> LoweringContext<'db> {
         with_exprs: &[AstExprId],
         body: AstExprId,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         // The AST-lower step has already wrapped the spawn body in a
         // synthetic 0-arg `Expr::Lambda`. Lowering it through the
         // standard expression path emits a `MakeClosure` rvalue, which
         // is exactly what we want as the closure operand to `Spawn`.
         let closure_local = self.builder.temp(RuntimeTy::Null);
         let closure_place = Place::Local(closure_local);
-        self.lower_expr(body, closure_place.clone());
+        self.lower_expr(body, closure_place.clone())?;
         let closure_op = Operand::Copy(closure_place);
 
         // Lower the optional name into an operand.
         let name_op = match name {
             Some(name_id) => self.lower_to_operand(name_id),
-            None => Operand::Constant(Constant::Null),
-        };
+            None => Ok(Operand::Constant(Constant::Null)),
+        }?;
 
         // BEP-034 middleware: with transformers present, package the body
         // closure + name into a `baml.spawn.Params` instance, apply each
@@ -6561,7 +6660,7 @@ impl<'db> LoweringContext<'db> {
             let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
             let mut cur = params_local;
             for &with_id in with_exprs {
-                let transformer_op = self.lower_to_operand(with_id);
+                let transformer_op = self.lower_to_operand(with_id)?;
                 let next = self.builder.temp(RuntimeTy::Null);
                 let resume = self.builder.create_block();
                 self.builder.call(
@@ -6601,14 +6700,15 @@ impl<'db> LoweringContext<'db> {
         // The result of `spawn` is the Future handle.
         self.builder
             .assign(dest, Rvalue::Use(Operand::Copy(future_place)));
+        Ok(())
     }
 
     /// Lower `await expr` into a `Terminator::Await` whose destination is
     /// the awaited value.
-    fn lower_await(&mut self, _expr_id: AstExprId, future: AstExprId, dest: Place) {
+    fn lower_await(&mut self, _expr_id: AstExprId, future: AstExprId, dest: Place) -> Lowered<()> {
         let future_local = self.builder.temp(RuntimeTy::Null);
         let future_place = Place::Local(future_local);
-        self.lower_expr(future, future_place.clone());
+        self.lower_expr(future, future_place.clone())?;
 
         // `Terminator::Await` requires its destination to be `Place::Local`.
         // If the caller handed us a projection (field/index), await into a
@@ -6632,6 +6732,7 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(projection, Rvalue::Use(Operand::Copy(await_dest)));
         }
+        Ok(())
     }
 }
 
@@ -6668,7 +6769,12 @@ impl<'db> LoweringContext<'db> {
 
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
-    fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
+    fn lower_path_expr(
+        &mut self,
+        expr_id: AstExprId,
+        segments: &[Name],
+        dest: Place,
+    ) -> Lowered<()> {
         use crate::inference_provider::MemberResolution;
         // Multi-segment paths (e.g. baml.http.fetch, self.field, obj.method) — check TIR resolution first
         if segments.len() > 1 {
@@ -6707,15 +6813,14 @@ impl<'db> LoweringContext<'db> {
                                 // sibling `self`-less sites.
                                 // TIR rejects a `self`-less method reached through a value,
                                 // so this is unreachable in a compiling program.
-                                self.emit_panic_call(
-                                    "internal compiler error: static method reached through a value receiver",
+                                return Err(self.internal_error(
+                                    "static method reached through a value receiver",
                                     expr_id,
-                                );
-                                return;
+                                ));
                             }
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0])?.map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6727,7 +6832,7 @@ impl<'db> LoweringContext<'db> {
                                     expr_id,
                                     receiver_segments,
                                     Place::local(recv_local),
-                                );
+                                )?;
                                 Operand::Copy(Place::local(recv_local))
                             };
                             self.builder.assign(
@@ -6737,7 +6842,7 @@ impl<'db> LoweringContext<'db> {
                                     receiver: receiver_op,
                                 },
                             );
-                            return;
+                            return Ok(());
                         }
                     }
                     // A *value-rooted* interface-method reference (`let f = x.eq`)
@@ -6753,14 +6858,13 @@ impl<'db> LoweringContext<'db> {
                             callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
                         receiver: Receiver::Bound,
                     }) => {
-                        if !self.callee_takes_self(callee) {
+                        if !self.callee_takes_self(callee)? {
                             // TIR rejects a `self`-less method reached through a value,
                             // so this is unreachable in a compiling program.
-                            self.emit_panic_call(
-                                "internal compiler error: static method reached through a value receiver",
+                            return Err(self.internal_error(
+                                "static method reached through a value receiver",
                                 expr_id,
-                            );
-                            return;
+                            ));
                         }
                     }
                     // A TYPE-rooted interface-item reference (`let f = Widget.make`,
@@ -6775,8 +6879,8 @@ impl<'db> LoweringContext<'db> {
                             callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
                         receiver: Receiver::Unbound,
                     }) => {
-                        self.lower_type_keyed_item_reference(expr_id, callee, dest);
-                        return;
+                        self.lower_type_keyed_item_reference(expr_id, callee, dest)?;
+                        return Ok(());
                     }
                     Some(
                         resolution @ (MemberResolution::Method {
@@ -6792,13 +6896,13 @@ impl<'db> LoweringContext<'db> {
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
                             );
-                            return;
+                            return Ok(());
                         }
                     }
                     Some(MemberResolution::Field { .. }) => {
                         // Local-rooted field access — chain field projections.
-                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
-                        return;
+                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest)?;
+                        return Ok(());
                     }
                     Some(
                         MemberResolution::Variant { .. }
@@ -6826,7 +6930,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution.callable(self.db) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0])?.map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6837,7 +6941,7 @@ impl<'db> LoweringContext<'db> {
                                     expr_id,
                                     receiver_segments,
                                     Place::local(recv_local),
-                                );
+                                )?;
                                 Operand::Copy(Place::local(recv_local))
                             };
                             self.builder.assign(
@@ -6847,7 +6951,7 @@ impl<'db> LoweringContext<'db> {
                                     receiver: receiver_op,
                                 },
                             );
-                            return;
+                            return Ok(());
                         }
                     }
                     // Value-rooted interface-method reference: see the ladder
@@ -6864,8 +6968,8 @@ impl<'db> LoweringContext<'db> {
                             callee @ (MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. }),
                         receiver: Receiver::Unbound,
                     } => {
-                        self.lower_type_keyed_item_reference(expr_id, callee, dest);
-                        return;
+                        self.lower_type_keyed_item_reference(expr_id, callee, dest)?;
+                        return Ok(());
                     }
                     MemberResolution::Method {
                         callee: MethodCallee::Inherent(_),
@@ -6879,7 +6983,7 @@ impl<'db> LoweringContext<'db> {
                                 dest,
                                 Rvalue::Use(Operand::Constant(Constant::Function(item))),
                             );
-                            return;
+                            return Ok(());
                         }
                     }
                     MemberResolution::Variant { .. }
@@ -6890,8 +6994,8 @@ impl<'db> LoweringContext<'db> {
                     MemberResolution::Field { .. } => {
                         // Local-rooted field access — chain field projections.
                         // The root segment is a local; chain through class fields.
-                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
-                        return;
+                        self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest)?;
+                        return Ok(());
                     }
                 }
             }
@@ -6909,7 +7013,7 @@ impl<'db> LoweringContext<'db> {
             // `resolutions` above and returns before reaching here, so the
             // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
-                && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])
+                && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])?
             {
                 let method_name = segments.last().unwrap().clone();
                 let recv_seg_idx = if segments.len() == 2 {
@@ -6934,9 +7038,9 @@ impl<'db> LoweringContext<'db> {
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local =
-                        self.lower_path_receiver_to_local(expr_id, receiver_segments, recv_root);
+                        self.lower_path_receiver_to_local(expr_id, receiver_segments, recv_root)?;
                     self.emit_virtual_bound_method(recv_local, &view, &method_name, &dest);
-                    return;
+                    return Ok(());
                 }
             }
             if self
@@ -6948,8 +7052,8 @@ impl<'db> LoweringContext<'db> {
                 // `lower_call`, so this only catches the value/field form.)
                 || self.is_default_receiver_root(expr_id, segments)
             {
-                self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
-                return;
+                self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest)?;
+                return Ok(());
             }
             // Check for enum variant (e.g. Status.Active lowered to Path(["Status","Active"]))
             if let Some(Tir2Ty::EnumVariant(qtn, variant)) = self
@@ -6957,7 +7061,7 @@ impl<'db> LoweringContext<'db> {
                 .cloned()
                 .as_ref()
             {
-                let enum_ref = self.enum_ref_of(qtn);
+                let enum_ref = self.enum_ref_of(qtn)?;
                 self.builder.assign(
                     dest,
                     Rvalue::Use(Operand::Constant(Constant::EnumVariant {
@@ -6965,27 +7069,26 @@ impl<'db> LoweringContext<'db> {
                         variant: variant.clone(),
                     })),
                 );
-                return;
+                return Ok(());
             }
             // Namespace intermediate or unresolved — emit null placeholder.
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            return;
+            return Ok(());
         }
 
         let name = &segments[0];
         if name.as_str() == "$id" {
             self.lower_current_runtime_id(dest);
-            return;
+            return Ok(());
         }
 
         if let Some(place) = self.place_for_path(expr_id, name) {
             self.builder.assign(dest, Rvalue::Use(Operand::Copy(place)));
-            return;
+            return Ok(());
         }
         if self.binding_id_for_path(expr_id, name).is_some() {
-            self.emit_panic_call(&format!("unresolved local: {name}"), expr_id);
-            return;
+            return Err(self.internal_error(&format!("unresolved local: {name}"), expr_id));
         }
 
         let span_start = self
@@ -7003,10 +7106,10 @@ impl<'db> LoweringContext<'db> {
         );
         match resolved {
             ResolvedName::Item(def) => {
-                self.lower_item_ref(expr_id, def, dest);
+                self.lower_item_ref(expr_id, def, dest)?;
             }
             ResolvedName::Builtin(def) => {
-                self.lower_item_ref(expr_id, def, dest);
+                self.lower_item_ref(expr_id, def, dest)?;
             }
             ResolvedName::Local { .. } | ResolvedName::Unknown => {
                 if self
@@ -7021,10 +7124,11 @@ impl<'db> LoweringContext<'db> {
                         .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
                 } else {
                     let msg = format!("unresolved name: {name}");
-                    self.emit_panic_call(&msg, expr_id);
+                    return Err(self.internal_error(&msg, expr_id));
                 }
             }
         }
+        Ok(())
     }
 
     /// Lower a multi-segment `Path` expression (`a.b.c`) as chained field projections.
@@ -7036,7 +7140,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         segments: &[Name],
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let root_place = self.place_for_path(expr_id, &segments[0]);
         let (mut current_place, mut current_ty) = if let Some(place) = root_place {
             let ty = match place {
@@ -7053,7 +7157,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             (place, ty)
-        } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0]) {
+        } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0])? {
             let ty = self.builder.local_ty(root_local);
             (Place::Local(root_local), ty)
         } else if self.is_default_receiver_root(expr_id, segments)
@@ -7074,7 +7178,7 @@ impl<'db> LoweringContext<'db> {
             // Root not found as a local or capture; emit null.
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            return;
+            return Ok(());
         };
 
         let mut skip_next_segment = false;
@@ -7155,7 +7259,7 @@ impl<'db> LoweringContext<'db> {
                 )
             {
                 if is_last {
-                    return;
+                    return Ok(());
                 }
                 current_place = target_place;
                 current_ty = target_ty;
@@ -7164,16 +7268,15 @@ impl<'db> LoweringContext<'db> {
             if let RuntimeTy::Interface(tn, _, _) = &current_ty {
                 // An interface-typed prefix with no recorded or derived view:
                 // an access TIR rejected. Loud, like the expression road.
-                self.emit_panic_call(
+                return Err(self.internal_error(
                     &format!(
-                        "internal compiler error: MIR failed to resolve field access \
+                        "MIR failed to resolve field access \
                          .{seg} against interface '{}': TIR recorded no virtual-field \
                          view for it",
                         tn.name(),
                     ),
                     expr_id,
-                );
-                return;
+                ));
             }
             // Dynamic map key fallback
             let key_local = self.builder.temp(RuntimeTy::String);
@@ -7191,6 +7294,7 @@ impl<'db> LoweringContext<'db> {
 
         self.builder
             .assign(dest, Rvalue::Use(Operand::Copy(current_place)));
+        Ok(())
     }
 
     /// Look up the MIR type of a named field on a class, for chained field access.
@@ -7258,14 +7362,19 @@ impl<'db> LoweringContext<'db> {
         template.substitute_symbolic(class_type_args)
     }
 
-    fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
+    fn lower_item_ref(
+        &mut self,
+        expr_id: AstExprId,
+        def: Definition<'db>,
+        dest: Place,
+    ) -> Lowered<()> {
         // An item TIR typed as an enum variant is that variant's value.
         if let Some(Tir2Ty::EnumVariant(qtn, variant)) = self
             .tir_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .as_ref()
         {
-            let enum_ref = self.enum_ref_of(qtn);
+            let enum_ref = self.enum_ref_of(qtn)?;
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::EnumVariant {
@@ -7273,7 +7382,7 @@ impl<'db> LoweringContext<'db> {
                     variant: variant.clone(),
                 })),
             );
-            return;
+            return Ok(());
         }
         // A function reference becomes a pooled function-value wrapper at
         // emit; a top-level `let` (a client, ...) is a plain read of the
@@ -7287,15 +7396,14 @@ impl<'db> LoweringContext<'db> {
             | Definition::TypeAlias(_) => {
                 // A type declaration is not a value; the checker rejects the
                 // reference, so a compiling program never reaches here.
-                self.emit_panic_call(
-                    "internal compiler error: a type declaration referenced as a value",
-                    expr_id,
+                return Err(
+                    self.internal_error("a type declaration referenced as a value", expr_id)
                 );
-                return;
             }
         };
         self.builder
             .assign(dest, Rvalue::Use(Operand::Constant(constant)));
+        Ok(())
     }
 }
 
@@ -7334,7 +7442,7 @@ impl<'db> LoweringContext<'db> {
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         match op {
             AstBinaryOp::And => {
                 return self.lower_short_circuit(expr_id, lhs, rhs, dest, true);
@@ -7354,7 +7462,7 @@ impl<'db> LoweringContext<'db> {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
-                return;
+                return Ok(());
             }
         }
 
@@ -7367,8 +7475,8 @@ impl<'db> LoweringContext<'db> {
         if matches!(op, AstBinaryOp::Eq | AstBinaryOp::Ne)
             && !self.equality_uses_primitive_opcode(lhs, rhs)
         {
-            self.lower_equality_via_driver(op, lhs, rhs, dest);
-            return;
+            self.lower_equality_via_driver(op, lhs, rhs, dest)?;
+            return Ok(());
         }
 
         // Arithmetic over non-primitive operands (a user type, or a union /
@@ -7385,8 +7493,8 @@ impl<'db> LoweringContext<'db> {
                 | AstBinaryOp::Mod
         ) && !self.arithmetic_uses_primitive_opcode(lhs, rhs)
         {
-            self.lower_arithmetic_via_driver(expr_id, op, lhs, rhs, dest);
-            return;
+            self.lower_arithmetic_via_driver(expr_id, op, lhs, rhs, dest)?;
+            return Ok(());
         }
 
         // Ordering over operands the comparison opcodes cannot order (`bool`, an
@@ -7398,8 +7506,8 @@ impl<'db> LoweringContext<'db> {
         if let Some(method) = Self::ordering_method(op)
             && !self.ordering_uses_primitive_opcode(lhs, rhs)
         {
-            self.lower_ordering_via_virtual_call(method, lhs, rhs, dest);
-            return;
+            self.lower_ordering_via_virtual_call(method, lhs, rhs, dest)?;
+            return Ok(());
         }
 
         // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
@@ -7408,8 +7516,8 @@ impl<'db> LoweringContext<'db> {
         // allocating a heap bigint. `int` is not a subtype of `bigint` and
         // there is no implicit move coercion — only these operators and the FFI
         // boundary convert — so lower both operands naturally.
-        let left = self.lower_to_operand(lhs);
-        let right = self.lower_to_operand(rhs);
+        let left = self.lower_to_operand(lhs)?;
+        let right = self.lower_to_operand(rhs)?;
         if let Some(mir_op) = Self::convert_binop(op) {
             self.builder.assign(
                 dest,
@@ -7421,8 +7529,9 @@ impl<'db> LoweringContext<'db> {
             );
         } else {
             // Fallback — shouldn't happen for well-typed code
-            self.emit_panic_call("unsupported binary op", expr_id);
+            return Err(self.internal_error("unsupported binary op", expr_id));
         }
+        Ok(())
     }
 
     /// Whether both operands of an `==`/`!=` are the *same* primitive type, so
@@ -7466,13 +7575,13 @@ impl<'db> LoweringContext<'db> {
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
-    ) {
-        let lhs_op = self.lower_to_operand(lhs);
-        let rhs_op = self.lower_to_operand(rhs);
+    ) -> Lowered<()> {
+        let lhs_op = self.lower_to_operand(lhs)?;
+        let rhs_op = self.lower_to_operand(rhs)?;
         let bool_ty = RuntimeTy::Bool;
         if matches!(op, AstBinaryOp::Eq) {
             self.lower_via_ops_driver("equals_equals", vec![lhs_op, rhs_op], bool_ty, dest);
-            return;
+            return Ok(());
         }
         // `!=`: call into a bool temp, then negate into `dest` (`assign` handles
         // projection destinations, so this covers both local and projection cases).
@@ -7490,6 +7599,7 @@ impl<'db> LoweringContext<'db> {
                 operand: Operand::Copy(eq_dest),
             },
         );
+        Ok(())
     }
 
     /// Emit `dest = baml.ops.<driver>(args)` — the shared shape of the operator
@@ -7610,7 +7720,7 @@ impl<'db> LoweringContext<'db> {
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let driver = match op {
             AstBinaryOp::Add => "__union_add",
             AstBinaryOp::Sub => "__union_sub",
@@ -7619,10 +7729,11 @@ impl<'db> LoweringContext<'db> {
             AstBinaryOp::Mod => "__union_rem",
             _ => unreachable!("lower_arithmetic_via_driver: non-arithmetic op {op:?}"),
         };
-        let lhs_op = self.lower_to_operand(lhs);
-        let rhs_op = self.lower_to_operand(rhs);
+        let lhs_op = self.lower_to_operand(lhs)?;
+        let rhs_op = self.lower_to_operand(rhs)?;
         let result_ty = self.expr_ty(expr_id);
         self.lower_via_ops_driver(driver, vec![lhs_op, rhs_op], result_ty, dest);
+        Ok(())
     }
 
     /// Whether both ordering operands are primitives the comparison opcodes can
@@ -7712,9 +7823,9 @@ impl<'db> LoweringContext<'db> {
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
-    ) {
-        let lhs_op = self.lower_to_operand(lhs);
-        let rhs_op = self.lower_to_operand(rhs);
+    ) -> Lowered<()> {
+        let lhs_op = self.lower_to_operand(lhs)?;
+        let rhs_op = self.lower_to_operand(rhs)?;
         // `Compare` is non-generic and declares no associated types, so the
         // template carries neither; the receiver supplies `Self` at runtime.
         // With no args or associated types to map onto frame slots, the
@@ -7743,6 +7854,7 @@ impl<'db> LoweringContext<'db> {
             unwind,
             dest,
         );
+        Ok(())
     }
 
     /// Whether the negation operand is [`Self::arith_primitive`] (the `Neg`
@@ -7753,10 +7865,16 @@ impl<'db> LoweringContext<'db> {
 
     /// Lower `-a` through the `baml.ops.__union_neg` driver (single dispatch on
     /// `a`'s runtime type). Mirrors [`Self::lower_arithmetic_via_driver`].
-    fn lower_negate_via_driver(&mut self, expr_id: AstExprId, operand: AstExprId, dest: Place) {
-        let operand_op = self.lower_to_operand(operand);
+    fn lower_negate_via_driver(
+        &mut self,
+        expr_id: AstExprId,
+        operand: AstExprId,
+        dest: Place,
+    ) -> Lowered<()> {
+        let operand_op = self.lower_to_operand(operand)?;
         let result_ty = self.expr_ty(expr_id);
         self.lower_via_ops_driver("__union_neg", vec![operand_op], result_ty, dest);
+        Ok(())
     }
 
     fn lower_short_circuit(
@@ -7766,12 +7884,12 @@ impl<'db> LoweringContext<'db> {
         rhs: AstExprId,
         dest: Place,
         is_and: bool,
-    ) {
+    ) -> Lowered<()> {
         // The expression has one value at its join, even when its eventual
         // destination has unrelated definitions (mutable locals/projections).
         let sc_dest = Place::Local(self.builder.temp(RuntimeTy::Bool));
 
-        let lhs_op = self.lower_condition_operand(lhs);
+        let lhs_op = self.lower_condition_operand(lhs)?;
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
@@ -7791,7 +7909,7 @@ impl<'db> LoweringContext<'db> {
         );
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, sc_dest.clone());
+        self.lower_expr(rhs, sc_dest.clone())?;
         // The stored result must be the COERCED bool (`a && b` is
         // bool-typed even when its operands are not), so a truthy-marked
         // rhs re-assigns through the coercion in place.
@@ -7811,6 +7929,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(bb_join);
         self.builder
             .assign(dest, Rvalue::Use(Operand::Copy(sc_dest)));
+        Ok(())
     }
 
     /// Lower `a ?? b` — evaluate `a`, if null then evaluate `b`, otherwise use `a`.
@@ -7820,11 +7939,11 @@ impl<'db> LoweringContext<'db> {
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let result = self.builder.temp(self.expr_ty(expr_id));
         let result_place = Place::local(result);
 
-        let lhs_op = self.lower_to_operand(lhs);
+        let lhs_op = self.lower_to_operand(lhs)?;
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
         self.builder.short_circuit(
@@ -7836,7 +7955,7 @@ impl<'db> LoweringContext<'db> {
         );
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, result_place.clone());
+        self.lower_expr(rhs, result_place.clone())?;
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -7844,10 +7963,16 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(bb_join);
         self.builder
             .assign(dest, Rvalue::Use(Operand::Copy(result_place)));
+        Ok(())
     }
 
     /// Lower `OptionalChain { expr }` — set up shared null exit for the entire chain.
-    fn lower_optional_chain(&mut self, _expr_id: AstExprId, inner: AstExprId, dest: Place) {
+    fn lower_optional_chain(
+        &mut self,
+        _expr_id: AstExprId,
+        inner: AstExprId,
+        dest: Place,
+    ) -> Lowered<()> {
         let bb_null = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
@@ -7855,7 +7980,7 @@ impl<'db> LoweringContext<'db> {
         self.chain_null_exits.push(bb_null);
 
         // Lower inner expression — Optional* nodes will jump to bb_null on null
-        self.lower_expr(inner, dest.clone());
+        self.lower_expr(inner, dest.clone())?;
 
         self.chain_null_exits.pop();
 
@@ -7871,11 +7996,16 @@ impl<'db> LoweringContext<'db> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 
     /// Lower an assignment whose target is wrapped in `OptionalChain`.
     /// Sets up null guards, then emits the assignment only on the non-null path.
-    fn lower_assign_optional_chain(&mut self, inner_target: AstExprId, value: AstExprId) {
+    fn lower_assign_optional_chain(
+        &mut self,
+        inner_target: AstExprId,
+        value: AstExprId,
+    ) -> Lowered<()> {
         let bb_null = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
@@ -7883,10 +8013,10 @@ impl<'db> LoweringContext<'db> {
         self.chain_null_exits.push(bb_null);
 
         // Lower target as lvalue (this will trigger null checks at each ?. node)
-        let place = self.lower_lvalue(inner_target);
+        let place = self.lower_lvalue(inner_target)?;
 
         // Lower value and assign.
-        self.lower_expr(value, place);
+        self.lower_expr(value, place)?;
 
         self.chain_null_exits.pop();
 
@@ -7900,6 +8030,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 
     /// Lower a compound assignment (+=, etc.) whose target is wrapped in `OptionalChain`.
@@ -7908,14 +8039,14 @@ impl<'db> LoweringContext<'db> {
         inner_target: AstExprId,
         op: AstAssignOp,
         value: AstExprId,
-    ) {
+    ) -> Lowered<()> {
         let bb_null = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
         self.chain_null_exits.push(bb_null);
 
-        let place = self.lower_lvalue(inner_target);
-        self.emit_assign_op(place, inner_target, op, value);
+        let place = self.lower_lvalue(inner_target)?;
+        self.emit_assign_op(place, inner_target, op, value)?;
 
         self.chain_null_exits.pop();
 
@@ -7927,6 +8058,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 
     /// Emit `place = place OP value` — the shared body of both `AssignOp`
@@ -7943,7 +8075,7 @@ impl<'db> LoweringContext<'db> {
         target: AstExprId,
         op: AstAssignOp,
         value: AstExprId,
-    ) {
+    ) -> Lowered<()> {
         let mir_op = Self::convert_assign_op(op);
         let driver = match mir_op {
             BinOp::Add => Some("__union_add"),
@@ -7957,13 +8089,13 @@ impl<'db> LoweringContext<'db> {
             && !self.arithmetic_uses_primitive_opcode(target, value)
         {
             let current = Operand::Copy(place.clone());
-            let rhs = self.lower_to_operand(value);
+            let rhs = self.lower_to_operand(value)?;
             let result_ty = self.expr_ty(target);
             self.lower_via_ops_driver(driver, vec![current, rhs], result_ty, place);
-            return;
+            return Ok(());
         }
         let current = Operand::Copy(place.clone());
-        let rhs = self.lower_to_operand(value);
+        let rhs = self.lower_to_operand(value)?;
         self.builder.assign(
             place,
             Rvalue::BinaryOp {
@@ -7972,6 +8104,7 @@ impl<'db> LoweringContext<'db> {
                 right: rhs,
             },
         );
+        Ok(())
     }
 
     /// Lower `obj?.member` — null-check obj, then access member or produce null.
@@ -7981,8 +8114,8 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         field: &Name,
         dest: Place,
-    ) {
-        let base_op = self.lower_to_operand(base);
+    ) -> Lowered<()> {
+        let base_op = self.lower_to_operand(base)?;
 
         // Test: base == null
         let is_null = Rvalue::BinaryOp {
@@ -8001,7 +8134,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_member_access(expr_id, base, field, dest);
+            self.lower_member_access(expr_id, base, field, dest)?;
             // Don't create our own join — the OptionalChain handler does that
         } else {
             // Standalone (no wrapping OptionalChain) — fall back to own null/join blocks
@@ -8012,7 +8145,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_member_access(expr_id, base, field, dest.clone());
+            self.lower_member_access(expr_id, base, field, dest.clone())?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8024,11 +8157,17 @@ impl<'db> LoweringContext<'db> {
 
             self.builder.set_current_block(bb_join);
         }
+        Ok(())
     }
 
     /// Lower `obj?.[index]` — null-check obj, then index or produce null.
-    fn lower_optional_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) {
-        let base_op = self.lower_to_operand(base);
+    fn lower_optional_index(
+        &mut self,
+        base: AstExprId,
+        index: AstExprId,
+        dest: Place,
+    ) -> Lowered<()> {
+        let base_op = self.lower_to_operand(base)?;
 
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
@@ -8045,7 +8184,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest, bb_null);
+            self.lower_optional_index_access(base, index, dest, bb_null)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -8054,7 +8193,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_optional_index_access(base, index, dest.clone(), bb_null);
+            self.lower_optional_index_access(base, index, dest.clone(), bb_null)?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8066,6 +8205,7 @@ impl<'db> LoweringContext<'db> {
 
             self.builder.set_current_block(bb_join);
         }
+        Ok(())
     }
 
     /// Lower the access half of `base?.[index]`, with the base already known
@@ -8079,13 +8219,13 @@ impl<'db> LoweringContext<'db> {
         index: AstExprId,
         dest: Place,
         bb_null: BlockId,
-    ) {
+    ) -> Lowered<()> {
         let base_ty = self.expr_ty(base);
-        let base_op = self.lower_to_operand(base);
+        let base_op = self.lower_to_operand(base)?;
         let index_ty = self.expr_ty(index);
         // Lower the index once and reuse it for both the null check and the
         // access, so a side-effectful subscript isn't evaluated twice.
-        let index_op = self.lower_to_operand(index);
+        let index_op = self.lower_to_operand(index)?;
         if index_ty != index_ty.strip_null() {
             let is_null = Rvalue::BinaryOp {
                 op: BinOp::Eq,
@@ -8100,6 +8240,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(bb_real);
         }
         self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+        Ok(())
     }
 
     /// Lower `func?.(args)` — null-check callee, then call or produce null.
@@ -8110,8 +8251,8 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: Place,
-    ) {
-        let callee_op = self.lower_to_operand(callee);
+    ) -> Lowered<()> {
+        let callee_op = self.lower_to_operand(callee)?;
 
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
@@ -8128,7 +8269,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest);
+            self.lower_call(expr_id, callee, args, runtime_id, dest)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -8137,7 +8278,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest.clone());
+            self.lower_call(expr_id, callee, args, runtime_id, dest.clone())?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8149,26 +8290,33 @@ impl<'db> LoweringContext<'db> {
 
             self.builder.set_current_block(bb_join);
         }
+        Ok(())
     }
 
-    fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
+    fn lower_unary(
+        &mut self,
+        expr_id: AstExprId,
+        op: AstUnaryOp,
+        expr: AstExprId,
+        dest: Place,
+    ) -> Lowered<()> {
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
             if let RuntimeTy::Literal(ref lit, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
-                return;
+                return Ok(());
             }
         }
         // Negation of a non-primitive operand (a user type, or a union /
         // existential / type variable involving one) dispatches through
         // `baml.ops.Negate`, resolved at runtime from the operand's concrete type.
         if matches!(op, AstUnaryOp::Neg) && !self.negate_uses_primitive_opcode(expr) {
-            self.lower_negate_via_driver(expr_id, expr, dest);
-            return;
+            self.lower_negate_via_driver(expr_id, expr, dest)?;
+            return Ok(());
         }
-        let operand = self.lower_to_operand(expr);
+        let operand = self.lower_to_operand(expr)?;
         let mir_op = match op {
             AstUnaryOp::Not => crate::UnaryOp::Not,
             AstUnaryOp::Neg => crate::UnaryOp::Neg,
@@ -8180,6 +8328,7 @@ impl<'db> LoweringContext<'db> {
                 operand,
             },
         );
+        Ok(())
     }
 }
 
@@ -8190,11 +8339,14 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         args: &[AstExprId],
-    ) -> Vec<Operand<'db>> {
+    ) -> Lowered<Vec<Operand<'db>>> {
         let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
             // No call plan: lower each arg in order (the type checker would
             // have already flagged any mismatch).
-            return args.iter().map(|&a| self.lower_to_operand(a)).collect();
+            return args
+                .iter()
+                .map(|&a| self.lower_to_operand(a))
+                .collect::<Lowered<Vec<_>>>();
         };
 
         // If this call targets a sys_op (`$rust_io_function`), an omitted
@@ -8225,23 +8377,28 @@ impl<'db> LoweringContext<'db> {
         let mut lowered_args: FxHashMap<AstExprId, Operand<'db>> = FxHashMap::default();
         for &arg in args {
             if provided_args.contains(&arg) {
-                lowered_args.insert(arg, self.lower_to_operand(arg));
+                lowered_args.insert(arg, self.lower_to_operand(arg)?);
             }
         }
 
         plan.bindings
             .into_iter()
             .map(|binding| match binding {
-                crate::inference_provider::ParamBinding::Provided { arg, .. } => lowered_args
-                    .remove(&arg)
-                    .expect("call plan referenced an argument outside the call expression"),
+                crate::inference_provider::ParamBinding::Provided { arg, .. } => {
+                    lowered_args.remove(&arg).ok_or_else(|| {
+                        self.internal_error(
+                            "the call plan binds an argument the call expression does not have",
+                            expr_id,
+                        )
+                    })
+                }
                 crate::inference_provider::ParamBinding::OmittedDefault { param_index, .. } => {
-                    match sysop_callee {
+                    Ok(match sysop_callee {
                         Some(callee_loc) => {
                             self.sysop_default_operand(callee_loc, param_index + sysop_self_offset)
                         }
                         None => Operand::Constant(Constant::OmittedArg),
-                    }
+                    })
                 }
             })
             .collect()
@@ -8287,15 +8444,15 @@ impl<'db> LoweringContext<'db> {
         callee: AstExprId,
         args: &[AstExprId],
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         if !args.is_empty() {
-            return false;
+            return Ok(false);
         }
         let callee_expr = self.body.exprs[callee].clone();
         // Trigger shape (shared with TIR type inference + throws analysis): a
         // `to_string` member/path call.
         if !is_sugar_callee(&callee_expr, "to_string") {
-            return false;
+            return Ok(false);
         }
         // Fires when the checker resolved the call through the sugar tier
         // (`desugared_callees`) or left the callee *untyped* (`Error`) — no
@@ -8312,13 +8469,13 @@ impl<'db> LoweringContext<'db> {
                 .tir_expr_type(key)
                 .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error));
         if !sugar {
-            return false;
+            return Ok(false);
         }
         let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
-                (self.lower_to_operand(base_id), ty)
+                (self.lower_to_operand(base_id)?, ty)
             }
             AstExpr::Path(segments) => {
                 let receiver_segments = &segments[..segments.len() - 1];
@@ -8329,7 +8486,7 @@ impl<'db> LoweringContext<'db> {
                 // root and `expr_ty(callee)` would ICE on the untyped callee.)
                 let recv_op = if receiver_segments.len() == 1 {
                     let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
-                        return false;
+                        return Ok(false);
                     };
                     Operand::Copy(place)
                 } else {
@@ -8347,7 +8504,7 @@ impl<'db> LoweringContext<'db> {
                         callee,
                         receiver_segments,
                         Place::local(recv_local),
-                    );
+                    )?;
                     Operand::Copy(Place::local(recv_local))
                 };
                 let prefix_idx = segments.len() - 2;
@@ -8356,7 +8513,7 @@ impl<'db> LoweringContext<'db> {
                     .cloned();
                 (recv_op, ty)
             }
-            _ => return false,
+            _ => return Ok(false),
         };
 
         // `string.from` is the static `from<T>` on `class String` (baml root
@@ -8433,7 +8590,7 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
         }
-        true
+        Ok(true)
     }
 
     /// Operator-style `recv.to_json()` -> `baml.json.from(recv)` desugar, the json
@@ -8450,13 +8607,13 @@ impl<'db> LoweringContext<'db> {
         callee: AstExprId,
         args: &[AstExprId],
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         if !args.is_empty() {
-            return false;
+            return Ok(false);
         }
         let callee_expr = self.body.exprs[callee].clone();
         if !is_sugar_callee(&callee_expr, "to_json") {
-            return false;
+            return Ok(false);
         }
         // Fires when the checker desugared the call or left the callee untyped
         // (no real `to_json` method).
@@ -8466,19 +8623,19 @@ impl<'db> LoweringContext<'db> {
                 .tir_expr_type(key)
                 .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error));
         if !sugar {
-            return false;
+            return Ok(false);
         }
         let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
-                (self.lower_to_operand(base_id), ty)
+                (self.lower_to_operand(base_id)?, ty)
             }
             AstExpr::Path(segments) => {
                 let receiver_segments = &segments[..segments.len() - 1];
                 let recv_op = if receiver_segments.len() == 1 {
                     let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
-                        return false;
+                        return Ok(false);
                     };
                     Operand::Copy(place)
                 } else {
@@ -8496,7 +8653,7 @@ impl<'db> LoweringContext<'db> {
                         callee,
                         receiver_segments,
                         Place::local(recv_local),
-                    );
+                    )?;
                     Operand::Copy(Place::local(recv_local))
                 };
                 let prefix_idx = segments.len() - 2;
@@ -8505,7 +8662,7 @@ impl<'db> LoweringContext<'db> {
                     .cloned();
                 (recv_op, ty)
             }
-            _ => return false,
+            _ => return Ok(false),
         };
 
         // `baml.json.from` is the namespace function `from<T>(value: T) -> json`.
@@ -8577,7 +8734,7 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
         }
-        true
+        Ok(true)
     }
 
     /// Static-constructor sugar: `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
@@ -8591,13 +8748,13 @@ impl<'db> LoweringContext<'db> {
         callee: AstExprId,
         args: &[AstExprId],
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         if args.len() != 1 {
-            return false;
+            return Ok(false);
         }
         let callee_expr = self.body.exprs[callee].clone();
         if !is_sugar_callee(&callee_expr, "from_json") {
-            return false;
+            return Ok(false);
         }
         // Fire only for a type-name receiver (`Type.from_json`), never a value
         // call (`x.from_json`) — rewriting the latter would silently drop `x`.
@@ -8615,7 +8772,7 @@ impl<'db> LoweringContext<'db> {
             _ => false,
         };
         if !static_receiver {
-            return false;
+            return Ok(false);
         }
         let key = self.expr_metadata_key(callee);
         let sugar = self.tir_desugared_callee(key)
@@ -8623,7 +8780,7 @@ impl<'db> LoweringContext<'db> {
                 .tir_expr_type(key)
                 .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error));
         if !sugar {
-            return false;
+            return Ok(false);
         }
 
         // The receiver type is the call's result type. Pass it as the leading
@@ -8662,7 +8819,7 @@ impl<'db> LoweringContext<'db> {
             _ => Vec::new(),
         };
         let ntypeargs = type_arg_ops.len();
-        let arg_op = self.lower_to_operand(args[0]);
+        let arg_op = self.lower_to_operand(args[0])?;
         let mut all_args = type_arg_ops;
         all_args.push(arg_op);
 
@@ -8698,7 +8855,7 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
         }
-        true
+        Ok(true)
     }
 
     /// Lower a call expression. `x?.m(...)` enters through
@@ -8712,7 +8869,7 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         // `x?.m(...)` is a guarded *method call*, not a call of a bound-method
         // value. Dispatching it on its own `OptionalMemberAccess` shape sent it
         // down the "callee is an opaque callable" branch below, which builds a
@@ -8732,11 +8889,12 @@ impl<'db> LoweringContext<'db> {
                 args,
                 runtime_id,
                 dest,
-            );
-            return;
+            )?;
+            return Ok(());
         }
         let callee_expr = self.body.exprs[callee].clone();
-        self.lower_call_with_callee(expr_id, callee, &callee_expr, args, runtime_id, dest);
+        self.lower_call_with_callee(expr_id, callee, &callee_expr, args, runtime_id, dest)?;
+        Ok(())
     }
 
     /// Lower `x?.m(...)`: null-test the receiver, then lower the call as
@@ -8759,8 +8917,8 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: Place,
-    ) {
-        let base_op = self.lower_to_operand(base);
+    ) -> Lowered<()> {
+        let base_op = self.lower_to_operand(base)?;
 
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
@@ -8777,7 +8935,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call_with_callee(expr_id, callee, member_call, args, runtime_id, dest);
+            self.lower_call_with_callee(expr_id, callee, member_call, args, runtime_id, dest)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -8793,7 +8951,7 @@ impl<'db> LoweringContext<'db> {
                 args,
                 runtime_id,
                 dest.clone(),
-            );
+            )?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8805,6 +8963,7 @@ impl<'db> LoweringContext<'db> {
 
             self.builder.set_current_block(bb_join);
         }
+        Ok(())
     }
 
     /// Lower the callee as a *value* when the direct-call paths decline it.
@@ -8816,7 +8975,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         callee: AstExprId,
         callee_expr: &AstExpr,
-    ) -> Operand<'db> {
+    ) -> Lowered<Operand<'db>> {
         if let AstExpr::MemberAccess { base, member } = callee_expr
             && matches!(
                 &self.body.exprs[callee],
@@ -8826,8 +8985,8 @@ impl<'db> LoweringContext<'db> {
             let ty = self.expr_ty(callee);
             let tmp = self.builder.temp(ty);
             let member = member.clone();
-            self.lower_member_access(callee, *base, &member, Place::local(tmp));
-            return Operand::Copy(Place::local(tmp));
+            self.lower_member_access(callee, *base, &member, Place::local(tmp))?;
+            return Ok(Operand::Copy(Place::local(tmp)));
         }
         self.lower_to_operand(callee)
     }
@@ -8840,13 +8999,13 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         use crate::inference_provider::MemberResolution;
 
         // A UFCS interface-item call, whatever its spelling — the resolution
         // record, not the syntax, routes it.
-        if self.try_lower_interface_item_call(expr_id, callee, args, runtime_id, &dest) {
-            return;
+        if self.try_lower_interface_item_call(expr_id, callee, args, runtime_id, &dest)? {
+            return Ok(());
         }
         if let AstExpr::MemberAccess { base, member } = callee_expr {
             let member_name = member.clone();
@@ -8862,8 +9021,8 @@ impl<'db> LoweringContext<'db> {
                 args,
                 runtime_id,
                 &dest,
-            ) {
-                return;
+            )? {
+                return Ok(());
             }
             // Receiver may be a union containing an interface member
             // (e.g. `Animal | Vehicle`), where every member declares the
@@ -8876,8 +9035,8 @@ impl<'db> LoweringContext<'db> {
                 args,
                 runtime_id,
                 &dest,
-            ) {
-                return;
+            )? {
+                return Ok(());
             }
         }
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
@@ -8925,7 +9084,7 @@ impl<'db> LoweringContext<'db> {
             {
                 let callee_op = Operand::Constant(Constant::Function(DeclRef::Source(default_loc)));
                 let Some(self_local) = self.self_local() else {
-                    return;
+                    return Ok(());
                 };
                 // Seed the default method's frame exactly as the runtime seeds
                 // an adopted default: `[Self ++ interface generics]` (the
@@ -8940,15 +9099,16 @@ impl<'db> LoweringContext<'db> {
                 let frame_tys: Vec<Tir2Ty> = {
                     let generic_params = self.enclosing_generic_params();
                     let generic_param_bounds = self.enclosing_generic_param_bounds();
-                    let self_subject = self.implements_subject_tir_ty().unwrap_or_else(|| {
-                        // `implements_block_iface_target` gated entry to this
-                        // branch, and a recorded target pairs with a Class /
-                        // Impl owner by construction (both are written by
-                        // the same HIR builder call).
-                        unreachable!(
-                            "`default.<method>()` bypass outside an implements-block method"
+                    // `implements_block_iface_target` gated entry to this
+                    // branch, and a recorded target pairs with a Class / Impl
+                    // owner by construction (both are written by the same HIR
+                    // builder call).
+                    let self_subject = self.implements_subject_tir_ty().ok_or_else(|| {
+                        self.internal_error(
+                            "`default.<method>()` outside an implements-block method",
+                            expr_id,
                         )
-                    });
+                    })?;
                     // The target lowered whole (as the constraint head it is —
                     // written pins only): its generic args.
                     let iface_args = match lower_ref_in_scope_at(
@@ -8977,8 +9137,8 @@ impl<'db> LoweringContext<'db> {
                 let ntypeargs = frame_type_arg_ops.len();
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(self.value_place(self_local)));
-                all_args.extend(self.lower_call_arg_operands(expr_id, args));
-                let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
+                let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
                 let target = self.builder.create_block();
                 let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
                 self.builder.call_with_type_args_and_runtime_id(
@@ -8991,7 +9151,7 @@ impl<'db> LoweringContext<'db> {
                     unwind,
                 );
                 self.builder.set_current_block(target);
-                return;
+                return Ok(());
             }
         }
         // BEP-044: intercept Path forms whose final segment is a method
@@ -9020,7 +9180,7 @@ impl<'db> LoweringContext<'db> {
             // (expr, name) would have to prove the first load dominates the
             // second use, and these can land in different blocks.
             if segments.len() >= 2
-                && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])
+                && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])?
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
@@ -9111,7 +9271,7 @@ impl<'db> LoweringContext<'db> {
                     };
                     let receiver_segments = &segments[..receiver_segments_end];
                     let recv_local =
-                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root);
+                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root)?;
                     // Every interface-mediated call dispatches open-world via a
                     // virtual call — same routing as the member-access dispatch
                     // site (`try_lower_interface_dispatch`); the VM resolves the
@@ -9127,8 +9287,8 @@ impl<'db> LoweringContext<'db> {
                         args,
                         runtime_id,
                         &dest,
-                    ) {
-                        return;
+                    )? {
+                        return Ok(());
                     }
                 }
                 // A union receiver is callable only through an interface shared by
@@ -9139,7 +9299,7 @@ impl<'db> LoweringContext<'db> {
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
                     let recv_local =
-                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root);
+                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root)?;
                     if let Some((decl_tn, decl_args, decl_assoc)) =
                         self.union_virtual_dispatch_view(&members, &method_name)
                         && self.emit_virtual_call(
@@ -9152,9 +9312,9 @@ impl<'db> LoweringContext<'db> {
                             args,
                             runtime_id,
                             &dest,
-                        )
+                        )?
                     {
-                        return;
+                        return Ok(());
                     }
                 }
             }
@@ -9164,16 +9324,16 @@ impl<'db> LoweringContext<'db> {
         // after all real dispatch (interface/union above, method resolution below)
         // has been attempted, so a `baml.ToString` implementor always wins first;
         // only a `to_string` call with no resolved method reaches the fallback.
-        if self.try_lower_to_string_fallback(expr_id, callee, args, &dest) {
-            return;
+        if self.try_lower_to_string_fallback(expr_id, callee, args, &dest)? {
+            return Ok(());
         }
         // Same fallback for `recv.to_json()` -> `baml.json.from(recv)`.
-        if self.try_lower_to_json_fallback(expr_id, callee, args, &dest) {
-            return;
+        if self.try_lower_to_json_fallback(expr_id, callee, args, &dest)? {
+            return Ok(());
         }
         // Static-constructor `Type.from_json(j)` -> `baml.json.to<Type>(j)`.
-        if self.try_lower_from_json_static_fallback(expr_id, callee, args, &dest) {
-            return;
+        if self.try_lower_from_json_static_fallback(expr_id, callee, args, &dest)? {
+            return Ok(());
         }
 
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
@@ -9251,7 +9411,7 @@ impl<'db> LoweringContext<'db> {
                     // Instance method call: arr.length() — prepend receiver as self.
                     // For immediate calls, emit the callee as a plain function constant
                     // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                    let receiver_op = self.lower_to_operand(*base);
+                    let receiver_op = self.lower_to_operand(*base)?;
                     receiver_base_for_class_type_args = Some(*base);
                     let callee_op = {
                         let resolution =
@@ -9268,11 +9428,11 @@ impl<'db> LoweringContext<'db> {
                         }
                         match resolution.as_ref().and_then(|r| r.callable(self.db)) {
                             Some(item) => Operand::Constant(Constant::Function(item)),
-                            None => self.lower_normalized_callee_operand(callee, callee_expr),
+                            None => self.lower_normalized_callee_operand(callee, callee_expr)?,
                         }
                     };
                     let mut all_args = vec![receiver_op];
-                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
                 } else {
                     // Non-self method or package function reference:
@@ -9304,14 +9464,14 @@ impl<'db> LoweringContext<'db> {
                         }
                         match resolution.as_ref().and_then(|r| r.callable(self.db)) {
                             Some(item) => Operand::Constant(Constant::Function(item)),
-                            None => self.lower_normalized_callee_operand(callee, callee_expr),
+                            None => self.lower_normalized_callee_operand(callee, callee_expr)?,
                         }
                     };
-                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                    (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 }
             } else {
-                let callee_op = self.lower_normalized_callee_operand(callee, callee_expr);
-                (callee_op, self.lower_call_arg_operands(expr_id, args))
+                let callee_op = self.lower_normalized_callee_operand(callee, callee_expr)?;
+                (callee_op, self.lower_call_arg_operands(expr_id, args)?)
             }
         } else if let AstExpr::Path(segments) = callee_expr {
             // The value-rooted ladder first (local-rooted paths like `self.method()`
@@ -9352,7 +9512,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 let callee_op = match method_resolution.as_ref().and_then(|r| r.callable(self.db)) {
                     Some(item) => Operand::Constant(Constant::Function(item)),
-                    None => self.lower_to_operand(callee),
+                    None => self.lower_to_operand(callee)?,
                 };
                 let method_takes_self = method_resolution.as_ref().is_some_and(|r| match r {
                     MemberResolution::Method {
@@ -9381,10 +9541,10 @@ impl<'db> LoweringContext<'db> {
                     receiver_path_tir_ty = self
                         .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                         .cloned();
-                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                    (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
-                        self.path_receiver_root(callee, &receiver_segments[0])
+                        self.path_receiver_root(callee, &receiver_segments[0])?
                             .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
                     } else {
                         // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
@@ -9394,7 +9554,7 @@ impl<'db> LoweringContext<'db> {
                             callee,
                             receiver_segments,
                             Place::local(recv_local),
-                        );
+                        )?;
                         Operand::Copy(Place::local(recv_local))
                     };
                     let prefix_idx = segments.len() - 2;
@@ -9402,7 +9562,7 @@ impl<'db> LoweringContext<'db> {
                         .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                         .cloned();
                     let mut all_args = vec![receiver_op];
-                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
                 }
             } else if is_pkg_method {
@@ -9422,10 +9582,10 @@ impl<'db> LoweringContext<'db> {
                 }
                 let callee_op = match flat_resolution.as_ref().and_then(|r| r.callable(self.db)) {
                     Some(item) => Operand::Constant(Constant::Function(item)),
-                    None => self.lower_to_operand(callee),
+                    None => self.lower_to_operand(callee)?,
                 };
                 let receiver_op = self
-                    .path_receiver_root(callee, &segments[0])
+                    .path_receiver_root(callee, &segments[0])?
                     .map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
@@ -9433,18 +9593,18 @@ impl<'db> LoweringContext<'db> {
                         .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                         .cloned();
                     let mut all_args = vec![receiver_op];
-                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
                 } else {
-                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                    (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 }
             } else {
-                let callee_op = self.lower_to_operand(callee);
-                (callee_op, self.lower_call_arg_operands(expr_id, args))
+                let callee_op = self.lower_to_operand(callee)?;
+                (callee_op, self.lower_call_arg_operands(expr_id, args)?)
             }
         } else {
-            let callee_op = self.lower_to_operand(callee);
-            (callee_op, self.lower_call_arg_operands(expr_id, args))
+            let callee_op = self.lower_to_operand(callee)?;
+            (callee_op, self.lower_call_arg_operands(expr_id, args)?)
         };
 
         let target = self.builder.create_block();
@@ -9457,7 +9617,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(dest, Rvalue::LoadType(template));
             self.builder.goto(target);
             self.builder.set_current_block(target);
-            return;
+            return Ok(());
         }
 
         // `Package.current()` is lexical, like `reflect.Type.of`: bake the enclosing
@@ -9475,7 +9635,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(dest, Rvalue::CurrentPackage(package));
             self.builder.goto(target);
             self.builder.set_current_block(target);
-            return;
+            return Ok(());
         }
 
         // Check if callee is `.length()` on a container — emit Rvalue::Len instead of Call.
@@ -9500,7 +9660,7 @@ impl<'db> LoweringContext<'db> {
                     self.builder.assign(dest, Rvalue::Len(place));
                     self.builder.goto(target);
                     self.builder.set_current_block(target);
-                    return;
+                    return Ok(());
                 }
             }
         }
@@ -9520,7 +9680,7 @@ impl<'db> LoweringContext<'db> {
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
             self.builder.goto(target);
             self.builder.set_current_block(target);
-            return;
+            return Ok(());
         }
 
         // ── Emit LoadType temps for call type arguments ──────────────────────
@@ -9594,7 +9754,7 @@ impl<'db> LoweringContext<'db> {
         };
         let ntypeargs = type_arg_operands.len();
 
-        let argument_layout = self.call_argument_layout(expr_id, arg_operands.len());
+        let argument_layout = self.call_argument_layout(expr_id, arg_operands.len())?;
         // Prepend type-arg operands before the value-arg operands.
         // (For regular BAML calls, type args are leading so the callee's frame
         // can pop them into `frame.type_args` before reading value args.)
@@ -9612,10 +9772,9 @@ impl<'db> LoweringContext<'db> {
             // The single value arg is the array of futures. (`__await_any` has
             // two type params T,E used only for type checking; the runtime
             // terminator just needs the array operand.)
-            let futures_operand = arg_operands
-                .into_iter()
-                .next()
-                .expect("__await_any takes exactly one (array) argument");
+            let futures_operand = arg_operands.into_iter().next().ok_or_else(|| {
+                self.internal_error("`__await_any` was called with no argument", expr_id)
+            })?;
             match &dest {
                 Place::Local(l) => {
                     self.builder
@@ -9634,11 +9793,11 @@ impl<'db> LoweringContext<'db> {
                         .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
                     self.builder.goto(after);
                     self.builder.set_current_block(after);
-                    return;
+                    return Ok(());
                 }
             }
             self.builder.set_current_block(target);
-            return;
+            return Ok(());
         }
 
         if is_sys_op {
@@ -9652,7 +9811,7 @@ impl<'db> LoweringContext<'db> {
             //     <args ...>
             //     SYS_OP g
             //     <store dest>
-            // The terminator binds a local; any other destination (a field,
+            // The terminator binds a local); any other destination (a field,
             // an element, the value behind a cell) is written from a temp
             // once the op has returned.
             let dest_local = match &dest {
@@ -9671,7 +9830,7 @@ impl<'db> LoweringContext<'db> {
             } else {
                 arg_operands
             };
-            let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+            let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
             self.builder.sys_op_with_runtime_id(
                 callee_operand,
                 sys_op_arg_operands,
@@ -9687,7 +9846,7 @@ impl<'db> LoweringContext<'db> {
                     .assign(dest, Rvalue::Use(Operand::Copy(Place::local(dest_local))));
                 self.builder.goto(after);
                 self.builder.set_current_block(after);
-                return;
+                return Ok(());
             }
         } else {
             // Call destinations must be Place::Local in MIR. If `dest` is a
@@ -9695,7 +9854,7 @@ impl<'db> LoweringContext<'db> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
                     self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
@@ -9710,7 +9869,7 @@ impl<'db> LoweringContext<'db> {
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
                     self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
@@ -9727,12 +9886,13 @@ impl<'db> LoweringContext<'db> {
                         .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
                     self.builder.goto(after);
                     self.builder.set_current_block(after);
-                    return;
+                    return Ok(());
                 }
             }
         }
 
         self.builder.set_current_block(target);
+        Ok(())
     }
 
     /// Whether `callee` resolves to a BOUND method access — i.e. the call uses
@@ -10355,7 +10515,10 @@ impl<'db> LoweringContext<'db> {
 
     /// `type T = …;`: evaluate (or load) the binding's runtime type and
     /// store it in the frame slot reserved for `T`'s rigid parameter.
-    fn emit_scoped_type_binding(&mut self, binding: &crate::inference_provider::ScopedTypeBinding) {
+    fn emit_scoped_type_binding(
+        &mut self,
+        binding: &crate::inference_provider::ScopedTypeBinding,
+    ) -> Lowered<()> {
         use crate::inference_provider::ScopedTypeSource;
         let value = match &binding.source {
             ScopedTypeSource::Runtime(operand) => self.lower_to_operand(*operand),
@@ -10365,9 +10528,9 @@ impl<'db> LoweringContext<'db> {
                 let temp = self.builder.temp(RuntimeTy::type_type());
                 self.builder
                     .assign(Place::local(temp), Rvalue::LoadType(template));
-                Operand::Copy(Place::local(temp))
+                Ok(Operand::Copy(Place::local(temp)))
             }
-        };
+        }?;
         let slot = RuntimeGenericLayout::new(&self.enclosing_generic_params())
             .slot(&binding.parameter)
             .unwrap_or_else(|| unreachable!("a scoped type parameter has a frame slot"));
@@ -10378,6 +10541,7 @@ impl<'db> LoweringContext<'db> {
             },
             self.builder.current_source_span,
         );
+        Ok(())
     }
 
     /// The owner frame a statically resolved callee expects ahead of its own
@@ -10546,21 +10710,21 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         type_args: &[AstTypeExpr],
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         // An interface item — a virtual slot, or a matched impl's method —
         // has no global of its own to pool: its turbofish value is the
         // type-keyed callable the bare reference is, with the written
         // arguments in the plan keyed at this expression.
         if let Some(callee) = self.unbound_interface_item_callee(base) {
-            self.lower_type_keyed_item_reference(expr_id, &callee, dest);
-            return;
+            self.lower_type_keyed_item_reference(expr_id, &callee, dest)?;
+            return Ok(());
         }
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
             // A value base (a local/captured generic function value):
             // there is no function global to pool, so specialize the *runtime
             // value* — evaluate it and wrap it in a closure carrying the
             // (frame-resolved) type args — instead of silently erasing them.
-            let value = self.lower_to_operand(base);
+            let value = self.lower_to_operand(base)?;
             let type_arg_templates =
                 self.planned_generic_apply_type_arg_templates(expr_id, type_args);
             self.builder.assign(
@@ -10570,7 +10734,7 @@ impl<'db> LoweringContext<'db> {
                     type_arg_templates,
                 },
             );
-            return;
+            return Ok(());
         };
         let templates = self.planned_generic_apply_type_arg_templates(expr_id, type_args);
         if templates.iter().all(TyTemplate::is_fully_concrete) {
@@ -10603,6 +10767,7 @@ impl<'db> LoweringContext<'db> {
                 },
             );
         }
+        Ok(())
     }
 
     /// The callee of `base` when it is an UNBOUND interface item — the
@@ -10719,40 +10884,40 @@ impl<'db> LoweringContext<'db> {
 // ─── 3.7: Helper methods ─────────────────────────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
-    fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand<'db> {
+    fn lower_to_operand(&mut self, expr_id: AstExprId) -> Lowered<Operand<'db>> {
         let ty = self.expr_ty(expr_id);
         let temp = self.builder.temp(ty);
-        self.lower_expr(expr_id, Place::local(temp));
-        Operand::Copy(Place::Local(temp))
+        self.lower_expr(expr_id, Place::local(temp))?;
+        Ok(Operand::Copy(Place::Local(temp)))
     }
 
-    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Operand<'db> {
-        self.try_resolve_to_local(expr_id)
-            .map_or_else(|| self.lower_to_operand(expr_id), Operand::copy_local)
+    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Lowered<Operand<'db>> {
+        match self.try_resolve_to_local(expr_id) {
+            Some(local) => Ok(Operand::copy_local(local)),
+            None => self.lower_to_operand(expr_id),
+        }
     }
 
-    fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
-        // Emit a call to baml.sys.panic with the error message
-        let callee = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["sys"],
-            "panic",
-        )));
-        let msg = Operand::Constant(Constant::String(message.to_string()));
-        let temp = self.builder.temp(RuntimeTy::Null);
-        let unreachable_block = self.builder.create_block();
-        self.builder.call(
-            callee,
-            vec![msg],
-            Place::local(temp),
-            unreachable_block,
-            None,
-        );
-        self.builder.set_current_block(unreachable_block);
-        self.builder.unreachable();
-        // Start a new block for any code after this (dead code)
-        let dead = self.builder.create_block();
-        self.builder.set_current_block(dead);
+    /// An internal inconsistency: lowering cannot produce code here, for a
+    /// program the checker accepted. The caller returns it, which abandons the
+    /// unit — [`lower_function`] / [`lower_let_body`] answer with the error
+    /// instead of MIR, and the compile fails.
+    fn internal_error(&self, message: &str, expr_id: AstExprId) -> MirInternalError {
+        MirInternalError {
+            message: message.to_string(),
+            span: self
+                .span_for_expr(expr_id)
+                .or(self.builder.current_source_span),
+        }
+    }
+
+    /// [`Self::internal_error`] for a site with no expression of its own —
+    /// located at whatever the builder is currently lowering.
+    fn internal_error_here(&self, message: &str) -> MirInternalError {
+        MirInternalError {
+            message: message.to_string(),
+            span: self.builder.current_source_span,
+        }
     }
 
     fn lower_current_runtime_id(&mut self, dest: Place) {
@@ -10767,19 +10932,20 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(resume);
     }
 
-    fn lower_set_runtime_id(&mut self, value: AstExprId) {
+    fn lower_set_runtime_id(&mut self, value: AstExprId) -> Lowered<()> {
         let callee = Operand::Constant(Constant::Function(self.lang_function(
             baml_base::LangPackage::Baml,
             &["id"],
             "set",
         )));
-        let arg = self.lower_to_operand(value);
+        let arg = self.lower_to_operand(value)?;
         let dest = self.builder.temp(RuntimeTy::String);
         let resume = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         self.builder
             .call(callee, vec![arg], Place::local(dest), resume, unwind);
         self.builder.set_current_block(resume);
+        Ok(())
     }
 
     /// The `$id` runtime-identity special form. MIR owns its lowering (reads
@@ -10796,8 +10962,8 @@ impl<'db> LoweringContext<'db> {
     /// applying the checker-recorded truthiness coercion (B-1563,
     /// `Adjust::Truthy`). A `bool`-typed condition records nothing and
     /// lowers exactly as before; the branch terminators stay strict-bool.
-    fn lower_condition_operand(&mut self, condition: AstExprId) -> Operand<'db> {
-        let op = self.lower_to_operand(condition);
+    fn lower_condition_operand(&mut self, condition: AstExprId) -> Lowered<Operand<'db>> {
+        let op = self.lower_to_operand(condition)?;
         // `!value` performs truthiness itself, so its operand need not have a
         // TIR adjustment. Predicate lowering can remove that Not; the branch
         // must still receive an exact bool, including on this path.
@@ -10806,7 +10972,7 @@ impl<'db> LoweringContext<'db> {
             RuntimeTy::Bool | RuntimeTy::Literal(baml_type::Literal::Bool(_), ..)
         );
         if is_bool && !self.tir_truthy_condition(self.expr_metadata_key(condition)) {
-            return op;
+            return Ok(op);
         }
         let coerced = self.builder.temp(RuntimeTy::Bool);
         self.builder.assign(
@@ -10816,11 +10982,16 @@ impl<'db> LoweringContext<'db> {
                 operand: op,
             },
         );
-        Operand::Copy(Place::Local(coerced))
+        Ok(Operand::Copy(Place::Local(coerced)))
     }
 
     /// A predicate needs control flow, not a materialized logical value.
-    fn lower_condition(&mut self, condition: AstExprId, on_true: BlockId, on_false: BlockId) {
+    fn lower_condition(
+        &mut self,
+        condition: AstExprId,
+        on_true: BlockId,
+        on_false: BlockId,
+    ) -> Lowered<()> {
         match self.body.exprs[condition].clone() {
             AstExpr::Binary {
                 op: AstBinaryOp::And,
@@ -10828,9 +10999,9 @@ impl<'db> LoweringContext<'db> {
                 rhs,
             } => {
                 let next = self.builder.create_block();
-                self.lower_condition(lhs, next, on_false);
+                self.lower_condition(lhs, next, on_false)?;
                 self.builder.set_current_block(next);
-                self.lower_condition(rhs, on_true, on_false);
+                self.lower_condition(rhs, on_true, on_false)?;
             }
             AstExpr::Binary {
                 op: AstBinaryOp::Or,
@@ -10838,21 +11009,22 @@ impl<'db> LoweringContext<'db> {
                 rhs,
             } => {
                 let next = self.builder.create_block();
-                self.lower_condition(lhs, on_true, next);
+                self.lower_condition(lhs, on_true, next)?;
                 self.builder.set_current_block(next);
-                self.lower_condition(rhs, on_true, on_false);
+                self.lower_condition(rhs, on_true, on_false)?;
             }
             AstExpr::Unary {
                 op: AstUnaryOp::Not,
                 expr,
             } => {
-                self.lower_condition(expr, on_false, on_true);
+                self.lower_condition(expr, on_false, on_true)?;
             }
             _ => {
-                let operand = self.lower_condition_operand(condition);
+                let operand = self.lower_condition_operand(condition)?;
                 self.builder.branch(operand, on_true, on_false);
             }
         }
+        Ok(())
     }
 
     fn lower_if(
@@ -10862,22 +11034,22 @@ impl<'db> LoweringContext<'db> {
         then_branch: AstExprId,
         else_branch: Option<AstExprId>,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let bb_then = self.builder.create_block();
         let bb_else = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        self.lower_condition(condition, bb_then, bb_else);
+        self.lower_condition(condition, bb_then, bb_else)?;
 
         self.builder.set_current_block(bb_then);
-        self.lower_expr(then_branch, dest.clone());
+        self.lower_expr(then_branch, dest.clone())?;
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
 
         self.builder.set_current_block(bb_else);
         if let Some(else_expr) = else_branch {
-            self.lower_expr(else_expr, dest);
+            self.lower_expr(else_expr, dest)?;
         } else {
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -10887,6 +11059,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 
     /// MIR lowering for `if let PATTERN = SCRUTINEE { THEN } else { ELSE }`.
@@ -10903,18 +11076,21 @@ impl<'db> LoweringContext<'db> {
         then_branch: AstExprId,
         else_branch: Option<AstExprId>,
         dest: Place,
-    ) {
-        let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
-            let op = self.lower_to_operand(scrutinee);
-            let ty = self.expr_ty(scrutinee);
-            self.operand_to_local(op, ty)
-        });
+    ) -> Lowered<()> {
+        let scrutinee_local = match self.try_resolve_to_local(scrutinee) {
+            Some(local) => local,
+            None => {
+                let op = self.lower_to_operand(scrutinee)?;
+                let ty = self.expr_ty(scrutinee);
+                self.operand_to_local(op, ty)
+            }
+        };
 
         let bb_then = self.builder.create_block();
         let bb_else = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        self.lower_pattern_test(scrutinee_local, pattern, bb_then, bb_else);
+        self.lower_pattern_test(scrutinee_local, pattern, bb_then, bb_else)?;
 
         // Then-branch: bind pattern locals, lower body, restore on exit.
         self.builder.set_current_block(bb_then);
@@ -10922,8 +11098,8 @@ impl<'db> LoweringContext<'db> {
             scrutinee_local,
             pattern,
             DefinitionSite::PatternBinding(pattern),
-        );
-        self.lower_expr(then_branch, dest.clone());
+        )?;
+        self.lower_expr(then_branch, dest.clone())?;
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -10932,7 +11108,7 @@ impl<'db> LoweringContext<'db> {
         // (or write Null if absent — same as plain `if` with no else).
         self.builder.set_current_block(bb_else);
         if let Some(else_expr) = else_branch {
-            self.lower_expr(else_expr, dest);
+            self.lower_expr(else_expr, dest)?;
         } else {
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -10942,6 +11118,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 
     fn lower_object(
@@ -10952,7 +11129,7 @@ impl<'db> LoweringContext<'db> {
         fields: &[baml_compiler2_ast::ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
         // Prefer the explicitly written type name. If absent (e.g., when the
         // type is a qualified path like `baml.errors.Io`), fall back to
@@ -11005,7 +11182,7 @@ impl<'db> LoweringContext<'db> {
                     .collect();
                 for field in fields {
                     if let Some(&idx) = field_name_to_idx.get(&field.name.to_string()) {
-                        result[idx] = self.lower_to_operand(field.value);
+                        result[idx] = self.lower_to_operand(field.value)?;
                     }
                 }
                 result
@@ -11017,7 +11194,7 @@ impl<'db> LoweringContext<'db> {
                 fields
                     .iter()
                     .map(|field| self.lower_to_operand(field.value))
-                    .collect()
+                    .collect::<Lowered<Vec<_>>>()?
             };
             self.builder.assign(
                 dest,
@@ -11049,11 +11226,11 @@ impl<'db> LoweringContext<'db> {
             let spread_locals: Vec<(usize, Local)> = spreads
                 .iter()
                 .map(|s| {
-                    let op = self.lower_to_operand(s.expr);
+                    let op = self.lower_to_operand(s.expr)?;
                     let ty = self.expr_ty(s.expr);
-                    (s.position, self.operand_to_local(op, ty))
+                    Ok((s.position, self.operand_to_local(op, ty)))
                 })
-                .collect();
+                .collect::<Lowered<Vec<_>>>()?;
 
             // Lower all explicit field expressions into operands.
             // Named fields occupy source positions 0.. excluding spread positions.
@@ -11070,13 +11247,13 @@ impl<'db> LoweringContext<'db> {
                         }
                         let cur = pos;
                         pos += 1;
-                        (
+                        Ok((
                             cur,
                             field.name.to_string(),
-                            self.lower_to_operand(field.value),
-                        )
+                            self.lower_to_operand(field.value)?,
+                        ))
                     })
-                    .collect()
+                    .collect::<Lowered<Vec<_>>>()?
             };
 
             // Build per-class-field operand array. Process all entries in source
@@ -11091,7 +11268,7 @@ impl<'db> LoweringContext<'db> {
                     let field_operands: Vec<Operand<'db>> = fields
                         .iter()
                         .map(|field| self.lower_to_operand(field.value))
-                        .collect();
+                        .collect::<Lowered<Vec<_>>>()?;
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
@@ -11102,7 +11279,7 @@ impl<'db> LoweringContext<'db> {
                             fields: field_operands,
                         },
                     );
-                    return;
+                    return Ok(());
                 }
             };
 
@@ -11151,6 +11328,7 @@ impl<'db> LoweringContext<'db> {
                 },
             );
         }
+        Ok(())
     }
 
     fn lower_member_access(
@@ -11159,7 +11337,7 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         field: &Name,
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         // Check if TIR resolved this to a method or free function — if so, emit a function constant
         // (unbound) or MakeBoundMethod (bound). Field and Variant resolutions fall through to the
         // existing lowering paths below.
@@ -11176,19 +11354,18 @@ impl<'db> LoweringContext<'db> {
                     // A `self`-less method has no receiver to bind: the base
                     // contributes only its STATIC type, whose class arguments
                     // fill the callee frame.
-                    if !self.callee_takes_self(callee) {
+                    if !self.callee_takes_self(callee)? {
                         // TIR rejects a `self`-less method reached through a value,
                         // so this is unreachable in a compiling program.
-                        self.emit_panic_call(
-                            "internal compiler error: static method reached through a value receiver",
+                        return Err(self.internal_error(
+                            "static method reached through a value receiver",
                             expr_id,
-                        );
-                        return;
+                        ));
                     }
                     // Bound method reference: lower receiver and emit MakeBoundMethod.
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
-                        let receiver_op = self.lower_to_operand(base);
+                        let receiver_op = self.lower_to_operand(base)?;
                         self.builder.assign(
                             dest,
                             Rvalue::MakeBoundMethod {
@@ -11196,7 +11373,7 @@ impl<'db> LoweringContext<'db> {
                                 receiver: receiver_op,
                             },
                         );
-                        return;
+                        return Ok(());
                     }
                 }
                 MemberResolution::Method {
@@ -11211,7 +11388,7 @@ impl<'db> LoweringContext<'db> {
                             dest,
                             Rvalue::Use(Operand::Constant(Constant::Function(item))),
                         );
-                        return;
+                        return Ok(());
                     }
                 }
                 MemberResolution::Method {
@@ -11223,14 +11400,13 @@ impl<'db> LoweringContext<'db> {
                     // virtual-bound path below); a `self`-LESS one has no
                     // receiver to bind and resolves type-keyed on the base's
                     // static type.
-                    if !self.callee_takes_self(callee) {
+                    if !self.callee_takes_self(callee)? {
                         // TIR rejects a `self`-less method reached through a value,
                         // so this is unreachable in a compiling program.
-                        self.emit_panic_call(
-                            "internal compiler error: static method reached through a value receiver",
+                        return Err(self.internal_error(
+                            "static method reached through a value receiver",
                             expr_id,
-                        );
-                        return;
+                        ));
                     }
                 }
                 MemberResolution::Field { .. }
@@ -11254,12 +11430,12 @@ impl<'db> LoweringContext<'db> {
                 .decl(&view.0)
                 .is_some_and(|decl| self.mir_interface_declares_method(&decl, field))
         {
-            let recv_op = self.lower_to_operand(base);
+            let recv_op = self.lower_to_operand(base)?;
             let recv_local = self.builder.temp(self.expr_ty(base));
             self.builder
                 .assign(Place::local(recv_local), Rvalue::Use(recv_op));
             self.emit_virtual_bound_method(recv_local, &view, field, &dest);
-            return;
+            return Ok(());
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
@@ -11268,7 +11444,7 @@ impl<'db> LoweringContext<'db> {
             .cloned()
             .as_ref()
         {
-            let enum_ref = self.enum_ref_of(qtn);
+            let enum_ref = self.enum_ref_of(qtn)?;
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::EnumVariant {
@@ -11276,12 +11452,12 @@ impl<'db> LoweringContext<'db> {
                     variant: variant.clone(),
                 })),
             );
-            return;
+            return Ok(());
         }
 
         // Regular field access
         let base_ty = self.expr_ty(base);
-        let base_op = self.lower_to_operand(base);
+        let base_op = self.lower_to_operand(base)?;
         let field_str = field.to_string();
 
         // Unwrap Optional — when called from lower_optional_member_access,
@@ -11337,12 +11513,12 @@ impl<'db> LoweringContext<'db> {
                     })
             };
             if handled_interface_field {
-                return;
+                return Ok(());
             }
             if let RuntimeTy::Class(tn, _) = &unwrapped_ty {
-                self.emit_panic_call(
+                return Err(self.internal_error(
                     &format!(
-                        "internal compiler error: MIR failed to resolve field access \
+                        "MIR failed to resolve field access \
                          .{} against class definition '{}' (module_path: {:?}). \
                          This class should be in class_fields but isn't.",
                         field_str,
@@ -11350,24 +11526,22 @@ impl<'db> LoweringContext<'db> {
                         tn.module_path(),
                     ),
                     expr_id,
-                );
-                return;
+                ));
             }
             if let RuntimeTy::Interface(tn, _, _) = &unwrapped_ty {
                 // TIR resolves every accepted interface field access and
                 // records the view; reaching here means the access was
                 // rejected upstream. Fail as loudly as the class arm rather
                 // than emit a dynamic map read on an instance.
-                self.emit_panic_call(
+                return Err(self.internal_error(
                     &format!(
-                        "internal compiler error: MIR failed to resolve field access \
+                        "MIR failed to resolve field access \
                          .{field_str} against interface '{}': TIR recorded no \
                          virtual-field view for it",
                         tn.name(),
                     ),
                     expr_id,
-                );
-                return;
+                ));
             }
             // Dynamic map access — only valid for map types, unknown, etc.
             let key_local = self.builder.temp(RuntimeTy::String);
@@ -11384,6 +11558,7 @@ impl<'db> LoweringContext<'db> {
                 })),
             );
         }
+        Ok(())
     }
 
     /// The interface view a field access on `base` dispatches through when
@@ -11456,12 +11631,13 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn lower_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) {
+    fn lower_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) -> Lowered<()> {
         let base_ty = self.expr_ty(base);
-        let base_op = self.lower_to_operand(base);
+        let base_op = self.lower_to_operand(base)?;
         let index_ty = self.expr_ty(index);
-        let index_op = self.lower_to_operand(index);
+        let index_op = self.lower_to_operand(index)?;
         self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+        Ok(())
     }
 
     /// Emit the element read for `base[index]` from already-lowered operands.
@@ -11546,12 +11722,12 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         // Same view the field form uses, so `x?.m()` dispatches on the non-null
         // receiver instead of declining on the `T | null` union and falling
         // through to a bound-method value.
         let Some(view) = self.dispatch_target_for_member_access(callee, base, method) else {
-            return false;
+            return Ok(false);
         };
         // A `self`-less interface method cannot dispatch on a receiver — the
         // callee has no slot for it. An in-body impl's static resolves through
@@ -11564,7 +11740,7 @@ impl<'db> LoweringContext<'db> {
             .and_then(|interface| self.interface_method_shape(interface, method))
             .is_some_and(|shape| !shape.takes_self)
         {
-            return false;
+            return Ok(false);
         }
         // Every interface-mediated call dispatches open-world via a virtual
         // call: the VM resolves the impl from the receiver's runtime concrete
@@ -11575,9 +11751,9 @@ impl<'db> LoweringContext<'db> {
         // on, or declines the road entirely for a field.
         let Some((decl_tn, decl_args, decl_assoc)) = self.dispatch_view_for_call(&view, method)
         else {
-            return false;
+            return Ok(false);
         };
-        let receiver_op = self.lower_to_operand(base);
+        let receiver_op = self.lower_to_operand(base)?;
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
         self.emit_virtual_call(
@@ -11612,8 +11788,8 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: &Place,
-    ) -> bool {
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
+    ) -> Lowered<bool> {
+        let arg_ops = self.lower_call_arg_operands(expr_id, args)?;
         self.emit_virtual_call_with_value_operands(
             Operand::Copy(Place::Local(recv_local)),
             iface_tn,
@@ -11639,7 +11815,7 @@ impl<'db> LoweringContext<'db> {
         arg_ops: Vec<Operand<'db>>,
         runtime_id: Option<AstExprId>,
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         let method_arg_count = self
             .interface_method_generic_count(iface_tn, method)
             .unwrap_or(0);
@@ -11671,9 +11847,9 @@ impl<'db> LoweringContext<'db> {
             &generic_params,
         );
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
         let result_ty = self.expr_ty(expr_id);
-        let argument_layout = self.call_argument_layout(expr_id, all_args.len() - ntypeargs);
+        let argument_layout = self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
         self.emit_virtual_call_with_operands(
             iface_template,
             method.as_str(),
@@ -11685,7 +11861,7 @@ impl<'db> LoweringContext<'db> {
             unwind,
             dest.clone(),
         );
-        true
+        Ok(true)
     }
 
     /// Emit the `VirtualCall` terminator itself, given operands that are already
@@ -11787,11 +11963,13 @@ impl<'db> LoweringContext<'db> {
         );
     }
 
-    fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
-        self.place_for_path(expr_id, name).or_else(|| {
-            self.load_top_level_let_root(expr_id, name)
-                .map(Place::local)
-        })
+    fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Lowered<Option<Place>> {
+        match self.place_for_path(expr_id, name) {
+            Some(place) => Ok(Some(place)),
+            None => Ok(self
+                .load_top_level_let_root(expr_id, name)?
+                .map(Place::local)),
+        }
     }
 
     /// Lower a receiver path, excluding its method or field, to a local.
@@ -11801,7 +11979,7 @@ impl<'db> LoweringContext<'db> {
         callee: AstExprId,
         receiver_segments: &[Name],
         recv_root: Place,
-    ) -> Local {
+    ) -> Lowered<Local> {
         let recv_ty_idx = receiver_segments.len() - 1;
         let recv_ty = self
             .tir_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
@@ -11809,15 +11987,15 @@ impl<'db> LoweringContext<'db> {
             .map(|t| self.convert_tir_ty_for_runtime(&t))
             .unwrap_or(RuntimeTy::Unknown);
         if receiver_segments.len() == 1 {
-            return self.operand_to_local(Operand::Copy(recv_root), recv_ty);
+            return Ok(self.operand_to_local(Operand::Copy(recv_root), recv_ty));
         }
         let local = self.builder.temp(recv_ty);
         self.lower_multi_segment_path_as_field_chain(
             callee,
             receiver_segments,
             Place::local(local),
-        );
-        local
+        )?;
+        Ok(local)
     }
 
     /// A method call whose receiver is a union that contains at least one
@@ -11837,20 +12015,20 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         runtime_id: Option<AstExprId>,
         dest: &Place,
-    ) -> bool {
+    ) -> Lowered<bool> {
         let Some(members) = self
             .call_receiver_tir_ty(callee, base)
             .as_ref()
             .and_then(Self::tir_union_members)
         else {
-            return false;
+            return Ok(false);
         };
         let Some((decl_tn, decl_args, decl_assoc)) =
             self.union_virtual_dispatch_view(&members, method)
         else {
-            return false;
+            return Ok(false);
         };
-        let receiver_op = self.lower_to_operand(base);
+        let receiver_op = self.lower_to_operand(base)?;
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
         self.emit_virtual_call(
@@ -12105,41 +12283,58 @@ impl<'db> LoweringContext<'db> {
     /// `lower_lvalue` + `lower_expr`, which re-lower the target and the value from the
     /// AST, so a receiver materialized here would be a side-effecting expression
     /// evaluated twice plus a block of dead statements.
-    fn virtual_field_assign_target(&mut self, target: AstExprId) -> Option<VirtualFieldTarget> {
+    fn virtual_field_assign_target(
+        &mut self,
+        target: AstExprId,
+    ) -> Lowered<Option<VirtualFieldTarget>> {
         match &self.body.exprs[target] {
             AstExpr::MemberAccess { base, member } => {
                 let (base, field) = (*base, member.clone());
-                let view = self.virtual_field_assign_view(target, base, &field)?;
-                let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
-                let recv_op = self.lower_to_operand(base);
+                let Some(view) = self.virtual_field_assign_view(target, base, &field) else {
+                    return Ok(None);
+                };
+                let Some((iface, field_index)) = self.virtual_field_wire_target(&view, &field)
+                else {
+                    return Ok(None);
+                };
+                let recv_op = self.lower_to_operand(base)?;
                 let receiver = self.operand_to_local(recv_op, self.expr_ty(base));
-                Some(VirtualFieldTarget {
+                Ok(Some(VirtualFieldTarget {
                     receiver,
                     field,
                     iface,
                     field_index,
-                })
+                }))
             }
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 let segments = segments.clone();
                 let field = segments.last().expect("checked non-empty").clone();
                 let prefix_idx = segments.len() - 2;
-                let view = self.interface_receiver_for_path_prefix(target, prefix_idx, &field)?;
-                let (iface, field_index) = self.virtual_field_wire_target(&view, &field)?;
-                let root = self.path_receiver_root(target, &segments[0])?;
+                let Some(view) =
+                    self.interface_receiver_for_path_prefix(target, prefix_idx, &field)
+                else {
+                    return Ok(None);
+                };
+                let Some((iface, field_index)) = self.virtual_field_wire_target(&view, &field)
+                else {
+                    return Ok(None);
+                };
+                let Some(root) = self.path_receiver_root(target, &segments[0])? else {
+                    return Ok(None);
+                };
                 let receiver = self.lower_path_receiver_to_local(
                     target,
                     &segments[..segments.len() - 1],
                     root,
-                );
-                Some(VirtualFieldTarget {
+                )?;
+                Ok(Some(VirtualFieldTarget {
                     receiver,
                     field,
                     iface,
                     field_index,
-                })
+                }))
             }
-            _ => None,
+            _ => Ok(None),
         }
     }
 
@@ -12151,17 +12346,21 @@ impl<'db> LoweringContext<'db> {
     /// the receiver's impl, so there is no `Place` to build. Before this existed the
     /// target fell through to a dynamic map-key store and the VM rejected it with
     /// `expected Map, got Instance`.
-    fn try_lower_virtual_field_assign(&mut self, target: AstExprId, value: AstExprId) -> bool {
-        let Some(field_target) = self.virtual_field_assign_target(target) else {
-            return false;
+    fn try_lower_virtual_field_assign(
+        &mut self,
+        target: AstExprId,
+        value: AstExprId,
+    ) -> Lowered<bool> {
+        let Some(field_target) = self.virtual_field_assign_target(target)? else {
+            return Ok(false);
         };
         // Take the value as an operand rather than parking it in a temp: a temp
         // defined here is a single-use local the emitter may classify as inlinable
         // and drop the store for, while this statement still emits a plain load of
         // it — reading an uninitialized slot.
-        let value_op = self.lower_to_operand(value);
+        let value_op = self.lower_to_operand(value)?;
         self.emit_interface_field_store(&field_target, value_op);
-        true
+        Ok(true)
     }
 
     /// `recv.field op= value` on an interface field: read through the virtual
@@ -12173,9 +12372,9 @@ impl<'db> LoweringContext<'db> {
         target: AstExprId,
         op: AstAssignOp,
         value: AstExprId,
-    ) -> bool {
-        let Some(field_target) = self.virtual_field_assign_target(target) else {
-            return false;
+    ) -> Lowered<bool> {
+        let Some(field_target) = self.virtual_field_assign_target(target)? else {
+            return Ok(false);
         };
         let current = self.builder.temp(self.expr_ty(target));
         self.emit_virtual_field_access(
@@ -12188,9 +12387,9 @@ impl<'db> LoweringContext<'db> {
         // Apply the operator to the temp through the ordinary path, so union
         // operator drivers and overload dispatch behave exactly as they do for a
         // class field; only the read and the write-back are virtual.
-        self.emit_assign_op(Place::local(current), target, op, value);
+        self.emit_assign_op(Place::local(current), target, op, value)?;
         self.emit_interface_field_store(&field_target, Operand::Copy(Place::Local(current)));
-        true
+        Ok(true)
     }
 
     /// Write `value` to `field` through an interface view — the store counterpart of
@@ -12475,7 +12674,7 @@ impl<'db> LoweringContext<'db> {
 // ─── Statement lowering ───────────────────────────────────────────────────────
 
 impl LoweringContext<'_> {
-    fn lower_stmt(&mut self, stmt_id: AstStmtId) {
+    fn lower_stmt(&mut self, stmt_id: AstStmtId) -> Lowered<()> {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_stmt(stmt_id) {
             self.builder.current_source_span = Some(span);
@@ -12486,21 +12685,28 @@ impl LoweringContext<'_> {
             AstStmt::Expr(expr_id) => {
                 let ty = self.expr_ty(expr_id);
                 let temp = self.builder.temp(ty);
-                self.lower_expr(expr_id, Place::local(temp));
+                self.lower_expr(expr_id, Place::local(temp))?;
             }
 
             AstStmt::TypeBinding { name, .. } => {
-                let binding = self.tir_type_binding(stmt_id).cloned().unwrap_or_else(|| {
-                    unreachable!("a typed TypeBinding statement has a durable binding plan")
-                });
-                debug_assert_eq!(binding.name, name);
+                let binding = self.tir_type_binding(stmt_id).cloned().ok_or_else(|| {
+                    self.internal_error_here(&format!(
+                        "TIR recorded no binding plan for the scoped type `{name}`"
+                    ))
+                })?;
+                if binding.name != *name {
+                    return Err(self.internal_error_here(&format!(
+                        "TIR's binding plan names `{}` where the statement binds `{name}`",
+                        binding.name
+                    )));
+                }
                 // The slot is reserved before the source is lowered: a static
                 // source's template may itself name earlier scoped bindings,
                 // and the layout must already contain this one for `T` to be
                 // addressable right after the statement.
                 self.scoped_type_binding_params
                     .push(binding.parameter.clone());
-                self.emit_scoped_type_binding(&binding);
+                self.emit_scoped_type_binding(&binding)?;
             }
 
             // `let PATTERN = init else { … };` — refutable binding lowered
@@ -12525,7 +12731,7 @@ impl LoweringContext<'_> {
                     .unwrap_or_else(|| self.pat_ty(pattern));
                 let scrutinee = self.builder.temp(scrutinee_ty);
                 if let Some(init) = initializer {
-                    self.lower_expr(init, Place::local(scrutinee));
+                    self.lower_expr(init, Place::local(scrutinee))?;
                 } else {
                     self.builder.assign(
                         Place::local(scrutinee),
@@ -12535,7 +12741,7 @@ impl LoweringContext<'_> {
 
                 let bb_match = self.builder.create_block();
                 let bb_fail = self.builder.create_block();
-                self.lower_pattern_test(scrutinee, pattern, bb_match, bb_fail);
+                self.lower_pattern_test(scrutinee, pattern, bb_match, bb_fail)?;
 
                 // Fail path: lower the else expression. TIR enforced that
                 // the else has type `!`, so this block has no successor and
@@ -12544,7 +12750,7 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_fail);
                 let else_ty = self.expr_ty(else_expr);
                 let else_dest = self.builder.temp(else_ty);
-                self.lower_expr(else_expr, Place::local(else_dest));
+                self.lower_expr(else_expr, Place::local(else_dest))?;
                 // If for any reason lowering produced a fall-through (e.g.
                 // recovery state with an Unknown-typed else), terminate the
                 // block with an unreachable so the CFG stays valid.
@@ -12556,7 +12762,7 @@ impl LoweringContext<'_> {
                 // No saved/restored locals — these flow forward like a
                 // plain `let`.
                 self.builder.set_current_block(bb_match);
-                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id));
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id))?;
             }
 
             AstStmt::Let {
@@ -12568,7 +12774,7 @@ impl LoweringContext<'_> {
                 let scrutinee = self.builder.temp(local_ty);
 
                 if let Some(init) = initializer {
-                    self.lower_expr(init, Place::local(scrutinee));
+                    self.lower_expr(init, Place::local(scrutinee))?;
                 } else {
                     self.builder.assign(
                         Place::local(scrutinee),
@@ -12576,7 +12782,7 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id));
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::Statement(stmt_id))?;
             }
 
             AstStmt::Let {
@@ -12599,14 +12805,14 @@ impl LoweringContext<'_> {
                 let local_ty = self.pat_ty(pattern);
                 let site = DefinitionSite::Statement(stmt_id);
                 let local = match &first_name {
-                    Some(name) => self.declare_binding(pattern, site, name, local_ty.clone()),
+                    Some(name) => self.declare_binding(pattern, site, name, local_ty.clone())?,
                     // A nameless pattern still evaluates its initializer.
                     None => self.builder.temp(local_ty.clone()),
                 };
 
                 let value = self.value_place(local);
                 if let Some(init) = initializer {
-                    self.lower_expr(init, value);
+                    self.lower_expr(init, value)?;
                 } else {
                     self.builder
                         .assign(value, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -12615,7 +12821,7 @@ impl LoweringContext<'_> {
                 // Additional chain-link bindings get their own locals that
                 // copy from the first. `let x: let y` ⇒ y = x at runtime.
                 for extra in names.iter().skip(1) {
-                    let alias = self.declare_binding(pattern, site, extra, local_ty.clone());
+                    let alias = self.declare_binding(pattern, site, extra, local_ty.clone())?;
                     let (alias_value, value) = (self.value_place(alias), self.value_place(local));
                     self.builder
                         .assign(alias_value, Rvalue::Use(Operand::Copy(value)));
@@ -12666,12 +12872,12 @@ impl LoweringContext<'_> {
                     // cost of one unused cell before the first test.
                     self.recell_per_iteration(&per_iteration_cells);
                 }
-                self.lower_condition(condition, bb_body, bb_exit);
+                self.lower_condition(condition, bb_body, bb_exit)?;
 
                 self.builder.set_current_block(bb_body);
                 let body_ty = self.expr_ty(body);
                 let body_temp = self.builder.temp(body_ty);
-                self.lower_expr(body, Place::local(body_temp));
+                self.lower_expr(body, Place::local(body_temp))?;
 
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(bb_after);
@@ -12680,7 +12886,7 @@ impl LoweringContext<'_> {
                 if let Some(after_stmt) = after {
                     self.builder.set_current_block(bb_after);
                     self.recell_per_iteration(&per_iteration_cells);
-                    self.lower_stmt(after_stmt);
+                    self.lower_stmt(after_stmt)?;
                 }
 
                 if !self.builder.is_current_terminated() {
@@ -12728,20 +12934,23 @@ impl LoweringContext<'_> {
                 // are re-lowered into a fresh local each pass. Mirrors
                 // `lower_if_let`'s scrutinee handling exactly.
                 self.builder.set_current_block(bb_header);
-                let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
-                    let op = self.lower_to_operand(scrutinee);
-                    let ty = self.expr_ty(scrutinee);
-                    self.operand_to_local(op, ty)
-                });
-                self.lower_pattern_test(scrutinee_local, pattern, bb_body, bb_exit);
+                let scrutinee_local = match self.try_resolve_to_local(scrutinee) {
+                    Some(local) => local,
+                    None => {
+                        let op = self.lower_to_operand(scrutinee)?;
+                        let ty = self.expr_ty(scrutinee);
+                        self.operand_to_local(op, ty)
+                    }
+                };
+                self.lower_pattern_test(scrutinee_local, pattern, bb_body, bb_exit)?;
 
                 // Body: bind pattern locals (declared per pass, so a captured
                 // binding gives each pass's closures their own cell), lower
                 // the body (result discarded), then jump back to the header.
                 self.builder.set_current_block(bb_body);
-                self.bind_pattern(scrutinee_local, pattern, DefinitionSite::Statement(stmt_id));
+                self.bind_pattern(scrutinee_local, pattern, DefinitionSite::Statement(stmt_id))?;
                 let body_temp = self.builder.temp(RuntimeTy::Void);
-                self.lower_expr(body, Place::local(body_temp));
+                self.lower_expr(body, Place::local(body_temp))?;
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(bb_header);
                 }
@@ -12766,16 +12975,24 @@ impl LoweringContext<'_> {
                     .and_then(|ty| self.iterable_view_for_tir_ty(ty));
 
                 if let Some(iterable_view) = iterable_view {
-                    self.lower_iterable_for_loop(stmt_id, binding, collection, body, iterable_view);
+                    self.lower_iterable_for_loop(
+                        stmt_id,
+                        binding,
+                        collection,
+                        body,
+                        iterable_view,
+                    )?;
                 } else {
-                    self.emit_panic_call("for loop collection is not iterable", collection);
+                    return Err(
+                        self.internal_error("for loop collection is not iterable", collection)
+                    );
                 }
             }
 
             AstStmt::Return(expr) => {
                 let ret = Local(0); // _0 is always the return place
                 match expr {
-                    Some(e) => self.lower_expr(e, Place::local(ret)),
+                    Some(e) => self.lower_expr(e, Place::local(ret))?,
                     // A bare `return` in a void function returns null; see
                     // `AstExpr::Return`.
                     None => self.builder.assign(
@@ -12784,7 +13001,7 @@ impl LoweringContext<'_> {
                     ),
                 }
                 // Run all pending defers (LIFO).
-                self.replay_defers_to_depth(0);
+                self.replay_defers_to_depth(0)?;
                 self.builder.goto(self.exit_block);
                 // Create a dead successor block for the builder cursor
                 // (subsequent statements in the same block-list are dead code)
@@ -12796,7 +13013,7 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Throw { value } => {
-                let val_op = self.lower_throw_operand(value);
+                let val_op = self.lower_throw_operand(value)?;
                 // Defers run via the block's unwind landing pads: the throw's PC is inside the
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
@@ -12815,7 +13032,7 @@ impl LoweringContext<'_> {
                     let target = loop_ctx.break_target;
                     let defer_depth = loop_ctx.defer_depth;
                     // Run defers declared in the loop body.
-                    self.replay_defers_to_depth(defer_depth);
+                    self.replay_defers_to_depth(defer_depth)?;
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -12827,7 +13044,7 @@ impl LoweringContext<'_> {
                     let target = loop_ctx.continue_target;
                     let defer_depth = loop_ctx.defer_depth;
                     // Run defers declared in the loop body.
-                    self.replay_defers_to_depth(defer_depth);
+                    self.replay_defers_to_depth(defer_depth)?;
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -12845,17 +13062,17 @@ impl LoweringContext<'_> {
             AstStmt::Assign { target, value } => {
                 let target_expr = &self.body.exprs[target];
                 if Self::is_runtime_id_path(target_expr) {
-                    self.lower_set_runtime_id(value);
+                    self.lower_set_runtime_id(value)?;
                 } else if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
-                    self.lower_assign_optional_chain(inner, value);
-                } else if self.try_lower_virtual_field_assign(target, value) {
+                    self.lower_assign_optional_chain(inner, value)?;
+                } else if self.try_lower_virtual_field_assign(target, value)? {
                     // Handled: the destination slot is only known once the
                     // receiver's impl is resolved, so there is no `Place` to
                     // assign through.
                 } else {
-                    let place = self.lower_lvalue(target);
-                    self.lower_expr(value, place);
+                    let place = self.lower_lvalue(target)?;
+                    self.lower_expr(value, place)?;
                 }
             }
 
@@ -12863,12 +13080,12 @@ impl LoweringContext<'_> {
                 let target_expr = &self.body.exprs[target];
                 if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
-                    self.lower_assign_op_optional_chain(inner, op, value);
-                } else if self.try_lower_virtual_field_assign_op(target, op, value) {
+                    self.lower_assign_op_optional_chain(inner, op, value)?;
+                } else if self.try_lower_virtual_field_assign_op(target, op, value)? {
                     // Handled — see `AstStmt::Assign`.
                 } else {
-                    let place = self.lower_lvalue(target);
-                    self.emit_assign_op(place, target, op, value);
+                    let place = self.lower_lvalue(target)?;
+                    self.emit_assign_op(place, target, op, value)?;
                 }
             }
 
@@ -12898,6 +13115,7 @@ impl LoweringContext<'_> {
         }
 
         self.builder.current_source_span = prev_span;
+        Ok(())
     }
 
     fn convert_assign_op(op: AstAssignOp) -> BinOp {
@@ -12915,31 +13133,25 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn lower_lvalue(&mut self, expr_id: AstExprId) -> Place {
+    fn lower_lvalue(&mut self, expr_id: AstExprId) -> Lowered<Place> {
         let expr = self.body.exprs[expr_id].clone();
         match &expr {
             AstExpr::Path(segments) if segments.len() == 1 => {
-                if let Some(place) = self.place_for_path(expr_id, &segments[0]) {
-                    place
-                } else {
-                    // Unresolved single-segment assignment target. This is
-                    // only reachable for programs TIR already rejected (an
-                    // unresolved name, or a special form like `$id` in a
-                    // position its TIR checks forbid). Fail loudly at runtime
-                    // instead of silently writing into a throwaway temp —
-                    // a silent temp here is how `$id = ...` once compiled to
-                    // a no-op (MIR has no compile-diagnostic channel).
-                    self.emit_panic_call(
+                // Unresolved single-segment assignment target: only reachable
+                // for programs TIR already rejected (an unresolved name, or a
+                // special form like `$id` in a position its TIR checks forbid)
+                // — a silent temp here is how `$id = ...` once compiled to a
+                // no-op.
+                self.place_for_path(expr_id, &segments[0]).ok_or_else(|| {
+                    self.internal_error(
                         &format!(
-                            "internal compiler error: MIR failed to resolve assignment \
+                            "MIR failed to resolve assignment \
                              target `{}` (TIR should have rejected this program)",
                             segments[0]
                         ),
                         expr_id,
-                    );
-                    let temp = self.builder.temp(RuntimeTy::Null);
-                    Place::Local(temp)
-                }
+                    )
+                })
             }
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 // Multi-segment path lvalue: `a.b` or `a.b.c`.
@@ -13000,25 +13212,25 @@ impl LoweringContext<'_> {
                     };
                     break;
                 }
-                current_place
+                Ok(current_place)
             }
             AstExpr::MemberAccess { base, member } => {
                 let base_id = *base;
                 let member_name = member.clone();
-                let base_place = self.lower_lvalue(base_id);
+                let base_place = self.lower_lvalue(base_id)?;
                 let base_ty = self.expr_ty(base_id);
                 if let RuntimeTy::Class(ref tn, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
-                            return Place::Field {
+                            return Ok(Place::Field {
                                 base: Box::new(base_place),
                                 field: idx,
-                            };
+                            });
                         }
                     }
-                    self.emit_panic_call(
+                    return Err(self.internal_error(
                         &format!(
-                            "internal compiler error: MIR failed to resolve member access \
+                            "MIR failed to resolve member access \
                              .{} against class definition '{}' (module_path: {:?}). \
                              This class should be in class_fields but isn't.",
                             member_name,
@@ -13026,10 +13238,7 @@ impl LoweringContext<'_> {
                             tn.module_path(),
                         ),
                         base_id,
-                    );
-                    // Dead code after panic — return a dummy place
-                    let dead = self.builder.temp(RuntimeTy::Null);
-                    return Place::Local(dead);
+                    ));
                 }
                 // Dynamic map access — only valid for map types, unknown, etc.
                 let key_local = self.builder.temp(RuntimeTy::String);
@@ -13037,17 +13246,17 @@ impl LoweringContext<'_> {
                     Place::local(key_local),
                     Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
                 );
-                Place::Index {
+                Ok(Place::Index {
                     base: Box::new(base_place),
                     index: key_local,
                     kind: IndexKind::Map,
-                }
+                })
             }
             AstExpr::Index { base, index } => {
                 let base_id = *base;
                 let index_id = *index;
-                let base_place = self.lower_lvalue(base_id);
-                let index_op = self.lower_to_operand(index_id);
+                let base_place = self.lower_lvalue(base_id)?;
+                let index_op = self.lower_to_operand(index_id)?;
                 let base_ty = self.expr_ty(base_id);
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
@@ -13057,18 +13266,18 @@ impl LoweringContext<'_> {
                 } else {
                     IndexKind::Map
                 };
-                Place::Index {
+                Ok(Place::Index {
                     base: Box::new(base_place),
                     index: index_local,
                     kind,
-                }
+                })
             }
             AstExpr::OptionalMemberAccess { base, member } => {
                 let base_id = *base;
                 let member_name = member.clone();
 
                 // Evaluate base once into a temp local
-                let base_op = self.lower_to_operand(base_id);
+                let base_op = self.lower_to_operand(base_id)?;
                 let base_ty = self.expr_ty(base_id);
                 let base_local = self.operand_to_local(base_op, base_ty.clone());
 
@@ -13082,10 +13291,13 @@ impl LoweringContext<'_> {
                 self.builder.assign(Place::local(test_local), is_null);
 
                 let bb_continue = self.builder.create_block();
-                let bb_null = *self
-                    .chain_null_exits
-                    .last()
-                    .expect("OptionalMemberAccess in lvalue must be inside OptionalChain");
+                let bb_null = *self.chain_null_exits.last().ok_or_else(|| {
+                    self.internal_error(
+                        "an optional member access in assignment position outside an optional \
+                         chain",
+                        expr_id,
+                    )
+                })?;
                 self.builder.branch(
                     Operand::Copy(Place::Local(test_local)),
                     bb_null,
@@ -13105,10 +13317,10 @@ impl LoweringContext<'_> {
                     );
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
-                            return Place::Field {
+                            return Ok(Place::Field {
                                 base: Box::new(base_place),
                                 field: idx,
-                            };
+                            });
                         }
                     }
                 }
@@ -13118,18 +13330,18 @@ impl LoweringContext<'_> {
                     Place::local(key_local),
                     Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
                 );
-                Place::Index {
+                Ok(Place::Index {
                     base: Box::new(base_place),
                     index: key_local,
                     kind: IndexKind::Map,
-                }
+                })
             }
             AstExpr::OptionalIndex { base, index } => {
                 let base_id = *base;
                 let index_id = *index;
 
                 // Evaluate base once into a temp local
-                let base_op = self.lower_to_operand(base_id);
+                let base_op = self.lower_to_operand(base_id)?;
                 let base_ty = self.expr_ty(base_id);
                 let base_local = self.operand_to_local(base_op, base_ty.clone());
 
@@ -13143,10 +13355,12 @@ impl LoweringContext<'_> {
                 self.builder.assign(Place::local(test_local), is_null);
 
                 let bb_continue = self.builder.create_block();
-                let bb_null = *self
-                    .chain_null_exits
-                    .last()
-                    .expect("OptionalIndex in lvalue must be inside OptionalChain");
+                let bb_null = *self.chain_null_exits.last().ok_or_else(|| {
+                    self.internal_error(
+                        "an optional index in assignment position outside an optional chain",
+                        expr_id,
+                    )
+                })?;
                 self.builder.branch(
                     Operand::Copy(Place::Local(test_local)),
                     bb_null,
@@ -13156,7 +13370,7 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_continue);
 
                 // Project index from the same temp local
-                let index_op = self.lower_to_operand(index_id);
+                let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();
@@ -13165,11 +13379,11 @@ impl LoweringContext<'_> {
                 } else {
                     IndexKind::Map
                 };
-                Place::Index {
+                Ok(Place::Index {
                     base: Box::new(Place::Local(base_local)),
                     index: index_local,
                     kind,
-                }
+                })
             }
             _ => {
                 let ty = self.expr_ty(expr_id);
@@ -13177,8 +13391,8 @@ impl LoweringContext<'_> {
                 // A projection assignment may use an arbitrary expression as
                 // its base (`store.require().info.title = ...`). Materialize
                 // that base exactly once before projecting through it.
-                self.lower_expr(expr_id, Place::Local(temp));
-                Place::Local(temp)
+                self.lower_expr(expr_id, Place::Local(temp))?;
+                Ok(Place::Local(temp))
             }
         }
     }
@@ -13193,14 +13407,17 @@ impl<'db> LoweringContext<'db> {
         scrutinee: AstExprId,
         arm_ids: &[baml_compiler2_ast::MatchArmId],
         dest: Place,
-    ) {
+    ) -> Lowered<()> {
         let is_exhaustive = self.tir_is_exhaustive_match(self.expr_metadata_key(expr_id));
 
-        let scrutinee_local = self.try_resolve_to_local(scrutinee).unwrap_or_else(|| {
-            let op = self.lower_to_operand(scrutinee);
-            let ty = self.expr_ty(scrutinee);
-            self.operand_to_local(op, ty)
-        });
+        let scrutinee_local = match self.try_resolve_to_local(scrutinee) {
+            Some(local) => local,
+            None => {
+                let op = self.lower_to_operand(scrutinee)?;
+                let ty = self.expr_ty(scrutinee);
+                self.operand_to_local(op, ty)
+            }
+        };
 
         let bb_join = self.builder.create_block();
 
@@ -13231,7 +13448,7 @@ impl<'db> LoweringContext<'db> {
             bb_join,
             SwitchOtherwise::Match { is_exhaustive },
             None,
-        );
+        )?;
         if !switched {
             // Whether any non-final arm's emitted test can reject a value the
             // static exhaustiveness proof counted as matched (a typevar
@@ -13253,11 +13470,12 @@ impl<'db> LoweringContext<'db> {
                 bb_join,
                 is_exhaustive,
                 backstop_last_arm,
-            );
+            )?;
         }
 
         self.match_scrutinee = saved_scrutinee;
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 
     /// Attempt to lower a match or catch as a Switch terminator.
@@ -13276,11 +13494,11 @@ impl<'db> LoweringContext<'db> {
         join: BlockId,
         otherwise: SwitchOtherwise,
         pre_created_blocks: Option<&[Option<BlockId>]>,
-    ) -> bool {
+    ) -> Lowered<bool> {
         use std::collections::HashSet;
 
         if arms.is_empty() {
-            return false;
+            return Ok(false);
         }
 
         let is_exhaustive = matches!(
@@ -13311,12 +13529,12 @@ impl<'db> LoweringContext<'db> {
         for (i, &(pattern, _body, guard)) in arms.iter().enumerate() {
             // Guards disqualify switch optimization
             if guard.is_some() {
-                return false;
+                return Ok(false);
             }
             // Narrowed bindings require NarrowBind's atomic test-and-bind
             // semantics, which Switch cannot preserve.
             if self.pattern_narrow_type(pattern).is_some() {
-                return false;
+                return Ok(false);
             }
 
             // Helpers that classify a pattern (the arm pattern itself, or a
@@ -13424,13 +13642,13 @@ impl<'db> LoweringContext<'db> {
                             &mut int_arms,
                             &mut seen_values,
                         ) {
-                            return false;
+                            return Ok(false);
                         }
                     }
                 }
                 AstPattern::Wildcard => {
                     if i != arms.len() - 1 {
-                        return false;
+                        return Ok(false);
                     }
                     otherwise_idx = Some(i);
                 }
@@ -13440,7 +13658,7 @@ impl<'db> LoweringContext<'db> {
                 // were handled by the `pattern_narrow_type` branch above.)
                 AstPattern::Bind { .. } => {
                     if i != arms.len() - 1 {
-                        return false;
+                        return Ok(false);
                     }
                     otherwise_idx = Some(i);
                 }
@@ -13453,7 +13671,7 @@ impl<'db> LoweringContext<'db> {
                         &mut int_arms,
                         &mut seen_values,
                     ) {
-                        return false;
+                        return Ok(false);
                     }
                 }
             }
@@ -13461,7 +13679,7 @@ impl<'db> LoweringContext<'db> {
 
         // Need at least one int arm to justify a switch.
         if int_arms.is_empty() {
-            return false;
+            return Ok(false);
         }
 
         // Reading a discriminant is only valid when every possible scrutinee
@@ -13469,14 +13687,14 @@ impl<'db> LoweringContext<'db> {
         if let Some(SwitchKind::EnumDiscriminant(enum_name)) = &switch_kind
             && !runtime_ty_is_enum_only(&self.builder.local_ty(scrutinee), enum_name)
         {
-            return false;
+            return Ok(false);
         }
 
         // TypeTag switches only pay off at 4+ arms (JumpTable). For fewer arms
         // the sequential `is_type` chain is more compact because the if-else
         // chain adds copy/pop stack management overhead per arm.
         if matches!(switch_kind, Some(SwitchKind::TypeTag)) && int_arms.len() < 4 {
-            return false;
+            return Ok(false);
         }
 
         // Exhaustiveness: for **match** TypeTag switches without a wildcard arm,
@@ -13542,8 +13760,8 @@ impl<'db> LoweringContext<'db> {
 
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
-                self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern));
-                self.lower_expr(body, dest.clone());
+                self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern))?;
+                self.lower_expr(body, dest.clone())?;
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
@@ -13612,8 +13830,8 @@ impl<'db> LoweringContext<'db> {
                 self.builder.set_current_block(bb_wildcard_body);
             }
             let (pattern, body, _) = arms[idx];
-            self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern));
-            self.lower_expr(body, dest);
+            self.bind_pattern(scrutinee, pattern, DefinitionSite::PatternBinding(pattern))?;
+            self.lower_expr(body, dest)?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
@@ -13694,7 +13912,7 @@ impl<'db> LoweringContext<'db> {
             arm_names,
         );
 
-        true
+        Ok(true)
     }
 
     fn lower_match_chain(
@@ -13705,7 +13923,7 @@ impl<'db> LoweringContext<'db> {
         join: BlockId,
         exhaustive: bool,
         backstop_last_arm: bool,
-    ) {
+    ) -> Lowered<()> {
         if arms.is_empty() {
             // No more arms to test. An exhaustive match cannot get here — some
             // arm matched — and says so, as the switch lowering's otherwise
@@ -13717,7 +13935,7 @@ impl<'db> LoweringContext<'db> {
             } else {
                 self.builder.goto(join);
             }
-            return;
+            return Ok(());
         }
 
         let arm = &arms[0];
@@ -13748,7 +13966,7 @@ impl<'db> LoweringContext<'db> {
             if backstop_last_arm && last_is_refutable {
                 let bb_body = self.builder.create_block();
                 let bb_trap = self.builder.create_block();
-                self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_trap);
+                self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_trap)?;
                 self.builder.set_current_block(bb_trap);
                 self.builder.unreachable();
                 self.builder.set_current_block(bb_body);
@@ -13757,12 +13975,12 @@ impl<'db> LoweringContext<'db> {
                 scrutinee,
                 arm.pattern,
                 DefinitionSite::PatternBinding(arm.pattern),
-            );
-            self.lower_expr(arm.body, dest);
+            )?;
+            self.lower_expr(arm.body, dest)?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
-            return;
+            return Ok(());
         }
 
         if let AstPattern::Or(parts) = self.body.patterns[arm.pattern].clone() {
@@ -13775,7 +13993,7 @@ impl<'db> LoweringContext<'db> {
                     self.builder.create_block()
                 };
 
-                self.lower_pattern_test(scrutinee, part, bb_body, bb_alt_next);
+                self.lower_pattern_test(scrutinee, part, bb_body, bb_alt_next)?;
 
                 self.builder.set_current_block(bb_body);
                 self.bind_pattern_inner(
@@ -13784,13 +14002,13 @@ impl<'db> LoweringContext<'db> {
                     arm.pattern,
                     part,
                     DefinitionSite::PatternBinding(arm.pattern),
-                );
+                )?;
                 if let Some(guard) = arm.guard {
                     let bb_guarded = self.builder.create_block();
-                    self.lower_condition(guard, bb_guarded, bb_next);
+                    self.lower_condition(guard, bb_guarded, bb_next)?;
                     self.builder.set_current_block(bb_guarded);
                 }
-                self.lower_expr(arm.body, dest.clone());
+                self.lower_expr(arm.body, dest.clone())?;
                 if !self.builder.is_current_terminated() {
                     self.builder.goto(join);
                 }
@@ -13801,33 +14019,34 @@ impl<'db> LoweringContext<'db> {
             }
 
             self.builder.set_current_block(bb_next);
-            self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
-            return;
+            self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm)?;
+            return Ok(());
         }
 
         let bb_body = self.builder.create_block();
         let bb_next = self.builder.create_block();
 
-        self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_next);
+        self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_next)?;
 
         self.builder.set_current_block(bb_body);
         self.bind_pattern(
             scrutinee,
             arm.pattern,
             DefinitionSite::PatternBinding(arm.pattern),
-        );
+        )?;
         if let Some(guard) = arm.guard {
             let bb_guarded = self.builder.create_block();
-            self.lower_condition(guard, bb_guarded, bb_next);
+            self.lower_condition(guard, bb_guarded, bb_next)?;
             self.builder.set_current_block(bb_guarded);
         }
-        self.lower_expr(arm.body, dest.clone());
+        self.lower_expr(arm.body, dest.clone())?;
         if !self.builder.is_current_terminated() {
             self.builder.goto(join);
         }
 
         self.builder.set_current_block(bb_next);
-        self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
+        self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm)?;
+        Ok(())
     }
 
     /// Whether lowering `pat`'s runtime test can *reject a value the static
@@ -14484,7 +14703,7 @@ impl<'db> LoweringContext<'db> {
         pat_id: AstPatId,
         success: BlockId,
         failure: BlockId,
-    ) {
+    ) -> Lowered<()> {
         let scrutinee = if self.atomic_pattern_test {
             let snapshot = self.builder.temp(self.builder.local_ty(scrutinee));
             self.builder.assign(
@@ -14508,9 +14727,9 @@ impl<'db> LoweringContext<'db> {
         {
             let saved = self.atomic_pattern_test;
             self.atomic_pattern_test = true;
-            self.lower_pattern_test(scrutinee, *sp, success, failure);
+            self.lower_pattern_test(scrutinee, *sp, success, failure)?;
             self.atomic_pattern_test = saved;
-            return;
+            return Ok(());
         }
         // Array `: T` ascription emits an `is_type` test before the
         // structural shape test below.
@@ -14599,7 +14818,7 @@ impl<'db> LoweringContext<'db> {
                     else {
                         unreachable!("guarded by matches! above");
                     };
-                    let enum_ref = self.enum_ref_of(qtn);
+                    let enum_ref = self.enum_ref_of(qtn)?;
                     let variant = variant.clone();
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
@@ -14627,7 +14846,7 @@ impl<'db> LoweringContext<'db> {
                     // `Slot<string>` value falls into a `Slot<int>` arm.
                     if Self::tir_ty_needs_interface_shape_test(&pat_tir_ty) {
                         self.emit_is_tir_type_branch(scrutinee, &pat_tir_ty, success, failure);
-                        return;
+                        return Ok(());
                     }
                     // A pattern type still carrying the enclosing function's
                     // TypeVars — a bare `T`, `T[]`, `map<_, T>`, a class like
@@ -14672,7 +14891,7 @@ impl<'db> LoweringContext<'db> {
                         let guard =
                             tir2_to_pattern_template(&pat_tir_ty, &self.runtime(), &generic_params);
                         self.emit_pattern_template_test(scrutinee, guard, success, failure);
-                        return;
+                        return Ok(());
                     }
                     // Other patterns keep the erased fast path (unchanged codegen).
                     let annotation_ty = self.runtime().convert(&pat_tir_ty);
@@ -14682,7 +14901,7 @@ impl<'db> LoweringContext<'db> {
             AstPattern::Or(sub_pats) => {
                 if sub_pats.is_empty() {
                     self.builder.goto(failure);
-                    return;
+                    return Ok(());
                 }
                 let n = sub_pats.len();
                 for (i, &sub_pat) in sub_pats.iter().enumerate() {
@@ -14691,7 +14910,7 @@ impl<'db> LoweringContext<'db> {
                     } else {
                         failure
                     };
-                    self.lower_pattern_test(scrutinee, sub_pat, success, next);
+                    self.lower_pattern_test(scrutinee, sub_pat, success, next)?;
                     if i + 1 < n {
                         self.builder.set_current_block(next);
                     }
@@ -14727,7 +14946,7 @@ impl<'db> LoweringContext<'db> {
                             field.pat,
                             &field.field,
                         ) {
-                            self.lower_pattern_test(field_local, field.pat, next, failure);
+                            self.lower_pattern_test(field_local, field.pat, next, failure)?;
                         } else {
                             self.builder.goto(failure);
                         }
@@ -14777,7 +14996,7 @@ impl<'db> LoweringContext<'db> {
                     failure,
                 );
                 if !has_nested_tests {
-                    return;
+                    return Ok(());
                 }
 
                 self.builder.set_current_block(after_len);
@@ -14795,7 +15014,7 @@ impl<'db> LoweringContext<'db> {
                     };
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.lower_pattern_test(elem_local, elem_pat, next, failure);
+                    self.lower_pattern_test(elem_local, elem_pat, next, failure)?;
                     if idx + 1 < element_count {
                         self.builder.set_current_block(next);
                     }
@@ -14814,7 +15033,7 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.lower_pattern_test(elem_local, elem_pat, next, failure);
+                    self.lower_pattern_test(elem_local, elem_pat, next, failure)?;
                     if elem_idx + 1 < element_count {
                         self.builder.set_current_block(next);
                     }
@@ -14830,10 +15049,11 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.lower_pattern_test(rest_local, rest_pat, success, failure);
+                    self.lower_pattern_test(rest_local, rest_pat, success, failure)?;
                 }
             }
         }
+        Ok(())
     }
 
     fn is_irrefutable_catch_all(&self, pat_id: AstPatId) -> bool {
@@ -14874,13 +15094,19 @@ impl<'db> LoweringContext<'db> {
 
     /// Bind the names `pat_id` introduces, registered under `site` — the
     /// construct HIR registered them for.
-    fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId, site: DefinitionSite) {
+    fn bind_pattern(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        site: DefinitionSite,
+    ) -> Lowered<()> {
         // Pass the root pat_id through recursion: HIR registers bindings
         // keyed by the OUTER pattern PatId (the let-stmt's pattern, the
         // match-arm's pattern, etc.), never by the inner Bind. To wire up
         // closure capture lookups correctly, we register the local against
         // that root.
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, site);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, site)?;
+        Ok(())
     }
 
     fn bind_pattern_inner(
@@ -14890,7 +15116,7 @@ impl<'db> LoweringContext<'db> {
         root: AstPatId,
         narrow_root: AstPatId,
         site: DefinitionSite,
-    ) {
+    ) -> Lowered<()> {
         let scrutinee = self
             .tested_pattern_values
             .get(&self.pat_metadata_key(pat_id))
@@ -14920,7 +15146,7 @@ impl<'db> LoweringContext<'db> {
                         .map(|ty| self.runtime().convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
-                let local = self.declare_binding(root, site, &name, ty);
+                let local = self.declare_binding(root, site, &name, ty)?;
                 let value = self.value_place(local);
                 self.builder.assign(
                     value,
@@ -14929,24 +15155,24 @@ impl<'db> LoweringContext<'db> {
                 // Recurse into the sub-pattern so inner bindings (e.g.
                 // `let x: let y` or `let x: Class { f }`) get emitted too.
                 if let Some(sp) = subpat {
-                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, site);
+                    self.bind_pattern_inner(bound_scrutinee, sp, root, sp, site)?;
                 }
             }
             AstPattern::Or(parts) => {
                 let mut bindings = Vec::new();
                 self.collect_pattern_bindings(pat_id, &mut bindings);
                 if bindings.is_empty() {
-                    return;
+                    return Ok(());
                 }
-                self.declare_or_pattern_bindings(pat_id, root, site);
-                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
+                self.declare_or_pattern_bindings(pat_id, root, site)?;
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site)?;
             }
             AstPattern::Class { fields, .. } => {
                 for f in fields {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
                     {
-                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, site);
+                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, site)?;
                     }
                 }
             }
@@ -14959,7 +15185,7 @@ impl<'db> LoweringContext<'db> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site)?;
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -14972,7 +15198,7 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, site);
+                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, site)?;
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -14981,11 +15207,12 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site);
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, site)?;
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
+        Ok(())
     }
 
     fn collect_pattern_bindings(&self, pat_id: AstPatId, out: &mut Vec<(Name, AstPatId)>) {
@@ -15035,13 +15262,14 @@ impl<'db> LoweringContext<'db> {
         pat_id: AstPatId,
         root: AstPatId,
         site: DefinitionSite,
-    ) {
+    ) -> Lowered<()> {
         let mut bindings = Vec::new();
         self.collect_pattern_bindings(pat_id, &mut bindings);
         for (name, bind_pat) in bindings {
             let ty = self.pat_ty(bind_pat);
-            self.declare_binding(root, site, &name, ty);
+            self.declare_binding(root, site, &name, ty)?;
         }
+        Ok(())
     }
 
     fn lower_or_pattern_assign_existing(
@@ -15051,10 +15279,10 @@ impl<'db> LoweringContext<'db> {
         root: AstPatId,
         narrow_root: AstPatId,
         site: DefinitionSite,
-    ) {
+    ) -> Lowered<()> {
         if parts.is_empty() {
             self.builder.unreachable();
-            return;
+            return Ok(());
         }
 
         let join = self.builder.create_block();
@@ -15067,10 +15295,10 @@ impl<'db> LoweringContext<'db> {
             } else {
                 self.builder.create_block()
             };
-            self.lower_pattern_test(scrutinee, part, body, next);
+            self.lower_pattern_test(scrutinee, part, body, next)?;
 
             self.builder.set_current_block(body);
-            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root, site);
+            self.assign_pattern_to_existing(scrutinee, part, root, narrow_root, site)?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
@@ -15083,6 +15311,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(failure);
         self.builder.unreachable();
         self.builder.set_current_block(join);
+        Ok(())
     }
 
     fn assign_pattern_to_existing(
@@ -15092,7 +15321,7 @@ impl<'db> LoweringContext<'db> {
         root: AstPatId,
         narrow_root: AstPatId,
         site: DefinitionSite,
-    ) {
+    ) -> Lowered<()> {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name, .. } => {
                 let local = self
@@ -15108,7 +15337,7 @@ impl<'db> LoweringContext<'db> {
                     .assign(value, Rvalue::Use(Operand::Copy(Place::Local(scrutinee))));
             }
             AstPattern::Or(parts) => {
-                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site);
+                self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root, site)?;
             }
             AstPattern::Class { fields, .. } => {
                 for field in fields {
@@ -15121,7 +15350,7 @@ impl<'db> LoweringContext<'db> {
                             root,
                             field.pat,
                             site,
-                        );
+                        )?;
                     }
                 }
             }
@@ -15134,7 +15363,7 @@ impl<'db> LoweringContext<'db> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site)?;
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -15145,7 +15374,7 @@ impl<'db> LoweringContext<'db> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat, site);
+                    self.assign_pattern_to_existing(rest_local, rest_pat, root, rest_pat, site)?;
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -15154,11 +15383,12 @@ impl<'db> LoweringContext<'db> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site);
+                    self.assign_pattern_to_existing(elem_local, elem_pat, root, elem_pat, site)?;
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
         }
+        Ok(())
     }
 }
 
@@ -15322,7 +15552,7 @@ impl LoweringContext<'_> {
         base: AstExprId,
         clauses: &[baml_compiler2_ast::CatchClause],
         dest: &Place,
-    ) {
+    ) -> Lowered<()> {
         use baml_compiler2_ast::CatchClauseKind;
 
         /// A clause's own bindings — `catch (e)` / `catch (e, trace)` — by
@@ -15340,20 +15570,20 @@ impl LoweringContext<'_> {
             ctx: &mut LoweringContext<'_>,
             binding: Option<&(Name, AstPatId)>,
             source: Option<Local>,
-        ) -> Option<Local> {
+        ) -> Lowered<Option<Local>> {
             let (Some((name, pattern)), Some(source)) = (binding, source) else {
-                return None;
+                return Ok(None);
             };
             let site = DefinitionSite::CatchBinding(*pattern);
             if !ctx.pattern_binding_is_captured(*pattern, site, name) {
-                ctx.bind_existing_local(*pattern, site, name, source);
-                return None;
+                ctx.bind_existing_local(*pattern, site, name, source)?;
+                return Ok(None);
             }
-            let local = ctx.declare_binding(*pattern, site, name, RuntimeTy::Unknown);
+            let local = ctx.declare_binding(*pattern, site, name, RuntimeTy::Unknown)?;
             let value = ctx.value_place(local);
             ctx.builder
                 .assign(value, Rvalue::Use(Operand::Copy(Place::Local(source))));
-            Some(local)
+            Ok(Some(local))
         }
 
         /// Create a clause's bindings on entry to one of its arms, returning
@@ -15364,10 +15594,10 @@ impl LoweringContext<'_> {
             error_local: Local,
             stack_trace_local: Option<Local>,
             clause: &ClauseBindings,
-        ) -> Option<Local> {
-            let error_copy = install_binding(ctx, clause.error.as_ref(), Some(error_local));
-            install_binding(ctx, clause.stack_trace.as_ref(), stack_trace_local);
-            error_copy
+        ) -> Lowered<Option<Local>> {
+            let error_copy = install_binding(ctx, clause.error.as_ref(), Some(error_local))?;
+            install_binding(ctx, clause.stack_trace.as_ref(), stack_trace_local)?;
+            Ok(error_copy)
         }
 
         let bb_join = self.builder.create_block();
@@ -15457,7 +15687,7 @@ impl LoweringContext<'_> {
         // itself is included for parity with the old `[body_entry_pc, ...)`
         // range — it can hold instructions from before the catch expression.
         let body_blocks_lo = self.builder.num_blocks();
-        self.lower_expr(base, dest.clone());
+        self.lower_expr(base, dest.clone())?;
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -15485,7 +15715,7 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_handler);
         let switch_rethrow_mark = self.catch_rethrow_locals.len();
         if let [clause] = clause_bindings.as_slice() {
-            let error_copy = install_clause_bindings(self, error_local, stack_trace_local, clause);
+            let error_copy = install_clause_bindings(self, error_local, stack_trace_local, clause)?;
             self.catch_rethrow_locals.push(error_local);
             self.catch_rethrow_locals.extend(error_copy);
         }
@@ -15500,14 +15730,14 @@ impl LoweringContext<'_> {
                     needs_throw_if_panic,
                 },
                 None,
-            );
+            )?;
         self.catch_rethrow_locals.truncate(switch_rethrow_mark);
         if lowered_as_switch {
             self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
                 .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
                 .collect();
             self.builder.set_current_block(bb_join);
-            return;
+            return Ok(());
         }
 
         // Fallback: sequential pattern-test chain.
@@ -15534,7 +15764,7 @@ impl LoweringContext<'_> {
             }
 
             let bb_arm_next = self.builder.create_block();
-            self.lower_pattern_test(error_local, arm.pattern, body_block, bb_arm_next);
+            self.lower_pattern_test(error_local, arm.pattern, body_block, bb_arm_next)?;
             self.builder.set_current_block(bb_arm_next);
         }
 
@@ -15552,16 +15782,16 @@ impl LoweringContext<'_> {
                 error_local,
                 stack_trace_local,
                 &clause_bindings[clause_idx],
-            );
+            )?;
             self.bind_pattern(
                 error_local,
                 arm.pattern,
                 DefinitionSite::PatternBinding(arm.pattern),
-            );
+            )?;
             let rethrow_mark = self.catch_rethrow_locals.len();
             self.catch_rethrow_locals.push(error_local);
             self.catch_rethrow_locals.extend(error_copy);
-            self.lower_expr(arm.body, dest.clone());
+            self.lower_expr(arm.body, dest.clone())?;
             self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
@@ -15572,6 +15802,7 @@ impl LoweringContext<'_> {
             .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
             .collect();
         self.builder.set_current_block(bb_join);
+        Ok(())
     }
 }
 
@@ -15581,20 +15812,24 @@ impl LoweringContext<'_> {
 ///
 /// The body has arity 0 and contains only the initializer expression.
 /// Used by `compile_init_function` in the emit crate to compile let initializers
-/// into bytecode for the `$init` function.
+/// into bytecode for the `$init` function. `Ok(None)` is a `let` with no
+/// initializer; `Err` is an internal inconsistency — see [`lower_function`].
 pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
-) -> Option<(MirFunctionBody<'db>, Vec<MirFunction<'db>>)> {
+) -> Result<Option<LoweredLetBody<'db>>, MirInternalError> {
     lower_let_body_impl(db, let_loc, opt)
 }
+
+/// A `let` initializer's body with the lambdas lowered inside it.
+pub type LoweredLetBody<'db> = (MirFunctionBody<'db>, Vec<MirFunction<'db>>);
 
 fn lower_let_body_impl<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
-) -> Option<(MirFunctionBody<'db>, Vec<MirFunction<'db>>)> {
+) -> Result<Option<LoweredLetBody<'db>>, MirInternalError> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
@@ -15602,11 +15837,11 @@ fn lower_let_body_impl<'db>(
         LetBody::Expr(expr_body) => {
             let mut ctx =
                 LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
-            let mir_body = ctx.lower_let_body_inner();
+            let mir_body = ctx.lower_let_body_inner()?;
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
-            Some((mir_body, lambdas))
+            Ok(Some((mir_body, lambdas)))
         }
-        LetBody::Missing => None,
+        LetBody::Missing => Ok(None),
     }
 }
 
@@ -15617,12 +15852,18 @@ fn lower_let_body_impl<'db>(
 /// main thread's re-query is a cache hit branded with its own `'db` — see
 /// `lower_seed_mirs` in the emit crate. `no_eq`: nothing tracked consumes the
 /// output, so backdating is inert and the MIR tree carries no `PartialEq`.
+///
+/// Lowering runs on CHECKED programs only, so it cannot fail on a user's
+/// account: `Err` is an internal inconsistency between what the checker
+/// recorded and what lowering finds. Such a function has no MIR — never a
+/// placeholder body that compiles and misbehaves when run — and the compile
+/// fails with the error.
 #[salsa::tracked(returns(ref), no_eq)]
 pub fn lower_function<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
-) -> MirFunction<'db> {
+) -> Result<MirFunction<'db>, MirInternalError> {
     lower_function_impl(db, func_loc, opt)
 }
 
@@ -15630,7 +15871,7 @@ fn lower_function_impl<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
-) -> MirFunction<'db> {
+) -> Result<MirFunction<'db>, MirInternalError> {
     let body = baml_compiler2_hir::body::function_body(db, func_loc);
     let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc);
     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
@@ -15671,16 +15912,16 @@ fn lower_function_impl<'db>(
             } else {
                 0
             };
-            MirFunction {
+            Ok(MirFunction {
                 arity: arity + extra_arity,
                 span: None,
                 identity: MirFunctionId::Declared(func_loc),
                 kind: MirFunctionKind::Builtin(*kind),
                 lambdas: vec![],
                 signature: None,
-            }
+            })
         }
-        FunctionBody::Missing => MirFunction {
+        FunctionBody::Missing => Ok(MirFunction {
             arity,
             span: None,
             identity: MirFunctionId::Declared(func_loc),
@@ -15706,6 +15947,6 @@ fn lower_function_impl<'db>(
             }),
             lambdas: vec![],
             signature: None,
-        },
+        }),
     }
 }

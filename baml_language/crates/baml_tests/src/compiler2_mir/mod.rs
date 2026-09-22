@@ -32,7 +32,9 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
     let mut output = String::new();
 
     for func_loc in functions {
-        let mir = lower_function(db, func_loc, OptLevel::Two);
+        let mir = lower_function(db, func_loc, OptLevel::Two)
+            .as_ref()
+            .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
         writeln!(output, "{}", display_function(db, mir)).unwrap();
     }
 
@@ -58,7 +60,9 @@ function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int thro
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -126,7 +130,9 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -210,7 +216,9 @@ function main() -> reflect.Type {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -293,6 +301,8 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
             .find(|&&loc| function_data(&db, loc).name.as_str() == name)
             .unwrap_or_else(|| panic!("{name} function"));
         lower_function(&db, loc, OptLevel::Two)
+            .as_ref()
+            .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"))
     };
 
     for name in ["indirect", "optional"] {

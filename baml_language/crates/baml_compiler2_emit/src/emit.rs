@@ -1915,6 +1915,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 baml_compiler2_mir::function_link_name(self.db, func)
             );
         }
+        // A method an impl of a SERVED package provides is slotted by no lane:
+        // it is reached only through its impl rule, by dispatch. One arriving
+        // here was lowered as a direct reference, which nothing can link.
+        if slot.is_none()
+            && let DeclRef::External(row) = func
+            && row.impl_block(self.db).is_some()
+        {
+            panic!(
+                "internal compiler error: `{}` is provided by an impl of a package served from \
+                 its interface, so no lane slots it; it must be reached through its impl rule, \
+                 never referenced directly",
+                baml_compiler2_mir::function_link_name(self.db, func)
+            );
+        }
         if slot.is_some() {
             // The incremental edge grain is the item's last-segment name —
             // rendered here only for the record.

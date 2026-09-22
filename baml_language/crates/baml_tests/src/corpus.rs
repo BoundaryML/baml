@@ -180,7 +180,9 @@ fn render_selected_mir(db: &ProjectDatabase, file: SourceFile, names: &[&str], o
         let name = &file.text(db)[name_span];
         if names.contains(&name) {
             found.insert(name.to_owned());
-            let mir = lower_function(db, func_loc, OptLevel::Two);
+            let mir = lower_function(db, func_loc, OptLevel::Two)
+                .as_ref()
+                .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
             writeln!(out, "{}", display_function(db, mir)).unwrap();
         }
     }
