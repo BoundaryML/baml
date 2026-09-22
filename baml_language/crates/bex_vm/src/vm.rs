@@ -4304,6 +4304,24 @@ impl BexVm {
         }
     }
 
+    /// View a `Value` as a [`BigintOperand`] if it is numerically a bigint or
+    /// an `int`: an `int` stays a small `i64` operand, a heap `Object::Bigint`
+    /// stays a pointer. Returns `None` for anything else (float, string, …).
+    ///
+    /// Used by the generic arithmetic path (`exec_binop`) so bigint arithmetic
+    /// whose static types were erased — e.g. spawn-capture-derived operands,
+    /// which emit deliberately de-specializes — evaluates through
+    /// `bigint_binop`, matching the specialized `*Bigint` opcodes.
+    fn value_as_bigint_operand(&self, v: Value) -> Option<BigintOperand> {
+        if let Some(n) = v.as_int() {
+            Some(BigintOperand::Int(n))
+        } else if let Some(ptr) = v.as_object_ptr() {
+            matches!(self.get_object(ptr), Object::Bigint(_)).then_some(BigintOperand::Heap(ptr))
+        } else {
+            None
+        }
+    }
+
     /// Reconstruct the original `Value` for a [`BigintOperand`].
     ///
     /// Used to populate panic payloads (e.g. `DivisionByZero`) without
@@ -7624,6 +7642,21 @@ impl BexVm {
                 }
             };
             Value::object(self.alloc_float(f))
+        } else if let (Some(l), Some(r)) = (
+            self.value_as_bigint_operand(left),
+            self.value_as_bigint_operand(right),
+        ) {
+            // Bigint arithmetic reached via the generic path: an operand's
+            // static `bigint` type was erased (spawn-capture-derived operands
+            // are deliberately de-specialized — see emit's
+            // `binary_operands_can_use_specialized_op`), so emit produced a
+            // generic `BinOp` rather than `AddBigint`/`SubBigint`/…. The `int`
+            // operand of a mix is widened at the point of use; both operands
+            // being `int` is already handled by the first arm above, so at
+            // least one is a heap bigint here. Delegating to `bigint_binop`
+            // keeps semantics (div-by-zero, shift panics, alloc caps)
+            // identical to the specialized opcodes.
+            self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
