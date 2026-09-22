@@ -517,6 +517,14 @@ function nondeterministic_items() -> string[] throws never {
 /// seed, so four seeds left an item's other direction unchecked about one
 /// time in eight, while a foil is the other direction by construction and is
 /// checked every time.
+///
+/// That reasoning is about the direction and not about the member. Which
+/// fact of a shape an item serves is a second coin, and two seeds leave one
+/// of them unasked here about half the time. This gate is for the status an
+/// item declares — a divergence that has been mended, a verified item that
+/// has not. Holding every fact a learner can be shown to the compiler is
+/// `unverified_facts` in the bank suite, which enumerates the members of a
+/// shape rather than drawing them.
 function nonconforming_items() -> string[] throws never {
     root.bank.items().filter_map((item) -> {
         let report = root.engine.verify_item(item, 2);

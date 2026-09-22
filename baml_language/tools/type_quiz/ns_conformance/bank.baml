@@ -907,3 +907,53 @@ test "bank: every item answers both ways" {
     assert.equal(items_answering_report(), "always=0 never=0 both=40")
 }
 
+// ─── every fact reaches the compiler ─────────────────────────────────────────
+
+/// Every fact the bank can serve, both directions, over the first `seeds`
+/// seeds of its shape, put to the compiler.
+///
+/// The item gate — `conforms`, in the engine suite — asks an item for the
+/// case it serves, and which fact of a shape that is falls to a coin. Two
+/// seeds of a two-member item therefore leave one of its facts unasked about
+/// half the time, and `deal` being a pure function of its seed, permanently
+/// rather than flakily: the fact stays unasked until the seeds move. Raising
+/// the seed count would make the gap unlikely, never impossible, so this
+/// enumerates the members instead of drawing them.
+///
+/// The two gates answer different questions and both are wanted. That one
+/// holds an item to the status it declares, divergences and foils included;
+/// this one holds every fact a learner can be shown to agreeing with the
+/// compiler, which is the claim the tool is built on.
+///
+/// Every shape is served as a `Verified` item (`registry.items()`), so every
+/// member must agree. A shape that ever declared a divergence would want
+/// reconciling here and at the gate alike.
+function unverified_facts(seeds: int) -> string[] throws never {
+    root.bank.shapes().flat_map((shape) -> {
+        let members = shape.members();
+        let id = `flow/${shape.name}`;
+        baml.iter.Range.new(0, seeds)
+            .flat_map((i) -> {
+                let none: string[] = [];
+                let dealt = root.bank.deal(shape, root.algebra.all_sites(), root.engine.seed_for(id, i))
+                    ?? return none;
+                baml.iter.Range.new(0, dealt.all.length()).collect().flat_map((m) -> {
+                    [false, true].filter_map((reversed) -> {
+                        let case = root.bank.flowed(dealt.all[m], reversed).case;
+                        let outcome = root.engine.verify(case);
+                        if (root.engine.agrees(outcome)) {
+                            null
+                        } else {
+                            `${members[m].name}#${i} reversed=${reversed}: ${outcome}`
+                        }
+                    })
+                })
+            })
+            .collect()
+    })
+}
+
+test "bank: every fact the bank can serve agrees with the compiler" {
+    assert.equal(unverified_facts(3).join("\n"), "")
+}
+

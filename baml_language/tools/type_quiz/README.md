@@ -328,10 +328,13 @@ mise run type-quiz-lint    # layering, banned APIs, wildcard arms
 mise run fmt-type-quiz     # the formatter this package is kept under
 ```
 
-`crates/baml_tests/tests/type_quiz.rs` runs the suite in CI, and the
-`type-quiz-lint` prek hook runs the lint after the formatter. Both of those
-and the `mise` task keep the CLI's home, cache and profile streams under
-`target/`. Invoking `baml-cli test --from tools/type_quiz` directly instead
+`crates/baml_tests/tests/type_quiz.rs` runs all three in CI: the suite, the
+lint, and a check that every source is already what the formatter would
+write. They are tests rather than hooks because a hook gates a commit on the
+one machine that has it installed, and these gate a merge. The formatter
+itself stays a prek hook as well, since a hook can fix what a check can only
+report. Both of those and the `mise` task keep the CLI's home, cache and
+profile streams under `target/`. Invoking `baml-cli test --from tools/type_quiz` directly instead
 leaves a few hundred megabytes of them in `tools/type_quiz/.baml`, which the
 CLI marks ignored but does not clean up.
 
