@@ -31,7 +31,7 @@ jobs:
     env:
       PRODUCT_METRICS_DASHBOARD_URL: https://boundary-product-metrics.fly.dev/
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
-      SLACK_CHANNEL_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.channel == 'sam-sandbox' && 'C07UTQN7N1X' || 'C03KV1PJ6EM' }}
+      SLACK_CHANNEL_NAME: ${{ inputs.channel || 'general' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
