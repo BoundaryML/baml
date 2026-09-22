@@ -1315,9 +1315,9 @@ impl MirFunctionId<'_> {
     }
 
     /// The spelling a nested synthetic function names its owner by: the
-    /// declaration's link-name tail ([`crate::lower::definition_short_name`]
-    /// — `f`, `Class.m`, `Interface.m`, `<(target as iface)>.m`), or the
-    /// owner's own synthetic spelling.
+    /// declaration's link-name tail (`definition_short_name` — `f`,
+    /// `Class.m`, `Interface.m`, `<(target as iface)>.m`), or the owner's
+    /// own synthetic spelling.
     pub fn short_name(&self, db: &dyn crate::Db) -> String {
         match self {
             MirFunctionId::Declared(func) => crate::lower::definition_short_name(

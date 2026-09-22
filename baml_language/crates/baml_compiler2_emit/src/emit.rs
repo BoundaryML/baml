@@ -3422,6 +3422,14 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // anonymous or misidentified object literal (e.g., `null { }` from
             // an ambiguous if-condition). Emit a null constant as a fallback so
             // compilation doesn't panic; the runtime behavior is best-effort.
+            // BUG: a CHECKED program reaches this arm too, and then constructs
+            // a silent `null`: a runtime-mounted class the link stub skipped
+            // (its own name or a field name is not a BAML identifier) that a
+            // consumer can still name — through a spellable export alias, or
+            // by omitting the unspellable field when it is optional. The enum
+            // twin (`Constant::EnumVariant`) is refused at the mount instead;
+            // this one dies with stub generation, once class objects are
+            // reached by identity.
             let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
             let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
             self.set_operand(

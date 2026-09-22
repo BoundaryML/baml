@@ -1395,8 +1395,16 @@ impl<'db> LowerCtx<'db> {
         if segments.first().is_some_and(|root| root.as_str() == "json")
             && let Some(baml) = self.accessible_package(&Name::new("baml"))
         {
-            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
             let namespace = &segments[..segments.len() - 1];
+            // Served `baml` (the precompiled stdlib of a runtime compile)
+            // answers from its interface, exactly as the package-prefixed
+            // spelling above and the value shorthand do.
+            if is_served_from_interface(self.db, baml) {
+                return crate::package_interface::mounted_interface(self.db, baml)?
+                    .lookup_type(namespace, item)
+                    .map(|exported| ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
+            }
+            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
             let visible = self.package_items.root == baml
                 || crate::package_interface::package_interface(self.db, baml)
                     .lookup_type(namespace, item)

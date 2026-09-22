@@ -246,7 +246,7 @@ fn extern_interface_loc<'db>(
         .then(|| ExternInterfaceLoc::new(db, head.clone()))
 }
 
-/// [`extern_class_loc`] for a package served from its interface.
+/// `extern_class_loc` for a package served from its interface.
 pub fn mounted_class_loc<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
@@ -254,7 +254,7 @@ pub fn mounted_class_loc<'db>(
     served(db, head.root()).then(|| extern_class_loc(db, head))?
 }
 
-/// [`extern_enum_loc`] for a package served from its interface.
+/// `extern_enum_loc` for a package served from its interface.
 pub fn mounted_enum_loc<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,
@@ -262,7 +262,7 @@ pub fn mounted_enum_loc<'db>(
     served(db, head.root()).then(|| extern_enum_loc(db, head))?
 }
 
-/// [`extern_interface_loc`] for a package served from its interface.
+/// `extern_interface_loc` for a package served from its interface.
 pub fn mounted_interface_loc<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     head: &DeclName,

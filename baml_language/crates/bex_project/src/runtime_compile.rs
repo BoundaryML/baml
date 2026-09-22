@@ -845,6 +845,14 @@ fn enrich_runtime_mount(
     // decompose to an external object reference; runtime linking resolves it
     // to the live declaration. Source-backed lookup wins before the mounted
     // interface in HIR, so preserve spellable field types here as well.
+    // BUG: a class row this arm skips is still NAMEABLE by a consumer — under
+    // a spellable export alias (the alias row inserted below), or by its own
+    // name when only a field is unspellable and that field is optional — and
+    // a literal through that name emits a silent `null` (emit's
+    // `alloc_class_instance` fall-open). The enum arm refuses such a row at
+    // the mount; the class refusal was withheld on the premise that naming
+    // the class requires spelling the unspellable thing, which the two
+    // shapes above disprove. Dies with stub generation.
     for (name, row) in &minted_rows {
         match row {
             ExportedType::Class { fields, .. }

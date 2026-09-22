@@ -658,7 +658,7 @@ impl std::fmt::Display for ImportError {
 
 /// A wire interface as seen from `root`: the artifact's own declarations
 /// are `root`'s, its dependencies resolve through `root`'s edges, and every
-/// row is the row its key says it is ([`validate_row_identities`]).
+/// row is the row its key says it is (`validate_row_identities`).
 ///
 /// Coherence AMONG the rows is NOT judged here, beyond the degenerate case
 /// of two rows with ONE identity, which needs no oracle
