@@ -14,18 +14,16 @@ pub(crate) struct EngineTelemetry {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) recording_id: Option<btel_publisher::RecordingId>,
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) file_sink: Option<Arc<btel_file::FileSink>>,
+    pub(super) delivery: Option<super::telemetry::RecordingDelivery>,
 }
 impl EngineTelemetry {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         let processing = self.runtime.result();
-        let Some(sink) = &self.file_sink else {
+        let Some(sink) = &self.delivery else {
             return processing;
         };
-        let delivery = sink
-            .result()
-            .map(|r| r.map_err(|e| btel_processor::RuntimeError(e.to_string())));
+        let delivery = sink.result();
         match (processing, delivery) {
             (_, Some(Err(error))) | (Some(Err(error)), _) => Some(Err(error)),
             (Some(Ok(())), Some(Ok(()))) => Some(Ok(())),

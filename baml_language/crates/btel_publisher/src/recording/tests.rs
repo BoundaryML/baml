@@ -211,10 +211,10 @@ fn deadlines_start_once_do_not_slide_and_do_not_emit_empty_files() {
     .unwrap();
     metadata(&mut p, thread, function, path);
     p.after_batch(2);
-    let deadline = p.deadline.unwrap();
+    let deadline = p.builder.deadline.unwrap();
     p.aggregate(delta(path));
     p.after_batch(1);
-    assert_eq!(p.deadline, Some(deadline));
+    assert_eq!(p.builder.deadline, Some(deadline));
     p.service(
         deadline.checked_sub(Duration::from_nanos(1)).unwrap(),
         false,
@@ -235,7 +235,7 @@ fn sequence_exhaustion_never_wraps_or_reuses_a_file_number() {
         files.borrow_mut().push(f);
     })
     .unwrap();
-    p.next_sequence = NonZeroU64::new(u64::MAX);
+    p.builder.next_sequence = NonZeroU64::new(u64::MAX);
     p.aggregate(delta(CallPathId::new_non_root(999).unwrap()));
     p.finish_recording().unwrap();
     assert_eq!(files.borrow()[0].sequence().get(), u64::MAX);
@@ -374,7 +374,7 @@ fn encoded_sections_survive_growth_and_thread_switches() {
             },
         );
     }
-    let capacity = p.buffer.spans.capacity();
+    let capacity = p.builder.buffer.spans.capacity();
     assert!(
         capacity > 4096,
         "exercise relocation with open message lengths"
@@ -389,7 +389,7 @@ fn encoded_sections_survive_growth_and_thread_switches() {
             captured_inputs: None,
         },
     );
-    p.seal().unwrap();
+    p.finish_recording().unwrap();
     let file = decode(&files.borrow()[0]);
     let sections = file.spans.unwrap().sections;
     assert_eq!(
@@ -425,7 +425,7 @@ fn encoded_sections_survive_growth_and_thread_switches() {
             captured_inputs: None,
         },
     );
-    p.seal().unwrap();
+    p.finish_recording().unwrap();
     assert_eq!(
         decode(&files.borrow()[1]).spans.unwrap().sections[0].thread_id,
         a.get()
@@ -449,33 +449,33 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     };
     p.before_batch(8);
     assert_eq!(
-        p.buffer.spans.capacity(),
+        p.builder.buffer.spans.capacity(),
         0,
         "timing batches must not reserve span storage"
     );
     p.aggregate(delta(path));
     p.span(thread, &mut event);
-    let capacity = p.buffer.spans.capacity();
+    let capacity = p.builder.buffer.spans.capacity();
     assert!(capacity >= 8 * btel_settings::encoding::MAX_EVENT_BYTES);
     for _ in 1..8 {
         p.span(thread, &mut event);
-        assert_eq!(p.buffer.spans.capacity(), capacity);
+        assert_eq!(p.builder.buffer.spans.capacity(), capacity);
     }
     p.after_batch(8);
     p.before_batch(8);
     p.span(thread, &mut event);
-    assert!(p.span_credit > 0);
+    assert!(p.builder.span_credit > 0);
     p.flush();
-    assert_eq!(p.span_credit, 0);
-    assert_eq!(p.pending_span_reservation, 0);
-    assert_eq!(p.buffer.spans.capacity(), 0);
+    assert_eq!(p.builder.span_credit, 0);
+    assert_eq!(p.builder.pending_span_reservation, 0);
+    assert_eq!(p.builder.buffer.spans.capacity(), 0);
     p.span(thread, &mut event); // Standalone callback must re-admit fresh storage.
     p.flush();
     p.before_batch(1024);
     p.before_span_chunk(1);
     p.span(thread, &mut event);
     assert_eq!(
-        p.buffer.spans.capacity(),
+        p.builder.buffer.spans.capacity(),
         256,
         "reserve for actual records, not chunk capacity"
     );
@@ -537,13 +537,13 @@ fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
                 });
             }
         }
-        let hint = p.buffer.encoded_size_hint();
+        let hint = p.builder.buffer.encoded_size_hint();
         p.flush();
         let files = files.borrow();
         let file = files.last().unwrap();
         assert!(hint >= file.bytes().len());
         assert!(hint - file.bytes().len() <= settings::FILE_ENVELOPE_BYTES);
-        assert_eq!(p.buffer.encoded_size_hint(), 0);
+        assert_eq!(p.builder.buffer.encoded_size_hint(), 0);
         if round > 0 {
             let entries = decode(file).aggregates.unwrap().entries;
             assert_eq!(entries.len(), 2);
@@ -573,7 +573,7 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
     let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
     let mut bytes_before_last_batch = 0;
     for _ in 0..1024 {
-        bytes_before_last_batch = p.buffer.encoded_size_hint();
+        bytes_before_last_batch = p.builder.buffer.encoded_size_hint();
         for _ in 0..8 {
             let thread = allocate_telemetry_id();
             p.span(

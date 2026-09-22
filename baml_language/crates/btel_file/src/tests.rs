@@ -27,6 +27,44 @@ fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
 }
 
 #[test]
+fn local_publisher_finishes_encoding_before_disk_drain() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let expected = files(id, 1).pop().unwrap();
+    let expected_bytes = expected.bytes().to_vec();
+    let sink = FileSink::start(
+        root.path().to_owned(),
+        FileSinkConfig::default(),
+        move |file| {
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(file.bytes(), expected_bytes);
+            Ok(())
+        },
+        |_| {},
+    )
+    .unwrap();
+    let builder = btel_publisher::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
+    let mut publisher = LocalPublisher::new(builder, sink);
+    let sink = publisher.sink().unwrap().clone();
+    publisher.aggregate(AggregateDelta {
+        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
+        count: 1,
+        total_duration: ClockDuration::from_ticks(3),
+        total_io_duration: AwaitDuration::ZERO,
+    });
+    publisher.finish();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(sink.result(), None);
+    drop(publisher);
+    release.send(()).unwrap();
+    sink.finish().unwrap();
+    assert_eq!(sink.result(), Some(Ok(())));
+}
+
+#[test]
 fn writes_exact_publisher_bytes_and_finish_is_idempotent() {
     let root = tempfile::tempdir().unwrap();
     let id = RecordingId::generate();

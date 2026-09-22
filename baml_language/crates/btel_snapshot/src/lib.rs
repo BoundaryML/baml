@@ -18,6 +18,7 @@ mod encoding;
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION};
 mod hash;
 pub use hash::SnapshotId;
+mod memory;
 
 macro_rules! index {
     ($name:ident) => {

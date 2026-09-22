@@ -82,6 +82,27 @@ impl BexStr {
         self.len() == 0
     }
 
+    /// Heap allocation bytes retained by this string, excluding `Self` and
+    /// allocator metadata. Shared backing is charged in full, including the
+    /// entire parent of a slice. Concatenations are flattened, as by `as_bytes`,
+    /// so subsequent access cannot increase the retained backing.
+    ///
+    /// Returns `None` on arithmetic overflow.
+    pub fn retained_heap_bytes(&self) -> Option<usize> {
+        fn flat_bytes(flat: &FlatStr) -> Option<usize> {
+            std::mem::size_of::<FlatStr>()
+                .checked_add(2 * std::mem::size_of::<usize>())?
+                .checked_add(flat.data.len())
+        }
+        match self {
+            Self::Inline { .. } => Some(0),
+            Self::Flat(flat) | Self::Slice { parent: flat, .. } => flat_bytes(flat),
+            Self::Concat(node) => std::mem::size_of::<ConcatNode>()
+                .checked_add(2 * std::mem::size_of::<usize>())?
+                .checked_add(flat_bytes(&node.flatten())?),
+        }
+    }
+
     /// Byte length. O(1) for all variants.
     pub fn len(&self) -> usize {
         match self {
@@ -142,7 +163,7 @@ impl BexStr {
     /// XXH3-128 (seed zero) of the logical UTF-8 bytes. Heap-backed strings
     /// cache the result; inline strings compute it directly. The first call on
     /// a concat flattens it, sharing the flat allocation/cache with its clones.
-    /// This is separate from `Hash`, whose Borrow<str> contract must be retained.
+    /// This is separate from `Hash`, whose `Borrow<str>` contract must be retained.
     pub fn content_hash(&self) -> u128 {
         match self {
             Self::Inline { len, data } => xxhash_rust::xxh3::xxh3_128(&data[..*len as usize]),

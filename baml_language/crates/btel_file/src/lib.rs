@@ -28,6 +28,8 @@ pub use btel_settings::local_files::FileSinkConfig;
 
 mod cas;
 pub use cas::cas_path;
+mod publisher;
+pub use publisher::LocalPublisher;
 mod reader;
 pub use reader::{ReadIssue, RecordingRead, read_directory};
 

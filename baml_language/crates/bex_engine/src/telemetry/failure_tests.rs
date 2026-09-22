@@ -32,32 +32,28 @@ fn engine_with_writer(
             preallocate: true,
         },
         |control| {
-            let failure = control.clone();
-            let mut writer = btel_file::FileSink::with_test_writer(
+            let failure = control;
+            let writer = btel_file::FileSink::with_test_writer(
                 PathBuf::new(),
                 btel_file::FileSinkConfig::default(),
                 write,
                 move |error| failure.disable(btel_processor::RuntimeError(error.to_string())),
             )?;
-            let sender = writer.take_sender();
-            sink = Some(Arc::new(writer));
-            Ok(RecordingPublisher::new(
+            let builder = RecordingBuilder::new(
                 id,
                 RecordingConfig {
                     target_bytes: nz(1),
                     ..RecordingConfig::default()
                 },
-                move |file| {
-                    if let Err(error) = sender.send(file) {
-                        control.disable(btel_processor::RuntimeError(error.to_string()));
-                    }
-                },
             )
-            .unwrap())
+            .unwrap();
+            let publisher = btel_file::LocalPublisher::new(builder, writer);
+            sink = publisher.sink().cloned();
+            Ok(publisher)
         },
     )
     .unwrap();
-    telemetry.file_sink = sink;
+    telemetry.delivery = sink.map(RecordingDelivery::Local);
     telemetry.recording_id = Some(id);
     telemetry.policies = Arc::new(bex_vm::telemetry::TelemetryPolicies::with_mode(
         btel_settings::mode::TelemetryMode::High,

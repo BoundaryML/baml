@@ -15,7 +15,9 @@ mod flags;
 mod merge;
 mod recording;
 pub use flags::CompletionFlags;
-pub use recording::{RecordingConfig, RecordingError, RecordingId, RecordingPublisher, SealedFile};
+pub use recording::{
+    RecordingBuilder, RecordingConfig, RecordingError, RecordingId, RecordingPublisher, SealedFile,
+};
 
 /// Generated wire messages, never the VM's in-memory layout. Scalar span
 /// messages encode while borrowed; no input references escape the callback.

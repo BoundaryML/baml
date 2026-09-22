@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package btel.cloud.v1;
+
+message CloudUploadEnvelope {
+  uint32 format_version = 1;
+  string plan_id = 2;
+  string upload_id = 3;
+  optional bytes recording_file = 4;
+  repeated CasObject cas_objects = 5;
+}
+
+message CasObject {
+  bytes snapshot_id = 1;
+  uint32 snapshot_format_version = 2;
+  bytes blob = 3;
+  bytes blob_sha256 = 4;
+}

@@ -1640,7 +1640,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             let recording_id = recording.as_ref().map(TelemetryRecording::id);
             #[cfg(not(target_arch = "wasm32"))]
-            let (runtime, file_sink) = match recording {
+            let (runtime, delivery) = match recording {
                 Some(recording) => recording.start(source_snapshot_id.map(|id| id.0))?,
                 None => (
                     btel_processor::TelemetryRuntime::new().map_err(|error| {
@@ -1659,7 +1659,7 @@ impl BexEngine {
                 #[cfg(not(target_arch = "wasm32"))]
                 runtime,
                 #[cfg(not(target_arch = "wasm32"))]
-                file_sink,
+                delivery,
             })
         };
 
@@ -2497,18 +2497,15 @@ impl BexEngine {
             // hold a heap permit while waiting for the telemetry consumer.
             if let Some(telemetry) = &self.telemetry {
                 let runtime = Arc::clone(&telemetry.runtime);
-                let file_sink = telemetry.file_sink.clone();
+                let delivery = telemetry.delivery.clone();
                 // Once admission closes, cancellation must not reopen the engine.
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
                     let processing = runtime.finish();
-                    // Drain disk delivery even when processing failed. No VM or
+                    // Drain delivery even when processing failed. No VM or
                     // heap permit survives here; cancellation cannot skip join.
-                    let delivery = file_sink.map_or(Ok(()), |sink| {
-                        sink.finish()
-                            .map_err(|error| btel_processor::RuntimeError(error.to_string()))
-                    });
+                    let delivery = delivery.map_or(Ok(()), |sink| sink.finish());
                     shutdown.complete();
                     delivery.and(processing)
                 })

@@ -1270,6 +1270,7 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "bridge_ctypes",
+ "btel_bcs",
  "btel_clock",
  "btel_file",
  "btel_processor",
@@ -1753,6 +1754,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel_bcs"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_processor",
+ "btel_publisher",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "bytes",
+ "futures",
+ "hex",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "btel_clock"
 version = "0.0.0-beta"
 dependencies = [
@@ -1768,6 +1795,7 @@ version = "0.0.0-beta"
 dependencies = [
  "btel_processor",
  "btel_publisher",
+ "btel_records",
  "btel_settings",
  "btel_snapshot",
  "btel_types",

@@ -1,0 +1,127 @@
+# Btel cloud delivery
+
+This crate implements the runtime side of a proposed BCS direct-upload contract.
+It does not imply that the BCS server already supports this protocol.
+
+## Transport
+
+The runtime posts JSON to
+`/v1/recordings/{recording_id}/uploads:prepare`. Recording IDs and digests are
+lowercase hexadecimal. Snapshot IDs are the existing 16-byte XXH3-128 identities,
+not the SHA-256 of their encoded blobs. `recording.sha256` covers the exact sealed
+recording bytes.
+
+The `Idempotency-Key` is `{recording_id}:{recording_file_sequence}`. The server
+must bind it to the original request contents and return the same immutable plan
+on retry; conflicting immutable contents must fail. Process liveness fields are
+fresh on each attempt and excluded from that idempotency comparison. There is
+no URL-renewal operation.
+
+`wire.rs` is the JSON schema's source of truth. Proposed and returned targets use
+`kind`: `recording`, `cas_batch`, or `cas_object`, with ordered
+`candidate_indices`. Each response disposition uses a nested `disposition` with
+`kind`: `inline_with_recording`, `member_of_batch`, `separate_object`, or
+`already_available`. The first three include `upload_id`. Expiration fields use
+Unix milliseconds.
+
+BCS must preserve the client's placement for missing snapshots, remove available
+members, and omit empty CAS-only targets. It must return exactly one recording
+target even if every snapshot is already available. Availability means validated
+content within the authorized organization, not merely an existing S3 object.
+
+Each surviving target is an ordinary HTTP PUT containing a
+`btel.cloud.v1.CloudUploadEnvelope` from `proto/cloud.proto`, format version 1.
+It embeds the exact recording bytes and the canonical CAS v1 blobs. The blob
+SHA-256 is an integrity check separate from the snapshot identity.
+
+Only prepare requests receive the BCS bearer credential. Upload requests use the
+returned URL and required headers; redirects are not followed. URLs and headers
+are capabilities and must not be logged.
+
+The supported S3 signing policy uses an unsigned payload, optionally with the
+constant required header `x-amz-content-sha256: UNSIGNED-PAYLOAD`. Exact payload
+checksums cannot be presigned before snapshot serialization. Other S3 checksum
+modes are rejected rather than guessed; BCS must agree to this policy. Envelope
+and blob integrity still require server-side validation.
+
+PUT success is the delivery acknowledgement, not proof of server ingestion or
+query availability. Retries reuse the same body and URL. BCS must issue URLs
+whose lifetimes cover the bounded retry window. Expiration is terminal.
+
+## Scope
+
+There is no durable spool, recovery after process exit, or URL renewal.
+Orderly shutdown drains admitted delivery work.
+Cloud contract tests use local HTTP servers and require neither BCS nor AWS;
+they do not establish interoperability with a deployed server.
+
+## Ownership and limits
+
+The processor statically dispatches to `CloudPublisher`. It reuses
+`RecordingBuilder` for encoding and hands owned groups to a dedicated delivery
+thread; event callbacks never perform HTTP.
+
+The publisher accumulates recording events and structured snapshots across
+processor batches. A window seals at a record boundary when it reaches the
+recording-byte target, 16 distinct snapshots, or 4 MiB of retained snapshot
+storage. A single snapshot may exceed a soft byte target. The non-sliding timer
+starts at the first event, using `RecordingConfig::flush_interval_duration`;
+idle expiry and explicit shutdown also seal pending data.
+
+Sealed windows are staged until processor input chunks have been recycled.
+The open window and staged windows together retain at most 32 snapshot owners
+and 8 MiB of snapshot storage by default. Staged recording files are separately
+bounded by delivery's plan/recording-byte limits. Construction validates that
+publisher and delivery owner limits leave headroom in the minimum VM pool.
+No network I/O runs on the processor. Admission waits occur only after recycling.
+
+Delivery separately limits pending owners, plans, recording bytes, and CAS bytes.
+It releases owner-slot reservations after serialization releases the snapshots,
+not after their PUTs finish. Immutable upload bodies remain byte-budgeted until
+delivery completes. Delivery admission waits for temporary plan, byte, or
+owner-slot saturation. Failure, closure, and released capacity wake waiting
+submitters. An individual group that can never fit fails before waiting.
+Callers must recycle input chunks before entering admission.
+
+Cloud processing moves one chunk into reusable owned storage and recycles its
+source allocation before incremental processing and handoff. Span and timing
+storage each reserve the transport's chunk capacity; only one contains live
+records at a time. Captures are moved, not cloned, and retain their existing
+VM snapshot-pool owners until processed or dropped. Local/no-sink processing
+keeps its original borrowed path without these allocations.
+
+This permits large chunks to make progress through bounded publisher windows
+and delivery backpressure. Snapshot accounting is cached between preflight and
+retention rather than scanning each new snapshot twice. There is no silent
+dropping or automatic recovery from terminal delivery errors.
+
+Snapshot IDs are remembered for this publisher's lifetime, without eviction.
+Reaching the configured ID limit also disables telemetry; it does not silently
+reoffer an already prepared ID. Placement thresholds use retained-memory estimates,
+not exact encoded lengths; output encoding has independent hard limits.
+
+Snapshot accounting conservatively charges arena capacities and shared backing.
+It excludes the preexisting shared pool and allocator metadata. Bigint values
+and bigint type literals currently have no safe retained-capacity bound through
+`num-bigint`'s public API. These snapshots disable cloud delivery instead of
+silently violating its budget. This does not change local recording or BAML
+execution.
+
+## Optional liveness
+
+Every prepare attempt carries a process-stable random `producer_session_id`,
+checked process-wide `liveness_sequence`, and producer `state`. BCS can return
+`heartbeat: { interval_ms, staleness_threshold_ms }`. A separate worker sends
+`POST /v1/recordings/{recording_id}/heartbeat` when the configured inactivity
+interval expires. Only completed successful BCS POSTs reset that deadline;
+S3 PUTs and failed POSTs do not.
+
+Heartbeat errors are advisory and observable through
+`BexEngine::telemetry_heartbeat_error`, without failing delivery or execution.
+Closing delivery marks it `DRAINING`; that state appears on subsequent
+control traffic without forcing an early heartbeat. Quick drains may finish
+before a heartbeat is due. Shutdown cancels in-flight heartbeats rather than
+waiting for the interval.
+
+The opt-in local performance probe and its interpretation limits are documented
+in [PERFORMANCE.md](PERFORMANCE.md).

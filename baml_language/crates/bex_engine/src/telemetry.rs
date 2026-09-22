@@ -4,12 +4,12 @@ use std::{
     sync::Arc,
 };
 
-use btel_publisher::{RecordingConfig, RecordingId, RecordingPublisher};
+use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
-/// One recording per engine, with exactly one local-file sink. BCS and spooling
-/// are not implemented. Storage failures disable recording and remain available
+/// One recording per engine, delivered to local files or BCS. Delivery failures
+/// disable recording and remain available
 /// through `BexEngine::telemetry_result`; they do not fail BAML execution.
 pub struct TelemetryRecording {
     id: RecordingId,
@@ -17,11 +17,79 @@ pub struct TelemetryRecording {
     destination: Destination,
 }
 enum Destination {
-    LocalFiles { recordings: PathBuf, cas: PathBuf },
+    LocalFiles {
+        recordings: PathBuf,
+        cas: PathBuf,
+    },
     UserFiles,
+    Cloud {
+        publisher: btel_bcs::PublisherConfig,
+        delivery: btel_bcs::delivery::DeliveryConfig,
+    },
+}
+
+#[derive(Clone)]
+pub(crate) enum RecordingDelivery {
+    Local(Arc<btel_file::FileSink>),
+    Cloud(Arc<btel_bcs::delivery::BcsDelivery>),
+}
+
+impl RecordingDelivery {
+    pub(crate) fn finish(&self) -> Result<(), btel_processor::RuntimeError> {
+        match self {
+            Self::Local(sink) => sink
+                .finish()
+                .map_err(|error| btel_processor::RuntimeError(error.to_string())),
+            Self::Cloud(delivery) => delivery
+                .finish()
+                .map_err(|error| btel_processor::RuntimeError(error.to_string())),
+        }
+    }
+
+    pub(crate) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
+        match self {
+            Self::Local(sink) => sink
+                .result()
+                .map(|result| result.map_err(|e| btel_processor::RuntimeError(e.to_string()))),
+            Self::Cloud(delivery) => delivery
+                .result()
+                .map(|result| result.map_err(|e| btel_processor::RuntimeError(e.to_string()))),
+        }
+    }
+
+    fn directory(&self) -> Option<&Path> {
+        match self {
+            Self::Local(sink) => Some(sink.directory()),
+            Self::Cloud(_) => None,
+        }
+    }
+
+    fn heartbeat_error(&self) -> Option<btel_bcs::liveness::HeartbeatError> {
+        match self {
+            Self::Local(_) => None,
+            Self::Cloud(delivery) => delivery.heartbeat_error(),
+        }
+    }
 }
 
 impl TelemetryRecording {
+    /// Deliver through the proposed BCS prepare protocol and presigned PUTs.
+    /// No worker starts until engine construction. There is no durable spool.
+    pub fn cloud(
+        config: RecordingConfig,
+        publisher: btel_bcs::PublisherConfig,
+        delivery: btel_bcs::delivery::DeliveryConfig,
+    ) -> Self {
+        Self {
+            id: RecordingId::generate(),
+            config,
+            destination: Destination::Cloud {
+                publisher,
+                delivery,
+            },
+        }
+    }
+
     /// Write to `<project-root>/.baml/btel/recordings/<recording-id>`.
     /// Snapshots share `<project-root>/.baml/btel/cas/v1` across recordings.
     /// The caller supplies the resolved BAML project root; the engine does not
@@ -80,7 +148,7 @@ impl TelemetryRecording {
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
-            Option<Arc<btel_file::FileSink>>,
+            Option<RecordingDelivery>,
         ),
         EngineError,
     > {
@@ -89,6 +157,19 @@ impl TelemetryRecording {
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
         let root = match self.destination {
+            Destination::Cloud {
+                publisher,
+                delivery,
+            } => {
+                return Self::start_cloud(
+                    self.id,
+                    self.config,
+                    publisher,
+                    delivery,
+                    source_snapshot,
+                    transport,
+                );
+            }
             Destination::UserFiles => std::env::home_dir()
                 .map(|home| {
                     (
@@ -115,11 +196,14 @@ impl TelemetryRecording {
                         },
                     )
                 });
-                let sender = match writer {
-                    Ok(mut writer) => {
-                        let sender = writer.take_sender();
-                        sink = Some(Arc::new(writer));
-                        Some(Arc::new(sender))
+                let builder = RecordingBuilder::new(self.id, self.config)
+                    .map_err(std::io::Error::other)?
+                    .with_source_snapshot(source_snapshot);
+                let publisher = match writer {
+                    Ok(writer) => {
+                        let publisher = btel_file::LocalPublisher::new(builder, writer);
+                        sink = publisher.sink().cloned();
+                        publisher
                     }
                     Err(error) => {
                         // Failure to create the directory/file worker also must not
@@ -128,35 +212,54 @@ impl TelemetryRecording {
                         control.disable(btel_processor::RuntimeError(format!(
                             "telemetry file startup: {error}"
                         )));
-                        None
+                        btel_file::LocalPublisher::disabled(builder)
                     }
                 };
-                let snapshot_sender = sender.clone();
-                let snapshot_control = control.clone();
-                RecordingPublisher::with_snapshot_receiver(
-                    self.id,
-                    self.config,
-                    move |file| {
-                        if let Some(sender) = &sender {
-                            if let Err(error) = sender.send(file) {
-                                control.disable(btel_processor::RuntimeError(error.to_string()));
-                            }
-                        }
-                    },
-                    move |snapshot| {
-                        if let Some(sender) = &snapshot_sender {
-                            if let Err(error) = sender.send_snapshot(snapshot) {
-                                snapshot_control
-                                    .disable(btel_processor::RuntimeError(error.to_string()));
-                            }
-                        }
-                    },
-                )
-                .map(|publisher| publisher.with_source_snapshot(source_snapshot))
-                .map_err(std::io::Error::other)
+                Ok(publisher)
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
-        Ok((runtime, sink))
+        Ok((runtime, sink.map(RecordingDelivery::Local)))
+    }
+
+    fn start_cloud(
+        id: RecordingId,
+        config: RecordingConfig,
+        publisher_config: btel_bcs::PublisherConfig,
+        delivery_config: btel_bcs::delivery::DeliveryConfig,
+        source_snapshot: Option<[u8; 32]>,
+        transport: btel_settings::transport::ChunkConfig,
+    ) -> Result<
+        (
+            Arc<btel_processor::TelemetryRuntime>,
+            Option<RecordingDelivery>,
+        ),
+        EngineError,
+    > {
+        let mut delivery = None;
+        let runtime =
+            btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
+                let failure = control.clone();
+                let handle =
+                    match btel_bcs::delivery::BcsDelivery::new(delivery_config, move |error| {
+                        failure.disable(btel_processor::RuntimeError(error.to_string()));
+                        tracing::warn!(%error, "cloud telemetry disabled");
+                    }) {
+                        Ok(worker) => {
+                            let handle = worker.handle();
+                            delivery = Some(RecordingDelivery::Cloud(Arc::new(worker)));
+                            handle
+                        }
+                        Err(error) => {
+                            control.disable(btel_processor::RuntimeError(error.to_string()));
+                            btel_bcs::delivery::DeliveryHandle::disabled(error)
+                        }
+                    };
+                btel_bcs::CloudPublisher::new(id, config, publisher_config, handle)
+                    .map(|publisher| publisher.with_source_snapshot(source_snapshot))
+                    .map_err(std::io::Error::other)
+            })
+            .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
+        Ok((runtime, delivery))
     }
 }
 
@@ -193,20 +296,30 @@ impl BexEngine {
     pub fn telemetry_recording_directory(&self) -> Option<&Path> {
         self.telemetry
             .as_ref()?
-            .file_sink
+            .delivery
             .as_ref()
-            .map(|sink| sink.directory())
+            .and_then(RecordingDelivery::directory)
     }
 
     /// None when telemetry is off or while processing. A disabled recording returns
     /// its retained error. After shutdown, Some(Ok(())) means all published
-    /// chunks were consumed and accepted files written and closed. Storage failures
+    /// chunks were consumed and accepted delivery completed. Cloud PUT success
+    /// does not imply ingestion or query availability. Storage failures
     /// disable recording independently of application execution. It does not assert
     /// complete captures, final clock validity, or a `RecordingEnd` marker.
     pub fn telemetry_result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         self.telemetry
             .as_ref()
             .and_then(super::telemetry_state::EngineTelemetry::result)
+    }
+
+    /// Last advisory heartbeat error, independent of recording delivery success.
+    pub fn telemetry_heartbeat_error(&self) -> Option<btel_bcs::liveness::HeartbeatError> {
+        self.telemetry
+            .as_ref()?
+            .delivery
+            .as_ref()
+            .and_then(RecordingDelivery::heartbeat_error)
     }
 }
 
