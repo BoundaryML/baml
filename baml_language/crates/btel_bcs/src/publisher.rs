@@ -1,4 +1,7 @@
-use std::{collections::HashSet, time::Instant};
+use std::{
+    collections::{HashSet, VecDeque},
+    time::Instant,
+};
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingError, RecordingId, SealedFile};
@@ -8,11 +11,13 @@ use btel_types::TelemetryId;
 
 use crate::{
     delivery::{DeliveryError, DeliveryHandle},
+    metadata::MetadataJournal,
     wire::{ProposedUploadTarget, UploadKind},
 };
 
 #[derive(Clone, Debug)]
 pub struct PublisherConfig {
+    /// Bounded recent-offer deduplication, not authoritative CAS availability.
     pub max_offered_snapshots: usize,
     /// Soft per-file targets. A single capture may exceed the byte target.
     pub snapshot_target: usize,
@@ -61,6 +66,8 @@ pub struct CloudPublisher {
     recording_target: usize,
     config: PublisherConfig,
     offered: HashSet<SnapshotId>,
+    offered_order: VecDeque<SnapshotId>,
+    metadata: MetadataJournal,
     pending: PendingSnapshots,
     staged: Vec<PendingFile>,
     retained_snapshots: usize,
@@ -110,10 +117,12 @@ impl CloudPublisher {
             return Err(RecordingError::InvalidConfig);
         }
         Ok(Self {
-            recording: RecordingBuilder::new(id, recording)?,
+            recording: RecordingBuilder::new(id, recording)?.with_metadata_replay(),
             recording_target: recording.target_bytes.get(),
             config,
             offered: HashSet::new(),
+            offered_order: VecDeque::new(),
+            metadata: MetadataJournal::new(limits.max_recording_body_bytes),
             pending: PendingSnapshots::default(),
             staged: Vec::new(),
             retained_snapshots: 0,
@@ -136,6 +145,8 @@ impl CloudPublisher {
         self.pending = PendingSnapshots::default();
         self.staged.clear();
         self.offered.clear();
+        self.offered_order.clear();
+        self.metadata = MetadataJournal::new(self.delivery.config().max_recording_body_bytes);
         self.retained_snapshots = 0;
         self.retained_bytes = 0;
         self.staged_recording_bytes = 0;
@@ -143,9 +154,52 @@ impl CloudPublisher {
         self.recording.discard_pending();
     }
 
+    fn already_offered(&self, id: SnapshotId) -> bool {
+        self.offered.contains(&id)
+            || self.pending.owners.iter().any(|owner| owner.id() == id)
+            || self
+                .staged
+                .iter()
+                .any(|file| file.snapshots.owners.iter().any(|owner| owner.id() == id))
+    }
+
+    fn remember(&mut self, id: SnapshotId) {
+        if self.offered.contains(&id) {
+            return;
+        }
+        if self.offered.len() == self.config.max_offered_snapshots {
+            if let Some(oldest) = self.offered_order.pop_front() {
+                self.offered.remove(&oldest);
+            }
+        }
+        self.offered.insert(id);
+        self.offered_order.push_back(id);
+    }
+
+    fn progress(&mut self) {
+        let progress = self.delivery.take_progress();
+        self.metadata.acknowledge(progress.recording_acked_through);
+        if progress.reset_cas {
+            self.offered.clear();
+            self.offered_order.clear();
+            // Pending owners remain protected by `already_offered` even if
+            // there are more of them than the recent-offer cache can retain.
+            let ids: Vec<_> = self
+                .pending
+                .owners
+                .iter()
+                .chain(self.staged.iter().flat_map(|file| &file.snapshots.owners))
+                .map(Snapshot::id)
+                .collect();
+            for id in ids {
+                self.remember(id);
+            }
+        }
+    }
+
     fn retain(&mut self, snapshot: Snapshot) {
         let preflight = self.preflight_size.take();
-        if self.offered.contains(&snapshot.id()) {
+        if self.already_offered(snapshot.id()) {
             return;
         }
         let size = match preflight {
@@ -153,21 +207,23 @@ impl CloudPublisher {
             _ => snapshot.retained_bytes(),
         };
         let Some(size) = size else {
-            self.fail(DeliveryError::Capacity);
+            self.delivery
+                .record_payload_loss(DeliveryError::Capacity, false);
             return;
         };
         let Some(total) = self.retained_bytes.checked_add(size) else {
-            self.fail(DeliveryError::Capacity);
+            self.delivery
+                .record_payload_loss(DeliveryError::Capacity, false);
             return;
         };
         if total > self.config.max_retained_bytes
             || self.retained_snapshots >= self.config.max_pending_snapshots
-            || self.offered.len() >= self.config.max_offered_snapshots
         {
-            self.fail(DeliveryError::Capacity);
+            self.delivery
+                .record_payload_loss(DeliveryError::Capacity, false);
             return;
         }
-        self.offered.insert(snapshot.id());
+        self.remember(snapshot.id());
         self.retained_snapshots += 1;
         self.retained_bytes = total;
         self.pending.bytes += size;
@@ -176,7 +232,7 @@ impl CloudPublisher {
     }
 
     fn stage(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
-        let file = match sealed {
+        let mut file = match sealed {
             Ok(Some(file)) => file,
             Ok(None) => return,
             Err(_) => {
@@ -184,26 +240,44 @@ impl CloudPublisher {
                 return;
             }
         };
+        self.progress();
         let limits = self.delivery.config();
-        let Some(total) = self
-            .staged_recording_bytes
-            .checked_add(file.retained_bytes())
-        else {
-            self.fail(DeliveryError::Capacity);
-            return;
-        };
+        let remaining_bytes = limits
+            .recording_reserved_bytes
+            .saturating_sub(self.staged_recording_bytes);
         if self.staged.len() >= limits.max_pending_plans
-            || total > limits.recording_reserved_bytes
+            || file.retained_bytes() > remaining_bytes
             || file.bytes().len() > limits.max_recording_body_bytes
         {
-            self.fail(DeliveryError::Capacity);
+            let evictions = self.metadata.retain(&file);
+            for _ in 0..evictions {
+                self.delivery.record_metadata_replay_eviction();
+            }
+            self.drop_pending_payload();
             return;
         }
-        self.staged_recording_bytes = total;
+        let body_limit = limits
+            .max_recording_body_bytes
+            .min(remaining_bytes.saturating_sub(std::mem::size_of::<SealedFile>()));
+        let evictions = self.metadata.prepare(&mut file, body_limit);
+        for _ in 0..evictions {
+            self.delivery.record_metadata_replay_eviction();
+        }
+        self.staged_recording_bytes += file.retained_bytes();
         self.staged.push(PendingFile {
             file,
             snapshots: std::mem::take(&mut self.pending),
         });
+    }
+
+    fn drop_pending_payload(&mut self) {
+        let reset_cas = !self.pending.owners.is_empty();
+        self.retained_snapshots -= self.pending.owners.len();
+        self.retained_bytes -= self.pending.bytes;
+        self.pending = PendingSnapshots::default();
+        self.delivery
+            .record_payload_loss(DeliveryError::Capacity, reset_cas);
+        self.progress();
     }
 
     fn seal_on_pressure(&mut self) {
@@ -224,6 +298,7 @@ impl CloudPublisher {
     }
 
     fn service(&mut self, now: Instant, force: bool) {
+        self.progress();
         if self.delivery.is_disabled() {
             self.fail(DeliveryError::Closed);
         }
@@ -248,8 +323,10 @@ impl CloudPublisher {
                     targets,
                     &snapshots.sizes,
                 ) {
-                    self.fail(error);
-                    break;
+                    if self.delivery.is_disabled() {
+                        self.fail(error);
+                        break;
+                    }
                 }
             }
         }
@@ -263,6 +340,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     const DETACH_RECORDS: bool = true;
 
     fn before_detached_span(&mut self, record: &SpanRecord<Snapshot, Snapshot>) {
+        self.progress();
         self.preflight_size = None;
         if self.failure.is_some() {
             return;
@@ -276,12 +354,14 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
                 .and_then(|completion| completion.captured_value),
         };
         if let Some(snapshot) = snapshot {
-            if !self.offered.contains(&snapshot.id()) {
+            if !self.already_offered(snapshot.id()) {
                 let size = snapshot.retained_bytes();
                 self.preflight_size = Some((snapshot.id(), size));
-                if size.is_some_and(|bytes| {
-                    self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes
-                }) {
+                if self.retained_snapshots >= self.config.max_pending_snapshots
+                    || size.is_some_and(|bytes| {
+                        self.retained_bytes.saturating_add(bytes) > self.config.max_retained_bytes
+                    })
+                {
                     self.service(Instant::now(), true);
                 }
             }
@@ -307,6 +387,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
+        self.progress();
         if self.failure.is_none() {
             self.start_window();
             self.recording.span_reference(thread, record);
@@ -318,6 +399,7 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn before_batch(&mut self, records: usize) {
+        self.progress();
         if self.delivery.is_disabled() {
             self.fail(DeliveryError::Closed);
         }
@@ -565,8 +647,8 @@ mod tests {
     }
 
     #[test]
-    fn byte_pressure_seals_but_hard_budget_releases_all_owners() {
-        let (_delivery, mut publisher) = publisher(PublisherConfig {
+    fn byte_pressure_drops_only_the_owner_that_cannot_fit() {
+        let (delivery, mut publisher) = publisher(PublisherConfig {
             retained_bytes_target: 1,
             ..PublisherConfig::default()
         });
@@ -577,15 +659,15 @@ mod tests {
         assert!(bytes > publisher.config.retained_bytes_target);
         publisher.config.max_retained_bytes = bytes;
         capture(&mut publisher, &pool, 2);
-        assert_eq!(publisher.failure, Some(DeliveryError::Capacity));
-        assert!(publisher.staged.is_empty());
+        assert_eq!(publisher.failure, None);
+        assert_eq!(publisher.staged.len(), 1);
         assert!(publisher.pending.owners.is_empty());
-        assert!(publisher.offered.is_empty());
-        assert_eq!(publisher.retained_bytes, 0);
-        assert_eq!(publisher.retained_snapshots, 0);
-        assert_eq!(publisher.recording.encoded_size_hint(), 0);
-        assert!(publisher.deadline().is_none());
-        assert_eq!(pool.stats().in_use, 0);
+        assert_eq!(publisher.offered.len(), 1);
+        assert_eq!(publisher.retained_bytes, bytes);
+        assert_eq!(publisher.retained_snapshots, 1);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert!(!delivery.handle().is_disabled());
+        assert_eq!(pool.stats().in_use, 1);
     }
 
     #[test]
@@ -605,32 +687,220 @@ mod tests {
     }
 
     #[test]
-    fn count_and_remembered_id_caps_are_terminal_not_dropping_policies() {
-        for config in [
-            PublisherConfig {
-                snapshot_target: 1,
-                max_pending_snapshots: 2,
-                ..PublisherConfig::default()
+    fn recent_id_eviction_and_loss_reset_preserve_pending_candidate_uniqueness() {
+        let (delivery, mut publisher) = publisher(PublisherConfig {
+            snapshot_target: 2,
+            max_offered_snapshots: 1,
+            ..PublisherConfig::default()
+        });
+        let pool = SnapshotPool::new(8, Limits::default());
+        for value in [1, 2, 3, 1, 2, 3] {
+            capture(&mut publisher, &pool, value);
+        }
+        assert_eq!(publisher.staged.len(), 1);
+        assert_eq!(publisher.pending.owners.len(), 1);
+        assert_eq!(publisher.offered.len(), 1);
+        delivery
+            .handle()
+            .record_payload_loss(DeliveryError::Http, true);
+        for value in [1, 2, 3] {
+            capture(&mut publisher, &pool, value);
+        }
+        assert_eq!(publisher.retained_snapshots, 3);
+        assert_eq!(publisher.staged[0].snapshots.owners.len(), 2);
+        assert_eq!(publisher.pending.owners.len(), 1);
+        assert_eq!(publisher.failure, None);
+        assert_eq!(pool.stats().in_use, 3);
+    }
+
+    #[test]
+    fn owner_count_pressure_drops_only_the_unadmitted_capture() {
+        let (delivery, mut publisher) = publisher(PublisherConfig {
+            snapshot_target: 1,
+            max_pending_snapshots: 2,
+            ..PublisherConfig::default()
+        });
+        let pool = SnapshotPool::new(4, Limits::default());
+        for value in 0..3 {
+            capture(&mut publisher, &pool, value);
+        }
+        assert_eq!(publisher.failure, None);
+        assert_eq!(publisher.retained_snapshots, 2);
+        assert_eq!(pool.stats().in_use, 2);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert!(!delivery.handle().is_disabled());
+    }
+
+    #[test]
+    fn oversized_recording_releases_owners_and_later_small_file_is_staged() {
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                prepare_base_url: "http://127.0.0.1:1".into(),
+                allow_http: true,
+                max_recording_body_bytes: 128,
+                ..DeliveryConfig::default()
             },
-            PublisherConfig {
-                snapshot_target: 1,
-                max_offered_snapshots: 2,
-                ..PublisherConfig::default()
+            |_| panic!("oversized payload must not disable delivery"),
+        )
+        .unwrap();
+        let mut publisher = CloudPublisher::new(
+            RecordingId::generate(),
+            RecordingConfig {
+                target_bytes: NonZeroUsize::new(128).unwrap(),
+                ..RecordingConfig::default()
             },
-        ] {
-            let (delivery, mut publisher) = publisher(config);
-            let pool = SnapshotPool::new(4, Limits::default());
-            for value in 0..3 {
-                capture(&mut publisher, &pool, value);
+            PublisherConfig::default(),
+            delivery.handle(),
+        )
+        .unwrap();
+        publisher.recording_target = usize::MAX;
+        let pool = SnapshotPool::new(20, Limits::default());
+        for value in 0..16 {
+            capture(&mut publisher, &pool, value);
+        }
+        assert_eq!(publisher.failure, None);
+        assert_eq!(publisher.retained_snapshots, 0);
+        assert_eq!(publisher.retained_bytes, 0);
+        assert!(publisher.staged.is_empty());
+        assert!(publisher.offered.is_empty());
+        assert_eq!(pool.stats().in_use, 0);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        publisher.aggregate(AggregateDelta {
+            count: 1,
+            ..AggregateDelta::default()
+        });
+        let sealed = publisher.recording.finish_recording();
+        publisher.stage(sealed);
+        assert_eq!(publisher.staged.len(), 1);
+        assert!(!delivery.handle().is_disabled());
+    }
+
+    #[test]
+    fn metadata_pressure_is_observable_without_disabling_recordings() {
+        let (delivery, mut publisher) = publisher(PublisherConfig::default());
+        publisher.metadata = MetadataJournal::new(1);
+        publisher.span(
+            allocate_telemetry_id(),
+            &mut SpanRecord::CallPathDefined {
+                call_path: CallPathId::new_non_root(1).unwrap(),
+                parent_call_path: CallPathId::ROOT,
+                visible_caller: None,
+                caller_pc: 0,
+                callee: btel_types::FunctionIdAllocator::default()
+                    .allocate()
+                    .unwrap(),
+                edge: btel_types::CallPathEdge::Synchronous,
+            },
+        );
+        let sealed = publisher.recording.finish_recording();
+        publisher.stage(sealed);
+        assert_eq!(publisher.failure, None);
+        assert_eq!(publisher.staged.len(), 1);
+        assert_eq!(delivery.handle().metadata_replay_evictions(), 1);
+        assert_eq!(delivery.handle().loss_count(), 0);
+        assert!(!delivery.handle().is_disabled());
+    }
+
+    #[test]
+    fn rejected_recordings_preserve_prior_metadata_for_a_later_small_file() {
+        use prost::Message;
+
+        for rejection in ["body", "plans", "bytes"] {
+            let delivery = BcsDelivery::new(
+                DeliveryConfig {
+                    prepare_base_url: "http://127.0.0.1:1".into(),
+                    allow_http: true,
+                    max_recording_body_bytes: 512,
+                    ..DeliveryConfig::default()
+                },
+                |_| panic!("payload rejection must not disable delivery"),
+            )
+            .unwrap();
+            let mut publisher = CloudPublisher::new(
+                RecordingId::generate(),
+                RecordingConfig {
+                    target_bytes: NonZeroUsize::new(512).unwrap(),
+                    ..RecordingConfig::default()
+                },
+                PublisherConfig::default(),
+                delivery.handle(),
+            )
+            .unwrap();
+            publisher.recording_target = usize::MAX;
+            let thread = allocate_telemetry_id();
+            let define = |publisher: &mut CloudPublisher, path| {
+                publisher.span(
+                    thread,
+                    &mut SpanRecord::CallPathDefined {
+                        call_path: CallPathId::new_non_root(path).unwrap(),
+                        parent_call_path: CallPathId::ROOT,
+                        visible_caller: None,
+                        caller_pc: 0,
+                        callee: btel_types::FunctionIdAllocator::default()
+                            .allocate()
+                            .unwrap(),
+                        edge: btel_types::CallPathEdge::Synchronous,
+                    },
+                );
+            };
+            define(&mut publisher, 1);
+            let first = publisher.recording.finish_recording();
+            publisher.stage(first);
+            assert_eq!(publisher.staged.len(), 1);
+            if rejection == "plans" {
+                while publisher.staged.len() < delivery.handle().config().max_pending_plans {
+                    publisher.aggregate(AggregateDelta {
+                        count: 1,
+                        ..AggregateDelta::default()
+                    });
+                    let sealed = publisher.recording.finish_recording();
+                    publisher.stage(sealed);
+                }
+            } else if rejection == "bytes" {
+                publisher.staged_recording_bytes =
+                    delivery.handle().config().recording_reserved_bytes;
             }
-            assert_eq!(publisher.failure, Some(DeliveryError::Capacity));
+            define(&mut publisher, 2);
+            let pool = SnapshotPool::new(20, Limits::default());
+            if rejection == "body" {
+                for value in 0..16 {
+                    capture(&mut publisher, &pool, value);
+                }
+            } else {
+                let sealed = publisher.recording.finish_recording();
+                publisher.stage(sealed);
+            }
+            assert_eq!(delivery.handle().loss_count(), 1, "{rejection}");
+            assert_eq!(
+                delivery.handle().metadata_replay_evictions(),
+                0,
+                "{rejection}"
+            );
             assert_eq!(pool.stats().in_use, 0);
-            assert_eq!(delivery.result(), None);
-            publisher.after_batch(3);
-            assert_eq!(delivery.result(), Some(Err(DeliveryError::Capacity)));
-            capture(&mut publisher, &pool, 4);
-            assert_eq!(pool.stats().in_use, 0);
-            publisher.finish();
+            assert_eq!(publisher.retained_snapshots, 0);
+
+            // Discard the earlier staged payloads without acknowledging them.
+            publisher.staged.clear();
+            publisher.staged_recording_bytes = 0;
+            publisher.aggregate(AggregateDelta {
+                count: 1,
+                ..AggregateDelta::default()
+            });
+            let sealed = publisher.recording.finish_recording();
+            publisher.stage(sealed);
+            assert_eq!(publisher.staged.len(), 1);
+            let decoded =
+                btel_publisher::proto::RecordingFile::decode(publisher.staged[0].file.bytes())
+                    .unwrap();
+            let paths: Vec<_> = decoded
+                .definitions
+                .unwrap()
+                .call_paths
+                .into_iter()
+                .map(|path| path.call_path_id)
+                .collect();
+            assert_eq!(paths, [1, 2], "{rejection}");
+            assert!(!delivery.handle().is_disabled());
         }
     }
 
@@ -649,8 +919,12 @@ mod tests {
             count: 1,
             ..AggregateDelta::default()
         });
-        assert_eq!(publisher.failure, Some(DeliveryError::Capacity));
-        assert!(publisher.staged.is_empty());
+        assert_eq!(publisher.failure, None);
+        assert_eq!(
+            publisher.staged.len(),
+            publisher.delivery.config().max_pending_plans
+        );
+        assert_eq!(publisher.delivery.loss_count(), 1);
     }
 
     #[test]

@@ -8,9 +8,10 @@ use btel_publisher::{RecordingBuilder, RecordingConfig, RecordingId};
 
 use crate::{BexEngine, EngineError, RuntimeCompiler};
 
-/// One recording per engine, delivered to local files or BCS. Delivery failures
-/// disable recording and remain available
-/// through `BexEngine::telemetry_result`; they do not fail BAML execution.
+/// One recording per engine, delivered to local files or BCS. Cloud payload
+/// failures discard that payload and allow later delivery. Local storage and
+/// fatal worker failures disable recording. Errors remain available through
+/// `BexEngine::telemetry_result`; they do not fail BAML execution.
 pub struct TelemetryRecording {
     id: RecordingId,
     config: RecordingConfig,
@@ -301,16 +302,46 @@ impl BexEngine {
             .and_then(RecordingDelivery::directory)
     }
 
-    /// None when telemetry is off or while processing. A disabled recording returns
-    /// its retained error. After shutdown, Some(Ok(())) means all published
+    /// `None` when telemetry is off or processing without a known error.
+    /// Cloud payload loss returns a retained error even if later uploads succeed;
+    /// an error does not necessarily mean recording is disabled.
+    /// After shutdown, `Some(Ok(()))` means all published
     /// chunks were consumed and accepted delivery completed. Cloud PUT success
-    /// does not imply ingestion or query availability. Storage failures
+    /// does not imply ingestion or query availability. Local storage failures
     /// disable recording independently of application execution. It does not assert
     /// complete captures, final clock validity, or a `RecordingEnd` marker.
     pub fn telemetry_result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         self.telemetry
             .as_ref()
             .and_then(super::telemetry_state::EngineTelemetry::result)
+    }
+
+    /// Number of discarded cloud prepare groups or upload targets, not events or
+    /// retry attempts. Zero for local recording or when telemetry is off.
+    pub fn telemetry_delivery_loss_count(&self) -> u64 {
+        match self
+            .telemetry
+            .as_ref()
+            .and_then(|state| state.delivery.as_ref())
+        {
+            Some(RecordingDelivery::Cloud(delivery)) => delivery.handle().loss_count(),
+            _ => 0,
+        }
+    }
+
+    /// Metadata segments evicted from bounded cloud replay storage. An eviction
+    /// is not confirmed upload loss: an in-flight copy may still succeed.
+    pub fn telemetry_metadata_replay_evictions(&self) -> u64 {
+        match self
+            .telemetry
+            .as_ref()
+            .and_then(|state| state.delivery.as_ref())
+        {
+            Some(RecordingDelivery::Cloud(delivery)) => {
+                delivery.handle().metadata_replay_evictions()
+            }
+            _ => 0,
+        }
     }
 
     /// Last advisory heartbeat error, independent of recording delivery success.

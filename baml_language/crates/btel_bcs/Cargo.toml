@@ -39,5 +39,6 @@ prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+btel_clock = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "test-util" ] }
 wiremock = { workspace = true }

@@ -7,6 +7,7 @@
 
 pub mod delivery;
 pub mod liveness;
+mod metadata;
 mod plan;
 pub mod publisher;
 pub mod wire;

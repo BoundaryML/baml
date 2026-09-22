@@ -21,6 +21,94 @@ fn config() -> RecordingConfig {
 }
 
 #[test]
+fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
+    use proto::function_definition::Resolution;
+
+    let mut builder = RecordingBuilder::new(
+        RecordingId::from_bytes([1; 16]).unwrap(),
+        RecordingConfig::default(),
+    )
+    .unwrap()
+    .with_metadata_replay();
+    builder
+        .buffer
+        .pending
+        .definitions
+        .functions
+        .push(proto::FunctionDefinition {
+            function_id: 1,
+            resolution: Some(Resolution::Unavailable(proto::MetadataUnavailable {})),
+        });
+    builder
+        .buffer
+        .pending
+        .clock_states
+        .states
+        .push(proto::ClockEpochState {
+            epoch_id: 1,
+            status: proto::TimingStatus::Valid as i32,
+            r#final: false,
+        });
+    builder.aggregate(AggregateDelta {
+        count: 7,
+        ..AggregateDelta::default()
+    });
+    let first = builder.finish_recording().unwrap().unwrap();
+    let metadata = proto::RecordingFile::decode(first.metadata_bytes()).unwrap();
+    assert!(metadata.header.is_none());
+    assert_eq!(metadata.sequence, 0);
+    assert!(metadata.spans.is_none());
+    assert!(metadata.aggregates.is_none());
+
+    builder
+        .buffer
+        .pending
+        .definitions
+        .functions
+        .push(proto::FunctionDefinition {
+            function_id: 1,
+            resolution: Some(Resolution::Metadata(proto::FunctionMetadata {
+                fqn: "resolved".into(),
+                ..Default::default()
+            })),
+        });
+    builder
+        .buffer
+        .pending
+        .clock_states
+        .states
+        .push(proto::ClockEpochState {
+            epoch_id: 1,
+            status: proto::TimingStatus::Discontinuity as i32,
+            r#final: true,
+        });
+    builder.aggregate(AggregateDelta {
+        count: 2,
+        ..AggregateDelta::default()
+    });
+    let mut second = builder.finish_recording().unwrap().unwrap();
+    let fresh = second.metadata_bytes().to_vec();
+    second.prepend_metadata(std::iter::once(first.metadata_bytes()));
+    assert_eq!(second.metadata_bytes(), fresh);
+    let decoded = proto::RecordingFile::decode(second.bytes()).unwrap();
+    let definitions = decoded.definitions.unwrap().functions;
+    assert!(matches!(
+        definitions[0].resolution,
+        Some(Resolution::Unavailable(_))
+    ));
+    assert!(matches!(
+        definitions[1].resolution,
+        Some(Resolution::Metadata(_))
+    ));
+    let states = decoded.clock_states.unwrap().states;
+    assert_eq!(states.len(), 2);
+    assert_eq!(states[0].status, proto::TimingStatus::Valid as i32);
+    assert_eq!(states[1].status, proto::TimingStatus::Discontinuity as i32);
+    assert!(states[1].r#final);
+    assert_eq!(decoded.aggregates.unwrap().entries[0].count, 2);
+}
+
+#[test]
 fn recording_rejects_unrepresentable_deadline() {
     let config = RecordingConfig {
         flush_interval_duration: std::time::Duration::MAX,

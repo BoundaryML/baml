@@ -98,6 +98,227 @@ async fn finish(delivery: Arc<BcsDelivery>) -> Result<(), DeliveryError> {
 }
 
 #[tokio::test]
+async fn failed_payload_releases_capacity_and_later_payload_uploads() {
+    for fail_prepare in [true, false] {
+        let server = MockServer::start().await;
+        let base = server.uri();
+        Mock::given(method("POST"))
+            .respond_with(move |request: &Request| {
+                let plan = response(request, &base, &[]);
+                if fail_prepare && plan.plan_id == "plan-1" {
+                    ResponseTemplate::new(503).set_delay(Duration::from_millis(20))
+                } else {
+                    ResponseTemplate::new(200).set_body_json(plan)
+                }
+            })
+            .expect(if fail_prepare { 5 } else { 2 })
+            .mount(&server)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(|request: &Request| {
+                ResponseTemplate::new(if request.url.path() == "/put/1-0" {
+                    503
+                } else {
+                    200
+                })
+                .set_delay(Duration::from_millis(20))
+            })
+            .expect(if fail_prepare { 1 } else { 5 })
+            .mount(&server)
+            .await;
+        let mut settings = config(&server);
+        settings.max_pending_plans = 1;
+        settings.max_attempts = DeliveryConfig::default().max_attempts;
+        assert_eq!(settings.max_attempts, 4);
+        let delivery = Arc::new(
+            BcsDelivery::new(settings, |_| panic!("ordinary loss disabled telemetry")).unwrap(),
+        );
+        let handle = delivery.handle();
+        let mut files = files(2).into_iter();
+        handle
+            .try_submit(
+                files.next().unwrap(),
+                vec![],
+                vec![proposed(0, UploadKind::Recording, &[])],
+            )
+            .unwrap();
+        let next = files.next().unwrap();
+        let submitter = handle.clone();
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::task::spawn_blocking(move || {
+                submitter.try_submit(next, vec![], vec![proposed(0, UploadKind::Recording, &[])])
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+        assert!(!handle.is_disabled());
+        assert_eq!(finish(delivery).await, Err(DeliveryError::Http));
+        assert_eq!(handle.loss_count(), 1);
+        assert_eq!(handle.last_error(), Some(DeliveryError::Http));
+        let requests = server.received_requests().await.unwrap();
+        for request in requests.iter().filter(|r| r.method == "POST") {
+            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            assert!(matches!(
+                body["state"].as_str(),
+                Some("RUNNING" | "DRAINING")
+            ));
+        }
+        assert!(
+            requests
+                .iter()
+                .any(|r| r.method == "PUT" && r.url.path() == "/put/2-0")
+        );
+        let retries: Vec<_> = requests
+            .iter()
+            .filter(|r| r.method == "PUT" && r.url.path() == "/put/1-0")
+            .collect();
+        for pair in retries.windows(2) {
+            assert_eq!(pair[0].body, pair[1].body);
+            assert_eq!(pair[0].url, pair[1].url);
+        }
+    }
+}
+
+#[tokio::test]
+async fn failed_physical_target_does_not_cancel_either_lane() {
+    for failed_target in [0, 1] {
+        let server = MockServer::start().await;
+        let base = server.uri();
+        Mock::given(method("POST"))
+            .respond_with(move |r: &Request| {
+                ResponseTemplate::new(200).set_body_json(response(r, &base, &[]))
+            })
+            .mount(&server)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(move |r: &Request| {
+                if r.url.path() == format!("/put/1-{failed_target}") {
+                    ResponseTemplate::new(403)
+                } else {
+                    ResponseTemplate::new(200).set_delay(Duration::from_millis(30))
+                }
+            })
+            .expect(3)
+            .mount(&server)
+            .await;
+        let delivery = Arc::new(
+            BcsDelivery::new(config(&server), |_| {
+                panic!("ordinary loss disabled telemetry")
+            })
+            .unwrap(),
+        );
+        let handle = delivery.handle();
+        let pool = SnapshotPool::new(2, Limits::default());
+        handle
+            .try_submit(
+                files(1).pop().unwrap(),
+                vec![scalar(&pool, 1), scalar(&pool, 2)],
+                vec![
+                    proposed(0, UploadKind::Recording, &[]),
+                    proposed(1, UploadKind::CasObject, &[0]),
+                    proposed(2, UploadKind::CasObject, &[1]),
+                ],
+            )
+            .unwrap();
+        assert_eq!(finish(delivery).await, Err(DeliveryError::Http));
+        assert_eq!(handle.loss_count(), 1);
+        assert!(!handle.is_disabled());
+        assert_eq!(pool.stats().in_use, 0);
+    }
+}
+
+#[tokio::test]
+async fn expired_target_drops_only_itself_and_later_work_is_accepted() {
+    for expired_target in [0, 1] {
+        let server = MockServer::start().await;
+        let base = server.uri();
+        Mock::given(method("POST"))
+            .respond_with(move |request: &Request| {
+                let mut plan = response(request, &base, &[]);
+                if plan.plan_id == "plan-1" {
+                    plan.uploads[expired_target].expires_at_unix_ms = 1;
+                }
+                ResponseTemplate::new(200).set_body_json(plan)
+            })
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(3)
+            .mount(&server)
+            .await;
+        let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
+        let handle = delivery.handle();
+        let pool = SnapshotPool::new(2, Limits::default());
+        let mut files = files(2).into_iter();
+        handle
+            .try_submit(
+                files.next().unwrap(),
+                vec![scalar(&pool, 1), scalar(&pool, 2)],
+                vec![
+                    proposed(0, UploadKind::Recording, &[]),
+                    proposed(1, UploadKind::CasObject, &[0]),
+                    proposed(2, UploadKind::CasObject, &[1]),
+                ],
+            )
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while handle.loss_count() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!handle.is_disabled());
+        handle
+            .try_submit(
+                files.next().unwrap(),
+                vec![],
+                vec![proposed(0, UploadKind::Recording, &[])],
+            )
+            .unwrap();
+        assert_eq!(finish(delivery).await, Err(DeliveryError::Expired));
+        assert_eq!(handle.loss_count(), 1);
+        assert_eq!(pool.stats().in_use, 0);
+        let requests = server.received_requests().await.unwrap();
+        let paths: std::collections::HashSet<_> = requests
+            .iter()
+            .filter(|r| r.method == "PUT")
+            .map(|r| r.url.path().to_owned())
+            .collect();
+        assert_eq!(paths.len(), 3);
+        assert!(!paths.contains(&format!("/put/1-{expired_target}")));
+        assert!(paths.contains("/put/1-2"));
+        assert!(paths.contains("/put/2-0"));
+    }
+}
+
+#[tokio::test]
+async fn canceled_submitters_do_not_count_as_payload_losses() {
+    for fatal in [DeliveryError::Worker, DeliveryError::Capacity] {
+        let server = MockServer::start().await;
+        let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
+        let handle = delivery.handle();
+        handle.disable(fatal);
+        assert_eq!(
+            handle.try_submit(
+                files(1).pop().unwrap(),
+                vec![],
+                vec![proposed(0, UploadKind::Recording, &[])],
+            ),
+            Err(fatal)
+        );
+        assert_eq!(handle.loss_count(), 0);
+        assert_eq!(finish(delivery).await, Err(fatal));
+        assert!(server.received_requests().await.unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
 async fn advisory_heartbeat_failure_does_not_interrupt_draining_uploads() {
     let server = MockServer::start().await;
     let base = server.uri();
@@ -470,11 +691,11 @@ async fn rejects_malformed_plans_before_any_put_and_releases_every_owner() {
             finish(delivery.clone()).await.is_err(),
             "mutation {mutation}"
         );
-        assert!(handle.is_disabled());
+        assert!(!handle.is_disabled());
         assert_eq!(pool.stats().in_use, 0);
-        assert_eq!(failures.load(Ordering::SeqCst), 1);
+        assert_eq!(failures.load(Ordering::SeqCst), 0);
         assert!(delivery.finish().is_err());
-        assert_eq!(failures.load(Ordering::SeqCst), 1);
+        assert_eq!(failures.load(Ordering::SeqCst), 0);
     }
 }
 
@@ -550,7 +771,7 @@ async fn timeout_retries_are_bounded_and_never_fit_work_is_rejected() {
         ),
         Err(DeliveryError::Capacity)
     );
-    assert!(handle.is_disabled());
+    assert!(!handle.is_disabled());
     assert_eq!(delivery.finish(), Err(DeliveryError::Capacity));
 }
 
@@ -795,7 +1016,7 @@ async fn drain_finishes_multiple_plans_without_cas_blocking_the_recording_lane()
 }
 
 #[tokio::test]
-async fn response_and_serialization_byte_limits_are_terminal() {
+async fn response_and_serialization_byte_limits_drop_only_affected_work() {
     for oversized_response in [true, false] {
         let server = MockServer::start().await;
         let base = server.uri();
@@ -812,7 +1033,7 @@ async fn response_and_serialization_byte_limits_are_terminal() {
             .await;
         Mock::given(method("PUT"))
             .respond_with(ResponseTemplate::new(200))
-            .expect(0)
+            .expect(u64::from(!oversized_response))
             .mount(&server)
             .await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
@@ -870,19 +1091,17 @@ async fn permanent_put_failure_is_not_retried_and_draining_releases_queued_owner
             vec![scalar(&pool, i64::try_from(index).unwrap())],
             vec![proposed(0, UploadKind::Recording, &[0])],
         );
-        if result.is_err() {
-            break;
-        }
+        result.unwrap();
     }
     assert_eq!(finish(delivery).await, Err(DeliveryError::Http));
     assert_eq!(pool.stats().in_use, 0);
-    assert_eq!(failures.load(Ordering::SeqCst), 1);
+    assert_eq!(failures.load(Ordering::SeqCst), 0);
     let requests = server.received_requests().await.unwrap();
     let mut paths = std::collections::HashSet::new();
     for request in requests.iter().filter(|r| r.method == "PUT") {
         assert!(paths.insert(request.url.path()));
     }
-    assert!(!paths.is_empty());
+    assert_eq!(paths.len(), 3);
 }
 
 #[tokio::test]

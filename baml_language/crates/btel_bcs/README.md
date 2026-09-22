@@ -46,7 +46,8 @@ and blob integrity still require server-side validation.
 
 PUT success is the delivery acknowledgement, not proof of server ingestion or
 query availability. Retries reuse the same body and URL. BCS must issue URLs
-whose lifetimes cover the bounded retry window. Expiration is terminal.
+whose lifetimes cover the bounded retry window. Expiration drops that payload;
+it does not stop later delivery.
 
 ## Scope
 
@@ -54,6 +55,24 @@ There is no durable spool, recovery after process exit, or URL renewal.
 Orderly shutdown drains admitted delivery work.
 Cloud contract tests use local HTTP servers and require neither BCS nor AWS;
 they do not establish interoperability with a deployed server.
+
+## Payload failures
+
+Retryable transport and HTTP failures get one initial attempt plus three retries
+by default. Invalid plans, expired URLs, and nonretryable HTTP errors are dropped
+without futile retries. A failed prepare discards its group; a failed upload
+discards only that physical target. Other targets and later windows continue.
+Temporary admission saturation still applies bounded backpressure.
+
+There is no circuit breaker, cooldown, probe loop, or durable retry spool.
+Only fatal worker failures or explicit cancellation disable cloud recording.
+`BexEngine::telemetry_delivery_loss_count` counts discarded groups/targets, not
+events or retry attempts. `telemetry_result` retains an error after loss even
+when later uploads succeed. Delivered recording sequences may have gaps.
+
+This deliberately replaces the original cloud contract's permanent-disable and
+offer-once policies. BCS must tolerate missing recordings/captures and repeated
+CAS offers; only BCS decides whether content is already available.
 
 ## Ownership and limits
 
@@ -92,19 +111,26 @@ keeps its original borrowed path without these allocations.
 
 This permits large chunks to make progress through bounded publisher windows
 and delivery backpressure. Snapshot accounting is cached between preflight and
-retention rather than scanning each new snapshot twice. There is no silent
-dropping or automatic recovery from terminal delivery errors.
+retention rather than scanning each new snapshot twice. Dropped payloads remain
+observable without stopping later telemetry.
 
-Snapshot IDs are remembered for this publisher's lifetime, without eviction.
-Reaching the configured ID limit also disables telemetry; it does not silently
-reoffer an already prepared ID. Placement thresholds use retained-memory estimates,
+Snapshot IDs use bounded recent deduplication. Loss makes affected content
+eligible to be offered again; reaching the history limit evicts old entries.
+Placement thresholds use retained-memory estimates,
 not exact encoded lengths; output encoding has independent hard limits.
+
+Unacknowledged recording metadata is replayed in later files, without replaying
+spans or aggregates. Its journal is bounded; prolonged outages can evict old
+metadata and leave references unresolved. `telemetry_metadata_replay_evictions`
+reports these evictions separately from confirmed payload loss, since an
+in-flight copy may still succeed. This is best-effort recovery, not a guarantee
+of complete history after arbitrary outages.
 
 Snapshot accounting conservatively charges arena capacities and shared backing.
 It excludes the preexisting shared pool and allocator metadata. Bigint values
 and bigint type literals currently have no safe retained-capacity bound through
-`num-bigint`'s public API. These snapshots disable cloud delivery instead of
-silently violating its budget. This does not change local recording or BAML
+`num-bigint`'s public API. Unsupported payloads are discarded instead of
+silently violating the budget. This does not change local recording or BAML
 execution.
 
 ## Optional liveness

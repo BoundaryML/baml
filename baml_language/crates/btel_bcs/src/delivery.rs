@@ -64,6 +64,7 @@ pub struct DeliveryConfig {
     pub max_cas_body_bytes: usize,
     pub request_timeout: Duration,
     pub retry_delay: Duration,
+    /// Initial attempt plus retries. Nonretryable HTTP and invalid plans drop immediately.
     pub max_attempts: u32,
     pub allow_http: bool,
 }
@@ -85,7 +86,7 @@ impl Default for DeliveryConfig {
             max_cas_body_bytes: 8 * 1024 * 1024,
             request_timeout: Duration::from_secs(10),
             retry_delay: Duration::from_millis(200),
-            max_attempts: 3,
+            max_attempts: 4,
             allow_http: false,
         }
     }
@@ -138,6 +139,10 @@ impl DeliveryConfig {
 struct State {
     sender: Option<mpsc::Sender<Work>>,
     failure: Option<DeliveryError>,
+    last_error: Option<DeliveryError>,
+    loss_count: u64,
+    metadata_replay_evictions: u64,
+    progress: DeliveryProgress,
     recording_bytes: usize,
     cas_bytes: usize,
     snapshots: usize,
@@ -145,6 +150,12 @@ struct State {
     cas_targets: usize,
     last_file: Option<([u8; 16], u64)>,
     finished: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct DeliveryProgress {
+    pub reset_cas: bool,
+    pub recording_acked_through: u64,
 }
 
 struct Shared {
@@ -157,6 +168,16 @@ struct Shared {
 }
 
 impl Shared {
+    fn lose(&self, error: DeliveryError, reset_cas: bool) {
+        let mut state = self.state.lock().unwrap();
+        if state.failure.is_some() {
+            return;
+        }
+        state.last_error = Some(error);
+        state.loss_count = state.loss_count.saturating_add(1);
+        state.progress.reset_cas |= reset_cas;
+    }
+
     fn fail(&self, error: DeliveryError) {
         let (first, sender) = {
             let mut state = self.state.lock().unwrap();
@@ -228,6 +249,10 @@ impl DeliveryHandle {
                 state: Mutex::new(State {
                     sender: None,
                     failure: Some(error),
+                    last_error: None,
+                    loss_count: 0,
+                    metadata_replay_evictions: 0,
+                    progress: DeliveryProgress::default(),
                     recording_bytes: 0,
                     cas_bytes: 0,
                     snapshots: 0,
@@ -249,6 +274,39 @@ impl DeliveryHandle {
         self.shared.state.lock().unwrap().failure.is_some()
     }
 
+    /// Saturating count of dropped plans and physical targets, not HTTP attempts.
+    pub fn loss_count(&self) -> u64 {
+        self.shared.state.lock().unwrap().loss_count
+    }
+
+    /// Saturating count of definition segments evicted from bounded replay retention.
+    pub fn metadata_replay_evictions(&self) -> u64 {
+        self.shared.state.lock().unwrap().metadata_replay_evictions
+    }
+
+    pub(crate) fn record_metadata_replay_eviction(&self) {
+        let mut state = self.shared.state.lock().unwrap();
+        state.metadata_replay_evictions = state.metadata_replay_evictions.saturating_add(1);
+    }
+
+    pub(crate) fn record_payload_loss(&self, error: DeliveryError, reset_cas: bool) {
+        self.shared.lose(error, reset_cas);
+    }
+
+    /// Most recent loss, or the fatal lifecycle error if delivery was disabled.
+    pub fn last_error(&self) -> Option<DeliveryError> {
+        let state = self.shared.state.lock().unwrap();
+        state.failure.or(state.last_error)
+    }
+
+    pub(crate) fn take_progress(&self) -> DeliveryProgress {
+        let mut state = self.shared.state.lock().unwrap();
+        DeliveryProgress {
+            reset_cas: std::mem::take(&mut state.progress.reset_cas),
+            recording_acked_through: state.progress.recording_acked_through,
+        }
+    }
+
     pub fn disable(&self, error: DeliveryError) {
         self.shared.fail(error);
     }
@@ -263,7 +321,7 @@ impl DeliveryHandle {
         candidates: Vec<Snapshot>,
         proposed_uploads: Vec<ProposedUploadTarget>,
     ) -> Result<(), DeliveryError> {
-        self.submit_and_latch(file, candidates, proposed_uploads, None)
+        self.submit_and_observe(file, candidates, proposed_uploads, None)
     }
 
     /// The publisher accounts each frozen owner once while building its window.
@@ -274,10 +332,10 @@ impl DeliveryHandle {
         proposed_uploads: Vec<ProposedUploadTarget>,
         retained_sizes: &[usize],
     ) -> Result<(), DeliveryError> {
-        self.submit_and_latch(file, candidates, proposed_uploads, Some(retained_sizes))
+        self.submit_and_observe(file, candidates, proposed_uploads, Some(retained_sizes))
     }
 
-    fn submit_and_latch(
+    fn submit_and_observe(
         &self,
         file: SealedFile,
         candidates: Vec<Snapshot>,
@@ -287,7 +345,7 @@ impl DeliveryHandle {
         let result = self.submit(file, candidates, proposed_uploads, retained_sizes);
         if let Err(error) = result {
             if error != DeliveryError::Closed {
-                self.shared.fail(error);
+                self.shared.lose(error, true);
             }
         }
         result
@@ -496,6 +554,10 @@ impl BcsDelivery {
             state: Mutex::new(State {
                 sender: Some(sender),
                 failure: None,
+                last_error: None,
+                loss_count: 0,
+                metadata_replay_evictions: 0,
+                progress: DeliveryProgress::default(),
                 recording_bytes: 0,
                 cas_bytes: 0,
                 snapshots: 0,
@@ -548,24 +610,29 @@ impl BcsDelivery {
 
     pub fn finish(&self) -> Result<(), DeliveryError> {
         let mut worker = self.worker.lock().unwrap();
-        let sender = self.handle.shared.state.lock().unwrap().sender.take();
+        let sender = {
+            let mut state = self.handle.shared.state.lock().unwrap();
+            if state.failure.is_none() {
+                self.handle
+                    .shared
+                    .heartbeat
+                    .set_state(ProducerState::Draining);
+            }
+            state.sender.take()
+        };
         drop(sender);
         self.handle.shared.capacity.notify_all();
-        self.handle
-            .shared
-            .heartbeat
-            .set_state(ProducerState::Draining);
         if worker.take().is_some_and(|worker| worker.join().is_err()) {
             self.handle.shared.fail(DeliveryError::Worker);
         }
         let mut state = self.handle.shared.state.lock().unwrap();
         state.finished = true;
-        state.failure.map_or(Ok(()), Err)
+        state.failure.or(state.last_error).map_or(Ok(()), Err)
     }
 
     pub fn result(&self) -> Option<Result<(), DeliveryError>> {
         let state = self.handle.shared.state.lock().unwrap();
-        if let Some(error) = state.failure {
+        if let Some(error) = state.failure.or(state.last_error) {
             Some(Err(error))
         } else {
             state.finished.then_some(Ok(()))
@@ -764,7 +831,8 @@ async fn put(
 }
 
 struct Prepared {
-    recording: (UploadTarget, Bytes),
+    recording: Option<(UploadTarget, Bytes)>,
+    recording_sequence: u64,
     cas: Vec<(UploadTarget, Bytes)>,
     expiry: u64,
     _reservation: Reservation,
@@ -792,7 +860,10 @@ async fn assemble(
             .and_then(|ms| now.checked_add(ms))
             .ok_or(DeliveryError::Expired)
     };
-    validate_response(&request, &response, horizon(1)?, config.allow_http)?;
+    validate_response(&request, &response, config.allow_http)?;
+    if response.expires_at_unix_ms <= horizon(1)? {
+        return Err(DeliveryError::Expired);
+    }
     let actual_cas = response
         .uploads
         .iter()
@@ -804,16 +875,6 @@ async fn assemble(
         reservation.cas_targets = actual_cas;
         (horizon(state.plans)?, horizon(state.cas_targets)?)
     };
-    for target in &response.uploads {
-        let horizon = if target.kind == UploadKind::Recording {
-            recording_horizon
-        } else {
-            cas_horizon
-        };
-        if target.expires_at_unix_ms <= horizon || response.expires_at_unix_ms <= horizon {
-            return Err(DeliveryError::Expired);
-        }
-    }
     let mut candidates: Vec<_> = candidates.into_iter().map(Some).collect();
     for disposition in &response.cas {
         if matches!(disposition.disposition, Disposition::AlreadyAvailable {}) {
@@ -823,43 +884,67 @@ async fn assemble(
     let mut recording = None;
     let mut cas = Vec::new();
     for target in response.uploads {
-        let limit = if target.kind == UploadKind::Recording {
-            config.max_recording_body_bytes
-        } else {
-            config.max_cas_body_bytes
-        };
-        let mut envelope = CloudUploadEnvelope {
-            format_version: 1,
-            plan_id: response.plan_id.clone(),
-            upload_id: target.upload_id.clone(),
-            recording_file: (target.kind == UploadKind::Recording).then(|| file.bytes().to_vec()),
-            cas_objects: Vec::new(),
-        };
-        if envelope.encoded_len() > limit {
-            return Err(DeliveryError::Capacity);
-        }
-        for &index in &target.candidate_indices {
-            let snapshot = candidates[index as usize]
-                .take()
-                .ok_or(DeliveryError::InvalidPlan)?;
-            let mut writer = LimitedWriter::new(limit - envelope.encoded_len());
-            snapshot
-                .write_blob(&mut writer)
-                .map_err(|_| DeliveryError::Encoding)?;
-            let object = CasObject {
-                snapshot_id: snapshot.id().as_bytes().to_vec(),
-                snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
-                blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
-                blob: writer.bytes.into_boxed_slice().into_vec(),
+        let body = (|| {
+            let horizon = if target.kind == UploadKind::Recording {
+                recording_horizon
+            } else {
+                cas_horizon
             };
-            drop(snapshot);
-            envelope.cas_objects.push(object);
+            if target.expires_at_unix_ms <= horizon || response.expires_at_unix_ms <= horizon {
+                return Err(DeliveryError::Expired);
+            }
+            let limit = if target.kind == UploadKind::Recording {
+                config.max_recording_body_bytes
+            } else {
+                config.max_cas_body_bytes
+            };
+            let mut envelope = CloudUploadEnvelope {
+                format_version: 1,
+                plan_id: response.plan_id.clone(),
+                upload_id: target.upload_id.clone(),
+                recording_file: (target.kind == UploadKind::Recording)
+                    .then(|| file.bytes().to_vec()),
+                cas_objects: Vec::new(),
+            };
             if envelope.encoded_len() > limit {
                 return Err(DeliveryError::Capacity);
             }
-        }
-        let body = Bytes::from(envelope.encode_to_vec());
-        drop(envelope);
+            for &index in &target.candidate_indices {
+                let snapshot = candidates[index as usize]
+                    .take()
+                    .ok_or(DeliveryError::InvalidPlan)?;
+                let mut writer = LimitedWriter::new(limit - envelope.encoded_len());
+                snapshot
+                    .write_blob(&mut writer)
+                    .map_err(|_| DeliveryError::Encoding)?;
+                let object = CasObject {
+                    snapshot_id: snapshot.id().as_bytes().to_vec(),
+                    snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
+                    blob_sha256: Sha256::digest(&writer.bytes).to_vec(),
+                    blob: writer.bytes.into_boxed_slice().into_vec(),
+                };
+                drop(snapshot);
+                envelope.cas_objects.push(object);
+                if envelope.encoded_len() > limit {
+                    return Err(DeliveryError::Capacity);
+                }
+            }
+            let body = Bytes::from(envelope.encode_to_vec());
+            drop(envelope);
+            Ok(body)
+        })();
+        let body = match body {
+            Ok(body) => body,
+            Err(error) => {
+                reservation
+                    .shared
+                    .lose(error, !target.candidate_indices.is_empty());
+                for &index in &target.candidate_indices {
+                    candidates[index as usize].take();
+                }
+                continue;
+            }
+        };
         if target.kind == UploadKind::Recording {
             recording = Some((target, body));
         } else {
@@ -867,10 +952,12 @@ async fn assemble(
         }
     }
     drop(candidates);
+    let recording_sequence = file.sequence().get();
     drop(file);
     reservation.release_snapshot_slots();
     Ok(Prepared {
-        recording: recording.ok_or(DeliveryError::InvalidPlan)?,
+        recording,
+        recording_sequence,
         cas,
         expiry: response.expires_at_unix_ms,
         _reservation: reservation,
@@ -883,35 +970,46 @@ async fn upload(
     prepared: Prepared,
     recording_slots: Arc<Semaphore>,
     cas_slots: Arc<Semaphore>,
-) -> Result<(), DeliveryError> {
+) {
     let Prepared {
-        recording: (target, body),
+        recording,
+        recording_sequence,
         cas,
         expiry,
-        _reservation,
+        _reservation: reservation,
     } = prepared;
+    let shared = &reservation.shared;
     let recording_lane = async {
-        let _slot = recording_slots
-            .acquire()
-            .await
-            .map_err(|_| DeliveryError::Closed)?;
-        put(client, config, target, body, expiry).await
+        if let Some((target, body)) = recording {
+            let _slot = recording_slots
+                .acquire()
+                .await
+                .expect("recording lane open");
+            let reset_cas = !target.candidate_indices.is_empty();
+            match put(client, config, target, body, expiry).await {
+                Ok(()) => {
+                    let mut state = shared.state.lock().unwrap();
+                    state.progress.recording_acked_through = state
+                        .progress
+                        .recording_acked_through
+                        .max(recording_sequence);
+                }
+                Err(error) => shared.lose(error, reset_cas),
+            }
+        }
     };
     let cas_lane = async {
         if cas.is_empty() {
-            return Ok(());
+            return;
         }
-        let _slot = cas_slots
-            .acquire()
-            .await
-            .map_err(|_| DeliveryError::Closed)?;
+        let _slot = cas_slots.acquire().await.expect("CAS lane open");
         for (target, body) in cas {
-            put(client, config, target, body, expiry).await?;
+            if let Err(error) = put(client, config, target, body, expiry).await {
+                shared.lose(error, true);
+            }
         }
-        Ok::<(), DeliveryError>(())
     };
-    tokio::try_join!(recording_lane, cas_lane)?;
-    Ok(())
+    tokio::join!(recording_lane, cas_lane);
 }
 
 async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
@@ -979,16 +1077,13 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                         let recording_slots = recording_slots.clone();
                         let cas_slots = cas_slots.clone();
                         uploads.spawn(async move {
-                            if let Err(error) = upload(
+                            upload(
                                 &client, &shared.config, prepared, recording_slots, cas_slots,
-                            ).await {
-                                shared.fail(error);
-                            }
+                            ).await;
                         });
                     }
                     Err(error) => {
-                        shared.fail(error);
-                        break;
+                        shared.lose(error, true);
                     }
                 }
             }
@@ -1012,4 +1107,56 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
     }
     shared.heartbeat.stop();
     while heartbeats.join_next().await.is_some() {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fatal_cancellation_does_not_reset_cas_or_record_payload_loss() {
+        let handle = DeliveryHandle::disabled(DeliveryError::Worker);
+        handle.record_payload_loss(DeliveryError::Worker, true);
+        assert_eq!(handle.loss_count(), 0);
+        assert_eq!(handle.shared.state.lock().unwrap().last_error, None);
+        let progress = handle.take_progress();
+        assert!(!progress.reset_cas);
+        assert_eq!(progress.recording_acked_through, 0);
+    }
+
+    #[test]
+    fn replay_evictions_and_payload_losses_are_separate_bounded_counters() {
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                prepare_base_url: "https://localhost".into(),
+                ..DeliveryConfig::default()
+            },
+            |_| panic!("ordinary loss must not disable delivery"),
+        )
+        .unwrap();
+        let handle = delivery.handle();
+        {
+            let mut state = handle.shared.state.lock().unwrap();
+            state.loss_count = u64::MAX - 1;
+            state.metadata_replay_evictions = u64::MAX - 1;
+            state.progress.recording_acked_through = 7;
+        }
+        handle.record_metadata_replay_eviction();
+        handle.record_metadata_replay_eviction();
+        assert_eq!(handle.metadata_replay_evictions(), u64::MAX);
+        assert_eq!(handle.loss_count(), u64::MAX - 1);
+        assert_eq!(handle.last_error(), None);
+        handle.record_payload_loss(DeliveryError::Encoding, true);
+        handle.record_payload_loss(DeliveryError::Capacity, false);
+        assert_eq!(handle.loss_count(), u64::MAX);
+        assert_eq!(handle.last_error(), Some(DeliveryError::Capacity));
+        assert!(!handle.is_disabled());
+        let progress = handle.take_progress();
+        assert!(progress.reset_cas);
+        assert_eq!(progress.recording_acked_through, 7);
+        let progress = handle.take_progress();
+        assert!(!progress.reset_cas);
+        assert_eq!(progress.recording_acked_through, 7);
+        assert_eq!(delivery.finish(), Err(DeliveryError::Capacity));
+    }
 }

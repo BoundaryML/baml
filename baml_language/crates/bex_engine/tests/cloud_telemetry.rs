@@ -326,14 +326,25 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cloud_delivery_failure_does_not_change_execution() {
     let server = MockServer::start().await;
+    let healthy = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let responding = healthy.clone();
+    let base = server.uri();
     Mock::given(method("POST"))
-        .respond_with(ResponseTemplate::new(403))
-        .expect(1)
+        .respond_with(move |request: &Request| {
+            if responding.load(std::sync::atomic::Ordering::Acquire) {
+                ResponseTemplate::new(200).set_body_json(cloud_protocol::response(
+                    request,
+                    &base,
+                    &[],
+                ))
+            } else {
+                ResponseTemplate::new(503)
+            }
+        })
         .mount(&server)
         .await;
     Mock::given(method("PUT"))
         .respond_with(ResponseTemplate::new(200))
-        .expect(0)
         .mount(&server)
         .await;
     let engine = engine(&server, Duration::from_millis(10));
@@ -349,6 +360,8 @@ async fn cloud_delivery_failure_does_not_change_execution() {
     .await
     .expect("delivery failure must be observable without another invocation");
     let failure = engine.telemetry_result().unwrap().unwrap_err();
+    assert!(engine.telemetry_delivery_loss_count() > 0);
+    healthy.store(true, std::sync::atomic::Ordering::Release);
     execute(&engine).await;
     tokio::time::timeout(Duration::from_secs(10), engine.shutdown())
         .await
@@ -356,12 +369,23 @@ async fn cloud_delivery_failure_does_not_change_execution() {
     assert_eq!(engine.telemetry_result(), Some(Err(failure.clone())));
     engine.shutdown().await;
     assert_eq!(engine.telemetry_result(), Some(Err(failure)));
-    assert!(
-        server
-            .received_requests()
-            .await
-            .unwrap()
+    let requests = server.received_requests().await.unwrap();
+    assert!(requests.iter().any(|request| request.method == "PUT"));
+    let prepares: Vec<btel_bcs::wire::PrepareUploadsRequest> = requests
+        .iter()
+        .filter(|request| request.method == "POST")
+        .map(|request| serde_json::from_slice(&request.body).unwrap())
+        .collect();
+    let initial_ids: BTreeSet<_> = prepares[0]
+        .candidates
+        .iter()
+        .map(|candidate| &candidate.snapshot_id)
+        .collect();
+    assert!(!initial_ids.is_empty());
+    assert!(prepares.iter().skip(1).any(|request| {
+        request
+            .candidates
             .iter()
-            .all(|r| r.method != "PUT")
-    );
+            .any(|candidate| initial_ids.contains(&candidate.snapshot_id))
+    }));
 }

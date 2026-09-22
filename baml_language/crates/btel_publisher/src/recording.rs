@@ -43,6 +43,7 @@ pub struct SealedFile {
     id: RecordingId,
     sequence: NonZeroU64,
     bytes: Vec<u8>,
+    metadata: std::ops::Range<usize>,
 }
 impl SealedFile {
     pub fn recording_id(&self) -> RecordingId {
@@ -56,6 +57,29 @@ impl SealedFile {
     }
     pub fn retained_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(self.bytes.capacity())
+    }
+
+    /// Encoded definitions and clock states introduced by this file, without events.
+    /// Empty unless the builder enabled metadata replay.
+    pub fn metadata_bytes(&self) -> &[u8] {
+        &self.bytes[self.metadata.clone()]
+    }
+
+    /// Prepend older metadata from this recording before its newer definitions.
+    /// Call before preparing uploads: the resulting bytes must remain immutable.
+    pub fn prepend_metadata<'a>(&mut self, segments: impl Iterator<Item = &'a [u8]> + Clone) {
+        let prefix_len: usize = segments.clone().map(<[u8]>::len).sum();
+        if prefix_len == 0 {
+            return;
+        }
+        let mut bytes = Vec::with_capacity(prefix_len + self.bytes.len());
+        for segment in segments {
+            bytes.extend_from_slice(segment);
+        }
+        bytes.extend_from_slice(&self.bytes);
+        self.bytes = bytes;
+        self.metadata.start += prefix_len;
+        self.metadata.end += prefix_len;
     }
 }
 
@@ -74,6 +98,7 @@ pub struct RecordingBuilder {
     deadline: Option<Instant>,
     pending_span_reservation: usize,
     span_credit: usize,
+    metadata_replay: bool,
 }
 impl RecordingBuilder {
     pub fn new(id: RecordingId, config: RecordingConfig) -> Result<Self, RecordingError> {
@@ -94,8 +119,16 @@ impl RecordingBuilder {
             deadline: None,
             pending_span_reservation: 0,
             span_credit: 0,
+            metadata_replay: false,
         })
     }
+    /// Expose essential metadata separately for a bounded best-effort cloud journal.
+    #[must_use]
+    pub fn with_metadata_replay(mut self) -> Self {
+        self.metadata_replay = true;
+        self
+    }
+
     /// Optional source fingerprint, fixed for this recording before processing.
     #[must_use]
     pub fn with_source_snapshot(mut self, source_snapshot_id: Option<[u8; 32]>) -> Self {
@@ -150,7 +183,7 @@ impl RecordingBuilder {
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
         let ready = self.buffer.take();
-        let file = proto::RecordingFile {
+        let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
                 format_minor: encoding::FORMAT_MINOR,
@@ -167,11 +200,28 @@ impl RecordingBuilder {
         let length = file.encoded_len();
         self.reserve_encoding(length)?;
         let mut bytes = self.buffer.spans.finish();
+        let metadata_start = bytes.len();
+        if self.metadata_replay {
+            let metadata = proto::RecordingFile {
+                definitions: file
+                    .definitions
+                    .take()
+                    .filter(|value| value.encoded_len() != 0),
+                clock_states: file
+                    .clock_states
+                    .take()
+                    .filter(|value| value.encoded_len() != 0),
+                ..Default::default()
+            };
+            metadata.encode_raw(&mut bytes);
+        }
+        let metadata = metadata_start..bytes.len();
         file.encode_raw(&mut bytes);
         let sealed = SealedFile {
             id: self.id,
             sequence,
             bytes,
+            metadata,
         };
         drop(file); // Release converted metadata before potentially blocking delivery.
         self.next_sequence = sequence.get().checked_add(1).and_then(NonZeroU64::new);

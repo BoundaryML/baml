@@ -72,14 +72,10 @@ pub(crate) fn checked_url(value: &str, allow_http: bool) -> Result<Url, Delivery
 pub(crate) fn validate_response(
     request: &PrepareUploadsRequest,
     response: &PrepareUploadsResponse,
-    required_expiry_ms: u64,
     allow_http: bool,
 ) -> Result<(), DeliveryError> {
     if response.plan_id.is_empty() {
         return Err(DeliveryError::InvalidPlan);
-    }
-    if response.expires_at_unix_ms <= required_expiry_ms {
-        return Err(DeliveryError::Expired);
     }
     if response.cas.len() != request.candidates.len() {
         return Err(DeliveryError::InvalidPlan);
@@ -106,9 +102,6 @@ pub(crate) fn validate_response(
             || !target_ids.insert(upload.client_target_id)
         {
             return Err(DeliveryError::InvalidPlan);
-        }
-        if upload.expires_at_unix_ms <= required_expiry_ms {
-            return Err(DeliveryError::Expired);
         }
         checked_url(&upload.presigned_put_url, allow_http)?;
         let mut headers = HashSet::new();
