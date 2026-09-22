@@ -68,10 +68,10 @@ infisical run --env=prod-product-metrics -- sh -c 'curl --fail-with-body --reque
 
 The weekly `#general` notification is dispatched by the [`Product metrics Slack report` GitHub Actions workflow](../../.github/workflows/product-metrics-slack-report.yml), not by the Fly service. Its scheduled trigger runs every Friday at 8:00 AM in `America/Los_Angeles`. The workflow installs Playwright's matching Chromium build, asks this app to screenshot the live `GET /` dashboard after the native and embedded PostHog charts render, and uploads the PNG and Block Kit message to Slack using `SLACK_BOUNDARY_BOT_TOKEN` from the protected `boundary-tools-prod` GitHub environment. Fly serves the dashboard but does not run Chromium or dispatch this notification. PostHog readiness is based on visible, non-loading insight cards and a stable card count rather than exact dashboard titles, so panels can be renamed, added, removed, or reordered without changing this job. A failed browser capture is retried up to three times with a fresh browser and exponential backoff.
 
-The workflow can also be dispatched manually after it is present on the repository's default branch:
+The workflow can also be dispatched manually to `#general` or `#sam-sandbox` after it is present on the repository's default branch. Scheduled runs always post to `#general`:
 
 ```bash
-gh workflow run product-metrics-slack-report.yml
+gh workflow run product-metrics-slack-report.yml -f channel=sam-sandbox
 ```
 
 ## Deploy
