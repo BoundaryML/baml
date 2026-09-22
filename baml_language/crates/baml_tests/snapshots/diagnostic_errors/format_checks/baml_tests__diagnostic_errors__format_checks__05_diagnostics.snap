@@ -364,7 +364,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`
+  × unknown attribute `@stream.not_null`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`
     ╭─[class_decls.baml:33:74]
  33 │     summary string? @description("A summary") @alias("sum") @stream.done @stream.not_null
     ·                                                                          ────────┬───────
@@ -373,11 +373,47 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0015
 
-  × unknown attribute `@stream.not_null`
+  × unknown attribute `@@streaming`; valid on a class: `@@description`, `@@alias`, `@@stream.done`
+    ╭─[class_decls.baml:73:5]
+ 73 │     @@streaming
+    ·     ─────┬─────
+    ·          ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@first`; valid on a class: `@@description`, `@@alias`, `@@stream.done`
+    ╭─[class_decls.baml:79:5]
+ 79 │     @@first
+    ·     ───┬───
+    ·        ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@streaming`; valid on a class: `@@description`, `@@alias`, `@@stream.done`
+    ╭─[class_decls.baml:80:5]
+ 80 │     @@streaming
+    ·     ─────┬─────
+    ·          ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`
      ╭─[class_decls.baml:291:14]
  291 │     e string @stream.not_null
      ·              ────────┬───────
      ·                      ╰── unknown attribute
+     ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.with_state`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`
+     ╭─[class_decls.baml:292:14]
+ 292 │     f string @stream.with_state
+     ·              ─────────┬────────
+     ·                       ╰── unknown attribute
      ╰────
 
   [hir] E0010
@@ -1049,6 +1085,78 @@ source: crates/baml_tests/src/generated_tests.rs
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
+  [hir] E0016
+
+  × attribute `@stream.done` is not valid on an enum variant; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+    ╭─[enum_decls.baml:49:102]
+ 49 │     ConfiguredVariant @description("A configured variant with many attributes") @alias("configured") @stream.done @stream.not_null @stream.with_state
+    ·                                                                                                      ──────┬─────
+    ·                                                                                                            ╰── not valid here
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+    ╭─[enum_decls.baml:49:115]
+ 49 │     ConfiguredVariant @description("A configured variant with many attributes") @alias("configured") @stream.done @stream.not_null @stream.with_state
+    ·                                                                                                                   ────────┬───────
+    ·                                                                                                                           ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.with_state`; valid on an enum variant: `@description`, `@alias`, `@skip`
+    ╭─[enum_decls.baml:49:132]
+ 49 │     ConfiguredVariant @description("A configured variant with many attributes") @alias("configured") @stream.done @stream.not_null @stream.with_state
+    ·                                                                                                                                    ─────────┬────────
+    ·                                                                                                                                             ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@streaming`; valid on an enum: `@@description`, `@@alias`
+    ╭─[enum_decls.baml:62:5]
+ 62 │     @@streaming
+    ·     ─────┬─────
+    ·          ╰── unknown attribute
+    ╰────
+
+  [hir] E0016
+
+  × attribute `@stream.done` is not valid on an enum variant; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+     ╭─[enum_decls.baml:146:5]
+ 146 │     @stream.done // 20 third attr trailing
+     ·     ──────┬─────
+     ·           ╰── not valid here
+     ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+     ╭─[enum_decls.baml:148:5]
+ 148 │     @stream.not_null // 22 fourth attr trailing
+     ·     ────────┬───────
+     ·             ╰── unknown attribute
+     ╰────
+
+  [hir] E0016
+
+  × attribute `@stream.done` is not valid on an enum variant; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+     ╭─[enum_decls.baml:172:5]
+ 172 │     @stream.done /* 20 third attr trailing */
+     ·     ──────┬─────
+     ·           ╰── not valid here
+     ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+     ╭─[enum_decls.baml:174:5]
+ 174 │     @stream.not_null /* 22 fourth attr trailing */
+     ·     ────────┬───────
+     ·             ╰── unknown attribute
+     ╰────
+
   [validation] E0011
 
   × name `ExtraWhitespace` defined 4 times as: class, enum, function, type
@@ -1072,6 +1180,24 @@ source: crates/baml_tests/src/generated_tests.rs
        401 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
            ·         ───────────────
            ╰────
+
+  [hir] E0016
+
+  × attribute `@stream.done` is not valid on an enum variant; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+     ╭─[enum_decls.baml:218:7]
+ 218 │     X @stream.done
+     ·       ──────┬─────
+     ·             ╰── not valid here
+     ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.not_null`; valid on an enum variant: `@description`, `@alias`, `@skip`
+     ╭─[enum_decls.baml:219:7]
+ 219 │     Y @stream.not_null
+     ·       ────────┬───────
+     ·               ╰── unknown attribute
+     ╰────
 
   [validation] E0011
 

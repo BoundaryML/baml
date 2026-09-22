@@ -280,10 +280,6 @@ pub(crate) struct MVariant {
     pub(crate) axis: usize,
     /// Stable discriminant in the master enum. Gaps are wire-format tombstones.
     pub(crate) discriminant: u8,
-    /// Whether the variant carries a `TyAttr` (a named `attr` field or a
-    /// trailing tuple `TyAttr`). Attr-less template leaves get accessor
-    /// fallbacks instead of a compile error.
-    pub(crate) has_attr: bool,
 }
 
 impl Family {
@@ -439,37 +435,11 @@ fn resolve_variant(
             ));
         }
     };
-    // A variant need not carry a `TyAttr`: a template-only leaf (`TypeArgRef`)
-    // is pure structure with no streaming metadata. The generated
-    // `attr()`/`with_attr()` accessors fall back to `TyAttr::EMPTY` / identity
-    // for them (see `emit::attr_arm`). `has_attr` records which case applies so
-    // the accessor arms don't need to re-derive it.
-    let has_attr = carries_ty_attr(&variant.fields);
     Ok(MVariant {
         attrs,
         ident: variant.ident,
         fields: variant.fields,
         axis,
         discriminant,
-        has_attr,
     })
-}
-
-/// Every family variant must hold a `TyAttr` for the generated `attr`/`with_attr`
-/// accessors: in a field named `attr` (struct variants) or as the last
-/// positional (tuple variants). Validated up front so a non-conforming variant
-/// fails with a clear, spanned error instead of a cryptic one from the
-/// generated `match`.
-fn carries_ty_attr(fields: &Fields) -> bool {
-    fn is_ty_attr(ty: &syn::Type) -> bool {
-        matches!(ty, syn::Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "TyAttr"))
-    }
-    match fields {
-        Fields::Named(n) => n
-            .named
-            .iter()
-            .any(|f| f.ident.as_ref().is_some_and(|id| id == "attr") && is_ty_attr(&f.ty)),
-        Fields::Unnamed(u) => u.unnamed.last().is_some_and(|f| is_ty_attr(&f.ty)),
-        Fields::Unit => false,
-    }
 }

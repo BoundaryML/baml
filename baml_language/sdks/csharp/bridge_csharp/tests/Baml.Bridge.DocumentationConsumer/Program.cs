@@ -56,7 +56,7 @@ Func<long, CancellationToken, Task<long>> callback =
     };
 Require(await callback(21, cancellation.Token) == 42L, "callback example changed");
 
-Func<BamlStream<string?, string>, Func<string?, Task>, CancellationToken, Task<string>>
+Func<BamlStream<string>, Func<string, Task>, CancellationToken, Task<string>>
     streamExample = ConsumeStreamAsync;
 Func<BamlHandle, BamlHandle> resourceExample = CloneResource;
 GC.KeepAlive(streamExample);
@@ -92,14 +92,14 @@ catch (BamlOperationCanceledException error)
 Console.WriteLine("csharp_documentation_consumer=ok");
 return 0;
 
-static async Task<TFinal> ConsumeStreamAsync<TPartial, TFinal>(
-    BamlStream<TPartial, TFinal> stream,
-    Func<TPartial, Task> onPartial,
+static async Task<T> ConsumeStreamAsync<T>(
+    BamlStream<T> stream,
+    Func<T, Task> onPartial,
     CancellationToken cancellationToken)
 {
     await using (stream)
     {
-        await foreach (TPartial partial in
+        await foreach (T partial in
             stream.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             await onPartial(partial).ConfigureAwait(false);

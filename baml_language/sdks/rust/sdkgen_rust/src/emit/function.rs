@@ -447,7 +447,7 @@ fn collect_effect_params(
             && arg.default.is_none()
             && let Some(baml_codegen_types::Ty::Function { throws, .. }) =
                 crate::effect_rename::callback_root(&arg.ty)
-            && let baml_codegen_types::Ty::TypeVar(name, _) = throws.as_ref()
+            && let baml_codegen_types::Ty::TypeVar(name) = throws.as_ref()
         {
             let name = name.as_str();
             let already = class_params.iter().any(|p| p == name)
@@ -470,7 +470,7 @@ fn translate_throws(
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, translate_ty::Unsupported> {
     match ty {
-        baml_codegen_types::Ty::Never { .. } => Ok(quote! { ::core::convert::Infallible }),
+        baml_codegen_types::Ty::Never => Ok(quote! { ::core::convert::Infallible }),
         _ => translate_ty::translate(ty, ctx),
     }
 }
@@ -542,7 +542,7 @@ fn translate_callable(
 /// which parameters accept via `impl Into<_>`.
 fn is_multi_arm_union(ty: &baml_codegen_types::Ty) -> bool {
     match ty {
-        baml_codegen_types::Ty::Union(items, _) => crate::unions::strip_null(items).0.len() >= 2,
+        baml_codegen_types::Ty::Union(items) => crate::unions::strip_null(items).0.len() >= 2,
         _ => false,
     }
 }
@@ -598,13 +598,13 @@ fn raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
-                let n = name.bare_name().to_string();
+            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+                let n = name.name().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }

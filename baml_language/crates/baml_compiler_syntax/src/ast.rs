@@ -390,13 +390,6 @@ impl UnionMemberParts {
     pub fn float_literal(&self) -> Option<(bool, SyntaxToken)> {
         scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::FLOAT_LITERAL)
     }
-
-    /// Get ATTRIBUTE child nodes from this union member.
-    pub fn attributes(&self) -> impl Iterator<Item = Attribute> + '_ {
-        self.child_nodes
-            .iter()
-            .filter_map(|n| Attribute::cast(n.clone()))
-    }
 }
 
 impl Default for UnionMemberParts {
@@ -2180,6 +2173,11 @@ impl Field {
     /// Get the field type.
     pub fn ty(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
+    }
+
+    /// Get field attributes (@alias, @description, etc.), which follow the type.
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
+        self.syntax.children().filter_map(Attribute::cast)
     }
 }
 

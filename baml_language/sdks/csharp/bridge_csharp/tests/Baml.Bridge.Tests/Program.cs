@@ -2143,7 +2143,7 @@ internal static unsafe class Program
             streamEnvelope.ToByteArray(),
             partialMetadata,
             finalMetadata,
-            "test.echo$stream",
+            "test.echo@stream",
             api))
         {
             Require(
@@ -2164,7 +2164,7 @@ internal static unsafe class Program
                 streamEnvelope.ToByteArray(),
                 partialMetadata,
                 finalMetadata,
-                "test.echo$stream",
+                "test.echo@stream",
                 api));
         streamClass.Name = "ai.stream.Stream";
 

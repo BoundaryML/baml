@@ -51,10 +51,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
 
     for (key, symbol) in entries {
         let leaf = route(key);
-        // spec2: preserve the BAML name verbatim — `$` is a valid TS
-        // identifier char, so a `$stream` companion class is emitted as
-        // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
-        // symbols are unaffected (their name carries no `$stream`).
+        // spec2: preserve the BAML name verbatim.
         let bare = key.name().as_str().to_string();
 
         match symbol {
@@ -193,13 +190,13 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
                 let n = name.name().as_str().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }

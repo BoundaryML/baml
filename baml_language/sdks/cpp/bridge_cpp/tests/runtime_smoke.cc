@@ -129,6 +129,66 @@ static void TestOwnedBufferMove() {
   std::printf("owned buffer move ok\n");
 }
 
+static void TestBigintCodec() {
+  Require(baml::codec<baml::bigint>::baml_ty().primitive().kind() ==
+              baml::detail::pb::BAML_TY_PRIMITIVE_BIGINT,
+          "bigint codec reported the wrong BAML type");
+
+  struct Case {
+    const char* decimal;
+    const char* hex;
+  };
+  const Case cases[] = {
+      {"0", "0"},
+      {"10", "a"},
+      {"1000000000", "3b9aca00"},
+      {"4294967295", "ffffffff"},
+      {"4294967296", "100000000"},
+      {"18446744073709551615", "ffffffffffffffff"},
+      {"123456789012345678901234567890", "18ee90ff6c373e0ee4e3f0ad2"},
+      {"-10", "-a"}};
+  for (const auto& test_case : cases) {
+    const baml::bigint value(test_case.decimal);
+    baml::detail::pb::InboundValue encoded;
+    baml::codec<baml::bigint>::encode(encoded, value);
+    Require(
+        encoded.has_bigint_value() && encoded.bigint_value() == test_case.hex,
+        "bigint encode did not convert decimal to wire hexadecimal");
+
+    baml::detail::pb::BamlOutboundValue outbound;
+    outbound.set_bigint_value(test_case.hex);
+    Require(baml::codec<baml::bigint>::decode(outbound) == value,
+            "bigint decode did not convert wire hexadecimal to decimal");
+
+    baml::detail::pb::BamlOutboundValue literal;
+    literal.mutable_literal_value()->set_bigint_value(test_case.hex);
+    Require(baml::codec<baml::bigint>::decode(literal) == value,
+            "literal bigint decode did not convert wire hexadecimal to "
+            "decimal");
+  }
+
+  const char* noncanonical[] = {"+10", "0010", "-0"};
+  for (const char* decimal : noncanonical) {
+    bool threw = false;
+    try {
+      baml::detail::pb::InboundValue encoded;
+      baml::codec<baml::bigint>::encode(encoded, baml::bigint(decimal));
+    } catch (const baml::error&) {
+      threw = true;
+    }
+    Require(threw, "bigint encode accepted noncanonical decimal text");
+  }
+
+  const baml::bigint large_value("1" + std::string(100000, '2'));
+  baml::detail::pb::InboundValue large_encoded;
+  baml::codec<baml::bigint>::encode(large_encoded, large_value);
+  baml::detail::pb::BamlOutboundValue large_outbound;
+  large_outbound.set_bigint_value(large_encoded.bigint_value());
+  Require(baml::codec<baml::bigint>::decode(large_outbound) == large_value,
+          "large bigint radix conversion did not round trip");
+  std::printf("bigint codec ok\n");
+}
+
 static void TestPortableValuesTranscodeWithoutHandles() {
   baml::detail::pb::BamlOutboundValue media;
   media.mutable_media_value()->set_media(
@@ -155,7 +215,7 @@ static void TestPortableValuesTranscodeWithoutHandles() {
 
 static void TestTypedSpecStreamAndPortableValueCodecs() {
   using Spec = baml::function_spec<std::string>;
-  using Stream = baml::stream<std::optional<std::string>, std::string>;
+  using Stream = baml::stream<std::string>;
 
   const auto spec_ty = baml::codec<Spec>::baml_ty();
   Require(spec_ty.class_ty().name() == "ai.FunctionSpec",
@@ -166,8 +226,8 @@ static void TestTypedSpecStreamAndPortableValueCodecs() {
   const auto stream_ty = baml::codec<Stream>::baml_ty();
   Require(stream_ty.class_ty().name() == "ai.stream.Stream",
           "Stream codec lost nominal identity");
-  Require(stream_ty.class_ty().type_args_size() == 2,
-          "Stream codec lost Partial/Final type arguments");
+  Require(stream_ty.class_ty().type_args_size() == 1,
+          "Stream codec lost its value type argument");
 
   baml::detail::pb::BamlOutboundValue done;
   done.mutable_class_value()->set_name("ai.stream.Done");
@@ -261,6 +321,7 @@ int main() {
   RunTest("call registry", TestCallRegistryRoundTrip);
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
+  RunTest("bigint codec", TestBigintCodec);
   RunTest("portable prompt and media",
           TestPortableValuesTranscodeWithoutHandles);
   RunTest("typed spec, stream, prompt, and media codecs",

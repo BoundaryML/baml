@@ -1,5 +1,5 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // --- Foo: class with string list ---
 // class Foo { hi string[] }
@@ -8,7 +8,7 @@ use crate::{baml_db, baml_tyannotated};
 test_deserializer!(
     test_foo,
     r#"{"hi": ["a", "b"]}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             hi: [string],
@@ -20,7 +20,7 @@ test_deserializer!(
 test_deserializer!(
     test_wrapped_objects,
     r#"{"hi": "a"}"#,
-    baml_tyannotated!([Foo]),
+    baml_ty!([Foo]),
     baml_db!{
         class Foo {
             hi: [string],
@@ -32,7 +32,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_obj_and_string,
     r#"The output is: {"hi": ["a", "b"]}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             hi: [string],
@@ -44,7 +44,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_obj_and_string_with_extra_text,
     r#"This is a test. The output is: {"hi": ["a", "b"]}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             hi: [string],
@@ -56,7 +56,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_obj_and_string_with_invalid_extra_text,
     r#"{"hi": ["a", "b"]} is the output."#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             hi: [string],
@@ -68,7 +68,7 @@ test_deserializer!(
 test_deserializer!(
     str_with_quotes,
     r#"{"foo": "[\"bar\"]"}"#,
-    baml_tyannotated!(Bar),
+    baml_ty!(Bar),
     baml_db!{
         class Bar {
             foo: string,
@@ -80,7 +80,7 @@ test_deserializer!(
 test_deserializer!(
     str_with_nested_json,
     r#"{"foo": "{\"foo\": [\"bar\"]}"}"#,
-    baml_tyannotated!(Bar),
+    baml_ty!(Bar),
     baml_db!{
         class Bar {
             foo: string,
@@ -96,7 +96,7 @@ test_deserializer!(
   "foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"
 }
 "#,
-    baml_tyannotated!(Bar),
+    baml_ty!(Bar),
     baml_db!{
         class Bar {
             foo: string,
@@ -111,10 +111,10 @@ test_deserializer!(
 test_deserializer!(
     test_optional_foo,
     r#"{}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
-            foo: (string | null) @class_completed_field_missing(null),
+            foo: (string | null),
         }
     },
     { "foo": null }
@@ -123,10 +123,10 @@ test_deserializer!(
 test_deserializer!(
     test_optional_foo_with_value,
     r#"{"foo": ""}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
-            foo: (string | null) @class_completed_field_missing(null),
+            foo: (string | null),
         }
     },
     { "foo": "" }
@@ -138,11 +138,11 @@ test_deserializer!(
 test_deserializer!(
     test_multi_fielded_foo,
     r#"{"one": "a"}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             one: string,
-            two: (string | null) @class_completed_field_missing(null),
+            two: (string | null),
         }
     },
     { "one": "a", "two": null }
@@ -151,11 +151,11 @@ test_deserializer!(
 test_deserializer!(
     test_multi_fielded_foo_with_optional,
     r#"{"one": "a", "two": "b"}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             one: string,
-            two: (string | null) @class_completed_field_missing(null),
+            two: (string | null),
         }
     },
     { "one": "a", "two": "b" }
@@ -192,7 +192,7 @@ test_deserializer!(
             "abstained": false
         }
     }"#,
-    baml_tyannotated!(Issue4589Outer),
+    baml_ty!(Issue4589Outer),
     baml_db! {
         class Issue4589Bbox {
             x: float,
@@ -203,19 +203,19 @@ test_deserializer!(
         class Issue4589Source {
             doc_id: string,
             page: int,
-            bbox: (Issue4589Bbox | null) @class_completed_field_missing(null),
+            bbox: (Issue4589Bbox | null),
         }
         class Issue4589Envelope {
-            value: (string | null) @class_completed_field_missing(null),
-            source: (Issue4589Source | null) @class_completed_field_missing(null),
+            value: (string | null),
+            source: (Issue4589Source | null),
             abstained: bool,
-            note: (string | null) @class_completed_field_missing(null),
+            note: (string | null),
         }
         class Issue4589Outer {
-            optional_omitted: (Issue4589Envelope | null) @class_completed_field_missing(null),
+            optional_omitted: (Issue4589Envelope | null),
             required_omitted: Issue4589Envelope,
-            optional_present: (Issue4589Envelope | null) @class_completed_field_missing(null),
-            optional_explicit_null: (Issue4589Envelope | null) @class_completed_field_missing(null),
+            optional_present: (Issue4589Envelope | null),
+            optional_explicit_null: (Issue4589Envelope | null),
         }
     },
     {
@@ -269,11 +269,11 @@ test_deserializer!(
             ]
         }
     ```"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             one: string,
-            two: (string | null) @class_completed_field_missing(null),
+            two: (string | null),
         }
     },
     { "one": "hi", "two": "hello" }
@@ -285,7 +285,7 @@ test_deserializer!(
 test_deserializer!(
     test_multi_fielded_foo_with_list,
     r#"{"a": 1, "b": "hi", "c": ["a", "b"]}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             a: int,
@@ -303,7 +303,7 @@ test_deserializer!(
 test_deserializer!(
     test_nested_class,
     r#"{"foo": {"a": "hi"}}"#,
-    baml_tyannotated!(Bar),
+    baml_ty!(Bar),
     baml_db!{
         class Foo {
             a: string,
@@ -333,7 +333,7 @@ test_deserializer!(
             "a": "twooo"
         }
     }"#,
-    baml_tyannotated!(Bar),
+    baml_ty!(Bar),
     baml_db!{
         class Foo {
             a: string,
@@ -361,7 +361,7 @@ test_deserializer!(
         }
     }
     "#,
-    baml_tyannotated!(Bar),
+    baml_ty!(Bar),
     baml_db!{
         class Foo {
             a: string,
@@ -392,12 +392,12 @@ test_deserializer!(
         "education": [],
         "skills": ["politician", "former brigadier-general"]
     }"#,
-    baml_tyannotated!(Resume),
+    baml_ty!(Resume),
     baml_db!{
         class Resume {
             name: string,
-            email: (string | null) @class_completed_field_missing(null),
-            phone: (string | null) @class_completed_field_missing(null),
+            email: (string | null),
+            phone: (string | null),
             experience: [string],
             education: [string],
             skills: [string],
@@ -428,15 +428,15 @@ test_partial_deserializer!(
         "experience": [
             "Senior Minister of Singapore since 2024",
             "Prime Minister of Singapore from 2004 to "#,
-    baml_tyannotated!(Resume),
+    baml_ty!(Resume),
     baml_db!{
         class Resume {
-            name: string @class_in_progress_field_missing(null),
-            email: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            phone: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            experience: [string] @class_in_progress_field_missing(null),
-            education: [string] @class_in_progress_field_missing([]),
-            skills: [string] @class_in_progress_field_missing([]),
+            name: string,
+            email: (string | null),
+            phone: (string | null),
+            experience: [string],
+            education: [string],
+            skills: [string],
         }
     },
     {
@@ -458,19 +458,19 @@ test_partial_deserializer!(
         "experience": [
             "Senior Minister of Singapore since 2024",
             "Prime Minister of Singapore from 2004 to "#,
-    baml_tyannotated!(Resume),
+    baml_ty!(Resume),
     baml_db!{
         class Resume {
-            name: string @class_in_progress_field_missing(null),
-            email: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            phone: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            experience: [string] @class_in_progress_field_missing(null),
-            education: [string] @class_in_progress_field_missing([]),
-            skills: [string] @class_in_progress_field_missing([]),
+            name: string,
+            email: (string | null),
+            phone: (string | null),
+            experience: [string],
+            education: [string],
+            skills: [string],
         }
     },
     {
-        "name": null,
+        "name": "",
         "email": null,
         "phone": null,
         "experience": [
@@ -500,7 +500,7 @@ test_deserializer!(
         "key4": "This is a value for key4",
         "key.with.punctuation/123": "This is a value with punctuation and numbers"
       }"#,
-    baml_tyannotated!(TestClassAlias),
+    baml_ty!(TestClassAlias),
     baml_db!{
         class TestClassAlias {
             key: string @alias("key-dash"),
@@ -526,7 +526,7 @@ test_deserializer!(
 test_deserializer!(
     test_class_with_whitespace_keys,
     r#"{" answer ": {" content ": 78.54}}"#,
-    baml_tyannotated!(SimpleTest),
+    baml_ty!(SimpleTest),
     baml_db!{
         class Answer {
             content: float,
@@ -567,7 +567,7 @@ test_deserializer!(
           "SIMD on custom silicon"
         ]
       }"#,
-    baml_tyannotated!(Resume),
+    baml_ty!(Resume),
     baml_db!{
         class Education {
             school: string,
@@ -616,7 +616,7 @@ test_deserializer!(
           }
         ]
     "#,
-    baml_tyannotated!([Education]),
+    baml_ty!([Education]),
     baml_db!{
         class Education {
             school: string,
@@ -681,7 +681,7 @@ test_deserializer!(
           diameter: 10,
         }
       ]"#,
-    baml_tyannotated!([Function]),
+    baml_ty!([Function]),
     make_function_db(),
     [
         {"selected": {
@@ -705,7 +705,7 @@ test_deserializer!(
       diameter: 10,
     }
     "#,
-    baml_tyannotated!(Function2),
+    baml_ty!(Function2),
     baml_db!{
         class Function2 {
             function_name: string,
@@ -730,7 +730,7 @@ test_deserializer!(
     }
     and this
     "#,
-    baml_tyannotated!(Function2),
+    baml_ty!(Function2),
     baml_db!{
         class Function2 {
             function_name: string,
@@ -750,11 +750,11 @@ test_deserializer!(
 test_failing_deserializer!(
     test_nested_obj_from_string_fails_0,
     r#"My inner string"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db! {
         class Bar {
             bar: string,
-            option: (int | null) @class_completed_field_missing(null),
+            option: (int | null),
         }
         class Foo {
             foo: Bar,
@@ -765,7 +765,7 @@ test_failing_deserializer!(
 test_failing_deserializer!(
     test_nested_obj_from_string_fails_1,
     r#"My inner string"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db! {
         class Bar {
             bar: string,
@@ -779,7 +779,7 @@ test_failing_deserializer!(
 test_failing_deserializer!(
     test_nested_obj_from_string_fails_2,
     r#"My inner string"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db! {
         class Foo {
             foo: string,
@@ -790,7 +790,7 @@ test_failing_deserializer!(
 test_deserializer!(
     test_nested_obj_from_int,
     r#"1214"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             foo: int,
@@ -802,7 +802,7 @@ test_deserializer!(
 test_deserializer!(
     test_nested_obj_from_float,
     r#"1214.123"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             foo: float,
@@ -814,7 +814,7 @@ test_deserializer!(
 test_deserializer!(
     test_nested_obj_from_bool,
     r#" true "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             foo: bool,
@@ -850,24 +850,24 @@ test_deserializer!(
 }
 ```
 "#,
-    baml_tyannotated!(Schema),
+    baml_ty!(Schema),
     baml_db!{
         class Nested2 {
-            prop11: (string | null) @class_completed_field_missing(null),
-            prop12: (string | null) @alias("blah") @class_completed_field_missing(null),
+            prop11: (string | null),
+            prop12: (string | null) @alias("blah"),
         }
         class Nested {
-            prop3: (string | null) @class_completed_field_missing(null),
-            prop4: (string | null) @alias("blah") @class_completed_field_missing(null),
+            prop3: (string | null),
+            prop4: (string | null) @alias("blah"),
             prop20: Nested2,
         }
         class Schema {
-            prop1: (string | null) @class_completed_field_missing(null),
+            prop1: (string | null),
             prop2: (Nested | string),
             prop5: [(string | null)],
             prop6: (string | [Nested]) @alias("blah"),
             nested_attrs: [(string | null | Nested)],
-            parens: (string | null) @class_completed_field_missing(null),
+            parens: (string | null),
             other_group: (string | (int | string)) @alias("other"),
         }
     },
@@ -957,7 +957,7 @@ test_deserializer!(
     }
   ]
 }"#,
-    baml_tyannotated!(Page),
+    baml_ty!(Page),
     baml_db!{
         enum ColumnType {
             Column @alias("column")
@@ -997,7 +997,7 @@ test_deserializer!(
         }
         class ParagraphBody {
             rich_text: [RichText],
-            children: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
+            children: [string],
         }
         class Paragraph {
             r#type: ParagraphType,
@@ -1005,8 +1005,8 @@ test_deserializer!(
         }
         class ToDoBody {
             rich_text: [RichText],
-            checked: (bool | null) @class_completed_field_missing(null),
-            children: [Paragraph] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
+            checked: (bool | null),
+            children: [Paragraph],
         }
         class ToDo {
             r#type: ToDoType,
@@ -1142,7 +1142,7 @@ Here's the redesigned code with these changes:
   ]
 
   "#,
-    baml_tyannotated!(DoCommandACReturnType),
+    baml_ty!(DoCommandACReturnType),
     baml_db!{
         class TextSection {
             text: string,
@@ -1174,7 +1174,7 @@ Here's the redesigned code with these changes:
 test_partial_deserializer!(
     test_object_finished_ints,
     r#"{"a": 1234,"b": 1234, "c": 1234}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             a: int,
@@ -1190,7 +1190,7 @@ test_partial_deserializer!(
 test_deserializer!(
     test_empty_string_value,
     r#"{"a": ""}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             a: string,
@@ -1202,7 +1202,7 @@ test_deserializer!(
 test_deserializer!(
     test_empty_string_value_1,
     r#"{a: ""}"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             a: string,
@@ -1218,7 +1218,7 @@ test_deserializer!(
     b: "",
     res: []
   }"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             a: string,
@@ -1238,7 +1238,7 @@ test_deserializer!(
     res: [hello,
      world]
   }"#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             a: string,
@@ -1268,10 +1268,10 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
-            pointer: (Foo | null) @class_completed_field_missing(null),
+            pointer: (Foo | null),
         }
     },
     {
@@ -1291,10 +1291,10 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
-            pointer: (Foo | null) @class_completed_field_missing(null),
+            pointer: (Foo | null),
         }
     },
     {
@@ -1319,7 +1319,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             pointer: (Foo | int),
@@ -1350,7 +1350,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             b: (Bar | int),
@@ -1379,7 +1379,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             pointer: (Foo | int),
@@ -1409,7 +1409,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             rec_one: (Foo | int),
@@ -1448,7 +1448,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             rec_one: (Foo | int),
@@ -1484,7 +1484,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             rec_one: (Foo | int | bool),
@@ -1514,7 +1514,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             rec_one: (Foo | int | bool),
@@ -1555,7 +1555,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             rec_one: string,
@@ -1578,7 +1578,7 @@ test_deserializer!(
     The answer is
     { rec_one: ["first with "quotes", and also "more"", "second"], rec_two: ["third", "fourth"] },
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
             rec_one: [string],
@@ -1600,7 +1600,7 @@ test_deserializer!(
     r#"
     {foo:FOO, name: "Greg"}
   "#,
-    baml_tyannotated!(WithFoo),
+    baml_ty!(WithFoo),
     baml_db!{
         enum Foo { FOO, BAR }
         class WithFoo {
@@ -1626,7 +1626,7 @@ test_deserializer!(
       "key4": "This is a value for key4",
       "key.with.punctuation/123": "This is a value with punctuation and numbers"
     }"#,
-    baml_tyannotated!(TestClassAlias),
+    baml_ty!(TestClassAlias),
     baml_db!{
         class TestClassAlias {
             key: string @alias("key-dash"),
@@ -1650,7 +1650,7 @@ test_deserializer!(
 test_deserializer!(
     test_class_with_capitalization,
     r#"{"Answer": {" content ": 78.54}}"#,
-    baml_tyannotated!(SimpleTest),
+    baml_ty!(SimpleTest),
     baml_db!{
         class Answer {
             content: float,
@@ -1673,11 +1673,11 @@ test_deserializer!(
 test_deserializer!(
     test_skip_field,
     r#"{"dont_skip": "ok"}"#,
-    baml_tyannotated!(SkipField),
+    baml_ty!(SkipField),
     baml_db!{
         class SkipField {
             dont_skip: string,
-            skip_this_one: (string | null) @class_completed_field_missing(null),
+            skip_this_one: (string | null),
         }
     },
     {
@@ -1755,7 +1755,7 @@ These are validated only for being non-empty strings — **no literal content re
 }
 ```
 "#,
-    baml_tyannotated!(ExtractedResult),
+    baml_ty!(ExtractedResult),
     baml_db!{
         class ExtractedResult {
             required_literals: [string],

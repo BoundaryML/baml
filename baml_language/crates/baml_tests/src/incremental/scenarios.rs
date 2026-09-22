@@ -363,10 +363,10 @@ fn type_alias_loc<'db>(
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::TypeAliasLoc<'db> {
-    *baml_compiler2_ppir::item_data::file_type_aliases(db, file)
+    *baml_compiler2_hir::item_data::file_type_aliases(db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::type_alias_data(db, loc)
+            baml_compiler2_hir::item_data::type_alias_data(db, loc)
                 .name
                 .as_str()
                 == name
@@ -386,8 +386,8 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
         (
-            baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone(),
-            baml_compiler2_ppir::item_data::type_alias_source_map(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
         )
     };
 
@@ -399,8 +399,8 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
         (
-            baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone(),
-            baml_compiler2_ppir::item_data::type_alias_source_map(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
         )
     };
 
@@ -425,7 +425,7 @@ fn semantic_edit_changes_item_data() {
     let data_before = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
-        baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone()
+        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
     };
 
     file.set_text(test_db.db_mut())
@@ -434,7 +434,7 @@ fn semantic_edit_changes_item_data() {
     let data_after = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
-        baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone()
+        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
     };
 
     assert_ne!(data_before, data_after);
@@ -445,10 +445,10 @@ fn class_loc<'db>(
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::ClassLoc<'db> {
-    *baml_compiler2_ppir::item_data::file_classes(db, file)
+    *baml_compiler2_hir::item_data::file_classes(db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::class_data(db, loc)
+            baml_compiler2_hir::item_data::class_data(db, loc)
                 .name
                 .as_str()
                 == name
@@ -461,10 +461,10 @@ fn function_loc<'db>(
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::FunctionLoc<'db> {
-    *baml_compiler2_ppir::item_data::file_functions(db, file)
+    *baml_compiler2_hir::item_data::file_functions(db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::function_data(db, loc)
+            baml_compiler2_hir::item_data::function_data(db, loc)
                 .name
                 .as_str()
                 == name
@@ -479,11 +479,11 @@ fn function_loc<'db>(
 /// and carries no spans, so projecting it away loses nothing these tests check.
 type ClassFingerprint = (
     baml_base::Name,
-    Vec<baml_compiler2_ppir::item_data::GenericParamData>,
+    Vec<baml_compiler2_hir::item_data::GenericParamData>,
     baml_compiler2_hir::type_ref::TypeRefStore,
-    Vec<baml_compiler2_ppir::item_data::FieldData>,
-    Vec<baml_compiler2_ppir::item_data::ImplementsData>,
-    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    Vec<baml_compiler2_hir::item_data::FieldData>,
+    Vec<baml_compiler2_hir::item_data::ImplementsData>,
+    baml_compiler2_hir::item_tree::ClassAttrs,
 );
 
 fn class_fingerprint(
@@ -491,14 +491,14 @@ fn class_fingerprint(
     file: SourceFile,
     name: &str,
 ) -> ClassFingerprint {
-    let data = baml_compiler2_ppir::item_data::class_data(db, class_loc(db, file, name));
+    let data = baml_compiler2_hir::item_data::class_data(db, class_loc(db, file, name));
     (
         data.name.clone(),
         data.generic_params.clone(),
         data.type_refs.clone(),
         data.fields.clone(),
         data.implements.clone(),
-        data.attributes.clone(),
+        data.attrs.clone(),
     )
 }
 
@@ -572,7 +572,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
     let before = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
     };
 
     file.set_text(test_db.db_mut())
@@ -580,7 +580,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
     let after = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
     };
 
     assert_eq!(
@@ -588,6 +588,56 @@ fn editing_a_function_body_preserves_its_signature_data() {
         "a body edit must not invalidate the signature"
     );
     assert_eq!(before.params.len(), 2);
+}
+
+/// A downstream consumer that reads spans out of the memoized signature, the
+/// way a signature-lowering pass anchors its diagnostics.
+#[salsa::tracked]
+fn signature_param_type_spans<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Vec<text_size::TextRange> {
+    baml_compiler2_hir::signature::function_signature(db, function).params[0]
+        .ty
+        .spans()
+}
+
+/// A signature's written types carry the nested spans that diagnostics anchor
+/// on. An edit that only moves them must not let the signature cut off, or a
+/// consumer reading those spans is never re-run and keeps the old positions.
+#[test]
+fn moving_a_function_refreshes_its_signature_type_spans() {
+    fn param_type_texts(
+        db: &baml_db::ProjectDatabase,
+        file: SourceFile,
+        text: &str,
+    ) -> Vec<String> {
+        signature_param_type_spans(db, function_loc(db, file, "lookup"))
+            .iter()
+            .map(|span| text[usize::from(span.start())..usize::from(span.end())].to_string())
+            .collect()
+    }
+    let expected = [
+        "map<string, map<string, int>>",
+        "string",
+        "map<string, int>",
+        "string",
+        "int",
+    ];
+
+    let mut test_db = IncrementalTestDb::new();
+    let before_text = "function lookup(table: map<string, map<string, int>>) -> int {\n  1\n}\n";
+    let file = test_db.db_mut().file("test.baml", before_text);
+    assert_eq!(param_type_texts(test_db.db(), file, before_text), expected);
+
+    let after_text =
+        "// a comment\nfunction lookup(table: map<string, map<string, int>>) -> int {\n  1\n}\n";
+    file.set_text(test_db.db_mut()).to(after_text.to_string());
+    assert_eq!(
+        param_type_texts(test_db.db(), file, after_text),
+        expected,
+        "a span-reading consumer must re-run when the signature's types move"
+    );
 }
 
 // ── Item ↔ scope index ───────────────────────────────────────────────────────
@@ -618,15 +668,15 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     );
 
     let db = test_db.db();
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     // Guard against a vacuous test: the declarative `Greet` must actually have
     // synthesized companions, or the ambiguous case is not being exercised.
-    let functions = baml_compiler2_ppir::item_data::file_functions(db, file);
+    let functions = baml_compiler2_hir::item_data::file_functions(db, file);
     let companions = functions
         .iter()
         .filter(|&&loc| {
             !matches!(
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .metadata
                     .origin,
                 baml_compiler2_ast::FunctionOrigin::UserDefined
@@ -640,8 +690,8 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     );
 
     for &loc in functions {
-        let func = baml_compiler2_ppir::item_data::function_data(db, loc);
-        let func_span = baml_compiler2_ppir::item_data::function_source_map(db, loc).span;
+        let func = baml_compiler2_hir::item_data::function_data(db, loc);
+        let func_span = baml_compiler2_hir::item_data::function_source_map(db, loc).span;
 
         // The scan being retired.
         let legacy = index
@@ -656,7 +706,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
             })
             .map(|scope| scope.file_scope_id(db));
 
-        let indexed = baml_compiler2_ppir::item_data::function_scope(db, loc)
+        let indexed = baml_compiler2_hir::item_data::function_scope(db, loc)
             .map(|scope| scope.file_scope_id(db));
 
         assert_eq!(
@@ -682,7 +732,7 @@ fn function_scope_survives_a_whitespace_edit() {
     let before = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Add");
-        baml_compiler2_ppir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
     };
 
     file.set_text(test_db.db_mut())
@@ -691,7 +741,7 @@ fn function_scope_survives_a_whitespace_edit() {
     let after = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Add");
-        baml_compiler2_ppir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
     };
 
     assert!(before.is_some());
@@ -712,11 +762,11 @@ fn scope_owner_round_trips() {
 
     let db = test_db.db();
     let loc = function_loc(db, file, "Add");
-    let scope = baml_compiler2_ppir::item_data::function_scope(db, loc).expect("scope");
+    let scope = baml_compiler2_hir::item_data::function_scope(db, loc).expect("scope");
 
     assert_eq!(
-        baml_compiler2_ppir::item_data::scope_owner(db, scope),
-        Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(loc)),
+        baml_compiler2_hir::item_data::scope_owner(db, scope),
+        Some(baml_compiler2_hir::item_data::ScopeOwner::Function(loc)),
     );
 }
 
@@ -789,43 +839,43 @@ function free_standing(x: int) -> int throws never {
     );
 
     let db = test_db.db();
-    assert!(!baml_compiler2_ppir::item_data::file_functions(db, file).is_empty());
+    assert!(!baml_compiler2_hir::item_data::file_functions(db, file).is_empty());
 
     let mut cases = (0usize, 0usize, 0usize, 0usize);
-    for &loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
-        let func_name = baml_compiler2_ppir::item_data::function_data(db, loc)
+    for &loc in baml_compiler2_hir::item_data::file_functions(db, file) {
+        let func_name = baml_compiler2_hir::item_data::function_data(db, loc)
             .name
             .clone();
 
         // The scans being retired.
-        let by_class = baml_compiler2_ppir::item_data::file_classes(db, file)
+        let by_class = baml_compiler2_hir::item_data::file_classes(db, file)
             .iter()
             .copied()
             .find(|&class_loc| {
-                baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                baml_compiler2_hir::item_data::class_data(db, class_loc)
                     .methods
                     .contains(&loc)
             });
-        let by_interface = baml_compiler2_ppir::item_data::file_interfaces(db, file)
+        let by_interface = baml_compiler2_hir::item_data::file_interfaces(db, file)
             .iter()
             .copied()
             .find(|&iface_loc| {
-                baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
+                baml_compiler2_hir::item_data::interface_data(db, iface_loc)
                     .methods
                     .contains(&loc)
             });
-        let by_impl = baml_compiler2_ppir::item_data::file_impls(db, file)
+        let by_impl = baml_compiler2_hir::item_data::file_impls(db, file)
             .iter()
             .copied()
             .find(|&impl_loc| {
-                baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc)
+                baml_compiler2_hir::item_data::impl_block_data(db, impl_loc)
                     .methods
                     .contains(&loc)
             });
 
-        let indexed = baml_compiler2_ppir::item_data::method_owner(db, loc);
+        let indexed = baml_compiler2_hir::item_data::method_owner(db, loc);
 
-        use baml_compiler2_ppir::item_data::MethodOwner;
+        use baml_compiler2_hir::item_data::MethodOwner;
         match (by_class, by_interface, by_impl) {
             (Some(class_loc), None, None) => {
                 cases.0 += 1;
@@ -887,7 +937,7 @@ fn elaborated_function_data_cuts_off_and_still_elaborates() {
     let before = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Apply");
-        baml_compiler2_ppir::item_data::elaborated_function_data(db, loc).clone()
+        baml_compiler2_hir::item_data::elaborated_function_data(db, loc).clone()
     };
 
     // The callback param `f` omits its throws — elaboration must have opened a
@@ -908,7 +958,7 @@ fn elaborated_function_data_cuts_off_and_still_elaborates() {
     let after = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Apply");
-        baml_compiler2_ppir::item_data::elaborated_function_data(db, loc).clone()
+        baml_compiler2_hir::item_data::elaborated_function_data(db, loc).clone()
     };
 
     assert_eq!(
@@ -933,7 +983,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
 
     let before = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
+        baml_compiler2_hir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
             .clone()
     };
 
@@ -946,7 +996,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
 
     let after = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
+        baml_compiler2_hir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
             .clone()
     };
 
@@ -961,7 +1011,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
 
 /// Run hir_ty inference for every body owner in `file`.
 fn query_hir_ty_inference(db: &baml_db::ProjectDatabase, file: SourceFile) {
-    for owner in baml_compiler2_ppir::file_body_owners(db, file) {
+    for owner in baml_compiler2_hir::body::file_body_owners(db, file) {
         let _ = baml_compiler2_hir_ty::infer::infer_body(db, owner);
     }
 }

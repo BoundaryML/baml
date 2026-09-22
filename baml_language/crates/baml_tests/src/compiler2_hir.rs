@@ -4,6 +4,8 @@
 //! - Multi-file `package_items` aggregation
 //! - Targeted unit tests: cross-file symbol merging
 //! - Early-cutoff: comment-only changes don't re-run `namespace_items`
+//! - Package namespace order, package-interface artifacts, and body-owner
+//!   dispatch
 
 #[cfg(test)]
 mod tests {
@@ -36,10 +38,10 @@ mod tests {
         file: baml_base::SourceFile,
         name: &str,
     ) -> FunctionLoc<'db> {
-        *baml_compiler2_ppir::item_data::file_functions(db, file)
+        *baml_compiler2_hir::item_data::file_functions(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .name
                     .as_str()
                     == name
@@ -53,20 +55,20 @@ mod tests {
         class_name: &str,
         method_name: &str,
     ) -> FunctionLoc<'db> {
-        let class_loc = *baml_compiler2_ppir::item_data::file_classes(db, file)
+        let class_loc = *baml_compiler2_hir::item_data::file_classes(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::class_data(db, loc)
+                baml_compiler2_hir::item_data::class_data(db, loc)
                     .name
                     .as_str()
                     == class_name
             })
             .unwrap_or_else(|| panic!("missing class {class_name}"));
-        *baml_compiler2_ppir::item_data::class_data(db, class_loc)
+        *baml_compiler2_hir::item_data::class_data(db, class_loc)
             .methods
             .iter()
             .find(|&&method_loc| {
-                baml_compiler2_ppir::item_data::function_data(db, method_loc)
+                baml_compiler2_hir::item_data::function_data(db, method_loc)
                     .name
                     .as_str()
                     == method_name
@@ -243,13 +245,13 @@ mod tests {
         );
 
         // Find the function via the firewall.
-        let greet = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+        let greet = *baml_compiler2_hir::item_data::file_functions(&db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(&db, loc).name == Name::new("greet")
+                baml_compiler2_hir::item_data::function_data(&db, loc).name == Name::new("greet")
             })
             .expect("function 'greet' should be in item tree");
-        let func = baml_compiler2_ppir::item_data::function_data(&db, greet);
+        let func = baml_compiler2_hir::item_data::function_data(&db, greet);
 
         assert_eq!(
             func.params.len(),
@@ -311,7 +313,7 @@ mod tests {
             "#,
         );
 
-        use baml_compiler2_ppir::item_data::{
+        use baml_compiler2_hir::item_data::{
             ImplSubjectData, class_data, class_impls, file_classes, file_free_impls, file_impls,
             impl_block_data,
         };
@@ -369,7 +371,7 @@ mod tests {
     #[test]
     fn get_implements_block_enforces_bounds_and_blanket_concreteness() {
         use baml_compiler2_hir::contributions::Definition;
-        use baml_type::{Ty, TyAttr};
+        use baml_type::Ty;
 
         let mut db = make_db();
         let file = db.file(
@@ -395,23 +397,23 @@ mod tests {
         let aliases = std::collections::HashMap::new();
 
         let class_ty = |class_name: &str| {
-            let loc = *baml_compiler2_ppir::item_data::file_classes(&db, file)
+            let loc = *baml_compiler2_hir::item_data::file_classes(&db, file)
                 .iter()
                 .find(|&&loc| {
-                    baml_compiler2_ppir::item_data::class_data(&db, loc).name
+                    baml_compiler2_hir::item_data::class_data(&db, loc).name
                         == Name::new(class_name)
                 })
                 .expect("class in item tree");
-            let data = baml_compiler2_ppir::item_data::class_data(&db, loc);
+            let data = baml_compiler2_hir::item_data::class_data(&db, loc);
             let qtn =
                 baml_compiler2_hir_ty::lower::qualify_def(&db, Definition::Class(loc), &data.name);
-            Ty::Class(qtn, Box::new([]), TyAttr::default())
+            Ty::Class(qtn, Box::new([]))
         };
         let iface = |iface_name: &str| {
-            let loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+            let loc = *baml_compiler2_hir::item_data::file_interfaces(&db, file)
                 .iter()
                 .find(|&&loc| {
-                    baml_compiler2_ppir::item_data::interface_data(&db, loc).name
+                    baml_compiler2_hir::item_data::interface_data(&db, loc).name
                         == Name::new(iface_name)
                 })
                 .expect("interface in item tree");
@@ -462,7 +464,6 @@ mod tests {
             printable.name,
             printable.generics,
             printable.associated_types,
-            TyAttr::default(),
         );
         assert!(
             baml_compiler2_hir_ty::interfaces::get_implements_block(
@@ -591,10 +592,11 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Five conflicts: greet, greet@spec, greet@render_prompt,
-        // greet@build_request, and greet@parse. Each LLM function expands to
-        // AST-level companions, all duplicated across 3 files.
-        assert_eq!(ns.conflicts().len(), 5);
+        // Six conflicts: greet, greet@spec, greet@render_prompt,
+        // greet@build_request, greet@parse, and greet@stream. Each LLM
+        // function expands to AST-level companions, all duplicated across 3
+        // files.
+        assert_eq!(ns.conflicts().len(), 6);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }
@@ -1549,12 +1551,15 @@ function foo(user: User) -> string {
     }
 
     #[test]
-    fn builtin_only_internal_attribute_is_rejected_in_user_file() {
+    fn an_attribute_on_a_function_is_unknown() {
+        use baml_base::AttributePosition;
         use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
+        // Attributes are a fixed vocabulary and none of it applies to a
+        // function, so any name written there is reported at its position.
         let mut db = make_db();
         let file = db.file(
-            "user_internal_attr.baml",
+            "user_function_attr.baml",
             "@@internal.uses(vm)\nfunction helper(value: string) -> string {\n  value\n}",
         );
 
@@ -1562,7 +1567,8 @@ function foo(user: User) -> string {
         assert!(index.diagnostics().iter().any(|diag| {
             matches!(
                 diag,
-                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "@@internal.uses"
+                Hir2Diagnostic::UnknownAttribute { attr_name, position: AttributePosition::Function, .. }
+                    if attr_name.as_str() == "internal.uses"
             )
         }));
     }
@@ -2162,7 +2168,7 @@ function foo(user: User) -> string {
     /// survive lowering. Locks the item-tree source-map plumbing end to end.
     #[test]
     fn item_source_maps_carry_name_spans_and_docstrings() {
-        use baml_compiler2_ppir::item_data;
+        use baml_compiler2_hir::item_data;
 
         let mut db = make_db();
         let src = r##"/// Alias docs.
@@ -2192,8 +2198,7 @@ function target() -> int { 1 }
             &src[usize::from(range.start())..usize::from(range.end())]
         };
 
-        // Select by name: the PPIR expanded index also holds synthetic
-        // `$stream` companions, whose spans are (correctly) defaulted.
+        // Select by name so the assertions don't depend on enumeration order.
         let alias = *item_data::file_type_aliases(&db, file)
             .iter()
             .find(|&&a| item_data::type_alias_data(&db, a).name.as_str() == "MyAlias")
@@ -2281,5 +2286,166 @@ function target() -> int { 1 }
                 .as_deref(),
             Some("Free impl docs.")
         );
+    }
+}
+
+/// Package aggregation order, package-interface artifacts, and the body-owner
+/// dispatch queries over the canonical item layer.
+#[cfg(test)]
+mod item_layer {
+    use baml_artifact::ArtifactKind;
+    use baml_base::Name;
+    use baml_compiler2_hir_ty::package_interface::PackageInterface;
+    use baml_db::ProjectDatabase;
+
+    use crate::engine::TestDbExt;
+
+    fn namespace_iteration_order(files: &[&str]) -> Vec<Vec<String>> {
+        let mut db = ProjectDatabase::new();
+        db.workspace(std::path::Path::new("."));
+
+        for (index, namespace) in files.iter().enumerate() {
+            db.file(
+                format!("ns_{namespace}/marker_{index}.baml"),
+                &format!("class Marker{index} {{}}"),
+            );
+        }
+
+        let package = baml_compiler2_hir::package::package_items(&db, db.workspace_root().unwrap());
+        package
+            .namespaces
+            .keys()
+            .map(|path| path.iter().map(ToString::to_string).collect())
+            .collect()
+    }
+
+    fn first_seen_namespace_order(files: &[&str]) -> Vec<Vec<String>> {
+        let mut expected = Vec::new();
+        for namespace in files {
+            let path = vec![namespace.to_string()];
+            if !expected.contains(&path) {
+                expected.push(path);
+            }
+        }
+        expected
+    }
+
+    #[test]
+    fn package_namespace_iteration_preserves_file_discovery_order() {
+        let namespaces = [
+            "zulu", "alpha", "quebec", "bravo", "papa", "charlie", "oscar", "delta", "november",
+            "echo", "mike", "foxtrot", "lima", "golf", "kilo", "hotel", "juliet", "india", "alpha",
+            "zulu", "golf",
+        ];
+        let expected = first_seen_namespace_order(&namespaces);
+        assert_eq!(namespace_iteration_order(&namespaces), expected);
+        assert_eq!(
+            expected.len(),
+            18,
+            "duplicate namespace paths must be removed"
+        );
+
+        let mut reversed = namespaces;
+        reversed.reverse();
+        assert_eq!(
+            namespace_iteration_order(&reversed),
+            first_seen_namespace_order(&reversed)
+        );
+
+        let mut rotated = namespaces;
+        rotated.rotate_left(7);
+        assert_eq!(
+            namespace_iteration_order(&rotated),
+            first_seen_namespace_order(&rotated)
+        );
+    }
+
+    #[test]
+    fn package_interface_artifacts_preserve_declaration_order_and_reject_v1() {
+        let mut db = ProjectDatabase::new();
+        db.workspace(std::path::Path::new("."));
+        db.file(
+            "types.baml",
+            "class Zulu {}\nclass Alpha {}\nclass Mike {}\n",
+        );
+
+        let package_id = db.workspace_root().unwrap();
+        let interface = baml_compiler2_hir_ty::package_interface::export_interface(&db, package_id);
+        let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, &interface)
+            .expect("package interface encodes");
+        let decoded: PackageInterface<baml_type::TypeName> =
+            baml_artifact::decode(ArtifactKind::PackageInterface, &artifact)
+                .expect("current package interface decodes");
+        let declaration_order: Vec<_> = decoded.types[&Vec::<Name>::new()]
+            .keys()
+            .map(Name::as_str)
+            .collect();
+        assert_eq!(declaration_order, ["Zulu", "Alpha", "Mike"]);
+
+        let legacy = baml_artifact::encode_with_format_for_test(
+            1,
+            ArtifactKind::PackageInterface,
+            &interface,
+        )
+        .expect("legacy package interface envelope encodes");
+        assert!(matches!(
+            baml_artifact::decode::<PackageInterface<baml_type::TypeName>>(
+                ArtifactKind::PackageInterface,
+                &legacy
+            ),
+            Err(baml_artifact::Error::Incompatible {
+                artifact_format: 1,
+                runtime_format: baml_artifact::FORMAT_VERSION,
+                ..
+            })
+        ));
+    }
+
+    /// The unified body-owner queries (`body`/`body_source_map`/`body_scope`/
+    /// `file_body_owners`) must agree with the per-kind queries they dispatch
+    /// to.
+    #[test]
+    fn body_owner_queries_match_per_kind_queries() {
+        use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, OwnerBody};
+
+        let mut db = ProjectDatabase::new();
+        db.workspace(std::path::Path::new("."));
+        let file = db.file(
+            "test.baml",
+            "function f() -> int { 1 }\n\nfunction g() -> int { f() }\n",
+        );
+
+        let owners = baml_compiler2_hir::body::file_body_owners(&db, file);
+        let functions = baml_compiler2_hir::item_data::file_functions(&db, file);
+        assert_eq!(owners.len(), functions.len());
+
+        for (&func_loc, &owner) in functions.iter().zip(owners.iter()) {
+            assert_eq!(owner, BodyOwnerId::Function(func_loc));
+            assert!(owner.file(&db) == file);
+
+            let unified = baml_compiler2_hir::body::body(&db, owner);
+            let direct = baml_compiler2_hir::body::function_body(&db, func_loc);
+            assert!(matches!(direct.as_ref(), FunctionBody::Expr(_)));
+            let OwnerBody::Function(unified_body) = &unified else {
+                panic!("function owner must dispatch to the function body query");
+            };
+            assert_eq!(unified_body, &direct);
+            assert_eq!(
+                unified.expr_body(),
+                match direct.as_ref() {
+                    FunctionBody::Expr(body) => Some(body),
+                    _ => None,
+                }
+            );
+
+            assert_eq!(
+                baml_compiler2_hir::body::body_source_map(&db, owner),
+                baml_compiler2_hir::body::function_body_source_map(&db, func_loc)
+            );
+            assert!(
+                baml_compiler2_hir::body::body_scope(&db, owner)
+                    == baml_compiler2_hir::item_data::function_scope(&db, func_loc)
+            );
+        }
     }
 }

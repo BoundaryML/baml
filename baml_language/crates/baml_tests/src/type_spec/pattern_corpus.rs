@@ -26,16 +26,12 @@ fn corpus_verdicts(relative_path: &str) -> String {
     let file = db.file("corpus.baml", &source);
 
     let mut out = String::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
         let BodyOwnerId::Function(function) = owner else {
             continue;
         };
-        let data = baml_compiler2_ppir::item_data::function_data(&db, function);
-        // Synthetic $stream companions duplicate their originals.
-        if data.name.as_str().ends_with("$stream") {
-            continue;
-        }
-        let Some(scope) = baml_compiler2_ppir::body_scope(&db, owner) else {
+        let data = baml_compiler2_hir::item_data::function_data(&db, function);
+        let Some(scope) = baml_compiler2_hir::body::body_scope(&db, owner) else {
             continue;
         };
         let _ = scope;

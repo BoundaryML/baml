@@ -230,8 +230,7 @@ def _derive_baml_fqn(cls: type) -> str:
 
 
 def _subpath_to_baml_fqn(subpath: str) -> str:
-    """Reverse the §1 routing table, recursing on the `stream_types.*`
-    prefix to handle nested stream companions.
+    """Reverse the §1 routing table.
 
     Phase 12a collapsed the BEP-030 `root.*` spec convention into the
     engine's `user.*` package convention; everything downstream (engine
@@ -242,9 +241,6 @@ def _subpath_to_baml_fqn(subpath: str) -> str:
     enums, and dict/list element types must arrive with the engine FQN
     already on them or the engine panics on lookup.
     """
-    if subpath.startswith("stream_types."):
-        inner = _subpath_to_baml_fqn(subpath[len("stream_types.") :])
-        return f"{inner}$stream" if inner else ""
     if subpath.startswith("vendor."):
         return subpath[len("vendor.") :]
     if subpath.startswith("baml."):

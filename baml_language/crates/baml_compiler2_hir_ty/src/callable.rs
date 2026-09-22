@@ -124,22 +124,20 @@ unsafe impl salsa::Update for CallableThrows {
 }
 
 fn callable_throws_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_ppir::Db,
+    _db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
     _function: FunctionLoc<'db>,
 ) -> CallableThrows {
     // The fixpoint seed: a recursive call contributes nothing until an
     // iteration proves otherwise.
-    CallableThrows(baml_type::Ty::Never {
-        attr: baml_type::TyAttr::default(),
-    })
+    CallableThrows(baml_type::Ty::Never)
 }
 
 /// What `function` throws: the declared clause when written, else the
 /// union its body's effect channel infers.
 #[salsa::tracked(cycle_initial = callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> CallableThrows {
     // A seeded value from a previous compile short-circuits body inference
@@ -181,7 +179,7 @@ pub fn callable_throws<'db>(
                 .clone(),
         );
     }
-    let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
+    let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
     if let Some(throws_ref) = data.throws {
         let frame = crate::lower::function_generic_frame(db, function);
         let ctx = crate::lower::lower_ctx_for_file(db, function.file(db)).with_frame(frame);
@@ -249,11 +247,11 @@ unsafe impl salsa::Update for FunctionSignatureTy {
 /// The enclosing type's generic-frame prefix length for a method's frame;
 /// 0 for a free function.
 fn enclosing_param_count<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> usize {
-    use baml_compiler2_ppir::item_data::MethodOwner;
-    match baml_compiler2_ppir::item_data::method_owner(db, function) {
+    use baml_compiler2_hir::item_data::MethodOwner;
+    match baml_compiler2_hir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => crate::lower::class_generic_frame(db, class).len(),
         Some(MethodOwner::Interface(iface)) => crate::lower::interface_frame(db, iface).len(),
         Some(MethodOwner::Impl(imp)) => crate::lower::impl_frame(db, imp).len(),
@@ -263,7 +261,7 @@ fn enclosing_param_count<'db>(
 
 #[salsa::tracked(returns(ref))]
 pub fn function_signature_ty<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> FunctionSignatureTy {
     let sig = crate::lower::function_signature(db, function);
@@ -281,7 +279,7 @@ pub fn function_signature_ty<'db>(
             },
         })
         .collect();
-    let builtin_kind = match baml_compiler2_ppir::function_body(db, function).as_ref() {
+    let builtin_kind = match baml_compiler2_hir::body::function_body(db, function).as_ref() {
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
     };

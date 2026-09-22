@@ -26,6 +26,10 @@ import { encodeCallArgs, decodeCallResult } from './proto.js';
 function newFunctionCall() {
     return BigInt(nativeNewFunctionCall());
 }
+/**
+ * A live `ai.stream.Stream<T>`. A partial and the settled value share the one
+ * type: a partial is `T` parsed from the text received so far.
+ */
 export class BamlStream {
     _handle;
     _classFqn;

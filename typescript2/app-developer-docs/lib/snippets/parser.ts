@@ -178,11 +178,21 @@ export function parseBamlSource(
     expectation,
     hasMetadata,
     regions: new Map(
-      [...regionLines].map(([name, content]) => [
-        name,
-        content.join('\n').trim(),
-      ]),
+      [...regionLines].map(([name, content]) => [name, dedentRegion(content)]),
     ),
     source,
   };
+}
+
+/** Remove the enclosing scope's indentation without flattening nested blocks. */
+function dedentRegion(lines: string[]): string {
+  const nonempty = lines.filter((line) => line.trim().length > 0);
+  if (nonempty.length === 0) return '';
+  const indent = Math.min(
+    ...nonempty.map((line) => line.length - line.trimStart().length),
+  );
+  return lines
+    .map((line) => line.slice(indent))
+    .join('\n')
+    .trim();
 }

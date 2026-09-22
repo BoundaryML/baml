@@ -1,5 +1,5 @@
 // Call-shape pin for the generic ai.stream constructor. The expected return
-// type must infer both TStream and TFinal without explicit type arguments.
+// type must infer the stream's `T` without an explicit type argument.
 
 client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
@@ -12,6 +12,6 @@ function TestFunc(input: string) -> string {
     prompt: `hi ${input}`
 }
 
-function call_stream_inferred() -> ai.stream.Stream<string | null, string> {
+function call_stream_inferred() -> ai.stream.Stream<string> {
     ai.stream.from_spec(TestFunc@spec("world"))
 }

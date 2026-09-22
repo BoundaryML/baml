@@ -2,6 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `#"legacy description"#`
+   ╭─[main.baml:2:32]
+ 2 │     value: string @description(#"legacy description"#)
+   ·                                ───────────┬──────────
+   ·                                           ╰── invalid builtin declaration
+   ╰────
+
   [parse] E0098
 
   × removed language feature

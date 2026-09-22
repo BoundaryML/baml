@@ -173,23 +173,6 @@ impl<P> QualifiedTypeName<P> {
         })
     }
 
-    /// Whether this is the generated stream-view companion for a type.
-    ///
-    /// Stream types currently use the `$stream` source-level suffix. Keeping
-    /// this query on the compiler-owned qualified name avoids duplicating that
-    /// identity rule in each code generator.
-    pub fn is_stream(&self) -> bool {
-        self.name.as_str().ends_with("$stream")
-    }
-
-    /// The unqualified source name, without the generated stream prefix.
-    pub fn bare_name(&self) -> &str {
-        self.name
-            .as_str()
-            .strip_suffix("$stream")
-            .unwrap_or_else(|| self.name.as_str())
-    }
-
     /// The `[...namespace, name]` path inside the package, as borrowed
     /// strings — the builtin registries are keyed this way.
     fn path_in_package(&self) -> Vec<&str> {

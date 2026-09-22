@@ -42,6 +42,8 @@ jobs:
       thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
+      # Docs example changes need the CLI, but not the full platform/SDK matrix.
+      documentation_snippets: ${{ steps.check_documentation_snippets.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
@@ -72,8 +74,10 @@ jobs:
         id: merge_base
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: |
-          sha=$(git merge-base HEAD "origin/${BASE_REF}")
+          set -euo pipefail
+          sha=${MERGE_GROUP_BASE_SHA:-$(git merge-base HEAD "origin/${BASE_REF}")}
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
 
       - name: Check if code changed
@@ -90,7 +94,7 @@ jobs:
             ':scripts/baml-package-manager-artifacts' \
             ':scripts/baml-release-platforms' \
             ':scripts/baml_release_platforms.py' \
-            ':scripts/baml_nightly_select.py' \
+            ':tools/baml_nightly_select.py' \
             ':scripts/baml-bridge-cffi-hygiene' \
             ':scripts/tests/**' \
             ':release/platforms.json' \
@@ -108,6 +112,7 @@ jobs:
             ':.github/workflows/publish2-nodejs-sdk.yaml' \
             ':.github/workflows/publish2-web-sdk.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/compiler-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
@@ -191,6 +196,35 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if documentation examples changed
+        id: check_documentation_snippets
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # Content includes expected inferred signatures in MDX, as well as
+          # canonical code. CSS/components do not require a Rust build.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-developer-docs/content/**' \
+            ':typescript2/app-developer-docs/lib/snippets/**' \
+            ':typescript2/app-developer-docs/scripts/validate-snippets.ts' \
+            ':typescript2/app-developer-docs/scripts/validate-book-behavior.ts' \
+            ':typescript2/app-developer-docs/scripts/operator-arguments.ts' \
+            ':typescript2/app-developer-docs/package.json' \
+            ':typescript2/package.json' \
+            ':typescript2/pnpm-lock.yaml' \
+            ':typescript2/pnpm-workspace.yaml' \
+            ':.envrc' \
+            ':mise.toml' \
+            ':tools/baml-sccache' \
+            ':.github/actions/setup-mise/**' \
+            ':.github/actions/setup-node2/**' \
+          ; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if docs changed
@@ -596,6 +630,23 @@ jobs:
       BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
       TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
 
+  documentation-snippets:
+    name: "Documentation examples"
+    needs: determine_changes
+    # Cargo CI already runs this reusable job when code changes or on main/canary.
+    # The two paths are mutually exclusive: never build a second CLI for docs.
+    if: >-
+      needs.determine_changes.outputs.documentation_snippets == 'true' &&
+      needs.determine_changes.outputs.code != 'true' &&
+      github.ref != 'refs/heads/main' && github.ref != 'refs/heads/canary'
+    uses: ./.github/workflows/compiler-tests.reusable.yaml
+    with:
+      run-compiler-tests: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+      TRUNK_ORG_TOKEN: ${{ secrets.TRUNK_ORG_TOKEN }}
+
   size-gate:
     name: "Size Gate"
     needs: determine_changes
@@ -663,8 +714,7 @@ jobs:
         run: pnpm --filter @b/pkg-grammar test
         working-directory: typescript2
 
-      - name: "Upload grammar test results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze grammar test results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/pkg-grammar/junit.xml
@@ -683,8 +733,7 @@ jobs:
         run: pnpm --filter @b/pkg-grammar-hljs test
         working-directory: typescript2
 
-      - name: "Upload highlight.js results to Trunk"
-        if: ${{ !cancelled() }}
+      - name: "Analyze highlight.js results in Trunk"
         uses: ./.github/actions/upload-test-results
         with:
           junit-path: typescript2/pkg-grammar-hljs/junit.xml
@@ -1275,6 +1324,7 @@ jobs:
       - release-metadata
       - bridge-cffi-release
       - cargo-tests
+      - documentation-snippets
       - wasm-pack-tests
       - docs
       - webview-tests
@@ -1304,6 +1354,7 @@ jobs:
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| documentation-snippets | ${{ needs.documentation-snippets.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1343,6 +1394,7 @@ jobs:
       - release-metadata
       - bridge-cffi-release
       - cargo-tests
+      - documentation-snippets
       - wasm-pack-tests
       - docs
       - webview-tests

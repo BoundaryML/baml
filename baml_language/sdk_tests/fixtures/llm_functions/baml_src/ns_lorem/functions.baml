@@ -32,9 +32,8 @@ function ExtractResume(text: string) -> Resume {
   `
 }
 
-// Paired with `StreamingDoc` to exercise the always-different
-// `Class$stream` type-companion branch (previously covered by the standalone
-// `python_llm_functions` crate). The former `openai-responses` shorthand is
+// Paired with `StreamingDoc` to exercise class-typed streaming bindings
+// (previously covered by the standalone `python_llm_functions` crate). The former `openai-responses` shorthand is
 // gone (only openai | anthropic | google | claude-code prefixes remain).
 function StreamingExtract(text: string) -> StreamingDoc {
   client: "openai/gpt-4o-mini"
@@ -61,7 +60,7 @@ function InspectMedia(photo: image) -> string {
 // === Streaming coverage ===
 //
 // `Fn@stream` is available for every tool-less LLM function and returns
-// `ai.stream.Stream<PARTIAL, FINAL>`, driven by `invoke_stream`
+// `ai.stream.Stream<OUT>`, driven by `invoke_stream`
 // (`ai.stream.StreamingClient`). The 8-bullet plain-text format forces
 // multi-chunk SSE so `next()` yields a series of partials before Done.
 function stream_e2e_extract(text: string) -> string {
@@ -83,8 +82,8 @@ function stream_e2e_extract(text: string) -> string {
   `
 }
 
-// Class-typed streaming: the partial type is `StreamingDoc$stream` /
-// `Resume$stream` (multi-field T) rather than a bare scalar.
+// Class-typed streaming: the partial type is the multi-field class itself
+// rather than a bare scalar.
 function stream_e2e_extract_doc(text: string) -> StreamingDoc {
   client: StreamStub
   prompt: `
@@ -146,10 +145,10 @@ function hs7_collision_type() -> reflect.Type {
 
 // Mirror the original VetRec wrapper: create and bind the runtime type inside
 // BAML and hand the stream to the host as `unknown`. `OutputType` is scoped
-// to this body and generics are invariant, so `Stream<OutputType?, OutputType>`
-// cannot be published as `Stream<unknown, unknown>`; the host still receives a
+// to this body and generics are invariant, so `Stream<OutputType>`
+// cannot be published as `Stream<unknown>`; the host still receives a
 // stream handle (the bridge selects the wrapper from the handle's tag), and
-// the live stream object retains its realized dynamic type arguments for
+// the live stream object retains its realized dynamic type argument for
 // next/final.
 function hs7_open_collision_stream(text: string) -> unknown {
   let output_type = hs7_collision_type();
@@ -226,14 +225,11 @@ function stream_e2e_collect_doc(text: string) -> StreamingDoc {
 
 function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
   let s = stream_e2e_extract@stream(text);
-  let next_calls: (null | string)[] = [];
+  let next_calls: string[] = [];
   while (true) {
     match (s.next()) {
       ai.stream.Done => {
         break;
-      }
-      null => {
-        next_calls.push(null);
       }
       let item: string => {
         next_calls.push(item);

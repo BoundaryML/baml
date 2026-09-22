@@ -46,8 +46,6 @@ pub struct Enum {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
 
-    /// Enum-level type attribute.
-    pub ty_attr: baml_type::TyAttr,
     /// The runtime package that owns this declaration, or null for a
     /// compile-time one. A GC edge; see `Class::owner`.
     #[borsh(skip)]

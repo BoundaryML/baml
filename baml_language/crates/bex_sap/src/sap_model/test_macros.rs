@@ -1,113 +1,13 @@
-//! This module contains macros for building types and annotations.
+//! Macros for building SAP model types in tests.
 //!
 //! Entry points:
-//! - [`baml_tyannotated!`] for creating [`crate::sap_model::AnnotatedTy`].
-//! - [`baml_ty!`] for creating [`crate::sap_model::Ty`] (unannotated).
-//! - [`baml_tyresolved!`] for creating [`crate::sap_model::TyResolved`] (unannotated).
+//! - [`baml_ty!`] for creating [`crate::sap_model::Ty`].
+//! - [`baml_tyresolved!`] for creating [`crate::sap_model::TyResolved`].
 //! - [`baml_db!`] for creating [`crate::sap_model::TypeRefDb`].
-
-/// For standalone types. Not used in db: it handles annotations itself.
-#[macro_export]
-macro_rules! baml_tyannotated {
-    // Flatten attributes at different levels of parentheses
-    (($($inner:tt)+) $(@$first_part:ident$(.$part:ident)*$(($($attr_args:tt)*))?)*) => {
-        $crate::baml_tyannotated!($($inner)+ $(@$first_part$(.$part)*$(($($attr_args)*))?)*)
-    };
-    // Negative literal
-    (-$lit:literal $(@$attr_name:ident$(($($attr_args:tt)*))?)*) => {
-        $crate::sap_model::AnnotatedTy::new(
-            $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::from($crate::sap_model::LiteralTy::from(-$lit))),
-            $crate::__parse_ty_attrs!{$(@$attr_name($($attr_args)*))*}
-        )
-    };
-    ($ty:tt $(@$first_part:ident$(.$part:ident)*$(($($attr_args:tt)*))?)*) => {{
-        let annotations = $crate::__parse_ty_attrs!{$(@$first_part$(.$part)*$(($($attr_args)*))?)*};
-        $crate::sap_model::TyWithMeta::new($crate::baml_ty!($ty), annotations)
-    }};
-    // StreamState cannot have attributes as it is not a user-provided type.
-    (StreamState<$inner:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*>) => {
-        $crate::sap_model::TyWithMeta::new(
-            $crate::baml_ty!(StreamState<$inner $(@$attr_name$(($($attr_args)*))?)*>),
-            $crate::sap_model::TypeAnnotations::default(),
-        )
-    };
-    (map<
-        $key_ty:tt $(@$key_attr_name:ident$(($($key_attr_args:tt)*))?)*,
-        $value_ty:tt $(@$value_attr_name:ident$(($($value_attr_args:tt)*))?)*
-    > $(@$attr_name:ident$(($($attr_args:tt)*))?)*) => {
-        $crate::sap_model::TyWithMeta::new(
-            $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Map($crate::sap_model::MapTy {
-                key: Box::new($crate::baml_tyannotated!($key_ty $(@$key_attr_name$(($($key_attr_args)*))?)*)),
-                value: Box::new($crate::baml_tyannotated!($value_ty $(@$value_attr_name$(($($value_attr_args)*))?)*)),
-            })),
-            $crate::__parse_ty_attrs!{$(@$attr_name$(($($attr_args)*))?)*}
-        )
-    };
-    ($($tt:tt)+) => {{
-        let mut vec = ::std::vec::Vec::new();
-        let attrs = $crate::__baml_tyannotated_union_muncher!(vec <= ($($tt)+));
-        $crate::sap_model::AnnotatedTy::new(
-            $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Union($crate::sap_model::UnionTy { variants: vec })),
-            attrs,
-        )
-    }};
-}
-
-#[macro_export]
-macro_rules! __baml_tyannotated_union_muncher {
-    // last as StreamState (attributes allowed here since they apply to the union not the member)
-    ($vec:ident <= (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*> $(@$last_attr:ident($($last_attr_args:tt)*))*)) => {{
-        $vec.push($crate::baml_tyannotated!(StreamState<$inner $(@$attr_name($($attr_args)*))*>));
-        $crate::__parse_ty_attrs!{$(@$last_attr($($last_attr_args)*))*}
-    }};
-    // last as map
-    ($vec:ident <= (
-        map<
-            $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-            $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))*
-        > $(@$attr:ident($($attr_args:tt)*))*
-    )) => {{
-        $vec.push($crate::baml_tyannotated!(
-            map<
-                $key_ty $(@$key_attr_name($($key_attr_args)*))*,
-                $value_ty $(@$value_attr_name($($value_attr_args)*))*
-            >
-        ));
-        $crate::__parse_ty_attrs!{$(@$attr($($attr_args)*))*}
-    }};
-    // last as tt
-    ($vec:ident <= ($last:tt $(@$last_attr:ident$(($($last_attr_args:tt)*))?)*)) => {{
-        $vec.push($crate::baml_tyannotated!($last));
-        $crate::__parse_ty_attrs!{$(@$last_attr$(($($last_attr_args)*))?)*}
-    }};
-    // item as StreamState (stream state cannot have attributes)
-    ($vec:ident <= (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*> | $($rest:tt)+)) => {{
-        $vec.push($crate::baml_tyannotated!(StreamState<$inner $(@$attr_name($($attr_args)*))*>));
-        $crate::__baml_tyannotated_union_muncher!($vec <= ($($rest)+));
-    }};
-    // item as map
-    ($vec:ident <= (
-        map<
-            $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-            $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))*
-        > $(@$attr:ident($($attr_args:tt)*))* | $($rest:tt)+
-    )) => {{
-        $vec.push($crate::baml_tyannotated!(
-            map<
-                $key_ty $(@$key_attr_name($($key_attr_args)*))*,
-                $value_ty $(@$value_attr_name($($value_attr_args)*))*
-            > $(@$attr($($attr_args)*))*
-        ));
-        $crate::__baml_tyannotated_union_muncher!($vec <= ($($rest)+))
-    }};
-    // item as tt
-    ($vec:ident <= (
-        $tt:tt $(@$attr:ident($($attr_args:tt)*))* | $($rest:tt)+
-    )) => {{
-        $vec.push($crate::baml_tyannotated!($tt $(@$attr($($attr_args)*))*));
-        $crate::__baml_tyannotated_union_muncher!($vec <= ($($rest)+))
-    }};
-}
+//!
+//! Streaming attributes go where BAML puts them: `@@stream.done` first inside a class body,
+//! `@stream.done` / `@stream.must_exist` / `@alias("..")` after a field's type. Unions must
+//! be wrapped in `()`.
 
 #[macro_export]
 macro_rules! baml_ty {
@@ -138,123 +38,24 @@ macro_rules! baml_ty {
     (($ty:tt)) => {
         $crate::baml_ty!($ty)
     };
+    (-$lit:literal) => {
+        $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::from($crate::sap_model::LiteralTy::from(-$lit)))
+    };
+    // `Enum.Variant`
+    ($enum_name:ident.$variant_name:ident) => {
+        $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::EnumVariant($crate::sap_model::EnumVariantTy {
+            name: stringify!($enum_name),
+            value: $crate::sap_model::AnnotatedEnumVariant {
+                name: ::std::borrow::Cow::Borrowed(stringify!($variant_name)),
+                aliases: ::std::vec::Vec::new(),
+            },
+        }))
+    };
     ($ty:ident) => {
         $crate::sap_model::Ty::Unresolved(stringify!($ty))
     };
     ($($resolved:tt)*) => {
         $crate::sap_model::Ty::Resolved($crate::baml_tyresolved!($($resolved)*))
-    };
-}
-
-#[macro_export]
-macro_rules! __parse_ty_attrs {
-    {} => {
-        $crate::sap_model::TypeAnnotations::default()
-    };
-    {@parse_without_null $($rest:tt)*} => {{
-        let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
-        attrs.parse_without_null = true;
-        attrs
-    }};
-    {@in_progress($lit:tt) $($rest:tt)*} => {{
-        let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
-        attrs.in_progress = Some($crate::__parse_attr_literal!{$lit});
-        attrs
-    }};
-}
-
-#[macro_export]
-macro_rules! __parse_attr_literal {
-    {never} => {
-        $crate::sap_model::AttrLiteral::Never
-    };
-    {null} => {
-        $crate::sap_model::AttrLiteral::Null
-    };
-    // Array recursion start
-    {[$($arr:tt)*]} => {
-        $crate::__parse_attr_literal!{><><ARRAY []><>< [$($arr)*]}
-    };
-    {$enum_name:ident.$variant_name:ident} => {
-        $crate::sap_model::AttrLiteral::EnumVariant {
-            enum_name: stringify!($enum_name),
-            variant_name: ::std::borrow::Cow::Borrowed(stringify!($variant_name)),
-        }
-    };
-    // Array recursion: tt
-    {$lit:literal} => {
-        $crate::sap_model::AttrLiteral::from($lit)
-    };
-    // Array recursion end
-    {><><ARRAY [$($prev:tt)*]><>< []} => {
-        $crate::sap_model::AttrLiteral::Array(vec![$($prev)*])
-    };
-    // Array recursion: class
-    {><><ARRAY [$($prev:tt)*]><>< [$cls_name:ident {$($cls_inner:tt)*}$(, $($rest:tt)*)?]} => {
-        $crate::__parse_attr_literal!{><><ARRAY [
-            $($prev)*,
-            $crate::__parse_attr_literal!{$cls_name {$($cls_inner)*}}
-        ]><>< [$($rest)*]}
-    };
-    // Array recursion: enum variant
-    {><><ARRAY [$($prev:tt)*]><>< [$enum_name:ident.$variant_name:ident $(, $($rest:tt)*)?]} => {
-        $crate::__parse_attr_literal!{><><ARRAY [
-            $($prev)*,
-            $crate::sap_model::AttrLiteral::EnumVariant {
-                enum_name: stringify!($enum_name),
-                variant_name: ::std::borrow::Cow::Borrowed(stringify!($variant_name)),
-            }
-        ]><>< [$($rest)*]}
-    };
-    // Map/object recursion end
-    {><><KV ($map:ident)><>< {}} => {};
-    // Map/object recursion: class
-    {><><KV ($map:ident)><>< {$key:literal: $cls_key:ident {$($cls_inner:tt)*}$(, $($rest:tt)*)?}} => {
-        $map.insert(::std::borrow::Cow::Borrowed($key), $crate::__parse_attr_literal!{$cls_key {$($cls_inner)*}});
-        $crate::__parse_attr_literal!{><><KV ($map)><>< {$($rest)*}}
-    };
-    // Map/object recursion: enum variant
-    {><><KV ($map:ident)><>< {$key:literal: $enum_name:ident.$variant_name:ident $(, $($rest:tt)*)?}} => {
-        $map.insert(::std::borrow::Cow::Borrowed($key), $crate::sap_model::AttrLiteral::EnumVariant {
-            enum_name: stringify!($enum_name),
-            variant_name: ::std::borrow::Cow::Borrowed(stringify!($variant_name)),
-        });
-        $crate::__parse_attr_literal!{><><KV ($map)><>< {$($rest)*}}
-    };
-    // Map/object recursion: tt
-    {><><KV ($map:ident)><>< {$key:literal: $value:tt$(, $($rest:tt)*)?}} => {
-        $map.insert(::std::borrow::Cow::Borrowed($key), $crate::__parse_attr_literal!{$value});
-        $crate::__parse_attr_literal!{><><KV ($map)><>< {$($rest)*}}
-    };
-    // Object recursion start
-    {$cls_name:ident {$($cls_inner:tt)*}} => {
-        $crate::sap_model::AttrLiteral::Object {
-            name: stringify!($cls_name),
-            data: {
-                let mut map = ::indexmap::IndexMap::new();
-                $crate::__parse_attr_literal!{><><KV (map)><>< {$($cls_inner)*}};
-                map
-            },
-        }
-    };
-    // Map recursion start
-    {{$($map_inner:tt)*}} => {
-        $crate::sap_model::AttrLiteral::Map({
-            #[allow(unused_mut)]
-            let mut map = ::indexmap::IndexMap::new();
-            $crate::__parse_attr_literal!{><><KV (map)><>< {$($map_inner)*}};
-            map
-        })
-    };
-}
-
-#[macro_export]
-macro_rules! __parse_attr_literal_or_default {
-    {try () else ($($default:tt)*)} => {
-        $crate::__parse_attr_literal!{$($default)*}
-    };
-    {try ($($attr_args:tt)+) else ($($default:tt)*)} => {
-        $crate::__parse_attr_literal!{$($attr_args)+}
     };
 }
 
@@ -285,21 +86,18 @@ macro_rules! baml_tyresolved {
     // Using rust-like syntax for array types
     ([$($inner:tt)+]) => {
         $crate::sap_model::TyResolved::Array($crate::sap_model::ArrayTy {
-            ty: Box::new($crate::baml_tyannotated!($($inner)+)),
+            ty: Box::new($crate::baml_ty!($($inner)+)),
         })
     };
-    (StreamState<$inner:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*>) => {
+    (StreamState<$inner:tt>) => {
         $crate::sap_model::TyResolved::StreamState($crate::sap_model::StreamStateTy {
-            value: Box::new($crate::baml_tyannotated!($inner $(@$attr_name$(($($attr_args)*))?)*)),
+            value: Box::new($crate::baml_ty!($inner)),
         })
     };
-    (map<
-        $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-        $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))* $(| $rest:tt $(@$rest_attr:ident($($rest_attr_args:tt)*))*)*
-    >) => {
+    (map<$key_ty:tt, $value_ty:tt $(| $rest:tt)*>) => {
         $crate::sap_model::TyResolved::Map($crate::sap_model::MapTy {
-            key: Box::new($crate::baml_tyannotated!($key_ty $(@$key_attr_name($($key_attr_args)*))*)),
-            value: Box::new($crate::baml_tyannotated!($value_ty $(@$value_attr_name($($value_attr_args)*))* $(| $rest $(@$rest_attr($($rest_attr_args)*))*)*)),
+            key: Box::new($crate::baml_ty!($key_ty)),
+            value: Box::new($crate::baml_ty!($value_ty $(| $rest)*)),
         })
     };
     ($lit:literal) => {
@@ -307,65 +105,45 @@ macro_rules! baml_tyresolved {
     };
     ($($tt:tt)+) => {
         $crate::sap_model::TyResolved::Union($crate::sap_model::UnionTy {
-            variants: {
-                let mut vec = ::std::vec::Vec::new();
-                $crate::__baml_resolved_union_muncher!(vec <= ($($tt)+));
-                vec
-            },
+            variants: $crate::__baml_union_muncher!([] <= ($($tt)+)),
         })
     };
 }
 
+/// Accumulates union members into a `vec![..]` of [`crate::sap_model::Ty`].
 #[macro_export]
-macro_rules! __baml_resolved_union_muncher {
+macro_rules! __baml_union_muncher {
     // last as StreamState
-    ($vec:ident <= (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*>)) => {{
-        $vec.push($crate::baml_tyannotated!(StreamState<$inner $(@$attr_name($($attr_args)*))*>));
-    }};
+    ([$($acc:expr),*] <= (StreamState<$inner:tt>)) => {
+        vec![$($acc,)* $crate::baml_ty!(StreamState<$inner>)]
+    };
     // last as map
-    ($vec:ident <= (
-        map<
-            $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-            $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))*
-        >
-    )) => {
-        $vec.push($crate::baml_tyannotated!(
-            map<
-                $key_ty $(@$key_attr_name($($key_attr_args)*))*,
-                $value_ty $(@$value_attr_name($($value_attr_args)*))*
-            >
-        ));
+    ([$($acc:expr),*] <= (map<$key_ty:tt, $value_ty:tt>)) => {
+        vec![$($acc,)* $crate::baml_ty!(map<$key_ty, $value_ty>)]
+    };
+    // last as enum variant
+    ([$($acc:expr),*] <= ($enum_name:ident.$variant_name:ident)) => {
+        vec![$($acc,)* $crate::baml_ty!($enum_name.$variant_name)]
     };
     // last as tt
-    ($vec:ident <= ($last:tt)) => {
-        $vec.push($crate::baml_tyannotated!($last));
+    ([$($acc:expr),*] <= ($last:tt)) => {
+        vec![$($acc,)* $crate::baml_ty!($last)]
     };
-    // last as StreamState (stream state cannot have attributes)
-    ($vec:ident <= (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*> | $($rest:tt)+)) => {{
-        $vec.push($crate::baml_tyannotated!(StreamState<$inner $(@$attr_name($($attr_args)*))*>));
-        $crate::__baml_resolved_union_muncher!($vec <= ($($rest)+));
-    }};
+    // item as StreamState
+    ([$($acc:expr),*] <= (StreamState<$inner:tt> | $($rest:tt)+)) => {
+        $crate::__baml_union_muncher!([$($acc,)* $crate::baml_ty!(StreamState<$inner>)] <= ($($rest)+))
+    };
     // item as map
-    ($vec:ident <= (
-        map<
-            $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-            $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))*
-        > $(@$attr:ident($($attr_args:tt)*))* | $($rest:tt)+
-    )) => {
-        $vec.push($crate::baml_tyannotated!(
-            map<
-                $key_ty $(@$key_attr_name($($key_attr_args)*))*,
-                $value_ty $(@$value_attr_name($($value_attr_args)*))*
-            > $(@$attr($($attr_args)*))*
-        ));
-        $crate::__baml_resolved_union_muncher!($vec <= ($($rest)+));
+    ([$($acc:expr),*] <= (map<$key_ty:tt, $value_ty:tt> | $($rest:tt)+)) => {
+        $crate::__baml_union_muncher!([$($acc,)* $crate::baml_ty!(map<$key_ty, $value_ty>)] <= ($($rest)+))
+    };
+    // item as enum variant
+    ([$($acc:expr),*] <= ($enum_name:ident.$variant_name:ident | $($rest:tt)+)) => {
+        $crate::__baml_union_muncher!([$($acc,)* $crate::baml_ty!($enum_name.$variant_name)] <= ($($rest)+))
     };
     // item as tt
-    ($vec:ident <= (
-        $first:tt $(@$attr:ident($($attr_args:tt)*))* | $($rest:tt)+
-    )) => {
-        $vec.push($crate::baml_tyannotated!($first $(@$attr($($attr_args)*))*));
-        $crate::__baml_resolved_union_muncher!($vec <= ($($rest)+));
+    ([$($acc:expr),*] <= ($first:tt | $($rest:tt)+)) => {
+        $crate::__baml_union_muncher!([$($acc,)* $crate::baml_ty!($first)] <= ($($rest)+))
     };
 }
 
@@ -375,31 +153,54 @@ macro_rules! baml_db {
         $crate::sap_model::TypeRefDb::new()
     };
     {$($item:tt)+} => {{
-        let mut db = $crate::sap_model::TypeRefDb::new();
-        $crate::__baml_db_item!(db => $($item)*);
-        db
+        let mut types = ::indexmap::IndexMap::new();
+        $crate::__baml_db_item!(types => $($item)*);
+        $crate::sap_model::TypeRefDb::from_types(types)
     }};
 }
 
 #[macro_export]
+macro_rules! __baml_db_add {
+    ($types:ident, $name:ident, $ty:expr) => {
+        assert!(
+            $types.insert(stringify!($name), $ty).is_none(),
+            "duplicate type `{}`",
+            stringify!($name)
+        );
+    };
+}
+
+#[macro_export]
 macro_rules! __baml_db_item {
-    {$db:ident =>
-        class $name:ident {$($fields:tt)*}
+    {$types:ident =>
+        class $name:ident { @@stream.done $($fields:tt)* }
         $($rest:tt)*
     } => {
-        $db.try_add(stringify!($name), $crate::sap_model::TyResolved::Class($crate::sap_model::ClassTy {
+        $crate::__baml_db_add!($types, $name, $crate::sap_model::TyResolved::Class($crate::sap_model::ClassTy {
             name: stringify!($name),
             fields: $crate::__class_fields!($($fields)*),
-        })).ok().unwrap();
-        $crate::__baml_db_item!($db => $($rest)*);
+            stream_done: true,
+        }));
+        $crate::__baml_db_item!($types => $($rest)*);
     };
-    {$db:ident =>
+    {$types:ident =>
+        class $name:ident { $($fields:tt)* }
+        $($rest:tt)*
+    } => {
+        $crate::__baml_db_add!($types, $name, $crate::sap_model::TyResolved::Class($crate::sap_model::ClassTy {
+            name: stringify!($name),
+            fields: $crate::__class_fields!($($fields)*),
+            stream_done: false,
+        }));
+        $crate::__baml_db_item!($types => $($rest)*);
+    };
+    {$types:ident =>
         enum $name:ident {
             $($variant:ident $(@alias($alias:literal))*),+$(,)?
         }
         $($rest:tt)*
     } => {
-        $db.try_add(stringify!($name), $crate::sap_model::TyResolved::Enum($crate::sap_model::EnumTy {
+        $crate::__baml_db_add!($types, $name, $crate::sap_model::TyResolved::Enum($crate::sap_model::EnumTy {
             name: stringify!($name),
             variants: vec![
                 $($crate::sap_model::AnnotatedEnumVariant {
@@ -407,17 +208,39 @@ macro_rules! __baml_db_item {
                     aliases: vec![$(::std::borrow::Cow::Borrowed($alias)),*],
                 }),+
             ],
-        })).ok().unwrap();
-        $crate::__baml_db_item!($db => $($rest)*);
+        }));
+        $crate::__baml_db_item!($types => $($rest)*);
     };
-    {$db:ident =>
+    {$types:ident =>
         type $name:ident = $ty:tt;
         $($rest:tt)*
     } => {
-        $db.try_add(stringify!($name), $crate::baml_tyresolved!($ty)).ok().unwrap();
-        $crate::__baml_db_item!($db => $($rest)*);
+        $crate::__baml_db_add!($types, $name, $crate::baml_tyresolved!($ty));
+        $crate::__baml_db_item!($types => $($rest)*);
     };
-    {$db:ident => } => {}
+    {$types:ident => } => {}
+}
+
+/// Builds one [`crate::sap_model::AnnotatedField`] from its name, type expression, and
+/// declaration attributes.
+#[macro_export]
+macro_rules! __baml_field {
+    ($name:ident, $ty:expr, $($attrs:tt)*) => {{
+        let (aliases, stream_done, default) = $crate::__class_field_args!($($attrs)*);
+        $crate::sap_model::AnnotatedField {
+            name: ::std::borrow::Cow::Borrowed({
+                let raw = stringify!($name);
+                match raw.strip_prefix("r#") {
+                    ::std::option::Option::Some(stripped) => stripped,
+                    ::std::option::Option::None => raw,
+                }
+            }),
+            ty: $ty,
+            aliases,
+            stream_done,
+            default,
+        }
+    }};
 }
 
 /// We require that unions be wrapped in `()`
@@ -427,208 +250,128 @@ macro_rules! __class_fields {
         ::std::vec::Vec::new()
     };
     {
-        $name:ident: StreamState<
-            $ty:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*
-        > $(@$field_attr_name:ident$(($($field_attr_args:tt)*))?)*,
+        $name:ident: StreamState<$ty:tt> $(@$attr:ident$(.$sub:ident)*$(($($attr_args:tt)*))?)*,
         $($rest:tt)*
     } => {
         {
-            let mut fields = $crate::__class_fields!($($rest)*);
-            let (aliases, _, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$field_attr_name$(($($field_attr_args)*))?)*);
-            let field = $crate::sap_model::AnnotatedField {
-                name: ::std::borrow::Cow::Borrowed({
-                    let raw = stringify!($name);
-                    match raw.strip_prefix("r#") {
-                        ::std::option::Option::Some(stripped) => stripped,
-                        ::std::option::Option::None => raw,
-                    }
-                }),
-                ty: $crate::baml_tyannotated!(StreamState<$ty $(@$attr_name$(($($attr_args)*))?)*>),
-                class_in_progress_field_missing,
-                class_completed_field_missing,
-                aliases,
-            };
-            fields.push(field);
+            let mut fields = vec![$crate::__baml_field!(
+                $name,
+                $crate::baml_ty!(StreamState<$ty>),
+                $(@$attr$(.$sub)*$(($($attr_args)*))?)*
+            )];
+            fields.extend($crate::__class_fields!($($rest)*));
             fields
         }
     };
     {
-        $name:ident: map<
-            $key_ty:tt $(@$key_attr_name:ident($($key_attr_args:tt)*))*,
-            $value_ty:tt $(@$value_attr_name:ident($($value_attr_args:tt)*))*
-        > $(@$attr_name:ident($($attr_args:tt)*))*,
+        $name:ident: map<$key_ty:tt, $value_ty:tt $(| $rest_ty:tt)*> $(@$attr:ident$(.$sub:ident)*$(($($attr_args:tt)*))?)*,
         $($rest:tt)*
     } => {
         {
-            let mut fields = $crate::__class_fields!($($rest)*);
-            let (aliases, type_annotations, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$attr_name($($attr_args)*))*);
-            let field = $crate::sap_model::AnnotatedField {
-                name: ::std::borrow::Cow::Borrowed({
-                    let raw = stringify!($name);
-                    match raw.strip_prefix("r#") {
-                        Some(stripped) => stripped,
-                        None => raw,
-                    }
-                }),
-                ty: $crate::sap_model::TyWithMeta::new(
-                    $crate::baml_ty!(map<
-                        $key_ty $(@$key_attr_name($($key_attr_args)*))*,
-                        $value_ty $(@$value_attr_name($($value_attr_args)*))*
-                    >),
-                    type_annotations
-                ),
-                class_in_progress_field_missing,
-                class_completed_field_missing,
-                aliases,
-            };
-            fields.push(field);
+            let mut fields = vec![$crate::__baml_field!(
+                $name,
+                $crate::baml_ty!(map<$key_ty, $value_ty $(| $rest_ty)*>),
+                $(@$attr$(.$sub)*$(($($attr_args)*))?)*
+            )];
+            fields.extend($crate::__class_fields!($($rest)*));
             fields
         }
     };
     {
-        $name:ident: $ty:tt $(@$attr_name:ident$(($($attr_args:tt)*))?)*,
+        $name:ident: $enum_name:ident.$variant_name:ident $(@$attr:ident$(.$sub:ident)*$(($($attr_args:tt)*))?)*,
         $($rest:tt)*
     } => {
         {
-            let mut fields = $crate::__class_fields!($($rest)*);
-            let (aliases, type_annotations, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$attr_name$(($($attr_args)*))?)*);
-            let field = $crate::sap_model::AnnotatedField {
-                name: ::std::borrow::Cow::Borrowed({
-                    let raw = stringify!($name);
-                    match raw.strip_prefix("r#") {
-                        Some(stripped) => stripped,
-                        None => raw,
-                    }
-                }),
-                ty: $crate::sap_model::TyWithMeta::new($crate::baml_ty!($ty), type_annotations),
-                class_in_progress_field_missing,
-                class_completed_field_missing,
-                aliases,
-            };
-            fields.push(field);
+            let mut fields = vec![$crate::__baml_field!(
+                $name,
+                $crate::baml_ty!($enum_name.$variant_name),
+                $(@$attr$(.$sub)*$(($($attr_args)*))?)*
+            )];
+            fields.extend($crate::__class_fields!($($rest)*));
+            fields
+        }
+    };
+    {
+        $name:ident: $ty:tt $(@$attr:ident$(.$sub:ident)*$(($($attr_args:tt)*))?)*,
+        $($rest:tt)*
+    } => {
+        {
+            let mut fields = vec![$crate::__baml_field!(
+                $name,
+                $crate::baml_ty!($ty),
+                $(@$attr$(.$sub)*$(($($attr_args)*))?)*
+            )];
+            fields.extend($crate::__class_fields!($($rest)*));
             fields
         }
     };
 }
 
+/// Parses a field's declaration attributes into `(aliases, stream_done, default)`.
 #[macro_export]
 macro_rules! __class_field_args {
-    // --- Accumulator-based internal rules ---
-    // Each rule carries: aliases, type_annotations, in_progress_opt, completed_opt, remaining attrs
     (<><><> __INTERNAL__
         [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
-        { @in_progress($($attr_lit:tt)+) $($rest:tt)* }
-    ) => {
-        $crate::__class_field_args!(<><><> __INTERNAL__
-            [$($aliases),*]
-            [{
-                let mut ta = $type_annotations;
-                ta.in_progress = Some($crate::__parse_attr_literal!{$($attr_lit)+});
-                ta
-            }]
-            [$in_progress_opt]
-            [$completed_opt]
-            { $($rest)* }
-        )
-    };
-    (<><><> __INTERNAL__
-        [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
-        { @parse_without_null $($rest:tt)* }
-    ) => {
-        $crate::__class_field_args!(<><><> __INTERNAL__
-            [$($aliases),*]
-            [{
-                let mut ta = $type_annotations;
-                ta.parse_without_null = true;
-                ta
-            }]
-            [$in_progress_opt]
-            [$completed_opt]
-            { $($rest)* }
-        )
-    };
-    (<><><> __INTERNAL__
-        [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
+        [$stream_done:expr]
+        [$default:expr]
         { @alias($alias:literal) $($rest:tt)* }
     ) => {
         $crate::__class_field_args!(<><><> __INTERNAL__
             [$($aliases,)* ::std::borrow::Cow::<'static, str>::Borrowed($alias)]
-            [$type_annotations]
-            [$in_progress_opt]
-            [$completed_opt]
+            [$stream_done]
+            [$default]
             { $($rest)* }
         )
     };
     (<><><> __INTERNAL__
         [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$_in_progress_opt:expr]
-        [$completed_opt:expr]
-        { @class_in_progress_field_missing($($attr_lit:tt)+) $($rest:tt)* }
+        [$_stream_done:expr]
+        [$default:expr]
+        { @stream.done $($rest:tt)* }
     ) => {
         $crate::__class_field_args!(<><><> __INTERNAL__
             [$($aliases),*]
-            [$type_annotations]
-            [::std::option::Option::Some($crate::__parse_attr_literal!{$($attr_lit)+})]
-            [$completed_opt]
+            [true]
+            [$default]
             { $($rest)* }
         )
     };
     (<><><> __INTERNAL__
         [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$_completed_opt:expr]
-        { @class_completed_field_missing($($attr_lit:tt)+) $($rest:tt)* }
+        [$stream_done:expr]
+        [$_default:expr]
+        { @stream.must_exist $($rest:tt)* }
     ) => {
         $crate::__class_field_args!(<><><> __INTERNAL__
             [$($aliases),*]
-            [$type_annotations]
-            [$in_progress_opt]
-            [::std::option::Option::Some($crate::__parse_attr_literal!{$($attr_lit)+})]
+            [$stream_done]
+            [::std::option::Option::Some($crate::sap_model::DefaultValue::Never)]
             { $($rest)* }
         )
     };
     (<><><> __INTERNAL__
         [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
+        [$stream_done:expr]
+        [$default:expr]
         { $($guard:tt)+ }
     ) => {
-        compile_error!("Invalid attribute");
+        compile_error!("unknown field attribute (expected @alias(..), @stream.done, or @stream.must_exist)");
     };
     // Terminal rule: return accumulated values as a tuple
     (<><><> __INTERNAL__
         [$($aliases:expr),*]
-        [$type_annotations:expr]
-        [$in_progress_opt:expr]
-        [$completed_opt:expr]
+        [$stream_done:expr]
+        [$default:expr]
         {}
     ) => {
-        (
-            vec![$($aliases),*],
-            $type_annotations,
-            $in_progress_opt.unwrap_or($crate::sap_model::AttrLiteral::Never),
-            $completed_opt.unwrap_or($crate::sap_model::AttrLiteral::Never),
-        )
+        (vec![$($aliases),*], $stream_done, $default)
     };
     // Entry point: initialize accumulators and dispatch to __INTERNAL__
     ($($attrs:tt)*) => {
         $crate::__class_field_args!(<><><> __INTERNAL__
             []
-            [$crate::sap_model::TypeAnnotations::<&'static str>::default()]
-            [::std::option::Option::<$crate::sap_model::AttrLiteral<&str>>::None]
-            [::std::option::Option::<$crate::sap_model::AttrLiteral<&str>>::None]
+            [false]
+            [::std::option::Option::<$crate::sap_model::DefaultValue<&'static str>>::None]
             {$($attrs)*}
         )
     };

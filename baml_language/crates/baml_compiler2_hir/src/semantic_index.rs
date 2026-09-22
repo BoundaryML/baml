@@ -256,12 +256,9 @@ pub struct FileSemanticIndex<'db> {
 
     /// Per-file item tree — maps `LocalItemId` to item data.
     ///
-    /// Reachable only inside HIR and PPIR: the `file_item_tree` doors in both
-    /// crates are `pub(crate)`, and everything downstream uses the PPIR
-    /// `item_data` firewall queries instead. This field stays `pub` solely
-    /// because PPIR (a separate crate) builds and reads the index; do not read
-    /// it from any other crate. (Collapsing HIR+PPIR onto one index would let
-    /// this become `pub(crate)` — see the plan's Fork B follow-up.)
+    /// Reachable only inside this crate: the `file_item_tree` door is
+    /// `pub(crate)` and everything downstream uses the [`crate::item_data`]
+    /// firewall queries instead.
     pub item_tree: Arc<ItemTree>,
 
     /// Source map for item tree — field/variant name spans.

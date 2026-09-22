@@ -760,13 +760,13 @@ impl<'a> ImplReceiver<'a> {
     /// items of the block's own file).
     fn for_target(ty: &TypeExpr, items: &'a [Item]) -> Option<Self> {
         Some(match &ty.kind {
-            TypeExprKind::Int { .. } => Self::Builtin("Int"),
-            TypeExprKind::Bigint { .. } => Self::Builtin("Bigint"),
-            TypeExprKind::Float { .. } => Self::Builtin("Float"),
-            TypeExprKind::Bool { .. } => Self::Builtin("Bool"),
-            TypeExprKind::Null { .. } => Self::Builtin("Null"),
-            TypeExprKind::String { .. } => Self::Builtin("String"),
-            TypeExprKind::Uint8Array { .. } => Self::Builtin("Uint8Array"),
+            TypeExprKind::Int => Self::Builtin("Int"),
+            TypeExprKind::Bigint => Self::Builtin("Bigint"),
+            TypeExprKind::Float => Self::Builtin("Float"),
+            TypeExprKind::Bool => Self::Builtin("Bool"),
+            TypeExprKind::Null => Self::Builtin("Null"),
+            TypeExprKind::String => Self::Builtin("String"),
+            TypeExprKind::Uint8Array => Self::Builtin("Uint8Array"),
             TypeExprKind::List { .. } => Self::Builtin("Array"),
             TypeExprKind::Map { .. } => Self::Builtin("Map"),
             TypeExprKind::Path { segments, .. } => {
@@ -830,7 +830,7 @@ fn type_expr_to_baml_type_with_self(
         TypeExprKind::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v.kind, TypeExprKind::Null { .. }))
+                .filter(|v| !matches!(v.kind, TypeExprKind::Null))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
@@ -942,14 +942,14 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match &ty.kind {
-        TypeExprKind::Int { .. } => BamlType::Int,
-        TypeExprKind::Bigint { .. } => BamlType::Bigint,
-        TypeExprKind::Float { .. } => BamlType::Float,
-        TypeExprKind::String { .. } => BamlType::String,
-        TypeExprKind::Bool { .. } => BamlType::Bool,
-        TypeExprKind::Null { .. } => BamlType::Null,
-        TypeExprKind::Never { .. } => BamlType::Null,
-        TypeExprKind::Void { .. } => BamlType::Null,
+        TypeExprKind::Int => BamlType::Int,
+        TypeExprKind::Bigint => BamlType::Bigint,
+        TypeExprKind::Float => BamlType::Float,
+        TypeExprKind::String => BamlType::String,
+        TypeExprKind::Bool => BamlType::Bool,
+        TypeExprKind::Null => BamlType::Null,
+        TypeExprKind::Never => BamlType::Null,
+        TypeExprKind::Void => BamlType::Null,
 
         TypeExprKind::Media { kind, .. } => {
             // Map MediaKind to the class name string.
@@ -963,7 +963,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Media(name.to_string())
         }
 
-        TypeExprKind::Uint8Array { .. } => BamlType::Uint8Array,
+        TypeExprKind::Uint8Array => BamlType::Uint8Array,
 
         TypeExprKind::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
@@ -1001,7 +1001,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v.kind, TypeExprKind::Null { .. }))
+                .filter(|v| !matches!(v.kind, TypeExprKind::Null))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
@@ -1012,12 +1012,12 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExprKind::Function { .. } => BamlType::Named("function".to_string()),
         TypeExprKind::AssociatedTypeProjection { .. }
-        | TypeExprKind::Unknown { .. }
-        | TypeExprKind::Missing { .. }
-        | TypeExprKind::Error { .. }
-        | TypeExprKind::Infer { .. } => BamlType::Named("unknown".to_string()),
-        TypeExprKind::Type { .. } => BamlType::Named("type".to_string()),
-        TypeExprKind::Rust { .. } => BamlType::RustType,
+        | TypeExprKind::Unknown
+        | TypeExprKind::Missing
+        | TypeExprKind::Error
+        | TypeExprKind::Infer => BamlType::Named("unknown".to_string()),
+        TypeExprKind::Type => BamlType::Named("type".to_string()),
+        TypeExprKind::Rust => BamlType::RustType,
     }
 }
 

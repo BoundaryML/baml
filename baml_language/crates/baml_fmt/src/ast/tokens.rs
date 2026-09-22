@@ -517,6 +517,35 @@ impl KnownKind for IntegerLiteral {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BigintLiteral {
+    pub token_span: TextRange,
+}
+impl BigintLiteral {
+    /// Does not verify that the span is actually a bigint literal token.
+    #[must_use]
+    pub fn new_from_span(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+}
+impl FromCST for BigintLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::BIGINT_LITERAL)?;
+        Ok(Self::new_from_span(token.text_range()))
+    }
+}
+impl Token for BigintLiteral {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for BigintLiteral {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BIGINT_LITERAL
+    }
+}
+
 /// A boolean / null literal — `true` (`KW_TRUE`), `false` (`KW_FALSE`), or
 /// `null` (`KW_NULL`). One token type spanning the three re-lexed kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

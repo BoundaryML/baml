@@ -773,14 +773,14 @@ fn operand_could_be_int<'db>(body: &MirFunctionBody<'db>, operand: &Operand<'db>
 /// newly added variant on the conservative side.
 fn ty_could_be_int(ty: &RuntimeTy) -> bool {
     match ty {
-        RuntimeTy::Int { .. } => true,
+        RuntimeTy::Int => true,
         RuntimeTy::Literal(lit, ..) => matches!(lit, Literal::Int(_)),
-        RuntimeTy::Bigint { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::String { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Null { .. }
-        | RuntimeTy::Void { .. }
+        RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Void
         | RuntimeTy::Media(..)
         | RuntimeTy::Class(..)
         | RuntimeTy::Enum(..)
@@ -789,10 +789,10 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
         | RuntimeTy::Map { .. }
         | RuntimeTy::Function { .. }
         | RuntimeTy::Future(..)
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. }
-        | RuntimeTy::Resource { .. }
-        | RuntimeTy::PromptAst { .. } => false,
+        | RuntimeTy::RustType
+        | RuntimeTy::Type
+        | RuntimeTy::Resource
+        | RuntimeTy::PromptAst => false,
         _ => true,
     }
 }

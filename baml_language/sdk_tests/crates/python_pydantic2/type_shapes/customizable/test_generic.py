@@ -6,7 +6,7 @@
     does not match any member of union [Void { ... },
     Class(TypeName { name: "Done", ... })]
 
-`ai.stream.Stream<T, S>.next() -> S | ai.stream.Done` is a
+`ai.stream.Stream<T>.next() -> T | ai.stream.Done` is a
 generic instance method whose return type mentions a class-level
 TypeVar. The host-side lowering for that call (`tir2_to_template`)
 doesn't substitute the instantiation's `S` into the lifted return

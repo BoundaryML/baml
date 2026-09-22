@@ -300,7 +300,7 @@ pub(crate) fn collect_raises_names(throws: Option<&Ty>) -> Vec<String> {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }
@@ -410,8 +410,8 @@ pub(crate) fn render_class(
 
     // `final`: generated value classes carry exact-class value semantics — the
     // encoder keys its typemap on the concrete class, so a user subclass would
-    // silently break inbound encode. This covers plain value classes, generic
-    // classes, and `$stream` companions (all routed through here). Sealed-union
+    // silently break inbound encode. This covers plain value classes and generic
+    // classes (both routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
     out.push_str(&format!("public final class {ident}{generics} {{\n"));
@@ -1421,14 +1421,12 @@ fn typed_callable_expr(
     let mut resolved = ty;
     loop {
         match resolved {
-            Ty::TypeAlias(name, _) => match ctx.aliases.get(name) {
+            Ty::TypeAlias(name) => match ctx.aliases.get(name) {
                 Some((inner, false)) => resolved = inner,
                 _ => return None,
             },
-            Ty::Union(members, _) => {
-                let mut non_null = members
-                    .iter()
-                    .filter(|member| !matches!(member, Ty::Null { .. }));
+            Ty::Union(members) => {
+                let mut non_null = members.iter().filter(|member| !matches!(member, Ty::Null));
                 let inner = non_null.next()?;
                 if non_null.next().is_some() {
                     return None;
@@ -1496,8 +1494,8 @@ fn typed_callable_expr(
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {
     match ty {
         Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) => true,
-        Ty::Class(_, args, _) => !args.is_empty(),
-        Ty::TypeAlias(name, _) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
+        Ty::Class(_, args) => !args.is_empty(),
+        Ty::TypeAlias(name) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
             *recursive || needs_inbound_descriptor(resolved, ctx)
         }),
         _ => false,

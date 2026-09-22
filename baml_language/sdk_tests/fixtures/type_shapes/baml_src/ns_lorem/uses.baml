@@ -21,3 +21,11 @@ function round_trip_root_foo(f: root.Foo) -> root.Foo {
 function round_trip_http_response(r: baml.http.Response) -> baml.http.Response {
   r
 }
+
+function round_trip_list_of_http_response(xs: baml.http.Response[]) -> baml.http.Response[] {
+  xs
+}
+
+function round_trip_resume_or_http_response(u: Resume | baml.http.Response) -> Resume | baml.http.Response {
+  u
+}

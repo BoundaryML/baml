@@ -1,9 +1,14 @@
 // Roundtrip coverage for the cross-namespace routing-rules suite: root
 // (`baml_sdk`), `a`, `a.b`, `lorem`, and `ipsum` leaves.
 //
-// The `baml.http.Response`-typed round trips in `lorem` are covered in
-// TestStreams.java (they need an engine-minted handle and can't be built
-// host-side).
+// The `baml.http.Response` arms in `lorem` need an engine-minted handle and
+// can't be built host-side; the handle round trip is covered by
+// TestHandles.java.
+//
+// java-port note: `Resume | baml.http.Response` -> `Union2<Resume,
+// baml.http.Response>`; see TestUnions.java for the general generic-family
+// shape. Arms are positional in BAML declaration order, so only the
+// host-constructible `Resume` arm (Arm0) is exercised here.
 //
 // Port of python_pydantic2/type_shapes/customizable/roundtrip_tests/
 // test_routing.py — same test names, cases, inputs, assertions.
@@ -18,6 +23,7 @@ package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import baml_bridge.Union2;
 import baml_sdk.Fns;
 import baml_sdk.Foo;
 import baml_sdk.a.b.Thing;
@@ -77,5 +83,16 @@ class TestRouting {
     void test_routing_round_trip_lorem_resume_from_ipsum() {
         Resume r = new Resume("grace", "g@x.com");
         assertEquals(r, baml_sdk.ipsum.Fns.round_trip_lorem_resume_from_ipsum(r));
+    }
+
+    @Test
+    void test_routing_round_trip_resume_or_http_response() {
+        // Pass the `Resume` arm; the `baml.http.Response` arm isn't
+        // host-constructible.
+        Resume r = new Resume("lovelace", "a@x.com");
+        Object result =
+                baml_sdk.lorem.Fns.round_trip_resume_or_http_response(
+                        new Union2.Arm0<Resume, baml_sdk.baml.http.Response>(r));
+        assertEquals(r, ((Union2.Arm0<?, ?>) result).value());
     }
 }

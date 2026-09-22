@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-
-use super::{ParsingContext, ParsingError, TypeCoercer};
+use super::{ParsingContext, ParsingError, TypeCoercer, VisitedType};
 use crate::{
     baml_value::BamlArray,
     deserializer::{
@@ -8,9 +6,7 @@ use crate::{
         types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
     },
     jsonish::CompletionState,
-    sap_model::{
-        ArrayTy, AttrLiteral, FromLiteral, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
-    },
+    sap_model::{ArrayTy, TyResolvedRef, TypeIdent},
 };
 
 /// Extract the winning union variant index from a coerced value's flags.
@@ -41,39 +37,21 @@ where
 {
     fn try_cast(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
-        let element_type = &*target.ty.ty;
-        let element_type = ctx.db.resolve_with_meta(element_type.as_ref()).ok()?;
+        let element_type = ctx.db.resolve(&target.ty).ok()?;
 
         // Only handle array values
         let crate::jsonish::Value::Array(arr, completion_state) = value else {
             return None;
         };
 
-        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                                ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
+        let flags = match completion_state {
+            CompletionState::Incomplete => {
                 DeserializerConditions::new().with_flag(Flag::Incomplete)
             }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
+            CompletionState::Complete => DeserializerConditions::new(),
         };
 
         // For empty arrays, we can return immediately
@@ -82,7 +60,7 @@ where
                 BamlArray { value: Vec::new() },
                 DeserializerMeta {
                     flags,
-                    ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
+                    ty: TyResolvedRef::Array(target),
                 },
             ));
         }
@@ -92,8 +70,7 @@ where
         let mut last_union_hint: Option<usize> = None;
         for (i, item) in arr.iter().enumerate() {
             let child_ctx = ctx.enter_scope_with_hint(&format!("{i}"), last_union_hint);
-            let et_ref = TyWithMeta::new(element_type.ty, element_type.meta);
-            let v = TyResolvedRef::try_cast(&child_ctx, et_ref, item)?;
+            let v = TyResolvedRef::try_cast(&child_ctx, element_type, item)?;
 
             // Extract winning variant index for the next iteration's hint
             last_union_hint = extract_union_winner_index(&v);
@@ -104,45 +81,26 @@ where
             BamlArray { value: items },
             DeserializerMeta {
                 flags,
-                ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
+                ty: TyResolvedRef::Array(target),
             },
         ))
     }
 
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let element_type = &*target.ty.ty;
         let element_type = ctx
             .db
-            .resolve_with_meta(element_type.as_ref())
+            .resolve(&target.ty)
             .map_err(|ident| ctx.error_type_resolution(ident))?;
 
         let mut items = vec![];
         let mut flags = DeserializerConditions::new();
 
-        match (value, &target.meta.in_progress) {
-            (
-                crate::jsonish::Value::Array(_, CompletionState::Incomplete),
-                Some(AttrLiteral::Never),
-            ) => {
-                return Ok(None);
-            }
-            (crate::jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                let ret = target.ty.from_literal(lit, ctx)?;
-                let ret = ValueWithFlags::new(
-                    ret,
-                    DeserializerMeta {
-                        flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                        ty: target.map_ty(TyResolvedRef::Array),
-                    },
-                );
-                return Ok(Some(ret));
-            }
-            (crate::jsonish::Value::Array(arr, c), _) => {
+        match value {
+            crate::jsonish::Value::Array(arr, c) => {
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
@@ -151,20 +109,14 @@ where
                 let mut last_union_hint: Option<usize> = None;
                 for (i, item) in arr.iter().enumerate() {
                     let child_ctx = ctx.enter_scope_with_hint(&format!("{i}"), last_union_hint);
-                    let et_ref = TyWithMeta::new(element_type.ty, element_type.meta);
-                    match TyResolvedRef::coerce(&child_ctx, et_ref, item) {
+                    match TyResolvedRef::coerce(&child_ctx, element_type, item) {
                         Ok(Some(v)) => {
                             // Extract winning variant index for the next iteration's hint
                             last_union_hint = extract_union_winner_index(&v);
                             items.push(v);
                         }
                         Ok(None) => {
-                            // child is incomplete with `in_progress = never`
-                            // debug_assert_eq!(
-                            //     *c,
-                            //     CompletionState::Incomplete,
-                            //     "Array should be incomplete if an item is."
-                            // );
+                            // The item is incomplete and has no partial parse yet.
                         }
                         // TODO(vbv): document why we penalize in proportion to how deep into an array a parse error is
                         Err(e) => flags.add_flag(Flag::ArrayItemParseError(i, e)),
@@ -172,14 +124,21 @@ where
                 }
             }
             // Not an array: try and make it a single-value array
-            (v, _) => {
+            v => {
+                // A recursive alias (`type J = int | J[]`) reaches this array again with the
+                // same value through the element type; that attempt is already in progress
+                // and has nothing new to offer.
+                let visited = VisitedType::Array(::core::ptr::from_ref(target).cast());
+                if ctx.is_visiting(&visited, v, true) {
+                    return Ok(None);
+                }
                 flags.add_flag(Flag::SingleToArray);
-                let et_ref = TyWithMeta::new(element_type.ty, element_type.meta);
-                match TyResolvedRef::coerce(&ctx.enter_scope("<implied>"), et_ref, v) {
+                let ctx = ctx.visit(visited, v, true).enter_scope("<implied>");
+                match TyResolvedRef::coerce(&ctx, element_type, v) {
                     Ok(Some(v)) => items.push(v),
-                    Ok(None) => {
-                        flags.add_flag(Flag::Incomplete);
-                    }
+                    // The implied item has no partial parse yet, so neither does the array we
+                    // are guessing around it.
+                    Ok(None) => return Ok(None),
                     Err(e) => flags.add_flag(Flag::ArrayItemParseError(0, e)),
                 }
             }
@@ -191,7 +150,7 @@ where
             ret,
             DeserializerMeta {
                 flags,
-                ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
+                ty: TyResolvedRef::Array(target),
             },
         )))
     }

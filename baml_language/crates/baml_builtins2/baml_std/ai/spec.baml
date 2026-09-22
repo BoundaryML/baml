@@ -97,9 +97,8 @@ function prompt(
 /// One unit of model work, bound and unrun. Immutable; getters only.
 ///
 /// `MyFunc@spec(args)` calls the compiler-generated private `MyFunc@spec`
-/// companion. Streaming calls the separate private `MyFunc@stream` companion,
-/// whose return type carries the `Out$stream` schema. Neither companion is
-/// public.
+/// companion. Streaming calls the separate private `MyFunc@stream` companion.
+/// Neither companion is public.
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,

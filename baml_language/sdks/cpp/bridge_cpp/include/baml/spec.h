@@ -2,11 +2,11 @@
 #define BAML_SPEC_H_
 
 // Typed host proxies for the two live capabilities used by authored LLM
-// functions: ai.FunctionSpec<Out> and ai.stream.Stream<Partial, Out>.
+// functions: ai.FunctionSpec<Out> and ai.stream.Stream<T>.
 // A FunctionSpec is obtained by calling an authored function with the SPEC
 // operation. Generated flat stream shortcuts call the compiler-private
 // `Fn@stream` projection through the STREAM boundary operation; the spec does
-// not carry the partial type and has no streaming method.
+// has no streaming method.
 
 #include <baml/codec.h>
 #include <baml/detail/call.h>
@@ -23,7 +23,7 @@ namespace baml {
 template <typename Out>
 class function_spec;
 
-template <typename Partial, typename Out>
+template <typename T>
 class stream;
 
 class prompt;
@@ -290,8 +290,9 @@ class function_spec {
   friend struct codec<function_spec<Out>>;
 };
 
-// A live, engine-owned ai.stream.Stream<Partial, Out>.
-template <typename Partial, typename Out>
+// A live, engine-owned ai.stream.Stream<T>. A partial and the settled value
+// share the one type: a partial is T parsed from the text received so far.
+template <typename T>
 class stream {
  public:
   stream(const stream&) = default;
@@ -307,30 +308,30 @@ class stream {
     return !(lhs == rhs);
   }
 
-  stream_item<Partial> next() const {
+  stream_item<T> next() const {
     detail::args_encoder args;
     add_self(args);
-    return detail::call_sync<stream_item<Partial>>("ai.stream.Stream.next",
-                                                   std::move(args));
+    return detail::call_sync<stream_item<T>>("ai.stream.Stream.next",
+                                             std::move(args));
   }
 
-  future<stream_item<Partial>> next_async() const {
+  future<stream_item<T>> next_async() const {
     detail::args_encoder args;
     add_self(args);
-    return detail::start_call<stream_item<Partial>>("ai.stream.Stream.next",
-                                                    std::move(args));
+    return detail::start_call<stream_item<T>>("ai.stream.Stream.next",
+                                              std::move(args));
   }
 
-  Out final_() const {
+  T final_() const {
     detail::args_encoder args;
     add_self(args);
-    return detail::call_sync<Out>("ai.stream.Stream.final", std::move(args));
+    return detail::call_sync<T>("ai.stream.Stream.final", std::move(args));
   }
 
-  future<Out> final_async() const {
+  future<T> final_async() const {
     detail::args_encoder args;
     add_self(args);
-    return detail::start_call<Out>("ai.stream.Stream.final", std::move(args));
+    return detail::start_call<T>("ai.stream.Stream.final", std::move(args));
   }
 
  private:
@@ -345,7 +346,7 @@ class stream {
 
   std::shared_ptr<detail::capability_state> state_;
 
-  friend struct codec<stream<Partial, Out>>;
+  friend struct codec<stream<T>>;
 };
 
 // Owned, provider-neutral prompt data. Unlike FunctionSpec and Stream this is
@@ -444,20 +445,18 @@ struct codec<function_spec<Out>> {
   }
 };
 
-template <typename Partial, typename Out>
-struct codec<stream<Partial, Out>> {
+template <typename T>
+struct codec<stream<T>> {
   static detail::pb::BamlTy baml_ty() {
-    return detail::generic_nominal_ty<Partial, Out>("ai.stream.Stream");
+    return detail::generic_nominal_ty<T>("ai.stream.Stream");
   }
 
-  static void encode(detail::pb::InboundValue& target,
-                     const stream<Partial, Out>& value) {
+  static void encode(detail::pb::InboundValue& target, const stream<T>& value) {
     detail::encode_capability(target, *value.state_);
   }
 
-  static stream<Partial, Out> decode(
-      const detail::pb::BamlOutboundValue& value) {
-    return stream<Partial, Out>(detail::decode_capability(
+  static stream<T> decode(const detail::pb::BamlOutboundValue& value) {
+    return stream<T>(detail::decode_capability(
         value, detail::pb::ADT_TAGGED_HEAP_HANDLE, "ai.stream.Stream handle"));
   }
 };

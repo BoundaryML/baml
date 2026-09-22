@@ -1,6 +1,6 @@
 ---
 title: Classify support tickets
-description: A focused BAML example that maps an incoming message to one known support category.
+description: Assign a support category to an incoming message.
 breadcrumbs:
   - href: /examples
     label: Examples
@@ -39,6 +39,6 @@ export async function classifyTicket(message: string) {
 
 ## Why this shape
 
-An enum makes the output space explicit and gives generated clients a named result type. The application can switch on known values instead of normalizing arbitrary model text.
+An enum limits the result to the categories you declare. Your application can switch on those values without parsing free-form model text.
 
 Read the [function reference](/baml/language/functions) for syntax details or expand the same pattern in the [structured extraction tutorial](/tutorials/structured-extraction).

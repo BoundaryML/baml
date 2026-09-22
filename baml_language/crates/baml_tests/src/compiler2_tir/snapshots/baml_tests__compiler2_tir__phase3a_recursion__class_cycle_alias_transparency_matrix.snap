@@ -12,13 +12,6 @@ class user.B {
   a: user.A
 }
   !! 37..52: class cycle: user.A -> user.B -> user.A
-class user.A$stream {
-  b: user.B$stream | null
-}
-type user.AliasB$stream = user.B$stream
-class user.B$stream {
-  a: user.A$stream | null
-}
 
 === class_cycle_broken_by_alias_to_optional ===
 class user.A {
@@ -27,11 +20,4 @@ class user.A {
 type user.AliasB = user.B | null
 class user.B {
   a: user.A
-}
-class user.A$stream {
-  b: user.B$stream | null
-}
-type user.AliasB$stream = user.B$stream | null
-class user.B$stream {
-  a: user.A$stream | null
 }

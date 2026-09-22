@@ -18,7 +18,7 @@ jobs:
     name: Capture and send dashboard
     runs-on: ubuntu-latest
     environment: boundary-tools-prod
-    timeout-minutes: 10
+    timeout-minutes: 35
     env:
       PRODUCT_METRICS_DASHBOARD_URL: https://boundary-product-metrics.fly.dev/
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}

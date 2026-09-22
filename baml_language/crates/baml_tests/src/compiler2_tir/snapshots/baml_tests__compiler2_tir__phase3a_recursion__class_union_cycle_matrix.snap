@@ -11,12 +11,6 @@ class user.B {
   a: user.A
 }
   !! 20..35: class cycle: user.A -> user.B -> user.A
-class user.A$stream {
-  b: user.B$stream | user.B$stream | null
-}
-class user.B$stream {
-  a: user.A$stream | null
-}
 
 === class_union_field_different_variants_breaks_cycle ===
 class user.A {
@@ -24,10 +18,4 @@ class user.A {
 }
 class user.B {
   a: user.A
-}
-class user.A$stream {
-  b: user.B$stream | string | null
-}
-class user.B$stream {
-  a: user.A$stream | null
 }

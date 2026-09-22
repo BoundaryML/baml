@@ -176,3 +176,59 @@ impl OwnerBody {
         }
     }
 }
+
+/// The body of any body owner (rust-analyzer's `DefWithBodyId` pattern).
+pub fn body<'db>(db: &'db dyn crate::Db, owner: BodyOwnerId<'db>) -> OwnerBody {
+    match owner {
+        BodyOwnerId::Function(function) => OwnerBody::Function(function_body(db, function)),
+        BodyOwnerId::Let(let_binding) => OwnerBody::Let(let_body(db, let_binding)),
+        BodyOwnerId::ParameterDefaults(function) => OwnerBody::ParameterDefaults(
+            crate::signature::function_parameter_defaults(db, function),
+        ),
+    }
+}
+
+/// The body source map of any body owner (spans only).
+pub fn body_source_map<'db>(
+    db: &'db dyn crate::Db,
+    owner: BodyOwnerId<'db>,
+) -> Option<baml_compiler2_ast::AstSourceMap> {
+    match owner {
+        BodyOwnerId::Function(function) => function_body_source_map(db, function),
+        BodyOwnerId::Let(let_binding) => let_body_source_map(db, let_binding),
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            crate::signature::function_parameter_defaults(db, function)
+                .defaults
+                .source_map
+                .clone(),
+        ),
+    }
+}
+
+/// The scope opened for a body owner's body.
+pub fn body_scope<'db>(
+    db: &'db dyn crate::Db,
+    owner: BodyOwnerId<'db>,
+) -> Option<crate::scope::ScopeId<'db>> {
+    match owner {
+        BodyOwnerId::Function(function) => crate::item_data::function_scope(db, function),
+        BodyOwnerId::Let(let_binding) => crate::item_data::let_scope(db, let_binding),
+        // Defaults are keyed under the FUNCTION's scope (the semantic
+        // index walks them there, `ExprMetadataScope::ParameterDefault`).
+        BodyOwnerId::ParameterDefaults(function) => crate::item_data::function_scope(db, function),
+    }
+}
+
+/// Every body owner in `file`: functions (methods included), then top-level
+/// lets, each group in source order.
+pub fn file_body_owners(db: &dyn crate::Db, file: baml_base::SourceFile) -> Vec<BodyOwnerId<'_>> {
+    let functions = crate::item_data::file_functions(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    let lets = crate::item_data::file_lets(db, file)
+        .iter()
+        .copied()
+        .map(Into::into);
+    functions.chain(lets).collect()
+}

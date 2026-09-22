@@ -45,6 +45,28 @@ export const annotationSpecs = {
       text: 'catch (e) {\n        BadToolInput => e.message,\n    }',
     },
   ],
+  'basics-function': [
+    {
+      kind: 'syntax',
+      label: 'Default; override by name',
+      mark: 'underbrace',
+      text: 'chars_per_token: int = 4',
+    },
+    {
+      kind: 'success',
+      label: 'Returned to the caller',
+      mark: 'underbrace',
+      text: 'text.trim().length() / chars_per_token',
+    },
+  ],
+  'basics-if': [
+    {
+      kind: 'success',
+      label: 'The selected branch supplies model',
+      mark: 'bracket',
+      text: 'if (tokens <= 8_000) {\n        "mini"\n    } else if (tokens <= 100_000) {\n        "standard"\n    } else {\n        "long-context"\n    }',
+    },
+  ],
   'effect-define': [
     {
       kind: 'syntax',

@@ -164,6 +164,31 @@ extension Int: BamlDecodable {
     }
 }
 
+extension BamlBigInt: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "bigint" }
+
+    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlBigInt {
+        let raw = value.normalized
+        let hexadecimal: String
+        switch raw.value {
+        case .bigintValue(let bigint):
+            hexadecimal = bigint
+        case .literalValue(let literal):
+            guard case .bigintValue(let bigint) = literal.literal else {
+                throw BamlDecodeError.typeMismatch(expected: "BamlBigInt", got: wireArmName(raw))
+            }
+            hexadecimal = bigint
+        default:
+            throw BamlDecodeError.typeMismatch(expected: "BamlBigInt", got: wireArmName(raw))
+        }
+        do {
+            return try BamlBigInt(hexadecimal: hexadecimal)
+        } catch {
+            throw BamlDecodeError.typeMismatch(expected: "canonical bigint", got: "bigint \(hexadecimal)")
+        }
+    }
+}
+
 extension Double: BamlDecodable {
     public static var _bamlArmIdentity: String? { "float" }
 

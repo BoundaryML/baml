@@ -93,9 +93,7 @@ mod tests {
     fn local(name: &str) -> LocalDecl {
         LocalDecl {
             name: Some(baml_base::Name::new(name)),
-            ty: RuntimeTy::Int {
-                attr: baml_type::TyAttr::default(),
-            },
+            ty: RuntimeTy::Int,
             span: None,
             scope_span: None,
             is_captured: false,

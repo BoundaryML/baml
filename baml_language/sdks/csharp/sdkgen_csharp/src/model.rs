@@ -216,7 +216,6 @@ fn callable_parts(name: &BaseName) -> (BaseName, CallableVariant) {
 
 #[cfg(test)]
 mod tests {
-    use baml_base::TyAttr;
     use baml_codegen_types::{Function, Origin, Ty};
 
     use super::*;
@@ -227,9 +226,7 @@ mod tests {
             generic_params: Vec::new(),
             docstring: None,
             arguments: Vec::new(),
-            return_type: Ty::String {
-                attr: TyAttr::default(),
-            },
+            return_type: Ty::String,
             throws: None,
             watchers: Vec::new(),
             origin: Origin {

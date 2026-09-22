@@ -5,7 +5,7 @@
 // rejected by the parser in literal position).
 
 function fixture_export_text() -> string {
-    #"
+    `
         {
           "format_version": 1,
           "package": "baml",
@@ -14,7 +14,7 @@ function fixture_export_text() -> string {
               "id": "T:baml.Foo",
               "kind": "class",
               "name": "Foo",
-              "docstring": "see \"throws\": here",
+              "docstring": "see \\"throws\\": here",
               "fields": [{"id": "F:baml.Foo._size", "name": "_size", "ty": {"display": "int"}}],
               "methods": [
                 {
@@ -72,11 +72,11 @@ function fixture_export_text() -> string {
             }
           ]
         }
-    "#
+    `
 }
 
 function fixture_ts_text() -> string {
-    #"
+    `
         {
           "format_version": 2,
           "typescript_version": "5.8.3-test",
@@ -106,7 +106,7 @@ function fixture_ts_text() -> string {
             }
           ]
         }
-    "#
+    `
 }
 
 test "id helpers split kind prefixes and path segments" {
@@ -977,19 +977,19 @@ test "an example that does not compile is caught, and a good one is not" {
         baml.sys.panic(`${compiler} is not built — cargo build -p baml_cli --bin baml-cli`);
     }
     let box = build_toolbox("../..", "../../baml_language/TYPE_SYSTEM.md", compiler, "", "data/scratch");
-    let good = #"
+    let good = `
         function example() -> string {
             let parts = "a,b,c".split(",");
             parts.join("-")
         }
-    "#;
+    `;
     assert.is_true(check_snippet(box, good) == null);
 
-    let bad = #"
+    let bad = `
         function example() -> string {
             "a,b,c".splitt(",")
         }
-    "#;
+    `;
     if let error: string = check_snippet(box, bad) {
         // The diagnostic goes back to the model verbatim, so it has to name
         // what is actually wrong.
@@ -1280,8 +1280,8 @@ test "the last round cannot ask for another lookup" {
     // mechanism: it is what the model is shown. This has already been lost once
     // to a careless edit, leaving a comment describing a function that no
     // longer existed, so it is worth a test that costs nothing.
-    let step = baml.prompt.render_output_format(baml.prompt.get_return_type("session_step"));
-    let last = baml.prompt.render_output_format(baml.prompt.get_return_type("session_final"));
+    let step = ai.wire.render_output_format(ai.internal.get_return_type("session_step"));
+    let last = ai.wire.render_output_format(ai.internal.get_return_type("session_final"));
     assert.is_true(step.includes("any of these schemas"));
     assert.is_true(step.includes("lookups"));
     assert.is_true(!last.includes("any of these schemas"));

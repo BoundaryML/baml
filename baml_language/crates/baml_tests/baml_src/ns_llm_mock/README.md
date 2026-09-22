@@ -186,7 +186,7 @@ let result = ai.Agent<string>.new(client = cl).run(MockEcho@spec("Say pong."));
 result.value      // also: result.journal, result.usage
 
 // streaming (from_spec cannot infer its two type params — write them out)
-let stream = ai.stream.from_spec<string | null, string>(MockEcho@spec("hi"), client = cl);
+let stream = ai.stream.from_spec<string, string>(MockEcho@spec("hi"), client = cl);
 stream.final()
 ```
 

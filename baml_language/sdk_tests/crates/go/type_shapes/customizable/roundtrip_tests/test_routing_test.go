@@ -70,3 +70,20 @@ func Test_round_trip_lorem_resume_from_ipsum(t *testing.T) {
 		t.Fatalf("got %#v, %v", got, err)
 	}
 }
+
+// Only the `Resume` arm is exercised: a Go host cannot create the opaque
+// handle behind `baml.http.Response`; engine-minted handle coverage lives in
+// test_rust_type_test.go.
+func Test_round_trip_resume_or_http_response(t *testing.T) {
+	email := "a@x.com"
+	resume := baml_sdk.LoremResume{Name: "lovelace", Email: &email}
+	want := baml_sdk.NewHttpResponseOrLoremResumeFromLoremResume(resume)
+	got, err := baml_sdk.LoremRoundTripResumeOrHttpResponse(context.Background(), want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotResume, ok := got.AsLoremResume()
+	if !ok || !reflect.DeepEqual(gotResume, resume) {
+		t.Fatalf("HTTP response union's resume arm = %#v, ok %v, want %#v", gotResume, ok, resume)
+	}
+}

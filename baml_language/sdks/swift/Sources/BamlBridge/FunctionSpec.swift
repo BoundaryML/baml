@@ -6,7 +6,7 @@ import Foundation
 /// Spec operation on the authored function. Every other operation is an
 /// ordinary method on this proxy; no synthetic `$parse`, `$render_prompt`,
 /// or `$build_request` function is involved. Streaming remains a separate
-/// `Fn_stream(...)` projection because it carries the PPIR partial type.
+/// `Fn_stream(...)` projection because it carries the partial type.
 public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     private let handle: BamlHandle
 

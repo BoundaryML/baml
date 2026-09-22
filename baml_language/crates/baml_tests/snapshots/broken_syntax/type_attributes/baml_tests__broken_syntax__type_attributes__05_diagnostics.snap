@@ -1,0 +1,1002 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[bindings.baml:4:25]
+ 4 │   type T = unreflect(t) @alias("x")
+   ·                         ┬
+   ·                         ╰── expected `expression`, found `'@'`
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[nested.baml:8:15]
+ 8 │   field (NFoo @alias("inner"))[]
+   ·               ┬
+   ·               ╰── Unexpected '@' in type expression
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:12:15]
+ 12 │   field (NFoo @stream.done)[]
+    ·               ┬
+    ·               ╰── Unexpected '@' in type expression
+    ╰────
+
+  [hir] E0171
+
+  × type `map` expects 2 type argument(s), got 1
+    ╭─[nested.baml:16:9]
+ 16 │   field map<NFoo @alias("key"), NBar>
+    ·         ────┬───
+    ·             ╰── invalid builtin type arguments
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[nested.baml:16:18]
+ 16 │   field map<NFoo @alias("key"), NBar>
+    ·                  ┬
+    ·                  ╰── expected `'>'`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:16:33]
+ 16 │   field map<NFoo @alias("key"), NBar>
+    ·                                 ──┬─
+    ·                                   ╰── field 'NBar' is missing a type annotation
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[nested.baml:16:37]
+ 16 │   field map<NFoo @alias("key"), NBar>
+    ·                                     ┬
+    ·                                     ╰── expected `Unexpected token in class body`, found `'>'`
+    ╰────
+
+  [hir] E0171
+
+  × type `map` expects 2 type argument(s), got 1
+    ╭─[nested.baml:20:9]
+ 20 │   field map<NFoo @stream.done, NBar>
+    ·         ────┬───
+    ·             ╰── invalid builtin type arguments
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[nested.baml:20:18]
+ 20 │   field map<NFoo @stream.done, NBar>
+    ·                  ┬
+    ·                  ╰── expected `'>'`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:20:32]
+ 20 │   field map<NFoo @stream.done, NBar>
+    ·                                ──┬─
+    ·                                  ╰── field 'NBar' is missing a type annotation
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[nested.baml:20:36]
+ 20 │   field map<NFoo @stream.done, NBar>
+    ·                                    ┬
+    ·                                    ╰── expected `Unexpected token in class body`, found `'>'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:24:15]
+ 24 │   field (NFoo @alias("inner") | NBar)[]
+    ·               ┬
+    ·               ╰── Unexpected '@' in type expression
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:28:15]
+ 28 │   field (NFoo @alias("inner"))[] @stream.done
+    ·               ┬
+    ·               ╰── Unexpected '@' in type expression
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:32:15]
+ 32 │   field (NFoo @alias("inner")) @alias("outer")
+    ·               ┬
+    ·               ╰── Unexpected '@' in type expression
+    ╰────
+
+  [hir] E0171
+
+  × type `map` expects 2 type argument(s), got 1
+    ╭─[nested.baml:36:21]
+ 36 │   field map<string, map<NFoo @alias("key"), NBar>>
+    ·                     ────┬───
+    ·                         ╰── invalid builtin type arguments
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[nested.baml:36:30]
+ 36 │   field map<string, map<NFoo @alias("key"), NBar>>
+    ·                              ┬
+    ·                              ╰── expected `'>'`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[nested.baml:36:45]
+ 36 │   field map<string, map<NFoo @alias("key"), NBar>>
+    ·                                             ──┬─
+    ·                                               ╰── field 'NBar' is missing a type annotation
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[nested.baml:36:49]
+ 36 │   field map<string, map<NFoo @alias("key"), NBar>>
+    ·                                                 ─┬
+    ·                                                  ╰── expected `Unexpected token in class body`, found `'>>'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:32]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                ┬
+   ·                                ╰── expected `top-level declaration`, found `'@'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:33]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                 ──┬──
+   ·                                   ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:38]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                      ┬
+   ·                                      ╰── expected `top-level declaration`, found `'('`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:39]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                       ┬
+   ·                                       ╰── expected `top-level declaration`, found `'"'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:40]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                        ──┬──
+   ·                                          ╰── expected `top-level declaration`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:45]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                             ┬
+   ·                                             ╰── expected `top-level declaration`, found `'"'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[signatures.baml:8:46]
+ 8 │ type AliasWithAttribute = EFoo @alias("alias")
+   ·                                              ┬
+   ·                                              ╰── expected `top-level declaration`, found `')'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:10:38]
+ 10 │ type AliasWithStreamAttribute = EFoo @stream.done
+    ·                                      ┬
+    ·                                      ╰── expected `top-level declaration`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:10:39]
+ 10 │ type AliasWithStreamAttribute = EFoo @stream.done
+    ·                                       ───┬──
+    ·                                          ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:10:45]
+ 10 │ type AliasWithStreamAttribute = EFoo @stream.done
+    ·                                             ┬
+    ·                                             ╰── expected `top-level declaration`, found `'.'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:10:46]
+ 10 │ type AliasWithStreamAttribute = EFoo @stream.done
+    ·                                              ──┬─
+    ·                                                ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:37]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                     ┬
+    ·                                     ╰── expected `top-level declaration`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:38]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                      ──┬──
+    ·                                        ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:43]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                           ┬
+    ·                                           ╰── expected `top-level declaration`, found `'('`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:44]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                            ┬
+    ·                                            ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:45]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                             ──┬──
+    ·                                               ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:50]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                                  ┬
+    ·                                                  ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:51]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                                   ┬
+    ·                                                   ╰── expected `top-level declaration`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:53]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                                     ┬
+    ·                                                     ╰── expected `top-level declaration`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:54]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                                      ───┬──
+    ·                                                         ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:60]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                                            ┬
+    ·                                                            ╰── expected `top-level declaration`, found `'.'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:12:61]
+ 12 │ type AliasWithBothAttributes = EFoo @alias("alias") @stream.done
+    ·                                                             ──┬─
+    ·                                                               ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:40]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                        ┬
+    ·                                        ╰── expected `top-level declaration`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:41]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                         ──┬──
+    ·                                           ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:46]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                              ┬
+    ·                                              ╰── expected `top-level declaration`, found `'('`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:47]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                               ┬
+    ·                                               ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:48]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                                ──┬──
+    ·                                                  ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:53]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                                     ┬
+    ·                                                     ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:14:54]
+ 14 │ type UnionAliasWithAttribute = EA | EB @alias("alias")
+    ·                                                      ┬
+    ·                                                      ╰── expected `top-level declaration`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:39]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                       ┬
+    ·                                       ╰── expected `')'`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:40]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                        ──┬──
+    ·                                          ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:45]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                             ┬
+    ·                                             ╰── expected `top-level declaration`, found `'('`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:46]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                              ┬
+    ·                                              ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:47]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                               ──┬──
+    ·                                                 ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:52]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                                    ┬
+    ·                                                    ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:53]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                                     ┬
+    ·                                                     ╰── expected `top-level declaration`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:54]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                                      ┬
+    ·                                                      ╰── expected `top-level declaration`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:56]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                                        ─┬
+    ·                                                         ╰── expected `top-level declaration`, found `'->'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:59]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                                           ───┬──
+    ·                                                              ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:16:66]
+ 16 │ function param_with_attribute(x: EFoo @alias("param")) -> string {
+    ·                                                                  ┬
+    ·                                                                  ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:17:3]
+ 17 │   "hello"
+    ·   ┬
+    ·   ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:17:4]
+ 17 │   "hello"
+    ·    ──┬──
+    ·      ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:17:9]
+ 17 │   "hello"
+    ·         ┬
+    ·         ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:18:1]
+ 18 │ }
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:46]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                              ┬
+    ·                                              ╰── expected `')'`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:47]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                               ───┬──
+    ·                                                  ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:53]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                                     ┬
+    ·                                                     ╰── expected `top-level declaration`, found `'.'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:54]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                                      ──┬─
+    ·                                                        ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:58]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                                          ┬
+    ·                                                          ╰── expected `top-level declaration`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:60]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                                            ─┬
+    ·                                                             ╰── expected `top-level declaration`, found `'->'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:63]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                                               ───┬──
+    ·                                                                  ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:20:70]
+ 20 │ function param_with_stream_attribute(x: EFoo @stream.done) -> string {
+    ·                                                                      ┬
+    ·                                                                      ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:21:3]
+ 21 │   "hello"
+    ·   ┬
+    ·   ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:21:4]
+ 21 │   "hello"
+    ·    ──┬──
+    ·      ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:21:9]
+ 21 │   "hello"
+    ·         ┬
+    ·         ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:22:1]
+ 22 │ }
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:42]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                          ┬
+    ·                                          ╰── expected `function body`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:43]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                           ──┬──
+    ·                                             ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:48]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                                ┬
+    ·                                                ╰── expected `top-level declaration`, found `'('`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:49]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                                 ┬
+    ·                                                 ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:50]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                                  ───┬──
+    ·                                                     ╰── expected `top-level declaration`, found `return`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:56]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                                        ┬
+    ·                                                        ╰── expected `top-level declaration`, found `'"'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:57]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                                         ┬
+    ·                                                         ╰── expected `top-level declaration`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:24:59]
+ 24 │ function return_with_attribute() -> EFoo @alias("return") {
+    ·                                                           ┬
+    ·                                                           ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:25:3]
+ 25 │   EFoo { x: 1 }
+    ·   ──┬─
+    ·     ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:25:8]
+ 25 │   EFoo { x: 1 }
+    ·        ┬
+    ·        ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:25:10]
+ 25 │   EFoo { x: 1 }
+    ·          ┬
+    ·          ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:25:11]
+ 25 │   EFoo { x: 1 }
+    ·           ┬
+    ·           ╰── expected `top-level declaration`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:25:13]
+ 25 │   EFoo { x: 1 }
+    ·             ┬
+    ·             ╰── expected `top-level declaration`, found `integer`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:25:15]
+ 25 │   EFoo { x: 1 }
+    ·               ┬
+    ·               ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:26:1]
+ 26 │ }
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:28:49]
+ 28 │ function return_with_stream_attribute() -> EFoo @stream.done {
+    ·                                                 ┬
+    ·                                                 ╰── expected `function body`, found `'@'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:28:50]
+ 28 │ function return_with_stream_attribute() -> EFoo @stream.done {
+    ·                                                  ───┬──
+    ·                                                     ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:28:56]
+ 28 │ function return_with_stream_attribute() -> EFoo @stream.done {
+    ·                                                        ┬
+    ·                                                        ╰── expected `top-level declaration`, found `'.'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:28:57]
+ 28 │ function return_with_stream_attribute() -> EFoo @stream.done {
+    ·                                                         ──┬─
+    ·                                                           ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:28:62]
+ 28 │ function return_with_stream_attribute() -> EFoo @stream.done {
+    ·                                                              ┬
+    ·                                                              ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:29:3]
+ 29 │   EFoo { x: 1 }
+    ·   ──┬─
+    ·     ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:29:8]
+ 29 │   EFoo { x: 1 }
+    ·        ┬
+    ·        ╰── expected `top-level declaration`, found `'{'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:29:10]
+ 29 │   EFoo { x: 1 }
+    ·          ┬
+    ·          ╰── expected `top-level declaration`, found `identifier`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:29:11]
+ 29 │   EFoo { x: 1 }
+    ·           ┬
+    ·           ╰── expected `top-level declaration`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:29:13]
+ 29 │   EFoo { x: 1 }
+    ·             ┬
+    ·             ╰── expected `top-level declaration`, found `integer`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:29:15]
+ 29 │   EFoo { x: 1 }
+    ·               ┬
+    ·               ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[signatures.baml:30:1]
+ 30 │ }
+    · ┬
+    · ╰── expected `top-level declaration`, found `'}'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[unions.baml:9:30]
+ 9 │   field UA | UB @stream.done | UC
+   ·                              ┬
+   ·                              ╰── expected `Unexpected token in class body`, found `'|'`
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[unions.baml:9:32]
+ 9 │   field UA | UB @stream.done | UC
+   ·                                ─┬
+   ·                                 ╰── field 'UC' is missing a type annotation
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unions.baml:13:28]
+ 13 │   field UA @alias("first") | UB | UC
+    ·                            ┬
+    ·                            ╰── expected `Unexpected token in class body`, found `'|'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[unions.baml:13:30]
+ 13 │   field UA @alias("first") | UB | UC
+    ·                              ─┬
+    ·                               ╰── field 'UB' is missing a type annotation
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unions.baml:13:33]
+ 13 │   field UA @alias("first") | UB | UC
+    ·                                 ┬
+    ·                                 ╰── expected `Unexpected token in class body`, found `'|'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[unions.baml:13:35]
+ 13 │   field UA @alias("first") | UB | UC
+    ·                                   ─┬
+    ·                                    ╰── field 'UC' is missing a type annotation
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unions.baml:17:30]
+ 17 │   field UA | UB @stream.done | UC @alias("trailing")
+    ·                              ┬
+    ·                              ╰── expected `Unexpected token in class body`, found `'|'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[unions.baml:17:32]
+ 17 │   field UA | UB @stream.done | UC @alias("trailing")
+    ·                                ─┬
+    ·                                 ╰── field 'UC' is missing a type annotation
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[unions.baml:21:18]
+ 21 │   field UA | (UB @alias("last"))
+    ·                  ┬
+    ·                  ╰── Unexpected '@' in type expression
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[unions.baml:25:18]
+ 25 │   field (UA | UB @alias("inner"))
+    ·                  ┬
+    ·                  ╰── Unexpected '@' in type expression
+    ╰────

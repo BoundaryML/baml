@@ -17,6 +17,7 @@ function match_parsed(s: string) -> string {
     let arr: json[] => baml.json.stringify(arr)
     let m: map<string, json> => baml.json.stringify(m)
     let n: int => "int"
+    let bi: bigint => "bigint"
     let f: float => "float"
     let b: bool => "bool"
     let st: string => st

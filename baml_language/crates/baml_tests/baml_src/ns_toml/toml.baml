@@ -86,6 +86,15 @@ test "toml_item_from_json_rejects_null" {
     }
 }
 
+test "toml_item_from_json_rejects_bigint" {
+    {
+        baml.toml.item_from_json(123123123123123123123123n);
+        baml.sys.panic("expected item_from_json(bigint) to throw")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
 // `item_to_json` is a public helper that `Table.to_json` does not reach (the
 // latter uses the auto-derived map projection), so it is otherwise untested.
 // One call hits its array-recursion, `ZonedDateTime`, and scalar arms

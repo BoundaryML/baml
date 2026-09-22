@@ -2169,7 +2169,7 @@ mod tests {
         BasicBlock, CellId, Constant, Landing, LocalDecl, MirFunctionBody, Operand, Place,
         Statement, Terminator,
     };
-    use baml_type::{RuntimeTy, TyAttr};
+    use baml_type::RuntimeTy;
 
     use super::*;
 
@@ -2349,9 +2349,7 @@ mod tests {
     fn int_local_decl(name: Option<&str>) -> LocalDecl {
         LocalDecl {
             name: name.map(baml_base::Name::new),
-            ty: RuntimeTy::Int {
-                attr: TyAttr::default(),
-            },
+            ty: RuntimeTy::Int,
             span: None,
             scope_span: None,
             is_captured: false,
@@ -2444,9 +2442,7 @@ mod tests {
     fn bool_local_decl(name: Option<&str>) -> LocalDecl {
         LocalDecl {
             name: name.map(baml_base::Name::new),
-            ty: RuntimeTy::Bool {
-                attr: TyAttr::default(),
-            },
+            ty: RuntimeTy::Bool,
             span: None,
             scope_span: None,
             is_captured: false,

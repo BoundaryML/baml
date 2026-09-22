@@ -299,10 +299,10 @@ fn build_target_command_with_name(
         // wrapped values stay on the generic String parser since "null"
         // also has to be accepted alongside the inner type.
         match ty {
-            RuntimeTy::Bool { .. } => {
+            RuntimeTy::Bool => {
                 arg = arg.value_parser(PossibleValuesParser::new(["true", "false"]));
             }
-            RuntimeTy::Null { .. } => {
+            RuntimeTy::Null => {
                 arg = arg.value_parser(PossibleValuesParser::new(["null"]));
             }
             _ => {}
@@ -442,33 +442,23 @@ fn json_only_params_block(func_info: &UserFunctionInfo) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{TyAttr, TypeName};
+    use baml_type::TypeName;
     use bex_engine::UserFunctionInfo;
     use bex_vm_types::types::FunctionOrigin;
 
     use super::*;
 
     fn ty_string() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::String
     }
     fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
     fn ty_bool() -> RuntimeTy {
-        RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Bool
     }
     fn ty_class(name: &str) -> RuntimeTy {
-        RuntimeTy::Class(
-            TypeName::local(name.into()),
-            Box::new([]),
-            TyAttr::default(),
-        )
+        RuntimeTy::Class(TypeName::local(name.into()), Box::new([]))
     }
 
     fn func_info(

@@ -17,7 +17,7 @@ use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticPhase,
     runtime_type::{self, InvalidIdentifierKind},
 };
-use baml_type::{TyAttr, normalize, normalize::TypeContext};
+use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
@@ -289,7 +289,6 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     let ty = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
         Box::new([]),
-        class.ty_attr.clone(),
     );
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
@@ -307,10 +306,7 @@ fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: He
     let Object::Enum(enm) = vm.get_object(enum_ptr) else {
         unreachable!("Package.enums only contains enum pointers")
     };
-    let ty = RealizedTy::Enum(
-        bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
-        enm.ty_attr.clone(),
-    );
+    let ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag));
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
 }
@@ -335,7 +331,6 @@ fn package_interface_type(
         bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
         Box::new([]),
         Box::new([]),
-        TyAttr::default(),
     );
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
@@ -356,7 +351,6 @@ fn allocate_runtime_declaration_types(
                 RealizedTy::Class(
                     bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
                     Box::new([]),
-                    class.ty_attr.clone(),
                 ),
             )),
             _ => None,
@@ -367,10 +361,7 @@ fn allocate_runtime_declaration_types(
         .filter_map(|&enum_ptr| match vm.get_object(enum_ptr) {
             Object::Enum(enm) => Some((
                 enum_ptr,
-                RealizedTy::Enum(
-                    bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
-                    enm.ty_attr.clone(),
-                ),
+                RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag)),
             )),
             _ => None,
         })
@@ -384,7 +375,6 @@ fn allocate_runtime_declaration_types(
                     bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
                     Box::new([]),
                     Box::new([]),
-                    TyAttr::default(),
                 ),
             )),
             _ => None,
@@ -596,7 +586,7 @@ fn reflected_class_ty(vm: &BexVm, fqn: &str) -> RealizedTy {
     let head = vm
         .declaration_head(&qtn)
         .unwrap_or_else(|| unreachable!("`{fqn}` is declared by the stdlib"));
-    RealizedTy::Class(head, Box::new([]), TyAttr::default())
+    RealizedTy::Class(head, Box::new([]))
 }
 
 fn diagnostic_span_value(vm: &mut BexVm, span: &bex_vm_types::RuntimeSourceSpan) -> Value {
@@ -798,7 +788,6 @@ fn test_function_ty() -> RealizedTy {
         params: Box::new([]),
         ret: Box::new(RealizedTy::null()),
         throws: Box::new(RealizedTy::unknown()),
-        attr: TyAttr::default(),
     }
 }
 
@@ -1300,9 +1289,6 @@ impl BamlClassPackage for PackageReflectImpl {
             return None;
         };
         let local = local_name(name.as_str())?;
-        if local.name.as_str().ends_with("$stream") {
-            return None;
-        }
         let class_ptr = package.classes.get(&local).copied()?;
         let runtime_type = stored_package_type(package, &local);
         Some(package_class_type(vm, runtime_type, class_ptr))
@@ -1396,13 +1382,13 @@ impl BamlClassPackage for PackageReflectImpl {
             // owner-package scan, and no name that could resolve to a
             // same-named declaration from somewhere else.
             match &type_value.ty {
-                RealizedTy::Class(head, _, _) => {
+                RealizedTy::Class(head, _) => {
                     derived.classes.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Enum(head, _) => {
+                RealizedTy::Enum(head) => {
                     derived.enums.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Interface(head, _, _, _) => {
+                RealizedTy::Interface(head, _, _) => {
                     derived.interfaces.insert(local.clone(), head.ptr());
                 }
                 _ => {}
@@ -1482,7 +1468,6 @@ impl BamlClassPackage for PackageReflectImpl {
         let entries = package
             .classes
             .iter()
-            .filter(|(name, _)| !name.name.as_str().ends_with("$stream"))
             .map(|(name, &class)| (name.clone(), class, stored_package_type(package, name)))
             .collect::<Vec<_>>();
         entries
@@ -1685,10 +1670,10 @@ fn dependency_named_declarations(
             continue;
         };
         let head = match &value.ty {
-            RealizedTy::Class(head, _, _) => head,
-            RealizedTy::Enum(head, _) => head,
-            RealizedTy::Interface(head, _, _, _) => head,
-            RealizedTy::TypeAlias(head, _) => head,
+            RealizedTy::Class(head, _) => head,
+            RealizedTy::Enum(head) => head,
+            RealizedTy::Interface(head, _, _) => head,
+            RealizedTy::TypeAlias(head) => head,
             _ => continue,
         };
         if head.is_resolved() {
@@ -2553,9 +2538,7 @@ impl BamlClassSession for PackageReflectImpl {
 }
 
 fn ty_never() -> RealizedTy {
-    RealizedTy::Never {
-        attr: TyAttr::default(),
-    }
+    RealizedTy::Never
 }
 
 /// The two natives' parameters are statically `reflect.AnyFunction`, so a
@@ -2584,7 +2567,7 @@ fn ty_arg(vm: &BexVm) -> RealizedTy {
     let head = vm
         .declaration_head(&qtn)
         .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
-    RealizedTy::Class(head, Box::new([]), TyAttr::default())
+    RealizedTy::Class(head, Box::new([]))
 }
 
 /// Build one `reflect.Arg`. A nameless positional (a host callable from a
@@ -2685,7 +2668,6 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
         params: sig.params.clone(),
         ret: Box::new(sig.ret.clone()),
         throws: Box::new(sig.throws.clone()),
-        attr: TyAttr::default(),
     }
 }
 
@@ -2727,8 +2709,8 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
 fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy) -> Option<Value> {
     fn is_float_slot(ty: &RealizedTy) -> bool {
         match ty {
-            RealizedTy::Float { .. } => true,
-            RealizedTy::Union(members, _) => {
+            RealizedTy::Float => true,
+            RealizedTy::Union(members) => {
                 members.iter().any(is_float_slot)
                     && members
                         .iter()
@@ -2760,7 +2742,7 @@ struct CallAnyContinuation {
 
 impl Continuation for CallAnyContinuation {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        if matches!(self.expected, RealizedTy::Unknown { .. }) {
+        if matches!(self.expected, RealizedTy::Unknown) {
             return NativeCallResult::Done(value);
         }
 

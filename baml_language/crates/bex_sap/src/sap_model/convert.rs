@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 
-use ::baml_type::TyAttrValue;
 use ::std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -11,10 +10,9 @@ use ::sys_types::{ClassDefinition, DefKey, EnumDefinition, SapTy};
 use indexmap::IndexMap;
 
 use crate::sap_model::{
-    self, AnnotatedEnumVariant, AnnotatedField, AnnotatedTy, ArrayTy, AttrLiteral, BigintLiteralTy,
-    BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
-    MapTy, MediaTy, NullTy, StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations,
-    TypeRefDb, UnionTy,
+    self, AnnotatedEnumVariant, AnnotatedField, ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy,
+    BoolTy, ClassTy, DefaultValue, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy,
+    MediaTy, NullTy, StringLiteralTy, StringTy, Ty, TyResolved, TypeRefDb, UnionTy,
 };
 
 impl crate::sap_model::TypeIdent for DefKey {}
@@ -113,6 +111,7 @@ impl TypeCtx {
                     docstring: v.docstring.clone(),
                     alias: v.alias.clone(),
                     fields: fields.collect(),
+                    stream_done: v.stream_done,
                 };
                 (k.clone(), class)
             })
@@ -182,29 +181,51 @@ impl TypeCtx {
 
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
     pub fn build_db(&self) -> Result<TypeRefDb<'_, DefKey>, ConvertError> {
-        let mut db = TypeRefDb::new();
+        fn add<'a>(
+            types: &mut IndexMap<DefKey, TyResolved<'a, DefKey>>,
+            name: &DefKey,
+            ty: TyResolved<'a, DefKey>,
+        ) -> Result<(), ConvertError> {
+            match types.entry(name.clone()) {
+                indexmap::map::Entry::Occupied(_) => {
+                    Err(ConvertError::AlreadyPresent(name.clone()))
+                }
+                indexmap::map::Entry::Vacant(entry) => {
+                    entry.insert(ty);
+                    Ok(())
+                }
+            }
+        }
+
+        let mut types = IndexMap::new();
         for (name, cls) in &self.class_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {
                 continue;
             }
-            let cls = self.convert_class(name, cls)?;
-            db.try_add_inner(name.clone(), TyResolved::Class(cls))
-                .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
+            add(
+                &mut types,
+                name,
+                TyResolved::Class(self.convert_class(name, cls)?),
+            )?;
         }
         for (name, enum_def) in &*self.enum_definitions {
-            let enum_def = Self::convert_enum(name, enum_def);
-            db.try_add_inner(name.clone(), TyResolved::Enum(enum_def))
-                .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
+            add(
+                &mut types,
+                name,
+                TyResolved::Enum(Self::convert_enum(name, enum_def)),
+            )?;
         }
         for (name, alias_ty) in &self.type_alias_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {
                 continue;
             }
-            let alias_ty = self.convert_type_alias(name, alias_ty, 0)?;
-            db.try_add_inner(name.clone(), alias_ty)
-                .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
+            add(
+                &mut types,
+                name,
+                self.convert_type_alias(name, alias_ty, 0)?,
+            )?;
         }
-        Ok(db)
+        Ok(TypeRefDb::from_types(types))
     }
 
     fn convert_class<'a>(
@@ -215,42 +236,30 @@ impl TypeCtx {
         let fields = class_def
             .fields
             .iter()
-            .filter_map(|field| {
+            .filter(|field| !field.skip)
+            .map(|field| {
                 let ::sys_types::ClassFieldDefinition {
                     name,
                     field_type,
                     alias,
-                    skip,
+                    stream_done,
+                    must_exist,
                     ..
-                } = &field;
-                if *skip {
-                    return None;
-                }
-                let ty = match self.convert_ty(field_type) {
-                    Ok(ty) => ty,
-                    Err(err) => return Some(Err(err)),
-                };
-                let (class_in_progress_field_missing, class_completed_field_missing) =
-                    match self.get_field_attrs(field_type, 0) {
-                        Ok(attrs) => attrs,
-                        Err(err) => return Some(Err(err)),
-                    };
-
-                let field = AnnotatedField {
+                } = field;
+                Ok(AnnotatedField {
                     name: Cow::Borrowed(name),
-                    ty,
-                    class_in_progress_field_missing,
-                    class_completed_field_missing,
+                    ty: self.convert_ty(field_type)?,
                     aliases: alias.iter().map(Into::into).collect(),
-                };
-                Some(Ok(field))
+                    stream_done: *stream_done,
+                    default: must_exist.then_some(DefaultValue::Never),
+                })
             })
-            .collect::<Result<_, _>>()?;
-        let class_ty = ClassTy {
+            .collect::<Result<_, ConvertError>>()?;
+        Ok(ClassTy {
             name: name.clone(),
             fields,
-        };
-        Ok(class_ty)
+            stream_done: class_def.stream_done,
+        })
     }
 
     fn convert_enum<'a>(
@@ -288,8 +297,7 @@ impl TypeCtx {
             return Err(ConvertError::RecursionDepthExceeded("type alias"));
         }
 
-        let converted = self.convert_ty(alias_ty)?;
-        let resolved = match converted.ty {
+        let resolved = match self.convert_ty(alias_ty)? {
             sap_model::Ty::Resolved(r) => r,
             sap_model::Ty::ResolvedRef(..) => {
                 return Err(ConvertError::InternalError(concat!(
@@ -324,36 +332,15 @@ impl TypeCtx {
     }
 
     /// Converts a BAML type into a sap model type.
-    pub fn convert_ty<'a>(
-        &'a self,
-        ty: &'a SapTy,
-    ) -> Result<AnnotatedTy<'a, DefKey>, ConvertError> {
+    pub fn convert_ty<'a>(&'a self, ty: &'a SapTy) -> Result<Ty<'a, DefKey>, ConvertError> {
         let ty = match ty {
-            SapTy::Int { attr } => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Bigint { attr } => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Bigint(BigintTy)),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Float { attr } => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::String { attr } => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::String(StringTy)),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Bool { attr } => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Null { attr } => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Media(media_kind, ty_attr) => {
+            SapTy::Int => Ty::Resolved(TyResolved::Int(IntTy)),
+            SapTy::Bigint => Ty::Resolved(TyResolved::Bigint(BigintTy)),
+            SapTy::Float => Ty::Resolved(TyResolved::Float(FloatTy)),
+            SapTy::String => Ty::Resolved(TyResolved::String(StringTy)),
+            SapTy::Bool => Ty::Resolved(TyResolved::Bool(BoolTy)),
+            SapTy::Null => Ty::Resolved(TyResolved::Null(NullTy)),
+            SapTy::Media(media_kind) => {
                 let media_kind = match media_kind {
                     baml_type::MediaKind::Image => MediaTy::Image,
                     baml_type::MediaKind::Video => MediaTy::Video,
@@ -363,48 +350,31 @@ impl TypeCtx {
                         return Err(ConvertError::UnknownMediaKind);
                     }
                 };
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::Media(media_kind)),
-                    convert_ty_attrs(ty_attr),
-                )
+                Ty::Resolved(TyResolved::Media(media_kind))
             }
-            SapTy::Literal(baml_type::Literal::Int(i), _, attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Literal(baml_type::Literal::Bigint(bi), _, attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
-                convert_ty_attrs(attr),
-            ),
+            SapTy::Literal(baml_type::Literal::Int(i), _) => {
+                Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i)))
+            }
+            SapTy::Literal(baml_type::Literal::Bigint(bi), _) => {
+                Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone())))
+            }
             SapTy::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
-            SapTy::Literal(baml_type::Literal::String(s), _, attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
-                    s,
-                )))),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Literal(baml_type::Literal::Bool(b), _, attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Class(type_name, _, attr) | SapTy::Interface(type_name, _, _, attr) => {
+            SapTy::Literal(baml_type::Literal::String(s), _) => {
+                Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(s))))
+            }
+            SapTy::Literal(baml_type::Literal::Bool(b), _) => {
+                Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b)))
+            }
+            SapTy::Class(type_name, _) | SapTy::Interface(type_name, _, _) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
-                TyWithMeta::new(
-                    // currently [`ClassDefinition`] does not have attributes attached to it.
-                    // They will probably get lifted earlier in the conversion process, but if not then we would do it here.
-                    sap_model::Ty::Unresolved(type_name.clone()),
-                    convert_ty_attrs(attr),
-                )
+                Ty::Unresolved(type_name.clone())
             }
-            SapTy::Enum(type_name, attr) => TyWithMeta::new(
-                sap_model::Ty::Unresolved(type_name.clone()),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::EnumVariant(type_name, variant, attr) => {
+            SapTy::Enum(type_name) => Ty::Unresolved(type_name.clone()),
+            SapTy::EnumVariant(type_name, variant) => {
                 let enum_def = self
                     .enum_definitions
                     .get(type_name)
@@ -427,95 +397,72 @@ impl TypeCtx {
                             .collect(),
                     },
                 };
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::EnumVariant(enum_variant_ty)),
-                    convert_ty_attrs(attr),
-                )
+                Ty::Resolved(TyResolved::EnumVariant(enum_variant_ty))
             }
-            SapTy::List(ty, attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
-                    ty: Box::new(self.convert_ty(ty)?),
-                })),
-                convert_ty_attrs(attr),
-            ),
-            SapTy::Map { key, value, attr } => {
-                let key = self.convert_ty(key)?;
-                let value = self.convert_ty(value)?;
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::Map(MapTy {
-                        key: Box::new(key),
-                        value: Box::new(value),
-                    })),
-                    convert_ty_attrs(attr),
-                )
-            }
-            SapTy::Union(items, ty_attr) => {
+            SapTy::List(ty) => Ty::Resolved(TyResolved::Array(ArrayTy {
+                ty: Box::new(self.convert_ty(ty)?),
+            })),
+            SapTy::Map { key, value } => Ty::Resolved(TyResolved::Map(MapTy {
+                key: Box::new(self.convert_ty(key)?),
+                value: Box::new(self.convert_ty(value)?),
+            })),
+            SapTy::Union(items) => {
                 if items.iter().any(|ty| self.is_union_like(ty)) {
                     return Err(ConvertError::UnflattenedUnion);
                 }
-                let items = items
+                let variants = items
                     .iter()
                     .map(|ty| self.convert_ty(ty))
                     .collect::<Result<Vec<_>, _>>()?;
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::Union(UnionTy { variants: items })),
-                    convert_ty_attrs(ty_attr),
-                )
+                Ty::Resolved(TyResolved::Union(UnionTy { variants }))
             }
-            SapTy::TypeAlias(type_name, attr) => {
+            SapTy::TypeAlias(type_name) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
                 // if it hasn't already, we flatten type aliases:
                 // with `type A = B; type B = C; class C { ... }`,
                 // a type reference `name:A` becomes `name:C`
-                let mut attr = attr.clone();
                 let mut innermost_name = type_name;
                 loop {
                     let Some(inner_ty) = self.type_alias_definitions.get(innermost_name) else {
                         return Err(ConvertError::UnknownTypeAlias(innermost_name.clone()));
                     };
                     match inner_ty {
-                        SapTy::TypeAlias(name, inner_attr) => {
+                        SapTy::TypeAlias(name) => {
                             if innermost_name == type_name {
                                 return Err(ConvertError::DirectRecursiveTypeAlias(
                                     type_name.clone(),
                                 ));
                             }
-                            attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
                         }
-                        SapTy::Class(name, _, inner_attr)
-                        | SapTy::Interface(name, _, _, inner_attr)
-                        | SapTy::Enum(name, inner_attr) => {
-                            attr = merge_ty_attrs(&attr, inner_attr);
+                        SapTy::Class(name, _)
+                        | SapTy::Interface(name, _, _)
+                        | SapTy::Enum(name) => {
                             innermost_name = name;
                             break;
                         }
                         unnamed => {
-                            attr = merge_ty_attrs(&attr, unnamed.attr());
+                            let _ = unnamed;
                             break;
                         }
                     }
                 }
-
-                TyWithMeta::new(
-                    sap_model::Ty::Unresolved(innermost_name.clone()),
-                    convert_ty_attrs(&attr),
-                )
+                Ty::Unresolved(innermost_name.clone())
             }
-            unparsable @ (SapTy::Uint8Array { .. }
-            | SapTy::Resource { .. }
-            | SapTy::PromptAst { .. }
+            unparsable @ (SapTy::Uint8Array
+            | SapTy::Resource
+            | SapTy::PromptAst
             | SapTy::Function { .. }
-            | SapTy::Void { .. }
-            | SapTy::Unknown { .. }
-            | SapTy::Future(_, _, _)
-            | SapTy::TypeVar(_, _)
+            | SapTy::Void
+            | SapTy::Unknown
+            | SapTy::Future(_, _)
+            | SapTy::TypeVar(_)
             | SapTy::AssociatedTypeProjection { .. }
-            | SapTy::Never { .. }
-            | SapTy::RustType { .. }
-            | SapTy::Type { .. }) => {
+            | SapTy::Never
+            | SapTy::RustType
+            | SapTy::Type) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
@@ -531,162 +478,6 @@ impl TypeCtx {
                 .is_some_and(|ty| self.is_union_like(ty)),
             _ => false,
         }
-    }
-
-    /// Outside of SAP, the SAP field attributes are treated as type attributes (since they can be attached to type declarations).
-    /// This function derives the SAP field attributes from the BAML type and attributes.
-    /// May need to recurse into named types.
-    ///
-    /// ## Returns
-    /// `(class_in_progress_field_missing, class_completed_field_missing)`
-    fn get_field_attrs<'a>(
-        &'a self,
-        field_type: &'a SapTy,
-        recursion_depth: usize,
-    ) -> Result<(AttrLiteral<'a, DefKey>, AttrLiteral<'a, DefKey>), ConvertError> {
-        if recursion_depth > MAX_RECURSION_DEPTH {
-            return Err(ConvertError::RecursionDepthExceeded(
-                "class field attribute derivation",
-            ));
-        }
-
-        let attrs = field_type.attr();
-        if matches!(attrs.sap_pending_never, TyAttrValue::Set) {
-            return Ok((AttrLiteral::Never, AttrLiteral::Never));
-        }
-
-        if self.field_type_is_nullable(field_type)? {
-            return Ok((AttrLiteral::Null, AttrLiteral::Null));
-        }
-
-        let field_attrs = match field_type {
-            SapTy::Int { .. }
-            | SapTy::Bigint { .. }
-            | SapTy::Float { .. }
-            | SapTy::String { .. }
-            | SapTy::Bool { .. }
-            | SapTy::Uint8Array { .. }
-            | SapTy::Media(..)
-            | SapTy::Literal(..)
-            | SapTy::Class(..)
-            | SapTy::Interface(..)
-            | SapTy::Enum(..)
-            | SapTy::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
-            SapTy::Null { .. } => {
-                unreachable!("nullable fields should be returned before field attr derivation")
-            }
-            SapTy::List(..) => (
-                AttrLiteral::Array(Vec::new()),
-                AttrLiteral::Array(Vec::new()),
-            ),
-            SapTy::Map { .. } => (
-                AttrLiteral::Map(IndexMap::new()),
-                AttrLiteral::Map(IndexMap::new()),
-            ),
-            SapTy::Union(members, ..) => members
-                .first()
-                .map(|first| self.get_field_attrs(first, recursion_depth + 1))
-                .transpose()?
-                .unwrap_or((AttrLiteral::Never, AttrLiteral::Never)),
-            SapTy::TypeAlias(name, ..) => {
-                let Some(alias_ty) = self.type_alias_definitions.get(name) else {
-                    return Err(ConvertError::UnknownTypeAlias(name.clone()));
-                };
-                self.get_field_attrs(alias_ty, recursion_depth + 1)?
-            }
-            unparsable @ (SapTy::Resource { .. }
-            | SapTy::PromptAst { .. }
-            | SapTy::Function { .. }
-            | SapTy::Void { .. }
-            | SapTy::Unknown { .. }
-            | SapTy::Future(_, _, _)
-            | SapTy::TypeVar(_, _)
-            | SapTy::AssociatedTypeProjection { .. }
-            | SapTy::Never { .. }
-            | SapTy::RustType { .. }
-            | SapTy::Type { .. }) => {
-                return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
-            }
-        };
-        Ok(field_attrs)
-    }
-
-    fn field_type_is_nullable(&self, field_type: &SapTy) -> Result<bool, ConvertError> {
-        self.field_type_is_nullable_inner(field_type, &mut HashSet::new(), 0)
-    }
-
-    fn field_type_is_nullable_inner(
-        &self,
-        field_type: &SapTy,
-        aliases_in_progress: &mut HashSet<DefKey>,
-        recursion_depth: usize,
-    ) -> Result<bool, ConvertError> {
-        if recursion_depth > MAX_RECURSION_DEPTH {
-            return Err(ConvertError::RecursionDepthExceeded(
-                "class field nullability derivation",
-            ));
-        }
-
-        Ok(match field_type {
-            SapTy::Null { .. } => true,
-            SapTy::Union(members, ..) => {
-                let mut is_nullable = false;
-                for member in members {
-                    if self.field_type_is_nullable_inner(
-                        member,
-                        aliases_in_progress,
-                        recursion_depth + 1,
-                    )? {
-                        is_nullable = true;
-                        break;
-                    }
-                }
-                is_nullable
-            }
-            SapTy::TypeAlias(name, ..) => {
-                if !aliases_in_progress.insert(name.clone()) {
-                    // A cycle by itself does not prove nullability for this branch.
-                    false
-                } else {
-                    let Some(alias_ty) = self.type_alias_definitions.get(name) else {
-                        aliases_in_progress.remove(name);
-                        return Err(ConvertError::UnknownTypeAlias(name.clone()));
-                    };
-                    let is_nullable = self.field_type_is_nullable_inner(
-                        alias_ty,
-                        aliases_in_progress,
-                        recursion_depth + 1,
-                    )?;
-                    aliases_in_progress.remove(name);
-                    is_nullable
-                }
-            }
-            _ => false,
-        })
-    }
-}
-
-fn convert_ty_attrs(attrs: &baml_type::TyAttr) -> TypeAnnotations<'static, DefKey> {
-    let in_progress = match attrs.sap_pending_never {
-        TyAttrValue::Set => Some(AttrLiteral::Never),
-        TyAttrValue::Unset => None,
-    };
-    let parse_without_null = attrs.sap_parse_without_null == TyAttrValue::Set;
-
-    TypeAnnotations {
-        in_progress,
-        parse_without_null,
-    }
-}
-/// Merges two type attributes.
-/// May return one of the inputs if the output would be identical.
-fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_type::TyAttr {
-    baml_type::TyAttr {
-        sap_in_progress_never: outer.sap_in_progress_never.or(inner.sap_in_progress_never),
-        sap_parse_without_null: outer
-            .sap_parse_without_null
-            .or(inner.sap_parse_without_null),
-        sap_pending_never: outer.sap_pending_never.or(inner.sap_pending_never),
     }
 }
 
@@ -752,125 +543,40 @@ fn check_parseable(
 
 fn is_sap_parseable(ty: &SapTy) -> Result<Vec<DefKey>, ()> {
     match ty {
-        SapTy::Int { .. }
-        | SapTy::Bigint { .. }
-        | SapTy::Float { .. }
-        | SapTy::String { .. }
-        | SapTy::Bool { .. }
-        | SapTy::Null { .. }
+        SapTy::Int
+        | SapTy::Bigint
+        | SapTy::Float
+        | SapTy::String
+        | SapTy::Bool
+        | SapTy::Null
         | SapTy::Literal(..) => Ok(Vec::new()),
-        SapTy::Uint8Array { .. } | SapTy::Media(..) => Err(()),
-        SapTy::Class(name, _, _) | SapTy::Interface(name, _, _, _) => Ok(vec![name.clone()]),
+        SapTy::Uint8Array | SapTy::Media(..) => Err(()),
+        SapTy::Class(name, _) | SapTy::Interface(name, _, _) => Ok(vec![name.clone()]),
         SapTy::Enum(..) | SapTy::EnumVariant(..) => Ok(Vec::new()),
-        SapTy::List(inner, _) => is_sap_parseable(inner),
+        SapTy::List(inner) => is_sap_parseable(inner),
         SapTy::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;
             let values = is_sap_parseable(value)?;
             Ok(keys.into_iter().chain(values).collect())
         }
-        SapTy::Union(members, _) => {
+        SapTy::Union(members) => {
             let mut names = Vec::new();
             for member in members {
                 names.extend(is_sap_parseable(member)?);
             }
             Ok(names)
         }
-        SapTy::TypeAlias(name, _) => Ok(vec![name.clone()]),
-        SapTy::Resource { .. }
-        | SapTy::PromptAst { .. }
+        SapTy::TypeAlias(name) => Ok(vec![name.clone()]),
+        SapTy::Resource
+        | SapTy::PromptAst
         | SapTy::Function { .. }
-        | SapTy::Void { .. }
-        | SapTy::Unknown { .. }
+        | SapTy::Void
+        | SapTy::Unknown
         | SapTy::Future(..)
         | SapTy::TypeVar(..)
         | SapTy::AssociatedTypeProjection { .. }
-        | SapTy::Never { .. }
-        | SapTy::RustType { .. }
-        | SapTy::Type { .. } => Err(()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use baml_type::{RuntimeTy, TyAttr};
-
-    use super::*;
-
-    fn local_type(name: &str) -> DefKey {
-        DefKey::new(
-            ::baml_type::typetag::TypeTag::of_head(name),
-            ::baml_type::DeclarationName::Declared(::baml_type::TypeName::local(name.into())),
-        )
-    }
-
-    #[test]
-    fn field_type_is_nullable_handles_recursive_alias_cycle_with_null_branch() {
-        let maybe_text = local_type("MaybeText");
-        let text_ref = local_type("TextRef");
-        let alias_attr = TyAttr::default();
-
-        let type_alias_definitions = HashMap::from([
-            (
-                maybe_text.clone(),
-                RuntimeTy::union([
-                    RuntimeTy::TypeAlias(text_ref.clone(), alias_attr.clone()),
-                    RuntimeTy::null(),
-                ]),
-            ),
-            (
-                text_ref,
-                RuntimeTy::TypeAlias(maybe_text.clone(), alias_attr.clone()),
-            ),
-        ]);
-
-        let ctx = TypeCtx::new(
-            &IndexMap::new(),
-            Arc::new(IndexMap::new()),
-            &type_alias_definitions,
-        );
-
-        assert!(
-            ctx.field_type_is_nullable(&RuntimeTy::TypeAlias(maybe_text, alias_attr))
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn field_type_is_nullable_errors_on_deep_alias_union_chain() {
-        let alias_attr = TyAttr::default();
-        let chain_len = MAX_RECURSION_DEPTH + 2;
-        let names: Vec<_> = (0..chain_len)
-            .map(|idx| local_type(&format!("DepthAlias{idx}")))
-            .collect();
-
-        let mut type_alias_definitions = HashMap::new();
-        for window in names.windows(2) {
-            let current = window[0].clone();
-            let next = window[1].clone();
-            type_alias_definitions.insert(
-                current,
-                RuntimeTy::union([
-                    RuntimeTy::TypeAlias(next, alias_attr.clone()),
-                    RuntimeTy::string(),
-                ]),
-            );
-        }
-        type_alias_definitions.insert(
-            names.last().cloned().unwrap(),
-            RuntimeTy::union([RuntimeTy::string(), RuntimeTy::bool()]),
-        );
-
-        let ctx = TypeCtx::new(
-            &IndexMap::new(),
-            Arc::new(IndexMap::new()),
-            &type_alias_definitions,
-        );
-
-        assert!(matches!(
-            ctx.field_type_is_nullable(&RuntimeTy::TypeAlias(names[0].clone(), alias_attr)),
-            Err(ConvertError::RecursionDepthExceeded(
-                "class field nullability derivation"
-            ))
-        ));
+        | SapTy::Never
+        | SapTy::RustType
+        | SapTy::Type => Err(()),
     }
 }

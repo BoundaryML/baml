@@ -877,7 +877,8 @@ public final class ProtoReader {
             case PRIM_INT -> BamlType.INT;
             case PRIM_FLOAT -> BamlType.FLOAT;
             case PRIM_BOOL -> BamlType.BOOL;
-            // null / bytes / bigint are outside the token grammar → dropped from the arm set.
+            case PRIM_BIGINT -> BamlType.BIGINT;
+            // null / bytes are outside the token grammar → dropped from the arm set.
             default -> null;
         };
     }
@@ -1404,6 +1405,7 @@ public final class ProtoReader {
         int ov = outboundArm(valueBytes);
         return switch (arm.kind()) {
             case PRIMITIVE -> (arm.isInt() && ov == OV_INT)
+                    || (arm.isBigint() && ov == OV_BIGINT)
                     || (arm.isString() && ov == OV_STRING)
                     || (arm.isBool() && ov == OV_BOOL)
                     || (arm.isFloat() && ov == OV_FLOAT);

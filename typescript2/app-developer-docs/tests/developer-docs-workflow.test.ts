@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -51,7 +57,8 @@ test('required Developer Docs check gates PRs and merge groups', () => {
   const gate = workflow.jobs['pre-merge-gate'];
   assert.equal(gate.name, 'Developer Docs');
   assert.equal(gate.if, 'always()');
-  assert.ok(gate.needs?.includes('snippets'));
+  assert.ok(!gate.needs?.includes('snippets'));
+  assert.ok(gate.needs?.includes('authored-content'));
   assert.ok(gate.needs?.includes('production-path'));
   const run = gate.steps[0].run;
   assert.ok(run);
@@ -63,7 +70,6 @@ test('required Developer Docs check gates PRs and merge groups', () => {
     PRODUCTION_PATH_RESULT: 'success',
     QUALITY_RESULT: 'success',
     SHOULD_RUN: 'true',
-    SNIPPETS_RESULT: 'success',
   };
   for (const event of ['pull_request', 'merge_group']) {
     const check = (overrides: Record<string, string>): number | null =>
@@ -91,7 +97,7 @@ test('required Developer Docs check gates PRs and merge groups', () => {
         `${event}: ${key} must block merging`,
       );
     }
-    assert.equal(check({ SHOULD_RUN: 'false', SNIPPETS_RESULT: 'skipped' }), 0);
+    assert.equal(check({ SHOULD_RUN: 'false' }), 0);
     assert.equal(
       check({ CAN_USE_SECRETS: 'false', PRODUCTION_PATH_RESULT: 'skipped' }),
       0,
@@ -146,6 +152,20 @@ test('merge-group change detection checks the diff and fails if it cannot read i
     writeFileSync(join(root, 'mise.toml'), '# changed runtime input');
     git('add', 'mise.toml');
     git('commit', '-qm', 'runtime input');
+    // Compiler inputs belong to main BAML CI, not the website checks.
+    assert.deepEqual(run(base, git('rev-parse', 'HEAD')), {
+      output: 'can-use-secrets=true\nshould-run=false\n',
+      status: 0,
+    });
+    mkdirSync(join(root, 'typescript2/app-developer-docs'), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(root, 'typescript2/app-developer-docs/package.json'),
+      '{}',
+    );
+    git('add', 'typescript2/app-developer-docs/package.json');
+    git('commit', '-qm', 'site input');
     assert.deepEqual(run(base, git('rev-parse', 'HEAD')), {
       output: 'can-use-secrets=true\nshould-run=true\n',
       status: 0,

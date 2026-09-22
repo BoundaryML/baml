@@ -13,9 +13,3 @@ function user.f(u: user.User | null) -> string | null throws never {
     u?.address?.street : string | null
   }
 }
-class user.Address$stream {
-  street: string | null
-}
-class user.User$stream {
-  address: user.Address$stream | null
-}

@@ -1,0 +1,5 @@
+# The generated web SDK, built by `baml generate` for the browser app.
+baml_sdk/
+# Scratch directories the conformance suite makes and removes; one can
+# survive a crashed run.
+.type-quiz-scratch-*/

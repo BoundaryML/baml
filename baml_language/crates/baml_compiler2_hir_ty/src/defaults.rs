@@ -15,12 +15,12 @@ use crate::diagnostics::TirTypeError;
 /// The structural default rules for one function, spans resolved against
 /// the parameter spans and the defaults arena's own source map.
 pub fn parameter_default_diagnostics<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> Vec<(TextRange, TirTypeError)> {
-    let data = baml_compiler2_ppir::item_data::function_data(db, function);
-    let source_map = baml_compiler2_ppir::item_data::function_source_map(db, function);
-    let defaults = baml_compiler2_ppir::function_parameter_defaults(db, function);
+    let data = baml_compiler2_hir::item_data::function_data(db, function);
+    let source_map = baml_compiler2_hir::item_data::function_source_map(db, function);
+    let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, function);
     let mut out = Vec::new();
     let mut seen_default = false;
     for (index, param) in data.params.iter().enumerate() {

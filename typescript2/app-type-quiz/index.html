@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BAML type-system quiz</title>
+  </head>
+  <body>
+    <!--
+      What a learner sees until React mounts over it. The page hangs off two
+      WebAssembly modules, and the larger one is instantiated by a top-level
+      await: if that fetch fails the module graph never resolves, nothing in
+      `src/` runs, and an empty body is the whole of what a truncated download
+      would otherwise say. So the message lives here, where it needs no
+      module, and the handler below is inline for the same reason.
+    -->
+    <div id="root">
+      <main class="shell">
+        <h1>BAML type-system quiz</h1>
+        <p id="booting">Loading. The first visit fetches a few megabytes.</p>
+      </main>
+    </div>
+    <script>
+      window.addEventListener('error', couldNotStart);
+      window.addEventListener('unhandledrejection', couldNotStart);
+      function couldNotStart(event) {
+        // Once the app has mounted, its own error handling is the better one
+        // and this would only talk over it.
+        if (window.__quizMounted) {
+          return;
+        }
+        var booting = document.getElementById('booting');
+        if (booting === null) {
+          return;
+        }
+        var reason = event.reason || event.error || event.message || 'unknown';
+        booting.textContent =
+          'The quiz could not start: ' +
+          (reason && reason.message ? reason.message : String(reason)) +
+          '. Reloading may be enough; a blocked or truncated download of the ' +
+          'WebAssembly it runs on is the usual cause.';
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -2,38 +2,38 @@ using System.Runtime.ExceptionServices;
 
 namespace Baml;
 
-public sealed class BamlStream<TPartial, TFinal>
-    : IAsyncEnumerable<TPartial>, IAsyncDisposable
+public sealed class BamlStream<T>
+    : IAsyncEnumerable<T>, IAsyncDisposable
 {
-    private readonly BamlStreamController<TPartial, TFinal> controller;
+    private readonly BamlStreamController<T> controller;
 
     internal BamlStream(
-        Func<IBamlStreamDriver<TPartial, TFinal>> driverFactory,
+        Func<IBamlStreamDriver<T>> driverFactory,
         string? bamlFunction,
         CancellationToken cancellationToken)
     {
-        controller = new BamlStreamController<TPartial, TFinal>(
+        controller = new BamlStreamController<T>(
             driverFactory,
             bamlFunction,
             cancellationToken);
     }
 
     internal BamlStream(
-        IBamlStreamDriver<TPartial, TFinal> driver,
+        IBamlStreamDriver<T> driver,
         string? bamlFunction,
         CancellationToken cancellationToken)
     {
-        controller = new BamlStreamController<TPartial, TFinal>(
+        controller = new BamlStreamController<T>(
             driver,
             bamlFunction,
             cancellationToken);
     }
 
-    public IAsyncEnumerator<TPartial> GetAsyncEnumerator(
+    public IAsyncEnumerator<T> GetAsyncEnumerator(
         CancellationToken cancellationToken = default) =>
         controller.GetAsyncEnumerator(cancellationToken);
 
-    public Task<TFinal> GetFinalResponseAsync(
+    public Task<T> GetFinalResponseAsync(
         CancellationToken cancellationToken = default) =>
         controller.GetFinalResponseAsync(cancellationToken);
 
@@ -42,45 +42,45 @@ public sealed class BamlStream<TPartial, TFinal>
 
 internal static class BamlStreamFactory
 {
-    internal static BamlStream<TPartial, TFinal> Create<TPartial, TFinal>(
-        Func<IBamlStreamDriver<TPartial, TFinal>> driverFactory,
+    internal static BamlStream<T> Create<T>(
+        Func<IBamlStreamDriver<T>> driverFactory,
         string? bamlFunction = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(driverFactory);
-        return new BamlStream<TPartial, TFinal>(
+        return new BamlStream<T>(
             driverFactory,
             bamlFunction,
             cancellationToken);
     }
 
-    internal static BamlStream<TPartial, TFinal> Create<TPartial, TFinal>(
-        IBamlStreamDriver<TPartial, TFinal> driver,
+    internal static BamlStream<T> Create<T>(
+        IBamlStreamDriver<T> driver,
         string? bamlFunction = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(driver);
-        return new BamlStream<TPartial, TFinal>(
+        return new BamlStream<T>(
             driver,
             bamlFunction,
             cancellationToken);
     }
 }
 
-internal interface IBamlStreamDriver<TPartial, TFinal> : IAsyncDisposable
+internal interface IBamlStreamDriver<T> : IAsyncDisposable
 {
     Task StartAsync(CancellationToken cancellationToken);
 
-    Task<BamlStreamPull<TPartial>> PullAsync(CancellationToken cancellationToken);
+    Task<BamlStreamPull<T>> PullAsync(CancellationToken cancellationToken);
 
-    Task<TFinal> GetFinalResponseAsync(CancellationToken cancellationToken);
+    Task<T> GetFinalResponseAsync(CancellationToken cancellationToken);
 }
 
-internal readonly struct BamlStreamPull<TPartial>
+internal readonly struct BamlStreamPull<T>
 {
-    private readonly TPartial partial;
+    private readonly T partial;
 
-    private BamlStreamPull(bool hasPartial, TPartial partial)
+    private BamlStreamPull(bool hasPartial, T partial)
     {
         HasPartial = hasPartial;
         this.partial = partial;
@@ -88,32 +88,32 @@ internal readonly struct BamlStreamPull<TPartial>
 
     internal bool HasPartial { get; }
 
-    internal TPartial Partial => HasPartial
+    internal T Partial => HasPartial
         ? partial
         : throw new InvalidOperationException(
             "A finished stream pull has no partial value.");
 
-    internal static BamlStreamPull<TPartial> FromPartial(TPartial partial) =>
+    internal static BamlStreamPull<T> FromPartial(T partial) =>
         new(hasPartial: true, partial);
 
-    internal static BamlStreamPull<TPartial> Finished { get; } =
+    internal static BamlStreamPull<T> Finished { get; } =
         new(hasPartial: false, default!);
 }
 
-internal sealed class BamlStreamController<TPartial, TFinal>
+internal sealed class BamlStreamController<T>
 {
     private readonly object gate = new();
     private readonly SemaphoreSlim driverGate = new(initialCount: 1, maxCount: 1);
-    private readonly Func<IBamlStreamDriver<TPartial, TFinal>> driverFactory;
+    private readonly Func<IBamlStreamDriver<T>> driverFactory;
     private readonly string? bamlFunction;
     private readonly CancellationTokenSource operationCancellation = new();
     private readonly List<CancellationTokenRegistration> operationRegistrations = [];
     private readonly TaskCompletionSource<TerminalOutcome> terminalSignal =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly Task<TFinal> finalResponseTask;
+    private readonly Task<T> finalResponseTask;
 
     private StreamMode mode;
-    private IBamlStreamDriver<TPartial, TFinal>? driver;
+    private IBamlStreamDriver<T>? driver;
     private bool driverStarted;
     private bool driverDisposed;
     private bool disposed;
@@ -126,7 +126,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
     private Task terminalFinalization = Task.CompletedTask;
 
     internal BamlStreamController(
-        Func<IBamlStreamDriver<TPartial, TFinal>> driverFactory,
+        Func<IBamlStreamDriver<T>> driverFactory,
         string? bamlFunction,
         CancellationToken factoryCancellationToken)
     {
@@ -138,7 +138,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
     }
 
     internal BamlStreamController(
-        IBamlStreamDriver<TPartial, TFinal> driver,
+        IBamlStreamDriver<T> driver,
         string? bamlFunction,
         CancellationToken factoryCancellationToken)
         : this(
@@ -150,7 +150,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
         this.driver = driver;
     }
 
-    internal IAsyncEnumerator<TPartial> GetAsyncEnumerator(
+    internal IAsyncEnumerator<T> GetAsyncEnumerator(
         CancellationToken cancellationToken)
     {
         lock (gate)
@@ -170,7 +170,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
         return new Enumerator(this);
     }
 
-    internal Task<TFinal> GetFinalResponseAsync(CancellationToken cancellationToken)
+    internal Task<T> GetFinalResponseAsync(CancellationToken cancellationToken)
     {
         bool startFinalOnly = false;
         bool startPartial = false;
@@ -182,7 +182,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
                 && !terminalSelected
                 && !disposed)
             {
-                return Task.FromCanceled<TFinal>(cancellationToken);
+                return Task.FromCanceled<T>(cancellationToken);
             }
         }
 
@@ -261,7 +261,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
             return await ObserveTerminalForMoveAsync().ConfigureAwait(false);
         }
 
-        BamlStreamPull<TPartial> pull;
+        BamlStreamPull<T> pull;
         try
         {
             pull = await InvokeDriverAsync(
@@ -292,7 +292,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
             return await ObserveTerminalForMoveAsync().ConfigureAwait(false);
         }
 
-        TFinal finalResponse;
+        T finalResponse;
         try
         {
             finalResponse = await InvokeDriverAsync(
@@ -318,7 +318,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
     {
         try
         {
-            TFinal finalResponse = await InvokeDriverAsync(
+            T finalResponse = await InvokeDriverAsync(
                     static (streamDriver, cancellationToken) =>
                         streamDriver.GetFinalResponseAsync(cancellationToken))
                 .ConfigureAwait(false);
@@ -349,13 +349,13 @@ internal sealed class BamlStreamController<TPartial, TFinal>
     }
 
     private async Task<TResult> InvokeDriverAsync<TResult>(
-        Func<IBamlStreamDriver<TPartial, TFinal>, CancellationToken, Task<TResult>> operation)
+        Func<IBamlStreamDriver<T>, CancellationToken, Task<TResult>> operation)
     {
         await driverGate.WaitAsync().ConfigureAwait(false);
         try
         {
             ThrowIfTerminalSelected();
-            IBamlStreamDriver<TPartial, TFinal> streamDriver =
+            IBamlStreamDriver<T> streamDriver =
                 await EnsureDriverStartedWhileLockedAsync().ConfigureAwait(false);
             ThrowIfTerminalSelected();
             return await operation(streamDriver, operationCancellation.Token)
@@ -381,7 +381,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
         }
     }
 
-    private async Task<IBamlStreamDriver<TPartial, TFinal>>
+    private async Task<IBamlStreamDriver<T>>
         EnsureDriverStartedWhileLockedAsync()
     {
         if (driver is null)
@@ -436,7 +436,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
 
         CancellationTokenRegistration registration = cancellationToken.UnsafeRegister(
             static (state, token) =>
-                ((BamlStreamController<TPartial, TFinal>)state!).OnCallerCancellation(token),
+                ((BamlStreamController<T>)state!).OnCallerCancellation(token),
             this);
 
         bool disposeRegistration;
@@ -491,7 +491,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
             bamlFunction,
             trace: null);
 
-    private void SelectSuccess(TFinal finalResponse)
+    private void SelectSuccess(T finalResponse)
     {
         lock (gate)
         {
@@ -613,7 +613,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
         return MoveResult.Finished;
     }
 
-    private static async Task<TFinal> ObserveTerminalAsync(
+    private static async Task<T> ObserveTerminalAsync(
         Task<TerminalOutcome> terminalTask)
     {
         TerminalOutcome outcome = await terminalTask.ConfigureAwait(false);
@@ -639,10 +639,10 @@ internal sealed class BamlStreamController<TPartial, TFinal>
 
     private sealed class TerminalOutcome
     {
-        private readonly TFinal value = default!;
+        private readonly T value = default!;
         private readonly ExceptionDispatchInfo? error;
 
-        private TerminalOutcome(TFinal value)
+        private TerminalOutcome(T value)
         {
             this.value = value;
         }
@@ -654,11 +654,11 @@ internal sealed class BamlStreamController<TPartial, TFinal>
 
         internal bool HasException => error is not null;
 
-        internal static TerminalOutcome FromValue(TFinal value) => new(value);
+        internal static TerminalOutcome FromValue(T value) => new(value);
 
         internal static TerminalOutcome FromException(Exception error) => new(error);
 
-        internal TFinal GetValueOrThrow()
+        internal T GetValueOrThrow()
         {
             error?.Throw();
             return value;
@@ -667,7 +667,7 @@ internal sealed class BamlStreamController<TPartial, TFinal>
 
     private readonly struct MoveResult
     {
-        private MoveResult(bool hasPartial, TPartial partial)
+        private MoveResult(bool hasPartial, T partial)
         {
             HasPartial = hasPartial;
             Partial = partial;
@@ -675,28 +675,28 @@ internal sealed class BamlStreamController<TPartial, TFinal>
 
         internal bool HasPartial { get; }
 
-        internal TPartial Partial { get; }
+        internal T Partial { get; }
 
-        internal static MoveResult FromPartial(TPartial partial) =>
+        internal static MoveResult FromPartial(T partial) =>
             new(hasPartial: true, partial);
 
         internal static MoveResult Finished { get; } =
             new(hasPartial: false, default!);
     }
 
-    private sealed class Enumerator : IAsyncEnumerator<TPartial>
+    private sealed class Enumerator : IAsyncEnumerator<T>
     {
-        private readonly BamlStreamController<TPartial, TFinal> owner;
+        private readonly BamlStreamController<T> owner;
         private int moveInProgress;
         private bool disposed;
         private bool finished;
 
-        internal Enumerator(BamlStreamController<TPartial, TFinal> owner)
+        internal Enumerator(BamlStreamController<T> owner)
         {
             this.owner = owner;
         }
 
-        public TPartial Current { get; private set; } = default!;
+        public T Current { get; private set; } = default!;
 
         public ValueTask<bool> MoveNextAsync()
         {

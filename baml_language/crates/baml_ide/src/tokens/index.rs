@@ -20,11 +20,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_base::SourceFile;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId};
-use baml_compiler2_hir::scope::{ScopeId, ScopeKind};
-use baml_compiler2_hir_ty::{ide::scope_body, infer::InferenceResult};
-use baml_compiler2_ppir::resolve::{
-    ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
+use baml_compiler2_hir::{
+    resolve::{ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at},
+    scope::{ScopeId, ScopeKind},
 };
+use baml_compiler2_hir_ty::{ide::scope_body, infer::InferenceResult};
 use text_size::{TextRange, TextSize};
 
 use super::{ModifierSet, SemanticTokenType, classify};
@@ -47,11 +47,11 @@ fn record(index: &mut ResolutionIndex, span: TextRange, class: (SemanticTokenTyp
 /// range request only pays for the scopes it actually touches, instead of
 /// resolving every scope in the file up front.
 pub(super) fn resolve_token_class(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     range: TextRange,
 ) -> Option<(SemanticTokenType, ModifierSet)> {
-    let sem_index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let sem_index = baml_compiler2_hir::file_semantic_index(db, file);
     // Walk innermost scope -> ancestors. The token's expression may be indexed
     // by an enclosing inference-bearing scope rather than the innermost one
     // (e.g. a `test ... with <runner>` clause, or a value spanning nested
@@ -95,7 +95,7 @@ pub(super) fn resolve_token_class(
 /// resolved in a scope pays for indexing its whole body; the rest are lookups.
 #[salsa::tracked(returns(clone))]
 pub(super) fn scope_resolution_index(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     scope_id: ScopeId<'_>,
 ) -> Arc<ResolutionIndex> {
     let mut index = ResolutionIndex::new();
@@ -122,9 +122,9 @@ pub(super) fn scope_resolution_index(
 /// token anyway, so it builds the merge; editing one scope only invalidates
 /// that scope's `scope_resolution_index`, not the whole file. A range request
 /// instead resolves on demand via [`resolve_token_class`].
-pub(super) fn build(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> ResolutionIndex {
+pub(super) fn build(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> ResolutionIndex {
     let mut index = ResolutionIndex::new();
-    let sem_index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let sem_index = baml_compiler2_hir::file_semantic_index(db, file);
     for (i, scope) in sem_index.scopes.iter().enumerate() {
         if scope.is_template_body
             || !matches!(
@@ -143,7 +143,7 @@ pub(super) fn build(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Resol
 
 /// Index every classifiable name occurrence in one function body.
 fn index_function(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     root: Option<baml_compiler2_ast::ExprId>,
     expr_body: &ExprBody,
@@ -220,7 +220,7 @@ fn index_function(
 
 /// Classify the non-root segments of a multi-segment path.
 fn index_path_tail(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     expr_id: ExprId,
     segments: &[baml_base::Name],

@@ -32,7 +32,3 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 unicode-normalization = { workspace = true }
-
-[features]
-## Enables manual `TypeRefDb` construction. Otherwise, we should construct from [`sys_types::SysOpContext`] via `TypeCtx`.
-manual_db = [  ]

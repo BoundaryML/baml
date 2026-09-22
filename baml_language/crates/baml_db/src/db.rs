@@ -234,9 +234,6 @@ impl baml_compiler2_hir::Db for ProjectDatabase {
 }
 
 #[salsa::db]
-impl baml_compiler2_ppir::Db for ProjectDatabase {}
-
-#[salsa::db]
 impl baml_compiler2_mir::Db for ProjectDatabase {}
 
 #[salsa::db]

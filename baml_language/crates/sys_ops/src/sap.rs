@@ -15,32 +15,12 @@ impl SapParseCache {
         self.types.db()
     }
 
-    pub fn ty(&self) -> &sap_model::AnnotatedTy<'_, DefKey> {
+    pub fn ty(&self) -> &sap_model::Ty<'_, DefKey> {
         self.types.ty()
     }
 
-    pub fn ty_resolved(
-        &self,
-    ) -> Result<
-        sap_model::TyWithMeta<
-            sap_model::TyResolvedRef<'_, DefKey>,
-            &sap_model::TypeAnnotations<'_, DefKey>,
-        >,
-        &DefKey,
-    > {
-        self.db().resolve_with_meta(self.ty().as_ref())
-    }
-
-    pub fn stream_ty_resolved(
-        &self,
-    ) -> Result<
-        sap_model::TyWithMeta<
-            sap_model::TyResolvedRef<'_, DefKey>,
-            &sap_model::TypeAnnotations<'_, DefKey>,
-        >,
-        &DefKey,
-    > {
-        self.db().resolve_with_meta(self.types.stream_ty().as_ref())
+    pub fn ty_resolved(&self) -> Result<sap_model::TyResolvedRef<'_, DefKey>, &DefKey> {
+        self.db().resolve(self.ty())
     }
 }
 
@@ -123,10 +103,10 @@ pub fn execute_sap_parse_partial(
     let jsonish = ::bex_sap::jsonish::parse(json, jsonish_options, false)
         .map_err(LlmOpError::JsonishError)?;
 
-    // === SAP parsing (use the streaming type for partial results) ===
+    // === SAP parsing (a partial is the same type, parsed from the text so far) ===
     let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(sap.db());
     let target = sap
-        .stream_ty_resolved()
+        .ty_resolved()
         .map_err(|err| parse_ctx.error_type_resolution(err))
         .map_err(LlmOpError::SapError)?;
     let parsed = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)

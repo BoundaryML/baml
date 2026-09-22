@@ -13,13 +13,13 @@ use crate::{
         types::{DeserializerMeta, ValueWithFlags},
     },
     jsonish,
-    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent},
+    sap_model::{TyResolvedRef, TypeIdent},
 };
 
 /// Checks if `raw_value` matches `parse_into` using the same heuristic
 /// strategies as [`match_string`] (exact, unaccented, stripped punctuation,
 /// case-insensitive), but without constructing a full [`DeserializerMeta`]
-/// result. This avoids the `'t` lifetime requirement on [`TypeAnnotations`].
+/// result.
 pub(super) fn matches_string_to_string<N: TypeIdent>(
     _parsing_context: &ParsingContext<'_, '_, '_, N>,
     raw_value: &str,
@@ -52,7 +52,7 @@ pub(super) fn matches_string_to_string<N: TypeIdent>(
 #[allow(clippy::needless_pass_by_value)]
 pub(super) fn match_string<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
-    target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
+    target: TyResolvedRef<'t, N>,
     value: Cow<'v, jsonish::Value<'s>>,
     // List of (name, [aliases]) tuples.
     candidates: &[(&'t str, Vec<impl AsRef<str>>)],
@@ -63,7 +63,7 @@ where
 {
     // Get rid of nulls.
     if matches!(*value, jsonish::Value::Null) {
-        return Err(ctx.error_unexpected_null(&target.ty));
+        return Err(ctx.error_unexpected_null(&target));
     }
 
     let mut flags = DeserializerConditions::new();
@@ -174,7 +174,7 @@ fn remove_accents(s: &str) -> String {
 /// Multiple results will yield an error.
 fn try_match_only_once<'s, 'v, 't, 'c, N: TypeIdent>(
     parsing_context: &ParsingContext<'s, 'v, 't, N>,
-    target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
+    target: TyResolvedRef<'t, N>,
     string_match: &'c str,
     flags: DeserializerConditions<'s, 'v, 't, N>,
 ) -> Result<ValueWithFlags<'s, 'v, 't, &'c str, N>, ParsingError>
@@ -186,7 +186,7 @@ where
         _ => None,
     }) {
         return Err(parsing_context.error_too_many_matches(
-            &target.ty,
+            &target,
             mismatch
                 .iter()
                 .map(|(string, count)| format!("{string} ({count} times)")),

@@ -26,6 +26,10 @@ export const documentationNavigation: DocumentationGroup[] = [
       { href: '/baml/get-started', label: 'Get started' },
       {
         children: [
+          {
+            href: '/baml/book/common-programming-concepts',
+            label: '3. Common programming concepts',
+          },
           { href: '/baml/book/errors', label: '8. Handle errors' },
           { href: '/baml/book/interfaces', label: '11. Interfaces' },
           {

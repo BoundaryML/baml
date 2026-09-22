@@ -10,8 +10,8 @@
 //! interface members - existential and rigid-bounded receivers through
 //! their bounds (I3), concrete receivers through the impls they match
 //! (I6, the rust-analyzer trait-impl candidate tier) - then fields.
-//! Not yet resolved here (later slices): union receivers, `$stream`
-//! companions, and free-impl method bodies as inference roots (their
+//! Not yet resolved here (later slices): union receivers and free-impl
+//! method bodies as inference roots (their
 //! member TYPES already resolve through the interface signature).
 
 use baml_compiler2_hir::{
@@ -19,7 +19,7 @@ use baml_compiler2_hir::{
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
 };
 use baml_type::{
-    DeclName, Name, ParamTy, TyAttr,
+    DeclName, Name, ParamTy,
     interned::{InferInterface, InferTy, Ty},
     normalize::TypeContext as _,
 };
@@ -46,7 +46,7 @@ pub enum MethodCandidateSource<'db> {
 /// receiver must already be structurally resolved (no top-level inference
 /// var); aliases expand through the fact oracle.
 pub fn lookup_method<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     receiver: &Ty,
     name: &Name,
@@ -59,12 +59,12 @@ pub fn lookup_method<'db>(
         // interfaces declaring the name need `as<I>` qualification even when
         // a candidate exists - is the callers' `concrete_member_ambiguity`
         // pre-check, not an exclusion here.
-        let method = baml_compiler2_ppir::item_data::class_data(db, class)
+        let method = baml_compiler2_hir::item_data::class_data(db, class)
             .methods
             .iter()
             .copied()
             .find(|&method| {
-                baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+                baml_compiler2_hir::item_data::function_data(db, method).name == *name
             })?;
         return Some(MethodCandidate {
             source: MethodCandidateSource::Source { method, class },
@@ -110,8 +110,8 @@ pub(crate) fn external_class_for_type(
     fuel: u32,
 ) -> Option<(DeclName, Vec<Ty>)> {
     match receiver.kind() {
-        InferTy::Class(qtn, args, _) => Some((qtn.clone(), args.to_vec())),
-        InferTy::TypeAlias(qtn, _) => {
+        InferTy::Class(qtn, args) => Some((qtn.clone(), args.to_vec())),
+        InferTy::TypeAlias(qtn) => {
             let expanded = facts.alias_def(qtn)?;
             external_class_for_type(facts, &Ty::from_plain(&expanded), fuel.checked_sub(1)?)
         }
@@ -269,16 +269,16 @@ pub enum InterfaceMemberLookup<'db> {
 /// name-keyed lookup and the enumeration can never disagree about which
 /// interfaces are in play.
 pub(crate) fn member_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     receiver: &Ty,
 ) -> Option<(Vec<InferInterface>, bool)> {
     match receiver.kind() {
-        InferTy::Interface(qtn, args, pins, _) => Some((
+        InferTy::Interface(qtn, args, pins) => Some((
             vec![InferInterface::new(qtn.clone(), args.clone(), pins.clone())],
             true,
         )),
-        InferTy::TypeVar(param, _) => Some((
+        InferTy::TypeVar(param) => Some((
             baml_type::normalize::TypeContext::type_var_bound(facts, param)
                 .iter()
                 .map(InferInterface::from_constraint)
@@ -311,7 +311,7 @@ pub(crate) fn member_roots<'db>(
 /// ambiguous. Concrete receivers' impl-provided members join with the
 /// impls-for-receiver step (pinned pending).
 pub fn lookup_interface_member<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
@@ -379,7 +379,7 @@ pub fn lookup_interface_member<'db>(
 /// Whether `target` declares method `name` with a `Self` use that makes it
 /// uncallable through an existential receiver, and where that use sits.
 pub(crate) fn declared_method_self_restriction<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     target: &InferInterface,
     name: &Name,
@@ -416,10 +416,10 @@ pub(crate) fn declared_method_self_restriction<'db>(
     let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
         return None;
     };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let data = baml_compiler2_hir::item_data::interface_data(db, interface);
     let method =
         data.methods.iter().copied().find(|&method| {
-            baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+            baml_compiler2_hir::item_data::function_data(db, method).name == *name
         })?;
     let signature = crate::lower::function_signature(db, method);
     signature_breaks_one_self(signature).then(|| {
@@ -442,7 +442,7 @@ pub(crate) fn declared_method_self_restriction<'db>(
 /// interfaces declaring the name still need `as<I>` qualification
 /// (E0121, TIR's rule).
 pub fn concrete_member_ambiguity<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
@@ -467,7 +467,7 @@ pub fn concrete_member_ambiguity<'db>(
 /// roots are separate future work - the member TYPE here comes from the
 /// interface signature either way.
 fn lookup_impl_member<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &Ty,
@@ -495,7 +495,7 @@ fn lookup_impl_member<'db>(
     // unwritable in user identifiers, so `$probe$…` collides with nothing
     // a declaration produces; a bounded blanket therefore declines here
     // (fail closed) exactly like an argument-pinning impl.
-    if let InferTy::Class(qtn, args, _) = receiver.kind()
+    if let InferTy::Class(qtn, args) = receiver.kind()
         && args.iter().any(Ty::has_infer)
         && let Some(Definition::Class(class)) = facts.definition_of(qtn)
     {
@@ -508,7 +508,7 @@ fn lookup_impl_member<'db>(
             crate::lower::class_qualified_name(db, class),
             frame
                 .iter()
-                .map(|param| Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())))
+                .map(|param| Ty::intern(InferTy::TypeVar(param.clone())))
                 .collect(),
         );
         let lookup = lookup_impl_member(db, viewer, facts, &probe, name);
@@ -522,8 +522,8 @@ fn lookup_impl_member<'db>(
     // a second `"a"` rather than any `string`.
     let widened;
     let receiver = match receiver.kind() {
-        InferTy::Literal(literal, _, attr) => {
-            widened = Ty::intern(crate::infer::literal_base(literal, attr.clone()));
+        InferTy::Literal(literal, _) => {
+            widened = Ty::intern(crate::infer::literal_base(literal));
             &widened
         }
         _ => receiver,
@@ -608,7 +608,7 @@ fn lookup_impl_member<'db>(
                                 // signature, which has no compiled body an
                                 // `ItemRef::InterfaceBody` could reference.
                                 if let Some(block) = resolved.source_block()
-                                    && baml_compiler2_ppir::item_data::function_has_body(db, method)
+                                    && baml_compiler2_hir::item_data::function_has_body(db, method)
                                 {
                                     // The default's frame: `[Self = receiver,
                                     // iface args..]` — associated types are
@@ -704,7 +704,7 @@ fn lookup_impl_member<'db>(
 /// to the projection itself, so a `Self.Item`-mentioning bound lands
 /// back on the receiver.
 fn assoc_bound_roots<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     base: &Ty,
     interface_ref: &baml_type::interned::InferInterface,
@@ -756,7 +756,7 @@ fn assoc_bound_roots<'db>(
         );
         return Vec::new();
     };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let data = baml_compiler2_hir::item_data::interface_data(db, interface);
     let Some(assoc) = data
         .associated_types
         .iter()
@@ -788,7 +788,7 @@ fn assoc_bound_roots<'db>(
     };
     let realized = crate::lower::substitute_params(&bound_ty, &instantiation);
     match realized.kind() {
-        InferTy::Interface(name, args, pins, _) => vec![InferInterface::new(
+        InferTy::Interface(name, args, pins) => vec![InferInterface::new(
             name.clone(),
             args.clone(),
             pins.clone(),
@@ -810,7 +810,7 @@ fn assoc_bound_roots<'db>(
 /// set is [`impls_of_type`] — the same one the IDE's listings show, so
 /// completion and describe cannot disagree.
 fn extend_from_impls<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     out: &mut Vec<MemberCandidate<'db>>,
     self_ty: &baml_type::Ty,
@@ -846,7 +846,7 @@ fn extend_from_impls<'db>(
 /// depend on where the reader stands, and an impl whose bounds an empty env
 /// cannot discharge is one a bare qualifier cannot reach either.
 pub fn impls_of_type<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     self_ty: &baml_type::Ty,
 ) -> Vec<crate::impls::ResolvedImpl<'db>> {
@@ -871,7 +871,7 @@ pub fn impls_of_type<'db>(
 /// from its entry point instead, so it converts totally and never reaches
 /// this check.
 fn impls_for_receiver<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     receiver: &Ty,
 ) -> Vec<crate::impls::ResolvedImpl<'db>> {
@@ -901,7 +901,7 @@ fn realized_impl_frame(resolved: &crate::impls::ResolvedImpl<'_>) -> Vec<Ty> {
 /// caller-bound (`ParamCandidate`) tier, checked here because the env
 /// exists at this layer and not inside the db-only impl search.
 fn env_discharges_rigid_bounds<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     resolved: &crate::impls::ResolvedImpl<'db>,
 ) -> bool {
@@ -937,12 +937,12 @@ fn env_discharges_rigid_bounds<'db>(
 /// rigid-carrying actuals fall back to the impl search (which admits
 /// placeholders).
 fn env_proves<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     actual: &Ty,
     goal: &InferInterface,
 ) -> bool {
-    let InferTy::TypeVar(param, _) = actual.kind() else {
+    let InferTy::TypeVar(param) = actual.kind() else {
         return crate::impls::resolve_impl(db, actual, goal).is_some();
     };
     let eq = crate::impls::AliasOnlyFacts::new(db);
@@ -969,7 +969,7 @@ fn substitute_class_params(ty: &Ty, frame: &[ParamTy], args: &[Ty]) -> Ty {
     if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
         return ty.clone();
     }
-    if let InferTy::TypeVar(param, _) = ty.kind()
+    if let InferTy::TypeVar(param) = ty.kind()
         && let Some(position) = frame.iter().position(|candidate| candidate == param)
         && let Some(replacement) = args.get(position)
     {
@@ -1075,7 +1075,7 @@ fn substitute_lookup_class_args<'db>(
 
 /// A member declared DIRECTLY on `target`, instantiated for `receiver`.
 pub(crate) fn member_on_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     target: &InferInterface,
     receiver: &Ty,
@@ -1143,7 +1143,7 @@ pub(crate) fn member_on_interface<'db>(
     let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
         return None;
     };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let data = baml_compiler2_hir::item_data::interface_data(db, interface);
     let instantiation = interface_instantiation(receiver, target, data)?;
 
     // Fields first (mirroring the class path's field-before-method).
@@ -1178,7 +1178,7 @@ pub(crate) fn member_on_interface<'db>(
     if let Some(&method) = data
         .methods
         .iter()
-        .find(|&&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
+        .find(|&&method| baml_compiler2_hir::item_data::function_data(db, method).name == *name)
     {
         let signature = crate::lower::function_signature(db, method);
         if existential && signature_breaks_one_self(signature) {
@@ -1275,7 +1275,7 @@ pub enum MemberSource {
 /// "outside BAML's user-facing language surface" (`FunctionMetadata`), so no
 /// source position can name one.
 pub fn member_candidates<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     receiver: &baml_type::interned::ClosedTy,
@@ -1284,7 +1284,7 @@ pub fn member_candidates<'db>(
 
     // Tier 1: the receiver's own class (`lookup_method`'s two branches).
     if let Some((class, _)) = receiver_class(facts, receiver, 8) {
-        let data = baml_compiler2_ppir::item_data::class_data(db, class);
+        let data = baml_compiler2_hir::item_data::class_data(db, class);
         for (index, field) in data.fields.iter().enumerate() {
             push_candidate(
                 &mut out,
@@ -1384,13 +1384,13 @@ pub fn member_candidates<'db>(
 // ("Concrete Types") records the rule and the two canonical-spelling
 // exceptions (`reflect.Type`, `baml.future.Future`).
 pub fn type_member_candidates<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     definition: Definition<'db>,
 ) -> Vec<MemberCandidate<'db>> {
     let mut out = Vec::new();
     match definition {
         Definition::Class(class) => {
-            let data = baml_compiler2_ppir::item_data::class_data(db, class);
+            let data = baml_compiler2_hir::item_data::class_data(db, class);
             for (name, is_static, method) in declared_methods(db, &data.methods) {
                 push_candidate(
                     &mut out,
@@ -1418,7 +1418,7 @@ pub fn type_member_candidates<'db>(
             );
         }
         Definition::Enum(enum_loc) => {
-            let data = baml_compiler2_ppir::item_data::enum_data(db, enum_loc);
+            let data = baml_compiler2_hir::item_data::enum_data(db, enum_loc);
             for (index, variant) in data.variants.iter().enumerate() {
                 push_candidate(
                     &mut out,
@@ -1441,7 +1441,7 @@ pub fn type_member_candidates<'db>(
             );
         }
         Definition::Interface(interface) => {
-            let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+            let data = baml_compiler2_hir::item_data::interface_data(db, interface);
             // No one-`Self` exclusion here: a type qualifier names `Self`
             // explicitly (`(T as Iface).m` or inferred), so every method is
             // reachable — the exclusion is the EXISTENTIAL receiver's.
@@ -1469,11 +1469,11 @@ pub fn type_member_candidates<'db>(
 /// "outside BAML's user-facing language surface" (`FunctionMetadata`), so no
 /// source position can name one.
 fn declared_methods<'a, 'db: 'a>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     methods: &'a [FunctionLoc<'db>],
 ) -> impl Iterator<Item = (Name, bool, FunctionLoc<'db>)> + 'a {
     methods.iter().filter_map(move |&method| {
-        let function = baml_compiler2_ppir::item_data::function_data(db, method);
+        let function = baml_compiler2_hir::item_data::function_data(db, method);
         if function.metadata.is_language_internal {
             return None;
         }
@@ -1503,8 +1503,8 @@ fn push_candidate<'db>(
 
 /// Whether a source function is declared without a `self` receiver, and is
 /// therefore reached through the type rather than through a value.
-fn is_static_source(db: &dyn baml_compiler2_ppir::Db, method: FunctionLoc<'_>) -> bool {
-    baml_compiler2_ppir::item_data::function_data(db, method)
+fn is_static_source(db: &dyn baml_compiler2_hir::Db, method: FunctionLoc<'_>) -> bool {
+    baml_compiler2_hir::item_data::function_data(db, method)
         .params
         .first()
         .is_none_or(|param| param.name.as_str() != "self")
@@ -1517,7 +1517,7 @@ fn is_static_exported(method: &crate::package_interface::ExportedFunction) -> bo
 }
 
 fn extend_from_interface<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     out: &mut Vec<MemberCandidate<'db>>,
     target: &InferInterface,
@@ -1543,7 +1543,7 @@ fn extend_from_interface<'db>(
 /// one-`Self` exclusion for existential receivers. Keep the two in step: this
 /// answers "what can be written", that one answers "what does it mean".
 fn interface_member_rows<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     facts: &Facts<'db>,
     target: &InferInterface,
     existential: bool,
@@ -1581,7 +1581,7 @@ fn interface_member_rows<'db>(
     let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
         return rows;
     };
-    let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
+    let data = baml_compiler2_hir::item_data::interface_data(db, interface);
     for (index, field) in data.fields.iter().enumerate() {
         rows.push((
             field.name.clone(),
@@ -1619,7 +1619,6 @@ pub(crate) fn instantiate_external_signature(
             &Ty::from_plain(&function.callable_throws),
             instantiation,
         ),
-        attr: TyAttr::default(),
     })
 }
 
@@ -1629,7 +1628,7 @@ fn exported_signature_breaks_one_self(
 ) -> bool {
     let contains = |ty: &baml_type::Ty, top_ok: bool| {
         self_occurs(&Ty::from_plain(ty), top_ok)
-            || matches!(ty, baml_type::Ty::TypeVar(param, _) if param == self_param && !top_ok)
+            || matches!(ty, baml_type::Ty::TypeVar(param) if param == self_param && !top_ok)
     };
     function
         .params
@@ -1641,7 +1640,7 @@ fn exported_signature_breaks_one_self(
 }
 
 fn external_interface_callable(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     interface: &baml_type::DeclName,
     name: &Name,
 ) -> Option<std::sync::Arc<crate::callable::ExternalCallable>> {
@@ -1683,7 +1682,7 @@ fn external_interface_callable(
 pub(crate) fn interface_instantiation(
     receiver: &Ty,
     target: &InferInterface,
-    data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
+    data: &baml_compiler2_hir::item_data::InterfaceData<'_>,
 ) -> Option<Vec<Ty>> {
     if data.generic_params.len() != target.generics.len() {
         debug_assert!(
@@ -1702,7 +1701,7 @@ pub(crate) fn interface_instantiation(
 
 fn interface_frame<'db>(
     interface: InterfaceLoc<'db>,
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
 ) -> Vec<ParamTy> {
     crate::lower::interface_frame(db, interface)
 }
@@ -1734,7 +1733,6 @@ fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiat
             &crate::impls::interned_ty(&signature.throws),
             instantiation,
         ),
-        attr: TyAttr::default(),
     })
 }
 
@@ -1761,10 +1759,10 @@ fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> boo
 /// Projection bases are exempt.
 fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
     match ty.kind() {
-        InferTy::TypeVar(param, _) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
+        InferTy::TypeVar(param) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
         InferTy::AssociatedTypeProjection { .. } => false,
         // Unions and optionals are covariant-transparent.
-        InferTy::Union(members, _) => members.iter().any(|member| self_occurs(member, top_ok)),
+        InferTy::Union(members) => members.iter().any(|member| self_occurs(member, top_ok)),
         _ => {
             let mut found = false;
             let mut children = Vec::new();
@@ -1805,7 +1803,7 @@ pub enum UnionMemberLookup<'db> {
 }
 
 pub fn lookup_union_member<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     union_ty: &Ty,
@@ -1866,7 +1864,7 @@ pub fn lookup_union_member<'db>(
 /// type variable contributes each conjunct's contribution; a concrete arm
 /// contributes its matched impls' realized interfaces.
 fn union_arm_interfaces<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     arm: &Ty,
@@ -1876,7 +1874,7 @@ fn union_arm_interfaces<'db>(
         return Vec::new();
     }
     match arm.kind() {
-        InferTy::Interface(qtn, args, pins, _) => {
+        InferTy::Interface(qtn, args, pins) => {
             let root = InferInterface::new(qtn.clone(), args.clone(), pins.clone());
             let mut out = vec![root.clone()];
             for required in crate::impls::direct_requires_closure(db, &root, arm, 8) {
@@ -1886,7 +1884,7 @@ fn union_arm_interfaces<'db>(
             }
             out
         }
-        InferTy::TypeVar(param, _) => {
+        InferTy::TypeVar(param) => {
             let mut out = Vec::new();
             for bound in baml_type::normalize::TypeContext::type_var_bound(facts, param) {
                 let root = InferInterface::from_constraint(&bound);
@@ -1925,7 +1923,7 @@ fn union_arm_interfaces<'db>(
 /// membership is one question, asked here and by item-projection
 /// determination alike.
 fn interface_declares_member(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     target: &InferInterface,
     name: &Name,
 ) -> Option<bool> {

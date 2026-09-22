@@ -1,9 +1,9 @@
 """Roundtrip coverage for the cross-namespace routing-rules suite:
 root (`baml_sdk`), `a`, `a.b`, `lorem`, and `ipsum` leaves.
 
-The `baml.http.Response`-typed round trips in `lorem` are covered in
-`test_streams.py` (they need an engine-minted handle and can't be built
-host-side).
+The `baml.http.Response` arms in `lorem` need an engine-minted handle and
+can't be built host-side; the handle round trip is covered by
+`test_handles.py`.
 """
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
@@ -15,6 +15,7 @@ from baml_sdk.lorem import (
     round_trip_resume,
     round_trip_root_foo,
     round_trip_deep_thing_from_lorem,
+    round_trip_resume_or_http_response,
 )
 from baml_sdk.ipsum import round_trip_lorem_resume_from_ipsum
 
@@ -61,3 +62,10 @@ def test_routing_round_trip_root_foo():
 def test_routing_round_trip_lorem_resume_from_ipsum():
     r = Resume(name="grace", email="g@x.com")
     assert round_trip_lorem_resume_from_ipsum(r=r) == r
+
+
+def test_routing_round_trip_resume_or_http_response():
+    # Pass the `Resume` arm; the `baml.http.Response` arm isn't
+    # host-constructible.
+    r = Resume(name="lovelace", email="a@x.com")
+    assert round_trip_resume_or_http_response(u=r) == r

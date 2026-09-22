@@ -100,13 +100,7 @@ fn to_source_code_with_optional_metadata(
         if fqn == AI_STREAM_STREAM {
             continue;
         }
-        let mut ns = translate_ty::namespace_for(key);
-        if key.is_stream() && matches!(symbol, Symbol::Function(_)) {
-            // Only `$stream` CLASSES route under stream_types;
-            // `$stream` FUNCTION companions sit beside their parent
-            // (Python's routing rule, mirrored).
-            ns.remove(0);
-        }
+        let ns = translate_ty::namespace_for(key);
         let rendered = match symbol {
             Symbol::Function(function) => {
                 let binding_name = &free_callable_names[&fqn];
@@ -151,9 +145,6 @@ fn to_source_code_with_optional_metadata(
             }
         };
         let Some(rendered) = rendered else { continue };
-        // Sort key uses the RAW name: bare_name() strips `$stream`, so
-        // a base function and its `$stream` companion would collide in
-        // the decl map and silently overwrite each other.
         let bare = key.name().as_str().to_string();
         namespaces
             .entry(ns)
@@ -230,7 +221,6 @@ fn to_source_code_with_optional_metadata(
 /// Fixpoint over named types: start assuming every candidate class /
 /// alias is supported, then repeatedly drop any whose definition uses
 /// an unsupported type, until stable. Enums are always supported.
-/// Generic and `$stream` classes are excluded up front (later phases).
 fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     let mut supported_classes: BTreeSet<String> = BTreeSet::new();
     let mut supported_aliases: BTreeSet<String> = BTreeSet::new();
@@ -308,8 +298,8 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
         // Parameterized targets box exactly like bare ones —
         // `GenericLinkedList<T>` self-references store inline via
         // Optional the same way.
-        Ty::Class(name, _, _) => out.push(name.to_string()),
-        Ty::Union(members, _) => {
+        Ty::Class(name, _) => out.push(name.to_string()),
+        Ty::Union(members) => {
             let (non_null, _) = normalize_union(members);
             // A >=2-arm union renders as an `indirect` BamlUnionN — its
             // payload is heap-boxed, so it breaks cycles on its own.
@@ -318,7 +308,7 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
                 if !alias.recursive {
                     direct_class_targets(&alias.resolves_to, pool, out);
@@ -400,7 +390,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: matches!(prop.ty, Ty::RustType { .. }),
+            is_rust: matches!(prop.ty, Ty::RustType),
         });
     }
 
@@ -463,12 +453,8 @@ fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
         if !matches!(symbol, Symbol::Function(_)) {
             continue;
         }
-        let mut namespace = translate_ty::namespace_for(name);
-        if name.is_stream() {
-            namespace.remove(0);
-        }
         scopes
-            .entry(namespace)
+            .entry(translate_ty::namespace_for(name))
             .or_default()
             .push((name.to_string(), name.name().as_str().to_string()));
     }
@@ -516,7 +502,7 @@ pub(crate) fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, 
     if !alias.recursive {
         return None;
     }
-    let Ty::Union(members, _) = &alias.resolves_to else {
+    let Ty::Union(members) = &alias.resolves_to else {
         return None;
     };
     let (non_null, nullable) = normalize_union(members);
@@ -782,44 +768,34 @@ mod tests {
     }
 
     fn int() -> Ty {
-        Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Int
+    }
+    fn bigint() -> Ty {
+        Ty::Bigint
     }
     fn float() -> Ty {
-        Ty::Float {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Float
     }
     fn string() -> Ty {
-        Ty::String {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::String
     }
     fn null() -> Ty {
-        Ty::Null {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Null
     }
     fn list(inner: Ty) -> Ty {
-        Ty::List(Box::new(inner), baml_base::TyAttr::EMPTY)
+        Ty::List(Box::new(inner))
     }
     fn map(key: Ty, value: Ty) -> Ty {
         Ty::Map {
             key: Box::new(key),
             value: Box::new(value),
-            attr: baml_base::TyAttr::EMPTY,
         }
     }
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into())
     }
     fn literal(value: baml_base::Literal) -> Ty {
-        Ty::Literal(
-            value,
-            baml_codegen_types::Freshness::Regular,
-            baml_base::TyAttr::EMPTY,
-        )
+        Ty::Literal(value, baml_codegen_types::Freshness::Regular)
     }
 
     #[test]
@@ -832,6 +808,7 @@ mod tests {
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
         assert_eq!(t(&int()).as_deref(), Some("Swift.Int"));
+        assert_eq!(t(&bigint()).as_deref(), Some("BamlBigInt"));
         assert_eq!(t(&float()).as_deref(), Some("Swift.Double"));
         assert_eq!(t(&list(int())).as_deref(), Some("[Swift.Int]"));
         assert_eq!(
@@ -854,15 +831,8 @@ mod tests {
             vec![baml_base::Name::new("stream")],
             baml_base::Name::new("Stream"),
         );
-        let stream = Ty::Class(
-            stream_name,
-            Box::new([string(), string()]),
-            baml_base::TyAttr::EMPTY,
-        );
-        assert_eq!(
-            t(&stream).as_deref(),
-            Some("BamlStream<Swift.String, Swift.String>")
-        );
+        let stream = Ty::Class(stream_name, Box::new([string()]));
+        assert_eq!(t(&stream).as_deref(), Some("BamlStream<Swift.String>"));
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(
             t(&union(vec![int(), string(), null()])).as_deref(),

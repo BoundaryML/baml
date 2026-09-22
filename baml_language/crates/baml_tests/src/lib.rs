@@ -223,9 +223,6 @@ pub mod compiler2_hir;
 pub mod compiler2_hir_ty;
 
 #[cfg(test)]
-pub mod compiler2_ppir;
-
-#[cfg(test)]
 pub mod compiler2_tir;
 
 #[cfg(test)]

@@ -1,10 +1,10 @@
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // test_union: union of two classes, Foo and Bar
 test_deserializer!(
     test_union,
     r#"{"hi": ["a", "b"]}"#,
-    baml_tyannotated!((Foo | Bar)),
+    baml_ty!((Foo | Bar)),
     baml_db!{
         class Foo {
             hi: [string],
@@ -28,7 +28,7 @@ test_deserializer!(
     "data": null
   }
   ```"#,
-    baml_tyannotated!((CatAPicker | CatBPicker | CatCPicker)),
+    baml_ty!((CatAPicker | CatBPicker | CatCPicker)),
     baml_db!{
         enum CatA {
             A
@@ -54,7 +54,7 @@ test_deserializer!(
         class CatCPicker {
             cat: CatC,
             item: (int | string | null),
-            data: (int | null) @class_completed_field_missing(null),
+            data: (int | null),
         }
     },
     {
@@ -100,7 +100,7 @@ test_deserializer!(
   ]
 }
 ```"####,
-    baml_tyannotated!((RespondToUserAPI | AskClarificationAPI | [AssistantAPI])),
+    baml_ty!((RespondToUserAPI | AskClarificationAPI | [AssistantAPI])),
     baml_db!{
         enum AssistantType {
             ETF @alias("ETFAssistantAPI"),
@@ -156,12 +156,12 @@ test_deserializer!(
             reported: [ScatterDataPoint],
         }
         class UIContent {
-            richText: (MarkdownContent | null) @class_completed_field_missing(null),
-            companyBadge: (CompanyBadgeContent | null) @class_completed_field_missing(null),
-            numericalSlider: (NumericalSliderContent | null) @class_completed_field_missing(null),
-            barGraph: ([GraphDataPoint] | null) @class_completed_field_missing(null),
-            scatterPlot: (ScatterPlotContent | null) @class_completed_field_missing(null),
-            foo: (string | null) @class_completed_field_missing(null),
+            richText: (MarkdownContent | null),
+            companyBadge: (CompanyBadgeContent | null),
+            numericalSlider: (NumericalSliderContent | null),
+            barGraph: ([GraphDataPoint] | null),
+            scatterPlot: (ScatterPlotContent | null),
+            foo: (string | null),
         }
         class UI {
             section_title: string,
@@ -212,7 +212,7 @@ test_deserializer!(
 test_deserializer!(
     test_ignore_float_in_string_if_string_in_union,
     "1 cup unsalted butter, room temperature",
-    baml_tyannotated!((float | string)),
+    baml_ty!((float | string)),
     baml_db! {},
     "1 cup unsalted butter, room temperature"
 );
@@ -220,7 +220,7 @@ test_deserializer!(
 test_deserializer!(
     test_ignore_int_if_string_in_union,
     "1 cup unsalted butter, room temperature",
-    baml_tyannotated!((int | string)),
+    baml_ty!((int | string)),
     baml_db! {},
     "1 cup unsalted butter, room temperature"
 );
@@ -228,31 +228,29 @@ test_deserializer!(
 // test_try_cast_union_early_return_preserves_incomplete_flag: skipped (uses internal APIs)
 
 // ============================================================================
-// Multi-variant union with parse_as
+// Multi-variant nullable union
 // ============================================================================
 
-// parse_as with multi-variant target picks int
 test_deserializer!(
-    test_union_multi_parse_as,
+    test_union_multi_picks_int,
     r#"42"#,
-    baml_tyannotated!((string | int | null) @parse_without_null),
+    baml_ty!((string | int | null)),
     baml_db! {},
     42
 );
 
-// parse_as with multi-variant target picks string
 test_deserializer!(
-    test_union_multi_parse_as_string,
+    test_union_multi_picks_string,
     r#""hello""#,
-    baml_tyannotated!((string | int | null) @parse_without_null),
+    baml_ty!((string | int | null)),
     baml_db! {},
     "hello"
 );
 
-// null rejected by parse_as(string | int)
-test_failing_deserializer!(
-    test_union_multi_parse_as_rejects_null,
+test_deserializer!(
+    test_union_multi_accepts_null,
     r#"null"#,
-    baml_tyannotated!((string | int | null) @parse_without_null),
-    baml_db! {}
+    baml_ty!((string | int | null)),
+    baml_db! {},
+    null
 );

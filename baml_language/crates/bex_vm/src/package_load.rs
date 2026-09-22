@@ -558,11 +558,7 @@ mod tests {
     fn empty_rule(interface: HeapPtr, class: bex_vm_types::TypeHead) -> RuntimeImplRule {
         RuntimeImplRule {
             interface_head: interface,
-            for_ty_pattern: bex_vm_types::TyTemplate::Class(
-                class,
-                Box::new([]),
-                baml_type::TyAttr::default(),
-            ),
+            for_ty_pattern: bex_vm_types::TyTemplate::Class(class, Box::new([])),
             generic_param_bounds: Vec::new(),
             interface_args: Vec::new(),
             interface_assoc: Vec::new(),

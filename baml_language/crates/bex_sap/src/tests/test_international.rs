@@ -1,4 +1,4 @@
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // =============================================================================
 // ENUM TESTS WITH ACCENTED ALIASES
@@ -7,7 +7,7 @@ use crate::{baml_db, baml_tyannotated};
 test_deserializer!(
     test_accented_alias_french,
     r#"française"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -26,7 +26,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_spanish,
     r#"española"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -45,7 +45,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_chinese,
     r#"中式"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -64,7 +64,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_arabic,
     r#"العربية"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -83,7 +83,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_russian,
     r#"русская"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -102,7 +102,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_japanese,
     r#"日本料理"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -121,7 +121,7 @@ test_deserializer!(
 test_failing_deserializer!(
     test_original_enum_values_fail_when_aliases_exist,
     r#"FRENCH"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -139,7 +139,7 @@ test_failing_deserializer!(
 test_deserializer!(
     test_accented_alias_in_sentence,
     r#"The restaurant serves española cuisine with authentic flavors"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -158,7 +158,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_case_variations,
     r#"Française"#,
-    baml_tyannotated!(CuisineType),
+    baml_ty!(CuisineType),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -177,7 +177,7 @@ test_deserializer!(
 test_deserializer!(
     test_accented_alias_list_mixed_scripts,
     r#"["française", "中式", "العربية"]"#,
-    baml_tyannotated!([CuisineType]),
+    baml_ty!([CuisineType]),
     baml_db! {
         enum CuisineType {
             FRENCH @alias("française"),
@@ -196,7 +196,7 @@ test_deserializer!(
 test_deserializer!(
     test_french_alias_invoice,
     r#"facture"#,
-    baml_tyannotated!(DocumentType),
+    baml_ty!(DocumentType),
     baml_db! {
         enum DocumentType {
             INVOICE @alias("facture"),
@@ -212,7 +212,7 @@ test_deserializer!(
 test_deserializer!(
     test_french_alias_receipt_with_accent,
     r#"reçu"#,
-    baml_tyannotated!(DocumentType),
+    baml_ty!(DocumentType),
     baml_db! {
         enum DocumentType {
             INVOICE @alias("facture"),
@@ -228,7 +228,7 @@ test_deserializer!(
 test_failing_deserializer!(
     test_original_enum_values_fail_with_french_aliases,
     r#"INVOICE"#,
-    baml_tyannotated!(DocumentType),
+    baml_ty!(DocumentType),
     baml_db! {
         enum DocumentType {
             INVOICE @alias("facture"),
@@ -243,7 +243,7 @@ test_failing_deserializer!(
 test_deserializer!(
     test_french_alias_in_context,
     r#"Please process this facture document"#,
-    baml_tyannotated!(DocumentType),
+    baml_ty!(DocumentType),
     baml_db! {
         enum DocumentType {
             INVOICE @alias("facture"),
@@ -259,7 +259,7 @@ test_deserializer!(
 test_deserializer!(
     test_status_french_alias_active,
     r#"actif"#,
-    baml_tyannotated!(Status),
+    baml_ty!(Status),
     baml_db! {
         enum Status {
             ACTIVE @alias("actif"),
@@ -275,7 +275,7 @@ test_deserializer!(
 test_deserializer!(
     test_status_french_alias_completed,
     r#"terminé"#,
-    baml_tyannotated!(Status),
+    baml_ty!(Status),
     baml_db! {
         enum Status {
             ACTIVE @alias("actif"),
@@ -291,7 +291,7 @@ test_deserializer!(
 test_deserializer!(
     test_status_french_alias_cancelled,
     r#"annulé"#,
-    baml_tyannotated!(Status),
+    baml_ty!(Status),
     baml_db! {
         enum Status {
             ACTIVE @alias("actif"),
@@ -307,7 +307,7 @@ test_deserializer!(
 test_deserializer!(
     test_priority_french_high,
     r#"élevé"#,
-    baml_tyannotated!(Priority),
+    baml_ty!(Priority),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -323,7 +323,7 @@ test_deserializer!(
 test_deserializer!(
     test_priority_french_medium,
     r#"médium"#,
-    baml_tyannotated!(Priority),
+    baml_ty!(Priority),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -339,7 +339,7 @@ test_deserializer!(
 test_deserializer!(
     test_priority_portuguese_low,
     r#"baixo"#,
-    baml_tyannotated!(Priority),
+    baml_ty!(Priority),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -355,7 +355,7 @@ test_deserializer!(
 test_deserializer!(
     test_priority_chinese_urgent,
     r#"紧急"#,
-    baml_tyannotated!(Priority),
+    baml_ty!(Priority),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -371,7 +371,7 @@ test_deserializer!(
 test_deserializer!(
     test_priority_arabic_normal,
     r#"عادي"#,
-    baml_tyannotated!(Priority),
+    baml_ty!(Priority),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -387,7 +387,7 @@ test_deserializer!(
 test_failing_deserializer!(
     test_original_priority_values_fail_with_aliases,
     r#"HIGH"#,
-    baml_tyannotated!(Priority),
+    baml_ty!(Priority),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -404,7 +404,7 @@ test_failing_deserializer!(
 test_deserializer!(
     test_multiple_original_enum_values_fail,
     r#"["HIGH", "MEDIUM", "LOW"]"#,
-    baml_tyannotated!([Priority]),
+    baml_ty!([Priority]),
     baml_db! {
         enum Priority {
             HIGH @alias("élevé"),
@@ -425,7 +425,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_french_name,
     r#"François"#,
-    baml_tyannotated!("François"),
+    baml_ty!("François"),
     baml_db! {},
     "François"
 );
@@ -433,7 +433,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_spanish_greeting,
     r#"¡Hola!"#,
-    baml_tyannotated!("¡Hola!"),
+    baml_ty!("¡Hola!"),
     baml_db! {},
     "¡Hola!"
 );
@@ -441,7 +441,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_portuguese_word,
     r#"São Paulo"#,
-    baml_tyannotated!("São Paulo"),
+    baml_ty!("São Paulo"),
     baml_db! {},
     "São Paulo"
 );
@@ -449,7 +449,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_german_umlaut,
     r#"Müller"#,
-    baml_tyannotated!("Müller"),
+    baml_ty!("Müller"),
     baml_db! {},
     "Müller"
 );
@@ -457,7 +457,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_chinese_characters,
     r#"北京"#,
-    baml_tyannotated!("北京"),
+    baml_ty!("北京"),
     baml_db! {},
     "北京"
 );
@@ -465,7 +465,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_arabic_text,
     r#"السلام عليكم"#,
-    baml_tyannotated!("السلام عليكم"),
+    baml_ty!("السلام عليكم"),
     baml_db! {},
     "السلام عليكم"
 );
@@ -473,7 +473,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_russian_cyrillic,
     r#"Москва"#,
-    baml_tyannotated!("Москва"),
+    baml_ty!("Москва"),
     baml_db! {},
     "Москва"
 );
@@ -481,7 +481,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_japanese_hiragana,
     r#"こんにちは"#,
-    baml_tyannotated!("こんにちは"),
+    baml_ty!("こんにちは"),
     baml_db! {},
     "こんにちは"
 );
@@ -489,7 +489,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_accented_with_quotes,
     r#""François""#,
-    baml_tyannotated!("François"),
+    baml_ty!("François"),
     baml_db! {},
     "François"
 );
@@ -497,7 +497,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_accented_case_insensitive,
     r#"françois"#,
-    baml_tyannotated!("François"),
+    baml_ty!("François"),
     baml_db! {},
     "François"
 );
@@ -505,7 +505,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_accented_in_sentence,
     r#"The name is François for this person"#,
-    baml_tyannotated!("François"),
+    baml_ty!("François"),
     baml_db! {},
     "François"
 );
@@ -513,7 +513,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_cafe_with_emoji,
     r#"Café ☕"#,
-    baml_tyannotated!("Café ☕"),
+    baml_ty!("Café ☕"),
     baml_db! {},
     "Café ☕"
 );
@@ -521,7 +521,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_literal_city_names,
     r#"São Paulo"#,
-    baml_tyannotated!(("Paris" | "São Paulo" | "Zürich")),
+    baml_ty!(("Paris" | "São Paulo" | "Zürich")),
     baml_db! {},
     "São Paulo"
 );
@@ -529,7 +529,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_literal_mixed_languages,
     r#"北京"#,
-    baml_tyannotated!(("Paris" | "北京" | "القاهرة")),
+    baml_ty!(("Paris" | "北京" | "القاهرة")),
     baml_db! {},
     "北京"
 );
@@ -537,7 +537,7 @@ test_deserializer!(
 test_deserializer!(
     test_literal_string_diacritics_combination,
     r#"naïve résumé"#,
-    baml_tyannotated!("naïve résumé"),
+    baml_ty!("naïve résumé"),
     baml_db! {},
     "naïve résumé"
 );
@@ -549,7 +549,7 @@ test_deserializer!(
 test_deserializer!(
   test_french_field_aliases,
   r#"{"nom": "Le Petit Café", "adresse": "Champs-Élysées", "spécialité": "crêpes bretonnes", "étoiles": 4}"#,
-  baml_tyannotated!(Restaurant),
+  baml_ty!(Restaurant),
   baml_db!{
       class Restaurant {
           name: string @alias("nom"),
@@ -569,7 +569,7 @@ test_deserializer!(
 test_deserializer!(
   test_french_field_aliases_without_quotes,
   r#"{nom: "Le Petit Café", adresse: Champs-Élysées, spécialité: "crêpes bretonnes", étoiles: 4}"#,
-  baml_tyannotated!(Restaurant),
+  baml_ty!(Restaurant),
   baml_db!{
       class Restaurant {
           name: string @alias("nom"),
@@ -589,7 +589,7 @@ test_deserializer!(
 test_failing_deserializer!(
     test_original_field_names_fail_when_aliases_exist,
     r#"{"name": "Le Petit Café", "address": "Champs-Élysées", "specialty": "crêpes bretonnes", "stars": 4}"#,
-    baml_tyannotated!(Restaurant),
+    baml_ty!(Restaurant),
     baml_db! {
         class Restaurant {
             name: string @alias("nom"),
@@ -603,7 +603,7 @@ test_failing_deserializer!(
 test_deserializer!(
   test_international_field_aliases,
   r#"{"prénom": "François", "família": "Silva", "città": "Milano", "straße": "Hauptstraße", "поле": "значение", "フィールド": "値"}"#,
-  baml_tyannotated!(InternationalContact),
+  baml_ty!(InternationalContact),
   baml_db!{
       class InternationalContact {
           first_name: string @alias("prénom"),
@@ -635,7 +635,7 @@ test_deserializer!(
     "поле": "текст",
     "フィールド": "データ"
   }"#,
-  baml_tyannotated!(InternationalContact),
+  baml_ty!(InternationalContact),
   baml_db!{
       class InternationalContact {
           first_name: string @alias("prénom"),
@@ -659,7 +659,7 @@ test_deserializer!(
 test_deserializer!(
     test_french_nested_class_aliases,
     r#"{"prénom": "François", "nom": "Müller", "âge": 35, "adresse": {"numéro": 42, "rue": "Champs-Élysées", "ville": "Paris", "région": "Île-de-France"}}"#,
-    baml_tyannotated!(Person),
+    baml_ty!(Person),
     baml_db!{
         class Address {
             number: int @alias("numéro"),
@@ -690,7 +690,7 @@ test_deserializer!(
 test_deserializer!(
   test_class_with_accented_aliases,
   r#"{"nom": "Café Latte", "prix": 4.50, "catégorie": "Boissons", "description": "Délicieux café"}"#,
-  baml_tyannotated!(ProductInfo),
+  baml_ty!(ProductInfo),
   baml_db!{
       class ProductInfo {
           name: string @alias("nom"),
@@ -710,7 +710,7 @@ test_deserializer!(
 test_failing_deserializer!(
     test_original_field_names_fail_with_aliases,
     r#"{"name": "Café Latte", "price": 4.50, "category": "Boissons", "description": "Délicieux café"}"#,
-    baml_tyannotated!(ProductInfo),
+    baml_ty!(ProductInfo),
     baml_db! {
         class ProductInfo {
             name: string @alias("nom"),
@@ -724,7 +724,7 @@ test_failing_deserializer!(
 test_deserializer!(
   test_library_with_french_aliases,
   r#"{"livres": ["L'Étranger", "Amélie Poulain", "Naïveté"], "auteurs": ["Camus", "Jeunet", "Müller"], "années": [1942, 2001, 2020]}"#,
-  baml_tyannotated!(Library),
+  baml_ty!(Library),
   baml_db!{
       class Library {
           books: [string] @alias("livres"),
@@ -746,7 +746,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_senor_matches_accented_alias,
     r#"senor"#,
-    baml_tyannotated!(SpanishTitle),
+    baml_ty!(SpanishTitle),
     baml_db! {
         enum SpanishTitle {
             MISTER @alias("señor"),
@@ -761,7 +761,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_senorita_matches_accented_alias,
     r#"senorita"#,
-    baml_tyannotated!(SpanishTitle),
+    baml_ty!(SpanishTitle),
     baml_db! {
         enum SpanishTitle {
             MISTER @alias("señor"),
@@ -776,7 +776,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_profesor_matches_accented_alias,
     r#"profesor"#,
-    baml_tyannotated!(SpanishTitle),
+    baml_ty!(SpanishTitle),
     baml_db! {
         enum SpanishTitle {
             MISTER @alias("señor"),
@@ -791,7 +791,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_in_sentence,
     r#"The title is senor for this person"#,
-    baml_tyannotated!(SpanishTitle),
+    baml_ty!(SpanishTitle),
     baml_db! {
         enum SpanishTitle {
             MISTER @alias("señor"),
@@ -806,7 +806,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_cafe_matches_accented_alias,
     r#"cafe"#,
-    baml_tyannotated!(FrenchWords),
+    baml_ty!(FrenchWords),
     baml_db! {
         enum FrenchWords {
             COFFEE @alias("café"),
@@ -822,7 +822,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_naive_matches_accented_alias,
     r#"naive"#,
-    baml_tyannotated!(FrenchWords),
+    baml_ty!(FrenchWords),
     baml_db! {
         enum FrenchWords {
             COFFEE @alias("café"),
@@ -838,7 +838,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_resume_matches_accented_alias,
     r#"resume"#,
-    baml_tyannotated!(FrenchWords),
+    baml_ty!(FrenchWords),
     baml_db! {
         enum FrenchWords {
             COFFEE @alias("café"),
@@ -854,7 +854,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_elite_matches_accented_alias,
     r#"elite"#,
-    baml_tyannotated!(FrenchWords),
+    baml_ty!(FrenchWords),
     baml_db! {
         enum FrenchWords {
             COFFEE @alias("café"),
@@ -870,7 +870,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_facade_matches_accented_alias,
     r#"facade"#,
-    baml_tyannotated!(FrenchWords),
+    baml_ty!(FrenchWords),
     baml_db! {
         enum FrenchWords {
             COFFEE @alias("café"),
@@ -886,7 +886,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_french_in_list,
     r#"["cafe", "naive", "resume"]"#,
-    baml_tyannotated!([FrenchWords]),
+    baml_ty!([FrenchWords]),
     baml_db! {
         enum FrenchWords {
             COFFEE @alias("café"),
@@ -902,7 +902,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_uber_matches_accented_alias,
     r#"uber"#,
-    baml_tyannotated!(GermanWords),
+    baml_ty!(GermanWords),
     baml_db! {
         enum GermanWords {
             OVER @alias("über"),
@@ -917,7 +917,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_fuhrer_matches_accented_alias,
     r#"fuhrer"#,
-    baml_tyannotated!(GermanWords),
+    baml_ty!(GermanWords),
     baml_db! {
         enum GermanWords {
             OVER @alias("über"),
@@ -932,7 +932,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_tur_matches_accented_alias,
     r#"tur"#,
-    baml_tyannotated!(GermanWords),
+    baml_ty!(GermanWords),
     baml_db! {
         enum GermanWords {
             OVER @alias("über"),
@@ -947,7 +947,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_grun_matches_accented_alias,
     r#"grun"#,
-    baml_tyannotated!(GermanWords),
+    baml_ty!(GermanWords),
     baml_db! {
         enum GermanWords {
             OVER @alias("über"),
@@ -964,7 +964,7 @@ test_deserializer!(
 test_deserializer!(
   test_unaccented_class_field_senor,
   r#"{"senor": "Sr. García", "nombre": "Juan", "edad": 30, "direccion": "Calle Mayor 123"}"#,
-  baml_tyannotated!(SpanishForm),
+  baml_ty!(SpanishForm),
   baml_db!{
       class SpanishForm {
           title: string @alias("señor"),
@@ -984,7 +984,7 @@ test_deserializer!(
 test_deserializer!(
   test_mixed_accented_unaccented_class_fields,
   r#"{"señor": "Sr. García", "nombre": "Juan", "edad": 30, "direccion": "Calle Mayor 123"}"#,
-  baml_tyannotated!(SpanishForm),
+  baml_ty!(SpanishForm),
   baml_db!{
       class SpanishForm {
           title: string @alias("señor"),
@@ -1004,7 +1004,7 @@ test_deserializer!(
 test_deserializer!(
   test_unaccented_french_class_fields,
   r#"{"prenom": "François", "nom": "Dupont", "ville": "Paris", "metier": "Professeur"}"#,
-  baml_tyannotated!(FrenchProfile),
+  baml_ty!(FrenchProfile),
   baml_db!{
       class FrenchProfile {
           first_name: string @alias("prénom"),
@@ -1024,7 +1024,7 @@ test_deserializer!(
 test_deserializer!(
   test_unaccented_portuguese_class_fields,
   r#"{"localizacao": "São Paulo", "descricao": "Uma cidade grande", "solucao": "Transporte público", "informacao": "Dados importantes"}"#,
-  baml_tyannotated!(PortugueseData),
+  baml_ty!(PortugueseData),
   baml_db!{
       class PortugueseData {
           location: string @alias("localização"),
@@ -1046,7 +1046,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_literal_cafe,
     r#"cafe"#,
-    baml_tyannotated!("café"),
+    baml_ty!("café"),
     baml_db! {},
     "café"
 );
@@ -1054,7 +1054,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_literal_resume,
     r#"resume"#,
-    baml_tyannotated!("résumé"),
+    baml_ty!("résumé"),
     baml_db! {},
     "résumé"
 );
@@ -1062,7 +1062,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_literal_senor,
     r#"senor"#,
-    baml_tyannotated!("señor"),
+    baml_ty!("señor"),
     baml_db! {},
     "señor"
 );
@@ -1070,7 +1070,7 @@ test_deserializer!(
 test_deserializer!(
     test_unaccented_literal_in_union,
     r#"cafe"#,
-    baml_tyannotated!(("café" | "résumé" | "señor")),
+    baml_ty!(("café" | "résumé" | "señor")),
     baml_db! {},
     "café"
 );
@@ -1082,7 +1082,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_hola,
     r#"hola"#,
-    baml_tyannotated!(SpanishGreeting),
+    baml_ty!(SpanishGreeting),
     baml_db! {
         enum SpanishGreeting {
             HELLO @alias("Hola"),
@@ -1097,7 +1097,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_adios,
     r#"adios"#,
-    baml_tyannotated!(SpanishGreeting),
+    baml_ty!(SpanishGreeting),
     baml_db! {
         enum SpanishGreeting {
             HELLO @alias("Hola"),
@@ -1112,7 +1112,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_mixed_case_unaccented,
     r#"ADIOS"#,
-    baml_tyannotated!(SpanishGreeting),
+    baml_ty!(SpanishGreeting),
     baml_db! {
         enum SpanishGreeting {
             HELLO @alias("Hola"),
@@ -1127,7 +1127,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_por_favor,
     r#"por favor"#,
-    baml_tyannotated!(SpanishGreeting),
+    baml_ty!(SpanishGreeting),
     baml_db! {
         enum SpanishGreeting {
             HELLO @alias("Hola"),
@@ -1142,7 +1142,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_cafe_upper,
     r#"CAFE"#,
-    baml_tyannotated!(FrenchFood),
+    baml_ty!(FrenchFood),
     baml_db! {
         enum FrenchFood {
             COFFEE @alias("Café"),
@@ -1157,7 +1157,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_gateau,
     r#"gateau"#,
-    baml_tyannotated!(FrenchFood),
+    baml_ty!(FrenchFood),
     baml_db! {
         enum FrenchFood {
             COFFEE @alias("Café"),
@@ -1172,7 +1172,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_mixed_case_fromage,
     r#"FrOmAgE"#,
-    baml_tyannotated!(FrenchFood),
+    baml_ty!(FrenchFood),
     baml_db! {
         enum FrenchFood {
             COFFEE @alias("Café"),
@@ -1187,7 +1187,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_french_in_sentence,
     r#"I would like some CAFE please"#,
-    baml_tyannotated!(FrenchFood),
+    baml_ty!(FrenchFood),
     baml_db! {
         enum FrenchFood {
             COFFEE @alias("Café"),
@@ -1204,7 +1204,7 @@ test_deserializer!(
 test_deserializer!(
   test_case_insensitive_unaccented_german_fields,
   r#"{"strasse": "Main St", "stadt": "Berlin", "uber": "Above", "grun": "Green"}"#,
-  baml_tyannotated!(GermanAddress),
+  baml_ty!(GermanAddress),
   baml_db!{
       class GermanAddress {
           street: string @alias("Straße"),
@@ -1224,7 +1224,7 @@ test_deserializer!(
 test_deserializer!(
   test_case_insensitive_mixed_case_german_fields,
   r#"{"STRASSE": "Main St", "stadt": "Berlin", "Uber": "Above", "GRUN": "Green"}"#,
-  baml_tyannotated!(GermanAddress),
+  baml_ty!(GermanAddress),
   baml_db!{
       class GermanAddress {
           street: string @alias("Straße"),
@@ -1245,7 +1245,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_literal_senor_upper,
     r#"SENOR"#,
-    baml_tyannotated!("señor"),
+    baml_ty!("señor"),
     baml_db! {},
     "señor"
 );
@@ -1253,7 +1253,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_literal_resume_mixed,
     r#"ReSuMe"#,
-    baml_tyannotated!("résumé"),
+    baml_ty!("résumé"),
     baml_db! {},
     "résumé"
 );
@@ -1261,7 +1261,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_literal_naive_lower,
     r#"naive"#,
-    baml_tyannotated!("Naïve"),
+    baml_ty!("Naïve"),
     baml_db! {},
     "Naïve"
 );
@@ -1271,7 +1271,7 @@ test_deserializer!(
 test_deserializer!(
     test_complex_case_unaccented_senorita_lower,
     r#"senorita"#,
-    baml_tyannotated!(ComplexAccents),
+    baml_ty!(ComplexAccents),
     baml_db! {
         enum ComplexAccents {
             WORD1 @alias("Señorita"),
@@ -1287,7 +1287,7 @@ test_deserializer!(
 test_deserializer!(
     test_complex_case_unaccented_cafe_lower,
     r#"cafe"#,
-    baml_tyannotated!(ComplexAccents),
+    baml_ty!(ComplexAccents),
     baml_db! {
         enum ComplexAccents {
             WORD1 @alias("Señorita"),
@@ -1303,7 +1303,7 @@ test_deserializer!(
 test_deserializer!(
     test_complex_case_unaccented_resume_upper,
     r#"RESUME"#,
-    baml_tyannotated!(ComplexAccents),
+    baml_ty!(ComplexAccents),
     baml_db! {
         enum ComplexAccents {
             WORD1 @alias("Señorita"),
@@ -1319,7 +1319,7 @@ test_deserializer!(
 test_deserializer!(
     test_complex_case_unaccented_naive_mixed,
     r#"NaIvE"#,
-    baml_tyannotated!(ComplexAccents),
+    baml_ty!(ComplexAccents),
     baml_db! {
         enum ComplexAccents {
             WORD1 @alias("Señorita"),
@@ -1335,7 +1335,7 @@ test_deserializer!(
 test_deserializer!(
     test_complex_case_unaccented_uber_lower,
     r#"uber"#,
-    baml_tyannotated!(ComplexAccents),
+    baml_ty!(ComplexAccents),
     baml_db! {
         enum ComplexAccents {
             WORD1 @alias("Señorita"),
@@ -1351,7 +1351,7 @@ test_deserializer!(
 test_deserializer!(
     test_complex_case_unaccented_list_mixed_cases,
     r#"["SENORITA", "cafe", "Resume", "naive", "UBER"]"#,
-    baml_tyannotated!([ComplexAccents]),
+    baml_ty!([ComplexAccents]),
     baml_db! {
         enum ComplexAccents {
             WORD1 @alias("Señorita"),
@@ -1369,7 +1369,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_with_punctuation,
     r#"SENOR-JOSE"#,
-    baml_tyannotated!(PunctuationAccents),
+    baml_ty!(PunctuationAccents),
     baml_db! {
         enum PunctuationAccents {
             TEST1 @alias("señor-josé"),
@@ -1384,7 +1384,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_cafe_bar,
     r#"cafe_bar"#,
-    baml_tyannotated!(PunctuationAccents),
+    baml_ty!(PunctuationAccents),
     baml_db! {
         enum PunctuationAccents {
             TEST1 @alias("señor-josé"),
@@ -1399,7 +1399,7 @@ test_deserializer!(
 test_deserializer!(
     test_case_insensitive_unaccented_resume_doc,
     r#"resume doc"#,
-    baml_tyannotated!(PunctuationAccents),
+    baml_ty!(PunctuationAccents),
     baml_db! {
         enum PunctuationAccents {
             TEST1 @alias("señor-josé"),

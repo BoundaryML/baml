@@ -1351,17 +1351,15 @@ fn classify_cell_ty(ty: &bex_vm_types::RealizedTy) -> Result<CellTy, String> {
         ty.clone()
     };
     let target = match &base {
-        RealizedTy::String { .. } => Target::Str,
-        RealizedTy::Int { .. } => Target::Int,
-        RealizedTy::Bigint { .. } => Target::Bigint,
-        RealizedTy::Float { .. } => Target::Float,
-        RealizedTy::Bool { .. } => Target::Bool,
-        RealizedTy::Enum(head, _) => Target::Enum(*head),
-        RealizedTy::Class(head, _, _) if is_class(*head, INSTANT_FQN) => Target::Instant,
-        RealizedTy::Class(head, _, _) if is_class(*head, PLAINDATE_FQN) => Target::PlainDate,
-        RealizedTy::Class(head, _, _) if is_class(*head, PLAINDATETIME_FQN) => {
-            Target::PlainDateTime
-        }
+        RealizedTy::String => Target::Str,
+        RealizedTy::Int => Target::Int,
+        RealizedTy::Bigint => Target::Bigint,
+        RealizedTy::Float => Target::Float,
+        RealizedTy::Bool => Target::Bool,
+        RealizedTy::Enum(head) => Target::Enum(*head),
+        RealizedTy::Class(head, _) if is_class(*head, INSTANT_FQN) => Target::Instant,
+        RealizedTy::Class(head, _) if is_class(*head, PLAINDATE_FQN) => Target::PlainDate,
+        RealizedTy::Class(head, _) if is_class(*head, PLAINDATETIME_FQN) => Target::PlainDateTime,
         other => return Err(format!("type `{other}` is not cell-decodable")),
     };
     Ok(CellTy { target, nullable })
@@ -1517,7 +1515,7 @@ fn decode_record_to_instance(
     ty: &bex_vm_types::RealizedTy,
 ) -> Result<Value, DecodeFail> {
     use bex_vm_types::RealizedTy;
-    let RealizedTy::Class(head, type_args, _) = ty else {
+    let RealizedTy::Class(head, type_args) = ty else {
         return Err(DecodeFail::Info(ErrInfo::new(
             Kind::Options,
             format!("decode target `{ty}` is not a class; CSV decodes into flat classes"),
@@ -2433,7 +2431,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
     fn _validate_columns(vm: &mut BexVm, r: &Value) -> Result<(), VmRustFnError> {
         use bex_vm_types::RealizedTy;
         let ty = current_type_arg(vm, "baml.csv.rows")?;
-        let RealizedTy::Class(head, type_args, _) = &ty else {
+        let RealizedTy::Class(head, type_args) = &ty else {
             let info = ErrInfo::new(
                 Kind::Options,
                 format!("rows target `{ty}` is not a class; CSV decodes into flat classes"),
@@ -2633,7 +2631,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
 
         // Header names + field types from T (or the first row's class).
         let class_info = match &ty {
-            Some(RealizedTy::Class(head, type_args, _)) => {
+            Some(RealizedTy::Class(head, type_args)) => {
                 Some(head.ptr()).and_then(|ptr| match vm.get_object(ptr) {
                     Object::Class(c) => Some(
                         c.fields

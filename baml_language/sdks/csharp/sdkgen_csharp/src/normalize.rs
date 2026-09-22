@@ -123,46 +123,38 @@ pub(crate) fn normalize_ty(ty: &Ty) -> Ty {
 
 fn normalize_canonical(ty: Ty) -> Ty {
     match ty {
-        Ty::Class(name, arguments, attr) => {
-            Ty::Class(name, arguments.iter().map(normalize_ty).collect(), attr)
-        }
-        Ty::Interface(name, generics, associated_types, attr) => Ty::Interface(
+        Ty::Class(name, arguments) => Ty::Class(name, arguments.iter().map(normalize_ty).collect()),
+        Ty::Interface(name, generics, associated_types) => Ty::Interface(
             name,
             generics.iter().map(normalize_ty).collect(),
             associated_types
                 .into_iter()
                 .map(|(name, ty)| (name, normalize_ty(&ty)))
                 .collect(),
-            attr,
         ),
-        Ty::List(inner, attr) => Ty::List(Box::new(normalize_ty(&inner)), attr),
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(normalize_ty(&inner))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(normalize_ty(&key)),
             value: Box::new(normalize_ty(&value)),
-            attr,
         },
-        Ty::Union(members, attr) => {
+        Ty::Union(members) => {
             let mut members = members.iter().map(normalize_ty).collect::<Vec<_>>();
             members.sort();
             members.dedup();
-            if let Some(index) = members
-                .iter()
-                .position(|member| matches!(member, Ty::Null { .. }))
-            {
+            if let Some(index) = members.iter().position(|member| matches!(member, Ty::Null)) {
                 let null = members.remove(index);
                 members.push(null);
             }
             match members.len() {
-                0 => Ty::Never { attr },
+                0 => Ty::Never,
                 1 => members.pop().expect("singleton union has one member"),
-                _ => Ty::Union(members.into(), attr),
+                _ => Ty::Union(members.into()),
             }
         }
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .into_iter()
@@ -177,12 +169,10 @@ fn normalize_canonical(ty: Ty) -> Ty {
                 .collect(),
             ret: Box::new(normalize_ty(&ret)),
             throws: Box::new(normalize_ty(&throws)),
-            attr,
         },
-        Ty::Future(value, error, attr) => Ty::Future(
+        Ty::Future(value, error) => Ty::Future(
             Box::new(normalize_ty(&value)),
             Box::new(normalize_ty(&error)),
-            attr,
         ),
         leaf => leaf,
     }
@@ -190,25 +180,21 @@ fn normalize_canonical(ty: Ty) -> Ty {
 
 #[cfg(test)]
 mod tests {
-    use baml_base::{Name, TyAttr};
+    use baml_base::Name;
     use baml_codegen_types::{Name as TypeName, Ty};
 
     use super::normalize_ty;
 
-    fn attr() -> TyAttr {
-        TyAttr::EMPTY
-    }
-
     #[test]
     fn union_normalization_is_repeatable_across_discovery_permutations() {
         let members = vec![
-            Ty::String { attr: attr() },
-            Ty::Class(TypeName::local(Name::new("Person")), Box::new([]), attr()),
-            Ty::Int { attr: attr() },
-            Ty::Null { attr: attr() },
-            Ty::Bool { attr: attr() },
+            Ty::String,
+            Ty::Class(TypeName::local(Name::new("Person")), Box::new([])),
+            Ty::Int,
+            Ty::Null,
+            Ty::Bool,
         ];
-        let expected = normalize_ty(&Ty::Union(members.clone().into(), attr()));
+        let expected = normalize_ty(&Ty::Union(members.clone().into()));
         let factorial = [1, 1, 2, 6, 24, 120];
 
         for rank in 0..100 {
@@ -221,38 +207,27 @@ mod tests {
                 remainder %= block;
                 permutation.push(remaining.remove(selected));
             }
-            assert_eq!(
-                normalize_ty(&Ty::Union(permutation.into(), attr())),
-                expected
-            );
+            assert_eq!(normalize_ty(&Ty::Union(permutation.into())), expected);
         }
 
-        let Ty::Union(ordered, _) = expected else {
+        let Ty::Union(ordered) = expected else {
             panic!("five distinct members must remain a union");
         };
-        assert!(matches!(ordered.last(), Some(Ty::Null { .. })));
+        assert!(matches!(ordered.last(), Some(Ty::Null)));
     }
 
     #[test]
     fn normalization_reaches_nested_union_positions() {
-        let union = |members| Ty::Union(members, attr());
-        let left = union(Box::new([
-            Ty::String { attr: attr() },
-            Ty::Int { attr: attr() },
-        ]));
-        let right = union(Box::new([
-            Ty::Int { attr: attr() },
-            Ty::String { attr: attr() },
-        ]));
+        let union = |members| Ty::Union(members);
+        let left = union(Box::new([Ty::String, Ty::Int]));
+        let right = union(Box::new([Ty::Int, Ty::String]));
         let first = Ty::Map {
-            key: Box::new(Ty::String { attr: attr() }),
-            value: Box::new(Ty::List(Box::new(left), attr())),
-            attr: attr(),
+            key: Box::new(Ty::String),
+            value: Box::new(Ty::List(Box::new(left))),
         };
         let second = Ty::Map {
-            key: Box::new(Ty::String { attr: attr() }),
-            value: Box::new(Ty::List(Box::new(right), attr())),
-            attr: attr(),
+            key: Box::new(Ty::String),
+            value: Box::new(Ty::List(Box::new(right))),
         };
         assert_eq!(normalize_ty(&first), normalize_ty(&second));
     }

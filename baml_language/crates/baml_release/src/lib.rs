@@ -4,6 +4,7 @@ pub mod manifest;
 pub mod platforms;
 
 use std::{
+    ffi::OsString,
     fs::{self, OpenOptions},
     io::{Cursor, Read},
     path::{Path, PathBuf},
@@ -19,21 +20,21 @@ use sha2::{Digest, Sha256};
 /// toolchain stores installed releases, config, and other per-user state.
 ///
 /// Resolution order:
-///   1. `$BAML_HOME`, if set.
-///   2. `$HOME` (or `$USERPROFILE` on Windows) joined with `.baml`.
+///   1. `$BAML_HOME`, if set to a non-empty value.
+///   2. The user's home directory joined with `.baml`.
 ///   3. A relative `.baml` as a last resort when no home directory is known.
 ///
 /// This is the single source of truth shared by the `baml` wrapper and the
 /// `baml-cli` toolchain binary; don't reimplement it.
 pub fn baml_home() -> PathBuf {
-    std::env::var_os("BAML_HOME")
+    baml_home_from(std::env::var_os("BAML_HOME"), dirs::home_dir())
+}
+
+fn baml_home_from(baml_home: Option<OsString>, home_dir: Option<PathBuf>) -> PathBuf {
+    baml_home
+        .filter(|value| !value.is_empty())
         .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
-                .map(|home| home.join(".baml"))
-        })
+        .or_else(|| home_dir.map(|home| home.join(".baml")))
         .unwrap_or_else(|| PathBuf::from(".baml"))
 }
 
@@ -722,6 +723,38 @@ fn extract_zip_to_dir(archive_bytes: &[u8], dest: &Path) -> Result<(), FetchErro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn baml_home_uses_non_empty_environment_value() {
+        assert_eq!(
+            baml_home_from(
+                Some(OsString::from("/custom/baml")),
+                Some(PathBuf::from("/home/tester")),
+            ),
+            PathBuf::from("/custom/baml")
+        );
+    }
+
+    #[test]
+    fn baml_home_ignores_empty_environment_value() {
+        assert_eq!(
+            baml_home_from(Some(OsString::new()), Some(PathBuf::from("/home/tester"))),
+            PathBuf::from("/home/tester/.baml")
+        );
+    }
+
+    #[test]
+    fn baml_home_uses_home_directory_when_environment_value_is_absent() {
+        assert_eq!(
+            baml_home_from(None, Some(PathBuf::from("/home/tester"))),
+            PathBuf::from("/home/tester/.baml")
+        );
+    }
+
+    #[test]
+    fn baml_home_uses_relative_directory_when_no_home_is_available() {
+        assert_eq!(baml_home_from(None, None), PathBuf::from(".baml"));
+    }
 
     #[test]
     fn test_release_archive_filename_uses_platform_extension() {

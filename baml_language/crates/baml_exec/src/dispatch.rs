@@ -124,7 +124,7 @@ pub async fn dispatch_target_with_context(
         Ok(value) => {
             // No stdout for `void` return; value-carrying types like `int?`
             // still emit their serialization even when null.
-            if !matches!(func_info.return_type, RuntimeTy::Void { .. }) {
+            if !matches!(func_info.return_type, RuntimeTy::Void) {
                 write_output_with_context(
                     &engine,
                     value,
@@ -296,7 +296,6 @@ async fn deserialize_via_baml_json(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::TyAttr;
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -311,14 +310,10 @@ mod tests {
     }
 
     fn ty_string() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::String
     }
     fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     // ── clamp_exit_code ─────────────────────────────────────────────────

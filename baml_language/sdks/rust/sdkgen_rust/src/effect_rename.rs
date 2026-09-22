@@ -77,11 +77,11 @@ fn rename_function(function: &Function, class_params: &[String]) -> Function {
 pub(crate) fn callback_root(ty: &Ty) -> Option<&Ty> {
     match ty {
         Ty::Function { .. } => Some(ty),
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             let mut callback = None;
             for member in members {
                 match member {
-                    Ty::Null { .. } => {}
+                    Ty::Null => {}
                     Ty::Function { .. } if callback.is_none() => callback = Some(member),
                     _ => return None,
                 }
@@ -109,7 +109,7 @@ fn effect_renames(function: &Function, class_params: &[String]) -> HashMap<Strin
         let Some(Ty::Function { throws, .. }) = callback_root(&arg.ty) else {
             continue;
         };
-        let Ty::TypeVar(effect, _) = throws.as_ref() else {
+        let Ty::TypeVar(effect) = throws.as_ref() else {
             continue;
         };
         let effect = effect.as_str();
@@ -148,33 +148,27 @@ fn pascal_case(s: &str) -> String {
 /// `renames`. Everything else is cloned unchanged.
 fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
     match ty {
-        Ty::TypeVar(name, attr) => match renames.get(name.as_str()) {
-            Some(nice) => Ty::TypeVar(
-                ParamTy::new(name.index(), baml_base::Name::new(nice.as_str())),
-                attr.clone(),
-            ),
+        Ty::TypeVar(name) => match renames.get(name.as_str()) {
+            Some(nice) => Ty::TypeVar(ParamTy::new(
+                name.index(),
+                baml_base::Name::new(nice.as_str()),
+            )),
             None => ty.clone(),
         },
-        Ty::List(inner, attr) => Ty::List(Box::new(rename_typevars(inner, renames)), attr.clone()),
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(rename_typevars(inner, renames))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(rename_typevars(key, renames)),
             value: Box::new(rename_typevars(value, renames)),
-            attr: attr.clone(),
         },
-        Ty::Union(items, attr) => Ty::Union(
-            items.iter().map(|t| rename_typevars(t, renames)).collect(),
-            attr.clone(),
-        ),
-        Ty::Class(name, args, attr) => Ty::Class(
+        Ty::Union(items) => Ty::Union(items.iter().map(|t| rename_typevars(t, renames)).collect()),
+        Ty::Class(name, args) => Ty::Class(
             name.clone(),
             args.iter().map(|t| rename_typevars(t, renames)).collect(),
-            attr.clone(),
         ),
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .iter()
@@ -186,14 +180,12 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
                 .collect(),
             ret: Box::new(rename_typevars(ret, renames)),
             throws: Box::new(rename_typevars(throws, renames)),
-            attr: attr.clone(),
         },
-        Ty::Future(value, error, attr) => Ty::Future(
+        Ty::Future(value, error) => Ty::Future(
             Box::new(rename_typevars(value, renames)),
             Box::new(rename_typevars(error, renames)),
-            attr.clone(),
         ),
-        Ty::Interface(name, generics, associated, attr) => Ty::Interface(
+        Ty::Interface(name, generics, associated) => Ty::Interface(
             name.clone(),
             generics
                 .iter()
@@ -203,49 +195,43 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
                 .iter()
                 .map(|(n, t)| (n.clone(), rename_typevars(t, renames)))
                 .collect(),
-            attr.clone(),
         ),
         // Leaves — no nested `Ty` to rewrite.
-        Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Void { .. }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Void
         | Ty::Literal(..)
-        | Ty::Uint8Array { .. }
+        | Ty::Uint8Array
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
         | Ty::TypeAlias(..)
         | Ty::Media(..)
-        | Ty::Unknown { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Never { .. }
-        | Ty::RustType { .. } => ty.clone(),
+        | Ty::Unknown
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Never
+        | Ty::RustType => ty.clone(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_base::{Name as BaseName, TyAttr};
+    use baml_base::Name as BaseName;
     use baml_codegen_types::{CallableParam, Function, FunctionArgument, Origin, ParamTy, Ty};
 
     use super::{callback_root, rename_function};
 
     fn int() -> Ty {
-        Ty::Int {
-            attr: TyAttr::EMPTY,
-        }
+        Ty::Int
     }
 
     fn effect_var() -> Ty {
-        Ty::TypeVar(
-            ParamTy::new(0, BaseName::new("__effect_param_0")),
-            TyAttr::EMPTY,
-        )
+        Ty::TypeVar(ParamTy::new(0, BaseName::new("__effect_param_0")))
     }
 
     fn callback_ty() -> Ty {
@@ -257,7 +243,6 @@ mod tests {
             }]),
             ret: Box::new(int()),
             throws: Box::new(effect_var()),
-            attr: TyAttr::EMPTY,
         }
     }
 
@@ -285,22 +270,14 @@ mod tests {
 
     fn throws_name(function: &Function) -> String {
         match function.throws.as_ref().expect("throws") {
-            Ty::TypeVar(param, _) => param.name().as_str().to_string(),
+            Ty::TypeVar(param) => param.name().as_str().to_string(),
             other => panic!("expected a type var, got {other:?}"),
         }
     }
 
     #[test]
     fn optional_callback_is_a_callback_root() {
-        let optional = Ty::Union(
-            Box::new([
-                callback_ty(),
-                Ty::Null {
-                    attr: TyAttr::EMPTY,
-                },
-            ]),
-            TyAttr::EMPTY,
-        );
+        let optional = Ty::Union(Box::new([callback_ty(), Ty::Null]));
         assert!(matches!(
             callback_root(&optional),
             Some(Ty::Function { .. })
@@ -309,7 +286,7 @@ mod tests {
 
     #[test]
     fn a_list_of_callbacks_is_not_a_callback_root() {
-        let listed = Ty::List(Box::new(callback_ty()), TyAttr::EMPTY);
+        let listed = Ty::List(Box::new(callback_ty()));
         assert!(callback_root(&listed).is_none());
     }
 
@@ -321,15 +298,7 @@ mod tests {
         let immediate = rename_function(&function_taking("cb", callback_ty()), &[]);
         assert_eq!(throws_name(&immediate), "CbError");
 
-        let optional_ty = Ty::Union(
-            Box::new([
-                callback_ty(),
-                Ty::Null {
-                    attr: TyAttr::EMPTY,
-                },
-            ]),
-            TyAttr::EMPTY,
-        );
+        let optional_ty = Ty::Union(Box::new([callback_ty(), Ty::Null]));
         let optional = rename_function(&function_taking("cb", optional_ty), &[]);
         assert_eq!(throws_name(&optional), "CbError");
     }

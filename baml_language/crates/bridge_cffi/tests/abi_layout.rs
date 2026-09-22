@@ -32,14 +32,24 @@ fn scratch_dir() -> PathBuf {
 
 fn compiler(cpp: bool) -> Command {
     let variable = if cpp { "CXX" } else { "CC" };
-    let fallback = if cfg!(windows) {
-        "cl.exe"
-    } else if cpp {
-        "c++"
-    } else {
-        "cc"
-    };
-    Command::new(std::env::var_os(variable).unwrap_or_else(|| fallback.into()))
+    match std::env::var_os(variable) {
+        Some(compiler) => Command::new(compiler),
+        None => default_compiler(cpp),
+    }
+}
+
+/// The Visual Studio installation's `cl.exe`, with the `PATH`, `INCLUDE`, and
+/// `LIB` it needs: runner images need not put MSVC on `PATH` or set them.
+#[cfg(windows)]
+fn default_compiler(_cpp: bool) -> Command {
+    find_msvc_tools::find(std::env::consts::ARCH, "cl.exe").expect(
+        "no MSVC cl.exe found: install the Visual Studio C++ build tools, or set CC and CXX",
+    )
+}
+
+#[cfg(not(windows))]
+fn default_compiler(cpp: bool) -> Command {
+    Command::new(if cpp { "c++" } else { "cc" })
 }
 
 fn run_checked(command: &mut Command, context: &str) {

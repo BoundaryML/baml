@@ -163,9 +163,9 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
 
     for expected in [
         "BamlFunctionSpec<string> DeterministicSpec(",
-        "BamlStream<string?, string> DeterministicStream(",
+        "BamlStream<string> DeterministicStream(",
         "BamlFunctionSpec<global::CsharpStreaming.StreamEnvelope> StructuredSpec(",
-        "BamlStream<global::CsharpStreaming.StreamEnvelopeStream?, global::CsharpStreaming.StreamEnvelope> StructuredStream(",
+        "BamlStream<global::CsharpStreaming.StreamEnvelope> StructuredStream(",
         "BamlGeneratedContract.CreateStream(",
         "BamlOptional<global::Baml.BamlValue> client = default",
     ] {
@@ -207,13 +207,6 @@ fn verify_streaming_surface(fixture: &std::path::Path) {
             "generated streaming registry omitted exact callable `{expected}`"
         );
     }
-    assert!(
-        generated
-            .join("CsharpStreaming")
-            .join("StreamEnvelopeStream.g.cs")
-            .is_file(),
-        "generated streaming SDK dropped the PPIR Out$stream model"
-    );
 }
 
 fn verify_generics_surface(fixture: &std::path::Path) {

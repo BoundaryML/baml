@@ -80,8 +80,7 @@ runs:
         components: rustfmt
 
     - name: Export BAML build fingerprint
-      run: echo "BAML_GIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      shell: bash
+      uses: ./.github/actions/export-build-fingerprint
 
     - name: Add additional targets
       if: inputs.targets != ''

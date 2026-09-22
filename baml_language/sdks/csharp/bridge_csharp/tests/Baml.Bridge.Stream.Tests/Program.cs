@@ -21,29 +21,29 @@ internal static class Program
 
     private static void VerifyPublicShape()
     {
-        Type streamType = typeof(BamlStream<int, string>);
+        Type streamType = typeof(BamlStream<string>);
         Require(streamType.IsSealed, "BamlStream must remain sealed");
         Require(streamType.GetConstructors().Length == 0, "BamlStream exposed public construction");
         Require(
-            typeof(IAsyncEnumerable<int>).IsAssignableFrom(streamType),
+            typeof(IAsyncEnumerable<string>).IsAssignableFrom(streamType),
             "BamlStream lost IAsyncEnumerable");
         Require(
             typeof(IAsyncDisposable).IsAssignableFrom(streamType),
             "BamlStream lost IAsyncDisposable");
         Require(
-            streamType.GetMethod(nameof(BamlStream<int, string>.GetFinalResponseAsync))?.ReturnType
+            streamType.GetMethod(nameof(BamlStream<string>.GetFinalResponseAsync))?.ReturnType
                 == typeof(Task<string>),
-            "BamlStream final response is not Task<TFinal>");
+            "BamlStream final response is not Task<T>");
     }
 
     private static async Task VerifyColdPullAndNaturalCompletionAsync()
     {
-        var driver = new ScriptedDriver<int, string>("final");
-        driver.EnqueuePartial(10);
-        driver.EnqueuePartial(20);
+        var driver = new ScriptedDriver<string>("final");
+        driver.EnqueuePartial("fi");
+        driver.EnqueuePartial("fina");
         driver.EnqueueFinished();
         int factoryCalls = 0;
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(
             () =>
             {
                 Interlocked.Increment(ref factoryCalls);
@@ -52,7 +52,7 @@ internal static class Program
             "fixture.cold");
 
         Require(factoryCalls == 0 && driver.StartCount == 0, "stream factory was not cold");
-        IAsyncEnumerator<int> enumerator = stream.GetAsyncEnumerator();
+        IAsyncEnumerator<string> enumerator = stream.GetAsyncEnumerator();
         Require(factoryCalls == 0 && driver.StartCount == 0, "enumerator acquisition started the stream");
 
         Task<string> finalBeforePull = stream.GetFinalResponseAsync();
@@ -64,13 +64,13 @@ internal static class Program
         Require(driver.PullCount == 0, "final attachment pulled a partial");
 
         Require(await enumerator.MoveNextAsync().ConfigureAwait(false), "first partial was missing");
-        Require(enumerator.Current == 10, "first partial changed");
+        Require(enumerator.Current == "fi", "first partial changed");
         Require(driver.PullCount == 1, "first demand dispatched more than one pull");
         await Task.Yield();
         Require(driver.PullCount == 1, "an idle consumer caused an unsolicited pull");
 
         Require(await enumerator.MoveNextAsync().ConfigureAwait(false), "second partial was missing");
-        Require(enumerator.Current == 20, "second partial changed");
+        Require(enumerator.Current == "fina", "second partial changed");
         Require(driver.PullCount == 2, "second demand did not map to exactly one pull");
 
         Require(!await enumerator.MoveNextAsync().ConfigureAwait(false), "finished pull produced a partial");
@@ -91,9 +91,9 @@ internal static class Program
     private static async Task VerifyFinalOnlyAndWaitCancellationAsync()
     {
         var finalSource = new TaskCompletionSource<string>();
-        var driver = new ScriptedDriver<int, string>(
+        var driver = new ScriptedDriver<string>(
             cancellationToken => finalSource.Task.WaitAsync(cancellationToken));
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(
             () => driver,
             "fixture.final_only");
 
@@ -133,9 +133,9 @@ internal static class Program
 
     private static async Task VerifyPreCanceledWaitDoesNotStartAsync()
     {
-        var driver = new ScriptedDriver<int, string>("eventual");
+        var driver = new ScriptedDriver<string>("eventual");
         int factoryCalls = 0;
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(() =>
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(() =>
         {
             Interlocked.Increment(ref factoryCalls);
             return driver;
@@ -163,16 +163,16 @@ internal static class Program
         {
             factoryCancellation.Cancel();
             int factoryCalls = 0;
-            BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(
+            BamlStream<string> stream = BamlStreamFactory.Create<string>(
                 () =>
                 {
                     Interlocked.Increment(ref factoryCalls);
-                    return new ScriptedDriver<int, string>("unreachable");
+                    return new ScriptedDriver<string>("unreachable");
                 },
                 "fixture.factory_cancel",
                 factoryCancellation.Token);
 
-            IAsyncEnumerator<int> enumerator = stream.GetAsyncEnumerator();
+            IAsyncEnumerator<string> enumerator = stream.GetAsyncEnumerator();
             Task<bool> move = enumerator.MoveNextAsync().AsTask();
             BamlOperationCanceledException moveError =
                 await ExpectAsync<BamlOperationCanceledException>(move).ConfigureAwait(false);
@@ -194,18 +194,18 @@ internal static class Program
         using var factorySource = new CancellationTokenSource();
         using var enumeratorSource = new CancellationTokenSource();
         var pullStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var driverDuringCancellation = new ScriptedDriver<int, string>("unreachable");
+        var driverDuringCancellation = new ScriptedDriver<string>("unreachable");
         driverDuringCancellation.EnqueuePull(async cancellationToken =>
         {
             pullStarted.TrySetResult();
             await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
-            return BamlStreamPull<int>.Finished;
+            return BamlStreamPull<string>.Finished;
         });
-        BamlStream<int, string> runningStream = BamlStreamFactory.Create<int, string>(
+        BamlStream<string> runningStream = BamlStreamFactory.Create<string>(
             () => driverDuringCancellation,
             "fixture.enumerator_cancel",
             factorySource.Token);
-        IAsyncEnumerator<int> runningEnumerator =
+        IAsyncEnumerator<string> runningEnumerator =
             runningStream.GetAsyncEnumerator(enumeratorSource.Token);
         Task<bool> runningMove = runningEnumerator.MoveNextAsync().AsTask();
         await pullStarted.Task.WaitAsync(Timeout).ConfigureAwait(false);
@@ -232,17 +232,17 @@ internal static class Program
     private static async Task VerifyConcurrentMoveAndEarlyDisposeAsync()
     {
         var pullStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var driver = new ScriptedDriver<int, string>("unreachable");
+        var driver = new ScriptedDriver<string>("unreachable");
         driver.EnqueuePull(async cancellationToken =>
         {
             pullStarted.TrySetResult();
             await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
-            return BamlStreamPull<int>.Finished;
+            return BamlStreamPull<string>.Finished;
         });
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(
             () => driver,
             "fixture.dispose");
-        IAsyncEnumerator<int> enumerator = stream.GetAsyncEnumerator();
+        IAsyncEnumerator<string> enumerator = stream.GetAsyncEnumerator();
         Task<string> final = stream.GetFinalResponseAsync();
         Task<bool> firstMove = enumerator.MoveNextAsync().AsTask();
         await pullStarted.Task.WaitAsync(Timeout).ConfigureAwait(false);
@@ -273,10 +273,10 @@ internal static class Program
     private static async Task VerifyDisposeBeforeStartAsync()
     {
         int factoryCalls = 0;
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(() =>
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(() =>
         {
             Interlocked.Increment(ref factoryCalls);
-            return new ScriptedDriver<int, string>("unreachable");
+            return new ScriptedDriver<string>("unreachable");
         });
 
         await stream.DisposeAsync().ConfigureAwait(false);
@@ -293,10 +293,10 @@ internal static class Program
     private static async Task VerifyFailureIsSharedAsync()
     {
         var failure = new InvalidDataException("partial decode failed");
-        var driver = new ScriptedDriver<int, string>("unreachable");
-        driver.EnqueuePull(_ => Task.FromException<BamlStreamPull<int>>(failure));
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(() => driver);
-        IAsyncEnumerator<int> enumerator = stream.GetAsyncEnumerator();
+        var driver = new ScriptedDriver<string>("unreachable");
+        driver.EnqueuePull(_ => Task.FromException<BamlStreamPull<string>>(failure));
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(() => driver);
+        IAsyncEnumerator<string> enumerator = stream.GetAsyncEnumerator();
         Task<string> final = stream.GetFinalResponseAsync();
 
         InvalidDataException moveError =
@@ -315,8 +315,8 @@ internal static class Program
     private static async Task VerifyContinuationsDoNotRunInlineAsync()
     {
         var finalSource = new TaskCompletionSource<string>();
-        var driver = new ScriptedDriver<int, string>(_ => finalSource.Task);
-        BamlStream<int, string> stream = BamlStreamFactory.Create<int, string>(() => driver);
+        var driver = new ScriptedDriver<string>(_ => finalSource.Task);
+        BamlStream<string> stream = BamlStreamFactory.Create<string>(() => driver);
         Task<string> final = stream.GetFinalResponseAsync();
         await WaitUntilAsync(() => driver.FinalCount == 1).ConfigureAwait(false);
 
@@ -389,22 +389,22 @@ internal static class Program
         internal static bool IsCompleting;
     }
 
-    private sealed class ScriptedDriver<TPartial, TFinal>
-        : IBamlStreamDriver<TPartial, TFinal>
+    private sealed class ScriptedDriver<T>
+        : IBamlStreamDriver<T>
     {
         private readonly object gate = new();
-        private readonly Queue<Func<CancellationToken, Task<BamlStreamPull<TPartial>>>> pulls = [];
-        private readonly Func<CancellationToken, Task<TFinal>> final;
+        private readonly Queue<Func<CancellationToken, Task<BamlStreamPull<T>>>> pulls = [];
+        private readonly Func<CancellationToken, Task<T>> final;
         private int startCount;
         private int pullCount;
         private int finalCount;
         private int disposeCount;
 
-        internal ScriptedDriver(TFinal final) : this(_ => Task.FromResult(final))
+        internal ScriptedDriver(T final) : this(_ => Task.FromResult(final))
         {
         }
 
-        internal ScriptedDriver(Func<CancellationToken, Task<TFinal>> final)
+        internal ScriptedDriver(Func<CancellationToken, Task<T>> final)
         {
             this.final = final;
         }
@@ -417,14 +417,14 @@ internal static class Program
 
         internal int DisposeCount => Volatile.Read(ref disposeCount);
 
-        internal void EnqueuePartial(TPartial partial) =>
-            EnqueuePull(_ => Task.FromResult(BamlStreamPull<TPartial>.FromPartial(partial)));
+        internal void EnqueuePartial(T partial) =>
+            EnqueuePull(_ => Task.FromResult(BamlStreamPull<T>.FromPartial(partial)));
 
         internal void EnqueueFinished() =>
-            EnqueuePull(_ => Task.FromResult(BamlStreamPull<TPartial>.Finished));
+            EnqueuePull(_ => Task.FromResult(BamlStreamPull<T>.Finished));
 
         internal void EnqueuePull(
-            Func<CancellationToken, Task<BamlStreamPull<TPartial>>> pull)
+            Func<CancellationToken, Task<BamlStreamPull<T>>> pull)
         {
             lock (gate)
             {
@@ -438,11 +438,11 @@ internal static class Program
             return Task.CompletedTask;
         }
 
-        public Task<BamlStreamPull<TPartial>> PullAsync(
+        public Task<BamlStreamPull<T>> PullAsync(
             CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref pullCount);
-            Func<CancellationToken, Task<BamlStreamPull<TPartial>>> pull;
+            Func<CancellationToken, Task<BamlStreamPull<T>>> pull;
             lock (gate)
             {
                 pull = pulls.Count == 0
@@ -453,7 +453,7 @@ internal static class Program
             return pull(cancellationToken);
         }
 
-        public Task<TFinal> GetFinalResponseAsync(CancellationToken cancellationToken)
+        public Task<T> GetFinalResponseAsync(CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref finalCount);
             return final(cancellationToken);

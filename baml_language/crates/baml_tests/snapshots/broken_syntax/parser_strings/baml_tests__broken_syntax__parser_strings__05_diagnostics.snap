@@ -225,6 +225,15 @@ source: crates/baml_tests/src/generated_tests.rs
     ·           ────
     ╰────
 
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `#"raw string"#`
+   ╭─[raw_strings.baml:3:30]
+ 3 │   simple string @description(#"raw string"#)
+   ·                              ───────┬──────
+   ·                                     ╰── invalid builtin declaration
+   ╰────
+
   [parse] E0098
 
   × removed language feature
@@ -232,6 +241,15 @@ source: crates/baml_tests/src/generated_tests.rs
  3 │   simple string @description(#"raw string"#)
    ·                              ───────┬──────
    ·                                     ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `#"contains "quotes" easily"#`
+   ╭─[raw_strings.baml:4:35]
+ 4 │   with_quotes string @description(#"contains "quotes" easily"#)
+   ·                                   ──────────────┬─────────────
+   ·                                                 ╰── invalid builtin declaration
    ╰────
 
   [parse] E0098
@@ -243,6 +261,15 @@ source: crates/baml_tests/src/generated_tests.rs
    ·                                                 ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
    ╰────
 
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `##"contains #"hash"# inside"##`
+   ╭─[raw_strings.baml:5:34]
+ 5 │   multi_hash string @description(##"contains #"hash"# inside"##)
+   ·                                  ───────────────┬──────────────
+   ·                                                 ╰── invalid builtin declaration
+   ╰────
+
   [parse] E0098
 
   × removed language feature
@@ -251,6 +278,22 @@ source: crates/baml_tests/src/generated_tests.rs
    ·                                  ───────────────┬──────────────
    ·                                                 ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
    ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `###"
+  │     This is a multiline
+  │     raw string with "quotes"
+  │     and #hashes#
+  │   "###`
+    ╭─[raw_strings.baml:6:33]
+  6 │ ╭─▶   multiline string @description(###"
+  7 │ │       This is a multiline
+  8 │ │       raw string with "quotes"
+  9 │ │       and #hashes#
+ 10 │ ├─▶   "###)
+    · ╰──── invalid builtin declaration
+    ╰────
 
   [parse] E0098
 

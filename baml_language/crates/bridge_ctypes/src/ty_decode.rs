@@ -12,7 +12,7 @@
 
 use baml_type::{
     Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
-    RuntimeInterface, RuntimeTy, TyAttr, TypeName,
+    RuntimeInterface, RuntimeTy, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue, TypeDefRef};
 use indexmap::IndexMap;
@@ -191,14 +191,11 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
             let args = decode_type_args(&c.type_args)?;
             RuntimeTy::class_with_args(type_name, args)
         }
-        TyVariant::Enum(e) => {
-            RuntimeTy::Enum(TypeName::from_dotted_path(&e.name), TyAttr::default())
-        }
+        TyVariant::Enum(e) => RuntimeTy::Enum(TypeName::from_dotted_path(&e.name)),
         TyVariant::List(l) => RuntimeTy::list(opt_to_runtime_ty(l.item.as_deref())?),
         TyVariant::Map(m) => RuntimeTy::Map {
             key: Box::new(opt_to_runtime_ty(m.key.as_deref())?),
             value: Box::new(opt_to_runtime_ty(m.value.as_deref())?),
-            attr: TyAttr::default(),
         },
         TyVariant::Optional(o) => RuntimeTy::optional(opt_to_runtime_ty(o.inner.as_deref())?),
         TyVariant::Union(u) => RuntimeTy::union(
@@ -208,11 +205,9 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
-        TyVariant::TypeAlias(n) => {
-            RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name), TyAttr::default())
-        }
+        TyVariant::TypeAlias(n) => RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name)),
         TyVariant::Unknown(_) => RuntimeTy::unknown(),
-        TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind), TyAttr::default()),
+        TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind)),
         TyVariant::Interface(i) => {
             let bindings = i
                 .bindings
@@ -232,14 +227,11 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 constraint.name,
                 constraint.generics,
                 constraint.associated_types,
-                TyAttr::default(),
             )
         }
-        TyVariant::EnumVariant(e) => RuntimeTy::EnumVariant(
-            TypeName::from_dotted_path(&e.name),
-            Name::new(&e.variant),
-            TyAttr::default(),
-        ),
+        TyVariant::EnumVariant(e) => {
+            RuntimeTy::EnumVariant(TypeName::from_dotted_path(&e.name), Name::new(&e.variant))
+        }
         TyVariant::Function(f) => RuntimeTy::Function {
             params: f
                 .params
@@ -248,31 +240,17 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .collect::<Result<Box<[_]>, _>>()?,
             ret: Box::new(opt_to_runtime_ty(f.ret.as_deref())?),
             throws: Box::new(opt_to_runtime_ty(f.throws.as_deref())?),
-            attr: TyAttr::default(),
         },
         TyVariant::Future(fut) => RuntimeTy::Future(
             Box::new(opt_to_runtime_ty(fut.value.as_deref())?),
             Box::new(opt_to_runtime_ty(fut.error.as_deref())?),
-            TyAttr::default(),
         ),
-        TyVariant::RustType(_) => RuntimeTy::RustType {
-            attr: TyAttr::default(),
-        },
-        TyVariant::MetaType(_) => RuntimeTy::Type {
-            attr: TyAttr::default(),
-        },
-        TyVariant::Resource(_) => RuntimeTy::Resource {
-            attr: TyAttr::default(),
-        },
-        TyVariant::PromptAst(_) => RuntimeTy::PromptAst {
-            attr: TyAttr::default(),
-        },
-        TyVariant::Void(_) => RuntimeTy::Void {
-            attr: TyAttr::default(),
-        },
-        TyVariant::TypeVar(v) => {
-            RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name)), TyAttr::default())
-        }
+        TyVariant::RustType(_) => RuntimeTy::RustType,
+        TyVariant::MetaType(_) => RuntimeTy::Type,
+        TyVariant::Resource(_) => RuntimeTy::Resource,
+        TyVariant::PromptAst(_) => RuntimeTy::PromptAst,
+        TyVariant::Void(_) => RuntimeTy::Void,
+        TyVariant::TypeVar(v) => RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name))),
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
             // The projection's interface constraint is wired as a `Ty` and must
@@ -287,7 +265,7 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                     )
                 })?;
                 match proto_ty_to_runtime_ty(ty)? {
-                    RuntimeTy::Interface(name, generics, associated_types, _) => {
+                    RuntimeTy::Interface(name, generics, associated_types) => {
                         Box::new(RuntimeInterface::new(name, generics, associated_types))
                     }
                     _ => {
@@ -299,11 +277,8 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 }
             },
             member: Name::new(&p.member),
-            attr: TyAttr::default(),
         },
-        TyVariant::Never(_) => RuntimeTy::Never {
-            attr: TyAttr::default(),
-        },
+        TyVariant::Never(_) => RuntimeTy::Never,
     })
 }
 
@@ -361,12 +336,8 @@ fn primitive_to_runtime_ty(kind: i32) -> RuntimeTy {
         BamlTyPrimitiveKind::BamlTyPrimitiveFloat => RuntimeTy::float(),
         BamlTyPrimitiveKind::BamlTyPrimitiveBool => RuntimeTy::bool(),
         BamlTyPrimitiveKind::BamlTyPrimitiveNull => RuntimeTy::null(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveBytes => RuntimeTy::Uint8Array {
-            attr: TyAttr::default(),
-        },
-        BamlTyPrimitiveKind::BamlTyPrimitiveBigint => RuntimeTy::Bigint {
-            attr: TyAttr::default(),
-        },
+        BamlTyPrimitiveKind::BamlTyPrimitiveBytes => RuntimeTy::Uint8Array,
+        BamlTyPrimitiveKind::BamlTyPrimitiveBigint => RuntimeTy::Bigint,
         BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified => RuntimeTy::unknown(),
     }
 }
@@ -413,11 +384,7 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, Ct
         Some(TyLiteralVariant::FloatValue(value)) => Literal::Float(value.clone()),
         None => return Ok(RuntimeTy::unknown()),
     };
-    Ok(RuntimeTy::Literal(
-        literal,
-        Freshness::Regular,
-        TyAttr::default(),
-    ))
+    Ok(RuntimeTy::Literal(literal, Freshness::Regular))
 }
 
 fn parse_decimal_bigint_literal(value: &str) -> Result<num_bigint::BigInt, CtypesError> {
@@ -470,7 +437,7 @@ mod tests {
             other: IndexMap::from([("x".into(), "y".into())]),
         };
         let definition = PortableTypeDef {
-            root: RuntimeTy::Class(name.clone(), Box::new([]), TyAttr::default()),
+            root: RuntimeTy::Class(name.clone(), Box::new([])),
             classes: vec![PortableClassDef {
                 name,
                 fields: vec![PortableClassFieldDef {

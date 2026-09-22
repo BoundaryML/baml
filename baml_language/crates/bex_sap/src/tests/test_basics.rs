@@ -1,20 +1,14 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // --- Null tests ---
 
-test_deserializer!(
-    test_null,
-    "null",
-    baml_tyannotated!(null),
-    baml_db! {},
-    null
-);
+test_deserializer!(test_null, "null", baml_ty!(null), baml_db! {}, null);
 
 test_deserializer!(
     test_null_1,
     "null",
-    baml_tyannotated!((string | null)),
+    baml_ty!((string | null)),
     baml_db! {},
     null
 );
@@ -22,7 +16,7 @@ test_deserializer!(
 test_deserializer!(
     test_null_2,
     "Null",
-    baml_tyannotated!((string | null)),
+    baml_ty!((string | null)),
     baml_db! {},
     // This is a string, not null
     "Null"
@@ -31,7 +25,7 @@ test_deserializer!(
 test_deserializer!(
     test_null_3,
     "None",
-    baml_tyannotated!((string | null)),
+    baml_ty!((string | null)),
     baml_db! {},
     // This is a string, not null
     "None"
@@ -39,27 +33,15 @@ test_deserializer!(
 
 // --- Number tests ---
 
-test_deserializer!(
-    test_number,
-    "12111",
-    baml_tyannotated!(int),
-    baml_db! {},
-    12111
-);
-test_deserializer!(
-    test_number_2,
-    "12,111",
-    baml_tyannotated!(int),
-    baml_db! {},
-    12111
-);
+test_deserializer!(test_number, "12111", baml_ty!(int), baml_db! {}, 12111);
+test_deserializer!(test_number_2, "12,111", baml_ty!(int), baml_db! {}, 12111);
 
 // --- Bigint tests ---
 
 test_deserializer!(
     test_bigint_small_number,
     "42",
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     // BamlBigint serializes as a decimal string to preserve arbitrary precision.
     "42"
@@ -68,7 +50,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_huge_number,
     "99999999999999999999",
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "99999999999999999999"
 );
@@ -76,7 +58,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_string,
     r#""99999999999999999999""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "99999999999999999999"
 );
@@ -92,7 +74,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_string_with_plus_sign,
     r#""+42""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "42"
 );
@@ -100,7 +82,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_string_with_minus_sign,
     r#""-42""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "-42"
 );
@@ -108,7 +90,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_string_with_whitespace,
     r#""  42  ""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "42"
 );
@@ -116,7 +98,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_string_with_trailing_comma,
     r#""42,""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "42"
 );
@@ -124,7 +106,7 @@ test_deserializer!(
 test_failing_deserializer!(
     test_bigint_string_with_hex_prefix_rejected,
     r#""0x2a""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {}
 );
 
@@ -134,7 +116,7 @@ test_failing_deserializer!(
 test_deserializer!(
     test_bigint_string_with_underscores_accepted,
     r#""1_000""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "1000"
 );
@@ -142,14 +124,14 @@ test_deserializer!(
 test_failing_deserializer!(
     test_bigint_string_empty_rejected,
     r#""""#,
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {}
 );
 
 test_deserializer!(
     test_bigint_float_with_rounding,
     "42.0",
-    baml_tyannotated!(bigint),
+    baml_ty!(bigint),
     baml_db! {},
     "42"
 );
@@ -157,7 +139,7 @@ test_deserializer!(
 test_deserializer!(
     test_int_or_bigint_union_resolution_small,
     "42",
-    baml_tyannotated!((int | bigint)),
+    baml_ty!((int | bigint)),
     baml_db! {},
     // First match (int) wins for an in-range value with equal score.
     42
@@ -166,7 +148,7 @@ test_deserializer!(
 test_deserializer!(
     test_int_or_bigint_union_resolution_huge,
     "99999999999999999999",
-    baml_tyannotated!((int | bigint)),
+    baml_ty!((int | bigint)),
     baml_db! {},
     // int rejects (out of range) — bigint matches with full precision.
     "99999999999999999999"
@@ -175,7 +157,7 @@ test_deserializer!(
 test_deserializer!(
     test_bigint_or_int_union_resolution_small,
     "42",
-    baml_tyannotated!((bigint | int)),
+    baml_ty!((bigint | int)),
     baml_db! {},
     // First match (bigint) wins.
     "42"
@@ -186,46 +168,22 @@ test_deserializer!(
 test_deserializer!(
     test_complete_json_string,
     r#""hello""#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "hello"
 );
 
 // --- Bool tests ---
 
-test_deserializer!(
-    test_bool,
-    "true",
-    baml_tyannotated!(bool),
-    baml_db! {},
-    true
-);
-test_deserializer!(
-    test_bool_2,
-    "True",
-    baml_tyannotated!(bool),
-    baml_db! {},
-    true
-);
-test_deserializer!(
-    test_bool_3,
-    "false",
-    baml_tyannotated!(bool),
-    baml_db! {},
-    false
-);
-test_deserializer!(
-    test_bool_4,
-    "False",
-    baml_tyannotated!(bool),
-    baml_db! {},
-    false
-);
+test_deserializer!(test_bool, "true", baml_ty!(bool), baml_db! {}, true);
+test_deserializer!(test_bool_2, "True", baml_ty!(bool), baml_db! {}, true);
+test_deserializer!(test_bool_3, "false", baml_ty!(bool), baml_db! {}, false);
+test_deserializer!(test_bool_4, "False", baml_ty!(bool), baml_db! {}, false);
 
 test_deserializer!(
     test_bool_wrapped,
     "The answer is true",
-    baml_tyannotated!([bool]),
+    baml_ty!([bool]),
     baml_db! {},
     [true]
 );
@@ -233,7 +191,7 @@ test_deserializer!(
 test_deserializer!(
     test_bool_wrapped_mismatched_case,
     "The answer is True",
-    baml_tyannotated!([bool]),
+    baml_ty!([bool]),
     baml_db! {},
     [true]
 );
@@ -241,7 +199,7 @@ test_deserializer!(
 test_deserializer!(
     test_bool_wrapped_mismatched_case_preceded_by_text,
     "The tax return you provided has section for dependents.\n\nAnswer: **True**",
-    baml_tyannotated!(bool),
+    baml_ty!(bool),
     baml_db! {},
     true
 );
@@ -249,7 +207,7 @@ test_deserializer!(
 test_deserializer!(
     test_bool_mismatched_case_followed_by_text,
     r#"False.\n\nThe statement "2 + 2 = 5" is mathematically incorrect. The correct sum of 2 + 2 is 4, not 5."#,
-    baml_tyannotated!(bool),
+    baml_ty!(bool),
     baml_db! {},
     false
 );
@@ -257,14 +215,14 @@ test_deserializer!(
 test_failing_deserializer!(
     test_ambiguous_bool,
     "The answer is true or false",
-    baml_tyannotated!(bool),
+    baml_ty!(bool),
     baml_db! {}
 );
 
 test_failing_deserializer!(
     test_elaborate_ambiguous_bool,
     r#"False. The statement "2 + 2 = 5" is not accurate according to basic arithmetic. In standard arithmetic, the sum of 2 and 2 is equal to 4, not 5. Therefore, the statement does not hold true."#,
-    baml_tyannotated!(bool),
+    baml_ty!(bool),
     baml_db! {}
 );
 
@@ -273,7 +231,7 @@ test_failing_deserializer!(
 test_deserializer!(
     test_float,
     "12111.123",
-    baml_tyannotated!(float),
+    baml_ty!(float),
     baml_db! {},
     12111.123
 );
@@ -281,7 +239,7 @@ test_deserializer!(
 test_deserializer!(
     test_float_comma_us,
     "12,111.123",
-    baml_tyannotated!(float),
+    baml_ty!(float),
     baml_db! {},
     12111.123
 );
@@ -289,25 +247,19 @@ test_deserializer!(
 test_deserializer!(
     test_float_comma_german2,
     "12.11.",
-    baml_tyannotated!(float),
+    baml_ty!(float),
     baml_db! {},
     12.11
 );
 
-test_deserializer!(
-    test_float_1,
-    "1/5",
-    baml_tyannotated!(float),
-    baml_db! {},
-    0.2
-);
+test_deserializer!(test_float_1, "1/5", baml_ty!(float), baml_db! {}, 0.2);
 
 // --- Array tests ---
 
 test_deserializer!(
     test_array,
     r#"[1, 2, 3]"#,
-    baml_tyannotated!([int]),
+    baml_ty!([int]),
     baml_db! {},
     [1, 2, 3]
 );
@@ -315,7 +267,7 @@ test_deserializer!(
 test_deserializer!(
     test_array_1,
     r#"[1, 2, 3]"#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["1", "2", "3"]
 );
@@ -323,7 +275,7 @@ test_deserializer!(
 test_deserializer!(
     test_array_3,
     r#"[1, 2, 3]"#,
-    baml_tyannotated!([float]),
+    baml_ty!([float]),
     baml_db! {},
     [1., 2., 3.]
 );
@@ -331,7 +283,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_to_float_from_comma_separated,
     "1 cup unsalted butter, room temperature",
-    baml_tyannotated!(float),
+    baml_ty!(float),
     baml_db! {},
     1.0
 );
@@ -341,7 +293,7 @@ test_deserializer!(
 test_deserializer!(
     test_object,
     r#"{"key": "value"}"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: string,
@@ -353,7 +305,7 @@ test_deserializer!(
 test_deserializer!(
     test_nested,
     r#"{"key": [1, 2, 3]}"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: [int],
@@ -365,7 +317,7 @@ test_deserializer!(
 test_deserializer!(
     test_nested_whitespace,
     r#" { "key" : [ 1 , 2 , 3 ] } "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: [int],
@@ -377,7 +329,7 @@ test_deserializer!(
 test_deserializer!(
     test_nested_whitespace_prefix_suffix,
     r#"prefix { "key" : [ 1 , 2 , 3 ] } suffix"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: [int],
@@ -391,7 +343,7 @@ test_deserializer!(
 test_deserializer!(
     test_multiple_top_level_1,
     r#"{"key": "value1"} {"key": "value2"}"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: string,
@@ -403,7 +355,7 @@ test_deserializer!(
 test_deserializer!(
     test_multiple_top_level_2,
     r#"{"key": "value1"} {"key": "value2"}"#,
-    baml_tyannotated!([Test]),
+    baml_ty!([Test]),
     baml_db!{
         class Test {
             key: string,
@@ -415,7 +367,7 @@ test_deserializer!(
 test_deserializer!(
     test_multiple_top_level_prefix_suffix_1,
     r#"prefix {"key": "value1"} some random text {"key": "value2"} suffix"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: string,
@@ -427,7 +379,7 @@ test_deserializer!(
 test_deserializer!(
     test_multiple_top_level_prefix_suffix_2,
     r#"prefix {"key": "value1"} some random text {"key": "value2"} suffix"#,
-    baml_tyannotated!([Test]),
+    baml_ty!([Test]),
     baml_db!{
         class Test {
             key: string,
@@ -441,7 +393,7 @@ test_deserializer!(
 test_deserializer!(
     test_trailing_comma_array_2,
     r#"[1, 2, 3,]"#,
-    baml_tyannotated!([int]),
+    baml_ty!([int]),
     baml_db! {},
     [1, 2, 3]
 );
@@ -449,7 +401,7 @@ test_deserializer!(
 test_deserializer!(
     test_trailing_comma_array_3,
     r#"[1, 2, 3,]"#,
-    baml_tyannotated!([string]),
+    baml_ty!([string]),
     baml_db! {},
     ["1", "2", "3"]
 );
@@ -457,7 +409,7 @@ test_deserializer!(
 test_deserializer!(
     test_trailing_comma_object,
     r#"{"key": "value",}"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: string,
@@ -471,7 +423,7 @@ test_deserializer!(
 test_deserializer!(
     test_invalid_array,
     r#"[1, 2, 3"#,
-    baml_tyannotated!([int]),
+    baml_ty!([int]),
     baml_db! {},
     [1, 2, 3]
 );
@@ -479,7 +431,7 @@ test_deserializer!(
 test_deserializer!(
     test_invalid_array_in_object,
     r#"{"key": [1, 2, 3"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: [int],
@@ -491,7 +443,7 @@ test_deserializer!(
 test_deserializer!(
     test_incomplete_string,
     r#""hello"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "\"hello"
 );
@@ -499,7 +451,7 @@ test_deserializer!(
 test_deserializer!(
     test_incomplete_string_in_object,
     r#"{"key": "value"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             key: string,
@@ -511,7 +463,7 @@ test_deserializer!(
 test_deserializer!(
     test_prefixed_incompleted_string,
     r#"prefix "hello"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "prefix \"hello"
 );
@@ -521,7 +473,7 @@ test_deserializer!(
 test_deserializer!(
     test_large_object,
     r#"{"key": "value", "array": [1, 2, 3], "object": {"key": "value"}}"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -551,7 +503,7 @@ test_deserializer!(
   }
   ```
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -584,7 +536,7 @@ test_deserializer!(
   ["1", "2"]
   ```
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -618,7 +570,7 @@ test_deserializer!(
   ["1", "2"]
   ```
   "#,
-    baml_tyannotated!([int]),
+    baml_ty!([int]),
     baml_db! {},
     [1, 2]
 );
@@ -637,7 +589,7 @@ test_deserializer!(
   }
   ```
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -665,7 +617,7 @@ test_deserializer!(
   }
   ```
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -693,7 +645,7 @@ test_deserializer!(
   }
   ```
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -721,7 +673,7 @@ test_deserializer!(
   }
   ```
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -746,7 +698,7 @@ test_deserializer!(
     }
   }
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -774,7 +726,7 @@ lines",
     }
   }
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Foo {
             key: string,
@@ -802,7 +754,7 @@ Frag 6, the rest, of the sentence. Then i would quote something "like this" or t
 Then would add a summary of sorts.
   }
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Test {
             my_field_0: bool,
@@ -820,7 +772,7 @@ Then would add a summary of sorts.
 test_deserializer!(
     test_whitespace_in_keys_preserved,
     r#"{" answer ": {" content ": 78.54}}"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     r#"{" answer ": {" content ": 78.54}}"#
 );
@@ -828,7 +780,7 @@ test_deserializer!(
 test_deserializer!(
     test_class_with_whitespace_keys,
     r#"{" answer ": {" content ": 78.54}}"#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     baml_db!{
         class Answer {
             content: float,
@@ -846,49 +798,49 @@ test_deserializer!(
 fn test_mal_formed_json_sequence() {
     let db = crate::baml_db! {
         class Foo1 {
-            field1: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field2: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field3: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field4: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field5: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field6: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            field1: (string | null),
+            field2: (string | null),
+            field3: (string | null),
+            field4: (string | null),
+            field5: (string | null),
+            field6: (string | null),
         }
         class Foo2 {
-            field7: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field8: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field9: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field10: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field11: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field12: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field13: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field14: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field15: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field16: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field17: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field18: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field19: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field20: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field21: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field22: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field23: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field24: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field25: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            field7: (string | null),
+            field8: (string | null),
+            field9: (string | null),
+            field10: (string | null),
+            field11: (string | null),
+            field12: (string | null),
+            field13: (string | null),
+            field14: (string | null),
+            field15: (string | null),
+            field16: (string | null),
+            field17: (string | null),
+            field18: (string | null),
+            field19: (string | null),
+            field20: (string | null),
+            field21: (string | null),
+            field22: (string | null),
+            field23: (string | null),
+            field24: (string | null),
+            field25: (string | null),
         }
         class Foo3 {
-            field28: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field29: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-            field30: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-            field31: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-            field32: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-            field33: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field34: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field35: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            field36: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            field28: (string | null),
+            field29: [string],
+            field30: [string],
+            field31: [string],
+            field32: [string],
+            field33: (string | null),
+            field34: (string | null),
+            field35: (string | null),
+            field36: (string | null),
         }
         class Test {
-            foo1: (Foo1 | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
-            foo2: [Foo2] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
-            foo3: (Foo3 | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            foo1: (Foo1 | null),
+            foo2: [Foo2],
+            foo3: (Foo3 | null),
         }
     };
 
@@ -959,8 +911,8 @@ fn test_mal_formed_json_sequence() {
 }"#;
 
     // Use is_done=false for partial streaming parse
-    let target_ty = crate::baml_tyannotated!(Test);
-    let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+    let target_ty = crate::baml_ty!(Test);
+    let target_ty = db.resolve(&target_ty).unwrap();
     let parsed =
         crate::jsonish::parse(raw, crate::jsonish::ParseOptions::default(), false).unwrap();
     let ctx = crate::deserializer::coercer::ParsingContext::new(&db);
@@ -1044,7 +996,7 @@ JSON Output:
   }
 ]
 ```"#,
-    baml_tyannotated!([Test]),
+    baml_ty!([Test]),
     baml_db!{
         class Test {
             id: string,
@@ -1097,12 +1049,12 @@ repleta de monstros e perigos!"""
     English: "Find him {player_name}. Find him and save Arcadia. Jonathan will save us all. It is the only way.",
   }
 ]"#,
-    baml_tyannotated!([Test]),
+    baml_ty!([Test]),
     baml_db!{
         class Test {
             id: string,
             English: string,
-            Portuguese: (string | null) @class_completed_field_missing(null),
+            Portuguese: (string | null),
         }
     },
     [
@@ -1168,7 +1120,7 @@ Here are the seven creative headings along with their descriptions and Python fu
   ]
 }
   "#,
-    baml_tyannotated!(Headings),
+    baml_ty!(Headings),
     baml_db!{
         class Heading {
             heading: string,
@@ -1204,7 +1156,7 @@ test_deserializer!(
   ]
 }
   "#,
-    baml_tyannotated!(Headings),
+    baml_ty!(Headings),
     baml_db!{
         class Heading {
             heading: string,
@@ -1231,15 +1183,15 @@ mod bigint_flag_checks {
     use num_bigint::BigInt;
 
     use crate::{
-        baml_db, baml_tyannotated,
+        baml_db, baml_ty,
         baml_value::BamlValue,
         deserializer::{coercer::ParsingContext, deserialize_flags::Flag},
-        sap_model::{AnnotatedTy, TyResolvedRef, TypeRefDb},
+        sap_model::{Ty, TyResolvedRef, TypeRefDb},
     };
 
     #[test]
     fn string_to_bigint_sets_flag() {
-        let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!(bigint);
+        let target_ty: Ty<'_, &str> = baml_ty!(bigint);
         let db: TypeRefDb<'_, &str> = baml_db! {};
         let parsed = crate::jsonish::parse(
             r#""99999999999999999999""#,
@@ -1248,7 +1200,7 @@ mod bigint_flag_checks {
         )
         .expect("jsonish::parse failed");
         let ctx = ParsingContext::new(&db);
-        let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+        let target_ty = db.resolve(&target_ty).unwrap();
         let value = TyResolvedRef::coerce(&ctx, target_ty, &parsed)
             .expect("coerce failed")
             .expect("coerce returned None");
@@ -1274,12 +1226,12 @@ mod bigint_flag_checks {
 
     #[test]
     fn float_to_bigint_sets_flag() {
-        let target_ty: AnnotatedTy<'_, &str> = baml_tyannotated!(bigint);
+        let target_ty: Ty<'_, &str> = baml_ty!(bigint);
         let db: TypeRefDb<'_, &str> = baml_db! {};
         let parsed = crate::jsonish::parse("42.0", crate::jsonish::ParseOptions::default(), true)
             .expect("jsonish::parse failed");
         let ctx = ParsingContext::new(&db);
-        let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+        let target_ty = db.resolve(&target_ty).unwrap();
         let value = TyResolvedRef::coerce(&ctx, target_ty, &parsed)
             .expect("coerce failed")
             .expect("coerce returned None");

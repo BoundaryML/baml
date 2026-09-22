@@ -21,11 +21,11 @@
 
 use baml_base::{LangRoots, Name, SourceFile, SourceRoot};
 use baml_compiler2_hir::{
+    item_data::{FunctionData, GenericParamData},
     package::{PackageItems, Spelling, lang_roots, spelling},
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_compiler2_ppir::item_data::{FunctionData, GenericParamData};
 use baml_type::{DeclName, Ty, TyRenderStrategy, user_facing::humanize_type_string};
 
 // ── Resolved-type rendering ───────────────────────────────────────────────────
@@ -118,7 +118,7 @@ fn canonical_path_in(spelling: &Spelling, qtn: &DeclName) -> String {
 }
 
 /// `canonical_path_in` over the database's spelling.
-pub fn canonical_path(db: &dyn baml_compiler2_ppir::Db, qtn: &DeclName) -> String {
+pub fn canonical_path(db: &dyn baml_compiler2_hir::Db, qtn: &DeclName) -> String {
     canonical_path_in(spelling(db), qtn)
 }
 
@@ -130,7 +130,7 @@ pub fn canonical_path(db: &dyn baml_compiler2_ppir::Db, qtn: &DeclName) -> Strin
 /// package is addressed as `root`); any other package's type by the path the
 /// viewer reaches it under (`baml.json.JsonObject`).
 pub fn addressable_path(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
     qtn: &DeclName,
 ) -> String {
@@ -158,7 +158,7 @@ impl TyRenderStrategy<DeclName> for PlainTyRender<'_> {
 
 /// Render `ty` in `file`'s package/namespace context — the hover/completion
 /// form.
-pub fn display_ty_for_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile, ty: &Ty) -> String {
+pub fn display_ty_for_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile, ty: &Ty) -> String {
     display_ty_for_file_impl(db, file, ty, false)
 }
 
@@ -169,7 +169,7 @@ pub fn display_ty_for_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile, t
 /// other call sites (diagnostics, completions, inlay hints) keep the
 /// un-collapsed [`display_ty_for_file`].
 pub fn display_ty_canonical_for_file(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     ty: &Ty,
 ) -> String {
@@ -177,13 +177,13 @@ pub fn display_ty_canonical_for_file(
 }
 
 fn display_ty_for_file_impl(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     ty: &Ty,
     collapse_aliases: bool,
 ) -> String {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let package_items = baml_compiler2_ppir::package_items(db, pkg_info.root);
+    let package_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
     let ctx = TyDisplayContext {
         current_root: pkg_info.root,
         current_namespace: pkg_info.namespace_path,
@@ -201,7 +201,7 @@ fn display_ty_for_file_impl(
 /// Full canonical paths so same-short-name types stay distinguishable;
 /// synthetic effect params show as `callback`. With file context available,
 /// prefer [`display_ty_for_file`].
-pub fn display_ty(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> String {
+pub fn display_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
     ty.render_with(&PlainTyRender(spelling(db)))
 }
 
@@ -211,7 +211,7 @@ pub fn display_ty(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> String {
 /// → `string`). Combined with `class_self_ty`'s builtin bridging this
 /// spells a method's container the way the reader writes the receiver:
 /// `T[]`, `map<K, V>`, `string`, `user.util.Widget<T>`.
-pub fn display_owner_ty(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> String {
+pub fn display_owner_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
     ty.render_with(&OwnerTyRender {
         spelling: spelling(db),
         lang: lang_roots(db),
@@ -223,7 +223,7 @@ pub fn display_owner_ty(db: &dyn baml_compiler2_ppir::Db, ty: &Ty) -> String {
 /// `root.ns.Foo`, `baml.json.JsonObject`), so a type a row names can be fed
 /// straight back into `baml describe` from any scope of that package.
 pub fn display_addressable_ty(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     viewer: SourceRoot,
     ty: &Ty,
 ) -> String {
@@ -240,7 +240,7 @@ struct AddressableTyRender<'a> {
 }
 
 impl<'a> AddressableTyRender<'a> {
-    fn new(db: &'a dyn baml_compiler2_ppir::Db, viewer: SourceRoot) -> Self {
+    fn new(db: &'a dyn baml_compiler2_hir::Db, viewer: SourceRoot) -> Self {
         Self {
             viewpoint: Viewpoint::user_facing(db, viewer),
             lang: lang_roots(db),
@@ -471,12 +471,7 @@ pub enum SigSlot<'db> {
 }
 
 impl SigSlot<'_> {
-    fn render(
-        &self,
-        db: &dyn baml_compiler2_ppir::Db,
-        file: SourceFile,
-        style: SigStyle,
-    ) -> String {
+    fn render(&self, db: &dyn baml_compiler2_hir::Db, file: SourceFile, style: SigStyle) -> String {
         match self {
             SigSlot::Resolved(ty) => {
                 if style.canonical_resolved {
@@ -616,7 +611,7 @@ impl<'db> FnSigParts<'db> {
     /// `file` anchors context-aware naming for [`SigSlot::Resolved`] slots.
     pub fn render(
         &self,
-        db: &dyn baml_compiler2_ppir::Db,
+        db: &dyn baml_compiler2_hir::Db,
         file: SourceFile,
         style: SigStyle,
     ) -> String {

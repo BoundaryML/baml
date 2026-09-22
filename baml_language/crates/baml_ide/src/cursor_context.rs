@@ -53,7 +53,7 @@ fn func_origin_rank(origin: baml_compiler2_ast::ast::FunctionOrigin) -> u8 {
 }
 
 pub fn playground_cursor_context(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     file_path: &str,
     byte_offset: u32,
@@ -99,12 +99,11 @@ pub fn playground_cursor_context(
     if token.kind() == SyntaxKind::WORD {
         let name = baml_base::Name::from(token.text().to_string());
 
-        let resolved =
-            baml_compiler2_ppir::resolve::resolve_name_at(db, source_file, offset, &name);
+        let resolved = baml_compiler2_hir::resolve::resolve_name_at(db, source_file, offset, &name);
 
         match resolved {
-            baml_compiler2_ppir::resolve::ResolvedName::Item(def)
-            | baml_compiler2_ppir::resolve::ResolvedName::Builtin(def) => {
+            baml_compiler2_hir::resolve::ResolvedName::Item(def)
+            | baml_compiler2_hir::resolve::ResolvedName::Builtin(def) => {
                 use baml_compiler2_hir::contributions::Definition;
                 match &def {
                     Definition::Function(_) => {
@@ -117,10 +116,10 @@ pub fn playground_cursor_context(
                     }
                 }
             }
-            baml_compiler2_ppir::resolve::ResolvedName::Local { .. } => {
+            baml_compiler2_hir::resolve::ResolvedName::Local { .. } => {
                 return cursor_context_for_local(db, files, source_file, offset);
             }
-            baml_compiler2_ppir::resolve::ResolvedName::Unknown => {
+            baml_compiler2_hir::resolve::ResolvedName::Unknown => {
                 // Fall through to positional fallback below
             }
         }
@@ -136,7 +135,7 @@ pub fn playground_cursor_context(
 /// Used for keywords, operators, punctuation, header comments, and
 /// any token that doesn't resolve through the name-lookup path.
 fn cursor_context_positional(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     source_file: SourceFile,
     offset: text_size::TextSize,
@@ -167,7 +166,7 @@ fn cursor_context_positional(
 
 /// Build cursor context when the cursor resolved to a top-level Definition.
 fn cursor_context_for_definition(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     source_file: SourceFile,
     offset: text_size::TextSize,
@@ -177,8 +176,8 @@ fn cursor_context_for_definition(
 
     match def {
         Definition::Function(func_loc) => {
-            let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-            let body = baml_compiler2_ppir::function_body(db, func_loc);
+            let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
             let is_workflow = matches!(
                 body.as_ref(),
                 baml_compiler2_hir::body::FunctionBody::Expr(_)
@@ -224,7 +223,7 @@ fn cursor_context_for_definition(
 /// Build cursor context when the cursor resolved to a local variable.
 /// We look up the enclosing function to provide context.
 fn cursor_context_for_local(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     source_file: SourceFile,
     offset: text_size::TextSize,
@@ -256,7 +255,7 @@ fn cursor_context_for_local(
 /// Find a [`SourceFile`] by file path (matches by suffix to handle
 /// different path formats, e.g. Monaco's relative paths).
 pub fn find_source_file(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     file_path: &str,
 ) -> Option<SourceFile> {
@@ -277,13 +276,13 @@ pub fn find_source_file(
 
 /// Find the enclosing function name and whether it's a workflow, given a cursor position.
 fn find_enclosing_function(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_file: SourceFile,
     offset: text_size::TextSize,
 ) -> Option<(String, bool)> {
     use baml_compiler2_hir::scope::ScopeKind;
 
-    let index = baml_compiler2_ppir::file_semantic_index(db, source_file);
+    let index = baml_compiler2_hir::file_semantic_index(db, source_file);
     let scope_id = index.scope_at_offset(offset, None);
     let ancestors = index.ancestor_scopes(scope_id);
 
@@ -298,21 +297,21 @@ fn find_enclosing_function(
     // A declarative LLM function and its `@stream`/`@parse` companions
     // share one declaration span, hence one scope range — so multiple
     // functions match here. Prefer the user-authored one (origin order).
-    let func_loc = baml_compiler2_ppir::item_data::file_functions(db, source_file)
+    let func_loc = baml_compiler2_hir::item_data::file_functions(db, source_file)
         .iter()
         .copied()
         .filter(|&loc| {
-            baml_compiler2_ppir::item_data::function_source_map(db, loc).span == func_scope_range
+            baml_compiler2_hir::item_data::function_source_map(db, loc).span == func_scope_range
         })
         .min_by_key(|&loc| {
             func_origin_rank(
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .metadata
                     .origin,
             )
         })?;
-    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+    let body = baml_compiler2_hir::body::function_body(db, func_loc);
     let is_workflow = matches!(
         body.as_ref(),
         baml_compiler2_hir::body::FunctionBody::Expr(_)
@@ -325,15 +324,15 @@ fn find_enclosing_function(
 
 /// Find workflows that call the given function by scanning all function bodies.
 fn find_workflow_memberships(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
     target_function_name: &str,
 ) -> Vec<String> {
     let mut memberships = Vec::new();
 
     for &source_file in files {
-        for &func_loc in baml_compiler2_ppir::item_data::file_functions(db, source_file) {
-            let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, source_file) {
+            let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
             let func_name =
                 crate::symbols::playground_function_name_for_file(db, source_file, &func_data.name);
             if func_data.name.as_str() == target_function_name || func_name == target_function_name
@@ -341,7 +340,7 @@ fn find_workflow_memberships(
                 continue; // Skip self
             }
 
-            let body = baml_compiler2_ppir::function_body(db, func_loc);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
 
             // Only workflow (Expr) functions can call other functions
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
@@ -402,13 +401,13 @@ fn expr_span_entry(
 /// containing expression IDs sorted smallest-first. Headers (tagged
 /// with the high bit) are inserted at the front when present.
 fn find_source_expr_ids_at(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     source_file: SourceFile,
     offset: text_size::TextSize,
 ) -> (Option<u32>, Vec<u32>) {
     use baml_compiler2_hir::scope::ScopeKind;
 
-    let index = baml_compiler2_ppir::file_semantic_index(db, source_file);
+    let index = baml_compiler2_hir::file_semantic_index(db, source_file);
     let scope_id = index.scope_at_offset(offset, None);
     let ancestors = index.ancestor_scopes(scope_id);
 
@@ -420,24 +419,25 @@ fn find_source_expr_ids_at(
     };
 
     let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
-    if let Some(func_loc) = baml_compiler2_ppir::item_data::file_functions(db, source_file)
+    if let Some(func_loc) = baml_compiler2_hir::item_data::file_functions(db, source_file)
         .iter()
         .copied()
         .filter(|&loc| {
-            baml_compiler2_ppir::item_data::function_source_map(db, loc).span == func_scope_range
+            baml_compiler2_hir::item_data::function_source_map(db, loc).span == func_scope_range
         })
         .min_by_key(|&loc| {
             func_origin_rank(
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .metadata
                     .origin,
             )
         })
     {
-        let Some(source_map) = baml_compiler2_ppir::function_body_source_map(db, func_loc) else {
+        let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+        else {
             return (None, vec![]);
         };
-        let body = baml_compiler2_ppir::function_body(db, func_loc);
+        let body = baml_compiler2_hir::body::function_body(db, func_loc);
         let expr_body = match body.as_ref() {
             baml_compiler2_hir::body::FunctionBody::Expr(eb) => Some(eb),
             _ => None,

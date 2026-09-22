@@ -5,23 +5,23 @@ use baml_type::{Name, RuntimeTy};
 pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
     use RuntimeTy as T;
     match (left, right) {
-        (T::String { .. }, T::String { .. })
-        | (T::Int { .. }, T::Int { .. })
-        | (T::Bigint { .. }, T::Bigint { .. })
-        | (T::Float { .. }, T::Float { .. })
-        | (T::Bool { .. }, T::Bool { .. })
-        | (T::Null { .. }, T::Null { .. })
-        | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
-        (T::Unknown { .. }, T::Unknown { .. })
-        | (T::RustType { .. }, T::RustType { .. })
-        | (T::Type { .. }, T::Type { .. })
-        | (T::Resource { .. }, T::Resource { .. })
-        | (T::PromptAst { .. }, T::PromptAst { .. })
-        | (T::Void { .. }, T::Void { .. })
-        | (T::Never { .. }, T::Never { .. }) => true,
-        (T::Media(left, _), T::Media(right, _)) => left == right,
+        (T::String, T::String)
+        | (T::Int, T::Int)
+        | (T::Bigint, T::Bigint)
+        | (T::Float, T::Float)
+        | (T::Bool, T::Bool)
+        | (T::Null, T::Null)
+        | (T::Uint8Array, T::Uint8Array) => true,
+        (T::Unknown, T::Unknown)
+        | (T::RustType, T::RustType)
+        | (T::Type, T::Type)
+        | (T::Resource, T::Resource)
+        | (T::PromptAst, T::PromptAst)
+        | (T::Void, T::Void)
+        | (T::Never, T::Never) => true,
+        (T::Media(left), T::Media(right)) => left == right,
         (T::Literal(left, ..), T::Literal(right, ..)) => left == right,
-        (T::List(left, _), T::List(right, _)) => runtime_ty_structurally_equal(left, right),
+        (T::List(left), T::List(right)) => runtime_ty_structurally_equal(left, right),
         (
             T::Map {
                 key: left_key,
@@ -37,23 +37,22 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
             runtime_ty_structurally_equal(left_key, right_key)
                 && runtime_ty_structurally_equal(left_value, right_value)
         }
-        (T::Class(left_name, left_args, _), T::Class(right_name, right_args, _)) => {
+        (T::Class(left_name, left_args), T::Class(right_name, right_args)) => {
             left_name == right_name && structurally_equal_slices(left_args, right_args)
         }
         (
-            T::Interface(left_name, left_args, left_bindings, _),
-            T::Interface(right_name, right_args, right_bindings, _),
+            T::Interface(left_name, left_args, left_bindings),
+            T::Interface(right_name, right_args, right_bindings),
         ) => {
             left_name == right_name
                 && structurally_equal_slices(left_args, right_args)
                 && structurally_equal_named_types(left_bindings, right_bindings)
         }
-        (T::Enum(left, _), T::Enum(right, _)) => left == right,
-        (
-            T::EnumVariant(left_name, left_variant, _),
-            T::EnumVariant(right_name, right_variant, _),
-        ) => left_name == right_name && left_variant == right_variant,
-        (T::TypeAlias(left, _), T::TypeAlias(right, _)) => left == right,
+        (T::Enum(left), T::Enum(right)) => left == right,
+        (T::EnumVariant(left_name, left_variant), T::EnumVariant(right_name, right_variant)) => {
+            left_name == right_name && left_variant == right_variant
+        }
+        (T::TypeAlias(left), T::TypeAlias(right)) => left == right,
         (
             T::Function {
                 params: left_params,
@@ -77,7 +76,7 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
                 && runtime_ty_structurally_equal(left_ret, right_ret)
                 && runtime_ty_structurally_equal(left_throws, right_throws)
         }
-        (T::Union(left, _), T::Union(right, _)) => structurally_equal_unordered_slices(left, right),
+        (T::Union(left), T::Union(right)) => structurally_equal_unordered_slices(left, right),
         _ => false,
     }
 }
@@ -141,7 +140,7 @@ pub fn selected_arm_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
 }
 
 fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
-    let RuntimeTy::Union(members, _) = ty else {
+    let RuntimeTy::Union(members) = ty else {
         return None;
     };
     if !members.iter().any(RuntimeTy::is_null) {
@@ -154,12 +153,12 @@ fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{RuntimeTy, TyAttr};
+    use baml_type::RuntimeTy;
 
     use super::runtime_ty_structurally_equal;
 
     fn union(members: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(members.into(), TyAttr::default())
+        RuntimeTy::Union(members.into())
     }
 
     #[test]

@@ -17,8 +17,8 @@ import java.util.stream.Collectors;
  *
  * <h2>Grammar</h2>
  * <ul>
- *   <li>the primitive constants {@link #INT}, {@link #STRING}, {@link #BOOL},
- *       {@link #FLOAT};</li>
+ *   <li>the primitive constants {@link #INT}, {@link #BIGINT}, {@link #STRING},
+ *       {@link #BOOL}, {@link #FLOAT};</li>
  *   <li>{@link #of(Class)} for a registered generated class or enum (the BAML
  *       FQN is resolved via {@link TypeRegistry} — the same lookup the value
  *       encoder uses);</li>
@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
  * <pre>
  * BamlTy oneof:      primitive = 1, class_ty = 2, enum = 3, list = 4, map = 5,
  *                    optional = 6, union = 7, literal = 8
- * BamlTyPrimitive:   kind = 1 (BamlTyPrimitiveKind: STRING=1, INT=2, FLOAT=3, BOOL=4)
+ * BamlTyPrimitive:   kind = 1 (BamlTyPrimitiveKind: STRING=1, INT=2, FLOAT=3, BOOL=4, BIGINT=7)
  * BamlTyClass:       name = 1 (BAML FQN), type_args = 2 (repeated BamlTy)
  * BamlTyEnum:        name = 1 (BAML FQN — enums are never generic)
  * BamlTyList:        item = 1 (BamlTy)
@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
  * </pre>
  * {@link #fromWireTy} returns {@code null} for any arm outside this grammar (a
  * wire type the token cannot represent, e.g. media / function / rust_type /
- * unknown / never / the {@code null}/{@code bytes}/{@code bigint} primitive
+ * unknown / never / the {@code null}/{@code bytes} primitive
  * kinds), and for any composite whose nested tokens are themselves outside the
  * grammar — a partial token would misalign positions, so the whole token is
  * poisoned.
@@ -100,11 +100,12 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int LIT_BIGINT = 4;
     private static final int LIT_FLOAT = 5;
 
-    // BamlTyPrimitiveKind enum values (the four in the token grammar).
+    // BamlTyPrimitiveKind enum values supported by the token grammar.
     private static final int PRIM_STRING = 1;
     private static final int PRIM_INT = 2;
     private static final int PRIM_FLOAT = 3;
     private static final int PRIM_BOOL = 4;
+    private static final int PRIM_BIGINT = 7;
 
     /**
      * The token's shape. The first eight render on the wire (a {@code BamlTy}
@@ -128,6 +129,7 @@ public final class BamlType implements Comparable<BamlType> {
 
     public static final BamlType STRING = primitive(PRIM_STRING);
     public static final BamlType INT = primitive(PRIM_INT);
+    public static final BamlType BIGINT = primitive(PRIM_BIGINT);
     public static final BamlType BOOL = primitive(PRIM_BOOL);
     public static final BamlType FLOAT = primitive(PRIM_FLOAT);
 
@@ -432,7 +434,8 @@ public final class BamlType implements Comparable<BamlType> {
             case PRIM_INT -> INT;
             case PRIM_FLOAT -> FLOAT;
             case PRIM_BOOL -> BOOL;
-            default -> null; // null/bytes/bigint and any future kind are out of grammar
+            case PRIM_BIGINT -> BIGINT;
+            default -> null; // null/bytes and any future kind are out of grammar
         };
     }
 
@@ -680,6 +683,7 @@ public final class BamlType implements Comparable<BamlType> {
                 case PRIM_STRING -> "string";
                 case PRIM_BOOL -> "bool";
                 case PRIM_FLOAT -> "float";
+                case PRIM_BIGINT -> "bigint";
                 default -> "primitive(" + primitiveKind + ")";
             };
             case ENUM -> fqn;
@@ -717,6 +721,11 @@ public final class BamlType implements Comparable<BamlType> {
     /** Whether this is the {@code int} primitive token. */
     public boolean isInt() {
         return kind == Kind.PRIMITIVE && primitiveKind == PRIM_INT;
+    }
+
+    /** Whether this is the {@code bigint} primitive token. */
+    public boolean isBigint() {
+        return kind == Kind.PRIMITIVE && primitiveKind == PRIM_BIGINT;
     }
 
     /** Whether this is the {@code string} primitive token. */

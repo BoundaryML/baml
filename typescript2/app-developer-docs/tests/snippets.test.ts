@@ -152,6 +152,18 @@ test('the canonical BAML grammar produces highlighted light and dark tokens', as
   }
 });
 
+test('indented excerpts preserve relative indentation on every line', () => {
+  const parsed = parseBamlSource(
+    'function main() -> int {\n    // docs:start block\n    let remaining = {\n        let limit = 8_000;\n        limit - 512\n    };\n    // docs:end block\n    remaining\n}',
+    'block.baml',
+  );
+  assert.equal(
+    parsed.regions.get('block'),
+    'let remaining = {\n    let limit = 8_000;\n    limit - 512\n};',
+  );
+  assert.match(parsed.source, /\n {4}let remaining/);
+});
+
 test('nested regions keep the enclosing example and inner excerpt in sync', () => {
   const parsed = parseBamlSource(
     '// docs:start outer\nfunction main() -> int {\n// docs:start inner\n  42\n// docs:end inner\n}\n// docs:end outer',

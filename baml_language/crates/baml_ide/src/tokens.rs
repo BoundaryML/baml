@@ -26,7 +26,7 @@ use baml_compiler_syntax::{
         ObjectField, TypeExpr,
     },
 };
-use baml_compiler2_ppir::resolve::{
+use baml_compiler2_hir::resolve::{
     resolve_enum_variant, resolve_field, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
 use rowan::ast::AstNode;
@@ -438,7 +438,7 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 /// result if its inference inputs are unaffected. `returns(ref)` hands
 /// borrowing callers the memoized vec without an O(tokens) clone per request.
 #[salsa::tracked(returns(ref))]
-pub fn semantic_tokens(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<SemanticToken> {
+pub fn semantic_tokens(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
     // Full document: classify every token, so build the merged whole-file index
     // (itself a merge of per-scope salsa-cached indices) and resolve from it.
@@ -462,7 +462,7 @@ pub fn semantic_tokens(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Ve
 /// on the range would blow the cache; the underlying per-scope indices and name
 /// resolution it calls *are* memoized.
 pub fn semantic_tokens_in_range(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     start: u32,
     end: u32,
@@ -493,7 +493,7 @@ pub fn semantic_tokens_in_range(
 /// merged whole-file index; a range walk resolves on demand per scope
 /// (rust-analyzer's `Semantics::resolve` model — only visited scopes pay).
 struct Walk<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
     resolve: Box<dyn Fn(TextRange) -> Option<Class> + 'db>,
     /// For a viewport request: subtrees that don't intersect this range are
@@ -1055,7 +1055,7 @@ fn classify_type_decl_word(token: &SyntaxToken) -> Option<Class> {
 /// type (e.g. a type parameter or an as-yet-undefined type) — only an explicit
 /// path *prefix* is a namespace, which the caller handles.
 fn classify_type_token(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     name: &str,
     offset: TextSize,

@@ -56,7 +56,7 @@ fn make_db() -> ProjectDatabase {
 
 /// Declared generic parameter names, for assertions that care about the names
 /// rather than the bounds.
-fn generic_param_names(params: &[baml_compiler2_ppir::item_data::GenericParamData]) -> Vec<Name> {
+fn generic_param_names(params: &[baml_compiler2_hir::item_data::GenericParamData]) -> Vec<Name> {
     params.iter().map(|param| param.name.clone()).collect()
 }
 
@@ -98,7 +98,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.types[name];
             match def {
                 Definition::Class(class_loc) => {
-                    let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+                    let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
                     let gp_str = if class_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -116,7 +116,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
                         .methods
                         .iter()
                         .map(|mid| {
-                            baml_compiler2_ppir::item_data::function_data(db, *mid)
+                            baml_compiler2_hir::item_data::function_data(db, *mid)
                                 .name
                                 .to_string()
                         })
@@ -144,7 +144,7 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
             let def = &ns_items.values[name];
             match def {
                 Definition::Function(func_loc) => {
-                    let func_data = baml_compiler2_ppir::item_data::function_data(db, *func_loc);
+                    let func_data = baml_compiler2_hir::item_data::function_data(db, *func_loc);
                     let gp_str = if func_data.generic_params.is_empty() {
                         String::new()
                     } else {
@@ -311,7 +311,7 @@ fn array_has_generic_param_t() {
         panic!("Array should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
         generic_param_names(&class_data.generic_params),
@@ -334,7 +334,7 @@ fn map_has_generic_params_k_v() {
         panic!("Map should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     assert_eq!(
         generic_param_names(&class_data.generic_params),
@@ -357,7 +357,7 @@ fn string_class_has_no_generic_params() {
         panic!("String should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     assert!(
         class_data.generic_params.is_empty(),
@@ -381,13 +381,13 @@ fn array_has_expected_methods() {
         panic!("Array should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
         .map(|mid| {
-            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+            baml_compiler2_hir::item_data::function_data(&db, *mid)
                 .name
                 .to_string()
         })
@@ -418,13 +418,13 @@ fn map_has_expected_methods() {
         panic!("Map should be a class");
     };
 
-    let class_data = baml_compiler2_ppir::item_data::class_data(&db, *class_loc);
+    let class_data = baml_compiler2_hir::item_data::class_data(&db, *class_loc);
 
     let method_names: Vec<String> = class_data
         .methods
         .iter()
         .map(|mid| {
-            baml_compiler2_ppir::item_data::function_data(&db, *mid)
+            baml_compiler2_hir::item_data::function_data(&db, *mid)
                 .name
                 .to_string()
         })
@@ -551,16 +551,11 @@ fn rust_type_field_lowers_to_rust_type() {
     // Lower $rust_type — should produce Ty::RustType
     let ty = lower_type_expr_hir(
         &db,
-        &baml_compiler2_ast::TypeExprKind::Rust { attrs: vec![] }.at(Default::default()),
+        &baml_compiler2_ast::TypeExprKind::Rust.at(Default::default()),
     );
     let diags: Vec<()> = Vec::new();
 
-    assert_eq!(
-        ty,
-        baml_type::Ty::RustType {
-            attr: Default::default()
-        }
-    );
+    assert_eq!(ty, baml_type::Ty::RustType);
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
 }
 
@@ -607,7 +602,6 @@ fn cross_namespace_type_resolution_via_root() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -617,7 +611,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "root.llm.Response should not resolve to an error sentinel"
     );
 
@@ -630,7 +624,6 @@ fn cross_namespace_type_resolution_via_root() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -640,7 +633,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "root.Config should not resolve to an error sentinel from llm namespace"
     );
 }
@@ -663,7 +656,6 @@ fn same_namespace_resolution_no_prefix() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -674,7 +666,7 @@ fn same_namespace_resolution_no_prefix() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "LLMConfig should not resolve to an error sentinel within same namespace"
     );
 }
@@ -716,7 +708,6 @@ fn nested_namespace_resolution() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
@@ -726,7 +717,7 @@ fn nested_namespace_resolution() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Error { .. }),
+        !matches!(ty, baml_type::Ty::Error),
         "root.llm.openai.ResponsesClient should not resolve to an error sentinel"
     );
 }
@@ -747,12 +738,11 @@ fn bare_name_cross_namespace_rejected() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
     assert!(
-        matches!(ty, baml_type::Ty::Error { .. }),
+        matches!(ty, baml_type::Ty::Error),
         "bare Config from ns_llm should not resolve (an unresolved name is the diagnosed \
          `!error` sentinel, never `unknown`)"
     );
@@ -785,12 +775,11 @@ fn multi_segment_bare_path_rejected() {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
-            attrs: vec![],
         }
         .at(Default::default()),
     );
     assert!(
-        matches!(ty, baml_type::Ty::Error { .. }),
+        matches!(ty, baml_type::Ty::Error),
         "ns2.MyClass from ns1 should not resolve without root. prefix (an unresolved name \
          is the diagnosed `!error` sentinel, never `unknown`)"
     );

@@ -7,7 +7,7 @@
 ///
 /// Returns a sorted, deduplicated list of variable names (e.g.,
 /// `["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]`).
-pub fn all_env_var_names(db: &dyn baml_compiler2_ppir::Db) -> Vec<String> {
+pub fn all_env_var_names(db: &dyn baml_compiler2_hir::Db) -> Vec<String> {
     let files = baml_compiler2_hir::compiler2_all_files(db);
     let mut names = std::collections::BTreeSet::new();
     for file in files {

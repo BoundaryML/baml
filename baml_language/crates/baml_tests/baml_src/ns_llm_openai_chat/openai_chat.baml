@@ -1741,7 +1741,7 @@ function live_openai_chat_answers() -> bool {
 
 function live_openai_chat_streams() -> bool {
     let cl = openai.ChatClient.new(model = "gpt-4o-mini", max_tokens = 16);
-    let stream = ai.stream.from_spec<string | null, string>(
+    let stream = ai.stream.from_spec<string>(
         ChatEcho@spec("Say pong."),
         client = cl,
     );

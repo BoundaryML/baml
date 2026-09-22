@@ -288,7 +288,6 @@ fn validate_return_value(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::TyAttr;
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
     use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
@@ -300,9 +299,7 @@ mod tests {
     }
 
     fn int_ty() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     // -------------------------------------------------------------------------

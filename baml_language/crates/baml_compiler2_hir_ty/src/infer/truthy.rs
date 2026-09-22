@@ -40,16 +40,16 @@ pub(crate) enum Truthiness {
 /// projections, `unknown`) answers `Runtime`.
 pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
     match ty.kind() {
-        InferTy::Null { .. } => Truthiness::AlwaysFalsy,
-        InferTy::Literal(lit, _, _) => literal_truthiness(lit),
+        InferTy::Null => Truthiness::AlwaysFalsy,
+        InferTy::Literal(lit, _) => literal_truthiness(lit),
         // Runtime-decided scalars and containers: any of them can hold a
         // falsy value.
-        InferTy::Bool { .. }
-        | InferTy::Int { .. }
-        | InferTy::Bigint { .. }
-        | InferTy::Float { .. }
-        | InferTy::String { .. }
-        | InferTy::Uint8Array { .. }
+        InferTy::Bool
+        | InferTy::Int
+        | InferTy::Bigint
+        | InferTy::Float
+        | InferTy::String
+        | InferTy::Uint8Array
         | InferTy::List(..)
         | InferTy::Map { .. } => Truthiness::Runtime,
         // Heap values with no falsy inhabitant.
@@ -60,11 +60,11 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::Media(..)
         | InferTy::Function { .. }
         | InferTy::Future(..)
-        | InferTy::Type { .. }
-        | InferTy::Resource { .. }
-        | InferTy::PromptAst { .. }
-        | InferTy::RustType { .. } => Truthiness::AlwaysTruthy,
-        InferTy::Union(members, _) => {
+        | InferTy::Type
+        | InferTy::Resource
+        | InferTy::PromptAst
+        | InferTy::RustType => Truthiness::AlwaysTruthy,
+        InferTy::Union(members) => {
             let mut all_truthy = true;
             let mut all_falsy = true;
             for member in members {
@@ -83,13 +83,13 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
             }
         }
         // Open or sentinel types: no static claim.
-        InferTy::Unknown { .. }
+        InferTy::Unknown
         | InferTy::TypeVar(..)
         | InferTy::AssociatedTypeProjection { .. }
         | InferTy::TypeAlias(..)
-        | InferTy::Never { .. }
-        | InferTy::Void { .. }
-        | InferTy::Error { .. }
+        | InferTy::Never
+        | InferTy::Void
+        | InferTy::Error
         | InferTy::InferVar { .. } => Truthiness::Runtime,
     }
 }
@@ -219,10 +219,8 @@ impl<'db> InferenceContext<'db> {
     /// otherwise.
     fn decide_condition(resolved: &Ty) -> Option<ConditionDecision> {
         match resolved.kind() {
-            InferTy::Bool { .. }
-            | InferTy::Literal(Literal::Bool(_), _, _)
-            | InferTy::Never { .. } => None,
-            InferTy::Void { .. } => Some(ConditionDecision::Mismatch),
+            InferTy::Bool | InferTy::Literal(Literal::Bool(_), _) | InferTy::Never => None,
+            InferTy::Void => Some(ConditionDecision::Mismatch),
             _ => Some(ConditionDecision::Coerce),
         }
     }

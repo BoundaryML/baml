@@ -8,11 +8,10 @@ namespace Baml.Generated.V1;
 public static partial class BamlGeneratedContract
 {
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static global::Baml.BamlStream<TPartial, TFinal> CreateStream<TPartial, TFinal>(
+    public static global::Baml.BamlStream<T> CreateStream<T>(
         Lazy<BamlGeneratedProgram> program,
-        BamlGeneratedFunction<TFinal> function,
-        BamlGeneratedType<TPartial> partialType,
-        BamlGeneratedArguments<TFinal> arguments,
+        BamlGeneratedFunction<T> function,
+        BamlGeneratedArguments<T> arguments,
         string partialOptionName,
         CancellationToken cancellationToken = default)
     {
@@ -24,24 +23,20 @@ public static partial class BamlGeneratedContract
             function.Declaration.Result,
             function.Declaration,
             function.Result,
-            partialType.Owner,
-            partialType.Declaration,
             arguments.Registry.Owner,
             arguments.Function,
             partialOptionName);
-        BamlGeneratedArguments<TFinal> snapshot =
+        BamlGeneratedArguments<T> snapshot =
             arguments.SnapshotForDeferredCall(out IDisposable ownership);
         try
         {
-            var driver = new NativeBamlStreamDriver<TPartial, TFinal>(
+            var driver = new NativeBamlStreamDriver<T>(
                 program,
                 (activeProgram, token) => activeProgram.StartStreamAsync(
                     function,
                     snapshot,
-                    partialType,
                     token),
                 ownership,
-                partialType.Declaration,
                 function.Result,
                 partialOptionName,
                 function.Declaration.Identity);
@@ -58,25 +53,22 @@ public static partial class BamlGeneratedContract
     }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static global::Baml.BamlStream<TPartial, TFinal> CreateStream<TPartial, TFinal>(
+    public static global::Baml.BamlStream<T> CreateStream<T>(
         Lazy<BamlGeneratedProgram> program,
-        BamlGeneratedBoundFunction<TFinal> function,
-        BamlGeneratedType<TPartial> partialType,
-        BamlGeneratedGenericArguments<TFinal> arguments,
+        BamlGeneratedBoundFunction<T> function,
+        BamlGeneratedGenericArguments<T> arguments,
         string partialOptionName,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(program);
         ArgumentNullException.ThrowIfNull(arguments);
-        BoundGenericFunctionDeclaration<TFinal> declaration = function.Declaration;
+        BoundGenericFunctionDeclaration<T> declaration = function.Declaration;
         RequireStreamTokens(
             function.Owner,
             declaration.Definition.Variant,
             declaration.Result,
             declaration.Definition,
             declaration.Result,
-            partialType.Owner,
-            partialType.Declaration,
             arguments.Registry.Owner,
             arguments.Function.Definition,
             partialOptionName);
@@ -86,19 +78,17 @@ public static partial class BamlGeneratedContract
                 "The generated stream arguments belong to another generic binding.");
         }
 
-        BamlGeneratedGenericArguments<TFinal> snapshot =
+        BamlGeneratedGenericArguments<T> snapshot =
             arguments.SnapshotForDeferredCall(out IDisposable ownership);
         try
         {
-            var driver = new NativeBamlStreamDriver<TPartial, TFinal>(
+            var driver = new NativeBamlStreamDriver<T>(
                 program,
                 (activeProgram, token) => activeProgram.StartStreamAsync(
                     function,
                     snapshot,
-                    partialType,
                     token),
                 ownership,
-                partialType.Declaration,
                 declaration.Result,
                 partialOptionName,
                 declaration.Definition.Identity);
@@ -114,26 +104,22 @@ public static partial class BamlGeneratedContract
         }
     }
 
-    private static void RequireStreamTokens<TPartial, TFinal>(
+    private static void RequireStreamTokens<T>(
         RegistryOwner functionOwner,
         string variant,
         TypeDeclaration declaredResult,
         object function,
-        TypeDeclaration<TFinal> finalType,
-        RegistryOwner partialOwner,
-        TypeDeclaration<TPartial> partialType,
+        TypeDeclaration<T> streamType,
         RegistryOwner argumentOwner,
         object argumentFunction,
         string partialOptionName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(partialOptionName);
         if (!StringComparer.Ordinal.Equals(variant, "stream")
-            || !ReferenceEquals(declaredResult, finalType)
-            || !ReferenceEquals(functionOwner, partialOwner)
+            || !ReferenceEquals(declaredResult, streamType)
             || !ReferenceEquals(functionOwner, argumentOwner)
             || !ReferenceEquals(function, argumentFunction)
-            || partialType.Metadata.Length == 0
-            || finalType.Metadata.Length == 0)
+            || streamType.Metadata.Length == 0)
         {
             throw new InvalidOperationException(
                 "The generated stream function, type, and arguments do not share one valid registry provenance.");
@@ -141,13 +127,16 @@ public static partial class BamlGeneratedContract
     }
 }
 
-internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
-    : IBamlStreamDriver<TPartial, TFinal>
+/// <summary>
+/// Drives one <c>ai.stream.Stream&lt;T&gt;</c>. A partial and the settled value share
+/// the one type: a partial is <c>T</c> parsed from the text received so far.
+/// </summary>
+internal sealed class NativeBamlStreamDriver<T>
+    : IBamlStreamDriver<T>
 {
     private readonly Lazy<BamlGeneratedProgram> deferredProgram;
     private readonly Func<BamlGeneratedProgram, CancellationToken, Task<BamlStreamNativeHandle>> start;
-    private readonly TypeDeclaration<TPartial> partialType;
-    private readonly TypeDeclaration<TFinal> finalType;
+    private readonly TypeDeclaration<T> streamType;
     private readonly string partialOptionName;
     private readonly string streamFunctionIdentity;
     private IDisposable? argumentOwnership;
@@ -160,23 +149,20 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
         Lazy<BamlGeneratedProgram> deferredProgram,
         Func<BamlGeneratedProgram, CancellationToken, Task<BamlStreamNativeHandle>> start,
         IDisposable argumentOwnership,
-        TypeDeclaration<TPartial> partialType,
-        TypeDeclaration<TFinal> finalType,
+        TypeDeclaration<T> streamType,
         string partialOptionName,
         string streamFunctionIdentity)
     {
         ArgumentNullException.ThrowIfNull(deferredProgram);
         ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(argumentOwnership);
-        ArgumentNullException.ThrowIfNull(partialType);
-        ArgumentNullException.ThrowIfNull(finalType);
+        ArgumentNullException.ThrowIfNull(streamType);
         ArgumentException.ThrowIfNullOrWhiteSpace(partialOptionName);
         ArgumentException.ThrowIfNullOrWhiteSpace(streamFunctionIdentity);
         this.deferredProgram = deferredProgram;
         this.start = start;
         this.argumentOwnership = argumentOwnership;
-        this.partialType = partialType;
-        this.finalType = finalType;
+        this.streamType = streamType;
         this.partialOptionName = partialOptionName;
         this.streamFunctionIdentity = streamFunctionIdentity;
     }
@@ -203,7 +189,7 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
         }
     }
 
-    public async Task<BamlStreamPull<TPartial>> PullAsync(
+    public async Task<BamlStreamPull<T>> PullAsync(
         CancellationToken cancellationToken)
     {
         (BamlGeneratedProgram activeProgram, BamlStreamNativeHandle activeStream) = RequireStarted();
@@ -215,17 +201,17 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
         byte[] bytes = await completion.ConfigureAwait(false);
         BamlStreamPull<BamlGeneratedValue> wire = PrimitiveProtocol.DecodeStreamPull(
             bytes,
-            partialType.Metadata,
+            streamType.Metadata,
             partialOptionName,
             nextIdentity,
             activeProgram.NativeState.Api);
         return wire.HasPartial
-            ? BamlStreamPull<TPartial>.FromPartial(
-                activeProgram.Registry.Decode(partialType, wire.Partial))
-            : BamlStreamPull<TPartial>.Finished;
+            ? BamlStreamPull<T>.FromPartial(
+                activeProgram.Registry.Decode(streamType, wire.Partial))
+            : BamlStreamPull<T>.Finished;
     }
 
-    public async Task<TFinal> GetFinalResponseAsync(
+    public async Task<T> GetFinalResponseAsync(
         CancellationToken cancellationToken)
     {
         (BamlGeneratedProgram activeProgram, BamlStreamNativeHandle activeStream) = RequireStarted();
@@ -239,7 +225,7 @@ internal sealed class NativeBamlStreamDriver<TPartial, TFinal>
             bytes,
             streamFunctionIdentity,
             activeProgram.NativeState.Api);
-        return activeProgram.Registry.Decode(finalType, value);
+        return activeProgram.Registry.Decode(streamType, value);
     }
 
     public ValueTask DisposeAsync()

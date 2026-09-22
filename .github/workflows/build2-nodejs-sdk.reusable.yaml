@@ -111,6 +111,8 @@ jobs:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
 
+      - uses: ./.github/actions/export-build-fingerprint
+
       - name: Stamp release plan
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}

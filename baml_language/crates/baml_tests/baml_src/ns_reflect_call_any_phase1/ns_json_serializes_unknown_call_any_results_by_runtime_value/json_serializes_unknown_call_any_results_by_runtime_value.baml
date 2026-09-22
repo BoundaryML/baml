@@ -61,6 +61,6 @@ function main() -> string {
 test "json_serializes_unknown_call_any_results_by_runtime_value" {
     assert.equal(
         main(),
-        "{\"name\":\"Ada\"}|{\"name\":\"Ada\"}\n[{\"overridden\":1}]|[{\"overridden\":1}]\n\"Ready\"|\"Ready\"\n\"99999999999999999999\"|\"99999999999999999999\"\n{\"x\":1}|{\"x\":1}\n{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}|{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}",
+        "{\"name\":\"Ada\"}|{\"name\":\"Ada\"}\n[{\"overridden\":1}]|[{\"overridden\":1}]\n\"Ready\"|\"Ready\"\n99999999999999999999|99999999999999999999\n{\"x\":1}|{\"x\":1}\n{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}|{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}",
     )
 }

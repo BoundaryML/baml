@@ -15,35 +15,33 @@ import { documentationMetadata } from '@/lib/metadata';
 const sections = [
   {
     description:
-      'Learn the language, follow the book, explore syntax, and browse standard packages.',
+      'Write functions, prompts, and types. Run them from the CLI or your application.',
     href: '/baml',
     icon: Braces,
     title: 'BAML',
   },
   {
     description:
-      'Install the toolchain and understand commands, configuration, and local workflows.',
+      'Look up commands, arguments, and flags for your installed version.',
     href: '/cli',
     icon: TerminalSquare,
     title: 'BAML CLI',
   },
   {
-    description:
-      'The developing cloud platform for operating BAML applications and workflows.',
+    description: 'Contact the team for help with cloud setup and APIs.',
     href: '/bcs',
     icon: Cloud,
     title: 'Boundary Cloud Services',
   },
   {
-    description:
-      'Goal-oriented guides that connect BAML with real application architectures.',
+    description: 'Build a receipt extractor and call it from Node.js.',
     href: '/tutorials',
     icon: BookOpen,
     title: 'Tutorials',
   },
   {
     description:
-      'Focused examples you can inspect, adapt, and use as starting points.',
+      'Classify support tickets, read images, and extract structured data.',
     href: '/examples',
     icon: Code2,
     title: 'Examples',
@@ -79,7 +77,7 @@ export default function HomePage() {
             </Link>
           </>
         }
-        description="One technical home for the BAML language, its CLI, practical workflows, and Boundary Cloud Services."
+        description="Install BAML, run a function, and call it from your application."
         eyebrow={
           <Link
             className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -89,7 +87,7 @@ export default function HomePage() {
             <ArrowRight aria-hidden="true" className="size-3.5" />
           </Link>
         }
-        title="Build reliable AI applications with BAML."
+        title="BAML documentation"
       />
       <section className="container-wrapper flex-1 p-0">
         <div className="container overflow-hidden px-0 lg:max-w-none">

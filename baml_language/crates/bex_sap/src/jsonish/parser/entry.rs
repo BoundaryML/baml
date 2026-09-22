@@ -226,7 +226,13 @@ pub(super) fn parse_func(
 
 pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value<'_>, JsonishError> {
     let res = parse_func(str, options, is_done)?;
-    Ok(res.simplify(is_done))
+    let mut res = res.simplify(is_done);
+    if is_done {
+        // Nothing more is coming: every node, including one the fixing parser
+        // left open (`[1, 2, 3`), is as complete as it will ever be.
+        res.complete_deeply();
+    }
+    Ok(res)
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ package sdk_test
 import (
 	"context"
 	"math"
+	"math/big"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,15 +12,28 @@ import (
 	baml_go "github.com/boundaryml/baml-go"
 )
 
-func canonicalJSONFixture() map[string]any {
+func testBigInt(t *testing.T, decimal string) *big.Int {
+	t.Helper()
+	value, ok := new(big.Int).SetString(decimal, 10)
+	if !ok {
+		t.Fatalf("invalid bigint test fixture %q", decimal)
+	}
+	return value
+}
+
+func canonicalJSONFixture(t *testing.T) map[string]any {
+	t.Helper()
 	return map[string]any{
-		"null":   nil,
-		"bool":   true,
-		"int":    int64(42),
-		"float":  1.5,
-		"string": "value",
-		"list":   []any{nil, false, int64(-3), 2.25, "nested"},
-		"map":    map[string]any{"child": []any{}},
+		"null":            nil,
+		"bool":            true,
+		"int":             int64(42),
+		"float":           1.5,
+		"string":          "value",
+		"list":            []any{nil, false, int64(-3), 2.25, "nested"},
+		"map":             map[string]any{"child": []any{}},
+		"positive_bigint": testBigInt(t, "123123123123123123123123"),
+		"negative_bigint": testBigInt(t, "-987654321098765432109876543210"),
+		"nested_bigint":   []any{testBigInt(t, "340282366920938463463374607431768211456")},
 	}
 }
 
@@ -31,7 +45,7 @@ func (nestedJSONMarshaler) BAMLInput() baml_go.Input {
 
 func Test_canonical_json_round_trips_at_top_level_and_through_alias(t *testing.T) {
 	ctx := context.Background()
-	want := canonicalJSONFixture()
+	want := canonicalJSONFixture(t)
 	for name, call := range map[string]func(context.Context, any) (any, error){
 		"canonical": baml_sdk.GoJsonTestsRoundTripJson,
 		"alias":     baml_sdk.GoJsonTestsRoundTripJsonAlias,
@@ -47,20 +61,20 @@ func Test_canonical_json_round_trips_at_top_level_and_through_alias(t *testing.T
 
 func Test_canonical_json_composes_through_containers_and_classes(t *testing.T) {
 	ctx := context.Background()
-	values := []any{nil, canonicalJSONFixture(), []any{}, map[string]any{}}
+	values := []any{nil, canonicalJSONFixture(t), []any{}, map[string]any{}}
 	gotList, err := baml_sdk.GoJsonTestsRoundTripJsonList(ctx, values)
 	if err != nil || !reflect.DeepEqual(gotList, values) {
 		t.Fatalf("JSON list = %#v, %v; want %#v", gotList, err, values)
 	}
 
-	mapping := map[string]any{"value": canonicalJSONFixture(), "null": nil}
+	mapping := map[string]any{"value": canonicalJSONFixture(t), "null": nil}
 	gotMap, err := baml_sdk.GoJsonTestsRoundTripJsonMap(ctx, mapping)
 	if err != nil || !reflect.DeepEqual(gotMap, mapping) {
 		t.Fatalf("JSON map = %#v, %v; want %#v", gotMap, err, mapping)
 	}
 
 	box := baml_sdk.GoJsonTestsJsonBox{
-		Payload:  canonicalJSONFixture(),
+		Payload:  canonicalJSONFixture(t),
 		List:     values,
 		Mapping:  mapping,
 		Nullable: nil,
@@ -78,7 +92,7 @@ func Test_canonical_json_defaults_and_callbacks(t *testing.T) {
 		t.Fatalf("default JSON = %#v, %v; want nil", got, err)
 	}
 
-	want := canonicalJSONFixture()
+	want := canonicalJSONFixture(t)
 	got, err = baml_sdk.GoJsonTestsDefaultJson(ctx, baml_sdk.WithGoJsonTestsDefaultJsonValue(want))
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("explicit JSON option = %#v, %v; want %#v", got, err, want)
@@ -98,7 +112,7 @@ func Test_canonical_json_defaults_and_callbacks(t *testing.T) {
 func Test_canonical_json_dynamic_union(t *testing.T) {
 	ctx := context.Background()
 	for name, want := range map[string]any{
-		"object": canonicalJSONFixture(),
+		"object": canonicalJSONFixture(t),
 		"null":   nil,
 	} {
 		t.Run(name, func(t *testing.T) {

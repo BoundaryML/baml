@@ -19,10 +19,13 @@
 //! `Qualified::With { resolution }`), and a provider that had to try the
 //! readings itself would be re-deriving the position it was handed.
 
-use baml_base::SourceFile;
+use baml_base::{AttributePosition, SourceFile};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
-use baml_compiler2_hir::{body::BodyOwnerId, contributions::Definition};
-use baml_compiler2_ppir::resolve::{NamespaceMember, namespace_members_at};
+use baml_compiler2_hir::{
+    body::BodyOwnerId,
+    contributions::Definition,
+    resolve::{NamespaceMember, namespace_members_at},
+};
 use text_size::{TextRange, TextSize};
 
 use crate::{resolve, syntax};
@@ -62,8 +65,8 @@ pub(crate) enum CompletionAnalysis<'db> {
     /// class/interface/implements body — the declaration keywords the
     /// grammar accepts there.
     Item { container: ItemContainer },
-    /// An `@attribute` name.
-    Attribute,
+    /// An `@attribute` name at a declaration position.
+    Attribute { position: AttributePosition },
     /// A position no provider knows yet. Additive by construction: an
     /// unclassified position offers nothing rather than guessing.
     Unsupported,
@@ -125,7 +128,7 @@ pub(crate) enum DotTarget<'db> {
 
 impl<'db> CompletionContext<'db> {
     pub(crate) fn new(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         file: SourceFile,
         offset: TextSize,
     ) -> Option<Self> {
@@ -153,7 +156,9 @@ impl<'db> CompletionContext<'db> {
         // dotted attribute name, and the fragment-only range would splice
         // `stream.stream.done`.
         let source_range = match &position {
-            Position::Attribute { name_start } => TextRange::new((*name_start).min(offset), offset),
+            Position::Attribute { name_start, .. } => {
+                TextRange::new((*name_start).min(offset), offset)
+            }
             _ => source_range,
         };
         let analysis = match position {
@@ -188,7 +193,7 @@ impl<'db> CompletionContext<'db> {
                 qualifier: None,
             },
             Position::Item { container } => CompletionAnalysis::Item { container },
-            Position::Attribute { .. } => CompletionAnalysis::Attribute,
+            Position::Attribute { position, .. } => CompletionAnalysis::Attribute { position },
             Position::Unsupported => CompletionAnalysis::Unsupported,
         };
 
@@ -202,7 +207,7 @@ impl<'db> CompletionContext<'db> {
 /// The file's text with [`MARKER`] spliced in at `offset`, parsed. Returns the
 /// tree and the marker's range within it.
 fn speculative_parse(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     text: &str,
     offset: TextSize,
@@ -252,12 +257,45 @@ enum Position {
         container: ItemContainer,
     },
     /// An `@attribute` name; `name_start` is where the name begins (after
-    /// the `@`), so accepting a dotted name replaces the whole fragment.
+    /// the `@`/`@@`), so accepting a dotted name replaces the whole fragment.
     Attribute {
         name_start: TextSize,
+        position: AttributePosition,
     },
     Expression,
     Unsupported,
+}
+
+/// The declaration an attribute node annotates, or `None` where the grammar
+/// accepts an attribute the schema table has no position for (a config item).
+fn attribute_position(attribute: &SyntaxNode) -> Option<AttributePosition> {
+    let block = attribute.kind() == SyntaxKind::BLOCK_ATTRIBUTE;
+    for owner in attribute.ancestors().skip(1) {
+        match owner.kind() {
+            // A field is a class's or an interface's; the enclosing
+            // declaration says which.
+            SyntaxKind::FIELD if !block => {
+                return owner.ancestors().skip(1).find_map(|declaration| {
+                    match declaration.kind() {
+                        SyntaxKind::CLASS_DEF => Some(AttributePosition::ClassField),
+                        SyntaxKind::INTERFACE_DEF => Some(AttributePosition::InterfaceField),
+                        _ => None,
+                    }
+                });
+            }
+            SyntaxKind::ENUM_VARIANT if !block => return Some(AttributePosition::EnumVariant),
+            // A method's `@@` is the method's, so the function kinds come
+            // before the class/interface that contains them in the walk.
+            SyntaxKind::FUNCTION_DEF | SyntaxKind::METHOD_SIG if block => {
+                return Some(AttributePosition::Function);
+            }
+            SyntaxKind::CLASS_DEF if block => return Some(AttributePosition::Class),
+            SyntaxKind::ENUM_DEF if block => return Some(AttributePosition::Enum),
+            SyntaxKind::INTERFACE_DEF if block => return Some(AttributePosition::Interface),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// What the marker token's surroundings say the position is.
@@ -275,12 +313,17 @@ fn classify(token: &SyntaxToken) -> Position {
     // resolves through the same DotTarget and filters to types.
     // BEFORE the type check: an `@name` nests INSIDE the annotated
     // `TYPE_EXPR`, and before the dot check: `@stream.⎸` is one attribute
-    // name, not a qualified path. `@@` block attributes are builtin-only
-    // machinery and offer nothing.
-    if let Some(attribute) = token
-        .parent_ancestors()
-        .find(|node| node.kind() == SyntaxKind::ATTRIBUTE)
-    {
+    // name, not a qualified path. An attribute at a position the schema
+    // table does not know offers nothing.
+    if let Some(attribute) = token.parent_ancestors().find(|node| {
+        matches!(
+            node.kind(),
+            SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE
+        )
+    }) {
+        let Some(position) = attribute_position(&attribute) else {
+            return Position::Unsupported;
+        };
         let ats = attribute
             .text()
             .to_string()
@@ -291,6 +334,7 @@ fn classify(token: &SyntaxToken) -> Position {
         return Position::Attribute {
             name_start: attribute.text_range().start()
                 + TextSize::from(u32::try_from(ats).unwrap_or(u32::MAX)),
+            position,
         };
     }
     if token
@@ -363,7 +407,7 @@ fn classify(token: &SyntaxToken) -> Position {
 
 /// The three readings of the `.` at `dot`, tried in resolution's own order.
 fn dot_target(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     dot: TextSize,
 ) -> Option<DotTarget<'_>> {
@@ -381,7 +425,7 @@ fn dot_target(
 /// from the REAL file (the chain ends before the cursor), never from the
 /// fragment being typed.
 fn qualifier_chain(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     dot: TextSize,
 ) -> Option<Vec<baml_base::Name>> {

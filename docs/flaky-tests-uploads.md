@@ -30,10 +30,21 @@ collections restarts their flake history.
 
 ## How a job wires up
 
-The test step takes `continue-on-error` and an `id`; the upload step gates the
+The test step takes `continue-on-error` and an `id`; the analyze step gates the
 job in its place. That ordering is what lets quarantining work — with
-quarantining off the upload just reports the test outcome, and with it on Trunk
-can clear failures it owns.
+quarantining off it just reports the test outcome, and with it on Trunk can
+clear failures it owns.
+
+Leave the analyze step's `if:` off so it inherits `success()`. `continue-on-error`
+on the test step already keeps the job green through a test failure, so the
+analyze step still runs and still gates; what `success()` adds is skipping it
+when an *earlier* step failed and no report was ever written.
+
+Never use `always()` or `!cancelled()` here: those replace the implicit
+`success()` — only a status-check function does — and an analyze step that runs
+after its test step was skipped reports `No test output files found`. A step
+needing its own condition can write `success() && …` for clarity, though a
+plain expression already implies it.
 
 ```yaml
 - name: "Run tests"
@@ -42,8 +53,7 @@ can clear failures it owns.
   run: cargo nextest run --profile ci -p my_crate
   working-directory: baml_language
 
-- name: "Upload test results to Trunk"
-  if: ${{ !cancelled() }}
+- name: "Analyze test results in Trunk"
   uses: ./.github/actions/upload-test-results
   with:
     junit-path: baml_language/target/nextest/ci/junit.xml

@@ -1,12 +1,10 @@
 // LLM API shape: authored call, bound spec, and the flat sync/async stream
-// shortcuts. The `$stream` spelling remains only in BAML type identity; C++
-// projects those PPIR schemas under stream_types.
+// shortcuts.
 #include <baml_sdk.h>
 #include <baml_test.h>
 
 #include <fstream>
 #include <iterator>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -21,10 +19,9 @@ static_assert(std::is_same<string_spec, expected_string_spec>::value,
 
 using string_stream = decltype(baml_sdk::lorem::stream_e2e_extract_stream(
     std::declval<const std::string&>()));
-using expected_string_stream =
-    baml::stream<std::optional<std::string>, std::string>;
+using expected_string_stream = baml::stream<std::string>;
 static_assert(std::is_same<string_stream, expected_string_stream>::value,
-              "Fn_stream must expose the PPIR partial type");
+              "Fn_stream must expose the streamed type");
 
 using async_string_spec =
     decltype(baml_sdk::lorem::stream_e2e_extract_spec_async(
@@ -50,14 +47,11 @@ static_assert(std::is_same<decltype(std::declval<const media_spec&>().prompt()),
                            baml::prompt>::value,
               "media-bearing specs must render through the same Prompt API");
 
-using doc_partial = baml_sdk::stream_types::lorem::StreamingDoc;
-using doc_final = baml_sdk::lorem::StreamingDoc;
+using doc = baml_sdk::lorem::StreamingDoc;
 using doc_stream = decltype(baml_sdk::lorem::stream_e2e_extract_doc_stream(
     std::declval<const std::string&>()));
-static_assert(
-    std::is_same<doc_stream,
-                 baml::stream<std::optional<doc_partial>, doc_final>>::value,
-    "Out$stream must remain a generated partial schema");
+static_assert(std::is_same<doc_stream, baml::stream<doc>>::value,
+              "a class-typed stream streams the class itself");
 
 }  // namespace
 

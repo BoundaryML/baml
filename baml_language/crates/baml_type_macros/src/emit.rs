@@ -28,7 +28,6 @@ pub(crate) fn emit(family: &Family) -> TokenStream {
         match &member.child {
             Child::Member(child_idx) => {
                 out.extend(gen_member_enum(family, member, *child_idx));
-                out.extend(gen_accessors(family, member));
                 out.extend(gen_head_visitors(family, member));
                 out.extend(gen_head_mappers(family, member));
             }
@@ -108,87 +107,6 @@ pub(crate) fn member_variants<'a>(
         .variants
         .iter()
         .filter(move |v| member.includes.contains(&v.axis))
-}
-
-/// Generate the mechanical `attr` / `with_attr` accessors for a member. An
-/// attr-carrying variant exposes its `TyAttr` (a named `attr` field or the last
-/// tuple positional); an attr-less template leaf (`TypeArgRef`)
-/// borrows the shared [`TyAttr::EMPTY`] and ignores `with_attr` (it has nowhere
-/// to store one).
-fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
-    let name = &member.name;
-    let attr_arms = member_variants(family, member).map(|v| attr_arm(name, v));
-    let with_arms = member_variants(family, member).map(|v| with_attr_arm(name, v));
-    let (impl_g, ty_g, where_c) = family.generics.split_for_impl();
-    quote! {
-        impl #impl_g #name #ty_g #where_c {
-            #[doc = " Borrow this type's streaming/SAP attributes ([`TyAttr`])."]
-            pub fn attr(&self) -> &TyAttr {
-                match self {
-                    #(#attr_arms),*
-                }
-            }
-
-            #[doc = " Return this type with its [`TyAttr`] replaced by `attr`."]
-            pub fn with_attr(self, attr: TyAttr) -> Self {
-                match self {
-                    #(#with_arms),*
-                }
-            }
-        }
-    }
-}
-
-pub(crate) fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
-    let vident = &v.ident;
-    // Attr-less leaves borrow the shared empty attribute set.
-    if !v.has_attr {
-        return match &v.fields {
-            Fields::Unit => quote! { #name::#vident => &TyAttr::EMPTY },
-            _ => quote! { #name::#vident { .. } => &TyAttr::EMPTY },
-        };
-    }
-    match &v.fields {
-        Fields::Named(_) => quote! { #name::#vident { attr, .. } => attr },
-        Fields::Unnamed(_) => quote! { #name::#vident(.., attr) => attr },
-        // `has_attr` is false for a unit variant, handled above.
-        Fields::Unit => unreachable!("attr-carrying unit variant is impossible"),
-    }
-}
-
-pub(crate) fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
-    let vident = &v.ident;
-    // Attr-less leaves have nowhere to store an attribute, so `with_attr` is
-    // the identity — the incoming `attr` is dropped. `_ = &attr` silences the
-    // unused-binding lint without moving it (every other arm consumes `attr`).
-    if !v.has_attr {
-        return match &v.fields {
-            Fields::Unit => quote! { this @ #name::#vident => { let _ = &attr; this } },
-            _ => quote! { this @ #name::#vident { .. } => { let _ = &attr; this } },
-        };
-    }
-    match &v.fields {
-        Fields::Named(named) => {
-            let rest: Vec<&Ident> = named
-                .named
-                .iter()
-                .filter_map(|f| f.ident.as_ref())
-                .filter(|id| *id != "attr")
-                .collect();
-            quote! {
-                #name::#vident { #(#rest,)* .. } => #name::#vident { #(#rest,)* attr }
-            }
-        }
-        Fields::Unnamed(unnamed) => {
-            let lead = unnamed.unnamed.len().saturating_sub(1);
-            let binds: Vec<Ident> = (0..lead).map(|i| format_ident!("f{}", i)).collect();
-            quote! {
-                #name::#vident(#(#binds,)* _) => #name::#vident(#(#binds,)* attr)
-            }
-        }
-        // `has_attr` is false for a unit variant, handled above.
-        Fields::Unit => unreachable!("attr-carrying unit variant is impossible"),
-    }
 }
 
 // ── Head visitors ────────────────────────────────────────────────────────────
@@ -684,7 +602,7 @@ fn map_arm(family: &Family, param: &Ident, name: &Ident, v: &MVariant) -> TokenS
 /// mapped through `f`. `?` inside propagates out of the generated method, so
 /// every wrapper is expanded as a block or `match` rather than a closure.
 fn map_expr(family: &Family, param: &Ident, ty: &syn::Type, place: TokenStream) -> TokenStream {
-    // Head-free payloads (a `TyAttr`, a field `Name`, a discriminant) are carried
+    // Head-free payloads (a field `Name`, a discriminant) are carried
     // across unchanged. Spelled as a call rather than `place.clone()` so a
     // non-`Clone` payload is a type error here instead of silently cloning the
     // reference.

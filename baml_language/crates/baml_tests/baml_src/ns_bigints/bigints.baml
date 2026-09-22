@@ -794,15 +794,14 @@ test "test_bigint_ilog_floor" {
 
 // ─── to_json ──────────────────────────────────────────────────────────────────
 //
-// Bigint values exceed JSON's safe-integer range, so to_json emits a decimal
-// string.
+// Bigint values render as arbitrary-precision JSON numbers.
 
-test "test_bigint_to_json_returns_string" {
-    assert.equal((42n).to_json(), "42")
+test "test_bigint_to_json_returns_number" {
+    assert.equal(baml.json.stringify((42n).to_json()), "42")
 }
 
 test "test_bigint_to_json_large" {
-    assert.equal((99999999999999999999n).to_json(), "99999999999999999999")
+    assert.equal((99999999999999999999n).to_json(), 99999999999999999999n)
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────

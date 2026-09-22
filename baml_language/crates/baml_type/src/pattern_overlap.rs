@@ -16,7 +16,7 @@
 //!    contract, whereas a wrong `No` rejects valid code and a wrong "definite"
 //!    would skip a needed test.
 
-use baml_base::{LangRoots, TyAttr};
+use baml_base::LangRoots;
 
 use crate::{
     Interface, ParamTy, Ty,
@@ -149,7 +149,7 @@ fn pattern_overlap_at(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>, depth:
 /// any other type as the singleton `{ty}`.
 fn union_members(ty: &Ty) -> &[Ty] {
     match ty {
-        Ty::Union(members, _) => members,
+        Ty::Union(members) => members,
         other => std::slice::from_ref(other),
     }
 }
@@ -167,7 +167,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
     );
     // `never` denotes the empty set: it overlaps nothing — not even itself (equality
     // unification would call two `never`s the same type, the wrong question here).
-    if matches!(pat, Ty::Never { .. }) || matches!(member, Ty::Never { .. }) {
+    if matches!(pat, Ty::Never) || matches!(member, Ty::Never) {
         return Overlap::No;
     }
     // `unknown` is the top type: at the pair's top level the question is value-set
@@ -178,7 +178,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
     // var (`unknown` implements nothing). Distinct from `unknown` in an invariant
     // *argument* position, where equality IS the question and `unify_into` keeps
     // deciding it (binding an opposing var, comparing ground pairs exactly).
-    if matches!(pat, Ty::Unknown { .. }) || matches!(member, Ty::Unknown { .. }) {
+    if matches!(pat, Ty::Unknown) || matches!(member, Ty::Unknown) {
         return Overlap::Yes;
     }
     // A bare in-scope rigid var meeting an interface existential is likewise
@@ -191,7 +191,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
     // bound-refute it (a bounded var must realize to a *concrete* type — the
     // rule that stays correct for invariant argument positions, where equality
     // is the question and `unify_into` keeps deciding).
-    let bare_rigid = |t: &Ty| matches!(t, Ty::TypeVar(n, _) if env.vars.contains(n));
+    let bare_rigid = |t: &Ty| matches!(t, Ty::TypeVar(n) if env.vars.contains(n));
     if (bare_rigid(pat) && matches!(member, Ty::Interface(..)))
         || (matches!(pat, Ty::Interface(..)) && bare_rigid(member))
     {
@@ -224,12 +224,12 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
     match (pat, member) {
         // Error sentinels overlap nothing (mirrors `unify_into`): the type already
         // carries its own diagnostic, and callers suppress cascading reports.
-        (Ty::Error { .. }, _) | (_, Ty::Error { .. }) => Overlap::No,
+        (Ty::Error, _) | (_, Ty::Error) => Overlap::No,
         // `unknown` is the top type: it shares values with every inhabited type
         // (`never` was rejected before unification).
-        (Ty::Unknown { .. }, _) | (_, Ty::Unknown { .. }) => Overlap::Yes,
+        (Ty::Unknown, _) | (_, Ty::Unknown) => Overlap::Yes,
         // An opaque `$rust_type` could coincide with anything.
-        (Ty::RustType { .. }, _) | (_, Ty::RustType { .. }) => Overlap::Yes,
+        (Ty::RustType, _) | (_, Ty::RustType) => Overlap::Yes,
         // A residual projection could stand for any type (defensive mirror of the
         // `unify_into` arm, which normally decides these pairs before the meet).
         (Ty::AssociatedTypeProjection { .. }, _) | (_, Ty::AssociatedTypeProjection { .. }) => {
@@ -267,25 +267,25 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Future(..)
-            | Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
+            | Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Literal(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::Function { .. }
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Void { .. }
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::Void
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::Never { .. },
+            | Ty::Never,
             _,
         ) => Overlap::No,
     }
@@ -345,11 +345,7 @@ fn pattern_bounds_refute(
         .map(|name| {
             (
                 name.clone(),
-                chase_var(
-                    &Ty::TypeVar(name.clone(), TyAttr::default()),
-                    env.vars,
-                    bindings,
-                ),
+                chase_var(&Ty::TypeVar(name.clone()), env.vars, bindings),
             )
         })
         .collect();
@@ -415,42 +411,30 @@ mod tests {
             crate::test_roots::local(Name::new(name)),
             args.into(),
             Box::new([]),
-            TyAttr::default(),
         )
     }
 
     fn int_literal(n: i64) -> Ty {
-        Ty::Literal(
-            Literal::Int(n),
-            crate::Freshness::Regular,
-            TyAttr::default(),
-        )
+        Ty::Literal(Literal::Int(n), crate::Freshness::Regular)
     }
 
     fn bool_literal(b: bool) -> Ty {
-        Ty::Literal(
-            Literal::Bool(b),
-            crate::Freshness::Regular,
-            TyAttr::default(),
-        )
+        Ty::Literal(Literal::Bool(b), crate::Freshness::Regular)
     }
 
     fn enum_ty(name: &str) -> Ty {
-        Ty::Enum(crate::test_roots::local(Name::new(name)), TyAttr::default())
+        Ty::Enum(crate::test_roots::local(Name::new(name)))
     }
 
     fn enum_variant(enum_name: &str, variant: &str) -> Ty {
         Ty::EnumVariant(
             crate::test_roots::local(Name::new(enum_name)),
             Name::new(variant),
-            TyAttr::default(),
         )
     }
 
     fn never() -> Ty {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 
     /// Stub enum schema: `Cmp` has variants `Less`, `Equal`, `More`.
@@ -460,23 +444,15 @@ mod tests {
     }
 
     fn class1(name: &str, arg: Ty) -> Ty {
-        Ty::Class(
-            crate::test_roots::local(Name::new(name)),
-            Box::new([arg]),
-            TyAttr::default(),
-        )
+        Ty::Class(crate::test_roots::local(Name::new(name)), Box::new([arg]))
     }
 
     fn class2(name: &str, a: Ty, b: Ty) -> Ty {
-        Ty::Class(
-            crate::test_roots::local(Name::new(name)),
-            Box::new([a, b]),
-            TyAttr::default(),
-        )
+        Ty::Class(crate::test_roots::local(Name::new(name)), Box::new([a, b]))
     }
 
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(crate::test_roots::local(Name::new(name)), TyAttr::default())
+        Ty::TypeAlias(crate::test_roots::local(Name::new(name)))
     }
 
     /// A nullary interface constraint (the bound / registry-request form, as opposed
@@ -496,7 +472,6 @@ mod tests {
             params: Box::new([]),
             ret: Box::new(ret),
             throws: Box::new(never()),
-            attr: TyAttr::default(),
         }
     }
 
@@ -505,7 +480,6 @@ mod tests {
             base: Box::new(base),
             interface: Box::new(constraint(iface)),
             member: Name::new(member),
-            attr: TyAttr::default(),
         }
     }
 
@@ -721,9 +695,7 @@ mod tests {
     #[test]
     fn pattern_overlap_unknown_top_type_meets_everything() {
         let vars = params(&[]);
-        let unknown = Ty::Unknown {
-            attr: TyAttr::default(),
-        };
+        let unknown = Ty::Unknown;
         assert_eq!(
             pattern_overlap_plain(&unknown, &Ty::int(), &vars),
             Overlap::Yes
@@ -739,9 +711,7 @@ mod tests {
         // invariant *argument* position the question is equality instead, and a
         // bounded var genuinely cannot realize to `unknown` — refuted.
         let vars = params(&["T"]);
-        let unknown = Ty::Unknown {
-            attr: TyAttr::default(),
-        };
+        let unknown = Ty::Unknown;
         let mut bounds = TypeVarBoundsMap::default();
         bounds.insert(param("T"), vec![constraint("I")]);
         let aliases = std::collections::HashMap::default();
@@ -812,9 +782,7 @@ mod tests {
         // An errored type carries its own diagnostic; the oracle must not stack an
         // overlap claim (in either direction) on top of it.
         let vars = params(&["T"]);
-        let error = Ty::Error {
-            attr: TyAttr::default(),
-        };
+        let error = Ty::Error;
         assert_eq!(
             pattern_overlap_plain(&error, &Ty::type_var("T"), &vars),
             Overlap::No

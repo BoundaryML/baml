@@ -1,30 +1,30 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 /// Helper: build all the types for the `BookAnalysis` schema.
 fn book_analysis_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         class Score {
-            year: int @class_in_progress_field_missing(null),
-            score: int @class_in_progress_field_missing(null),
+            year: int,
+            score: int,
         }
         class PopularityOverTime {
-            bookName: string @class_in_progress_field_missing(null),
-            scores: [Score] @class_in_progress_field_missing([]),
+            bookName: string,
+            scores: [Score],
         }
         class WordCount {
-            bookName: string @class_in_progress_field_missing(null),
-            count: int @class_in_progress_field_missing(null),
+            bookName: string,
+            count: int,
         }
         class Ranking {
-            bookName: string @class_in_progress_field_missing(null),
-            score: int @class_in_progress_field_missing(null),
+            bookName: string,
+            score: int,
         }
         class BookAnalysis {
-            bookNames: [string] @class_in_progress_field_missing([]),
-            popularityOverTime: [PopularityOverTime] @alias("popularityData") @class_in_progress_field_missing([]),
-            popularityRankings: [Ranking] @class_in_progress_field_missing([]),
-            wordCounts: [WordCount] @class_in_progress_field_missing([]),
+            bookNames: [string],
+            popularityOverTime: [PopularityOverTime] @alias("popularityData"),
+            popularityRankings: [Ranking],
+            wordCounts: [WordCount],
         }
     }
 }
@@ -33,24 +33,24 @@ fn book_analysis_db() -> TypeRefDb<'static, &'static str> {
 fn choppy_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         class Error {
-            code: int @class_in_progress_field_missing(null),
-            message: string @class_in_progress_field_missing(null),
+            code: int,
+            message: string,
         }
         class ErrorBasic {
-            message: string @class_in_progress_field_missing(null),
+            message: string,
         }
         class Vertex {
-            id: string @class_in_progress_field_missing(null),
-            metadata: map<string, string> @class_in_progress_field_missing({}),
+            id: string,
+            metadata: map<string, string>,
         }
         class Edge {
-            source_id: string @class_in_progress_field_missing(null),
-            target_id: string @class_in_progress_field_missing(null),
-            relationship: string @class_in_progress_field_missing(null),
+            source_id: string,
+            target_id: string,
+            relationship: string,
         }
         class GraphJson {
-            vertices: [Vertex] @class_in_progress_field_missing([]),
-            edges: [Edge] @class_in_progress_field_missing([]),
+            vertices: [Vertex],
+            edges: [Edge],
         }
     }
 }
@@ -149,7 +149,7 @@ test_partial_deserializer!(
     }
     ```
     "#,
-    baml_tyannotated!(BookAnalysis),
+    baml_ty!(BookAnalysis),
     book_analysis_db(),
     {
       "bookNames": [
@@ -243,7 +243,7 @@ test_partial_deserializer!(
         "scores": [
           {"year": 1950, "score": 70},
   "#,
-    baml_tyannotated!(BookAnalysis),
+    baml_ty!(BookAnalysis),
     book_analysis_db(),
     {
       "bookNames": [
@@ -271,7 +271,7 @@ test_partial_deserializer!(
 test_partial_deserializer!(
     test_partial_choppy,
     TRIMMED_CHOPPY_RESULT,
-    baml_tyannotated!(GraphJson),
+    baml_ty!(GraphJson),
     choppy_db(),
     {
       "vertices": [
@@ -283,7 +283,7 @@ test_partial_deserializer!(
           }
         },
         {
-          "id": null,
+          "id": "",
           "metadata": {
           }
         }
@@ -299,7 +299,7 @@ test_partial_deserializer!(
 test_partial_deserializer!(
     test_partial_choppy_union,
     TRIMMED_CHOPPY_RESULT,
-    baml_tyannotated!((GraphJson | [GraphJson] | Error)),
+    baml_ty!((GraphJson | [GraphJson] | Error)),
     choppy_db(),
     {
       "vertices": [
@@ -311,7 +311,7 @@ test_partial_deserializer!(
           }
         },
         {
-          "id": null,
+          "id": "",
           "metadata": {
           }
         }
@@ -327,7 +327,7 @@ test_partial_deserializer!(
 test_partial_deserializer!(
     test_partial_choppy_union_2,
     TRIMMED_CHOPPY_RESULT,
-    baml_tyannotated!((GraphJson | ErrorBasic)),
+    baml_ty!((GraphJson | ErrorBasic)),
     choppy_db(),
     {
       "vertices": [
@@ -339,7 +339,7 @@ test_partial_deserializer!(
           }
         },
         {
-          "id": null,
+          "id": "",
           "metadata": {
           }
         }

@@ -1,4 +1,4 @@
-name: "Upload test results to Trunk"
+name: "Analyze test results in Trunk"
 description: >-
   Enriches a JUnit report with source-file paths where its reporter cannot
   emit them, then uploads it to one Flaky Tests collection. The upload gates
@@ -55,7 +55,7 @@ runs:
     # is determined by whether there are any unquarantined test failures. When
     # quarantining is disabled, this matches the existing behavior of the
     # tests' result.
-    - name: "Upload to Trunk"
+    - name: "Analyze in Trunk"
       if: inputs.token != ''
       uses: trunk-io/analytics-uploader@v2
       with:

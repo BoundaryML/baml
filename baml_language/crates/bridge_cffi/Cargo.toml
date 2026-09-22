@@ -48,6 +48,9 @@ wasm-bindgen-futures = { workspace = true }
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 cbindgen = { workspace = true }
 
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+find-msvc-tools = { workspace = true }
+
 [dev-dependencies]
 baml_artifact = { workspace = true, features = [ "test-support" ] }
 

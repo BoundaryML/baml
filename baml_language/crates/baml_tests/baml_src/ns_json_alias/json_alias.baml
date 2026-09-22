@@ -74,12 +74,13 @@ test "let_json_map" {
 // ─── 1.7 Exhaustive match against json ───────────────────────────────────────
 
 // The function takes `json` as a parameter; passing `null` should return "null".
-// All seven arms are covered.
+// All eight arms are covered.
 function match_json(j: json) -> string {
     match (j) {
         null => "null",
         let b: bool => "bool",
         let i: int => "int",
+        let bi: bigint => "bigint",
         let f: float => "float",
         let s: string => "string",
         let arr: json[] => "array",

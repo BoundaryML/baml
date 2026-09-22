@@ -156,7 +156,6 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Now,
     ),
     ("type_shapes", "roundtrip_tests/test_routing.rs", Gate::Now),
-    ("type_shapes", "roundtrip_tests/test_streams.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_symbol_collisions.rs",

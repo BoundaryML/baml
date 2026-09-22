@@ -1,7 +1,7 @@
 // examples of code the LLM may generate that we need to fix
 
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 fn code_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
@@ -20,7 +20,7 @@ test_deserializer!(
       "code": `print("Hello, world!")`
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -36,7 +36,7 @@ test_deserializer!(
       "code": 'print("Hello, world!")'
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -52,7 +52,7 @@ test_deserializer!(
       "code": "print(\"Hello, world!\")"
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -68,7 +68,7 @@ test_deserializer!(
       "code": "print(\"Hello, world!\")"
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -84,7 +84,7 @@ test_deserializer!(
       "code": """print("Hello, world!")"""
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -102,7 +102,7 @@ test_deserializer!(
       "type": "code",
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -121,7 +121,7 @@ test_deserializer!(
     "type": "code",
   }
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -138,7 +138,7 @@ test_deserializer!(
 Goodbye, world!\")"
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -155,7 +155,7 @@ test_deserializer!(
 Goodbye, world!")`
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -172,7 +172,7 @@ test_deserializer!(
 Goodbye, world!")'
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -189,7 +189,7 @@ test_deserializer!(
 Goodbye, world!")"""
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -205,7 +205,7 @@ test_deserializer!(
       "code": "print("Hello, world!")"
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -221,7 +221,7 @@ test_deserializer!(
       "code": `print("Hello, world!")`
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -237,7 +237,7 @@ test_deserializer!(
       "code": 'print('Hello, world!')'
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -253,7 +253,7 @@ test_deserializer!(
       "code": """print("Hello, world!")"""
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -272,7 +272,7 @@ test_deserializer!(
       "code": """print("""Hello, world!""")"""
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -288,7 +288,7 @@ test_deserializer!(
       "code": `console.log(`Hello, world!`)`
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -342,7 +342,7 @@ export default query(async (ctx) => {
 })`
   }
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -436,7 +436,7 @@ Both versions will:
 The main difference is that Ruby uses the special `$?` variable to check command success, while TypeScript relies on try/catch with execSync.
 
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -480,7 +480,7 @@ test_deserializer!(
       "type": "code",
     }
     "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -503,7 +503,7 @@ Here's a comparison of TypeScript and Ruby code for checking the main Git branch
 }
 
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -526,7 +526,7 @@ Here's a comparison of TypeScript and Ruby code for checking the main Git branch
 }
 
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -549,7 +549,7 @@ Here's a comparison of TypeScript and Ruby code for checking the main Git branch
 ```
 
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",
@@ -572,7 +572,7 @@ const { execSync } = require('child_process');
 ```
 
   "#,
-    baml_tyannotated!(Test),
+    baml_ty!(Test),
     code_db(),
     {
       "type": "code",

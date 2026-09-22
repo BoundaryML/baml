@@ -200,22 +200,6 @@ class TestMain {
     }
 
     @Test
-    void test_main_stream_types_lorem_leaf_present() {
-        // PPIR synthesizes Class$stream partial models for any class referenced by
-        // an LLM function's return type. Both Resume and StreamingDoc are LLM
-        // return types, so at least one in-package `$stream` partial must exist.
-        // Java keeps the
-        // in-package `$`-preserved naming (`baml_sdk.lorem.StreamingDoc$stream`),
-        // NOT Python's `stream_types.lorem.*` legacy layout. StreamingDoc's
-        // conditional-emit outcome is pinned to "emitted"; Resume's is left to
-        // the conditional-emit rule.
-        boolean hasAny =
-                classExists("baml_sdk.lorem.Resume$stream")
-                        || classExists("baml_sdk.lorem.StreamingDoc$stream");
-        assertTrue(hasAny, "expected at least one in-package $stream partial class in lorem");
-    }
-
-    @Test
     void test_main_classify_sentiment_factory_bindings() {
         assertTrue(hasMethod(baml_sdk.ipsum.Fns.class, "ClassifySentiment"));
         assertTrue(hasMethod(baml_sdk.ipsum.Fns.class, "ClassifySentiment_async"));

@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import sharp from 'sharp';
 import { postToSlack, type SlackBlock } from '../clients/slack.js';
 
@@ -18,21 +18,21 @@ interface EmbeddedDashboardLayout {
   width: number;
 }
 
-const primaryPanelTitles = [
-  'CLI invocations — daily',
-  'CLI weekly cohort retention',
-  'CLI 7DAU — daily',
-  'CLI 30DAU — daily',
-  'CLI new users (7d period)',
-  'CLI retained users (7d period)',
-  'CLI resurrected users (7d period)',
-];
+export interface PostHogCardRenderState {
+  hasErrorIndicator: boolean;
+  hasLoadingIndicator: boolean;
+  height: number;
+  opacity: number;
+  text: string;
+  visibility: string;
+  width: number;
+}
 
-const websitePanelTitles = [
-  'Website key page views — weekly',
-  'Website top pages — weekly',
-  'Website traffic sources — weekly',
-];
+export interface RetryOptions {
+  attempts: number;
+  delayMs: number;
+  onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
+}
 
 const nativePanelTitles = [
   'Total Discord users',
@@ -41,9 +41,120 @@ const nativePanelTitles = [
   'Early Access Program',
 ];
 
+const captureAttempts = 3;
+const dashboardNavigationTimeoutMs = 60_000;
+const dashboardRenderTimeoutMs = 120_000;
 const dashboardSettleTimeMs = 20_000;
+const dashboardStatePollIntervalMs = 2_000;
+const retryDelayMs = 5_000;
 const productMetricsReadmeUrl =
   'https://github.com/BoundaryML/baml/blob/canary/typescript2/app-product-metrics/README.md';
+
+const delay = async (delayMs: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+};
+
+export async function withRetries<T>(
+  operation: (attempt: number) => Promise<T>,
+  options: RetryOptions,
+): Promise<T> {
+  if (!Number.isInteger(options.attempts) || options.attempts < 1) {
+    throw new Error('attempts must be a positive integer');
+  }
+  for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
+    try {
+      return await operation(attempt);
+    } catch (error) {
+      if (attempt === options.attempts) throw error;
+      const nextDelayMs = options.delayMs * 2 ** (attempt - 1);
+      options.onRetry?.(error, attempt, nextDelayMs);
+      await delay(nextDelayMs);
+    }
+  }
+  throw new Error('unreachable');
+}
+
+export function postHogCardsAreReady(cards: PostHogCardRenderState[]): boolean {
+  return (
+    cards.length > 0 &&
+    cards.every(
+      ({
+        hasErrorIndicator,
+        hasLoadingIndicator,
+        height,
+        opacity,
+        text,
+        visibility,
+        width,
+      }) =>
+        !hasErrorIndicator &&
+        !hasLoadingIndicator &&
+        height > 0 &&
+        opacity > 0 &&
+        width > 0 &&
+        visibility === 'visible' &&
+        text.trim().length > 0,
+    )
+  );
+}
+
+async function postHogCardStates(
+  page: Page,
+): Promise<PostHogCardRenderState[]> {
+  return await page
+    .locator('[data-attr="insight-card"]')
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const bounds = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          hasErrorIndicator:
+            element.getAttribute('data-api-errored') === 'true' ||
+            element.querySelector(
+              '[data-attr="insight-error-state"], [data-attr="insight-refresh-data-hint"]',
+            ) !== null,
+          hasLoadingIndicator:
+            element.querySelector('[data-attr="loading-bar"]') !== null,
+          height: Math.round(bounds.height),
+          opacity: Number.parseFloat(style.opacity),
+          text: element.textContent ?? '',
+          visibility: style.visibility,
+          width: Math.round(bounds.width),
+        };
+      }),
+    );
+}
+
+async function waitForPostHogDashboard(page: Page): Promise<void> {
+  const deadline = Date.now() + dashboardRenderTimeoutMs;
+  let readySince: number | undefined;
+  let stableCardCount: number | undefined;
+  let lastCards: PostHogCardRenderState[] = [];
+
+  while (Date.now() < deadline) {
+    lastCards = await postHogCardStates(page);
+    if (postHogCardsAreReady(lastCards)) {
+      if (stableCardCount !== lastCards.length) {
+        stableCardCount = lastCards.length;
+        readySince = Date.now();
+      } else if (
+        readySince !== undefined &&
+        Date.now() - readySince >= dashboardSettleTimeMs
+      ) {
+        return;
+      }
+    } else {
+      stableCardCount = undefined;
+      readySince = undefined;
+    }
+    await page.waitForTimeout(dashboardStatePollIntervalMs);
+  }
+
+  const readyCards = lastCards.filter((card) => postHogCardsAreReady([card]));
+  throw new Error(
+    `PostHog dashboard did not settle within ${dashboardRenderTimeoutMs / 1_000}s (${readyCards.length}/${lastCards.length} cards ready)`,
+  );
+}
 
 function dashboardReportHeading(dashboardUrl: string, date: string): string {
   return `<${new URL(dashboardUrl).href}|Product metrics dashboard> · ${date}`;
@@ -79,7 +190,7 @@ export function dashboardReportBlocks(
   ];
 }
 
-export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
+async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
   const browser = await chromium.launch({ headless: true });
   try {
     const indexPage = await browser.newPage({
@@ -87,7 +198,7 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
       viewport: { height: 900, width: 1600 },
     });
     const dashboardResponse = await indexPage.goto(dashboardUrl, {
-      timeout: 30_000,
+      timeout: dashboardNavigationTimeoutMs,
       waitUntil: 'domcontentloaded',
     });
     if (!dashboardResponse?.ok()) {
@@ -100,7 +211,7 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
     if (hasNativeChart) {
       await nativeChart.locator('.plot-container').first().waitFor({
         state: 'visible',
-        timeout: 60_000,
+        timeout: dashboardRenderTimeoutMs,
       });
       await indexPage.waitForFunction(
         (titles) => {
@@ -109,7 +220,7 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
           return titles.every((title) => chartText.includes(title));
         },
         nativePanelTitles,
-        { timeout: 60_000 },
+        { timeout: dashboardRenderTimeoutMs },
       );
       await indexPage.waitForTimeout(dashboardSettleTimeMs);
     }
@@ -172,25 +283,15 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
         reportPage.on('pageerror', (error) => pageErrors.push(error.message));
         try {
           const response = await reportPage.goto(frame.src, {
-            timeout: 30_000,
-            waitUntil: 'load',
+            timeout: dashboardNavigationTimeoutMs,
+            waitUntil: 'domcontentloaded',
           });
           if (!response?.ok()) {
             throw new Error(
               `Embedded dashboard returned HTTP ${response?.status() ?? 'unknown'}`,
             );
           }
-          const expectedTitles =
-            index === 0 ? primaryPanelTitles : websitePanelTitles;
-          await reportPage.waitForFunction(
-            (titles) => {
-              const bodyText = document.body.innerText;
-              return titles.every((title) => bodyText.includes(title));
-            },
-            expectedTitles,
-            { timeout: 60_000 },
-          );
-          await reportPage.waitForTimeout(dashboardSettleTimeMs);
+          await waitForPostHogDashboard(reportPage);
           const screenshot = Buffer.from(
             await reportPage.screenshot({ type: 'png' }),
           );
@@ -227,6 +328,19 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   } finally {
     await browser.close();
   }
+}
+
+export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
+  return await withRetries(() => captureDashboardOnce(dashboardUrl), {
+    attempts: captureAttempts,
+    delayMs: retryDelayMs,
+    onRetry: (error, attempt, nextDelayMs) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `Dashboard capture attempt ${attempt}/${captureAttempts} failed: ${reason}. Retrying in ${nextDelayMs / 1_000}s.`,
+      );
+    },
+  });
 }
 
 export async function sendSlackDashboardReport(

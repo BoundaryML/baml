@@ -229,32 +229,32 @@ impl WalkAllUnions for Ty {
         }
 
         match self {
-            Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Void { .. }
-            | Ty::Uint8Array { .. }
+            Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Void
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::RustType { .. }
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Unknown { .. }
-            | Ty::Never { .. }
+            | Ty::RustType
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::Unknown
+            | Ty::Never
             | Ty::Literal(..) => {}
-            Ty::Class(_, args, _) => {
+            Ty::Class(_, args) => {
                 for arg in args {
                     unions.extend(arg.walk_all_unions());
                 }
             }
-            Ty::Interface(_, generics, associated_types, _) => {
+            Ty::Interface(_, generics, associated_types) => {
                 for generic in generics {
                     unions.extend(generic.walk_all_unions());
                 }
@@ -262,7 +262,7 @@ impl WalkAllUnions for Ty {
                     unions.extend(ty.walk_all_unions());
                 }
             }
-            Ty::List(ty, _) => unions.extend(ty.walk_all_unions()),
+            Ty::List(ty) => unions.extend(ty.walk_all_unions()),
             Ty::Map { key, value, .. } => {
                 unions.extend(key.walk_all_unions());
                 unions.extend(value.walk_all_unions());
@@ -279,13 +279,13 @@ impl WalkAllUnions for Ty {
                 unions.extend(ret.walk_all_unions());
                 unions.extend(throws.walk_all_unions());
             }
-            Ty::Future(value, error, _) => {
+            Ty::Future(value, error) => {
                 unions.extend(value.walk_all_unions());
                 unions.extend(error.walk_all_unions());
             }
             // Codegen types are canonical at the compiler boundary, but keep
             // this public symbol traversal total for manually assembled pools.
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 for member in members {
                     unions.extend(member.walk_all_unions());
                 }
@@ -308,10 +308,10 @@ fn validate_map_keys_ty(
             }
             validate_map_keys_ty(value, pool, resolving_aliases)
         }
-        Ty::Class(_, args, _) => args
+        Ty::Class(_, args) => args
             .iter()
             .try_for_each(|arg| validate_map_keys_ty(arg, pool, resolving_aliases)),
-        Ty::Interface(_, generics, associated_types, _) => {
+        Ty::Interface(_, generics, associated_types) => {
             generics
                 .iter()
                 .try_for_each(|ty| validate_map_keys_ty(ty, pool, resolving_aliases))?;
@@ -319,8 +319,8 @@ fn validate_map_keys_ty(
                 .iter()
                 .try_for_each(|(_, ty)| validate_map_keys_ty(ty, pool, resolving_aliases))
         }
-        Ty::List(inner, _) => validate_map_keys_ty(inner, pool, resolving_aliases),
-        Ty::Union(members, _) => members
+        Ty::List(inner) => validate_map_keys_ty(inner, pool, resolving_aliases),
+        Ty::Union(members) => members
             .iter()
             .try_for_each(|member| validate_map_keys_ty(member, pool, resolving_aliases)),
         Ty::Function {
@@ -335,7 +335,7 @@ fn validate_map_keys_ty(
             validate_map_keys_ty(ret, pool, resolving_aliases)?;
             validate_map_keys_ty(throws, pool, resolving_aliases)
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             validate_map_keys_ty(value, pool, resolving_aliases)?;
             validate_map_keys_ty(error, pool, resolving_aliases)
         }
@@ -349,12 +349,12 @@ fn map_key_resolves_to_string(
     resolving_aliases: &mut HashSet<super::Name>,
 ) -> bool {
     match key {
-        Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), ..) => true,
-        Ty::Never { .. } => true,
-        Ty::Union(members, _) => members
+        Ty::String | Ty::Literal(baml_base::Literal::String(_), ..) => true,
+        Ty::Never => true,
+        Ty::Union(members) => members
             .iter()
             .all(|member| map_key_resolves_to_string(member, pool, resolving_aliases)),
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             if !resolving_aliases.insert(name.clone()) {
                 return false;
             }
@@ -369,7 +369,7 @@ fn map_key_resolves_to_string(
 
 #[cfg(test)]
 mod tests {
-    use baml_base::{Name as BaseName, TyAttr};
+    use baml_base::Name as BaseName;
 
     use super::*;
 
@@ -403,10 +403,7 @@ mod tests {
                 docstring: None,
                 ty: Ty::Map {
                     key: Box::new(key),
-                    value: Box::new(Ty::Int {
-                        attr: TyAttr::EMPTY,
-                    }),
-                    attr: TyAttr::EMPTY,
+                    value: Box::new(Ty::Int),
                 },
             }],
             static_methods: Vec::new(),
@@ -420,23 +417,12 @@ mod tests {
         let key = name("Key");
         let key_chain = name("KeyChain");
         let mut pool = SymbolPool::new();
-        pool.insert(
-            key.clone(),
-            alias(
-                key.clone(),
-                Ty::String {
-                    attr: TyAttr::EMPTY,
-                },
-            ),
-        );
+        pool.insert(key.clone(), alias(key.clone(), Ty::String));
         pool.insert(
             key_chain.clone(),
-            alias(key_chain.clone(), Ty::TypeAlias(key, TyAttr::EMPTY)),
+            alias(key_chain.clone(), Ty::TypeAlias(key)),
         );
-        pool.insert(
-            name("Holder"),
-            map_with_key(Ty::TypeAlias(key_chain, TyAttr::EMPTY)),
-        );
+        pool.insert(name("Holder"), map_with_key(Ty::TypeAlias(key_chain)));
 
         assert_eq!(validate_symbol_pool_map_keys(&pool), Ok(()));
     }
@@ -444,21 +430,13 @@ mod tests {
     #[test]
     fn map_key_validation_rejects_non_string_and_cyclic_aliases() {
         for (label, target) in [
-            (
-                "non-string",
-                Ty::Int {
-                    attr: TyAttr::EMPTY,
-                },
-            ),
-            ("cycle", Ty::TypeAlias(name("Key"), TyAttr::EMPTY)),
+            ("non-string", Ty::Int),
+            ("cycle", Ty::TypeAlias(name("Key"))),
         ] {
             let key = name("Key");
             let mut pool = SymbolPool::new();
             pool.insert(key.clone(), alias(key.clone(), target));
-            pool.insert(
-                name("Holder"),
-                map_with_key(Ty::TypeAlias(key, TyAttr::EMPTY)),
-            );
+            pool.insert(name("Holder"), map_with_key(Ty::TypeAlias(key)));
 
             assert!(
                 matches!(
@@ -473,26 +451,8 @@ mod tests {
 
     #[test]
     fn union_walker_is_total_for_noncanonical_pools() {
-        let nested = Ty::Union(
-            Box::new([
-                Ty::String {
-                    attr: TyAttr::EMPTY,
-                },
-                Ty::Null {
-                    attr: TyAttr::EMPTY,
-                },
-            ]),
-            TyAttr::EMPTY,
-        );
-        let outer = Ty::Union(
-            Box::new([
-                Ty::Int {
-                    attr: TyAttr::EMPTY,
-                },
-                nested.clone(),
-            ]),
-            TyAttr::EMPTY,
-        );
+        let nested = Ty::Union(Box::new([Ty::String, Ty::Null]));
+        let outer = Ty::Union(Box::new([Ty::Int, nested.clone()]));
         let symbol = alias(name("Nested"), outer.clone());
 
         assert_eq!(symbol.walk_all_unions(), HashSet::from([outer, nested]));

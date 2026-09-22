@@ -83,6 +83,15 @@ Sets up the BAML Language Rust toolchain with caching and optional WASM support.
     workspace: 'baml_language'                   # Optional, default: 'baml_language'
 ```
 
+Also exports the build fingerprint (see `export-build-fingerprint`).
+
+### export-build-fingerprint
+Exports `BAML_GIT_SHA`, the checked-out commit that `baml_artifact` stamps into every compiler and bridge build. Canary builds only load artifacts from the same commit and refuse to compile without one, so every job that builds BAML Rust without `setup-rust` must run this after checkout. Steps that build in their own container (`cross`, maturin) must also forward `BAML_GIT_SHA` into it.
+
+```yaml
+- uses: ./.github/actions/export-build-fingerprint
+```
+
 ### engine-setup-rust
 Sets up the engine Rust toolchain with caching and optional WASM support.
 

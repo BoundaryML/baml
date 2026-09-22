@@ -31,7 +31,6 @@ pub use baml_compiler2_emit;
 pub use baml_compiler2_hir;
 pub use baml_compiler2_hir_ty;
 pub use baml_compiler2_mir;
-pub use baml_compiler2_ppir;
 pub use check::{
     CheckResult, NarrowedDiagnostics, check_file, check_files_parallel,
     collect_compiler2_diagnostics, collect_compiler2_diagnostics_narrowed, collect_diagnostics,

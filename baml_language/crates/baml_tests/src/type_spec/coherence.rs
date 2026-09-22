@@ -25,7 +25,7 @@ fn hir_ty_pairs(source: &str) -> Vec<(TextRange, TextRange, bool)> {
             .iter()
             .map(|violation| {
                 let span_of = |loc: baml_compiler2_hir::loc::ImplLoc<'_>| {
-                    baml_compiler2_ppir::item_data::impl_block_source_map(&db, loc).span
+                    baml_compiler2_hir::item_data::impl_block_source_map(&db, loc).span
                 };
                 (
                     span_of(violation.primary),

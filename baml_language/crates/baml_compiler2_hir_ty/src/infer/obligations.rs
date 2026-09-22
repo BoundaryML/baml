@@ -199,11 +199,11 @@ impl<'db> InferenceContext<'db> {
                 if purpose == GoalPurpose::Coercion {
                     match ty.kind() {
                         // `never` inhabits every type.
-                        InferTy::Never { .. } => return Attempt::Done,
+                        InferTy::Never => return Attempt::Done,
                         // A union value is used through the interface by
                         // whichever member it holds, so every member must
                         // implement it (the spec's Variance rule 2.1).
-                        InferTy::Union(members, _) => {
+                        InferTy::Union(members) => {
                             for member in members {
                                 self.register_obligation(Obligation::Implements {
                                     ty: member.clone(),
@@ -356,7 +356,7 @@ impl<'db> InferenceContext<'db> {
     /// As in impl selection: exactly one applicable head commits,
     /// several stall, none reports.
     fn select_object(&mut self, subject: &Ty, goal: &InferInterface) -> Selection {
-        let InferTy::Interface(name, args, pins, _) = subject.kind() else {
+        let InferTy::Interface(name, args, pins) = subject.kind() else {
             unreachable!("object selection is for an existential subject")
         };
         let subject_target = InferInterface::new(name.clone(), args.clone(), pins.clone());
@@ -390,7 +390,7 @@ impl<'db> InferenceContext<'db> {
     /// placeholder projection). As in impl selection: exactly one
     /// applicable head commits, several stall, none reports.
     fn select_param_env(&mut self, subject: &Ty, goal: &InferInterface) -> Selection {
-        let InferTy::TypeVar(param, _) = subject.kind() else {
+        let InferTy::TypeVar(param) = subject.kind() else {
             unreachable!("caller-bound selection is for a rigid var subject")
         };
         let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
@@ -458,7 +458,6 @@ impl<'db> InferenceContext<'db> {
                             base: subject.clone(),
                             interface: head.clone(),
                             member: name.clone(),
-                            attr: baml_type::TyAttr::default(),
                         })
                     },
                     |(_, have_pin)| have_pin.clone(),
@@ -695,7 +694,7 @@ impl<'db> InferenceContext<'db> {
         goal: &Ty,
         facts: &crate::impls::ImplFacts<'_>,
     ) -> Option<rustc_hash::FxHashMap<baml_type::ParamTy, Ty>> {
-        if let InferTy::TypeVar(param, _) = facts.for_ty_pattern.kind()
+        if let InferTy::TypeVar(param) = facts.for_ty_pattern.kind()
             && facts.generic_params.iter().any(|(p, _)| p == param)
             && !crate::impls::is_concrete_receiver(goal)
         {
@@ -824,7 +823,7 @@ impl<'db> InferenceContext<'db> {
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
         match ty.kind() {
-            InferTy::TypeVar(param, _) => {
+            InferTy::TypeVar(param) => {
                 let carried = baml_type::normalize::TypeContext::type_var_bound(&self.facts, param);
                 carried.iter().any(|have| {
                     let have = InferInterface::from_constraint(have);
@@ -832,7 +831,7 @@ impl<'db> InferenceContext<'db> {
                         || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
                 })
             }
-            InferTy::Interface(name, args, pins, _) => {
+            InferTy::Interface(name, args, pins) => {
                 let have = InferInterface::new(name.clone(), args.clone(), pins.clone());
                 crate::impls::head_satisfies(self.db, &have, &target, &eq)
                     || crate::impls::interface_requires(self.db, &have, &target, ty, 8)
@@ -872,9 +871,7 @@ impl<'db> InferenceContext<'db> {
 /// wrote it (`1`), which is why [`InferenceContext::attempt`] keeps both.
 fn widen_literal(ty: &Ty) -> Ty {
     match ty.kind() {
-        InferTy::Literal(literal, _, attr) => {
-            Ty::intern(super::literal_base(literal, attr.clone()))
-        }
+        InferTy::Literal(literal, _) => Ty::intern(super::literal_base(literal)),
         _ => ty.clone(),
     }
 }

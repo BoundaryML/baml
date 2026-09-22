@@ -6,11 +6,9 @@ Drives codegen from real `.baml` source through the full
 
 Scope (subset of 09a-codegen-example-scenario.md):
 - user.lorem.Resume + ExtractResume (with flat spec/stream projections)
-- user.lorem.StreamingDoc + StreamingExtract (pins the always-different
-  `$stream` companion branch; folded in from the former
-  `python_llm_functions` crate)
+- user.lorem.StreamingDoc + StreamingExtract (class-typed streaming
+  bindings; folded in from the former `python_llm_functions` crate)
 - user.ipsum.Sentiment (enum) + ClassifySentiment
-- stream_types/lorem leaf presence
 """
 
 
@@ -121,29 +119,6 @@ def test_main_streaming_extract_operation_bindings():
         "StreamingExtract__parse_async",
     ):
         assert not hasattr(lorem, removed), f"obsolete companion leaked: {removed}"
-
-
-def test_main_stream_types_lorem_leaf_present():
-    # PPIR synthesizes Class$stream companions for any class referenced
-    # by an LLM function's return type. Both Resume and StreamingDoc
-    # are LLM return types, so `stream_types.lorem` must exist with at
-    # least one of them. StreamingDoc's conditional-emit outcome is
-    # pinned to "emitted" (its `body string?` proxies a
-    # stream-state-altering field); Resume's is left to the
-    # conditional-emit rule.
-    from baml_sdk.stream_types import lorem as stream_lorem
-
-    has_any = any(hasattr(stream_lorem, name) for name in ("Resume", "StreamingDoc"))
-    assert has_any, (
-        "expected at least one $stream companion class in stream_types/lorem"
-    )
-
-
-# SDK_PARITY_LINT(skip): validates Python generated stream_types package imports
-def test_main_nested_stream_partial_module_imports_cleanly():
-    from baml_sdk.stream_types import stream_typing
-
-    assert stream_typing.TextResultStreamHolder is not None
 
 
 def test_main_classify_sentiment_factory_bindings():

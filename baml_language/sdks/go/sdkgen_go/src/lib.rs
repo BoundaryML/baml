@@ -27,7 +27,7 @@ use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
 };
-use baml_type::{ParamTy, RESERVED_USER_PACKAGE, TyAttr};
+use baml_type::{ParamTy, RESERVED_USER_PACKAGE};
 
 mod names;
 mod packages;
@@ -57,23 +57,23 @@ fn is_ai_prompt(name: &Name) -> bool {
 
 fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
     match ty {
-        Ty::Interface(name, generics, associated, _) => {
+        Ty::Interface(name, generics, associated) => {
             out.insert(name.clone());
             for nested in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
                 collect_interface_tys(nested, out);
             }
         }
-        Ty::Class(_, arguments, _) => {
+        Ty::Class(_, arguments) => {
             for argument in arguments {
                 collect_interface_tys(argument, out);
             }
         }
-        Ty::List(inner, _) => collect_interface_tys(inner, out),
+        Ty::List(inner) => collect_interface_tys(inner, out),
         Ty::Map { key, value, .. } => {
             collect_interface_tys(key, out);
             collect_interface_tys(value, out);
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             for item in items {
                 collect_interface_tys(item, out);
             }
@@ -90,7 +90,7 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
             collect_interface_tys(ret, out);
             collect_interface_tys(throws, out);
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             collect_interface_tys(value, out);
             collect_interface_tys(error, out);
         }
@@ -404,6 +404,7 @@ func metadataInput(metadata Metadata) baml_go.Input {
 		"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 		"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
 		"other": baml_go.Map(metadata.Other, baml_go.String),
+		"skip": baml_go.Bool(false),
 	})
 }
 
@@ -1124,9 +1125,8 @@ fn collect_projected_codec_types(
         GoTy::FunctionSpec { output } => {
             collect_projected_codec_types(output, owner_package, pool, projection, collected);
         }
-        GoTy::Stream { partial, final_ } => {
-            collect_projected_codec_types(partial, owner_package, pool, projection, collected);
-            collect_projected_codec_types(final_, owner_package, pool, projection, collected);
+        GoTy::Stream { value } => {
+            collect_projected_codec_types(value, owner_package, pool, projection, collected);
         }
         GoTy::Function(key) => {
             collected
@@ -1354,9 +1354,7 @@ fn supported_go_type(ty: &GoTy, classes: &BTreeSet<Name>) -> bool {
                 && type_var_candidate_reifiable(member, classes)
         }),
         GoTy::FunctionSpec { output } => supported_go_type(output, classes),
-        GoTy::Stream { partial, final_ } => {
-            supported_go_type(partial, classes) && supported_go_type(final_, classes)
-        }
+        GoTy::Stream { value } => supported_go_type(value, classes),
         // Function values need direction-specific generated adapters. Classes,
         // aliases, and ordinary output positions use this bidirectional check
         // and therefore continue to omit them.
@@ -1513,8 +1511,8 @@ fn direct_required_class_target_inner<'a>(
     aliases: &mut HashSet<Name>,
 ) -> Option<&'a Name> {
     match ty {
-        Ty::Class(name, _, _) => Some(name),
-        Ty::TypeAlias(name, _) if aliases.insert(name.clone()) => match &pool[name] {
+        Ty::Class(name, _) => Some(name),
+        Ty::TypeAlias(name) if aliases.insert(name.clone()) => match &pool[name] {
             Symbol::TypeAlias(alias) if !alias.recursive => {
                 direct_required_class_target_inner(&alias.resolves_to, pool, aliases)
             }
@@ -1629,7 +1627,7 @@ fn supported_function_argument(
 }
 
 fn function_returns_only_error(return_type: &Ty) -> bool {
-    matches!(return_type, Ty::Void { .. } | Ty::Never { .. })
+    matches!(return_type, Ty::Void | Ty::Never)
 }
 
 fn supported_wire_type(
@@ -1655,14 +1653,14 @@ enum PrimitiveKind {
 #[cfg(test)]
 fn primitive_kind(ty: &Ty) -> Option<PrimitiveKind> {
     match ty {
-        Ty::String { .. } => Some(PrimitiveKind::String),
-        Ty::Int { .. } => Some(PrimitiveKind::Int),
-        Ty::Bigint { .. } => Some(PrimitiveKind::Bigint),
-        Ty::Float { .. } => Some(PrimitiveKind::Float),
-        Ty::Bool { .. } => Some(PrimitiveKind::Bool),
-        Ty::Null { .. } => Some(PrimitiveKind::Null),
-        Ty::Uint8Array { .. } => Some(PrimitiveKind::Uint8Array),
-        Ty::Literal(literal, _, _) => match literal {
+        Ty::String => Some(PrimitiveKind::String),
+        Ty::Int => Some(PrimitiveKind::Int),
+        Ty::Bigint => Some(PrimitiveKind::Bigint),
+        Ty::Float => Some(PrimitiveKind::Float),
+        Ty::Bool => Some(PrimitiveKind::Bool),
+        Ty::Null => Some(PrimitiveKind::Null),
+        Ty::Uint8Array => Some(PrimitiveKind::Uint8Array),
+        Ty::Literal(literal, _) => match literal {
             Literal::String(_) => Some(PrimitiveKind::String),
             Literal::Int(_) => Some(PrimitiveKind::Int),
             Literal::Bigint(_) => Some(PrimitiveKind::Bigint),
@@ -1971,7 +1969,7 @@ fn render_functions(
             DynamicDocContext::Return,
             type_var_scope,
         ));
-        if function.throws.is_some() || matches!(function.return_type, Ty::Never { .. }) {
+        if function.throws.is_some() || matches!(function.return_type, Ty::Never) {
             dynamic_notes.push(
                 "BAML failures are returned as Go errors containing the current runtime trace text; structured BAML error values are not exposed yet."
                     .to_string(),
@@ -2074,17 +2072,12 @@ fn render_functions(
                         .cloned()
                         .enumerate()
                         .map(|(index, name)| {
-                            Ty::TypeVar(
-                                ParamTy::new(
-                                    u32::try_from(index)
-                                        .expect("generic parameter index fits in u32"),
-                                    name,
-                                ),
-                                TyAttr::default(),
-                            )
+                            Ty::TypeVar(ParamTy::new(
+                                u32::try_from(index).expect("generic parameter index fits in u32"),
+                                name,
+                            ))
                         })
                         .collect(),
-                    TyAttr::default(),
                 );
                 let _ = writeln!(
                     out,
@@ -2163,17 +2156,13 @@ fn render_functions(
                             .cloned()
                             .enumerate()
                             .map(|(index, name)| {
-                                Ty::TypeVar(
-                                    ParamTy::new(
-                                        u32::try_from(index)
-                                            .expect("generic parameter index fits in u32"),
-                                        name,
-                                    ),
-                                    TyAttr::default(),
-                                )
+                                Ty::TypeVar(ParamTy::new(
+                                    u32::try_from(index)
+                                        .expect("generic parameter index fits in u32"),
+                                    name,
+                                ))
                             })
                             .collect(),
-                        TyAttr::default(),
                     );
                     let _ = writeln!(
                         out,
@@ -2222,9 +2211,9 @@ fn render_functions(
             out.push('}');
         }
         out.push_str(")\n");
-        if matches!(function.return_type, Ty::Void { .. }) {
+        if matches!(function.return_type, Ty::Void) {
             let _ = writeln!(out, "\treturn {error_local}");
-        } else if matches!(function.return_type, Ty::Never { .. }) {
+        } else if matches!(function.return_type, Ty::Never) {
             let _ = writeln!(out, "\tif {error_local} != nil {{");
             let _ = writeln!(out, "\t\treturn {error_local}\n\t}}");
             let _ = writeln!(
@@ -2394,10 +2383,9 @@ fn add_function_surface_imports(
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             add_function_surface_imports(output, surface_owner_package, context, imports);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            add_function_surface_imports(partial, surface_owner_package, context, imports);
-            add_function_surface_imports(final_, surface_owner_package, context, imports);
+            add_function_surface_imports(value, surface_owner_package, context, imports);
         }
         GoTy::Map { key, value } => {
             add_function_surface_imports(key, surface_owner_package, context, imports);
@@ -2490,10 +2478,9 @@ fn add_projected_type_imports(
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             add_projected_type_imports(output, context, imports, visited);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            add_projected_type_imports(partial, context, imports, visited);
-            add_projected_type_imports(final_, context, imports, visited);
+            add_projected_type_imports(value, context, imports, visited);
         }
         GoTy::Map { key, value } => {
             add_projected_type_imports(key, context, imports, visited);
@@ -2569,10 +2556,9 @@ fn add_projected_surface_imports(
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
             add_projected_surface_imports(output, surface_owner_package, context, imports);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             imports.add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
-            add_projected_surface_imports(partial, surface_owner_package, context, imports);
-            add_projected_surface_imports(final_, surface_owner_package, context, imports);
+            add_projected_surface_imports(value, surface_owner_package, context, imports);
         }
         GoTy::Map { key, value } => {
             add_projected_surface_imports(key, surface_owner_package, context, imports);
@@ -2757,18 +2743,11 @@ fn render_projected_go_type(
                 type_vars,
             ),
         ),
-        GoTy::Stream { partial, final_ } => format!(
-            "{}.Stream[{}, {}]",
+        GoTy::Stream { value } => format!(
+            "{}.Stream[{}]",
             GeneratorIdent::RuntimePackage,
             render_projected_go_type(
-                partial,
-                current_baml_package,
-                current_package,
-                names,
-                type_vars,
-            ),
-            render_projected_go_type(
-                final_,
+                value,
                 current_baml_package,
                 current_package,
                 names,
@@ -3142,18 +3121,10 @@ fn projected_output_decoder(
                 type_vars,
             ),
         ),
-        GoTy::Stream { partial, final_ } => format!(
-            "{runtime}.DecodeStream({}, {})",
+        GoTy::Stream { value } => format!(
+            "{runtime}.DecodeStream({})",
             projected_output_decoder(
-                partial,
-                current_baml_package,
-                current_package,
-                names,
-                codecs,
-                type_vars,
-            ),
-            projected_output_decoder(
-                final_,
+                value,
                 current_baml_package,
                 current_package,
                 names,
@@ -3345,7 +3316,7 @@ fn render_enum_codecs(
         let enum_fqn = BamlFqn::symbol(name);
         let enum_name = names.project(&enum_fqn, GoNameKind::Enum, GoVisibility::Exported);
         let go_type = function_go_type(
-            &Ty::Enum(name.clone(), TyAttr::default()),
+            &Ty::Enum(name.clone()),
             name.package(),
             current_package,
             names,
@@ -3432,7 +3403,7 @@ fn render_class_codecs(
         let class_fqn = BamlFqn::symbol(name);
         let class_name = names.project(&class_fqn, GoNameKind::Class, GoVisibility::Exported);
         let go_type = function_go_type(
-            &Ty::Class(name.clone(), Box::new([]), TyAttr::default()),
+            &Ty::Class(name.clone(), Box::new([])),
             name.package(),
             current_package,
             names,
@@ -3809,10 +3780,7 @@ fn projected_contains_named_type_var(ty: &GoTy, parameter: &BaseName) -> bool {
             .iter()
             .any(|argument| projected_contains_named_type_var(argument, parameter)),
         GoTy::FunctionSpec { output } => projected_contains_named_type_var(output, parameter),
-        GoTy::Stream { partial, final_ } => {
-            projected_contains_named_type_var(partial, parameter)
-                || projected_contains_named_type_var(final_, parameter)
-        }
+        GoTy::Stream { value } => projected_contains_named_type_var(value, parameter),
         GoTy::List(inner) | GoTy::Optional(inner) => {
             projected_contains_named_type_var(inner, parameter)
         }
@@ -4271,10 +4239,9 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
             "{runtime}.ClassBAMLType(\"ai.FunctionSpec\", {})",
             baml_type_descriptor(output, names),
         ),
-        GoTy::Stream { partial, final_ } => format!(
-            "{runtime}.ClassBAMLType(\"ai.stream.Stream\", {}, {})",
-            baml_type_descriptor(partial, names),
-            baml_type_descriptor(final_, names),
+        GoTy::Stream { value } => format!(
+            "{runtime}.ClassBAMLType(\"ai.stream.Stream\", {})",
+            baml_type_descriptor(value, names),
         ),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
@@ -5147,89 +5114,71 @@ mod tests {
     }
 
     fn ty_int() -> Ty {
-        Ty::Int {
-            attr: TyAttr::default(),
-        }
+        Ty::Int
     }
 
     fn ty_bigint() -> Ty {
-        Ty::Bigint {
-            attr: TyAttr::default(),
-        }
+        Ty::Bigint
     }
 
     fn ty_float() -> Ty {
-        Ty::Float {
-            attr: TyAttr::default(),
-        }
+        Ty::Float
     }
 
     fn ty_string() -> Ty {
-        Ty::String {
-            attr: TyAttr::default(),
-        }
+        Ty::String
     }
 
     fn ty_bool() -> Ty {
-        Ty::Bool {
-            attr: TyAttr::default(),
-        }
+        Ty::Bool
     }
 
     fn ty_null() -> Ty {
-        Ty::Null {
-            attr: TyAttr::default(),
-        }
+        Ty::Null
     }
 
     fn ty_bytes() -> Ty {
-        Ty::Uint8Array {
-            attr: TyAttr::default(),
-        }
+        Ty::Uint8Array
     }
 
     fn ty_void() -> Ty {
-        Ty::Void {
-            attr: TyAttr::default(),
-        }
+        Ty::Void
     }
 
     fn ty_never() -> Ty {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 
     fn ty_union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members.into(), TyAttr::default())
+        Ty::Union(members.into())
     }
 
     fn ty_list_boxed(inner: Box<Ty>) -> Ty {
-        Ty::List(inner, TyAttr::default())
+        Ty::List(inner)
     }
 
     fn ty_enum(name: Name) -> Ty {
-        Ty::Enum(name, TyAttr::default())
+        Ty::Enum(name)
     }
 
     fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
-        Ty::Class(name, arguments.into(), TyAttr::default())
+        Ty::Class(name, arguments.into())
     }
 
     fn ty_alias(name: Name) -> Ty {
-        Ty::TypeAlias(name, TyAttr::default())
+        Ty::TypeAlias(name)
     }
 
     fn ty_literal(literal: Literal) -> Ty {
-        Ty::Literal(literal, Freshness::Regular, TyAttr::default())
+        Ty::Literal(literal, Freshness::Regular)
     }
 
     fn ty_type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name), TyAttr::default())
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name))
     }
 
     fn ty_media(kind: baml_base::MediaKind) -> Ty {
-        Ty::Media(kind, TyAttr::default())
+        Ty::Media(kind)
     }
 
     fn ty_callable(params: Vec<Ty>, ret: Ty, throws: Ty) -> Ty {
@@ -5244,7 +5193,6 @@ mod tests {
                 .collect(),
             ret: Box::new(ret),
             throws: Box::new(throws),
-            attr: TyAttr::default(),
         }
     }
 
@@ -5264,7 +5212,6 @@ mod tests {
                 .collect(),
             ret: Box::new(ret),
             throws: Box::new(throws),
-            attr: TyAttr::default(),
         }
     }
 
@@ -5978,7 +5925,6 @@ mod tests {
                     Ty::Map {
                         key: Box::new(ty_literal(Literal::String("fixed".to_string()))),
                         value: Box::new(ty_type_var(type_parameter)),
-                        attr: TyAttr::default(),
                     },
                     ty_int(),
                 ]),
@@ -6321,15 +6267,7 @@ mod tests {
         let pool = SymbolPool::from([
             class(
                 widget.clone(),
-                vec![
-                    ("label", ty_string()),
-                    (
-                        "native",
-                        Ty::RustType {
-                            attr: TyAttr::default(),
-                        },
-                    ),
-                ],
+                vec![("label", ty_string()), ("native", Ty::RustType)],
             ),
             class(holder, vec![("widget", ty_class(widget, vec![]))]),
         ]);
@@ -6726,12 +6664,7 @@ mod tests {
             ),
             (
                 deferred,
-                Symbol::Function(make_function(
-                    "echoValue",
-                    Ty::Resource {
-                        attr: TyAttr::default(),
-                    },
-                )),
+                Symbol::Function(make_function("echoValue", Ty::Resource)),
             ),
         ]);
         let files = to_source_code_with_bytecode(
@@ -6762,14 +6695,10 @@ mod tests {
                 injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
-                ty: Ty::Resource {
-                    attr: TyAttr::default(),
-                },
+                ty: Ty::Resource,
                 default: None,
             }],
-            return_type: Ty::Resource {
-                attr: TyAttr::default(),
-            },
+            return_type: Ty::Resource,
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -7048,9 +6977,7 @@ mod tests {
             vec![],
             BaseName::new("round_trip_rust_type"),
         );
-        let rust_type = Ty::RustType {
-            attr: TyAttr::default(),
-        };
+        let rust_type = Ty::RustType;
         let pool = SymbolPool::from([round_trip_function(name, "value", rust_type)]);
         let files = to_source_code_with_bytecode(
             &pool,

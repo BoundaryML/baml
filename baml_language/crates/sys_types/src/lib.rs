@@ -723,6 +723,8 @@ pub struct ClassDefinition {
     pub docstring: Option<String>,
     pub alias: Option<String>,
     pub fields: Vec<ClassFieldDefinition>,
+    /// `@@stream.done`: no partial parse until the whole object is complete.
+    pub stream_done: bool,
 }
 
 /// A field in a pre-extracted class definition.
@@ -741,6 +743,11 @@ pub struct ClassFieldDefinition {
     pub docstring: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
+    /// `@stream.done`: the field holds its default until its value is complete.
+    pub stream_done: bool,
+    /// `@stream.must_exist`: the field has no default, so its class has no
+    /// partial parse until the field is present.
+    pub must_exist: bool,
 }
 
 /// Pre-extracted enum definition for output format rendering.

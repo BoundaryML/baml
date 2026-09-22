@@ -2,7 +2,7 @@ use ouroboros::self_referencing;
 use sys_types::DefKey;
 
 pub use crate::jsonish::parse;
-use crate::sap_model::{AnnotatedTy, TypeRefDb};
+use crate::sap_model::{Ty, TypeRefDb};
 
 pub mod baml_value;
 pub mod deserializer;
@@ -19,7 +19,9 @@ pub enum StreamingMode {
 }
 
 /// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`sys_types::SapTy`]
-/// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
+/// for the parse target, and borrows `TypeRefDb` + `Ty` from them.
+///
+/// Partial and final parses share the one target type.
 pub struct CompiledSapModel {
     inner: CompiledSapModelInner,
 }
@@ -28,19 +30,15 @@ impl CompiledSapModel {
     pub fn from_type_ctx(
         type_ctx: sap_model::TypeCtx,
         target: sys_types::SapTy,
-        stream_target: sys_types::SapTy,
     ) -> Result<Self, sap_model::ConvertError> {
         // A generic `T` can materialize as a union after the context's declared
-        // types were simplified. Normalize both runtime targets at the SAP
+        // types were simplified. Normalize the runtime target at the SAP
         // boundary so the converter always receives its required flat form.
         let target = type_ctx.normalize_parse_target(target);
-        let stream_target = type_ctx.normalize_parse_target(stream_target);
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
             target,
-            stream_target,
             sap_model::TypeCtx::build_db,
-            sap_model::TypeCtx::convert_ty,
             sap_model::TypeCtx::convert_ty,
         )?;
         Ok(Self { inner })
@@ -48,22 +46,17 @@ impl CompiledSapModel {
     pub fn from_sys_op_context(
         ctx: &::sys_types::SysOpContext,
         target: sys_types::SapTy,
-        stream_target: sys_types::SapTy,
     ) -> Result<Self, sap_model::ConvertError> {
         let type_ctx = sap_model::TypeCtx::from_sys_op_context(ctx);
-        Self::from_type_ctx(type_ctx, target, stream_target)
+        Self::from_type_ctx(type_ctx, target)
     }
 
     pub fn db(&self) -> &TypeRefDb<'_, DefKey> {
         self.inner.borrow_db()
     }
 
-    pub fn ty(&self) -> &AnnotatedTy<'_, DefKey> {
+    pub fn ty(&self) -> &Ty<'_, DefKey> {
         self.inner.borrow_ty()
-    }
-
-    pub fn stream_ty(&self) -> &AnnotatedTy<'_, DefKey> {
-        self.inner.borrow_stream_ty()
     }
 }
 
@@ -72,14 +65,10 @@ struct CompiledSapModelInner {
     pub type_ctx: sap_model::TypeCtx,
     /// The target type
     pub parse_ty: sys_types::SapTy,
-    pub parse_stream_ty: sys_types::SapTy,
     #[borrows(type_ctx)]
     #[covariant]
     pub db: TypeRefDb<'this, DefKey>,
     #[borrows(type_ctx, parse_ty)]
     #[covariant]
-    pub ty: AnnotatedTy<'this, DefKey>,
-    #[borrows(type_ctx, parse_stream_ty)]
-    #[covariant]
-    pub stream_ty: AnnotatedTy<'this, DefKey>,
+    pub ty: Ty<'this, DefKey>,
 }

@@ -40,21 +40,37 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// equality check, which is exactly the gap this constant exists to close
 /// for stable builds.)
 ///
-/// Version 8 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
+/// Version 8: every type dropped its `TyAttr` payload and the runtime `Class`
+/// and `Enum` their `ty_attr` field (BEP-075 removed type attributes), so the
+/// serialized shape of every type-bearing record changed.
+///
+/// Version 9 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
 /// which run shielded from cancellation), and changes what the `Spawn` opcode
 /// yields: the VM now pushes a `baml.spawn.Plan` for the engine to start,
 /// where it used to push a pre-allocated `UnscheduledFuture`. Both take that
 /// operand from the stack, so the encoded instruction is byte-identical and
-/// only this constant tells the two apart — a version-8 runtime replaying
-/// older bytecode would hand the engine the wrong object. The same version
-/// covers the `Object`/`ObjectType` lattice losing `UnscheduledFuture` from
-/// the middle of the enum, which renumbers the Borsh discriminants of every
-/// variant declared after it.
-pub const FORMAT_VERSION: u32 = 8;
+/// only this constant tells the two apart — a runtime replaying older bytecode
+/// would hand the engine the wrong object. The same version covers the
+/// `Object`/`ObjectType` lattice losing `UnscheduledFuture` from the middle of
+/// the enum, which renumbers the Borsh discriminants of every variant declared
+/// after it. (It is 9, not 8: version 8 is BEP-075's and shipped in 0.20.0.
+/// Landing this change under that number would accept a released artifact
+/// whose `Spawn` instruction decodes identically and then mis-executes.)
+pub const FORMAT_VERSION: u32 = 9;
 
-/// Git commit used to build this crate, or the canonical BAML version when the
-/// source was built outside a Git checkout.
-pub const BUILD_FINGERPRINT: &str = env!("BAML_ARTIFACT_BUILD_FINGERPRINT");
+/// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
+/// HEAD), or empty when neither was available.
+const BUILD_COMMIT: &str = env!("BAML_ARTIFACT_BUILD_COMMIT");
+
+/// Identity of the build that encodes and accepts artifacts: the Git commit
+/// this crate was built from. Only a channel that does not enforce it (see
+/// [`ENFORCE_BUILD_FINGERPRINT`]) may build without a commit, e.g. from a
+/// source archive; it then falls back to the canonical BAML version.
+pub const BUILD_FINGERPRINT: &str = if BUILD_COMMIT.is_empty() {
+    baml_version::CANONICAL_VERSION
+} else {
+    BUILD_COMMIT
+};
 
 const PREFIX_LEN: usize = MAGIC.len() + size_of::<u32>() + size_of::<u64>();
 
@@ -64,6 +80,14 @@ const PREFIX_LEN: usize = MAGIC.len() + size_of::<u32>() + size_of::<u64>();
 /// [`FORMAT_VERSION`] plus the existing release-version metadata check instead;
 /// an equal-format fingerprint mismatch is accepted there with a warning.
 pub const ENFORCE_BUILD_FINGERPRINT: bool = channel_is(b"canary") || channel_is(b"dev");
+
+// Without a commit, an enforcing build would carry the version as its
+// fingerprint: it would reject every correctly fingerprinted artifact of its
+// own release while accepting any other commitless build of that version.
+const _: () = assert!(
+    !ENFORCE_BUILD_FINGERPRINT || !BUILD_COMMIT.is_empty(),
+    "this channel requires a Git commit fingerprint: build from a Git checkout, or set BAML_GIT_SHA to the commit being built",
+);
 
 const fn channel_is(expected: &[u8]) -> bool {
     let actual = baml_version::CHANNEL.as_bytes();

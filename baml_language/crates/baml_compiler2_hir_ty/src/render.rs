@@ -39,7 +39,7 @@ pub struct Unspellable(pub DeclName);
 
 impl<'a> Viewpoint<'a> {
     /// User-facing rendering as seen from `viewer`'s package.
-    pub fn user_facing(db: &'a dyn baml_compiler2_ppir::Db, viewer: SourceRoot) -> Self {
+    pub fn user_facing(db: &'a dyn baml_compiler2_hir::Db, viewer: SourceRoot) -> Self {
         Self {
             spelling: spelling(db),
             viewer: Some(viewer),
@@ -48,7 +48,7 @@ impl<'a> Viewpoint<'a> {
     }
 
     /// Canonical rendering: every package spelled, nothing elided.
-    pub fn canonical(db: &'a dyn baml_compiler2_ppir::Db) -> Self {
+    pub fn canonical(db: &'a dyn baml_compiler2_hir::Db) -> Self {
         Self {
             spelling: spelling(db),
             viewer: None,

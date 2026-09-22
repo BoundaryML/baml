@@ -939,11 +939,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
         GoTy::FunctionSpec { output } => {
             format!("FunctionSpec{}", union_type_component(output, names))
         }
-        GoTy::Stream { partial, final_ } => format!(
-            "Stream{}{}",
-            union_type_component(partial, names),
-            union_type_component(final_, names)
-        ),
+        GoTy::Stream { value } => format!("Stream{}", union_type_component(value, names)),
         GoTy::TypeVar(name) => format!("TypeVar{}", name.as_str()),
         GoTy::Literal(literal) => literal_component(literal),
         GoTy::Class(name, arguments) => {
@@ -1055,10 +1051,9 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
             hash.byte(23);
             hash_go_ty(hash, output);
         }
-        GoTy::Stream { partial, final_ } => {
+        GoTy::Stream { value } => {
             hash.byte(24);
-            hash_go_ty(hash, partial);
-            hash_go_ty(hash, final_);
+            hash_go_ty(hash, value);
         }
         GoTy::TypeVar(name) => {
             hash.byte(21);

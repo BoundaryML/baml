@@ -47,20 +47,15 @@ def test_main_deep_namespace_thing_reachable():
 def test_main_generated_models_ignore_extra_fields():
     from baml_sdk.generics import Wrapper
     from baml_sdk.lorem import Resume
-    from baml_sdk.stream_types.lorem import Resume as StreamResume
 
     resume = Resume.model_validate(
         {"name": "Ada", "email": None, "future_field": "ignored"}
     )
     wrapper = Wrapper[int].model_validate({"value": 42, "future_field": "ignored"})
-    stream_resume = StreamResume.model_validate(
-        {"name": "Grace", "email": None, "future_field": "ignored"}
-    )
 
     assert resume.model_dump() == {"name": "Ada", "email": None}
     assert wrapper.model_dump() == {"value": 42}
-    assert stream_resume.model_dump() == {"name": "Grace", "email": None}
 
-    for model in (resume, wrapper, stream_resume):
+    for model in (resume, wrapper):
         assert model.model_config["extra"] == "ignore"
         assert model.model_extra is None

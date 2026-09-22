@@ -49,18 +49,18 @@ fn owner_scope_of(
 /// The body owner whose inference covers `scope_id`'s expressions: the
 /// nearest enclosing Function/Let scope's recorded item owner.
 pub fn owner_for_scope<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     scope_id: ScopeId<'db>,
 ) -> Option<BodyOwnerId<'db>> {
     let file = scope_id.file(db);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     let owner_fsid = owner_scope_of(index, scope_id.file_scope_id(db));
     let owner_scope_id = index.scope_ids[owner_fsid.index() as usize];
-    match baml_compiler2_ppir::item_data::scope_owner(db, owner_scope_id)? {
-        baml_compiler2_ppir::item_data::ScopeOwner::Function(function) => {
+    match baml_compiler2_hir::item_data::scope_owner(db, owner_scope_id)? {
+        baml_compiler2_hir::item_data::ScopeOwner::Function(function) => {
             Some(BodyOwnerId::Function(function))
         }
-        baml_compiler2_ppir::item_data::ScopeOwner::Let(let_binding) => {
+        baml_compiler2_hir::item_data::ScopeOwner::Let(let_binding) => {
             Some(BodyOwnerId::Let(let_binding))
         }
         _ => None,
@@ -69,7 +69,7 @@ pub fn owner_for_scope<'db>(
 
 /// The inference covering `scope_id`, keyed off its owner.
 pub fn infer_for_scope<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     scope_id: ScopeId<'db>,
 ) -> Option<&'db InferenceResult<'db>> {
     owner_for_scope(db, scope_id).map(|owner| crate::infer::infer_body(db, owner))
@@ -79,25 +79,27 @@ pub fn infer_for_scope<'db>(
 /// lambda scope roots at that lambda's body expression). `None` for
 /// non-body scopes and bodiless owners.
 pub fn scope_body<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     scope_id: ScopeId<'db>,
 ) -> Option<ScopeBody<'db>> {
     let file = scope_id.file(db);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     let fsid = scope_id.file_scope_id(db);
     let owner_fsid = owner_scope_of(index, fsid);
     let owner_scope_id = index.scope_ids[owner_fsid.index() as usize];
-    let owner = match baml_compiler2_ppir::item_data::scope_owner(db, owner_scope_id)? {
-        baml_compiler2_ppir::item_data::ScopeOwner::Function(function) => {
+    let owner = match baml_compiler2_hir::item_data::scope_owner(db, owner_scope_id)? {
+        baml_compiler2_hir::item_data::ScopeOwner::Function(function) => {
             BodyOwnerId::Function(function)
         }
-        baml_compiler2_ppir::item_data::ScopeOwner::Let(let_binding) => {
+        baml_compiler2_hir::item_data::ScopeOwner::Let(let_binding) => {
             BodyOwnerId::Let(let_binding)
         }
         _ => return None,
     };
-    let expr_body = baml_compiler2_ppir::body(db, owner).expr_body()?.clone();
-    let source_map = baml_compiler2_ppir::body_source_map(db, owner)?;
+    let expr_body = baml_compiler2_hir::body::body(db, owner)
+        .expr_body()?
+        .clone();
+    let source_map = baml_compiler2_hir::body::body_source_map(db, owner)?;
     // A LAMBDA scope (any non-template lambda between `scope_id` and the
     // owner) roots at its own body expression within the shared arena.
     let scope = &index.scopes[fsid.index() as usize];
@@ -142,7 +144,7 @@ fn find_lambda_by_span<'a>(
 /// The names come back in the resolution ladder's own precedence; see
 /// [`member_candidates`](crate::method_resolution::member_candidates).
 pub fn members_for_receiver<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     owner: BodyOwnerId<'db>,
     receiver: &baml_type::Ty,
 ) -> Vec<crate::method_resolution::MemberCandidate<'db>> {
@@ -162,7 +164,7 @@ pub fn members_for_receiver<'db>(
 /// the reader is standing, which is exactly what makes this the type-side
 /// question rather than the value-side one.
 pub fn members_for_type<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     definition: baml_compiler2_hir::contributions::Definition<'db>,
 ) -> Vec<crate::method_resolution::MemberCandidate<'db>> {
     crate::method_resolution::type_member_candidates(db, definition)

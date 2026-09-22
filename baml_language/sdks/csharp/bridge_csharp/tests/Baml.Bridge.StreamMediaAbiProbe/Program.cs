@@ -714,20 +714,15 @@ internal static class Program
         }
 
         BamlOutboundHandle handle = value.HandleValue;
-        BamlTy? partialType = handle.Ty?.ClassTy?.TypeArgs.ElementAtOrDefault(0);
-        BamlTy? finalType = handle.Ty?.ClassTy?.TypeArgs.ElementAtOrDefault(1);
+        BamlTy? streamType = handle.Ty?.ClassTy?.TypeArgs.ElementAtOrDefault(0);
         if ((int)handle.HandleType != TaggedStreamHandleType
             || handle.Ty?.TyCase != BamlTy.TyOneofCase.ClassTy
             || !StringComparer.Ordinal.Equals(
                 handle.Ty.ClassTy.Name,
                 StreamClassName)
-            || handle.Ty.ClassTy.TypeArgs.Count != 2
-            || partialType?.TyCase != BamlTy.TyOneofCase.Optional
-            || partialType.Optional.Inner?.TyCase != BamlTy.TyOneofCase.Primitive
-            || partialType.Optional.Inner.Primitive.Kind
-                != BamlTyPrimitiveKind.BamlTyPrimitiveString
-            || finalType?.TyCase != BamlTy.TyOneofCase.Primitive
-            || finalType.Primitive.Kind
+            || handle.Ty.ClassTy.TypeArgs.Count != 1
+            || streamType?.TyCase != BamlTy.TyOneofCase.Primitive
+            || streamType.Primitive.Kind
                 != BamlTyPrimitiveKind.BamlTyPrimitiveString)
         {
             throw new InvalidDataException(

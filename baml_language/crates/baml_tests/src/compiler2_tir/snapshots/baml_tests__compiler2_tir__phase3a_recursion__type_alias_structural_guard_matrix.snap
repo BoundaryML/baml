@@ -4,22 +4,16 @@ expression: "render_labeled_cases(&[(\"type_alias_valid_recursive_via_container\
 ---
 === type_alias_valid_recursive_via_container ===
 type user.JSON = string | int | bool | null | user.JSON[] | map<string, user.JSON>
-type user.JSON$stream = string | int | bool | null | user.JSON$stream[] | map<string, user.JSON$stream>
 
 === type_alias_list_in_union ===
 type user.A = user.A[] | string
-type user.A$stream = user.A$stream[] | string
 
 === type_alias_optional_list_self_reference ===
 type user.A = user.A[] | null
-type user.A$stream = user.A$stream[] | null
 
 === type_alias_map_in_union ===
 type user.A = map<string, user.A> | string
-type user.A$stream = map<string, user.A$stream> | string
 
 === type_alias_mutual_cycle_through_list ===
 type user.A = user.B[]
 type user.B = user.A
-type user.A$stream = user.B$stream[]
-type user.B$stream = user.A$stream

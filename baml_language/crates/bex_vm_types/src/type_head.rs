@@ -554,7 +554,7 @@ mod tests {
     /// unresolved head degrades to its tag instead of inventing one.
     #[test]
     fn a_heap_headed_type_renders_through_its_declaration() {
-        use baml_type::{RealizedTy, TyAttr};
+        use baml_type::RealizedTy;
 
         let name = baml_type::TypeName::new(
             baml_base::Name::new("demo"),
@@ -568,26 +568,23 @@ mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::default(),
+            stream_done: false,
             type_tag: TypeTag::of_head(&name.render_dotted(false)),
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }));
 
         let mut head = TypeHead::of_name(&name);
-        let unresolved: RealizedTy<TypeHead> =
-            RealizedTy::Class(head, Box::new([]), TyAttr::default());
+        let unresolved: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
         assert_eq!(
             unresolved.to_string(),
             format!("<unresolved type #{}>", head.tag().as_i64()),
         );
 
         head.resolve(ptr_to(&mut declaration));
-        let ty: RealizedTy<TypeHead> = RealizedTy::List(
-            Box::new(RealizedTy::Class(head, Box::new([]), TyAttr::default())),
-            TyAttr::default(),
-        );
+        let ty: RealizedTy<TypeHead> =
+            RealizedTy::List(Box::new(RealizedTy::Class(head, Box::new([]))));
         assert_eq!(ty.to_string(), "demo.Person[]");
     }
 
@@ -599,7 +596,7 @@ mod tests {
     /// and rendering shows what the user called it.
     #[test]
     fn an_anonymous_declaration_has_no_qualified_name() {
-        use baml_type::{RealizedTy, TyAttr};
+        use baml_type::RealizedTy;
 
         let type_tag = TypeTag::fresh_dynamic();
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
@@ -609,8 +606,8 @@ mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::default(),
+            stream_done: false,
             type_tag,
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
@@ -627,7 +624,7 @@ mod tests {
         assert!(overlay.namespace().is_empty());
         assert_eq!(overlay.name().as_str(), "Widget");
 
-        let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]), TyAttr::default());
+        let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
         assert_eq!(ty.to_string(), "Widget");
     }
 
@@ -662,15 +659,13 @@ mod tests {
     /// fire only where the instantiation actually exists.
     #[test]
     fn family_instantiates_at_a_heap_head() {
-        use baml_type::{RealizedTy, TyAttr};
+        use baml_type::RealizedTy;
 
         let mut definition = slot();
         let head = TypeHead::new(ptr_to(&mut definition), TypeTag::of_head("demo.Person"));
 
-        let ty: RealizedTy<TypeHead> = RealizedTy::List(
-            Box::new(RealizedTy::Class(head, Box::new([]), TyAttr::default())),
-            TyAttr::default(),
-        );
+        let ty: RealizedTy<TypeHead> =
+            RealizedTy::List(Box::new(RealizedTy::Class(head, Box::new([]))));
 
         // The generated walk finds the head through the `Box`.
         let mut seen = Vec::new();
