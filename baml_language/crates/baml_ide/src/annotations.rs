@@ -43,13 +43,15 @@
 //! We suppress type hints for:
 //! - Unknown / error types (noise)
 //! - Bindings named `_` (discard patterns)
-//! - Constructor expressions and bindings named like their inferred type
+//! - Constructor or primitive-literal initializers (including homogeneous
+//!   arrays of them), and bindings named like their inferred type
 //!
 //! We suppress parameter-name hints when:
 //! - The callee type is not `Ty::Function` (no param info)
 //! - The param name is `None` (positional-only parameter)
 //! - The argument count != param count (variadic / error cases)
-//! - Arguments already named like the parameter, and `assert.equal` calls
+//! - Arguments already named like the parameter, and `assert.equal` /
+//!   `assert.is_true` calls
 //!
 //! LLM declarative functions are skipped entirely (and never recursed into), so
 //! their synthetic `client` / `function_name` / `args` calls produce no hints.
@@ -225,8 +227,9 @@ fn process_body(
             continue;
         };
 
-        // The constructor already spells the type immediately after `=`.
-        if initializer.is_some_and(|id| matches!(body.exprs[id], Expr::Object { .. })) {
+        // Constructor names and primitive literals already make the type
+        // clear at the initializer, including signed numeric literals.
+        if initializer.is_some_and(|id| initializer_makes_type_obvious(body, id)) {
             continue;
         }
 
@@ -282,7 +285,7 @@ fn process_body(
             if is_synthetic_registration(body, *callee) {
                 continue;
             }
-            if is_assert_equal(body, *callee) {
+            if is_assert_without_hints(body, *callee) {
                 continue;
             }
             // Skip compiler-synthesized wrapping calls — e.g. the
@@ -361,6 +364,50 @@ fn process_body(
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
     baml_type::contains_error_recovery(ty) || matches!(ty, Ty::Unknown | Ty::Never)
+}
+
+fn initializer_makes_type_obvious(body: &ExprBody, expr: ExprId) -> bool {
+    match &body.exprs[expr] {
+        Expr::Object { .. } | Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null => true,
+        Expr::Unary { .. } => primitive_literal_kind(body, expr).is_some(),
+        Expr::Array { elements } => array_elements_make_type_obvious(body, elements),
+        _ => false,
+    }
+}
+
+fn primitive_literal_kind(
+    body: &ExprBody,
+    expr: ExprId,
+) -> Option<std::mem::Discriminant<baml_base::Literal>> {
+    match &body.exprs[expr] {
+        Expr::Literal(literal) => Some(std::mem::discriminant(literal)),
+        Expr::Unary { expr, .. } => primitive_literal_kind(body, *expr),
+        _ => None,
+    }
+}
+
+fn array_elements_make_type_obvious(body: &ExprBody, elements: &[ExprId]) -> bool {
+    let Some(&first) = elements.first() else {
+        return false;
+    };
+    match &body.exprs[first] {
+        Expr::Object {
+            type_name,
+            type_args,
+            ..
+        } => elements.iter().all(|&element| {
+            matches!(&body.exprs[element], Expr::Object { type_name: other_name, type_args: other_args, .. }
+                if other_name == type_name && other_args == type_args)
+        }),
+        Expr::ByteStringLiteral(_) => elements
+            .iter()
+            .all(|&element| matches!(body.exprs[element], Expr::ByteStringLiteral(_))),
+        _ => primitive_literal_kind(body, first).is_some_and(|kind| {
+            elements
+                .iter()
+                .all(|&element| primitive_literal_kind(body, element) == Some(kind))
+        }),
+    }
 }
 
 /// Compare the words a reader sees, including `files` beside `File[]` and
@@ -445,14 +492,15 @@ fn argument_repeats_parameter(body: &ExprBody, arg: ExprId, parameter: &str) -> 
     }
 }
 
-fn is_assert_equal(body: &ExprBody, callee: ExprId) -> bool {
+fn is_assert_without_hints(body: &ExprBody, callee: ExprId) -> bool {
+    let is_assert_method = |name: &str| matches!(name, "equal" | "is_true");
     match &body.exprs[callee] {
         Expr::Path(parts) => {
             parts.len() >= 2
                 && parts[parts.len() - 2].as_str() == "assert"
-                && parts[parts.len() - 1].as_str() == "equal"
+                && is_assert_method(parts[parts.len() - 1].as_str())
         }
-        Expr::MemberAccess { base, member } if member.as_str() == "equal" => {
+        Expr::MemberAccess { base, member } if is_assert_method(member.as_str()) => {
             matches!(&body.exprs[*base], Expr::Path(parts) if parts.last().is_some_and(|name| name.as_str() == "assert"))
         }
         _ => false,
@@ -860,9 +908,17 @@ function start_run(analysis_dir: string, count: int) -> int { count }
 
 function demo(analysis_dir: string) -> int {
     let retained = Conversation { text: "hi" }
+    let total = 0
+    let ratio = 1.5
+    let enabled = true
+    let message = "hello"
+    let loss = -1
+    let copies = [File { name: "a" }, File { name: "b" }]
+    let values = [1, 2]
     let files = load_files()
     let result = load_file()
     assert.equal(1, 1)
+    assert.is_true(enabled)
     start_run(analysis_dir, 2)
 }
 "#;

@@ -1990,7 +1990,7 @@ fn semantic_tokens_range_covers_a_subset() {
 fn inlay_hints_appear_for_inferred_let_types() {
     let mut harness = Harness::new();
     harness.fs.add_project(&harness.ws);
-    let fixture = "function main() -> string {\n    let greeting = \"hi\"\n    greeting\n}\n";
+    let fixture = "function make_greeting() -> string { \"hi\" }\nfunction main() -> string {\n    let obvious = \"hi\"\n    let greeting = make_greeting()\n    greeting\n}\n";
     harness.fs.write(harness.ws.join("main.baml"), fixture);
     harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
     harness.settle();
@@ -2004,7 +2004,7 @@ fn inlay_hints_appear_for_inferred_let_types() {
                 "textDocument": { "uri": uri },
                 "range": {
                     "start": { "line": 0, "character": 0 },
-                    "end": { "line": 4, "character": 0 },
+                    "end": { "line": 6, "character": 0 },
                 },
             }),
         )
@@ -2015,6 +2015,11 @@ fn inlay_hints_appear_for_inferred_let_types() {
         .find(|hint| hint["label"][0]["value"] == ": string")
         .expect("clickable let-binding type hint");
     assert!(type_hint["label"][0]["location"].is_object());
+    assert_eq!(
+        hints.len(),
+        1,
+        "literal binding should have no hint: {hints:?}"
+    );
 }
 
 #[test]
