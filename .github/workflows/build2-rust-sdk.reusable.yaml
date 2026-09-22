@@ -40,7 +40,7 @@ jobs:
     name: package baml_bridge crate
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
