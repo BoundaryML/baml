@@ -7,7 +7,13 @@ Sheep Council meets every Monday at 9:00 AM Pacific Time. We announce the upcomi
 Prepare and upload the Loops email before the human chooses the week's topic. Do not wait for the topic to be finalized; leave clear topic and description placeholders for the human to edit in Loops.
 
 1. Copy [`email-data/template.lmx`](email-data/template.lmx) to a new dated `.lmx` file in `email-data/`.
-2. Use Browser to open the Sheep Council calendar (`c_da94df69eff3e6036e130002f3a841d3ba51bdbbaaefd92266f18a395a4d16aa@group.calendar.google.com`) and find the upcoming Monday occurrence of the recurring event linked in the template. Generate the link with **Publish this instance of the event** from that calendar. Do not use an attendee’s calendar copy or select an event by the `BAML Team Review` title alone.
+2. Obtain the calendar link for the upcoming Monday occurrence using this workflow:
+
+   - open https://calendar.google.com/calendar/u/0/embed?src=c_d89d75eedbea6c1e191912bb9ffcf2c7dc68c6ecf6adc65b3475aacd4fc8e1bb@group.calendar.google.com&ctz=America/Los_Angeles
+   - navigate to the next "BAML Team Review" event
+   - click on "More details"
+   - click on "Publish this instance of the event" and copy out the URL
+
 3. Update the new LMX file with the event’s Monday date, 9:00 AM PT time, and Google Calendar event link. The template link is the approved September 21, 2026 occurrence; use that exact link for that week and replace it with the correct occurrence for future weeks. Escape URL ampersands as `&amp;` in LMX. Confirm the link displays the intended event details for external recipients before sending.
 4. Leave the topic, preview text, and topic details as obvious placeholders if the human has not chosen them yet.
 5. Upload the prepared email to Loops. Creating a campaign requires the explicit LMX file:
