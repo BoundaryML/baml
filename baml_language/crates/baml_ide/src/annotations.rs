@@ -514,10 +514,10 @@ fn parameter_definition(
     parameter: &str,
 ) -> Option<(SourceFile, TextRange)> {
     let offset = callee_span.end() - TextSize::from(1);
-    let function = match crate::resolve::symbol_at(db, file, offset)? {
-        SymbolTarget::Item(Definition::Function(function))
-        | SymbolTarget::Method { func: function } => function,
-        _ => return None,
+    let (SymbolTarget::Item(Definition::Function(function))
+    | SymbolTarget::Method { func: function }) = crate::resolve::symbol_at(db, file, offset)?
+    else {
+        return None;
     };
     let index = item_data::function_data(db, function)
         .params
