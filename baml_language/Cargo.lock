@@ -1594,6 +1594,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
+ "cc",
  "futures",
  "indexmap",
  "libc",

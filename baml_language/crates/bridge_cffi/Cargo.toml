@@ -50,6 +50,7 @@ cbindgen = { workspace = true }
 
 [dev-dependencies]
 baml_artifact = { workspace = true, features = [ "test-support" ] }
+cc = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = true
