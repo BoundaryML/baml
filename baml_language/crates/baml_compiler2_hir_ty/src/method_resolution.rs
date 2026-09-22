@@ -16,30 +16,34 @@
 
 use baml_compiler2_hir::{
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
+    loc::{ClassLoc, DeclRef, FunctionLoc, InterfaceLoc},
 };
 use baml_type::{
     DeclName, Name, ParamTy,
-    interned::{InferInterface, InferTy, Ty},
+    interned::{InferInterface, InferTy, Ty, TyVocabulary},
     normalize::TypeContext as _,
 };
 
-use crate::facts::Facts;
-
-/// One resolved method: the function plus the receiver-driven
-/// instantiation of its owning class's generic params (the frame prefix
-/// that `function_generic_frame` prepends for methods).
-pub struct MethodCandidate<'db> {
-    pub source: MethodCandidateSource<'db>,
-    pub class_args: Vec<Ty>,
-}
-
-pub enum MethodCandidateSource<'db> {
-    Source {
-        method: FunctionLoc<'db>,
-        class: ClassLoc<'db>,
+use crate::{
+    callable::{
+        callable_breaks_one_self, callable_signature, callable_takes_self,
+        instantiate_callable_signature,
     },
-    External(Box<crate::package_interface::ResolvedFunction>),
+    extern_loc::{
+        FunctionRef, ImplRef, InterfaceRef, extern_function_row, extern_interface_method,
+        extern_interface_row, mounted_class_method, mounted_interface_loc,
+        mounted_interface_method,
+    },
+    facts::Facts,
+};
+
+/// One resolved class-inherent method, wherever it is declared, plus the
+/// receiver-driven instantiation of its owning class's generic params (the
+/// frame prefix that `function_generic_frame` prepends for methods). The
+/// owner is the method's own (`callable_owner_type`).
+pub struct MethodCandidate<'db> {
+    pub method: FunctionRef<'db>,
+    pub class_args: Vec<Ty>,
 }
 
 /// Finds `name` among the methods of `receiver`'s owning class. The
@@ -67,29 +71,14 @@ pub fn lookup_method<'db>(
                 baml_compiler2_hir::item_data::function_data(db, method).name == *name
             })?;
         return Some(MethodCandidate {
-            source: MethodCandidateSource::Source { method, class },
+            method: DeclRef::Source(method),
             class_args,
         });
     }
     let (qtn, class_args) = external_class_for_type(facts, receiver, 8)?;
-    let crate::package_interface::ExportedType::Class {
-        methods,
-        generic_params,
-        generic_param_bounds,
-        ..
-    } = crate::package_interface::mounted_type_row(db, &qtn)?
-    else {
-        return None;
-    };
-    let method = methods.iter().find(|method| method.name == *name)?;
+    let method = mounted_class_method(db, &qtn, name)?;
     Some(MethodCandidate {
-        source: MethodCandidateSource::External(Box::new(
-            crate::package_interface::resolved_exported_function(
-                method,
-                generic_params.clone(),
-                generic_param_bounds.clone(),
-            ),
-        )),
+        method: DeclRef::External(method),
         class_args,
     })
 }
@@ -171,7 +160,7 @@ pub enum MemberDeclarer<'db> {
     /// runtime resolver's key) and the field's index in that interface's
     /// own declared field list.
     VirtualField {
-        interface: InterfaceLoc<'db>,
+        interface: InterfaceRef<'db>,
         realized: InferInterface,
         field_index: u32,
     },
@@ -179,53 +168,37 @@ pub enum MemberDeclarer<'db> {
     /// statically known (a required method has no body; the default is
     /// one possible target).
     VirtualMethod {
-        interface: InterfaceLoc<'db>,
-        method: FunctionLoc<'db>,
+        interface: InterfaceRef<'db>,
+        method: FunctionRef<'db>,
     },
     /// A concrete receiver's method through a matched impl: the method
     /// the impl provides when it does, else the interface's default body.
     ImplMethod {
-        block: ImplLoc<'db>,
-        func: FunctionLoc<'db>,
-        /// The callee's OWNER frame, realized by the impl match — the frame
-        /// the resolution CARRIES so the call site never re-derives it: the
-        /// impl's generic bindings (declaration order) for a provided
-        /// method, `[Self = receiver, iface args..]` for an adopted
-        /// default.
+        block: ImplRef<'db>,
+        func: FunctionRef<'db>,
+        /// The instantiation of `func`'s OWNER frame, realized by the impl
+        /// match — carried so the call site never re-derives it: the impl's
+        /// generic bindings (declaration order) for a method the impl
+        /// provides (`func` impl-owned), `[Self = receiver, interface
+        /// generics..]` for an adopted default (`func` interface-owned).
+        /// The shape is `func`'s owner kind, never a separate fact.
         frame_type_args: Vec<Ty>,
-        /// `true` when `func` is the interface's default body (which expects
-        /// the `[Self, iface args..]` convention), `false` for a provided
-        /// method (the impl-generics convention).
-        from_interface_default: bool,
     },
     /// A concrete receiver's interface FIELD through a matched impl.
     /// The backing class-field link is not resolved here yet, so
     /// consumers record nothing for this case (S16 follow-up).
-    ImplField { block: ImplLoc<'db> },
-    /// A mounted method target. The descriptor is fully owned and remains
-    /// valid without a dependency source location.
-    ExternalMethod(std::sync::Arc<crate::callable::ExternalCallable>),
-    /// A virtual field declared by a mounted interface.
-    ExternalVirtualField {
-        interface: baml_type::DeclName,
-        realized: InferInterface,
-        field_index: u32,
-    },
+    ImplField { block: ImplRef<'db> },
 }
 
-/// The pieces the call site needs to finish a default method's
-/// instantiation: the method and the interface-frame prefix
-/// (`[Self, args..]` — associated types are not slots) already pinned by
-/// the receiver.
-pub enum PendingOwnGenerics<'db> {
-    Source {
-        method: baml_compiler2_hir::loc::FunctionLoc<'db>,
-        prefix: Vec<Ty>,
-    },
-    External {
-        function: Box<crate::package_interface::ResolvedFunction>,
-        prefix: Vec<Ty>,
-    },
+/// The pieces the call site needs to finish a method's instantiation: the
+/// callable and the OWNER-frame prefix already pinned by the receiver
+/// (`[Self, args..]` for an interface method — associated types are not
+/// slots; the impl's realized generics for an impl-provided one). One shape
+/// for both lanes: the call site asks the callable surface for the own
+/// suffix.
+pub struct PendingOwnGenerics<'db> {
+    pub callable: FunctionRef<'db>,
+    pub prefix: Vec<Ty>,
 }
 
 /// The outcome of an interface-member lookup. Ambiguity is a DISTINCT
@@ -384,56 +357,25 @@ pub(crate) fn declared_method_self_restriction<'db>(
     target: &InferInterface,
     name: &Name,
 ) -> Option<crate::diagnostics::SelfCallPosition> {
-    if let Some(crate::package_interface::ExportedType::Interface {
-        self_param,
-        required_methods,
-        default_methods,
-        ..
-    }) = crate::package_interface::mounted_type_row(db, &target.name)
+    let callable = if baml_compiler2_hir::package::is_served_from_interface(db, target.name.root())
     {
-        let method = required_methods
-            .iter()
-            .chain(default_methods)
-            .find(|method| method.name == *name)?;
-        let function =
-            crate::package_interface::resolved_exported_function(method, Vec::new(), Vec::new());
-        if !exported_signature_breaks_one_self(&function, self_param) {
+        DeclRef::External(mounted_interface_method(db, &target.name, name)?)
+    } else {
+        let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
             return None;
-        }
-        return Some(
-            if function
-                .params
-                .iter()
-                .skip(1)
-                .any(|param| self_occurs(&Ty::from_plain(&param.ty), false))
-            {
-                crate::diagnostics::SelfCallPosition::Parameter
-            } else {
-                crate::diagnostics::SelfCallPosition::NestedInReturn
-            },
-        );
-    }
-    let Some(Definition::Interface(interface)) = facts.definition_of(&target.name) else {
-        return None;
-    };
-    let data = baml_compiler2_hir::item_data::interface_data(db, interface);
-    let method =
-        data.methods.iter().copied().find(|&method| {
+        };
+        let data = baml_compiler2_hir::item_data::interface_data(db, interface);
+        let method = data.methods.iter().copied().find(|&method| {
             baml_compiler2_hir::item_data::function_data(db, method).name == *name
         })?;
-    let signature = crate::lower::function_signature(db, method);
-    signature_breaks_one_self(signature).then(|| {
-        if signature
-            .params
-            .iter()
-            .skip(1)
-            .any(|param| self_occurs(&Ty::from_plain(&param.ty), false))
-        {
-            crate::diagnostics::SelfCallPosition::Parameter
-        } else {
-            crate::diagnostics::SelfCallPosition::NestedInReturn
+        DeclRef::Source(method)
+    };
+    match crate::callable::callable_self_dispatch(db, callable) {
+        crate::callable::SelfDispatch::Breaks(position) => Some(position),
+        crate::callable::SelfDispatch::OnParam(_) | crate::callable::SelfDispatch::NoSelfParam => {
+            None
         }
-    })
+    }
 }
 
 /// The concrete-receiver impl tier's AMBIGUITY verdict alone - consulted
@@ -549,7 +491,7 @@ fn lookup_impl_member<'db>(
             // interface's.
             if member.is_method {
                 match resolved.provided_method(db, name) {
-                    Some(crate::impls::ProvidedMethod::Source { block, func }) => {
+                    Some(callable) => {
                         // The provided method's frame: the impl's generic
                         // params realized through the match, in declaration
                         // order. A matched impl binds every declared param
@@ -559,41 +501,25 @@ fn lookup_impl_member<'db>(
                         // type. The own suffix (declared generics and
                         // synthetic effect params alike) stays rigid for the
                         // CALL SITE to finish, as on the class-method road.
+                        // The same discipline whichever lane the method comes
+                        // from: an exported row supplies its OWN refined
+                        // signature, `linkability` and `builtin_kind` (a
+                        // mounted `$rust_function` impl method stays reserved
+                        // through this row, not the interface's).
                         let frame_type_args = realized_impl_frame(&resolved);
-                        let signature = crate::lower::function_signature(db, func);
-                        member.ty = instantiate_signature(signature, &frame_type_args);
-                        member.pending_own = (signature.generic_params.len()
-                            > frame_type_args.len())
-                        .then(|| PendingOwnGenerics::Source {
-                            method: func,
+                        member.ty = instantiate_callable_signature(db, callable, &frame_type_args);
+                        member.pending_own = (!callable_signature(db, callable)
+                            .generic_params
+                            .is_empty())
+                        .then(|| PendingOwnGenerics {
+                            callable,
                             prefix: frame_type_args.clone(),
                         });
                         member.declarer = MemberDeclarer::ImplMethod {
-                            block,
-                            func,
+                            block: resolved.block(),
+                            func: callable,
                             frame_type_args,
-                            from_interface_default: false,
                         };
-                    }
-                    Some(crate::impls::ProvidedMethod::Mounted(method)) => {
-                        // Same discipline off the mounted row's descriptor.
-                        let prefix = realized_impl_frame(&resolved);
-                        let function = crate::package_interface::resolved_exported_function(
-                            method,
-                            Vec::new(),
-                            Vec::new(),
-                        );
-                        let external = function.external.clone().unwrap_or_else(|| {
-                            unreachable!("resolved_exported_function always attaches an external")
-                        });
-                        member.ty = instantiate_external_signature(&function, &prefix);
-                        member.pending_own = (!function.generic_params.is_empty()).then(|| {
-                            PendingOwnGenerics::External {
-                                function: Box::new(function),
-                                prefix: prefix.clone(),
-                            }
-                        });
-                        member.declarer = MemberDeclarer::ExternalMethod(external);
                     }
                     None => {
                         // The interface's default body runs; the typing from
@@ -601,37 +527,38 @@ fn lookup_impl_member<'db>(
                         // Only the declarer narrows to the matched impl.
                         member.declarer = match member.declarer {
                             MemberDeclarer::VirtualMethod { interface, method } => {
-                                // Adoption requires a default BODY: an
+                                // Adoption requires a default BODY this
+                                // compilation can reference — a SOURCE block
+                                // adopting a SOURCE default with a body. An
                                 // INCOMPLETE impl (required method not
-                                // provided — already diagnosed) must keep the
-                                // virtual declarer rather than adopt the bare
-                                // signature, which has no compiled body an
-                                // `ItemRef::InterfaceBody` could reference.
-                                if let Some(block) = resolved.source_block()
-                                    && baml_compiler2_hir::item_data::function_has_body(db, method)
-                                {
-                                    // The default's frame: `[Self = receiver,
-                                    // iface args..]` — associated types are
-                                    // not slots.
-                                    let mut frame_type_args =
-                                        Vec::with_capacity(1 + implemented.generics.len());
-                                    frame_type_args.push(receiver.clone());
-                                    frame_type_args.extend(implemented.generics.iter().cloned());
-                                    MemberDeclarer::ImplMethod {
-                                        block,
-                                        func: method,
-                                        frame_type_args,
-                                        from_interface_default: true,
+                                // provided — already diagnosed), an external
+                                // block, or an external interface keep the
+                                // virtual declarer: its slot is what links.
+                                match (resolved.block(), method) {
+                                    (DeclRef::Source(block), DeclRef::Source(func))
+                                        if baml_compiler2_hir::item_data::function_has_body(
+                                            db, func,
+                                        ) =>
+                                    {
+                                        // The default's frame: `[Self =
+                                        // receiver, iface args..]` —
+                                        // associated types are not slots.
+                                        let mut frame_type_args =
+                                            Vec::with_capacity(1 + implemented.generics.len());
+                                        frame_type_args.push(receiver.clone());
+                                        frame_type_args
+                                            .extend(implemented.generics.iter().cloned());
+                                        MemberDeclarer::ImplMethod {
+                                            block: DeclRef::Source(block),
+                                            func: method,
+                                            frame_type_args,
+                                        }
                                     }
-                                } else {
-                                    match external_interface_callable(db, &implemented.name, name) {
-                                        Some(callable) => MemberDeclarer::ExternalMethod(callable),
-                                        None => MemberDeclarer::VirtualMethod { interface, method },
+                                    (_, method) => {
+                                        MemberDeclarer::VirtualMethod { interface, method }
                                     }
                                 }
                             }
-                            // A mounted interface's default: the interface
-                            // row's callable already declares it.
                             other => other,
                         };
                     }
@@ -641,13 +568,12 @@ fn lookup_impl_member<'db>(
                 // field links live there); mounted rows keep the
                 // interface view.
                 member.declarer = match member.declarer {
-                    field @ (MemberDeclarer::VirtualField { .. }
-                    | MemberDeclarer::ExternalVirtualField { .. }) => {
-                        match resolved.source_block() {
-                            Some(block) => MemberDeclarer::ImplField { block },
-                            None => field,
-                        }
-                    }
+                    field @ MemberDeclarer::VirtualField { .. } => match resolved.block() {
+                        DeclRef::Source(block) => MemberDeclarer::ImplField {
+                            block: DeclRef::Source(block),
+                        },
+                        DeclRef::External(_) => field,
+                    },
                     other => other,
                 };
             }
@@ -782,7 +708,9 @@ fn assoc_bound_roots<'db>(
         bound,
         crate::lower::TypePosition::ConstraintHead,
     )));
-    let Some(instantiation) = interface_instantiation(base, interface_ref, data) else {
+    let Some(instantiation) =
+        interface_instantiation(base, interface_ref, data.generic_params.len())
+    else {
         // Asserted inside `interface_instantiation`.
         return Vec::new();
     };
@@ -919,7 +847,7 @@ fn env_discharges_rigid_bounds<'db>(
                 bound
                     .generics
                     .iter()
-                    .map(|arg| crate::impls::substitute_bindings(arg, &resolved.bindings))
+                    .map(|arg| arg.substitute_bindings(&resolved.bindings))
                     .collect(),
                 Box::new([]),
             );
@@ -1005,16 +933,15 @@ fn substitute_lookup_class_args<'db>(
     match lookup {
         InterfaceMemberLookup::Found(mut member) => {
             member.ty = subst(&member.ty);
-            member.pending_own = member.pending_own.map(|pending| match pending {
-                PendingOwnGenerics::Source { method, prefix } => PendingOwnGenerics::Source {
-                    method,
-                    prefix: prefix.iter().map(subst).collect(),
-                },
-                PendingOwnGenerics::External { function, prefix } => PendingOwnGenerics::External {
-                    function,
-                    prefix: prefix.iter().map(subst).collect(),
-                },
-            });
+            member.pending_own =
+                member
+                    .pending_own
+                    .map(
+                        |PendingOwnGenerics { callable, prefix }| PendingOwnGenerics {
+                            callable,
+                            prefix: prefix.iter().map(subst).collect(),
+                        },
+                    );
             member.declarer = match member.declarer {
                 MemberDeclarer::VirtualField {
                     interface,
@@ -1029,25 +956,13 @@ fn substitute_lookup_class_args<'db>(
                     block,
                     func,
                     frame_type_args,
-                    from_interface_default,
                 } => MemberDeclarer::ImplMethod {
                     block,
                     func,
                     frame_type_args: frame_type_args.iter().map(subst).collect(),
-                    from_interface_default,
-                },
-                MemberDeclarer::ExternalVirtualField {
-                    interface,
-                    realized,
-                    field_index,
-                } => MemberDeclarer::ExternalVirtualField {
-                    interface,
-                    realized: subst_ref(&realized),
-                    field_index,
                 },
                 other @ (MemberDeclarer::VirtualMethod { .. }
-                | MemberDeclarer::ImplField { .. }
-                | MemberDeclarer::ExternalMethod(_)) => other,
+                | MemberDeclarer::ImplField { .. }) => other,
             };
             InterfaceMemberLookup::Found(member)
         }
@@ -1082,60 +997,47 @@ pub(crate) fn member_on_interface<'db>(
     name: &Name,
     existential: bool,
 ) -> Option<InterfaceMember<'db>> {
-    if let Some(crate::package_interface::ExportedType::Interface {
-        self_param,
-        generic_params,
-        fields,
-        required_methods,
-        default_methods,
-        ..
-    }) = crate::package_interface::mounted_type_row(db, &target.name)
-    {
-        let instantiation =
-            crate::impls::mounted_interface_instantiation(target, receiver, generic_params)?;
-        if let Some(index) = fields.iter().position(|(field, ..)| field == name) {
-            let (_, field_ty, _) = &fields[index];
+    if let Some(interface) = mounted_interface_loc(db, &target.name) {
+        let row = extern_interface_row(db, interface);
+        let instantiation = interface_instantiation(receiver, target, row.generic_params.len())?;
+        if let Some(index) = row.fields.iter().position(|(field, ..)| field == name) {
+            let (_, field_ty, _) = &row.fields[index];
             let field_ty =
                 crate::lower::substitute_params(&Ty::from_plain(field_ty), &instantiation);
             return Some(InterfaceMember {
                 ty: field_ty,
                 is_method: false,
                 pending_own: None,
-                declarer: MemberDeclarer::ExternalVirtualField {
-                    interface: target.name.clone(),
+                declarer: MemberDeclarer::VirtualField {
+                    interface: DeclRef::External(interface),
                     realized: target.clone(),
                     field_index: u32::try_from(index)
                         .expect("mounted interface field count fits u32"),
                 },
             });
         }
-        if let Some(method) = required_methods
-            .iter()
-            .chain(default_methods)
-            .find(|method| method.name == *name)
-        {
-            let function = crate::package_interface::resolved_exported_function(
-                method,
-                Vec::new(),
-                Vec::new(),
-            );
-            if existential && exported_signature_breaks_one_self(&function, self_param) {
+        // The row lives in a served package (the loc above proved it), so
+        // the ungated mint is the honest one here.
+        if let Some(method) = extern_interface_method(db, &target.name, name) {
+            let callable = DeclRef::External(method);
+            if existential && callable_breaks_one_self(db, callable) {
                 return None;
             }
             let pending_own =
-                (!function.generic_params.is_empty()).then(|| PendingOwnGenerics::External {
-                    function: Box::new(function.clone()),
-                    prefix: instantiation.clone(),
+                (!callable_signature(db, callable).generic_params.is_empty()).then(|| {
+                    PendingOwnGenerics {
+                        callable,
+                        prefix: instantiation.clone(),
+                    }
                 });
-            let callable = function
-                .external
-                .clone()
-                .expect("an exported interface method has an external target");
             return Some(InterfaceMember {
-                ty: instantiate_external_signature(&function, &instantiation),
+                ty: instantiate_callable_signature(db, callable, &instantiation),
                 is_method: true,
                 pending_own,
-                declarer: MemberDeclarer::ExternalMethod(callable),
+                declarer: MemberDeclarer::VirtualMethod {
+                    interface: DeclRef::External(interface),
+                    method: callable,
+                },
             });
         }
         return None;
@@ -1144,7 +1046,7 @@ pub(crate) fn member_on_interface<'db>(
         return None;
     };
     let data = baml_compiler2_hir::item_data::interface_data(db, interface);
-    let instantiation = interface_instantiation(receiver, target, data)?;
+    let instantiation = interface_instantiation(receiver, target, data.generic_params.len())?;
 
     // Fields first (mirroring the class path's field-before-method).
     if let Some(index) = data.fields.iter().position(|field| field.name == *name) {
@@ -1161,7 +1063,7 @@ pub(crate) fn member_on_interface<'db>(
             is_method: false,
             pending_own: None,
             declarer: MemberDeclarer::VirtualField {
-                interface,
+                interface: DeclRef::Source(interface),
                 realized: target.clone(),
                 // The index space every implementation is baked against
                 // is the interface's OWN declared field list, not the
@@ -1180,24 +1082,28 @@ pub(crate) fn member_on_interface<'db>(
         .iter()
         .find(|&&method| baml_compiler2_hir::item_data::function_data(db, method).name == *name)
     {
-        let signature = crate::lower::function_signature(db, method);
-        if existential && signature_breaks_one_self(signature) {
+        let callable = DeclRef::Source(method);
+        if existential && callable_breaks_one_self(db, callable) {
             return None;
         }
         // The interface frame is the receiver's business; the method's
         // OWN generics (frame suffix, `map<R, E2>`, `seen<U>`) are the
         // call site's - hand them back for turbofish/fresh-var filling.
-        let pending_own = (signature.generic_params.len() > instantiation.len()).then(|| {
-            PendingOwnGenerics::Source {
-                method,
-                prefix: instantiation.clone(),
-            }
-        });
+        let pending_own =
+            (!callable_signature(db, callable).generic_params.is_empty()).then(|| {
+                PendingOwnGenerics {
+                    callable,
+                    prefix: instantiation.clone(),
+                }
+            });
         return Some(InterfaceMember {
-            ty: instantiate_signature(signature, &instantiation),
+            ty: instantiate_callable_signature(db, callable, &instantiation),
             is_method: true,
             pending_own,
-            declarer: MemberDeclarer::VirtualMethod { interface, method },
+            declarer: MemberDeclarer::VirtualMethod {
+                interface: DeclRef::Source(interface),
+                method: callable,
+            },
         });
     }
 
@@ -1227,27 +1133,29 @@ pub struct MemberCandidate<'db> {
     pub decl: MemberDecl<'db>,
 }
 
-/// The declaration an enumerated member came from.
+/// The declaration an enumerated member came from, wherever it lives: a
+/// source item this database type-checks, or the identity of a served
+/// package's exported row (whose facts every consumer reads through the
+/// `extern_loc` row reads).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MemberDecl<'db> {
-    /// A method with a source declaration — class-inherent, or an
-    /// interface's required/default method.
-    Method(FunctionLoc<'db>),
-    /// A field of a source class, by index into its declared field list.
-    ClassField { class: ClassLoc<'db>, index: usize },
-    /// A field of a source interface, by index into its declared field list.
+    /// A method: class-inherent, or an interface's required/default method.
+    Method(crate::extern_loc::FunctionRef<'db>),
+    /// A field of a class, by index into its declared field list.
+    ClassField {
+        class: crate::extern_loc::ClassRef<'db>,
+        index: usize,
+    },
+    /// A field of an interface, by index into its declared field list.
     InterfaceField {
-        interface: InterfaceLoc<'db>,
+        interface: crate::extern_loc::InterfaceRef<'db>,
         index: usize,
     },
     /// An enum variant, by index into its declared variant list.
     EnumVariant {
-        enum_loc: EnumLoc<'db>,
+        enum_loc: crate::extern_loc::EnumRef<'db>,
         index: usize,
     },
-    /// Declared by a mounted package: there is no source declaration to
-    /// point at, only the exported row.
-    Mounted,
 }
 
 /// The tier an enumerated member came from.
@@ -1292,7 +1200,10 @@ pub fn member_candidates<'db>(
                 false,
                 false,
                 MemberSource::Inherent,
-                MemberDecl::ClassField { class, index },
+                MemberDecl::ClassField {
+                    class: DeclRef::Source(class),
+                    index,
+                },
             );
         }
         for (name, is_static, method) in declared_methods(db, &data.methods) {
@@ -1302,32 +1213,36 @@ pub fn member_candidates<'db>(
                 true,
                 is_static,
                 MemberSource::Inherent,
-                MemberDecl::Method(method),
+                MemberDecl::Method(DeclRef::Source(method)),
             );
         }
     } else if let Some((qtn, _)) = external_class_for_type(facts, receiver, 8)
-        && let Some(crate::package_interface::ExportedType::Class {
-            fields, methods, ..
-        }) = crate::package_interface::mounted_type_row(db, &qtn)
+        && let Some(class) = crate::extern_loc::mounted_class_loc(db, &qtn)
     {
-        for (name, ..) in fields {
+        let row = crate::extern_loc::extern_class_row(db, class);
+        for (index, (name, ..)) in row.fields.iter().enumerate() {
             push_candidate(
                 &mut out,
                 name.clone(),
                 false,
                 false,
                 MemberSource::Inherent,
-                MemberDecl::Mounted,
+                MemberDecl::ClassField {
+                    class: DeclRef::External(class),
+                    index,
+                },
             );
         }
-        for method in methods {
+        for exported in row.methods {
+            let method = crate::extern_loc::extern_class_method(db, class.head(db), &exported.name)
+                .unwrap_or_else(|| unreachable!("a method row of the class mints"));
             push_candidate(
                 &mut out,
-                method.name.clone(),
+                exported.name.clone(),
                 true,
-                is_static_exported(method),
+                !crate::callable::callable_takes_self(db, DeclRef::External(method)),
                 MemberSource::Inherent,
-                MemberDecl::Mounted,
+                MemberDecl::Method(DeclRef::External(method)),
             );
         }
     }
@@ -1398,7 +1313,7 @@ pub fn type_member_candidates<'db>(
                     true,
                     is_static,
                     MemberSource::Inherent,
-                    MemberDecl::Method(method),
+                    MemberDecl::Method(DeclRef::Source(method)),
                 );
             }
             // Impl-provided members: a bare `C.member` also resolves as
@@ -1426,7 +1341,10 @@ pub fn type_member_candidates<'db>(
                     false,
                     true,
                     MemberSource::Inherent,
-                    MemberDecl::EnumVariant { enum_loc, index },
+                    MemberDecl::EnumVariant {
+                        enum_loc: DeclRef::Source(enum_loc),
+                        index,
+                    },
                 );
             }
             // An enum is a concrete type like any other: it cannot carry an
@@ -1452,7 +1370,7 @@ pub fn type_member_candidates<'db>(
                     true,
                     is_static,
                     MemberSource::Inherent,
-                    MemberDecl::Method(method),
+                    MemberDecl::Method(DeclRef::Source(method)),
                 );
             }
         }
@@ -1477,7 +1395,11 @@ fn declared_methods<'a, 'db: 'a>(
         if function.metadata.is_language_internal {
             return None;
         }
-        Some((function.name.clone(), is_static_source(db, method), method))
+        Some((
+            function.name.clone(),
+            !callable_takes_self(db, DeclRef::Source(method)),
+            method,
+        ))
     })
 }
 
@@ -1499,21 +1421,6 @@ fn push_candidate<'db>(
         source,
         decl,
     });
-}
-
-/// Whether a source function is declared without a `self` receiver, and is
-/// therefore reached through the type rather than through a value.
-fn is_static_source(db: &dyn baml_compiler2_hir::Db, method: FunctionLoc<'_>) -> bool {
-    baml_compiler2_hir::item_data::function_data(db, method)
-        .params
-        .first()
-        .is_none_or(|param| param.name.as_str() != "self")
-}
-
-/// The exported twin of [`is_static_source`], over the same predicate the
-/// dispatch shape is built from.
-fn is_static_exported(method: &crate::package_interface::ExportedFunction) -> bool {
-    !crate::package_interface::exported_takes_self(method)
 }
 
 fn extend_from_interface<'db>(
@@ -1549,31 +1456,30 @@ fn interface_member_rows<'db>(
     existential: bool,
 ) -> Vec<(Name, bool, bool, MemberDecl<'db>)> {
     let mut rows = Vec::new();
-    if let Some(crate::package_interface::ExportedType::Interface {
-        self_param,
-        fields,
-        required_methods,
-        default_methods,
-        ..
-    }) = crate::package_interface::mounted_type_row(db, &target.name)
-    {
-        for (name, ..) in fields {
-            rows.push((name.clone(), false, false, MemberDecl::Mounted));
+    if let Some(interface) = crate::extern_loc::mounted_interface_loc(db, &target.name) {
+        let row = crate::extern_loc::extern_interface_row(db, interface);
+        for (index, (name, ..)) in row.fields.iter().enumerate() {
+            rows.push((
+                name.clone(),
+                false,
+                false,
+                MemberDecl::InterfaceField {
+                    interface: DeclRef::External(interface),
+                    index,
+                },
+            ));
         }
-        for method in required_methods.iter().chain(default_methods) {
-            let function = crate::package_interface::resolved_exported_function(
-                method,
-                Vec::new(),
-                Vec::new(),
-            );
-            if existential && exported_signature_breaks_one_self(&function, self_param) {
+        for exported in row.required_methods.iter().chain(row.default_methods) {
+            let method = extern_interface_method(db, interface.head(db), &exported.name)
+                .unwrap_or_else(|| unreachable!("a row of the interface mints"));
+            if existential && callable_breaks_one_self(db, DeclRef::External(method)) {
                 continue;
             }
             rows.push((
-                method.name.clone(),
+                exported.name.clone(),
                 true,
-                is_static_exported(method),
-                MemberDecl::Mounted,
+                !crate::package_interface::exported_takes_self(extern_function_row(db, method)),
+                MemberDecl::Method(DeclRef::External(method)),
             ));
         }
         return rows;
@@ -1587,79 +1493,24 @@ fn interface_member_rows<'db>(
             field.name.clone(),
             false,
             false,
-            MemberDecl::InterfaceField { interface, index },
+            MemberDecl::InterfaceField {
+                interface: DeclRef::Source(interface),
+                index,
+            },
         ));
     }
     for (name, is_static, method) in declared_methods(db, &data.methods) {
-        if existential && signature_breaks_one_self(crate::lower::function_signature(db, method)) {
+        if existential && callable_breaks_one_self(db, DeclRef::Source(method)) {
             continue;
         }
-        rows.push((name, true, is_static, MemberDecl::Method(method)));
+        rows.push((
+            name,
+            true,
+            is_static,
+            MemberDecl::Method(DeclRef::Source(method)),
+        ));
     }
     rows
-}
-
-pub(crate) fn instantiate_external_signature(
-    function: &crate::package_interface::ResolvedFunction,
-    instantiation: &[Ty],
-) -> Ty {
-    let params = function
-        .params
-        .iter()
-        .map(|param| baml_type::interned::InferFunctionParamTy {
-            name: param.name.clone(),
-            ty: crate::lower::substitute_params(&Ty::from_plain(&param.ty), instantiation),
-            mode: param.mode,
-        })
-        .collect();
-    Ty::intern(InferTy::Function {
-        params,
-        ret: crate::lower::substitute_params(&Ty::from_plain(&function.return_type), instantiation),
-        throws: crate::lower::substitute_params(
-            &Ty::from_plain(&function.callable_throws),
-            instantiation,
-        ),
-    })
-}
-
-fn exported_signature_breaks_one_self(
-    function: &crate::package_interface::ResolvedFunction,
-    self_param: &ParamTy,
-) -> bool {
-    let contains = |ty: &baml_type::Ty, top_ok: bool| {
-        self_occurs(&Ty::from_plain(ty), top_ok)
-            || matches!(ty, baml_type::Ty::TypeVar(param) if param == self_param && !top_ok)
-    };
-    function
-        .params
-        .iter()
-        .skip(1)
-        .any(|param| contains(&param.ty, false))
-        || contains(&function.return_type, true)
-        || contains(&function.callable_throws, true)
-}
-
-fn external_interface_callable(
-    db: &dyn baml_compiler2_hir::Db,
-    interface: &baml_type::DeclName,
-    name: &Name,
-) -> Option<std::sync::Arc<crate::callable::ExternalCallable>> {
-    let package = interface.root();
-    let row = crate::package_interface::package_interface(db, package)
-        .lookup_type(interface.namespace(), interface.name())?;
-    let crate::package_interface::ExportedType::Interface {
-        required_methods,
-        default_methods,
-        ..
-    } = row
-    else {
-        return None;
-    };
-    let method = required_methods
-        .iter()
-        .chain(default_methods)
-        .find(|method| method.name == *name)?;
-    crate::package_interface::resolved_exported_function(method, Vec::new(), Vec::new()).external
 }
 
 /// The interface frame's instantiation vector for a receiver:
@@ -1677,20 +1528,21 @@ fn external_interface_callable(
 /// copy the declaration's own frame), so it is asserted as a
 /// construction bug and answered conservatively in release; padding the
 /// frame instead would fabricate `Error` slots no diagnostic has
-/// vouched for. The same contract as
-/// [`crate::impls::mounted_interface_instantiation`].
+/// vouched for. `declared_arity` is the interface's own declared generic
+/// count, from its source data or its exported row — one contract for both
+/// lanes.
 pub(crate) fn interface_instantiation(
     receiver: &Ty,
     target: &InferInterface,
-    data: &baml_compiler2_hir::item_data::InterfaceData<'_>,
+    declared_arity: usize,
 ) -> Option<Vec<Ty>> {
-    if data.generic_params.len() != target.generics.len() {
+    if declared_arity != target.generics.len() {
         debug_assert!(
             false,
             "interface reference `{:?}` carries {} generic args; its declaration takes {}",
             target.name,
             target.generics.len(),
-            data.generic_params.len(),
+            declared_arity,
         );
         return None;
     }
@@ -1706,58 +1558,10 @@ fn interface_frame<'db>(
     crate::lower::interface_frame(db, interface)
 }
 
-fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiation: &[Ty]) -> Ty {
-    let params: Box<[baml_type::interned::InferFunctionParamTy]> = signature
-        .params
-        .iter()
-        .map(|param| baml_type::interned::InferFunctionParamTy {
-            name: Some(param.name.clone()),
-            ty: crate::lower::substitute_params(
-                &crate::impls::interned_ty(&param.ty),
-                instantiation,
-            ),
-            mode: if param.has_default {
-                baml_type::FunctionParamMode::Optional
-            } else {
-                baml_type::FunctionParamMode::Required
-            },
-        })
-        .collect();
-    Ty::intern(InferTy::Function {
-        params,
-        ret: crate::lower::substitute_params(
-            &crate::impls::interned_ty(&signature.ret),
-            instantiation,
-        ),
-        throws: crate::lower::substitute_params(
-            &crate::impls::interned_ty(&signature.throws),
-            instantiation,
-        ),
-    })
-}
-
-/// The one-`Self` rule (spec: object safety for existential receivers):
-/// a NON-self parameter containing bare `Self`, or `Self` nested inside
-/// an invariant constructor in the return/throws, makes the method
-/// uncallable through an existential (a bare top-level `-> Self`
-/// collapses covariantly and stays legal). `Self.Assoc` projections are
-/// exempt - the existential's pins make them one concrete type.
-fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> bool {
-    let self_in =
-        |ty: &baml_type::Ty, top_ok: bool| -> bool { self_occurs(&Ty::from_plain(ty), top_ok) };
-    signature
-        .params
-        .iter()
-        .skip(1)
-        .any(|param| self_in(&param.ty, false))
-        || self_in(&signature.ret, true)
-        || self_in(&signature.throws, true)
-}
-
 /// Whether frame slot 0 (`Self`) occurs illegally: any occurrence in a
 /// non-top position, or a top occurrence when `top_ok` is false.
 /// Projection bases are exempt.
-fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
+pub(crate) fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
     match ty.kind() {
         InferTy::TypeVar(param) if param.index() == 0 && param.as_str() == "Self" => !top_ok,
         InferTy::AssociatedTypeProjection { .. } => false,

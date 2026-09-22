@@ -43,7 +43,7 @@ use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
     item_data,
-    loc::FunctionLoc,
+    loc::{DeclRef, FunctionLoc},
     resolve::{ResolvedName, resolve_name_at},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{
@@ -450,7 +450,9 @@ fn find_member_usages(
                 }
             }
 
-            // Constructor-literal keys (fields only).
+            // Constructor-literal keys (fields only), in either lane: a
+            // served class's literals are keyed on its exported row, exactly
+            // as its member accesses are.
             if let SymbolTarget::Field { class, .. } = target {
                 collect_constructor_key_usages(
                     db,
@@ -471,23 +473,47 @@ fn find_member_usages(
 /// The declared name of a member target (for the text pre-filter and key
 /// matching).
 fn member_target_name(db: &dyn baml_compiler2_hir::Db, target: SymbolTarget<'_>) -> Option<Name> {
+    use baml_compiler2_hir_ty::extern_loc::{
+        extern_class_row, extern_enum_row, extern_function_row, extern_interface_row,
+    };
     match target {
-        SymbolTarget::Field { class, field_index } => item_data::class_data(db, class)
-            .fields
-            .get(field_index)
-            .map(|f| f.name.clone()),
+        SymbolTarget::Field { class, field_index } => match class {
+            DeclRef::Source(class) => item_data::class_data(db, class)
+                .fields
+                .get(field_index)
+                .map(|f| f.name.clone()),
+            DeclRef::External(class) => extern_class_row(db, class)
+                .fields
+                .get(field_index)
+                .map(|(name, ..)| name.clone()),
+        },
         SymbolTarget::Variant {
             enum_loc,
             variant_index,
-        } => item_data::enum_data(db, enum_loc)
-            .variants
-            .get(variant_index)
-            .map(|v| v.name.clone()),
-        SymbolTarget::Method { func } => Some(item_data::function_data(db, func).name.clone()),
-        SymbolTarget::InterfaceField { iface, field_index } => item_data::interface_data(db, iface)
-            .fields
-            .get(field_index)
-            .map(|f| f.name.clone()),
+        } => match enum_loc {
+            DeclRef::Source(enum_loc) => item_data::enum_data(db, enum_loc)
+                .variants
+                .get(variant_index)
+                .map(|v| v.name.clone()),
+            DeclRef::External(enum_loc) => extern_enum_row(db, enum_loc)
+                .variants
+                .get(variant_index)
+                .cloned(),
+        },
+        SymbolTarget::Method { func } => Some(match func {
+            DeclRef::Source(func) => item_data::function_data(db, func).name.clone(),
+            DeclRef::External(func) => extern_function_row(db, func).name.clone(),
+        }),
+        SymbolTarget::InterfaceField { iface, field_index } => match iface {
+            DeclRef::Source(iface) => item_data::interface_data(db, iface)
+                .fields
+                .get(field_index)
+                .map(|f| f.name.clone()),
+            DeclRef::External(iface) => extern_interface_row(db, iface)
+                .fields
+                .get(field_index)
+                .map(|(name, ..)| name.clone()),
+        },
         // Associated types appear only in TYPE positions, which carry no
         // inference records — the walker finds no body usages (honest
         // absence until type-reference resolution is recorded).
@@ -512,7 +538,7 @@ fn member_target_name(db: &dyn baml_compiler2_hir::Db, target: SymbolTarget<'_>)
 fn collect_constructor_key_usages(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
-    class: baml_compiler2_hir::loc::ClassLoc<'_>,
+    class: baml_compiler2_hir_ty::extern_loc::ClassRef<'_>,
     field_name: &Name,
     expr_body: &ExprBody,
     source_map: &baml_compiler2_ast::AstSourceMap,
@@ -536,13 +562,7 @@ fn collect_constructor_key_usages(
             continue;
         };
 
-        let pkg_id = qtn.root();
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
-        let Some(Definition::Class(obj_class)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
-        else {
-            continue;
-        };
-        if obj_class != class {
+        if crate::resolve::constructed_class(db, qtn) != Some(class) {
             continue;
         }
 

@@ -814,7 +814,21 @@ pub(super) fn inlay_hint(
         .filter(|annotation| start <= annotation.offset && annotation.offset <= end)
         .map(|annotation| lsp_types::InlayHint {
             position: codec.offset_to_position(u32::from(annotation.offset)),
-            label: lsp_types::InlayHintLabel::String(annotation.label.clone()),
+            label: annotation
+                .target
+                .and_then(|(file, range)| {
+                    super::proto::location(snap, baml_ide::Location { file, range })
+                })
+                .map_or_else(
+                    || lsp_types::InlayHintLabel::String(annotation.label.clone()),
+                    |location| {
+                        lsp_types::InlayHintLabel::LabelParts(vec![lsp_types::InlayHintLabelPart {
+                            value: annotation.label.clone(),
+                            location: Some(location),
+                            ..Default::default()
+                        }])
+                    },
+                ),
             kind: Some(match annotation.kind {
                 baml_ide::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
                 baml_ide::AnnotationKind::Parameter => lsp_types::InlayHintKind::PARAMETER,

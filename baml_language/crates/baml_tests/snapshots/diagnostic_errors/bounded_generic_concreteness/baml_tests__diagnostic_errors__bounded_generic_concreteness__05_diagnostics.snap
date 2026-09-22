@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:61:5]
+ 61 │     pair(a, b);
+    ·     ──────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:62:5]
+ 62 │     pair_with_callback(a, b);
+    ·     ────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:63:5]
+ 63 │     pair_with_callback(a, b, done = () -> void { });
+    ·     ───────────────────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:64:5]
+ 64 │     pair_with_callback<Combinable>(a, b);
+    ·     ────────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `A | B` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime type
+  │ to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:65:5]
+ 65 │     pair_with_callback(either, either);
+    ·     ──────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:66:5]
+ 66 │     second_bounded(1, a, () -> void { });
+    ·     ────────────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:67:5]
+ 67 │     Pairer { key: a }.pair(a, b);
+    ·     ────────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+    ╭─[bounded_generic_concreteness.baml:68:5]
+ 68 │     Pairer.pair_static(a, b);
+    ·     ────────────────────────
+    ╰────

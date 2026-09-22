@@ -1877,6 +1877,7 @@ fn tir_type_error_to_diagnostic_id(
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotConstructAlias { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
             DiagnosticId::CannotConstructBuiltinCompanion
         }
@@ -1962,6 +1963,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InterfaceMemberRequiresReceiver { .. } => DiagnosticId::NoSuchField,
         TirTypeError::InvalidSelfCallThroughInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::SelflessMethodNeedsConcreteSelf { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::SelfDispatchParamNotFirst { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::SelflessInstanceMember { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ErasedSelfMethodValue { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DefaultOnRequiredMethod { .. } => DiagnosticId::DefaultOnRequiredMethod,

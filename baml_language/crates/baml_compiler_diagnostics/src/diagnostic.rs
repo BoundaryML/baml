@@ -40,7 +40,8 @@ pub enum DiagnosticPhase {
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a
-/// wire-format break gated by the cache's `FORMAT_VERSION`.
+/// wire-format break gated by the cache's `FORMAT_VERSION`. A new variant is
+/// therefore appended at the end, whichever group below it belongs with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticId {
     // Parse errors (E0009, E0010)
@@ -411,6 +412,15 @@ pub enum DiagnosticId {
     /// could only copy a handle out of another value, which relabels what the
     /// handle means (its type arguments, or its class).
     CannotConstructOpaqueClass,
+    /// Reserved (E0175): a value path into a package served from its
+    /// compiled interface that names a declaration the interface does not
+    /// carry. Not produced today — the interface cannot yet tell such a
+    /// declaration from a misspelling, so the path reports as an unresolved
+    /// name, as in source. Returns once the interface carries the names of
+    /// its unexported declarations. (Landed as E0173; this branch already
+    /// emits E0173/E0174, and a reserved code nothing produces is the one
+    /// safe to move.)
+    ServedInterfaceExportsFunctionsOnly,
 }
 
 impl DiagnosticId {
@@ -623,6 +633,7 @@ impl DiagnosticId {
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
             DiagnosticId::CannotConstructOpaqueClass => "E0173",
             DiagnosticId::ReservedBindingName => "E0174",
+            DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0175",
         }
     }
 }
@@ -926,6 +937,12 @@ mod tests {
             vec![0]
         );
         assert_eq!(borsh::to_vec(&DiagnosticId::TypeMismatch).unwrap(), vec![3]);
+        // A late variant, so an insertion anywhere before it is caught too:
+        // new variants are appended.
+        assert_eq!(
+            borsh::to_vec(&DiagnosticId::ScopedTypeEscapesBlock).unwrap(),
+            vec![140]
+        );
         assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
         assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
         assert_eq!(borsh::to_vec(&DiagnosticPhase::Parse).unwrap(), vec![0]);

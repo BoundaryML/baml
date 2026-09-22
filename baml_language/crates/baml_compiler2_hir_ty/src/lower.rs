@@ -38,7 +38,7 @@ use baml_type::{
 use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone)]
-enum ResolvedTypeDefinition<'db> {
+pub(crate) enum ResolvedTypeDefinition<'db> {
     Source(Definition<'db>),
     Exported(Box<crate::package_interface::ExportedType>),
 }
@@ -1200,11 +1200,7 @@ impl<'db> LowerCtx<'db> {
             // cycle-guarded, through the fact oracle.
             Definition::TypeAlias(_) => LoweringTy::TypeAlias(self.qualify(def, short)),
             // Value-namespace definitions are not types.
-            Definition::Function(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
-            | Definition::Let(_) => LoweringTy::error(),
+            Definition::Function(_) | Definition::Let(_) => LoweringTy::error(),
         }
     }
 
@@ -1352,14 +1348,14 @@ impl<'db> LowerCtx<'db> {
 
     /// The package this context's package spells as `name` (itself, or a
     /// declared dependency) — see `hir::package::accessible_package`.
-    fn accessible_package(&self, name: &Name) -> Option<baml_base::SourceRoot> {
+    pub(crate) fn accessible_package(&self, name: &Name) -> Option<baml_base::SourceRoot> {
         accessible_package(self.db, self.package_items.root, name)
     }
 
     /// TIR's `resolve_type_in`, mirrored: (1) namespace-relative in the
     /// current package (no outward walk); (2) `root.`-absolute or
     /// package-prefixed.
-    fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
+    pub(crate) fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
         let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
 
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
@@ -1378,14 +1374,17 @@ impl<'db> LowerCtx<'db> {
                     return Some(ResolvedTypeDefinition::Source(def));
                 }
             } else if let Some(package) = self.accessible_package(&segments[0]) {
+                // A served dependency answers from its interface ONLY: its
+                // files, when present, are link-only stubs (`definition_of`).
                 if is_served_from_interface(self.db, package) {
                     let interface = crate::package_interface::mounted_interface(self.db, package)?;
                     if let Some(exported) = interface.lookup_type(prefix_ns, item) {
                         return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
                     }
-                }
-                let dep_items = baml_compiler2_hir::package::package_items(self.db, package);
-                if let Some(def) = dep_items.lookup_type(prefix_ns, item) {
+                } else if let Some(def) =
+                    baml_compiler2_hir::package::package_items(self.db, package)
+                        .lookup_type(prefix_ns, item)
+                {
                     return Some(ResolvedTypeDefinition::Source(def));
                 }
             }
@@ -1396,8 +1395,16 @@ impl<'db> LowerCtx<'db> {
         if segments.first().is_some_and(|root| root.as_str() == "json")
             && let Some(baml) = self.accessible_package(&Name::new("baml"))
         {
-            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
             let namespace = &segments[..segments.len() - 1];
+            // Served `baml` (the precompiled stdlib of a runtime compile)
+            // answers from its interface, exactly as the package-prefixed
+            // spelling above and the value shorthand do.
+            if is_served_from_interface(self.db, baml) {
+                return crate::package_interface::mounted_interface(self.db, baml)?
+                    .lookup_type(namespace, item)
+                    .map(|exported| ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
+            }
+            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
             let visible = self.package_items.root == baml
                 || crate::package_interface::package_interface(self.db, baml)
                     .lookup_type(namespace, item)
@@ -1412,7 +1419,17 @@ impl<'db> LowerCtx<'db> {
 
     /// Value-namespace resolution, mirroring `LowerCtx::resolve_type`'s
     /// algorithm over `lookup_value` (functions, clients, lets).
-    pub fn resolve_value(&self, segments: &[Name]) -> Option<Definition<'db>> {
+    /// TIR's value-path ladder, mirrored, with ONE answer per lane: a
+    /// source-served package's definition, or a served package's exported
+    /// function by its identity. A served dependency answers from its
+    /// interface ONLY — its files, when present, are link-only stubs
+    /// (`definition_of`) — which is also why a served package's non-function
+    /// value resolves to nothing: the interface exports functions and types.
+    pub fn resolve_value(
+        &self,
+        segments: &[Name],
+    ) -> Option<crate::package_interface::ResolvedValue<'db>> {
+        use crate::package_interface::ResolvedValue;
         let (item, seg_ns) = segments.split_last()?;
         let relative_ns: Vec<Name> = if self.ns_context.is_empty() {
             seg_ns.to_vec()
@@ -1420,76 +1437,47 @@ impl<'db> LowerCtx<'db> {
             self.ns_context.iter().chain(seg_ns).cloned().collect()
         };
         if let Some(def) = self.package_items.lookup_value(&relative_ns, item) {
-            return Some(def);
+            return Some(ResolvedValue::Source(def));
         }
         if segments.len() >= 2 {
             let prefix_ns = &segments[1..segments.len() - 1];
             if segments[0].as_str() == "root" {
                 if let Some(def) = self.package_items.lookup_value(prefix_ns, item) {
-                    return Some(def);
+                    return Some(ResolvedValue::Source(def));
                 }
             } else if let Some(package) = self.accessible_package(&segments[0]) {
-                // A source root served from a package interface may also carry
-                // link-only HIR stubs so emit can allocate import slots. Those
-                // stubs are deliberately type-erased (notably generic function
-                // parameters become `unknown`) and must never win semantic
-                // resolution over the mounted interface row. Inference falls
-                // through to `resolve_exported_value` for that authoritative
-                // signature.
-                if !is_served_from_interface(self.db, package) {
-                    let dep_items = baml_compiler2_hir::package::package_items(self.db, package);
-                    if let Some(def) = dep_items.lookup_value(prefix_ns, item) {
-                        return Some(def);
-                    }
+                if is_served_from_interface(self.db, package) {
+                    return crate::extern_loc::mounted_function_named(
+                        self.db, package, prefix_ns, item,
+                    )
+                    .map(ResolvedValue::External);
+                }
+                if let Some(def) = baml_compiler2_hir::package::package_items(self.db, package)
+                    .lookup_value(prefix_ns, item)
+                {
+                    return Some(ResolvedValue::Source(def));
                 }
             }
         }
+        // The sole builtin namespace shorthand: `json.x` reads `baml.json.x`.
         if segments.first().is_some_and(|root| root.as_str() == "json")
             && let Some(baml) = self.accessible_package(&Name::new("baml"))
         {
-            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
             let namespace = &segments[..segments.len() - 1];
+            if is_served_from_interface(self.db, baml) {
+                return crate::extern_loc::mounted_function_named(self.db, baml, namespace, item)
+                    .map(ResolvedValue::External);
+            }
+            let baml_items = baml_compiler2_hir::package::package_items(self.db, baml);
             let visible = self.package_items.root == baml
                 || crate::package_interface::package_interface(self.db, baml)
                     .lookup_function(namespace, item)
                     .is_some();
             if visible && let Some(def) = baml_items.lookup_value(namespace, item) {
-                return Some(def);
+                return Some(ResolvedValue::Source(def));
             }
         }
         None
-    }
-
-    /// Source-less free-function lookup. Kept separate from
-    /// [`Self::resolve_value`] so source consumers that require a real loc can
-    /// remain explicit; inference tries the source road first, then this one.
-    pub fn resolve_exported_value(
-        &self,
-        segments: &[Name],
-    ) -> Option<crate::package_interface::ResolvedFunction> {
-        if segments.len() < 2 {
-            return None;
-        }
-        let (package_name, visible_segments) =
-            if segments.first().is_some_and(|root| root.as_str() == "json") {
-                // Mirror `resolve_value`'s sole builtin namespace shorthand after
-                // ordinary local lookup.
-                (Name::new("baml"), segments)
-            } else {
-                (segments[0].clone(), &segments[1..])
-            };
-        let package = self.accessible_package(&package_name)?;
-        if !is_served_from_interface(self.db, package) {
-            return None;
-        }
-        let (item, namespace) = visible_segments.split_last()?;
-        let interface = crate::package_interface::mounted_interface(self.db, package)?;
-        let function = interface.lookup_function(namespace, item)?;
-        Some(crate::package_interface::resolved_exported_function(
-            function,
-            Vec::new(),
-            Vec::new(),
-        ))
     }
 
     /// Type-namespace resolution, exposed for constructor and member typing.
@@ -1729,9 +1717,6 @@ pub fn declaration_self_ty<'db>(
         Definition::Interface(_)
         | Definition::TypeAlias(_)
         | Definition::Function(_)
-        | Definition::TemplateString(_)
-        | Definition::Client(_)
-        | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }
 }

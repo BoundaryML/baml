@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot construct `Text`: it is an alias of `string`, not a class
+    ╭─[alias_construction.baml:17:5]
+ 17 │     Text { value: "x" }
+    ·     ───────────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot construct `Either`: it is an alias of `Point | string`, not a class
+    ╭─[alias_construction.baml:21:5]
+ 21 │     Either { x: 1, y: 2 }
+    ·     ─────────────────────
+    ╰────
+
+  [type] E0001
+
+  × type `PointAlias` expects 0 type argument(s), got 1
+    ╭─[alias_construction.baml:25:5]
+ 25 │     PointAlias<int> { x: 1, y: 2 }
+    ·     ──────────────────────────────
+    ╰────

@@ -15,7 +15,7 @@ use baml_compiler2_ast::Expr;
 use baml_compiler2_hir::{
     contributions::Definition,
     item_data,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc},
+    loc::{DeclRef, FunctionLoc, InterfaceLoc},
     resolve::{ResolvedName, resolve_name_at},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind, FileSemanticIndex},
@@ -56,29 +56,34 @@ pub enum SymbolTarget<'db> {
         func_scope: FileScopeId,
         binding: BindingId,
     },
-    /// A class field, by position in the class's field list.
+    /// A class field, by position in the class's field list — a source
+    /// class's, or a served package's exported row's.
     Field {
-        class: ClassLoc<'db>,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         field_index: usize,
     },
     /// An enum variant, by position in the enum's variant list.
     Variant {
-        enum_loc: EnumLoc<'db>,
+        enum_loc: baml_compiler2_hir_ty::extern_loc::EnumRef<'db>,
         variant_index: usize,
     },
     /// Any method, as the function item it is: a class method, an
     /// `implements`-block method, or an interface method — bodyless
     /// (required) and bodied (default) alike, since
     /// [`baml_compiler2_hir::item_data::InterfaceData::methods`] holds both
-    /// as real items. Ask
+    /// as real items (a served row likewise). Ask
     /// [`baml_compiler2_hir::item_data::method_owner`] which kind it is.
-    Method { func: FunctionLoc<'db> },
+    Method {
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+    },
     /// An interface field declaration, by position.
     InterfaceField {
-        iface: InterfaceLoc<'db>,
+        iface: baml_compiler2_hir_ty::extern_loc::InterfaceRef<'db>,
         field_index: usize,
     },
-    /// An interface's associated-type declaration, by position.
+    /// An interface's associated-type declaration, by position. Reached
+    /// from declaration sites only (no member resolution names one), so
+    /// it is a source declaration by construction.
     AssociatedType {
         iface: InterfaceLoc<'db>,
         assoc_index: usize,
@@ -770,7 +775,10 @@ fn member_at<'db>(
                 .fields
                 .iter()
                 .position(|field| field.name.as_str() == token_text)?;
-            Some(SymbolTarget::Field { class, field_index })
+            Some(SymbolTarget::Field {
+                class: DeclRef::Source(class),
+                field_index,
+            })
         }
         // Cursor on a variant declaration inside an enum body.
         ScopeKind::Enum => {
@@ -783,7 +791,7 @@ fn member_at<'db>(
                 .iter()
                 .position(|variant| variant.name.as_str() == token_text)?;
             Some(SymbolTarget::Variant {
-                enum_loc,
+                enum_loc: DeclRef::Source(enum_loc),
                 variant_index,
             })
         }
@@ -952,9 +960,9 @@ pub(crate) fn template_position_at(
             let func_owner = item_data::function_scope(db, func_loc)?;
             let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
             match inference.member_resolutions.get(tag) {
-                Some(baml_compiler2_hir_ty::infer::MemberResolution::Free { func }) => {
-                    Some(TemplatePosition::Driver(*func))
-                }
+                Some(baml_compiler2_hir_ty::infer::MemberResolution::Free {
+                    func: baml_compiler2_hir::loc::DeclRef::Source(func),
+                }) => Some(TemplatePosition::Driver(*func)),
                 // Unresolved or non-free tags still block prose words from
                 // resolving as code; hover documents the template form.
                 _ => Some(TemplatePosition::DefaultText),
@@ -1017,8 +1025,9 @@ pub(crate) fn template_driver_at(
             }
             let func_owner = item_data::function_scope(db, *func)?;
             let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
-            if let Some(baml_compiler2_hir_ty::infer::MemberResolution::Free { func }) =
-                inference.member_resolutions.get(tag)
+            if let Some(baml_compiler2_hir_ty::infer::MemberResolution::Free {
+                func: baml_compiler2_hir::loc::DeclRef::Source(func),
+            }) = inference.member_resolutions.get(tag)
             {
                 return Some(*func);
             }
@@ -1195,7 +1204,9 @@ fn operator_target_at(
         .and_then(|rhs| inference.type_of_expr.get(&rhs))
         .map(baml_type::interned::Ty::from_plain);
     let func = ops::operator_method(db, dispatch, &lhs_ty, rhs_ty.as_ref())?;
-    Some(SymbolTarget::Method { func })
+    Some(SymbolTarget::Method {
+        func: DeclRef::Source(func),
+    })
 }
 
 /// Cursor on a declaration-position name the scope tree cannot see: a
@@ -1216,7 +1227,9 @@ fn declaration_name_at(
         if hit(item_data::function_source_map(db, *func).name_span)
             && item_data::method_owner(db, *func).is_some()
         {
-            return Some(SymbolTarget::Method { func: *func });
+            return Some(SymbolTarget::Method {
+                func: DeclRef::Source(*func),
+            });
         }
     }
 
@@ -1236,7 +1249,7 @@ fn declaration_name_at(
         for (field_index, span) in source_map.field_name_spans.iter().enumerate() {
             if hit(*span) {
                 return Some(SymbolTarget::InterfaceField {
-                    iface: *iface,
+                    iface: DeclRef::Source(*iface),
                     field_index,
                 });
             }
@@ -1350,51 +1363,95 @@ fn member_access_at<'db>(
     member_resolution_target(db, resolution?)
 }
 
-/// Map an inference [`MemberResolution`] to a [`SymbolTarget`].
+/// Map an inference [`MemberResolution`] to a [`SymbolTarget`], whichever
+/// lane the declaration lives in: a served package's row is as addressable
+/// a target as a source item (hover, usages), it just has no span to
+/// navigate to.
 pub(crate) fn member_resolution_target<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     resolution: &baml_compiler2_hir_ty::infer::MemberResolution<'db>,
 ) -> Option<SymbolTarget<'db>> {
-    use baml_compiler2_hir_ty::infer::MemberResolution;
+    use baml_compiler2_hir_ty::{
+        extern_loc::{extern_class_row, extern_enum_row, extern_interface_method},
+        infer::{MemberResolution, MethodCallee},
+    };
 
     match resolution {
         MemberResolution::Field { class, field } => {
-            let field_index = item_data::class_data(db, *class)
-                .fields
-                .iter()
-                .position(|f| f.name == *field)?;
+            let field_index = match class {
+                // Read the canonical (PPIR) tree, not the HIR pre-expansion
+                // tree: an inferred `class` can be a synthetic `$stream` class
+                // (the type of a streamed partial), which is absent
+                // pre-expansion. Its field name-spans alias the user-authored
+                // class's, so navigation still lands on real source.
+                DeclRef::Source(class) => item_data::class_data(db, *class)
+                    .fields
+                    .iter()
+                    .position(|f| f.name == *field)?,
+                DeclRef::External(class) => extern_class_row(db, *class)
+                    .fields
+                    .iter()
+                    .position(|(name, ..)| name == field)?,
+            };
             Some(SymbolTarget::Field {
                 class: *class,
                 field_index,
             })
         }
         MemberResolution::Variant { enum_loc, variant } => {
-            let variant_index = item_data::enum_data(db, *enum_loc)
-                .variants
-                .iter()
-                .position(|v| v.name == *variant)?;
+            let variant_index = match enum_loc {
+                DeclRef::Source(enum_loc) => item_data::enum_data(db, *enum_loc)
+                    .variants
+                    .iter()
+                    .position(|v| v.name == *variant)?,
+                DeclRef::External(enum_loc) => extern_enum_row(db, *enum_loc)
+                    .variants
+                    .iter()
+                    .position(|name| name == variant)?,
+            };
             Some(SymbolTarget::Variant {
                 enum_loc: *enum_loc,
                 variant_index,
             })
         }
-        MemberResolution::Free { func } => Some(SymbolTarget::Item(Definition::Function(*func))),
-        MemberResolution::BoundMethod { func, .. }
-        | MemberResolution::UnboundMethod { func, .. }
-        | MemberResolution::InterfaceConcreteMethod { func, .. } => {
-            Some(SymbolTarget::Method { func: *func })
-        }
-        MemberResolution::InterfaceVirtualMethod { interface, method } => {
+        MemberResolution::Free {
+            func: DeclRef::Source(func),
+        } => Some(SymbolTarget::Item(Definition::Function(*func))),
+        // BUG: a served package's free function has no symbol — no hover,
+        // goto, or references — because it is a top-level ITEM and `Item`
+        // carries source definitions only. Closed when the definition lane
+        // gains its provenance-total ref (PR-4's `DefinitionRef`), which
+        // also gives served type names a target. Pinned by
+        // `mounted_package_tests::a_mounted_free_function_has_no_symbol_yet`.
+        MemberResolution::Free {
+            func: DeclRef::External(_),
+        } => None,
+        MemberResolution::Method {
+            callee: MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. },
+            ..
+        } => Some(SymbolTarget::Method { func: *func }),
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { interface, method },
+            ..
+        } => {
             // Only the slot (interface + name) is known statically — and the
             // interface's own declaration IS that slot: `methods` holds every
             // one as a real function item, bodyless required and bodied
-            // default alike. Addressing the item is what makes a virtual call
-            // and the declaration under the cursor the SAME target, which is
-            // what lets the reference search compare them by equality.
-            let func = *item_data::interface_data(db, *interface)
-                .methods
-                .iter()
-                .find(|&&fn_loc| item_data::function_data(db, fn_loc).name == *method)?;
+            // default alike, and a served interface's rows likewise.
+            // Addressing the item is what makes a virtual call and the
+            // declaration under the cursor the SAME target, which is what
+            // lets the reference search compare them by equality.
+            let func = match interface {
+                DeclRef::Source(interface) => DeclRef::Source(
+                    *item_data::interface_data(db, *interface)
+                        .methods
+                        .iter()
+                        .find(|&&fn_loc| item_data::function_data(db, fn_loc).name == *method)?,
+                ),
+                DeclRef::External(interface) => {
+                    DeclRef::External(extern_interface_method(db, interface.head(db), method)?)
+                }
+            };
             Some(SymbolTarget::Method { func })
         }
         MemberResolution::InterfaceVirtualField {
@@ -1405,11 +1462,6 @@ pub(crate) fn member_resolution_target<'db>(
             iface: *interface,
             field_index: *field_index as usize,
         }),
-        // Mounted rows deliberately carry no dependency SourceFile/span.
-        MemberResolution::External(_)
-        | MemberResolution::ExternalField { .. }
-        | MemberResolution::ExternalVariant { .. }
-        | MemberResolution::ExternalInterfaceVirtualField { .. } => None,
     }
 }
 
@@ -1445,21 +1497,40 @@ fn constructor_field_at<'db>(
         let Ty::Class(ref qtn, _) = obj_ty else {
             return None;
         };
-
-        let pkg_id = qtn.root();
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
-        let def = pkg_items.lookup_type(qtn.namespace(), qtn.name())?;
-        let Definition::Class(class) = def else {
-            return None;
+        let class = constructed_class(db, qtn)?;
+        let field_index = match class {
+            DeclRef::Source(class) => item_data::class_data(db, class)
+                .fields
+                .iter()
+                .position(|f| f.name == field.name)?,
+            DeclRef::External(class) => {
+                baml_compiler2_hir_ty::extern_loc::extern_class_row(db, class)
+                    .fields
+                    .iter()
+                    .position(|(name, _, _)| *name == field.name)?
+            }
         };
-
-        let field_index = item_data::class_data(db, class)
-            .fields
-            .iter()
-            .position(|f| f.name == field.name)?;
         return Some(SymbolTarget::Field { class, field_index });
     }
     None
+}
+
+/// The class a constructor literal's type names, in whichever lane serves
+/// it: a served package's row — never its link stub, which would give the
+/// field a second identity split from the `Field { External }` every member
+/// access produces — else the source class.
+pub(crate) fn constructed_class<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    qtn: &baml_type::DeclName,
+) -> Option<baml_compiler2_hir_ty::extern_loc::ClassRef<'db>> {
+    if let Some(class) = baml_compiler2_hir_ty::extern_loc::mounted_class_loc(db, qtn) {
+        return Some(DeclRef::External(class));
+    }
+    let pkg_items = baml_compiler2_hir::package::package_items(db, qtn.root());
+    match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
+        Definition::Class(class) => Some(DeclRef::Source(class)),
+        _ => None,
+    }
 }
 
 // ── target_definition ────────────────────────────────────────────────────────
@@ -1500,7 +1571,10 @@ pub fn target_definition<'db>(
                 }
             }
         }
-        SymbolTarget::Field { class, field_index } => {
+        SymbolTarget::Field {
+            class: DeclRef::Source(class),
+            field_index,
+        } => {
             let range = *item_data::class_source_map(db, class)
                 .field_name_spans
                 .get(field_index)?;
@@ -1510,7 +1584,7 @@ pub fn target_definition<'db>(
             })
         }
         SymbolTarget::Variant {
-            enum_loc,
+            enum_loc: DeclRef::Source(enum_loc),
             variant_index,
         } => {
             let range = *item_data::enum_source_map(db, enum_loc)
@@ -1521,11 +1595,16 @@ pub fn target_definition<'db>(
                 range,
             })
         }
-        SymbolTarget::Method { func } => Some(Location {
+        SymbolTarget::Method {
+            func: DeclRef::Source(func),
+        } => Some(Location {
             file: func.file(db),
             range: item_data::function_source_map(db, func).name_span,
         }),
-        SymbolTarget::InterfaceField { iface, field_index } => {
+        SymbolTarget::InterfaceField {
+            iface: DeclRef::Source(iface),
+            field_index,
+        } => {
             let range = *item_data::interface_source_map(db, iface)
                 .field_name_spans
                 .get(field_index)?;
@@ -1544,5 +1623,22 @@ pub fn target_definition<'db>(
                 range,
             })
         }
+        // A served package's rows have no `SourceFile` and no span in this
+        // database by construction: nothing to navigate to.
+        SymbolTarget::Field {
+            class: DeclRef::External(_),
+            ..
+        }
+        | SymbolTarget::Variant {
+            enum_loc: DeclRef::External(_),
+            ..
+        }
+        | SymbolTarget::Method {
+            func: DeclRef::External(_),
+        }
+        | SymbolTarget::InterfaceField {
+            iface: DeclRef::External(_),
+            ..
+        } => None,
     }
 }

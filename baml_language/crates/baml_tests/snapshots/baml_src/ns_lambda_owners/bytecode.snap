@@ -1,0 +1,59 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function lambda_owners.<(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run(self: lambda_owners.Boxed<#0>, x: int) -> int {
+    load_var self
+    make_cell
+    store_var self
+    load_var x
+    load_type #0
+    load_var self
+    make_closure .<lambda(<(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run, 0)>, captures=1, ntypeargs=1
+    call_indirect
+    return
+}
+
+function lambda_owners.<(user.lambda_owners.Other as user.lambda_owners.Runner)>.run(self: lambda_owners.Other, x: int) -> int {
+    load_var self
+    make_cell
+    store_var self
+    load_var2 2 1
+    make_closure .<lambda(<(user.lambda_owners.Other as user.lambda_owners.Runner)>.run, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambda_owners.<(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run(self: lambda_owners.Retry, x: int) -> int {
+    load_var self
+    make_cell
+    store_var self
+    load_var2 2 1
+    make_closure .<lambda(<(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambda_owners.Retry.scaled(self: lambda_owners.Retry, x: int) -> int {
+    load_var self
+    make_cell
+    store_var self
+    load_var2 2 1
+    make_closure .<lambda(Retry.scaled, 0)>, 1
+    call_indirect
+    return
+}
+
+function lambda_owners.Runner.twice(self: lambda_owners.Runner, x: int) -> int {
+    load_var self
+    make_cell
+    store_var self
+    load_type #0
+    load_var self
+    make_closure .<lambda(Runner.twice, 0)>, captures=1, ntypeargs=1
+    store_var go
+    load_var2 2 3
+    call_indirect
+    load_var go
+    call_indirect
+    return
+}

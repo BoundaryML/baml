@@ -19,20 +19,28 @@ export interface WeeklyPost {
   text: string;
 }
 
-interface SlackPostResponse {
+interface SlackApiResponse {
   error?: string;
-  file_id?: string;
   ok?: boolean;
+}
+
+interface SlackPostResponse extends SlackApiResponse {
+  file_id?: string;
   upload_url?: string;
 }
 
-async function slackApi(
+interface SlackConversationsListResponse extends SlackApiResponse {
+  channels?: Array<{ id?: string; name?: string }>;
+  response_metadata?: { next_cursor?: string };
+}
+
+async function slackApi<T extends SlackApiResponse = SlackPostResponse>(
   token: string,
   method: string,
   body: Record<string, unknown>,
   fetchImpl: typeof fetch,
   encoding: 'form' | 'json' = 'json',
-): Promise<SlackPostResponse> {
+): Promise<T> {
   const encodedBody =
     encoding === 'form'
       ? new URLSearchParams(
@@ -54,13 +62,50 @@ async function slackApi(
     method: 'POST',
     signal: AbortSignal.timeout(30_000),
   });
-  const result = (await response.json()) as SlackPostResponse;
+  const result = (await response.json()) as T;
   if (!response.ok || !result.ok) {
     throw new Error(
       `Slack ${method} failed: ${result.error ?? response.status}`,
     );
   }
   return result;
+}
+
+export async function resolveSlackChannelId(
+  token: string,
+  channelName: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  const normalizedChannelName = channelName.trim().replace(/^#/, '');
+  if (!normalizedChannelName) throw new Error('Slack channel name is required');
+
+  let cursor: string | undefined;
+  do {
+    const result = await slackApi<SlackConversationsListResponse>(
+      token,
+      'conversations.list',
+      {
+        exclude_archived: true,
+        limit: 200,
+        types: 'public_channel',
+        ...(cursor ? { cursor } : {}),
+      },
+      fetchImpl,
+      'form',
+    );
+    const channel = result.channels?.find(
+      ({ name }) => name === normalizedChannelName,
+    );
+    if (channel?.id) return channel.id;
+    const nextCursor =
+      result.response_metadata?.next_cursor?.trim() || undefined;
+    if (nextCursor && nextCursor === cursor) {
+      throw new Error('Slack conversations.list returned a repeated cursor');
+    }
+    cursor = nextCursor;
+  } while (cursor);
+
+  throw new Error(`Slack channel #${normalizedChannelName} was not found`);
 }
 
 export async function postToSlack(

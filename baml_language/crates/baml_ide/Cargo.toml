@@ -30,4 +30,5 @@ serde_json = { workspace = true }
 text-size = { workspace = true }
 
 [dev-dependencies]
+baml_artifact = { workspace = true }
 insta = { workspace = true }

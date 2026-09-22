@@ -125,6 +125,17 @@ pub(super) const BYTECODE: &[Example] = &[
         reason: "Closure construction, capture and indirect calls.",
     },
     Example {
+        path: "ns_lambda_owners/lambda_owners.baml",
+        functions: &[
+            "user.lambda_owners.Retry.scaled",
+            "user.lambda_owners.Runner.twice",
+            "user.lambda_owners.<(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run",
+            "user.lambda_owners.<(user.lambda_owners.Other as user.lambda_owners.Runner)>.run",
+            "user.lambda_owners.<(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run",
+        ],
+        reason: "A lambda's owner segment is the owner's link-name tail for every method kind: inherent, interface default, in-body impl, out-of-body impl, generic impl. Impl- and interface-owned owners once lost their qualification, colliding across impl blocks.",
+    },
+    Example {
         path: "ns_fixtures/ns_patterns_new/patterns_new.baml",
         functions: &[
             "user.fixtures.patterns_new.or_with_repeated_typed_binding",

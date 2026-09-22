@@ -223,7 +223,8 @@ pub fn interface_declared_param_bounds(
 // `normalized_alias_map`) ──────────────────────────────────────────────────
 
 /// Every type alias visible to `pkg_id` (its own plus its dependency
-/// closure's), resolved to its one-level value through the `hir_ty` road.
+/// closure's), resolved to its one-level value through the `hir_ty` road,
+/// whichever lane each package is served from ([`package_declared_aliases`]).
 #[salsa::tracked(returns(ref))]
 pub fn package_resolved_aliases(
     db: &dyn baml_compiler2_hir::Db,
@@ -235,18 +236,51 @@ pub fn package_resolved_aliases(
         db, pkg_id,
     ));
     for pkg in packages {
-        let items = baml_compiler2_hir::package::package_items(db, pkg);
-        for ns in items.namespaces.values() {
-            for (name, def) in &ns.types {
-                if let Definition::TypeAlias(loc) = def {
-                    aliases
-                        .entry(qualify_def(db, Definition::TypeAlias(*loc), name))
-                        .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
-                }
+        package_declared_aliases(db, pkg, &mut aliases);
+    }
+    aliases
+}
+
+/// The aliases `pkg` declares, whichever lane serves it: a source package's
+/// alias items; a mounted package's exported alias rows — its link stubs
+/// carry no aliases, and a stub-less served root has no files at all, so the
+/// rows are the only place they exist; both for a precompiled stdlib root,
+/// which has source and a seeded interface. The one-shot oracle
+/// [`crate::facts::uncached_alias_def`] answers by the same two lanes; an
+/// environment that read only one would judge an alias it cannot see as an
+/// opaque head, and the overlap engine's verdict on an opaque head is
+/// "disjoint" — a fails-open coherence hole.
+pub(crate) fn package_declared_aliases(
+    db: &dyn baml_compiler2_hir::Db,
+    pkg: baml_base::SourceRoot,
+    out: &mut std::collections::HashMap<DeclName, Ty>,
+) {
+    let items = baml_compiler2_hir::package::package_items(db, pkg);
+    for ns in items.namespaces.values() {
+        for (name, def) in &ns.types {
+            if let Definition::TypeAlias(loc) = def {
+                out.entry(qualify_def(db, Definition::TypeAlias(*loc), name))
+                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
             }
         }
     }
-    aliases
+    if let Some(interface) = crate::package_interface::mounted_interface(db, pkg) {
+        interface_declared_aliases(interface, out);
+    }
+}
+
+/// The alias rows of an exported interface — the mounted lane of
+/// [`package_declared_aliases`], and the only alias source for an interface
+/// judged before it is installed.
+pub(crate) fn interface_declared_aliases(
+    interface: &crate::package_interface::PackageInterface,
+    out: &mut std::collections::HashMap<DeclName, Ty>,
+) {
+    for exported in interface.types.values().flat_map(|types| types.values()) {
+        if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } = exported {
+            out.entry(qtn.clone()).or_insert_with(|| resolved.clone());
+        }
+    }
 }
 
 /// Resolve an enum's full variant-name set (for `nf`'s complete-variant
@@ -255,16 +289,7 @@ pub fn enum_variant_names(
     db: &dyn baml_compiler2_hir::Db,
     enum_qtn: &DeclName,
 ) -> Option<Vec<Name>> {
-    let Definition::Enum(enum_loc) = crate::facts::definition_of(db, enum_qtn)? else {
-        return None;
-    };
-    Some(
-        baml_compiler2_hir::item_data::enum_data(db, enum_loc)
-            .variants
-            .iter()
-            .map(|variant| variant.name.clone())
-            .collect(),
-    )
+    crate::facts::uncached_enum_variants(db, enum_qtn)
 }
 
 /// [`package_resolved_aliases`] with every body folded toward the union
@@ -1215,6 +1240,20 @@ pub fn resolve_ref_to_interface_identity<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
+    let qtn = resolve_ref_to_interface_name(db, store, target, pkg_items, current_ns)?;
+    resolved_interface_from_ty(db, Ty::Interface(qtn, Box::new([]), Box::new([])))
+}
+
+/// The interface a written reference NAMES, whichever lane declares it —
+/// the head alone, with no source item required. `None` when the reference
+/// does not lower to an interface.
+pub fn resolve_ref_to_interface_name(
+    db: &dyn baml_compiler2_hir::Db,
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    target: baml_compiler2_hir::type_ref::TypeRefId,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    current_ns: &[Name],
+) -> Option<DeclName> {
     let mut diagnostics = Vec::new();
     let ty = lower_ref_in_at(
         &LowerScope {
@@ -1230,7 +1269,10 @@ pub fn resolve_ref_to_interface_identity<'db>(
         crate::lower::TypePosition::ConstraintHead,
         &mut diagnostics,
     );
-    resolved_interface_from_ty(db, ty)
+    match ty {
+        Ty::Interface(qtn, ..) => Some(qtn),
+        _ => None,
+    }
 }
 
 /// Shared tail of the two `resolve_*_to_interface_identity` functions.
@@ -1608,10 +1650,16 @@ fn collect_type_generic_bound_errors<'db>(
             for arg in args {
                 collect_type_generic_bound_errors(db, facts, arg, seen_aliases, errors);
             }
+            // The head's declared bounds: its source declaration's, or its
+            // served package's row's, which carries them the same way.
             if let Some(Definition::Class(class)) = facts.definition_of(qtn) {
                 let params = crate::lower::class_generic_frame(db, class);
                 let declared = crate::lower::class_generic_bounds(db, class);
                 check_head_args(facts, &params, &declared, args, errors);
+            } else if let Some(class) = crate::extern_loc::mounted_class_loc(db, qtn) {
+                let row = crate::extern_loc::extern_class_row(db, class);
+                let declared = row_param_bounds(row.generic_params, row.generic_param_bounds);
+                check_head_args(facts, row.generic_params, &declared, args, errors);
             }
         }
         baml_type::LoweringTy::Interface(qtn, args, pins) => {
@@ -1625,6 +1673,10 @@ fn collect_type_generic_bound_errors<'db>(
                 let params = crate::lower::interface_declared_params(db, iface);
                 let declared = interface_declared_param_bounds(db, iface);
                 check_head_args(facts, &params, &declared, args, errors);
+            } else if let Some(iface) = crate::extern_loc::mounted_interface_loc(db, qtn) {
+                let row = crate::extern_loc::extern_interface_row(db, iface);
+                let declared = row_param_bounds(row.generic_params, row.param_bounds);
+                check_head_args(facts, row.generic_params, &declared, args, errors);
             }
         }
         baml_type::LoweringTy::List(inner) => {
@@ -1674,6 +1726,16 @@ fn collect_type_generic_bound_errors<'db>(
         }
         _ => {}
     }
+}
+
+/// A served row's per-parameter bounds in the walk's keyed form. The row
+/// carries one bound list per parameter, in parameter order; import refuses
+/// a row whose lists do not pair (`validate_row_identities`).
+fn row_param_bounds(
+    params: &[ParamTy],
+    bounds: &[Vec<baml_type::Interface>],
+) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>> {
+    params.iter().cloned().zip(bounds.iter().cloned()).collect()
 }
 
 /// One head's arguments against its declared bounds: each conjunct is a

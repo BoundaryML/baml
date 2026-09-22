@@ -1,11 +1,15 @@
 import { writeFile } from 'node:fs/promises';
 import { chromium, type Page } from 'playwright';
 import sharp from 'sharp';
-import { postToSlack, type SlackBlock } from '../clients/slack.js';
+import {
+  postToSlack,
+  resolveSlackChannelId,
+  type SlackBlock,
+} from '../clients/slack.js';
 
 export interface SlackDashboardReportConfig {
   botToken: string;
-  channel: string;
+  channelName: string;
   dashboardUrl: string;
   screenshotPath?: string;
 }
@@ -347,6 +351,10 @@ export async function sendSlackDashboardReport(
   config: SlackDashboardReportConfig,
   now = new Date(),
 ): Promise<void> {
+  const channelId = await resolveSlackChannelId(
+    config.botToken,
+    config.channelName,
+  );
   const screenshot = await captureDashboard(config.dashboardUrl);
   if (config.screenshotPath) {
     await writeFile(config.screenshotPath, screenshot);
@@ -354,7 +362,7 @@ export async function sendSlackDashboardReport(
   const date = now.toISOString().slice(0, 10);
   await postToSlack(config.botToken, {
     blocks: dashboardReportBlocks(config.dashboardUrl, date),
-    channel: config.channel,
+    channel: channelId,
     file: {
       altText: 'Screenshot of the live product metrics dashboard',
       bytes: screenshot,

@@ -591,3 +591,31 @@ test "one package under two aliases is one package" {
     let main = generated.get_function<() -> int>("root.main") ?? throw "missing root.main";
     assert.equal(main(), 7)
 }
+
+/// The `json.*` shorthand in TYPE position resolves against the precompiled
+/// stdlib's interface, as it does against stdlib source: a runtime compile
+/// sees `baml` served from its interface, so `json.ParseError` has no source
+/// item to fall back to and must be answered by the served row.
+test "json type shorthand resolves against the served stdlib" {
+    let generated = reflect.Package.compile(
+        {
+            "main.baml": `
+                function describe(e: json.ParseError) -> string throws never {
+                    "parse:" + e.message
+                }
+                function main() -> string {
+                    let e: json.ParseError? = json.ParseError { message: "m" };
+                    match (e) {
+                        let err: json.ParseError => describe(err),
+                        _ => "absent",
+                    }
+                }
+            `,
+        },
+    );
+    if (generated.diagnostics().length() != 0) {
+        throw generated.diagnostics()[0].message
+    }
+    let main = generated.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    assert.equal(main(), "parse:m")
+}

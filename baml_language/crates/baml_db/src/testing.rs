@@ -44,7 +44,7 @@
 
 use std::path::Path;
 
-use baml_base::{SourceRoot, SourceRootKind};
+use baml_base::{Name, SourceFile, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, Severity};
 pub use baml_compiler2_emit::OptLevel;
 use baml_compiler2_emit::{
@@ -272,4 +272,141 @@ pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
 
     generate_project_bytecode_with_opt(&db, root, OptLevel::One)
         .expect("generate_project_bytecode should succeed for valid test source")
+}
+
+// ── Root-aware fixture builders ─────────────────────────────────────────────
+
+/// Test-database conveniences over [`ProjectDatabase`]'s source-root API.
+///
+/// Test fixtures overwhelmingly want one thing: a stdlib-equipped database
+/// with a single `Workspace` root that files are dropped into by path, plus
+/// the occasional source-bearing dependency package. This trait spells that
+/// out once so fixtures read `db.workspace(root)` / `db.file(path, text)`
+/// instead of repeating the root bookkeeping. It is test support only —
+/// production code adds roots and files explicitly.
+pub trait TestDbExt {
+    /// Install the stdlib sources (if not yet installed) and add an unnamed
+    /// `Workspace` root at `root` — the package the default spelling `user`
+    /// displays.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `root` is rejected (see [`crate::SourceRootError`]), or if
+    /// a non-stdlib root was added before the stdlib.
+    fn workspace(&mut self, root: &Path) -> SourceRoot;
+
+    /// Add a source-bearing `Dependency` root for `package` at
+    /// `<builtin>/<package>`.
+    ///
+    /// The `<builtin>/` prefix is deliberate: it is the emit layer's wire
+    /// contract for non-workspace units, so files added under this root
+    /// (`db.file("<builtin>/<package>/lib.baml", ...)`) ride the same emit
+    /// group as the stdlib and can be captured as a mountable
+    /// `PackageInterface` blob plus symbolic compilation units.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `package` is already served by another root or a mounted
+    /// blob (see [`crate::SourceRootError`]).
+    fn dependency(&mut self, package: &str) -> SourceRoot;
+
+    /// Mount a serialized `PackageInterface` as a source-less package reached
+    /// from the workspace root under `alias` — the runtime compiler's shape:
+    /// a `Dynamic` root at `<builtin>/<alias>` served from the blob, plus the
+    /// edge. Errors are the database's own ([`crate::SourceRootError`]).
+    fn try_mount(
+        &mut self,
+        alias: &str,
+        blob: Vec<u8>,
+    ) -> Result<SourceRoot, crate::SourceRootError>;
+
+    /// [`Self::try_mount`], panicking on refusal.
+    fn mount(&mut self, alias: &str, blob: Vec<u8>) -> SourceRoot {
+        self.try_mount(alias, blob)
+            .unwrap_or_else(|err| panic!("cannot mount `{alias}`: {err}"))
+    }
+
+    /// Add or update the file at `path`, owned by the live root whose path is
+    /// the longest prefix of `path`; a path under no root (e.g. the bare
+    /// `test.baml` most fixtures use) goes to the `Workspace` root.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is under no root and the database has no `Workspace`
+    /// root — call [`TestDbExt::workspace`] first.
+    fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile;
+}
+
+impl TestDbExt for ProjectDatabase {
+    fn workspace(&mut self, root: &Path) -> SourceRoot {
+        self.ensure_stdlib_sources();
+        self.add_source_root(SourceRootSpec::new(root, SourceRootKind::Workspace))
+            .unwrap_or_else(|err| {
+                panic!(
+                    "cannot add the workspace source root at `{}`: {err}",
+                    root.display()
+                )
+            })
+    }
+
+    fn dependency(&mut self, package: &str) -> SourceRoot {
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::dependency(\"{package}\")` needs a workspace root to depend on it")
+        });
+        let root = self
+            .add_source_root(
+                SourceRootSpec::new(format!("<builtin>/{package}"), SourceRootKind::Dependency)
+                    .named(Name::new(package)),
+            )
+            .unwrap_or_else(|err| {
+                panic!("cannot add the dependency source root `{package}`: {err}")
+            });
+        self.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new(package),
+                root,
+            },
+        )
+        .unwrap_or_else(|err| panic!("cannot depend on `{package}`: {err}"));
+        root
+    }
+
+    fn try_mount(
+        &mut self,
+        alias: &str,
+        blob: Vec<u8>,
+    ) -> Result<SourceRoot, crate::SourceRootError> {
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::mount(\"{alias}\")` needs a workspace root to mount into")
+        });
+        let root = self.add_source_root(
+            SourceRootSpec::new(format!("<builtin>/{alias}"), SourceRootKind::Dynamic)
+                .named(Name::new(alias))
+                .served_from(blob),
+        )?;
+        self.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new(alias),
+                root,
+            },
+        )?;
+        Ok(root)
+    }
+
+    fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile {
+        let path = path.as_ref();
+        let root = self
+            .source_root_for_path(path)
+            .or_else(|| self.workspace_root())
+            .unwrap_or_else(|| {
+                panic!(
+                    "no source root owns `{}` and the database has no workspace root; \
+                     call `TestDbExt::workspace` (or `db_with_root`) first",
+                    path.display()
+                )
+            });
+        self.add_or_update_file_in(root, path, text)
+    }
 }

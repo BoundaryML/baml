@@ -8,7 +8,7 @@ function requiredEnvironmentVariable(name: string): string {
 
 await sendSlackDashboardReport({
   botToken: requiredEnvironmentVariable('SLACK_BOUNDARY_BOT_TOKEN'),
-  channel: requiredEnvironmentVariable('SLACK_CHANNEL_ID'),
+  channelName: requiredEnvironmentVariable('SLACK_CHANNEL_NAME'),
   dashboardUrl: requiredEnvironmentVariable('PRODUCT_METRICS_DASHBOARD_URL'),
   screenshotPath:
     process.env.PRODUCT_METRICS_SCREENSHOT_PATH?.trim() || undefined,

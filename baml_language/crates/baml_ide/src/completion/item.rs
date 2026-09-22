@@ -59,7 +59,6 @@ pub enum CompletionKind {
     Interface,
     TypeAlias,
     Client,
-    RetryPolicy,
     /// A dependency package that roots a qualified path (`baml.http.fetch`).
     Package,
     /// A generic parameter in scope (`T`).
