@@ -13,9 +13,16 @@
 //
 // The bar: every feature of the surface within ten points of how often any
 // case compiles, and that within five of half. It is a property of the bank
-// and is met there — by near misses that wear an equivalence's shape and are
-// not one, and by wrappers that draw both kinds of inner pair — because
-// selection cannot buy it: forcing the answers even forces the items uneven.
+// and has to be, because selection cannot buy it: forcing the answers even
+// forces the items uneven.
+//
+// It is NOT met. Near misses and the two-kinds-of-inner-pair wrappers carry
+// the per-construct features, but two features of the PAIR — the two types
+// written the same way, and one spelling inside the other — lean 40 and 25
+// points, and the test below records them rather than claiming otherwise.
+// They went unseen until `pair_features` named them: every other feature
+// here describes one type at a time, and no number of those can say the two
+// are written alike, which is the first thing a reader sees.
 //
 // What counts as surface is what is on screen before the answer. The rule a
 // case turns on is not: it is named in the explanation, after. So the rules,
@@ -181,6 +188,25 @@ function text_features(source: string) -> string[] throws never {
         })
 }
 
+/// How the two types on screen stand to each other as spellings, which is
+/// the first thing a reader sees and the last thing `gather_kinds` can say.
+///
+/// Every other feature describes one type at a time, so a case whose two
+/// types are written the same way carries nothing to tell it from one whose
+/// types merely share a construct. That is the most visible thing about a
+/// case and it is not a fact about either type: it is a fact about the pair.
+function pair_features(source: string, target: string) -> string[] throws never {
+    if (source == target) {
+        ["pair:same-spelling"]
+    } else if (target.includes(source)) {
+        ["pair:source-within-target"]
+    } else if (source.includes(target)) {
+        ["pair:target-within-source"]
+    } else {
+        []
+    }
+}
+
 /// Every fact, at the site and direction each of `seeds` seeds draws.
 function surfaced(seeds: int) -> Surfaced[] throws never {
     root.bank.facts().flat_map((fact) -> {
@@ -195,6 +221,13 @@ function surfaced(seeds: int) -> Surfaced[] throws never {
                 note(out, `site:${root.algebra.site_phrase(drawn.site)}`);
                 gather_kinds(one.cast.flow.source, seen, out);
                 gather_kinds(one.cast.flow.target, seen, out);
+                let spelled = pair_features(
+                    root.algebra.render(one.cast.flow.source),
+                    root.algebra.render(one.cast.flow.target),
+                );
+                for (let feature in spelled) {
+                    note(out, feature);
+                }
                 for (let feature in text_features(source_of(one.case))) {
                     note(out, feature);
                 }
@@ -257,11 +290,21 @@ function carriers(cases: Surfaced[], feature: string) -> string throws never {
 }
 
 /// The base rate, and every feature of the surface that leans more than
-/// `bar` points from it over at least `support` cases — each with the facts
-/// that carry it. Nothing leaning is the property; anything listed is a shape
-/// a learner can answer from.
-function leaning_features(seeds: int, support: int, bar: int) -> string throws never {
-    leaning_of(surfaced(seeds), support, bar, true)
+/// `bar` points from it over at least `support` cases. Nothing leaning is the
+/// property; anything listed is a shape a learner can answer from.
+///
+/// `carried` adds the facts carrying each lean and how each of them answers,
+/// which is where a lean says what it is made of and what would balance it.
+/// It is off where a lean is pinned: the carriers are a dozen counts that
+/// move whenever any of them is redrawn, and a pin that churns on every
+/// unrelated change stops being read.
+function leaning_features(
+    seeds: int,
+    support: int,
+    bar: int,
+    carried: bool,
+) -> string throws never {
+    leaning_of(surfaced(seeds), support, bar, carried)
 }
 
 /// `leaning_features` over any set of cases: the bank's sweep, or what a
@@ -318,8 +361,37 @@ function leaning_of(
     `compiles=${percent_of(compiling, total)}% of ${total} leaning=${leaning}`
 }
 
-test "tells: nothing on the surface of a case leans more than ten points from the rest" {
-    assert.equal(leaning_features(128, 100, 10), "compiles=50% of 7424 leaning=[]")
+test "tells: the surface leans in the two places recorded here and nowhere else" {
+    // RECORDED DEBT, not a property met. Two features of the pair do predict
+    // the answer, and both are among the most visible things about a case:
+    //
+    //   pair:same-spelling      the two types are written the same way, which
+    //                           at a flow site can only compile. It is not
+    //                           100% only because `identity` and `same_class`
+    //                           also reach the coherence site, where being
+    //                           one type is what is rejected; nothing flips
+    //                           `same_positional_count`, whose function types
+    //                           are no implementation target, and it is 100%
+    //                           of 128.
+    //   pair:source-within-target
+    //                           one spelling appears inside the other. This
+    //                           is the subset rule where the containment is
+    //                           real, and an accident of naming where it is
+    //                           not — `Side` reads as inside `Side.Left`,
+    //                           which is why that fact answers the other way.
+    //
+    // Both were invisible until `pair_features` named them, because every
+    // other feature here describes ONE type and these are facts about the
+    // pair. The bar they break is the bank's own, and the fix is the bank's:
+    // an equivalence spelled the same way cannot be balanced by a near miss,
+    // since a near miss spelled the same way would be the same type.
+    //
+    // Pinned so that a THIRD lean, or either of these getting worse, fails.
+    // Pass `carried: true` for the facts behind each.
+    assert.equal(
+        leaning_features(128, 100, 10, false),
+        `compiles=50% of 7424 leaning=["pair:same-spelling 90% of 440", "pair:source-within-target 75% of 835"]`,
+    )
 }
 
 // ─── what selection can see ──────────────────────────────────────────────────

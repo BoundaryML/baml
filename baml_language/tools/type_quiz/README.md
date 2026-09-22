@@ -52,7 +52,11 @@ way is a program the compiler answers the other way about, and the item
 carries it as a *foil*. The two are the same program bar the swap — the
 suite holds them to being the same characters in a different order, and to
 parting company only where the direction of the flow is named — so a learner
-shown both and asked which one compiles can read nothing off their surface.
+shown both and asked which one compiles has little to read off their surface.
+Little, not nothing: the check sets parentheses aside (`letters`), because a
+union needs bracketing as an array's element and not as a parameter, so about
+one pair in twenty-five differs by exactly those two brackets, and there the
+bracketed program is the one that compiles four times in five.
 An equivalence or an unrelated pair reads the same in both directions and so
 has no foil, and neither does anything at the coherence site, where the
 reverse draw is the same two blocks the other way up. Twenty-two of the
@@ -93,17 +97,27 @@ of the forty the bank serves answers both ways. The invariant wrappers are
 shapes too: `Box<S>` against `Box<T>` over a strict pair, which is always
 rejected, beside the same over an equivalent pair, which always compiles.
 
-The suite holds the bank to it (`ns_conformance/tells.baml`). Over 128 seeds
-of every fact, no feature of a case's surface — a construct, a declaration, a
-site, a word in the source — may compile more than ten points more or less
-often than cases do overall, and that overall rate is within five points of
-half. What counts as surface is what is on screen before the answer: the rule
-a case turns on is named after it, in the explanation, so an equivalence rule
-still always "compiles" and that is not a tell. When the check fails it names
-the facts carrying the leaning feature and how each answers, which is where
-the missing half goes. This is a property of the bank because selection
-cannot buy it: forcing the answers even forces the items uneven, which was
-measured to cost a scripted expert its certification.
+The suite measures the bank against it (`ns_conformance/tells.baml`). Over
+128 seeds of every fact, no feature of a case's surface — a construct, a
+declaration, a site, a word in the source — may compile more than ten points
+more or less often than cases do overall, and that overall rate is within
+five points of half. What counts as surface is what is on screen before the
+answer: the rule a case turns on is named after it, in the explanation, so an
+equivalence rule still always "compiles" and that is not a tell. This has to
+be a property of the bank because selection cannot buy it: forcing the
+answers even forces the items uneven, which was measured to cost a scripted
+expert its certification.
+
+**Two features still break that bar, and the test records them rather than
+claiming otherwise.** Both are facts about the PAIR rather than about either
+type, which is why a vocabulary of per-type constructs could not see them:
+the two types written *the same way* compiles 90% of the time, and one
+spelling appearing *inside* the other 75%. The first is the sharper of the
+two — an equivalence spelled the same way can only compile at a flow site,
+and no near miss can balance it, since a near miss spelled the same way would
+be the same type. Closing them is bank work and is not done. Until it is, a
+learner who answers "the same words twice, so it compiles" is right nine
+times in ten.
 
 ## What the bank covers
 
