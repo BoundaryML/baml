@@ -901,6 +901,7 @@ function later() -> string {
         let source = r#"
 class File { name string }
 class Conversation { text string }
+class Hello { text string }
 
 function load_files() -> File[] { [File { name: "a" }] }
 function load_file() -> File { File { name: "a" } }
@@ -914,6 +915,7 @@ function demo(analysis_dir: string) -> int {
     let message = "hello"
     let loss = -1
     let copies = [File { name: "a" }, File { name: "b" }]
+    let greetings = [Hello { text: "hi" }, Hello { text: "bye" }]
     let values = [1, 2]
     let files = load_files()
     let result = load_file()
