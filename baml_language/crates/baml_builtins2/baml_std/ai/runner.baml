@@ -199,6 +199,12 @@ class Agent {
     }
 
     function _parses<Out>(self, turn: ModelTurn, candidate: string) -> bool {
+        if let parsed: ParsedOutput = turn.parsed_output {
+            return match (parsed.value) {
+                let value: Out => true,
+                _ => false,
+            };
+        }
         // A media-shaped `Out` is satisfied by the turn's blocks. When the turn
         // carries NONE, this falls through to the ordinary text parse rather
         // than declaring failure — that is sys_llm's `Ok(None)` -> SAP path
@@ -395,7 +401,12 @@ class Agent {
                     // absence is expressed: SAP answers `null` for `image?` /
                     // `image[]?` and `[]` for `image[]`, and only a required
                     // `image` fails there (`_parses` agrees, by construction).
-                    let value = if (self._has_media_output<Out>(turn)) {
+                    let value = if let parsed: ParsedOutput = turn.parsed_output {
+                        let typed: Out = parsed.value else {
+                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                        };
+                        typed
+                    } else if (self._has_media_output<Out>(turn)) {
                         self._media_value<Out>(turn, selected.id())
                     } else {
                         baml.sap.parse<Out>(candidate) catch_all (e) {

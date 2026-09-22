@@ -16,6 +16,10 @@ class Meta {
     description: string?,
     docstring: string?,
     other: map<string, string>,
+    /// True when a class field or enum variant is marked `@skip`: it is left
+    /// out of prompts, output schemas and parsing. Always false for the
+    /// metadata of a class or enum itself.
+    skip: bool,
 }
 
 /// A value paired with schema metadata. For type values this lets metadata be
@@ -205,7 +209,7 @@ interface AnyClass {
     /// runtime type is not a class.
     function attributes(self) -> reflect.Meta throws never {
         let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
-            return reflect.Meta { alias: null, description: null, docstring: null, other: {} };
+            return reflect.Meta { alias: null, description: null, docstring: null, other: {}, skip: false };
         };
         class_type.meta()
     }

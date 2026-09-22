@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { z } from 'zod';
+import { validateBookLayout } from '../lib/content/book-layout';
 import { bridgeDataSchema, loadBridgeData } from '../lib/content/bridges.ts';
 import {
   loadProjectSnippet,
@@ -13,6 +14,7 @@ import { selectProjectFiles } from '../lib/snippets/selection';
 const expectedAuthoredRoutes = [
   '/baml',
   '/baml/book',
+  '/baml/book/common-programming-concepts',
   '/baml/book/concurrency',
   '/baml/book/errors',
   '/baml/book/interfaces',
@@ -43,16 +45,25 @@ async function collectFiles(directory: string): Promise<string[]> {
 
 test('the MDX collection contains exactly the authored route contract', async () => {
   const contentRoot = resolve(process.cwd(), 'content');
-  const routes = (await collectFiles(contentRoot))
+  const files = (await collectFiles(contentRoot))
     .filter((path) => path.endsWith('.mdx'))
-    .map((path) => {
-      const segments = relative(contentRoot, path)
-        .split(sep)
-        .map((segment) => segment.replace(/\.mdx$/, ''));
-      if (segments.at(-1) === 'index') segments.pop();
-      return `/${segments.join('/')}`;
-    })
-    .sort();
+    .map((path) => relative(contentRoot, path).split(sep).join('/'));
+  const bookPrefix = 'baml/book/';
+  const book = validateBookLayout(
+    files
+      .filter((path) => path.startsWith(bookPrefix))
+      .map((path) => path.slice(bookPrefix.length)),
+  );
+  const routes = [
+    ...new Set(book.map((file) => file.chapter)),
+    ...files
+      .filter((path) => !path.startsWith(bookPrefix))
+      .map((path) => {
+        const segments = path.replace(/\.mdx$/, '').split('/');
+        if (segments.at(-1) === 'index') segments.pop();
+        return `/${segments.join('/')}`;
+      }),
+  ].sort();
   assert.deepEqual(routes, expectedAuthoredRoutes);
 });
 

@@ -173,6 +173,7 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
 ena = "0.14"
+find-msvc-tools = "0.1"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
