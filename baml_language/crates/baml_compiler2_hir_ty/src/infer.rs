@@ -12096,13 +12096,13 @@ impl<'db> InferenceContext<'db> {
         self.materialize_result(result)
     }
 
-    /// [`finalize_ty`](Self::finalize_ty) + the total plain exit: the
-    /// one-step form for diagnostic payloads and other plain-vocabulary
-    /// consumers inside `finish`.
-    /// `interface` (an existential) without the pins inference never
-    /// solved. A failed goal leaves its pins open - only the impl that
-    /// proved it would have bound them - so they carry no information, and
-    /// finalizing them would print the error sentinel.
+    /// `interface` (an existential) without the pins inference never solved.
+    /// A failed goal leaves its pins open - only the impl that proved it
+    /// would have bound them - so they say nothing about what the user has
+    /// to fix, and the interface reads better named by the part that DID
+    /// resolve. Not a spelling rule: an unsolved type printing as `!error`
+    /// is a true report of an inference failure and is left alone
+    /// everywhere else.
     fn with_unsolved_pins_elided(&mut self, interface: &Ty) -> Ty {
         let resolved = self.table.resolve_completely(interface);
         let InferTy::Interface(name, args, pins, attr) = resolved.kind() else {
@@ -12121,6 +12121,9 @@ impl<'db> InferenceContext<'db> {
         ))
     }
 
+    /// [`finalize_ty`](Self::finalize_ty) + the total plain exit: the
+    /// one-step form for diagnostic payloads and other plain-vocabulary
+    /// consumers inside `finish`.
     fn plain_finalized(&mut self, ty: &Ty) -> baml_type::Ty {
         self.finalize_ty(ty).to_plain()
     }
@@ -13818,7 +13821,6 @@ fn widen_fresh_literal(ty: &Ty) -> Ty {
     }
 }
 
-/// The base primitive a literal type belongs to.
 /// The purpose of a call-site bound on frame param `param`, whose own
 /// params start at `own_start`. The callee's OWN params are the user's type
 /// arguments and must be concrete. The frame PREFIX is the receiver's:
@@ -13833,6 +13835,7 @@ fn call_bound_purpose(param: &baml_type::ParamTy, own_start: usize) -> obligatio
     }
 }
 
+/// The base primitive a literal type belongs to.
 pub(crate) fn literal_base(literal: &Literal, attr: TyAttr) -> InferTy {
     match literal {
         Literal::Int(_) => InferTy::Int { attr },

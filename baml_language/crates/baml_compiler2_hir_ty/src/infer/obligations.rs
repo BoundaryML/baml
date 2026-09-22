@@ -835,7 +835,8 @@ impl<'db> InferenceContext<'db> {
 }
 
 /// A literal type is judged as its base primitive: `1` implements what `int`
-/// does, and reports as `int`.
+/// does. Only the JUDGMENT widens - a report names the subject as the user
+/// wrote it (`1`), which is why [`InferenceContext::attempt`] keeps both.
 fn widen_literal(ty: &Ty) -> Ty {
     match ty.kind() {
         InferTy::Literal(literal, _, attr) => {
