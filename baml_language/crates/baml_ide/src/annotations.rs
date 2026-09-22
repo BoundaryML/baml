@@ -43,26 +43,33 @@
 //! We suppress type hints for:
 //! - Unknown / error types (noise)
 //! - Bindings named `_` (discard patterns)
+//! - Constructor or primitive-literal initializers (including homogeneous
+//!   arrays of them), and bindings named like their inferred type
 //!
 //! We suppress parameter-name hints when:
 //! - The callee type is not `Ty::Function` (no param info)
 //! - The param name is `None` (positional-only parameter)
 //! - The argument count != param count (variadic / error cases)
+//! - Arguments already named like the parameter, and `assert.equal` /
+//!   `assert.is_true` calls
 //!
 //! LLM declarative functions are skipped entirely (and never recursed into), so
 //! their synthetic `client` / `function_name` / `args` calls produce no hints.
 
-use baml_base::SourceFile;
+use baml_base::{SourceFile, SourceRootKind};
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
     ast::{AstSourceMap, ExprBody, FunctionOrigin},
 };
-use baml_compiler2_hir::{body::FunctionBody, scope::FileScopeId};
+use baml_compiler2_hir::{
+    body::FunctionBody, contributions::Definition, item_data, package::package_items,
+    scope::FileScopeId,
+};
 use baml_compiler2_hir_ty::ide::infer_for_scope;
 use baml_type::Ty;
-use text_size::TextSize;
+use text_size::{TextRange, TextSize};
 
-use crate::render::display_ty_for_file;
+use crate::{listing::ResolvedTarget, render::display_ty_for_file, resolve::SymbolTarget};
 
 type SemanticIndex<'a> = baml_compiler2_hir::semantic_index::FileSemanticIndex<'a>;
 
@@ -90,6 +97,8 @@ pub struct InlineAnnotation {
     pub padding_left: bool,
     /// Insert thin space to the right of the hint (between hint and following token).
     pub padding_right: bool,
+    /// Declaration to open when the editor clicks the label, if one exists.
+    pub target: Option<(SourceFile, TextRange)>,
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -183,7 +192,12 @@ fn process_body(
 ) {
     // ── Type hints for let bindings without annotations ───────────────────────
     for (stmt_id, stmt) in body.stmts.iter() {
-        let Stmt::Let { pattern, .. } = stmt else {
+        let Stmt::Let {
+            pattern,
+            initializer,
+            ..
+        } = stmt
+        else {
             continue;
         };
 
@@ -209,7 +223,13 @@ fn process_body(
         }
 
         // Skip `_` / non-simple bindings.
-        if pat.binding_name(&body.patterns).is_none() {
+        let Some(binding_name) = pat.binding_name(&body.patterns) else {
+            continue;
+        };
+
+        // Constructor names and primitive literals already make the type
+        // clear at the initializer, including signed numeric literals.
+        if initializer.is_some_and(|id| initializer_makes_type_obvious(body, id)) {
             continue;
         }
 
@@ -221,7 +241,7 @@ fn process_body(
         // Resolve through the binding's real source scope chain. PatIds are
         // arena-local, so scanning every file scope can hit a foreign body that
         // happens to reuse the same numeric id.
-        let mut ty_str: Option<String> = None;
+        let mut inferred_ty: Option<Ty> = None;
         let use_scope = scope_at_offset_within_body(index, pat_span.start(), owner_scope);
         for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
             let scope_id = index.scope_ids[file_scope_id.index() as usize];
@@ -231,14 +251,18 @@ fn process_body(
             if let Some(ty) = inference.type_of_pat.get(pattern) {
                 let ty = ty.clone();
                 if !should_suppress_type(&ty) {
-                    ty_str = Some(display_ty_for_file(db, file, &ty));
+                    inferred_ty = Some(ty);
                 }
                 break;
             }
         }
-        let Some(ty_str) = ty_str else {
+        let Some(ty) = inferred_ty else {
             continue;
         };
+        if type_repeats_binding_name(binding_name.as_str(), &ty) {
+            continue;
+        }
+        let ty_str = display_ty_for_file(db, file, &ty);
 
         out.push(InlineAnnotation {
             offset: pat_span.end(),
@@ -246,6 +270,7 @@ fn process_body(
             kind: AnnotationKind::Type,
             padding_left: false,
             padding_right: true,
+            target: type_definition(db, &ty),
         });
     }
 
@@ -270,6 +295,9 @@ fn process_body(
             }
             let callee_span = source_map.expr_span(*callee);
             if callee_span.is_empty() {
+                continue;
+            }
+            if is_assert_without_hints(db, file, body, *callee, callee_span) {
                 continue;
             }
 
@@ -304,6 +332,9 @@ fn process_body(
                     if name_str == "self" {
                         continue;
                     }
+                    if argument_repeats_parameter(body, arg.expr, name_str) {
+                        continue;
+                    }
                     let arg_span = source_map.expr_span(arg.expr);
                     if arg_span.is_empty() {
                         continue;
@@ -314,6 +345,7 @@ fn process_body(
                         kind: AnnotationKind::Parameter,
                         padding_left: false,
                         padding_right: false,
+                        target: parameter_definition(db, file, callee_span, name_str),
                     });
                 }
                 break;
@@ -332,6 +364,193 @@ fn process_body(
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
     baml_type::contains_error_recovery(ty) || matches!(ty, Ty::Unknown | Ty::Never)
+}
+
+fn initializer_makes_type_obvious(body: &ExprBody, expr: ExprId) -> bool {
+    match &body.exprs[expr] {
+        Expr::Object { .. } | Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null => true,
+        Expr::Unary { .. } => primitive_literal_kind(body, expr).is_some(),
+        Expr::Array { elements } => array_elements_make_type_obvious(body, elements),
+        _ => false,
+    }
+}
+
+fn primitive_literal_kind(
+    body: &ExprBody,
+    expr: ExprId,
+) -> Option<std::mem::Discriminant<baml_base::Literal>> {
+    match &body.exprs[expr] {
+        Expr::Literal(literal) => Some(std::mem::discriminant(literal)),
+        Expr::Unary { expr, .. } => primitive_literal_kind(body, *expr),
+        _ => None,
+    }
+}
+
+fn array_elements_make_type_obvious(body: &ExprBody, elements: &[ExprId]) -> bool {
+    let Some(&first) = elements.first() else {
+        return false;
+    };
+    match &body.exprs[first] {
+        Expr::Object {
+            type_name,
+            type_args,
+            ..
+        } => elements.iter().all(|&element| {
+            matches!(&body.exprs[element], Expr::Object { type_name: other_name, type_args: other_args, .. }
+                if other_name == type_name && other_args == type_args)
+        }),
+        Expr::ByteStringLiteral(_) => elements
+            .iter()
+            .all(|&element| matches!(body.exprs[element], Expr::ByteStringLiteral(_))),
+        _ => primitive_literal_kind(body, first).is_some_and(|kind| {
+            elements
+                .iter()
+                .all(|&element| primitive_literal_kind(body, element) == Some(kind))
+        }),
+    }
+}
+
+/// Compare the words a reader sees, including `files` beside `File[]` and
+/// `analysis_dir` beside `analysisDir`. Only a trailing plural `s` is folded;
+/// broader stemming would hide useful hints for unrelated names.
+fn same_name(left: &str, right: &str) -> bool {
+    let normalize = |name: &str| {
+        let lower = name
+            .chars()
+            .filter(|c| *c != '_')
+            .flat_map(char::to_lowercase)
+            .collect::<String>();
+        lower.strip_suffix('s').unwrap_or(&lower).to_string()
+    };
+    normalize(left) == normalize(right)
+}
+
+fn type_repeats_binding_name(binding: &str, ty: &Ty) -> bool {
+    match ty {
+        Ty::List(inner) => type_repeats_binding_name(binding, inner),
+        Ty::Union(members) => {
+            let mut non_null = members.iter().filter(|ty| !matches!(ty, Ty::Null));
+            non_null
+                .next()
+                .is_some_and(|ty| type_repeats_binding_name(binding, ty))
+                && non_null.next().is_none()
+        }
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::Interface(name, _, _) | Ty::TypeAlias(name) => {
+            same_name(binding, name.name().as_str())
+        }
+        _ => false,
+    }
+}
+
+fn type_definition(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> Option<(SourceFile, TextRange)> {
+    let builtin_alias = match ty {
+        Ty::Int => Some("int"),
+        Ty::Bigint => Some("bigint"),
+        Ty::Float => Some("float"),
+        Ty::String => Some("string"),
+        Ty::Bool => Some("bool"),
+        Ty::Uint8Array => Some("uint8array"),
+        _ => None,
+    };
+    if let Some(alias) = builtin_alias {
+        let ResolvedTarget::Item(def) = crate::listing::resolve_builtin_type_target(db, alias)?
+        else {
+            return None;
+        };
+        return crate::syntax::definition_span(db, def);
+    }
+
+    let name = match ty {
+        Ty::List(inner) => return type_definition(db, inner),
+        Ty::Union(members) => {
+            let mut non_null = members.iter().filter(|ty| !matches!(ty, Ty::Null));
+            let inner = non_null.next()?;
+            return non_null
+                .next()
+                .is_none()
+                .then(|| type_definition(db, inner))
+                .flatten();
+        }
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::Interface(name, _, _) | Ty::TypeAlias(name) => {
+            name
+        }
+        _ => return None,
+    };
+    let def = package_items(db, name.root()).lookup_type(name.namespace(), name.name())?;
+    crate::syntax::definition_span(db, def)
+}
+
+fn argument_repeats_parameter(body: &ExprBody, arg: ExprId, parameter: &str) -> bool {
+    match &body.exprs[arg] {
+        Expr::Path(parts) => parts
+            .last()
+            .is_some_and(|name| same_name(name.as_str(), parameter)),
+        Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } => {
+            same_name(member.as_str(), parameter)
+        }
+        _ => false,
+    }
+}
+
+fn is_assert_without_hints(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    body: &ExprBody,
+    callee: ExprId,
+    callee_span: TextRange,
+) -> bool {
+    let is_assert_method = |name: &str| matches!(name, "equal" | "is_true");
+    let looks_like_assert = match &body.exprs[callee] {
+        Expr::Path(parts) => {
+            parts.len() >= 2
+                && parts[parts.len() - 2].as_str() == "assert"
+                && is_assert_method(parts[parts.len() - 1].as_str())
+        }
+        Expr::MemberAccess { base, member } if is_assert_method(member.as_str()) => {
+            matches!(&body.exprs[*base], Expr::Path(parts) if parts.last().is_some_and(|name| name.as_str() == "assert"))
+        }
+        _ => false,
+    };
+    if !looks_like_assert {
+        return false;
+    }
+
+    // The syntax can also name a local `assert` value or a user namespace.
+    // Only the embedded standard assertion package gets this suppression.
+    let offset = callee_span.end() - TextSize::from(1);
+    let Some(SymbolTarget::Item(Definition::Function(function))) =
+        crate::resolve::symbol_at(db, file, offset)
+    else {
+        return false;
+    };
+    let root = function.file(db).source_root(db);
+    root.kind(db) == SourceRootKind::Stdlib
+        && root
+            .self_name(db)
+            .is_some_and(|name| name.as_str() == "assert")
+}
+
+fn parameter_definition(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    callee_span: TextRange,
+    parameter: &str,
+) -> Option<(SourceFile, TextRange)> {
+    let offset = callee_span.end() - TextSize::from(1);
+    let (SymbolTarget::Item(Definition::Function(function))
+    | SymbolTarget::Method { func: function }) = crate::resolve::symbol_at(db, file, offset)?
+    else {
+        return None;
+    };
+    let index = item_data::function_data(db, function)
+        .params
+        .iter()
+        .position(|param| param.name.as_str() == parameter)?;
+    let span = baml_compiler2_hir::signature::function_signature_source_map(db, function)
+        .param_name_spans
+        .get(index)
+        .copied()?;
+    Some((function.file(db), span))
 }
 
 /// True if `callee` names a test/testset registration method
@@ -610,7 +829,7 @@ class Greeter {
     prefix: string,
 
     function run(self, name: string) -> string {
-        let g = greet(name)
+        let g = greet("hello")
         g
     }
 }
@@ -698,5 +917,98 @@ function later() -> string {
             vec!["beta: "],
             "expected later's call to use right's parameter, got {labels_at_y:?}"
         );
+    }
+
+    #[test]
+    fn redundant_hints_are_suppressed_and_useful_hints_link_to_declarations() {
+        let source = r#"
+class File { name string }
+class Conversation { text string }
+class Hello { text string }
+
+function load_files() -> File[] { [File { name: "a" }] }
+function load_file() -> File { File { name: "a" } }
+function start_run(analysis_dir: string, count: int) -> int { count }
+
+function demo(analysis_dir: string) -> int {
+    let retained = Conversation { text: "hi" }
+    let total = 0
+    let ratio = 1.5
+    let enabled = true
+    let message = "hello"
+    let loss = -1
+    let copies = [File { name: "a" }, File { name: "b" }]
+    let greetings = [Hello { text: "hi" }, Hello { text: "bye" }]
+    let values = [1, 2]
+    let files = load_files()
+    let result = load_file()
+    assert.equal(1, 1)
+    assert.is_true(enabled)
+    start_run(analysis_dir, 2)
+}
+"#;
+        let mut builder = ProjectTest::builder();
+        builder.source("main.baml", source);
+        let project = builder.build();
+        let hints = file_annotations(&project.db, project.files[0]);
+        let type_hints = hints
+            .iter()
+            .filter(|hint| hint.kind == AnnotationKind::Type)
+            .collect::<Vec<_>>();
+        assert_eq!(type_hints.len(), 1, "unexpected type hints: {type_hints:?}");
+        assert_eq!(type_hints[0].label, ": File");
+        let (file, range) = type_hints[0].target.expect("class type is clickable");
+        assert_eq!(file, project.files[0]);
+        assert_eq!(
+            &source[usize::from(range.start())..usize::from(range.end())],
+            "File"
+        );
+
+        let parameter_hints = hints
+            .iter()
+            .filter(|hint| hint.kind == AnnotationKind::Parameter)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            parameter_hints.len(),
+            1,
+            "unexpected parameter hints: {parameter_hints:?}"
+        );
+        assert_eq!(parameter_hints[0].label, "count: ");
+        let (file, range) = parameter_hints[0].target.expect("parameter is clickable");
+        assert_eq!(file, project.files[0]);
+        assert_eq!(
+            &source[usize::from(range.start())..usize::from(range.end())],
+            "count"
+        );
+    }
+
+    #[test]
+    fn user_assert_namespace_keeps_parameter_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "ns_assert/functions.baml",
+            r#"
+function equal(actual: int, expected: int) -> bool { actual == expected }
+function is_true(condition: bool) -> bool { condition }
+"#,
+        );
+        builder.source(
+            "main.baml",
+            r#"
+
+function demo() -> bool {
+    assert.equal(1, 2) && assert.is_true(true)
+}
+"#,
+        );
+        let project = builder.build();
+        let labels = file_annotations(&project.db, project.files[1])
+            .iter()
+            .filter(|hint| hint.kind == AnnotationKind::Parameter)
+            .map(|hint| hint.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(labels.contains(&"actual: "), "{labels:?}");
+        assert!(labels.contains(&"expected: "), "{labels:?}");
+        assert!(labels.contains(&"condition: "), "{labels:?}");
     }
 }
