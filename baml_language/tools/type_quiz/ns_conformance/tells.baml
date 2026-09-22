@@ -207,6 +207,32 @@ function pair_features(source: string, target: string) -> string[] throws never 
     }
 }
 
+/// Everything a learner can see of a case before answering: where the pair
+/// is put, what each type is made of, how the two stand to each other as
+/// spellings, and the words of the program.
+///
+/// The one reading of a surface. The bank sweep and the sweep over what a
+/// sitting actually served both go through here, because a feature only one
+/// of them can name is a feature the other cannot hold anything to — and it
+/// is the served sweep that catches selection undoing what the bank
+/// balanced, which is exactly the case where the two must agree on what
+/// counts as visible.
+function surface_of(cast: root.bank.Cast, source: string) -> string[] throws never {
+    let out: string[] = [];
+    let seen: string[] = [];
+    note(out, `site:${root.algebra.site_phrase(cast.site)}`);
+    gather_kinds(cast.flow.source, seen, out);
+    gather_kinds(cast.flow.target, seen, out);
+    let spelled = pair_features(root.algebra.render(cast.flow.source), root.algebra.render(cast.flow.target));
+    for (let feature in spelled) {
+        note(out, feature);
+    }
+    for (let feature in text_features(source)) {
+        note(out, feature);
+    }
+    out
+}
+
 /// Every fact, at the site and direction each of `seeds` seeds draws.
 function surfaced(seeds: int) -> Surfaced[] throws never {
     root.bank.facts().flat_map((fact) -> {
@@ -216,22 +242,11 @@ function surfaced(seeds: int) -> Surfaced[] throws never {
                 let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
                     ?? return null;
                 let one = root.bank.flowed(drawn, drawn.reversed);
-                let out: string[] = [];
-                let seen: string[] = [];
-                note(out, `site:${root.algebra.site_phrase(drawn.site)}`);
-                gather_kinds(one.cast.flow.source, seen, out);
-                gather_kinds(one.cast.flow.target, seen, out);
-                let spelled = pair_features(
-                    root.algebra.render(one.cast.flow.source),
-                    root.algebra.render(one.cast.flow.target),
-                );
-                for (let feature in spelled) {
-                    note(out, feature);
+                Surfaced {
+                    fact: fact.name,
+                    compiles: one.cast.compiles,
+                    features: surface_of(one.cast, source_of(one.case)),
                 }
-                for (let feature in text_features(source_of(one.case))) {
-                    note(out, feature);
-                }
-                Surfaced { fact: fact.name, compiles: one.cast.compiles, features: out }
             })
             .collect()
     })

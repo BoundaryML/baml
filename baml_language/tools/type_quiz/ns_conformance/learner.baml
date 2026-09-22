@@ -833,15 +833,38 @@ test "orders: every servable rule has one, and only the carrying variance rules 
 // holds the questions a learner is actually asked to the bar.
 
 /// The question put at `t`, as its surface and its answer, when it asked for
-/// a verdict. The surface here is the words in the source: a served question
-/// is a case, which carries its program and not the types it was built from.
+/// a verdict.
+///
+/// The whole surface, by `surface_of`, and not just the words of the source.
+/// A `Case` carries its program and not the pair it was built from, so the
+/// draw is dealt again from the item and the seed to recover it — the same
+/// deal `generate` made, since both are pure functions of that seed. Reading
+/// the words alone would leave this unable to name the features the bank
+/// sweep already records as leaning, and it is precisely selection
+/// over-serving one of those that this is here to catch.
+///
+/// `null` for a question put as a choice, and for an item that is not a
+/// shape — which no sitting serves, every such item being one the compiler
+/// is known to disagree with. The count in the report is what would show
+/// either of those quietly swallowing a question.
 function served_surface(knobs: root.engine.Knobs, t: root.Taken) -> Surfaced? throws never {
     match (root.put_at(knobs, t.item, t.seed).posed) {
         let case: root.engine.Case => {
+            let shape = root.bank.shapes().find((s) -> {
+                `flow/${s.name}` == t.item
+            })
+                ?? return null;
+            let dealt = root.bank.deal(
+                shape,
+                root.algebra.all_sites(),
+                root.engine.Seed { state: root.state_of(t.seed) },
+            )
+                ?? return null;
+            let drawn = dealt.served();
             Surfaced {
                 fact: t.item,
                 compiles: root.engine.verdict_kind(case.key) == root.engine.VerdictKind.Compiles,
-                features: text_features(source_of(case)),
+                features: surface_of(root.bank.cast_of(drawn, drawn.reversed), source_of(case)),
             }
         },
         root.engine.Choice => null,
@@ -904,6 +927,25 @@ class Sitting {
     sessions: int[],
 }
 
-test "sitting: nothing in the questions a learner is asked leans more than fifteen points" {
+test "sitting: nothing well enough seen in a sitting leans more than fifteen points" {
+    // WHAT THIS DOES NOT COVER. `served_surface` now reads the whole surface,
+    // the same `surface_of` the bank sweep uses, so the pair features are in
+    // the vocabulary here — but 237 questions do not see them often enough to
+    // hold them to anything. Measured with the support floor dropped to one:
+    //
+    //   pair:same-spelling          100% of 11
+    //   pair:source-within-target    65% of 23
+    //   kind:literal                 65% of 23
+    //   decl:implements              32% of 19
+    //
+    // The first is the bank's recorded debt showing through, and eleven cases
+    // is no evidence either way: the standard error at that count is about
+    // fifteen points, the width of the whole bar. Lowering the floor would
+    // buy noise, not coverage. What would buy coverage is more sittings, and
+    // driving them is already the slowest thing the suite does.
+    //
+    // So this holds the eight or so features a sitting shows often enough to
+    // judge, and the BANK sweep is what holds the pair features. Selection
+    // over-serving one of them by less than the floor would pass here.
     assert.equal(served_leaning_report(), `compiles=48% of 237 leaning=[]`)
 }

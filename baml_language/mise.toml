@@ -107,7 +107,7 @@ printf '[update]\nauto_check = false\n' > "$home/config.toml"
 # target/ and slows every later run. The benchmarks pin it off for the same
 # reason. Set BAML_PROFILE=1 to get it back when profiling is the point.
 BAML_CLI_ALLOW_DIRECT=1 \
-BAML_PROFILE=0 \
+BAML_PROFILE="${BAML_PROFILE:-0}" \
 BAML_HOME="$home" \
 BAML_CACHE_DIR="$PWD/target/baml-type-quiz-cache" \
 BAML_PROFILE_DIR="$PWD/target/baml-type-quiz-profiles" \

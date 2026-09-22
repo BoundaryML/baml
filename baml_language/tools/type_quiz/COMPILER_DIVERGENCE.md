@@ -75,8 +75,8 @@ that is not a union (`bool | (string)`), or by the nesting sitting inside an
 array element or a generic argument; and the same type spelled as a
 parameter, a field, a return type or an array's element type is checked
 correctly. Where the initializer shares no member with the annotation the
-binding IS rejected, but with the check visibly reversed — `expected
-`bigint`, found `int | string | bool``, the span on the annotation rather
+binding IS rejected, but with the check visibly reversed —
+``expected `bigint`, found `int | string | bool` `` — the span on the annotation rather
 than the initializer — which is what a refutable pattern tested against the
 initializer would report. Where they share a member, as above, nothing is
 reported at all.

@@ -605,7 +605,7 @@ keeps its number once it has one.
    is checked correctly, as is a union parenthesised whole and a nesting
    inside an array or a generic argument. Where the initializer shares no
    member with the annotation the binding is rejected, but reversed —
-   `expected `bigint`, found `int | string | bool`` with the span on the
+   ``expected `bigint`, found `int | string | bool` `` with the span on the
    annotation — which is what testing the annotation as a refutable pattern
    against the initializer would say; where they share one, nothing is said.
    Found by a near miss: the bank had been putting `A | (B | C)` at a binding
