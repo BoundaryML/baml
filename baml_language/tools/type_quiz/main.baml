@@ -348,7 +348,7 @@ function next_prompt(
     );
     let chosen = root.engine.choose(profile, knobs, drawn, streams.right)
         ?? return null;
-    let put = put_at(knobs, chosen.item, chosen.seed.state * 1n);
+    let put = put_drawn(knobs, item_named(chosen.item), chosen.seed, chosen.candidate);
     let question = root.engine.Question { item: chosen.item, seed: chosen.seed.state, posed: put.posed };
     // The stuck rule is taught only before a case that turns on it: the
     // selection leans toward such a case but does not insist, and the spec's
@@ -397,13 +397,28 @@ function put_at(
     let state = root.engine.Seed { state: state_of(seed) };
     let candidate = root.engine.generate(found, state)
         ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` };
+    put_drawn(knobs, found, state, candidate)
+}
+
+/// How a candidate already in hand is put under `knobs`.
+///
+/// `put_at` reaches this by generating the case again from its item and its
+/// seed, which is what a caller holding only those two has to do. Selection
+/// holds the candidate it drew, and generating it a second time is the most
+/// expensive thing a step would otherwise do twice.
+function put_drawn(
+    knobs: root.engine.Knobs,
+    item: root.engine.Item,
+    seed: root.engine.Seed,
+    candidate: root.engine.Candidate,
+) -> root.engine.Put throws never {
     root.engine.put(
         candidate,
         () -> {
-            root.engine.foil_of(found, state)
+            root.engine.foil_of(item, seed)
         },
         knobs,
-        root.engine.pose_seed(state_of(seed)),
+        root.engine.pose_seed(seed.state),
     )
 }
 

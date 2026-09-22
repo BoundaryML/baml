@@ -181,15 +181,28 @@ function sit_from(
 
 // ─── what the model concludes ────────────────────────────────────────────────
 
-function expert_report() -> string throws never {
+/// What certifying a perfect learner costs over `sessions`, and what the
+/// first of them concluded about withholding and about the naive models.
+///
+/// Over twelve sittings, not one, and asked as two tests of six. What it
+/// costs varies enormously with the draw — the spread runs from the low
+/// eighties to the budget, and two of the twelve do not finish inside it —
+/// so a single session measures the luck of that session, and the version of
+/// this test that asked one certified by chance. Splitting the twelve is for
+/// the clock rather than the measurement: driving them is the slowest thing
+/// the suite does by a factor of two, and the per-test cap is what it would
+/// meet first.
+///
+/// # Panics
+///
+/// - `baml.panics.Unreachable` if `sessions` is empty, which would be a
+///   report about nothing.
+function expert_report_over(sessions: int[]) -> string throws never {
     let knobs = root.engine.default_knobs();
-    // Over twelve sittings, not one. What it costs to certify a perfect
-    // learner varies enormously with the draw — the spread below runs from
-    // the high thirties to the budget — so a single session measures the luck
-    // of that session, and the version of this test that asked one certified
-    // by chance.
-    let steps = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((session) -> {
-        let sat = sit(expert, knobs, session);
+    let sittings = sessions.map((session) -> {
+        sit(expert, knobs, session)
+    });
+    let steps = sittings.map((sat) -> {
         `${sat.standing.why}:${sat.profile.step}`
     });
     let certified = steps
@@ -197,8 +210,12 @@ function expert_report() -> string throws never {
             step.starts_with("Mastered")
         })
         .length();
-    let sat = sit(expert, knobs, 1);
-    `certified=${certified} of 12 steps=${steps} withheld=${sat.standing.withheld} suspected=${sat.standing.suspected ?? "none"}`
+    // The first sitting of the run, which the map above already sat: reading
+    // `withheld` and `suspected` off a thirteenth sitting of the same session
+    // cost an eighth of this test for a number it had already worked out.
+    let first = sittings.at(0)
+        ?? throw baml.panics.Unreachable { message: "a certification report over no sittings" };
+    `certified=${certified} of ${sessions.length()} steps=${steps} withheld=${first.standing.withheld} suspected=${first.standing.suspected ?? "none"}`
 }
 
 /// Practice asks a fixed number of cases and stops nowhere else: the expert
@@ -457,13 +474,13 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: certifying a perfect learner costs 81 to 133 questions, and twice in twelve does not finish" {
-    // The two that do not finish are the measurement, not a fluke to be tuned
-    // away: at this budget a learner who answers everything right is still
-    // sometimes left uncertified, and three models that sat the quiz said
-    // independently that it should have had their measure by about question
-    // twenty-five. Raising the budget hides it; the estimator is where it
-    // would be fixed.
+test "learner: certifying a perfect learner costs 91 to 130 questions over sessions 1 to 6, and one does not finish" {
+    // The two that do not finish across the twelve are the measurement, not a
+    // fluke to be tuned away: at this budget a learner who answers everything
+    // right is still sometimes left uncertified, and three models that sat the
+    // quiz said independently that it should have had their measure by about
+    // question twenty-five. Raising the budget hides it; the estimator is
+    // where it would be fixed.
     //
     // It was one in twelve until a wrap over an equivalence stopped bearing
     // the wrap's own rule (`root.algebra.transfer_decides`). That rule is now
@@ -473,8 +490,15 @@ test "learner: certifying a perfect learner costs 81 to 133 questions, and twice
     // evidence those cases used to give was never earned: the learner could
     // answer them without knowing the wrap was invariant.
     assert.equal(
-        expert_report(),
-        `certified=10 of 12 steps=["Mastered:130", "Mastered:96", "Mastered:110", "Budget:140", "Mastered:91", "Mastered:97", "Mastered:118", "Mastered:81", "Mastered:99", "Budget:140", "Mastered:110", "Mastered:133"] withheld=0.0 suspected=none`,
+        expert_report_over([1, 2, 3, 4, 5, 6]),
+        `certified=5 of 6 steps=["Mastered:130", "Mastered:96", "Mastered:110", "Budget:140", "Mastered:91", "Mastered:97"] withheld=0.0 suspected=none`,
+    )
+}
+
+test "learner: certifying a perfect learner costs 81 to 133 questions over sessions 7 to 12, and one does not finish" {
+    assert.equal(
+        expert_report_over([7, 8, 9, 10, 11, 12]),
+        `certified=5 of 6 steps=["Mastered:118", "Mastered:81", "Mastered:99", "Budget:140", "Mastered:110", "Mastered:133"] withheld=0.0 suspected=none`,
     )
 }
 
