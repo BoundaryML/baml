@@ -2010,9 +2010,52 @@ fn inlay_hints_appear_for_inferred_let_types() {
         )
         .expect("inlay hints succeed");
     let hints = response.as_array().expect("hint array");
-    assert!(
-        hints.iter().any(|hint| hint["label"] == ": string"),
-        "let-binding type hint present, got: {hints:?}"
+    let type_hint = hints
+        .iter()
+        .find(|hint| hint["label"][0]["value"] == ": string")
+        .expect("clickable let-binding type hint");
+    assert!(type_hint["label"][0]["location"].is_object());
+}
+
+#[test]
+fn inlay_hint_labels_link_to_type_and_parameter_definitions() {
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    let fixture = "class File { name string }\nfunction make_file() -> File { File { name: \"x\" } }\nfunction consume(file: File) -> string { file.name }\nfunction main() -> string { let chosen = make_file(); consume(chosen) }\n";
+    harness.fs.write(harness.ws.join("main.baml"), fixture);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+
+    let uri = harness.uri("main.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 4, "character": 0 },
+                },
+            }),
+        )
+        .expect("inlay hints succeed");
+    let hints = response.as_array().expect("hint array");
+    let type_hint = hints
+        .iter()
+        .find(|hint| hint["label"][0]["value"] == ": File")
+        .expect("clickable type hint");
+    assert_eq!(
+        type_hint["label"][0]["location"]["range"]["start"]["line"],
+        0
+    );
+    let parameter_hint = hints
+        .iter()
+        .find(|hint| hint["label"][0]["value"] == "file: ")
+        .expect("clickable parameter hint");
+    assert_eq!(
+        parameter_hint["label"][0]["location"]["range"]["start"]["line"],
+        2
     );
 }
 
