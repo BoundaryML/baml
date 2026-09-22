@@ -100,7 +100,14 @@ set -euo pipefail
 home="$PWD/target/baml-type-quiz-home"
 mkdir -p "$home"
 printf '[update]\nauto_check = false\n' > "$home/config.toml"
+# Profiling ships default-ON and this suite is the worst shape for it:
+# millions of small BAML calls, every one traced, for timings nobody reads.
+# Measured at 47% of the CPU on one learner test, and about 1.5 GB written a
+# run — which, unlike CI's throwaway directory, accumulates here under
+# target/ and slows every later run. The benchmarks pin it off for the same
+# reason. Set BAML_PROFILE=1 to get it back when profiling is the point.
 BAML_CLI_ALLOW_DIRECT=1 \
+BAML_PROFILE="${BAML_PROFILE:-0}" \
 BAML_HOME="$home" \
 BAML_CACHE_DIR="$PWD/target/baml-type-quiz-cache" \
 BAML_PROFILE_DIR="$PWD/target/baml-type-quiz-profiles" \

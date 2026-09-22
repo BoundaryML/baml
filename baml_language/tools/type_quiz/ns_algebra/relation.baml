@@ -195,6 +195,21 @@ function screens(transfer: (Knowledge) -> Knowledge throws never) -> bool throws
     from_sub == transfer(Relation.Super) && from_sub == transfer(Relation.Unrelated)
 }
 
+/// Whether a transfer fed `into` could have concluded otherwise.
+///
+/// Every position maps an equivalence to an equivalence — a covariant one
+/// keeps it, a contravariant one turns a symmetric relation round to itself,
+/// and an invariant one relates two types exactly when their arguments are
+/// one type. So a step fed an equivalence concludes one whichever position
+/// it is, and a learner who could not say which position they were looking
+/// at answers the case right regardless. The step is then part of the
+/// explanation and no part of the question: `Box<bool>` against
+/// `Box<true | false>` turns on knowing the two are one type, and not on
+/// invariance.
+function transfer_decides(into: Knowledge) -> bool throws never {
+    into != Relation.Equiv
+}
+
 /// Which of `judged`'s steps the answer turns on.
 ///
 /// Everything below the outermost screening step is inert, with one exception
@@ -203,6 +218,10 @@ function screens(transfer: (Knowledge) -> Knowledge throws never) -> bool throws
 /// is exactly what the question is about. `Box<bool>` against
 /// `Box<true | false>` turns on knowing the two are one type; `Box<int>`
 /// against `Box<int | string>` turns on nothing but invariance.
+///
+/// That same equivalence leaves the screening step itself deciding nothing,
+/// by `transfer_decides`, so it does not bear either. A case that reaches a
+/// wrap over an equivalence turns on the equivalence alone.
 function bearing_of(judged: Judged[]) -> bool[] throws never {
     let cut = baml.iter.Range.new(1, judged.length()).reduce(
         (acc, i) -> {
@@ -222,7 +241,18 @@ function bearing_of(judged: Judged[]) -> bool[] throws never {
     );
     baml.iter.Range.new(0, judged.length())
         .map((i) -> {
-            i >= cut
+            if (i < cut) {
+                return false;
+            }
+            // The head of a derivation asserts its pair outright: there is no
+            // step before it for a transfer to have been fed.
+            if (i == 0) {
+                return true;
+            }
+            match (judged[i].step) {
+                Transferred => transfer_decides(judged[i - 1].after),
+                Asserted => true,
+            }
         })
         .collect()
 }

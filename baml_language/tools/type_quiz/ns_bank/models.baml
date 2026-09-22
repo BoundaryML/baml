@@ -186,6 +186,23 @@ function structural_implements() -> root.algebra.Model throws never {
     }
 }
 
+/// A near miss read as the equivalence it resembles: the shape is taken for
+/// the answer and the members are never checked.
+///
+/// This is what the near misses are in the bank to catch. Without a model
+/// that falls for them they trap nobody, which the sampler reads as a case
+/// of no interest and serves less often than the equivalence beside it — and
+/// a shape that is mostly served in its compiling form is a shape that gives
+/// the answer away again.
+function shape_is_answer() -> root.algebra.Model throws never {
+    root.algebra.Model {
+        id: "shape",
+        description: "You answer from the shape of the question rather than from what is in it: two unions that look alike, two recursive aliases built the same way, an alias beside a type — these read to you as one type, because cases shaped like them usually are. They are one type only when their members are the same. `int | string` and `string | float` are not a reordering of each other, and `type A = int | A[]` is not `type B = string | B[]`.",
+        believes: { "subtyping/subset-based": equivalent },
+        transfers: {},
+    }
+}
+
 /// Either direction of a relation is accepted, as TypeScript's method
 /// parameters are.
 function bivariant(k: root.algebra.Knowledge) -> root.algebra.Knowledge throws never {
@@ -199,5 +216,12 @@ function bivariant(k: root.algebra.Knowledge) -> root.algebra.Knowledge throws n
 }
 
 function models() -> root.algebra.Model[] throws never {
-    [spelling(), typescript(), covariant_everywhere(), bounds_are_types(), structural_implements()]
+    [
+        spelling(),
+        typescript(),
+        covariant_everywhere(),
+        bounds_are_types(),
+        structural_implements(),
+        shape_is_answer(),
+    ]
 }
