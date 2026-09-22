@@ -19,6 +19,54 @@ fn config() -> RecordingConfig {
         ..RecordingConfig::default()
     }
 }
+
+#[test]
+fn recording_rejects_unrepresentable_deadline() {
+    let config = RecordingConfig {
+        flush_interval_duration: std::time::Duration::MAX,
+        ..config()
+    };
+    assert!(matches!(
+        RecordingBuilder::new(RecordingId::from_bytes([1; 16]).unwrap(), config),
+        Err(RecordingError::InvalidConfig)
+    ));
+}
+
+#[test]
+fn span_reservation_rejects_overflow_and_encoder_limit_without_allocating() {
+    for records in [
+        encoding::MAX_BUFFER_BYTES / encoding::MAX_EVENT_BYTES + 1,
+        usize::MAX / encoding::MAX_EVENT_BYTES + 1,
+        usize::MAX,
+    ] {
+        let mut builder =
+            RecordingBuilder::new(RecordingId::from_bytes([1; 16]).unwrap(), config()).unwrap();
+        builder.pending_span_reservation = records;
+        assert_eq!(builder.admit_spans(), Err(RecordingError::EncodingTooLarge));
+        assert_eq!(builder.buffer.spans.capacity(), 0);
+        assert_eq!(builder.span_credit, 0);
+    }
+}
+
+#[test]
+fn encoding_reservation_rejects_addition_overflow() {
+    let mut builder =
+        RecordingBuilder::new(RecordingId::from_bytes([1; 16]).unwrap(), config()).unwrap();
+    builder.admit_spans().unwrap();
+    builder.buffer.spans.event(
+        allocate_telemetry_id(),
+        proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
+    );
+    assert_eq!(
+        builder.reserve_encoding(usize::MAX),
+        Err(RecordingError::EncodingTooLarge)
+    );
+    assert_eq!(
+        builder.reserve_encoding(encoding::MAX_BUFFER_BYTES),
+        Err(RecordingError::EncodingTooLarge)
+    );
+}
+
 fn ids() -> (TelemetryId, btel_types::FunctionId, CallPathId) {
     (
         allocate_telemetry_id(),

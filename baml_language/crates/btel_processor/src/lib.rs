@@ -13,13 +13,13 @@ use std::{
     fmt,
     num::NonZeroUsize,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
-    time::Instant,
 };
 
 pub use bex_chunkedringbuffer::DrainStatus as Progress;
 use bex_chunkedringbuffer::{Consumer, ProducerId, SpanChunk, TransportFailed};
 use btel_records::{SpanRecord, TimingRecord};
 use btel_types::{AwaitDuration, CallPathId, CallPathNodeId, ClockInstant, TelemetryId};
+use web_time::Instant;
 
 mod capture;
 pub use capture::CaptureProcessor;

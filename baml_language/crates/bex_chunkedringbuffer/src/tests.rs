@@ -600,7 +600,7 @@ fn expired_consumer_deadline_does_not_wait_for_a_live_producer() {
         let pool = ChunkPool::<usize, usize>::new(config(4, 1)).unwrap();
         let mut reader = pool.bind_consumer().unwrap();
         let writer = pool.register_producer().unwrap();
-        reader.wait_until(Some(std::time::Instant::now()));
+        reader.wait_until(Some(web_time::Instant::now()));
         drop(writer);
         pool.close_admission();
         assert!(reader.drain(nz(8), |_, _| {}, |_, _| {}).complete);

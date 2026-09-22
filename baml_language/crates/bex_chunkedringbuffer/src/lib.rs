@@ -829,7 +829,7 @@ impl<T, S> Consumer<T, S> {
 
     /// Consumer-only deadline for periodic processing when no input arrives.
     /// The same locked predicate protects timed and untimed waits from lost wakes.
-    pub fn wait_until(&mut self, deadline: Option<std::time::Instant>) {
+    pub fn wait_until(&mut self, deadline: Option<web_time::Instant>) {
         for _ in 0..if cfg!(baml_loom) {
             btel_settings::transport::MODEL_IDLE_PROBES
         } else {
@@ -855,14 +855,14 @@ impl<T, S> Consumer<T, S> {
             && !(s.closed && s.active_producers == 0)
             && self.shared.status.load(Ordering::Acquire) == ACTIVE
         {
-            if deadline.is_some_and(|at| std::time::Instant::now() >= at) {
+            if deadline.is_some_and(|at| web_time::Instant::now() >= at) {
                 break;
             }
             s.sleeping = true;
             s = if let Some(at) = deadline {
                 self.shared
                     .wake
-                    .wait_timeout(s, at.saturating_duration_since(std::time::Instant::now()))
+                    .wait_timeout(s, at.saturating_duration_since(web_time::Instant::now()))
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .0
             } else {

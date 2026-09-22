@@ -123,5 +123,51 @@ control traffic without forcing an early heartbeat. Quick drains may finish
 before a heartbeat is due. Shutdown cancels in-flight heartbeats rather than
 waiting for the interval.
 
-The opt-in local performance probe and its interpretation limits are documented
-in [PERFORMANCE.md](PERFORMANCE.md).
+## Performance probes
+
+From `baml_language`, run the opt-in per-call diagnostic:
+
+```sh
+cargo test --release -p bex_engine --test telemetry_performance \
+  -- --ignored --exact telemetry_performance --nocapture
+```
+
+Each scenario runs in a fresh process. The default is five cyclically balanced
+trials, with 20 paced warmup calls and 500 measured calls per trial.
+`BTEL_PERF_TRIALS` and `BTEL_PERF_ITERATIONS` override those counts. Compilation,
+engine construction, argument/context preparation, and warmup are outside call
+latency; shutdown is timed separately.
+
+The JSON output includes latency percentiles, throughput, delivery status, and
+request counters before measurement, after measurement, and after shutdown.
+Do not interpret post-failure latency as successful telemetry performance, or
+uploads deferred until shutdown as concurrent-upload overhead. Paced calls are
+closed-loop measurements, not an independent arrival stream.
+
+This per-call probe's mock server shares the process. For whole-runtime CPU/RSS
+measurement with a separate server process, use the
+[native resource workload runner](../bex_engine/examples/resource_workloads/README.md).
+Both probes use loopback HTTP, not deployed BCS/S3. Keep machine-specific results
+and generated reports under ignored `target/` output rather than in the source
+tree.
+
+## Golden contract fixtures
+
+The versioned fixture set lives in [`tests/fixtures/cloud-v1`](tests/fixtures/cloud-v1).
+It fixes prepare JSON, server plans, canonical recording/CAS sources, upload
+protobuf bytes, hashes, headers, expiry behavior, and heartbeat wire examples.
+The HTTP golden tests serve checked-in responses rather than manufacturing a
+plan from the client's request.
+
+```sh
+cargo test -p btel_bcs --test golden_uploads --test golden_heartbeat
+```
+
+JSON comparisons preserve every protocol field while ignoring object key order
+and whitespace. Protobuf upload bodies are compared byte-for-byte. Only documented
+test-local origins and nondeterministic liveness identity/sequence fields may be
+substituted; membership, ordering, versions, digests, and payload bytes may not.
+
+These vectors are ready for cross-repository contract review, not proof that BCS
+has adopted the protocol. Updating a fixture is an intentional wire-contract
+change requiring review, not an automatic snapshot-accept operation.

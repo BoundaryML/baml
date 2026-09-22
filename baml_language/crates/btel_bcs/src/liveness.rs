@@ -436,22 +436,4 @@ mod tests {
         assert_eq!(Instant::now(), start);
         assert_eq!(heartbeat.failure_count(), 0);
     }
-
-    #[test]
-    fn mock_server_duplicate_and_reordered_golden() {
-        // This is fixture server behavior, not an implementation claim about BCS.
-        let messages: Vec<Liveness> =
-            serde_json::from_str(include_str!("../tests/fixtures/liveness-reordered.json"))
-                .unwrap();
-        let mut highest_sequence = 0;
-        let mut latest_state = ProducerState::Running;
-        for message in messages {
-            if message.liveness_sequence > highest_sequence {
-                highest_sequence = message.liveness_sequence;
-                latest_state = message.state;
-            }
-        }
-        assert_eq!(highest_sequence, 3);
-        assert_eq!(latest_state, ProducerState::Draining);
-    }
 }

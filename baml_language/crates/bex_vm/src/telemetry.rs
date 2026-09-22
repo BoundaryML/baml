@@ -168,7 +168,7 @@ impl TelemetryState {
             #[cfg(target_arch = "wasm32")]
             snapshots: btel_snapshot::SnapshotPool::new(
                 btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-                Default::default(),
+                btel_snapshot::Limits::default(),
             ),
             mode: policies.mode(),
             thread: ThreadTelemetry {
@@ -198,15 +198,14 @@ impl TelemetryState {
     #[cold]
     fn capture(&mut self, input: snapshot::Input<'_>) -> Option<btel_snapshot::Snapshot> {
         #[cfg(not(target_arch = "wasm32"))]
-        let builder = self.runtime.acquire_snapshot()?;
+        let builder = self.runtime.acquire_snapshot();
         #[cfg(target_arch = "wasm32")]
-        let builder = self
-            .snapshots
-            .try_acquire()
-            .expect("synchronous WASM capture consumption");
+        let builder = self.snapshots.try_acquire();
+        #[cfg(target_arch = "wasm32")]
+        assert!(builder.is_some(), "synchronous WASM capture consumption");
         // SAFETY: invocation entry/completion run with the VM heap permit held.
         // Scratch traversal never releases it or triggers VM allocation/GC.
-        Some(unsafe { self.capture_scratch.capture(builder, input) })
+        builder.map(|builder| unsafe { self.capture_scratch.capture(builder, input) })
     }
 
     pub fn configure_spawn(&mut self, context: &ThreadSpawnContext) {
@@ -1175,9 +1174,12 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn vm_frame_sizes_stay_within_budget() {
-        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 96);
-        assert_eq!(size_of::<crate::vm::NativeFrame>(), 32);
-        assert_eq!(size_of::<crate::vm::Frame>(), 96);
+        // Heap-debug adds an epoch to HeapPtr; the rest of each frame stays fixed.
+        let pointer_bytes = size_of::<HeapPtr>();
+        assert!(matches!(pointer_bytes, 8 | 16));
+        assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 88 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::NativeFrame>(), 24 + pointer_bytes);
+        assert_eq!(size_of::<crate::vm::Frame>(), 88 + pointer_bytes);
     }
 
     #[test]

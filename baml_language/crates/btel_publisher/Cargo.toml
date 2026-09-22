@@ -20,6 +20,10 @@ btel_types = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
 uuid = { workspace = true, features = [ "v4" ] }
+web-time = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = [ "js" ] }
 
 [build-dependencies]
 prost-build = { workspace = true }

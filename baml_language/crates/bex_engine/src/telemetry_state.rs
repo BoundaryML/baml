@@ -31,9 +31,19 @@ impl EngineTelemetry {
         }
     }
 
-    pub(super) fn new_root(&self) -> Option<TelemetryState> {
+    fn recording_disabled(&self) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        if self.runtime.is_disabled() {
+        {
+            self.runtime.is_disabled()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.policies.mode() == btel_settings::mode::TelemetryMode::Off
+        }
+    }
+
+    pub(super) fn new_root(&self) -> Option<TelemetryState> {
+        if self.recording_disabled() {
             return None;
         }
         Some(self.new_state(self.clock.start_run()))
@@ -47,8 +57,7 @@ impl EngineTelemetry {
         )
     }
     pub(super) fn new_child(&self, context: Option<&ThreadSpawnContext>) -> Option<TelemetryState> {
-        #[cfg(not(target_arch = "wasm32"))]
-        if self.runtime.is_disabled() {
+        if self.recording_disabled() {
             return None;
         }
         let context = context.expect("enabled parent supplies telemetry spawn context");

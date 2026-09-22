@@ -1,0 +1,24 @@
+{
+  "recording": {
+    "recording_id": "07070707070707070707070707070707",
+    "recording_file_sequence": 1,
+    "encoded_length": 298,
+    "sha256": "8efc78e6aa6fe0e73dbfe7d2358c938cdfb8ef6a6d2ee0386917715815eeb13e"
+  },
+  "candidates": [
+    {"snapshot_id": "1522149c468e9df686b1b85d18897787", "snapshot_format_version": 1},
+    {"snapshot_id": "d5e7a16fd863e35d7b777652bf02a54d", "snapshot_format_version": 1},
+    {"snapshot_id": "04273f87d4f17e3ae23a936df1340298", "snapshot_format_version": 1},
+    {"snapshot_id": "bf8422dc2e6a37be2a7fcef6974ecd6d", "snapshot_format_version": 1, "size_class": "LARGE"},
+    {"snapshot_id": "8e676ec2a88a256b084eb820330d90c7", "snapshot_format_version": 1}
+  ],
+  "proposed_uploads": [
+    {"client_target_id": 0, "kind": "recording", "candidate_indices": [0]},
+    {"client_target_id": 1, "kind": "cas_batch", "candidate_indices": [1, 2]},
+    {"client_target_id": 2, "kind": "cas_object", "candidate_indices": [3]},
+    {"client_target_id": 3, "kind": "cas_batch", "candidate_indices": [4]}
+  ],
+  "producer_session_id": "11111111-2222-4333-8444-555555555555",
+  "liveness_sequence": 1,
+  "state": "RUNNING"
+}

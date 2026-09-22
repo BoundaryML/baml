@@ -1,5 +1,5 @@
 //! Size/time-triggered append/merge buffers and immutable file sealing for one sink.
-use std::{fmt, num::NonZeroU64, time::Instant};
+use std::{fmt, num::NonZeroU64};
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_records::SpanRecord;
@@ -8,6 +8,7 @@ use btel_snapshot::Snapshot;
 use btel_types::TelemetryId;
 use prost::Message;
 pub use settings::RecordingConfig;
+use web_time::Instant;
 
 use crate::{ConversionBuffer, proto};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -79,6 +80,9 @@ impl RecordingBuilder {
         config
             .validate()
             .map_err(|_| RecordingError::InvalidConfig)?;
+        Instant::now()
+            .checked_add(config.flush_interval_duration)
+            .ok_or(RecordingError::InvalidConfig)?;
         Ok(Self {
             id,
             config,
@@ -107,11 +111,14 @@ impl RecordingBuilder {
             .spans
             .len()
             .checked_add(additional)
-            .filter(|&n| n <= encoding::MAX_BUFFER_BYTES)
+            .filter(|&n| u32::try_from(n).is_ok())
             .ok_or(RecordingError::EncodingTooLarge)?;
         if needed > self.buffer.spans.capacity() {
-            let target = settings::encoding_capacity(self.buffer.spans.capacity(), needed)
-                .min(encoding::MAX_BUFFER_BYTES);
+            let target = u32::try_from(settings::encoding_capacity(
+                self.buffer.spans.capacity(),
+                needed,
+            ))
+            .unwrap_or(u32::MAX) as usize;
             self.buffer.spans.reserve(target);
         }
         Ok(())
@@ -122,7 +129,10 @@ impl RecordingBuilder {
         // Delay allocation until the first span so a timing-only batch does not
         // allocate a worst-case span buffer. Reserve once for the whole batch.
         let records = self.pending_span_reservation.max(1);
-        self.reserve_encoding(records.saturating_mul(encoding::MAX_EVENT_BYTES))?;
+        let bytes = records
+            .checked_mul(encoding::MAX_EVENT_BYTES)
+            .ok_or(RecordingError::EncodingTooLarge)?;
+        self.reserve_encoding(bytes)?;
         self.span_credit = records;
         self.pending_span_reservation = 0;
         Ok(())

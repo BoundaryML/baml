@@ -44,7 +44,7 @@ pub trait Publisher<I, V> {
     fn manages_flush_deadline(&self) -> bool {
         false
     }
-    fn deadline(&self) -> Option<std::time::Instant> {
+    fn deadline(&self) -> Option<web_time::Instant> {
         None
     }
     fn max_chunks_per_batch(&self) -> usize {
