@@ -46,7 +46,7 @@ use rustc_hash::FxHashMap;
 /// Recursion budget for verifying blanket bounds: a bounded blanket can
 /// itself be satisfied by another blanket, so bound-checking re-enters
 /// the resolver.
-const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
+pub(crate) const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
 
 /// The plain-to-interned conversion at the `TypeContext` boundary.
 pub fn interned_ty(ty: &baml_type::Ty) -> Ty {

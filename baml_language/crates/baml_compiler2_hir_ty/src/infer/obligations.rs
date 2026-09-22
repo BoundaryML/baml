@@ -71,6 +71,12 @@ pub(super) enum Obligation {
         interface: InferInterface,
         at: ExprId,
         purpose: GoalPurpose,
+        /// How many impl headers were confirmed to reach this goal. A
+        /// bounded blanket impl can be satisfied by another, so confirming
+        /// one registers its own bounds; this is the budget that stops a
+        /// self-satisfying impl from doing that forever (see
+        /// [`InferenceContext::attempt`]).
+        depth: u32,
     },
     /// `lhs <op-interface> rhs` deferred: discharge re-runs the SAME
     /// ground operator dispatch (union distribution, literal widening,
@@ -129,9 +135,11 @@ impl<'db> InferenceContext<'db> {
                 interface,
                 at,
                 purpose,
+                depth,
             } => {
                 let at = *at;
                 let purpose = *purpose;
+                let depth = *depth;
                 let ty = self.table.resolve_completely(ty);
                 let interface = self.resolve_interface_ref(interface);
                 if ty.has_error() {
@@ -167,6 +175,7 @@ impl<'db> InferenceContext<'db> {
                                     interface: interface.clone(),
                                     at,
                                     purpose,
+                                    depth,
                                 });
                             }
                             return Attempt::Done;
@@ -200,6 +209,19 @@ impl<'db> InferenceContext<'db> {
                     }
                     return Attempt::Done;
                 }
+                // The ground resolver bounds the same recursion with
+                // `BLANKET_IMPL_BOUND_DEPTH` and fails the candidate when it
+                // runs out (`bounds_hold`), so an exhausted chain reports
+                // "does not implement" on both paths. Selection needs the
+                // budget as well as the cycle check that resolver has: each
+                // round instantiates the impl header with FRESH variables, so
+                // a self-satisfying impl (`implements<X, T extends Cyc<X>>
+                // Cyc<X> for T`) never re-registers an EQUAL goal - it grows
+                // one, and equality alone would never stop it.
+                if depth > crate::impls::BLANKET_IMPL_BOUND_DEPTH {
+                    self.report_not_implemented(at, subject, &interface);
+                    return Attempt::Done;
+                }
                 let selection = match ty.kind() {
                     // Nothing filters the candidate set yet: a head still
                     // unknown, or a projection whose base has not resolved.
@@ -218,7 +240,7 @@ impl<'db> InferenceContext<'db> {
                     InferTy::TypeVar(..) => self.select_param_env(&ty, &interface),
                     // Every other head is known, and filters the impls. A
                     // (closed) union finds none: no impl subject is a union.
-                    _ => self.select_impl(&ty, &interface, at),
+                    _ => self.select_impl(&ty, &interface, at, depth),
                 };
                 match selection {
                     Selection::Confirmed => Attempt::Done,
@@ -262,7 +284,13 @@ impl<'db> InferenceContext<'db> {
     /// (rustc's "type annotations needed"). Committing on uniqueness is
     /// sound because coherence (I7) guarantees at most one impl per
     /// realized instance.
-    fn select_impl(&mut self, goal: &Ty, interface: &InferInterface, at: ExprId) -> Selection {
+    fn select_impl(
+        &mut self,
+        goal: &Ty,
+        interface: &InferInterface,
+        at: ExprId,
+        depth: u32,
+    ) -> Selection {
         let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
         let mut applicable = None;
         for facts in candidates {
@@ -282,7 +310,7 @@ impl<'db> InferenceContext<'db> {
         let instantiation = self
             .confirm_impl(goal, interface, facts)
             .expect("the unique applicable candidate re-confirms");
-        self.register_impl_bound_obligations(facts, &instantiation, at);
+        self.register_impl_bound_obligations(facts, &instantiation, at, depth + 1);
         Selection::Confirmed
     }
 
@@ -501,6 +529,7 @@ impl<'db> InferenceContext<'db> {
         facts: &crate::impls::ImplFacts<'_>,
         instantiation: &rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
         at: ExprId,
+        depth: u32,
     ) {
         for (param, bounds) in &facts.generic_params {
             let Some(arg) = instantiation.get(param) else {
@@ -531,6 +560,7 @@ impl<'db> InferenceContext<'db> {
                     interface,
                     at,
                     purpose: GoalPurpose::Bound,
+                    depth,
                 });
             }
         }
@@ -691,7 +721,7 @@ impl<'db> InferenceContext<'db> {
         let (member, instantiation) = self
             .probe_candidate(receiver, name, facts)
             .expect("the unique applicable candidate re-confirms");
-        self.register_impl_bound_obligations(facts, &instantiation, at);
+        self.register_impl_bound_obligations(facts, &instantiation, at, 1);
         Some(member)
     }
 

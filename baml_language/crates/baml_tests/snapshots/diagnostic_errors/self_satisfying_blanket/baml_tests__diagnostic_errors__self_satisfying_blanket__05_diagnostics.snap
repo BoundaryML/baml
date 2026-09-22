@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × type `Foo` does not satisfy the bound `Cyc<!error>` required by the blanket `implements` rule
+    ╭─[self_satisfying_blanket.baml:23:5]
+ 23 │     needs_cyc(f)
+    ·     ────────────
+    ╰────

@@ -3721,6 +3721,12 @@ impl<'db> InferenceContext<'db> {
                 .reduce_projections(&closed, PROJECTION_FINALIZE_FUEL)
                 .into_ty();
         }
+        // Interned identity first: it is a pointer compare, and re-spelling a
+        // union is a deep walk. Only a pair that is NOT already identical can
+        // need the canonical spelling.
+        if actual == expected || actual.has_error() || expected.has_error() {
+            return true;
+        }
         // Relate through the canonical spelling of a union whose members
         // resolution has since ground out (see `canonical_if_ground`).
         if actual.has_union() {
@@ -3729,7 +3735,7 @@ impl<'db> InferenceContext<'db> {
         if expected.has_union() {
             expected = self.deduped_unions(&expected);
         }
-        if actual == expected || actual.has_error() || expected.has_error() {
+        if actual == expected {
             return true;
         }
         // A GROUND top expectation is trivially satisfied - but it IS a
@@ -4072,6 +4078,7 @@ impl<'db> InferenceContext<'db> {
                                 interface: interface.clone(),
                                 at: anchor,
                                 purpose: obligations::GoalPurpose::Coercion,
+                                depth: 0,
                             });
                         }
                         return true;
@@ -8212,6 +8219,7 @@ impl<'db> InferenceContext<'db> {
                     interface: substitute_interface_params(&bound, instantiation),
                     at,
                     purpose: call_bound_purpose(&param, own_start),
+                    depth: 0,
                 });
             }
         }
@@ -8245,6 +8253,7 @@ impl<'db> InferenceContext<'db> {
                     interface: substitute_interface_params(&bound, instantiation),
                     at,
                     purpose: call_bound_purpose(param, own_start),
+                    depth: 0,
                 });
             }
         }
@@ -8289,6 +8298,7 @@ impl<'db> InferenceContext<'db> {
                     interface,
                     at,
                     purpose: obligations::GoalPurpose::ConcreteBound,
+                    depth: 0,
                 });
             }
         }
@@ -8870,6 +8880,7 @@ impl<'db> InferenceContext<'db> {
                     interface,
                     at: object,
                     purpose: obligations::GoalPurpose::ConcreteBound,
+                    depth: 0,
                 });
             }
         }
@@ -12160,20 +12171,38 @@ impl<'db> InferenceContext<'db> {
     /// literal-into-base are SEMANTIC steps that erase literal freshness, and
     /// flow narrowing downstream reads that freshness. Removing a member equal
     /// to one already there changes no type.
+    /// `Ty` is hash-consed, so a type that reaches the same child twice
+    /// (`Pair<P, P>` holds ONE node under two handles) is a DAG whose tree
+    /// unfolding is exponentially larger. `map_children` walks the tree, so
+    /// the descent is memoized per call on the interned handle: the DAG is
+    /// visited once per node instead of once per path. The memo is local to
+    /// one call because the walk RESOLVES as it goes, and the table may solve
+    /// a variable between calls.
     fn deduped_unions(&mut self, ty: &Ty) -> Ty {
+        let mut memo = FxHashMap::default();
+        self.deduped_unions_memo(ty, &mut memo)
+    }
+
+    fn deduped_unions_memo(&mut self, ty: &Ty, memo: &mut FxHashMap<Ty, Ty>) -> Ty {
+        if let Some(cached) = memo.get(ty) {
+            return cached.clone();
+        }
         let resolved = self.table.resolve_completely(ty);
-        if !resolved.has_union() {
-            return resolved;
-        }
-        let rebuilt = Ty::intern(
+        let deduped = if resolved.has_union() {
+            let rebuilt = Ty::intern(
+                resolved
+                    .kind()
+                    .map_children(|child| self.deduped_unions_memo(child, memo)),
+            );
+            match rebuilt.kind() {
+                InferTy::Union(members, _) => syntactic_union(members),
+                _ => rebuilt,
+            }
+        } else {
             resolved
-                .kind()
-                .map_children(|child| self.deduped_unions(child)),
-        );
-        match rebuilt.kind() {
-            InferTy::Union(members, _) => syntactic_union(members),
-            _ => rebuilt,
-        }
+        };
+        memo.insert(ty.clone(), deduped.clone());
+        deduped
     }
 
     /// Post-substitution projection normalization (rustc's
@@ -12241,6 +12270,7 @@ impl<'db> InferenceContext<'db> {
             interface: iterable.clone(),
             at,
             purpose: obligations::GoalPurpose::Coercion,
+            depth: 0,
         });
         let existential = iterable.existential();
         let projection = Ty::intern(InferTy::AssociatedTypeProjection {
