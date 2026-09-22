@@ -56,7 +56,7 @@
 //! LLM declarative functions are skipped entirely (and never recursed into), so
 //! their synthetic `client` / `function_name` / `args` calls produce no hints.
 
-use baml_base::SourceFile;
+use baml_base::{SourceFile, SourceRootKind};
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
     ast::{AstSourceMap, ExprBody, FunctionOrigin},
@@ -285,9 +285,6 @@ fn process_body(
             if is_synthetic_registration(body, *callee) {
                 continue;
             }
-            if is_assert_without_hints(body, *callee) {
-                continue;
-            }
             // Skip compiler-synthesized wrapping calls — e.g. the
             // `string.from(${expr})` that `${…}` interpolation lowers to.
             // Marked at lowering time (see `AstSourceMap::synthetic_exprs`),
@@ -298,6 +295,9 @@ fn process_body(
             }
             let callee_span = source_map.expr_span(*callee);
             if callee_span.is_empty() {
+                continue;
+            }
+            if is_assert_without_hints(db, file, body, *callee, callee_span) {
                 continue;
             }
 
@@ -492,9 +492,15 @@ fn argument_repeats_parameter(body: &ExprBody, arg: ExprId, parameter: &str) -> 
     }
 }
 
-fn is_assert_without_hints(body: &ExprBody, callee: ExprId) -> bool {
+fn is_assert_without_hints(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    body: &ExprBody,
+    callee: ExprId,
+    callee_span: TextRange,
+) -> bool {
     let is_assert_method = |name: &str| matches!(name, "equal" | "is_true");
-    match &body.exprs[callee] {
+    let looks_like_assert = match &body.exprs[callee] {
         Expr::Path(parts) => {
             parts.len() >= 2
                 && parts[parts.len() - 2].as_str() == "assert"
@@ -504,7 +510,24 @@ fn is_assert_without_hints(body: &ExprBody, callee: ExprId) -> bool {
             matches!(&body.exprs[*base], Expr::Path(parts) if parts.last().is_some_and(|name| name.as_str() == "assert"))
         }
         _ => false,
+    };
+    if !looks_like_assert {
+        return false;
     }
+
+    // The syntax can also name a local `assert` value or a user namespace.
+    // Only the embedded standard assertion package gets this suppression.
+    let offset = callee_span.end() - TextSize::from(1);
+    let Some(SymbolTarget::Item(Definition::Function(function))) =
+        crate::resolve::symbol_at(db, file, offset)
+    else {
+        return false;
+    };
+    let root = function.file(db).source_root(db);
+    root.kind(db) == SourceRootKind::Stdlib
+        && root
+            .self_name(db)
+            .is_some_and(|name| name.as_str() == "assert")
 }
 
 fn parameter_definition(
@@ -957,5 +980,35 @@ function demo(analysis_dir: string) -> int {
             &source[usize::from(range.start())..usize::from(range.end())],
             "count"
         );
+    }
+
+    #[test]
+    fn user_assert_namespace_keeps_parameter_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "ns_assert/functions.baml",
+            r#"
+function equal(actual: int, expected: int) -> bool { actual == expected }
+function is_true(condition: bool) -> bool { condition }
+"#,
+        );
+        builder.source(
+            "main.baml",
+            r#"
+
+function demo() -> bool {
+    assert.equal(1, 2) && assert.is_true(true)
+}
+"#,
+        );
+        let project = builder.build();
+        let labels = file_annotations(&project.db, project.files[1])
+            .iter()
+            .filter(|hint| hint.kind == AnnotationKind::Parameter)
+            .map(|hint| hint.label.as_str())
+            .collect::<Vec<_>>();
+        assert!(labels.contains(&"actual: "), "{labels:?}");
+        assert!(labels.contains(&"expected: "), "{labels:?}");
+        assert!(labels.contains(&"condition: "), "{labels:?}");
     }
 }
