@@ -158,6 +158,14 @@ fn type_quiz_conformance() {
         // nothing wrong. Fifteen minutes is the ceiling for a stall, not a
         // budget the suite uses: the whole of it runs in five on an idle core.
         .env("BAML_TEST_TIMEOUT_MS", "900000")
+        // Profiling ships default-ON, and this suite is the worst possible
+        // shape for it: a hundred-odd tests whose work is millions of small
+        // BAML calls, every one of them traced. Measured on one learner test,
+        // tracing was 47% of the CPU and wrote 262 MB that nothing ever reads
+        // — the whole suite wrote about 1.5 GB a run. The benchmarks pin it
+        // off for the same reason (`benches/runtime_benchmark.rs`); a
+        // conformance run wants the answers, not the timings.
+        .env("BAML_PROFILE", "0")
         .env("BAML_HOME", &home)
         .env("BAML_CACHE_DIR", &cache_dir)
         .env("BAML_PROFILE_DIR", tmp.path().join("profiles-v1"))
