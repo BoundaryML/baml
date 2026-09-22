@@ -7,13 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: Slack channel for the report
+        description: Public Slack channel for the report
         required: true
-        default: general
-        type: choice
-        options:
-          - general
-          - sam-sandbox
+        default: '#general'
+        type: string
 
 concurrency:
   group: product-metrics-slack-report
@@ -31,7 +28,7 @@ jobs:
     env:
       PRODUCT_METRICS_DASHBOARD_URL: https://boundary-product-metrics.fly.dev/
       SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
-      SLACK_CHANNEL_NAME: ${{ inputs.channel || 'general' }}
+      SLACK_CHANNEL_NAME: "${{ inputs.channel || '#general' }}"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
