@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
    ╭─[main.baml:7:19]
  7 │         string => []
    ·                   ──
@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
     ╭─[main.baml:16:18]
  16 │     let values = [];
     ·                  ──
@@ -23,7 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `map<string, unknown>`
+  │ full type: `map<string, !error>`
     ╭─[main.baml:21:18]
  21 │     let values = {};
     ·                  ──
@@ -32,7 +32,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `map<string, unknown>`
+  │ full type: `map<string, !error>`
     ╭─[main.baml:26:18]
  26 │     let values = map {  };
     ·                  ────────

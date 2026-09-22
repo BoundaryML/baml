@@ -14,8 +14,10 @@
 //!   or definitively fails (a reported diagnostic, the output erased).
 //! - After fixpoint, still-stalled obligations fail CLOSED: their
 //!   outputs erase through the ordinary finalize rules (ruling 2), and a
-//!   stalled `Implements` goal on a known subject reports its ambiguity
-//!   ([`InferenceContext::settle_stalled_obligations`]).
+//!   goal that stalled because SEVERAL candidates proved it reports that
+//!   ambiguity ([`InferenceContext::settle_stalled_obligations`]). Each
+//!   stall records which of the two it was ([`Stall`]), so settling reads
+//!   the reason instead of re-deriving one from the leftover type.
 //!
 //! The interleave exists because of a real deadlock: an operator
 //! obligation's output can be a LOWER BOUND of the very variable its
@@ -92,10 +94,35 @@ pub(super) enum Obligation {
 }
 
 enum Attempt {
-    /// Live variables remain: retry next round.
-    Stalled,
+    /// Undecided this round: retry next.
+    Stalled(Stall),
     /// Discharged (successfully or with a recorded failure).
     Done,
+}
+
+/// Why an attempt could not decide its goal - and so, at quiescence, which
+/// diagnostic owns it.
+#[derive(Clone, Copy)]
+enum Stall {
+    /// Part of the goal is still unsolved: the subject is a variable, a
+    /// union has not closed, or a projection's base has not resolved. No
+    /// candidate was ever consulted, so there is nothing to call ambiguous;
+    /// the diagnostics for an undetermined type own it.
+    Unresolved,
+    /// The goal is decidable and MORE THAN ONE candidate decides it. More
+    /// solving may still prune the set, so it retries; if nothing does, it
+    /// is rustc's E0283 ("type annotations needed").
+    Ambiguous,
+}
+
+/// A registered obligation and what its last attempt learned about it.
+pub(super) struct Pending {
+    obligation: Obligation,
+    /// Why the last attempt left it pending, or `None` before its first.
+    /// Settling treats `None` as undecided rather than ambiguous: a goal
+    /// registered after the fixpoint's last round was never asked, so
+    /// nothing observed more than one candidate for it.
+    stall: Option<Stall>,
 }
 
 /// The outcome of candidate selection for a goal whose subject is known.
@@ -111,7 +138,10 @@ enum Selection {
 
 impl<'db> InferenceContext<'db> {
     pub(super) fn register_obligation(&mut self, obligation: Obligation) {
-        self.obligations.push(obligation);
+        self.obligations.push(Pending {
+            obligation,
+            stall: None,
+        });
     }
 
     /// One discharge round over every pending obligation. Returns whether
@@ -119,10 +149,13 @@ impl<'db> InferenceContext<'db> {
     pub(super) fn discharge_obligations_once(&mut self) -> bool {
         let pending = std::mem::take(&mut self.obligations);
         let mut progressed = false;
-        for obligation in pending {
+        for Pending { obligation, .. } in pending {
             match self.attempt(&obligation) {
                 Attempt::Done => progressed = true,
-                Attempt::Stalled => self.obligations.push(obligation),
+                Attempt::Stalled(stall) => self.obligations.push(Pending {
+                    obligation,
+                    stall: Some(stall),
+                }),
             }
         }
         progressed
@@ -157,7 +190,9 @@ impl<'db> InferenceContext<'db> {
                 if let InferTy::Union(..) = ty.kind() {
                     match baml_type::interned::ClosedTy::try_from(&ty) {
                         Ok(closed) => ty = self.canonicalize_unions(&closed).into_ty(),
-                        Err(_) if purpose != GoalPurpose::Coercion => return Attempt::Stalled,
+                        Err(_) if purpose != GoalPurpose::Coercion => {
+                            return Attempt::Stalled(Stall::Unresolved);
+                        }
                         Err(_) => {}
                     }
                 }
@@ -227,7 +262,7 @@ impl<'db> InferenceContext<'db> {
                     // unknown, or a projection whose base has not resolved.
                     // Guessing is the one thing fulfillment never does.
                     InferTy::InferVar { .. } | InferTy::AssociatedTypeProjection { .. } => {
-                        return Attempt::Stalled;
+                        return Attempt::Stalled(Stall::Unresolved);
                     }
                     // Object candidates (rustc's
                     // `assemble_candidates_from_object_ty`): an existential
@@ -244,7 +279,7 @@ impl<'db> InferenceContext<'db> {
                 };
                 match selection {
                     Selection::Confirmed => Attempt::Done,
-                    Selection::Ambiguous => Attempt::Stalled,
+                    Selection::Ambiguous => Attempt::Stalled(Stall::Ambiguous),
                     Selection::NoCandidate => {
                         self.report_not_implemented(at, subject, &interface);
                         Attempt::Done
@@ -262,7 +297,7 @@ impl<'db> InferenceContext<'db> {
                 let lhs = self.table.resolve_completely(lhs);
                 let rhs = rhs.as_ref().map(|rhs| self.table.resolve_completely(rhs));
                 if lhs.has_infer() || rhs.as_ref().is_some_and(Ty::has_infer) {
-                    return Attempt::Stalled;
+                    return Attempt::Stalled(Stall::Unresolved);
                 }
                 let result = self.dispatch_operator(interface, &lhs, rhs.as_ref());
                 if result.has_error() {
@@ -460,28 +495,26 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Settles the goals still pending at quiescence, when no more solving
-    /// can happen. A goal whose subject never resolved, or is a projection
-    /// whose base never did, is left to the diagnostics for those (reporting
-    /// it too would only repeat them), as the deferred subs' residue is. A
-    /// known subject still pending had more than one impl or bound that
-    /// could prove it - rustc's "type annotations needed" (E0283).
+    /// can happen. The recorded stall REASON decides, not a guess re-derived
+    /// from the leftover type: "more than one implementation could make this
+    /// work" is rustc's E0283 and is only true of a goal that actually found
+    /// more than one. Everything else stalled because part of it never
+    /// resolved - no candidate was ever consulted - and the diagnostics for
+    /// an undetermined type own it, as they own the deferred subs' residue.
     pub(super) fn settle_stalled_obligations(&mut self) {
-        for obligation in std::mem::take(&mut self.obligations) {
-            let Obligation::Implements {
-                ty, interface, at, ..
-            } = obligation
+        for Pending { obligation, stall } in std::mem::take(&mut self.obligations) {
+            // An operator stalls only on an unsolved operand, so one pattern
+            // covers both kinds: ambiguity is impl selection's outcome alone.
+            let (
+                Obligation::Implements {
+                    ty, interface, at, ..
+                },
+                Some(Stall::Ambiguous),
+            ) = (obligation, stall)
             else {
-                // A stalled operator's operand is an unsolved variable;
-                // its own diagnostic covers it.
                 continue;
             };
             let ty = self.table.resolve_completely(&ty);
-            if ty.has_error()
-                || ty.has_projection()
-                || matches!(ty.kind(), InferTy::InferVar { .. })
-            {
-                continue;
-            }
             let interface = self.resolve_interface_ref(&interface).existential();
             self.pending_diags
                 .push(super::PendingDiag::AmbiguousImplementation {

@@ -1331,7 +1331,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0155
 
   × type annotations needed
-  │ full type: `unknown[]`
+  │ full type: `!error[]`
      ╭─[other_exprs.baml:101:5]
  101 │     [];
      ·     ──

@@ -1738,7 +1738,7 @@ struct InferenceContext<'db> {
     deferred_subs: Vec<(Ty, Ty, Option<ExprId>)>,
     /// The obligation worklist (I4): registered during the walk,
     /// discharged at finish interleaved with bound resolution.
-    obligations: Vec<obligations::Obligation>,
+    obligations: Vec<obligations::Pending>,
     /// The expression whose CHECK is currently relating types - r-a's
     /// `ObligationCause`: obligations born inside a structural `sub`
     /// recursion anchor their eventual diagnostic here.
@@ -10755,7 +10755,7 @@ impl<'db> InferenceContext<'db> {
                     (
                         location,
                         crate::diagnostics::TirTypeError::TypeMustBeKnown {
-                            full_type: rendered_plain(&full_type),
+                            full_type: self.plain_finalized(&full_type),
                         },
                     )
                 }
@@ -10948,16 +10948,27 @@ impl<'db> InferenceContext<'db> {
                     related: Vec::new(),
                 });
             }
-            // Expressions with a nominal does-not-implement verdict: a
-            // mismatch there against an interface existential is the same
-            // fault restated through subtyping (an argument's provisional
-            // check re-judged once its expectation solved), and the verdict
-            // is the precise report.
-            let not_implemented_at: rustc_hash::FxHashSet<ExprId> = self
+            // Expressions with a nominal does-not-implement verdict, keyed
+            // by the interface that failed: a mismatch there AGAINST THAT
+            // INTERFACE is the same fault restated through subtyping (an
+            // argument's provisional check re-judged once its expectation
+            // solved), and the verdict is the precise report. Keyed by the
+            // anchor alone it also swallows a mismatch against a DIFFERENT
+            // interface at the same span - a second fault nothing else
+            // reports, which the user would only meet after fixing the first.
+            let not_implemented_at: rustc_hash::FxHashSet<(ExprId, baml_type::DeclName)> = self
                 .pending_diags
                 .iter()
                 .filter_map(|pending| match pending {
-                    PendingDiag::DoesNotImplement { expr, .. } => Some(*expr),
+                    PendingDiag::DoesNotImplement {
+                        expr, interface, ..
+                    } => match interface.kind() {
+                        InferTy::Interface(name, ..) => Some((*expr, name.clone())),
+                        // Every push site builds this from an interface
+                        // existential; nothing else can be the subject of a
+                        // does-not-implement verdict.
+                        _ => None,
+                    },
                     _ => None,
                 })
                 .collect();
@@ -10975,8 +10986,8 @@ impl<'db> InferenceContext<'db> {
                 if tainted(expected) || tainted(actual) {
                     continue;
                 }
-                if matches!(expected.kind(), InferTy::Interface(..))
-                    && not_implemented_at.contains(&expr)
+                if let InferTy::Interface(name, ..) = expected.kind()
+                    && not_implemented_at.contains(&(expr, name.clone()))
                 {
                     continue;
                 }
@@ -11309,9 +11320,7 @@ impl<'db> InferenceContext<'db> {
                         (
                             TirTypeError::AmbiguousImplementation {
                                 value_type: self.plain_finalized(&value),
-                                interface: rendered_plain(
-                                    &self.table.resolve_completely(&interface),
-                                ),
+                                interface: self.plain_finalized(&interface),
                             },
                             expr,
                         )
@@ -13781,10 +13790,18 @@ fn erase_infer(ty: &Ty) -> ClosedTy {
         .unwrap_or_else(|_| unreachable!("erase_infer replaced every inference node"))
 }
 
-/// The rename-for-rendering edge for `&self` diagnostic helpers, which
-/// have no table access to finalize: a closed value materializes; a live
-/// variable renders as the user-denotable top type
-/// ([`infer_to_diagnostic_unknown`]).
+/// The rename edge for `&self` helpers, which cannot reach the table to
+/// finalize: a closed value materializes, and a live variable falls back to
+/// [`infer_to_diagnostic_unknown`].
+///
+/// NOT the way to put an undetermined type in a MESSAGE - use
+/// [`InferenceContext::plain_finalized`], whose erasure spells one. `unknown`
+/// is a real BAML type (the top type, which a user can write and which every
+/// value inhabits), so a message naming it claims inference SUCCEEDED and
+/// landed there. The remaining callers are either provably closed at the call
+/// (the caller tests `has_infer` first, or substitutes concrete types before
+/// rendering, as the specialization examples do) or need the written surface
+/// preserved rather than finalized (the open-throws coverage input).
 fn rendered_plain(ty: &Ty) -> baml_type::Ty {
     ClosedTy::try_from(ty)
         .unwrap_or_else(|_| {
@@ -13796,7 +13813,10 @@ fn rendered_plain(ty: &Ty) -> baml_type::Ty {
 }
 
 /// Replaces every unresolved inference node with the user-denotable top type
-/// while preserving the surrounding shape for diagnostics.
+/// while preserving the surrounding shape. For the paths in
+/// [`rendered_plain`]'s doc that need a SPELLABLE type out of an open one -
+/// not for reporting that inference failed, which this would state as the
+/// successful answer `unknown`.
 fn infer_to_diagnostic_unknown(ty: &Ty) -> Ty {
     if !ty.has_infer() {
         return ty.clone();
