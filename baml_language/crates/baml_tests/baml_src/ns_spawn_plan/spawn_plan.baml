@@ -482,6 +482,24 @@ test "a task cancelled while queued never runs" {
     assert.equal(cancelled_while_queued_never_runs(), "1:-1:1")
 }
 
+// The limit holds back the WORK, not just its counts: under a capacity of one,
+// no body starts until the previous one has finished its IO, so the log
+// alternates strictly whatever the timing. (Capacity one also keeps the shared
+// log free of racing writes: only one body ever runs at a time.)
+function a_limit_serializes_real_io() -> string {
+    let limit = limit_of(1);
+    let log = Log { entries: [] };
+    let a = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let b = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let c = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let total = (await a) + (await b) + (await c);
+    `${total}:${log.entries.join(",")}`
+}
+
+test "a limit holds back the work, not just the counts" {
+    assert.equal(a_limit_serializes_real_io(), "3:start,end,start,end,start,end")
+}
+
 // ─── Root and CancelToken ────────────────────────────────────────────────────
 
 function linked_token_cancels() -> int {

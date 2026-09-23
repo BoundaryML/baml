@@ -1076,9 +1076,15 @@ fn spawn_with_modifier_typechecks() {
 }"#,
     );
     let output = render_tir(&db, file);
+    // `!!` marks a diagnostic; `!error` is only an error-TYPED expression, so
+    // checking for it alone passes a mismatch that leaves the types intact.
     assert!(
-        !output.contains("!error"),
+        !output.contains("!!"),
         "a Limit modifier must typecheck cleanly, got:\n{output}"
+    );
+    assert!(
+        output.contains(".with(limit)) : baml.future.Future<int, never>"),
+        "a Limit leaves the task's value and error types alone, got:\n{output}"
     );
 }
 
@@ -1102,7 +1108,12 @@ function f() -> string {
     );
     let output = render_tir(&db, file);
     assert!(
-        !output.contains("!error"),
+        !output.contains("!!"),
+        "a type-changing modifier must typecheck cleanly, got:\n{output}"
+    );
+    // The body yields `int`: only the modifier's `Output` makes it `string`.
+    assert!(
+        output.contains(".with(s)) : baml.future.Future<string, never>"),
         "a modifier's `Output` must reach the future's value type, got:\n{output}"
     );
 }
@@ -1126,9 +1137,18 @@ function f() -> int throws never {
 }"#,
     );
     let output = render_tir(&db, file);
+    // `f` declares `throws never`, so the apply error surfacing in its throws
+    // is exactly this diagnostic. (The fixture spells `string` itself, so its
+    // mere presence in the output proves nothing.)
     assert!(
-        output.contains("string"),
+        output.contains("declared throws is `never`, but this function may also throw `string`"),
         "a modifier's `ApplyError` must reach the spawner's throws surface, got:\n{output}"
+    );
+    // It is the SPAWNER's error, thrown before the task exists: the task's own
+    // error channel is untouched.
+    assert!(
+        output.contains(".with(r)) : baml.future.Future<int, never>"),
+        "`ApplyError` must not leak into the task's error type, got:\n{output}"
     );
 }
 
