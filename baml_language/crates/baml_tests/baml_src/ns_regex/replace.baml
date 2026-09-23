@@ -9,7 +9,7 @@
 //   literal + string   -> the native `_replace_literal` / `_replace_all_literal`
 //   pattern + string   -> the engine's own template expansion
 //   literal + callback -> `_replace_literal_with`, a BAML scan loop
-//   pattern + callback -> `_replace_pattern_with`, over `match` / `match_all`
+//   pattern + callback -> `_replace_pattern_with`, over `find` / `find_all`
 //
 // Each is covered here, plus the edges where they have to agree with each
 // other (empty search, no match, offsets).

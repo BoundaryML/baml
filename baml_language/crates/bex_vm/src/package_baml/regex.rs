@@ -73,7 +73,7 @@ fn group_value(vm: &mut BexVm, hay: &BexStr, span: (usize, usize), chars: (usize
 }
 
 /// Convert every match's spans in one pass over the haystack. Restarting the
-/// codepoint count for each match makes even `match_all("")` quadratic.
+/// codepoint count for each match makes even `find_all("")` quadratic.
 fn match_values(
     vm: &mut BexVm,
     hay: &BexStr,
@@ -265,7 +265,7 @@ impl BamlClassRegexRegex for PackageBamlImpl {
     }
 
     /// Materialize the first match with codepoint offsets, or return `None`.
-    fn match_(
+    fn find(
         vm: &mut BexVm,
         regex: &Value,
         haystack: &BexStr,
@@ -278,7 +278,7 @@ impl BamlClassRegexRegex for PackageBamlImpl {
     }
 
     /// Materialize all non-overlapping matches with one batched offset conversion.
-    fn match_all(
+    fn find_all(
         vm: &mut BexVm,
         regex: &Value,
         haystack: &BexStr,

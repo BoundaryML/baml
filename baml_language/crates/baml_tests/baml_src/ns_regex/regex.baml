@@ -23,8 +23,8 @@ test "regex_is_match" {
     assert.equal(digits.is_match("abc"), false)
 }
 
-test "regex_match_reports_text_and_offsets" {
-    let m = baml.regex.compile("(?<y>\\d{4})-(\\d{2})").match("on 2026-01 x");
+test "regex_find_reports_text_and_offsets" {
+    let m = baml.regex.compile("(?<y>\\d{4})-(\\d{2})").find("on 2026-01 x");
     assert.equal(m?.text, "2026-01");
     assert.equal(m?.start, 3);
     assert.equal(m?.end, 10)
@@ -32,8 +32,8 @@ test "regex_match_reports_text_and_offsets" {
 
 // `groups[0]` is the whole match; the rest are numbered left to right by
 // opening paren. Named groups appear under both spellings.
-test "regex_match_groups_and_names" {
-    let m = baml.regex.compile("(?<y>\\d{4})-(\\d{2})").match("on 2026-01 x");
+test "regex_find_groups_and_names" {
+    let m = baml.regex.compile("(?<y>\\d{4})-(\\d{2})").find("on 2026-01 x");
     let whole = m?.groups.at(0);
     assert.equal(whole?.text, "2026-01");
     let year = m?.groups.at(1);
@@ -50,7 +50,7 @@ test "regex_match_groups_and_names" {
 // name is still a key in `named`, so reading code never has to tell "no such
 // group" from "did not match this time".
 test "regex_nonparticipating_group_is_null" {
-    let m = baml.regex.compile("(?<a>x)?(?<b>y)").match("y");
+    let m = baml.regex.compile("(?<a>x)?(?<b>y)").find("y");
     let a = m?.groups.at(1);
     assert.equal(a, null);
     let b = m?.groups.at(2);
@@ -60,25 +60,25 @@ test "regex_nonparticipating_group_is_null" {
     assert.equal(named_a, null)
 }
 
-test "regex_match_returns_null_when_absent" {
-    assert.equal(baml.regex.compile("\\d+").match("abc"), null)
+test "regex_find_returns_null_when_absent" {
+    assert.equal(baml.regex.compile("\\d+").find("abc"), null)
 }
 
-test "regex_match_all" {
-    let ms = baml.regex.compile("\\d+").match_all("a1 b22 c333");
+test "regex_find_all" {
+    let ms = baml.regex.compile("\\d+").find_all("a1 b22 c333");
     assert.equal(
         ms.map((m: baml.regex.Match) -> string {
             m.text
         }),
         ["1", "22", "333"],
     );
-    assert.equal(baml.regex.compile("z").match_all("abc"), [])
+    assert.equal(baml.regex.compile("z").find_all("abc"), [])
 }
 
 // A pattern that can match nothing would loop forever if the scan did not
 // step past an empty match.
-test "regex_match_all_terminates_on_empty_matches" {
-    let ms = baml.regex.compile("").match_all("ab");
+test "regex_find_all_terminates_on_empty_matches" {
+    let ms = baml.regex.compile("").find_all("ab");
     assert.equal(ms.length(), 3);
     assert.equal(
         ms.map((m: baml.regex.Match) -> int {
@@ -93,9 +93,9 @@ test "regex_match_all_terminates_on_empty_matches" {
 // general one.
 test "regex_alternation_is_leftmost_first" {
     let re = baml.regex.compile("cat|catalog");
-    assert.equal(re.match("catalog")?.text, "cat");
+    assert.equal(re.find("catalog")?.text, "cat");
     let flipped = baml.regex.compile("catalog|cat");
-    assert.equal(flipped.match("catalog")?.text, "catalog")
+    assert.equal(flipped.find("catalog")?.text, "catalog")
 }
 
 // ─── exact_match ─────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ test "regex_word_combining_marks_are_word_characters" {
 test "regex_word_empty_literal_matches_nowhere" {
     assert.equal(baml.regex.word("").is_match("anything"), false);
     assert.equal(baml.regex.word("").is_match(""), false);
-    assert.equal(baml.regex.word("").match_all("abc"), [])
+    assert.equal(baml.regex.word("").find_all("abc"), [])
 }
 
 // Whitespace inside the literal stays exact — `word` adds boundaries, it does
@@ -238,7 +238,7 @@ test "regex_escape_makes_dynamic_data_literal" {
 // converted, so offsets feed `slice` directly.
 test "regex_offsets_are_codepoints" {
     let haystack = "😀héllo wörld";
-    let m = baml.regex.compile("w\\w+").match(haystack);
+    let m = baml.regex.compile("w\\w+").find(haystack);
     assert.equal(m?.start, 7);
     assert.equal(m?.end, 12);
     assert.equal(haystack.slice(m?.start ?? 0, m?.end ?? 0), "wörld")
@@ -246,7 +246,7 @@ test "regex_offsets_are_codepoints" {
 
 test "regex_group_offsets_are_codepoints" {
     let haystack = "😀 x=42";
-    let m = baml.regex.compile("x=(\\d+)").match(haystack);
+    let m = baml.regex.compile("x=(\\d+)").find(haystack);
     let value = m?.groups.at(1);
     assert.equal(value?.start, 4);
     assert.equal(value?.end, 6);
@@ -257,7 +257,7 @@ test "regex_all_match_offsets_include_optional_and_nested_groups" {
     let haystack = "😀é x é";
     for (let backtracking in [false, true]) {
         let re = baml.regex.compile("(?<outer>(é))|(x)", backtracking = backtracking);
-        let matches = re.match_all(haystack);
+        let matches = re.find_all(haystack);
         assert.equal(
             matches.map((m: baml.regex.Match) -> int {
                 m.start
@@ -282,10 +282,10 @@ test "regex_all_match_offsets_include_optional_and_nested_groups" {
 // first did. (JavaScript's `/g` flag is the counterexample this rules out.)
 test "regex_is_stateless_across_calls" {
     let re = baml.regex.compile("\\d");
-    assert.equal(re.match("a1b2")?.start, 1);
-    assert.equal(re.match("a1b2")?.start, 1);
-    assert.equal(re.match_all("a1b2").length(), 2);
-    assert.equal(re.match_all("a1b2").length(), 2)
+    assert.equal(re.find("a1b2")?.start, 1);
+    assert.equal(re.find("a1b2")?.start, 1);
+    assert.equal(re.find_all("a1b2").length(), 2);
+    assert.equal(re.find_all("a1b2").length(), 2)
 }
 
 // ─── The shared dialect ──────────────────────────────────────────────────────
@@ -311,25 +311,25 @@ test "regex_inline_flags_in_both_dialects" {
 // Python's `(?P<name>...)` spelling is accepted alongside `(?<name>...)`, which
 // is what makes a ported `re` pattern work unchanged.
 test "regex_python_named_group_spelling" {
-    let m = baml.regex.compile("(?P<y>\\d+)").match("a12");
+    let m = baml.regex.compile("(?P<y>\\d+)").find("a12");
     assert.equal(m?.named.has("y"), true);
-    let b = baml.regex.compile("(?P<y>\\d+)", backtracking = true).match("a12");
+    let b = baml.regex.compile("(?P<y>\\d+)", backtracking = true).find("a12");
     assert.equal(b?.named.has("y"), true)
 }
 
 // `\d`, `\w`, and `\b` are Unicode-aware in both dialects, and Unicode
 // character properties are available in both.
 test "regex_unicode_classes_in_both_dialects" {
-    assert.equal(baml.regex.compile("\\p{Greek}+").match("abαβγ")?.text, "αβγ");
-    assert.equal(baml.regex.compile("\\d+").match("٣٤")?.text, "٣٤");
-    assert.equal(baml.regex.compile("\\w+").match("héllo")?.text, "héllo");
+    assert.equal(baml.regex.compile("\\p{Greek}+").find("abαβγ")?.text, "αβγ");
+    assert.equal(baml.regex.compile("\\d+").find("٣٤")?.text, "٣٤");
+    assert.equal(baml.regex.compile("\\w+").find("héllo")?.text, "héllo");
 
     assert.equal(
-        baml.regex.compile("\\p{Greek}+", backtracking = true).match("abαβγ")?.text,
+        baml.regex.compile("\\p{Greek}+", backtracking = true).find("abαβγ")?.text,
         "αβγ",
     );
-    assert.equal(baml.regex.compile("\\d+", backtracking = true).match("٣٤")?.text, "٣٤");
-    assert.equal(baml.regex.compile("\\w+", backtracking = true).match("héllo")?.text, "héllo")
+    assert.equal(baml.regex.compile("\\d+", backtracking = true).find("٣٤")?.text, "٣٤");
+    assert.equal(baml.regex.compile("\\w+", backtracking = true).find("héllo")?.text, "héllo")
 }
 
 // ─── The backtracking opt-in ─────────────────────────────────────────────────
@@ -344,14 +344,14 @@ test "regex_default_dialect_handles_catastrophic_shape" {
 
 test "regex_backtracking_lookahead_and_lookbehind" {
     let before = baml.regex.compile("\\d+(?= USD)", backtracking = true);
-    assert.equal(before.match("Cost: USD 25 USD")?.text, "25");
+    assert.equal(before.find("Cost: USD 25 USD")?.text, "25");
     let after = baml.regex.compile("(?<=USD )\\d+", backtracking = true);
-    assert.equal(after.match("Cost: USD 25 USD")?.text, "25")
+    assert.equal(after.find("Cost: USD 25 USD")?.text, "25")
 }
 
 test "regex_backtracking_backreference" {
     let repeated = baml.regex.compile("\\b(\\w+)\\s+\\1\\b", backtracking = true);
-    assert.equal(repeated.match("the the cat")?.text, "the the");
+    assert.equal(repeated.find("the the cat")?.text, "the the");
     assert.equal(repeated.is_match("the cat"), false)
 }
 
@@ -371,57 +371,32 @@ test "regex_backtracking_recursive_subroutine" {
 // requires the whole nested input to be accepted.
 test "regex_recursion_depth_limit_fails_to_match" {
     let nested = baml.regex.compile("(?<n>a\\g<n>?)", backtracking = true);
-    assert.equal(nested.match("aaaa")?.text, "aaaa");
+    assert.equal(nested.find("aaaa")?.text, "aaaa");
     // 22 `a`s: the match stops at the depth limit rather than throwing.
     let deep = "a".repeat(22);
-    assert.equal(nested.match(deep)?.text.length(), 20);
+    assert.equal(nested.find(deep)?.text.length(), 20);
     assert.equal(nested.exact_match(deep), null)
 }
 
-// ─── `match` as a name ───────────────────────────────────────────────────────
+// ─── Qualified and optional access ──────────────────────────────────────────
 
-// `match` is a keyword, so naming a method with it has to be accepted in every
-// name position independently. These are the two the simple `re.match(hay)`
-// spelling does not reach.
-
-// A qualified receiver: the path parser has to stop at `match` and hand the
-// `.` to member access rather than consuming it as another segment.
-test "regex_match_through_a_qualified_path" {
+test "regex_find_through_a_qualified_path" {
     let re = baml.regex.compile("\\d");
-    assert.equal(baml.regex.Regex.match(re, "a7")?.text, "7");
+    assert.equal(baml.regex.Regex.find(re, "a7")?.text, "7");
+    assert.equal(baml.regex.Regex.find_all(re, "a7b8").length(), 2);
     assert.equal(baml.regex.Regex.is_match(re, "ab"), false)
 }
 
-// A required (body-less) interface method is parsed on its own path, separate
-// from a declaration with a body.
-interface Matcher {
-    function match(self, haystack: string) -> string throws never;
-}
-
-class Shouty {
-    implements Matcher {
-        function match(self, haystack: string) -> string throws never {
-            haystack.to_upper_case()
-        }
-    }
-}
-
-test "regex_match_names_a_required_interface_method" {
-    let s = Shouty {  };
-    assert.equal(s.match("hi"), "HI")
-}
-
-function optional_match(re: baml.regex.Regex?, haystack: string) -> string? {
-    let found = re?.match(haystack);
+function optional_find(re: baml.regex.Regex?, haystack: string) -> string? {
+    let found = re?.find(haystack);
     found?.text
 }
 
-test "regex_match_through_optional_and_qualified_interface_access" {
+test "regex_find_through_optional_access" {
     let re = baml.regex.compile("\\d+");
-    assert.equal(optional_match(re, "a42"), "42");
-    assert.equal(optional_match(null, "a42"), null);
-    let s = Shouty {  };
-    assert.equal((Shouty as Matcher).match(s, "hello"), "HELLO")
+    assert.equal(optional_find(re, "a42"), "42");
+    assert.equal(optional_find(null, "a42"), null);
+    assert.equal(re?.find_all("a42b7")?.length(), 2)
 }
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
@@ -496,6 +471,6 @@ test "regex_error_carries_pattern_and_span" {
 test "regex_matching_never_throws" {
     let re = compile_dynamic("\\d+", false);
     assert.equal(re.is_match("1"), true);
-    assert.equal(re.match_all("1 2").length(), 2);
+    assert.equal(re.find_all("1 2").length(), 2);
     assert.equal(re.split("a1b"), ["a", "b"])
 }

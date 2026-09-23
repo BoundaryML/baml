@@ -276,7 +276,7 @@ namespace baml.regex:
   enum ErrorKind
   class Group { methods: [] }
   class Match { methods: [] }
-  class Regex { methods: [is_match, match, match_all, exact_match, split, _replace_template, _replace_all_template] }
+  class Regex { methods: [is_match, find, find_all, exact_match, split, _replace_template, _replace_all_template] }
   function _compile
   function _index_of_from
   function _literal_match

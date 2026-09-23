@@ -100,7 +100,7 @@ class Regex {
 
     /// Returns `true` if the pattern matches anywhere in `haystack`.
     ///
-    /// Cheaper than `match` when the match itself is not needed: no capture
+    /// Cheaper than `find` when the match itself is not needed: no capture
     /// groups are recorded.
     ///
     /// # Examples
@@ -121,12 +121,12 @@ class Regex {
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile("(\\d+)").match("a 42 b")?.text  // "42"
-    /// baml.regex.compile("\\d+").match("abc")             // null
+    /// baml.regex.compile("(\\d+)").find("a 42 b")?.text  // "42"
+    /// baml.regex.compile("\\d+").find("abc")             // null
     /// ```
     //baml:mut_vm
     //baml:fallible
-    function match(self, haystack: string) -> Match? throws never {
+    function find(self, haystack: string) -> Match? throws never {
         $rust_function
     }
 
@@ -138,12 +138,12 @@ class Regex {
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile("\\d+").match_all("a1 b22").map((m) => m.text)  // ["1", "22"]
-    /// baml.regex.compile("x").match_all("abc")                           // []
+    /// baml.regex.compile("\\d+").find_all("a1 b22").map((m) => m.text)  // ["1", "22"]
+    /// baml.regex.compile("x").find_all("abc")                           // []
     /// ```
     //baml:mut_vm
     //baml:fallible
-    function match_all(self, haystack: string) -> Match[] throws never {
+    function find_all(self, haystack: string) -> Match[] throws never {
         $rust_function
     }
 
@@ -402,9 +402,9 @@ function _replace_pattern_with<E>(
     all: bool,
 ) -> string throws E {
     let matches: Match[] = if (all) {
-        search.match_all(haystack)
+        search.find_all(haystack)
     } else {
-        match (search.match(haystack)) {
+        match (search.find(haystack)) {
             null => [],
             let first: Match => [first],
         }
