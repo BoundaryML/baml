@@ -1,3 +1,4 @@
+import { currentUser } from "@/lib/auth";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
@@ -30,7 +31,8 @@ const themeInitScript = `
 })();
 `;
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const user = await currentUser();
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
@@ -47,9 +49,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/" className="text-foreground">
                 Issues
               </Link>
-              <span className="cursor-default">Feedback</span>
-              <span className="cursor-default">Evals</span>
-              <span className="text-xs border rounded px-1.5 py-0.5">mock</span>
+              <Link href="/feedback">Reports</Link>
+              <Link href="/intuition">Intuition</Link>
+              <Link href="/runs">Runs</Link>
+              <Link href="/agents">Agents</Link>
+              {user ? <span className="text-foreground">@{user}</span> : <a href="/api/auth/github">Sign in</a>}
             </nav>
           </div>
         </header>

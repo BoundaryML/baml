@@ -6,10 +6,12 @@ import { ArrowUpDown, Columns3, LayoutList, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { PendingReport } from "@/lib/db";
 import type { Difficulty, Issue, StatusState, Subsystem } from "@/lib/types";
-import { progress, relativeTime, stageInfo } from "@/lib/pipeline";
-import { DifficultyBadge, StatusBadge, SubsystemBadge } from "./issue-status";
+import { boardPhase, progress, relativeTime, stageInfo } from "@/lib/pipeline";
+import { DifficultyBadge, KindBadge, StatusBadge, SubsystemBadge } from "./issue-status";
 import { PipelineStrip } from "./pipeline-strip";
+import { StatTiles } from "./stat-tiles";
 
 type ViewMode = "list" | "board";
 
@@ -26,9 +28,16 @@ const STATUS_OPTIONS: { value: StatusState | "all"; label: string }[] = [
 const SUBSYSTEMS: Subsystem[] = ["Syntax", "Compiler", "Runtime", "StdLibrary", "Tooling", "Unknown"];
 const DIFFICULTIES: Difficulty[] = ["Trivial", "Easy", "Medium", "Hard"];
 
-const BOARD_COLUMNS: { state: StatusState; label: string; color: string }[] = [
-  { state: "open", label: "Open", color: "bg-blue-500" },
-  { state: "in_progress", label: "In progress", color: "bg-amber-500" },
+const BOARD_COLUMNS = [
+  { state: "ingested", label: "Ingested", color: "bg-slate-400" },
+  { state: "enriching", label: "Enriching", color: "bg-sky-500" },
+  { state: "investigating", label: "Investigation", color: "bg-cyan-500" },
+  { state: "organizing", label: "Routing & difficulty", color: "bg-blue-500" },
+  { state: "ready", label: "Ready for fix", color: "bg-violet-500" },
+  { state: "design", label: "Design", color: "bg-amber-500" },
+  { state: "fix", label: "Fixing", color: "bg-orange-500" },
+  { state: "pr", label: "PR opened", color: "bg-emerald-500" },
+  { state: "attention", label: "Needs attention", color: "bg-rose-500" },
   { state: "merged", label: "Merged", color: "bg-purple-500" },
   { state: "shipped", label: "Shipped", color: "bg-green-600" },
   { state: "deferred", label: "Deferred", color: "bg-slate-500" },
@@ -61,6 +70,7 @@ function IssueRow({ issue, now }: { issue: Issue; now: number }) {
           <span className="font-medium truncate">{issue.title}</span>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {issue.kind === "feature" && <KindBadge kind="feature" />}
           <SubsystemBadge subsystem={issue.subsystem} />
           <DifficultyBadge difficulty={issue.difficulty} />
           {issue.dataset === "eval" && <EvalBadge />}
@@ -96,6 +106,7 @@ function BoardCard({ issue }: { issue: Issue }) {
     >
       <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
         {issue.id}
+        {issue.kind === "feature" && <KindBadge kind="feature" />}
         {issue.dataset === "eval" && <EvalBadge />}
       </div>
       <div className="mt-0.5 text-sm font-medium leading-snug line-clamp-2">{issue.title}</div>
@@ -107,7 +118,7 @@ function BoardCard({ issue }: { issue: Issue }) {
   );
 }
 
-export function IssueList({ issues }: { issues: Issue[] }) {
+export function IssueList({ issues, pendingReports = [], compact = false }: { issues: Issue[]; pendingReports?: PendingReport[]; compact?: boolean }) {
   const now = useNow();
   const [status, setStatus] = useState<StatusState | "all">("all");
   const [subsystem, setSubsystem] = useState<Subsystem | "all">("all");
@@ -116,12 +127,13 @@ export function IssueList({ issues }: { issues: Issue[] }) {
   const [oldestFirst, setOldestFirst] = useState(false);
   const [view, setView] = useState<ViewMode>("list");
   const [showEval, setShowEval] = useState(false);
-  const evalCount = useMemo(() => issues.filter((i) => i.dataset === "eval").length, [issues]);
+  const evalCount = useMemo(() => issues.filter((i) => i.dataset === "eval").length + pendingReports.filter(r => r.dataset === "eval").length, [issues, pendingReports]);
+
+  const datasetIssues = useMemo(() => issues.filter((i) => showEval || i.dataset !== "eval"), [issues, showEval]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return issues
-      .filter((i) => showEval || i.dataset !== "eval")
+    return datasetIssues
       .filter((i) => view === "board" || status === "all" || i.status.state === status)
       .filter((i) => subsystem === "all" || i.subsystem === subsystem)
       .filter((i) => difficulty === "all" || i.difficulty === difficulty)
@@ -130,6 +142,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           !q ||
           i.title.toLowerCase().includes(q) ||
           i.id.toLowerCase().includes(q) ||
+          (i.kind === "feature" && "feature request".includes(q)) ||
           (i.shepherd ?? "").toLowerCase().includes(q),
       )
       .sort((a, b) =>
@@ -137,10 +150,11 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           ? a.updated_at.localeCompare(b.updated_at)
           : b.updated_at.localeCompare(a.updated_at),
       );
-  }, [issues, status, subsystem, difficulty, query, oldestFirst, view, showEval]);
+  }, [datasetIssues, status, subsystem, difficulty, query, oldestFirst, view]);
 
   return (
     <div className="space-y-4">
+      {!compact && <StatTiles issues={datasetIssues} />}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
           {view === "list" ? (
@@ -264,20 +278,22 @@ export function IssueList({ issues }: { issues: Issue[] }) {
           <div className="text-center py-12 text-muted-foreground">No issues match.</div>
         )
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-flow-col auto-cols-[260px] gap-4 overflow-x-auto pb-4">
           {BOARD_COLUMNS.map((col) => {
-            const items = filtered.filter((i) => i.status.state === col.state);
+            const items = filtered.filter((i) => boardPhase(i) === col.state);
+            const reports = pendingReports.filter(r => r.phase === col.state && (showEval || r.dataset !== "eval") && subsystem === "all" && difficulty === "all" && (!query.trim() || `${r.title} ${r.id}`.toLowerCase().includes(query.trim().toLowerCase())));
             return (
               <div key={col.state} className="flex flex-col min-h-[160px]">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b">
                   <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
                   <h3 className="font-medium text-sm">{col.label}</h3>
-                  <span className="text-xs text-muted-foreground ml-auto tabular-nums">{items.length}</span>
+                  <span className="text-xs text-muted-foreground ml-auto tabular-nums">{items.length + reports.length}</span>
                 </div>
                 <div className="flex flex-col gap-2 flex-1">
+                  {reports.map(report => <Link key={report.id} href={`/feedback/${encodeURIComponent(report.id)}`} className="block rounded-md border bg-card p-3 text-sm hover:bg-accent/50"><span className="text-xs text-muted-foreground">Report{report.dataset === "eval" ? " · eval" : ""}</span><p className="mt-1 font-medium">{report.title}</p></Link>)}
                   {items.length > 0 ? (
                     items.map((i) => <BoardCard key={i.id} issue={i} />)
-                  ) : (
+                  ) : reports.length ? null : (
                     <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground bg-muted/30 rounded-md">
                       none
                     </div>

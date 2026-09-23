@@ -2,6 +2,13 @@ import { Badge } from "@/components/ui/badge";
 import type { Difficulty, Issue, Subsystem } from "@/lib/types";
 import { statusLabel } from "@/lib/pipeline";
 
+/** Leads every issue view: a bug, or a feature request. */
+export function KindBadge({ kind, className }: { kind: Issue["kind"]; className?: string }) {
+  return kind === "feature"
+    ? <Badge variant="outline" className={"border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200 " + (className ?? "")}>Feature request</Badge>
+    : <Badge variant="outline" className={"border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300 " + (className ?? "")}>Bug</Badge>;
+}
+
 export function StatusBadge({ issue }: { issue: Issue }) {
   return <Badge variant={issue.status.state}>{statusLabel(issue)}</Badge>;
 }

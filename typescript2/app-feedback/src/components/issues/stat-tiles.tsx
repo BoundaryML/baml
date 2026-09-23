@@ -16,7 +16,7 @@ export function StatTiles({ issues }: { issues: Issue[] }) {
   const prs = issues.filter((i) => i.status.state === "in_progress" && i.status.pr).length;
   const landed = issues.filter((i) => i.status.state === "merged" || i.status.state === "shipped").length;
   const needsHuman = issues.filter(
-    (i) => i.outcome && (i.outcome.kind === "gate_failed" || i.outcome.kind === "agent_stopped" || i.outcome.kind === "hard"),
+    (i) => i.outcome && (i.outcome.kind === "agent_stopped" || i.outcome.kind === "hard"),
   ).length;
   const feedback = new Set(issues.flatMap((i) => i.feedback_ids)).size;
 

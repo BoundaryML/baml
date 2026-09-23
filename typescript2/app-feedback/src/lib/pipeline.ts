@@ -5,11 +5,11 @@ import type { Issue } from "./types";
 // handle_issue's passes, read from its outcome.json.
 export const STAGES = [
   "triaged",
+  "investigated",
   "organized",
   "gauged",
   "design",
   "fix",
-  "gate",
   "pr",
 ] as const;
 
@@ -26,11 +26,11 @@ export interface StageInfo {
 
 export const STAGE_LABELS: Record<Stage, string> = {
   triaged: "Triaged",
+  investigated: "Investigated",
   organized: "Organized",
   gauged: "Gauged",
   design: "Design pass",
   fix: "Fix pass",
-  gate: "Gate",
   pr: "PR",
 };
 
@@ -41,6 +41,7 @@ export function stageInfo(issue: Issue): StageInfo[] {
     state: "done",
     detail: `${issue.repros.length} repro${issue.repros.length === 1 ? "" : "s"} from ${issue.feedback_ids.length} report${issue.feedback_ids.length === 1 ? "" : "s"}`,
   });
+  out.push({ stage: "investigated", state: /^## (?:Investigation|Where it breaks)\s*$/m.test(issue.description) ? "done" : "todo", detail: "Source investigation" });
   out.push(
     issue.shepherd
       ? { stage: "organized", state: "done", detail: `shepherd: ${issue.shepherd}` }
@@ -52,19 +53,25 @@ export function stageInfo(issue: Issue): StageInfo[] {
       : { stage: "gauged", state: "todo", detail: "not gauged" },
   );
 
-  const o = issue.outcome;
+  const active = issue.status.state === "in_progress" && !issue.status.pr ? issue.pipeline_phase : undefined;
+  const o = active ? { ...issue.outcome, running: active, seconds: issue.outcome?.seconds ?? 0, turns: issue.outcome?.turns ?? 0 } as NonNullable<Issue["outcome"]> : issue.outcome;
   const terminal =
-    issue.status.state === "rejected" || issue.status.state === "deferred";
+    issue.status.state === "cancelled" || issue.status.state === "rejected" || issue.status.state === "deferred";
   const todo = (stage: Stage, detail: string): StageInfo => ({
     stage,
     state: terminal ? "skipped" : "todo",
     detail,
   });
 
+  if (!o && issue.status.state === "in_progress" && issue.status.pr) {
+    out.push({ stage: "design", state: "skipped", detail: "No separate design pass recorded" });
+    out.push({ stage: "fix", state: "done", detail: "Draft fix published" });
+    out.push({ stage: "pr", state: "done", detail: issue.status.pr.replace("https://github.com/", "") });
+    return out;
+  }
   if (!o) {
     out.push(todo("design", "not started"));
     out.push(todo("fix", "not started"));
-    out.push(todo("gate", "not run"));
     out.push(todo("pr", "none"));
     return out;
   }
@@ -73,7 +80,7 @@ export function stageInfo(issue: Issue): StageInfo[] {
   const runInfo = `${o.turns} turns, ${mins} min`;
 
   if (o.running) {
-    const order: Stage[] = ["design", "fix", "gate", "pr"];
+    const order: Stage[] = ["design", "fix", "pr"];
     for (const s of order) {
       if (s === o.running) out.push({ stage: s, state: "running", detail: `running (${runInfo})` });
       else if (order.indexOf(s) < order.indexOf(o.running))
@@ -96,28 +103,17 @@ export function stageInfo(issue: Issue): StageInfo[] {
           ? { stage: "fix", state: "failed", detail: o.reason ?? "stopped" }
           : { stage: "fix", state: "skipped", detail: "not reached" },
       );
-      out.push({ stage: "gate", state: "skipped", detail: "not run" });
       out.push({ stage: "pr", state: "skipped", detail: "none" });
       return out;
     }
     case "hard":
       out.push({ stage: "design", state: "done", detail: `design doc written (${runInfo})` });
       out.push({ stage: "fix", state: "skipped", detail: "hard: handed to the shepherd" });
-      out.push({ stage: "gate", state: "skipped", detail: "not run" });
       out.push({ stage: "pr", state: "skipped", detail: "none" });
       return out;
-    case "gate_failed": {
-      const failed = o.gate?.steps.find((s) => !s.ok);
-      out.push({ stage: "design", state: "done", detail: "plan written" });
-      out.push({ stage: "fix", state: "done", detail: runInfo });
-      out.push({ stage: "gate", state: "failed", detail: failed ? `${failed.name} failed` : "failed" });
-      out.push({ stage: "pr", state: "skipped", detail: "branch kept for a human" });
-      return out;
-    }
     case "fixed":
       out.push({ stage: "design", state: "done", detail: "plan written" });
       out.push({ stage: "fix", state: "done", detail: runInfo });
-      out.push({ stage: "gate", state: "done", detail: `${o.gate?.steps.length ?? 0} steps green` });
       out.push(
         o.pr
           ? { stage: "pr", state: "done", detail: o.pr.replace("https://github.com/", "") }
@@ -147,6 +143,8 @@ export function statusLabel(issue: Issue): string {
       return `Shipped ${s.version}`;
     case "deferred":
       return "Deferred";
+    case "cancelled":
+      return "Cancelled";
     case "rejected":
       return "Rejected";
   }
@@ -170,4 +168,17 @@ export function relativeTime(iso: string, now: number): string {
   if (hours < 24) return `${hours}h ago`;
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+/** Board columns describe the persisted phase, not just the broad open/in_progress status. */
+export function boardPhase(issue: Issue): string {
+  if (["merged", "shipped", "deferred", "rejected", "cancelled"].includes(issue.status.state)) return issue.status.state;
+  if (("pr" in issue.status && issue.status.pr) || issue.outcome?.pr) return "pr";
+  if (issue.status.state === "in_progress") return issue.pipeline_phase ?? issue.outcome?.running ?? "design";
+  if (issue.outcome?.running) return issue.outcome.running;
+  if (issue.outcome?.kind === "agent_stopped") return "attention";
+  if (issue.outcome?.kind === "hard") return "attention";
+  if (!/^## (?:Investigation|Where it breaks)\s*$/m.test(issue.description)) return "investigating";
+  if (!issue.shepherd || !issue.difficulty) return "organizing";
+  return "ready";
 }
