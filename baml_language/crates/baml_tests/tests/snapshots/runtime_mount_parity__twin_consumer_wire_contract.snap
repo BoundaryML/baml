@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/tests/runtime_mount_parity.rs
+expression: wire_contract(mounted_unit)
+---
+unit main.baml (package user)
+import object Enum app.Level
+import object Class app.Widget
+import global Function app.make
+import global Function app.Widget.bump
+import global Function app.Widget.of
+import global Function baml.String.from
+export object user.level_name = Code(2)
+export object user.summary = Code(12)
+export global user.level_name = 0
+export global user.summary = 1
+references Level
+references Widget
+references bump
+references from
+references level_name
+references make
+references of
+bakes type layout: true
