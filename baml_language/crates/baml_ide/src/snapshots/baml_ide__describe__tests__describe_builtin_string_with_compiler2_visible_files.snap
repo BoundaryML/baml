@@ -54,7 +54,7 @@ methods:
   /// Returns the characters in `[start, end)`.
   function slice(self, start: int, end: int) -> string throws never
   /// Replaces the first occurrence of `search`.
-  function replace<E>(self, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws E)) -> string throws E
+  function replace(self, search: string | baml.regex.Regex, replacement: string) -> string throws never
   /// Returns the character index of the first occurrence of `search`, or `null`
   function index_of(self, search: string) -> int | null throws never
   /// Returns the character index at which the last occurrence of `search` starts,
@@ -66,7 +66,7 @@ methods:
   /// Returns `self` repeated `count` times. A negative `count` counts as 0.
   function repeat(self, count: int) -> string throws never
   /// Replaces every occurrence of `search`.
-  function replace_all<E>(self, search: string | baml.regex.Regex, replacement: string | ((baml.regex.Match) -> string throws E)) -> string throws E
+  function replace_all(self, search: string | baml.regex.Regex, replacement: string) -> string throws never
   /// `self` as the `string` primitive.
   function _as_string(self) -> string throws never
   /// `replace` restricted to a literal search and a literal replacement.

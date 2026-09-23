@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class String  (string)  <builtin>/baml/string.baml:17-857
+class String  (string)  <builtin>/baml/string.baml:17-848
 
 /// A UTF-8 encoded string.
 ///
