@@ -1377,12 +1377,9 @@ impl UnitReferences {
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     /// The database link names are rendered through at the codegen boundary.
     pub db: &'ctx dyn baml_compiler2_mir::Db,
-    /// The Pass-1 slot registry every direct callee and top-level `let` read
-    /// resolves through, by declaration identity ([`GlobalSlots`]).
-    pub slots: &'ctx GlobalSlots<'ctx>,
-    pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
-    pub class_object_indices: &'ctx HashMap<String, usize>,
-    pub enum_object_indices: &'ctx HashMap<String, usize>,
+    /// The resolution surface every declaration reference goes through
+    /// ([`emit::CodegenRefs`]).
+    pub refs: &'obj mut (dyn emit::CodegenRefs<'ctx> + 'ctx),
     pub class_fields: &'ctx ClassFieldSnapshot,
     pub objects: &'obj mut ObjectPool,
     /// Program-absolute index of `objects[0]`: 0 when `objects` is the whole
@@ -3485,6 +3482,94 @@ pub(crate) struct GlobalSlots<'db> {
     pub(crate) lets: HashMap<baml_compiler2_hir::loc::LetLoc<'db>, usize>,
 }
 
+/// The flat whole-program emitter's [`emit::CodegenRefs`]: answers from the
+/// Pass-1 slot registry and the rendered-name object tables its passes built.
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
+#[derive(Clone, Copy)]
+pub(crate) struct FlatRefs<'ctx> {
+    pub(crate) db: &'ctx dyn baml_compiler2_mir::Db,
+    pub(crate) slots: &'ctx GlobalSlots<'ctx>,
+    /// Class object index by every spelling Pass 2 registered (fully
+    /// qualified, display, and short).
+    pub(crate) class_object_indices: &'ctx HashMap<String, usize>,
+    /// Enum object index by fully-qualified spelling (Pass 3).
+    pub(crate) enum_object_indices: &'ctx HashMap<String, usize>,
+}
+
+impl FlatRefs<'_> {
+    /// A pooled index by the three spellings a type name may be registered
+    /// under: fully qualified, display, and short.
+    fn by_spellings(table: &HashMap<String, usize>, tn: &baml_type::TypeName) -> Option<usize> {
+        table
+            .get(&tn.render_dotted(false))
+            .or_else(|| table.get(tn.display_name().as_str()))
+            .or_else(|| table.get(tn.name().as_str()))
+            .copied()
+    }
+}
+
+impl<'ctx> emit::CodegenRefs<'ctx> for FlatRefs<'ctx> {
+    fn class(
+        &mut self,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'ctx>,
+    ) -> Option<ObjectIndex> {
+        let name = baml_compiler2_mir::class_link_name(self.db, class);
+        self.class_object_indices
+            .get(&name)
+            .copied()
+            .map(ObjectIndex::from_raw)
+    }
+
+    fn class_named(&mut self, tn: &baml_type::TypeName) -> Option<ObjectIndex> {
+        Self::by_spellings(self.class_object_indices, tn).map(ObjectIndex::from_raw)
+    }
+
+    fn enum_(&mut self, enum_ref: baml_compiler2_hir_ty::extern_loc::EnumRef<'ctx>) -> ObjectIndex {
+        let name = baml_compiler2_mir::enum_link_name(self.db, enum_ref);
+        // TIR admitted the enum and MIR resolved it to a declaration, so this
+        // compilation registered an object for it (a source enum — a mounted
+        // package's link stub included — or a seeded pool object of the
+        // precompiled stdlib). A miss is an internal error, never a `Null`
+        // where a variant belongs.
+        self.enum_object_indices
+            .get(&name)
+            .copied()
+            .map(ObjectIndex::from_raw)
+            .unwrap_or_else(|| panic!("internal error: no enum object for `{name}`"))
+    }
+
+    fn enum_named(&mut self, tn: &baml_type::TypeName) -> Option<ObjectIndex> {
+        Self::by_spellings(self.enum_object_indices, tn).map(ObjectIndex::from_raw)
+    }
+
+    fn function(
+        &mut self,
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'ctx>,
+    ) -> Option<GlobalIndex> {
+        self.slots
+            .functions
+            .get(&func)
+            .copied()
+            .map(GlobalIndex::from_raw)
+    }
+
+    fn let_global(&mut self, binding: baml_compiler2_hir::loc::LetLoc<'ctx>) -> GlobalIndex {
+        self.slots
+            .lets
+            .get(&binding)
+            .copied()
+            .map(GlobalIndex::from_raw)
+            .unwrap_or_else(|| {
+                panic!(
+                    "undefined global item: {}",
+                    definition_link_name(self.db, Definition::Let(binding))
+                )
+            })
+    }
+}
+
 /// The provenance-typed placement registry: every source-visible function
 /// this emit placed, by declaration. Total over the enumeration (live,
 /// spliced, and clean-reused alike) EXCEPT `$compiler_intrinsic` /
@@ -4589,7 +4674,6 @@ fn emit_file_group<'db>(
             files,
             skip_clean,
             slots,
-            classes,
             class_object_indices,
             enum_object_indices,
             &class_fields,
@@ -4605,7 +4689,6 @@ fn emit_file_group<'db>(
             files,
             skip_clean,
             slots,
-            classes,
             class_object_indices,
             enum_object_indices,
             &class_fields,
@@ -4681,7 +4764,6 @@ fn emit_file_group<'db>(
                 db,
                 &sorted_bindings,
                 slots,
-                classes,
                 class_object_indices,
                 enum_object_indices,
                 &class_fields,
@@ -5670,7 +5752,6 @@ fn emit_functions_serial<'db>(
     files: &[baml_base::SourceFile],
     skip_clean: Option<&HashSet<String>>,
     slots: &GlobalSlots<'db>,
-    classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
@@ -5722,7 +5803,6 @@ fn emit_functions_serial<'db>(
                         &line_starts,
                         &source_file,
                         slots,
-                        classes,
                         class_object_indices,
                         enum_object_indices,
                         class_fields,
@@ -5735,12 +5815,15 @@ fn emit_functions_serial<'db>(
                         lambda_info.iter().map(|(idx, _)| *idx).collect();
                     let lambda_names_vec: Vec<String> =
                         lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                    let ctx = MirCodegenContext {
+                    let mut refs = FlatRefs {
                         db,
                         slots,
-                        classes,
                         class_object_indices,
                         enum_object_indices,
+                    };
+                    let ctx = MirCodegenContext {
+                        db,
+                        refs: &mut refs,
                         class_fields,
                         objects: &mut program.objects,
                         objects_base: 0,
@@ -5979,7 +6062,6 @@ fn emit_functions_parallel<'db>(
     files: &[baml_base::SourceFile],
     skip_clean: Option<&HashSet<String>>,
     slots: &GlobalSlots<'db>,
-    classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
@@ -6077,7 +6159,6 @@ fn emit_functions_parallel<'db>(
                     &item.line_starts,
                     &item.source_file,
                     slots,
-                    classes,
                     class_object_indices,
                     enum_object_indices,
                     class_fields,
@@ -6090,12 +6171,15 @@ fn emit_functions_parallel<'db>(
                     lambda_info.iter().map(|(idx, _)| *idx).collect();
                 let lambda_names_vec: Vec<String> =
                     lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                let ctx = MirCodegenContext {
+                let mut refs = FlatRefs {
                     db,
                     slots,
-                    classes,
                     class_object_indices,
                     enum_object_indices,
+                };
+                let ctx = MirCodegenContext {
+                    db,
+                    refs: &mut refs,
                     class_fields,
                     objects: &mut fragment,
                     objects_base: watermark,
@@ -6441,7 +6525,6 @@ fn compile_lambdas_flat<'db>(
     line_starts: &[u32],
     source_file: &str,
     slots: &GlobalSlots<'db>,
-    classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
@@ -6477,7 +6560,6 @@ fn compile_lambdas_flat<'db>(
                     line_starts,
                     source_file,
                     slots,
-                    classes,
                     class_object_indices,
                     enum_object_indices,
                     class_fields,
@@ -6490,12 +6572,15 @@ fn compile_lambdas_flat<'db>(
                     nested_info.iter().map(|(idx, _)| *idx).collect();
                 let nested_names: Vec<String> =
                     nested_info.iter().map(|(_, name)| name.clone()).collect();
-                let ctx = MirCodegenContext {
+                let mut refs = FlatRefs {
                     db,
                     slots,
-                    classes,
                     class_object_indices,
                     enum_object_indices,
+                };
+                let ctx = MirCodegenContext {
+                    db,
+                    refs: &mut refs,
                     class_fields,
                     objects,
                     objects_base,
@@ -6543,7 +6628,6 @@ fn compile_init_function<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
     slots: &GlobalSlots<'db>,
-    classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
@@ -6589,7 +6673,6 @@ fn compile_init_function<'db>(
                     &line_starts,
                     &source_file,
                     slots,
-                    classes,
                     class_object_indices,
                     enum_object_indices,
                     class_fields,
@@ -6602,12 +6685,15 @@ fn compile_init_function<'db>(
                     lambda_info.iter().map(|(idx, _)| *idx).collect();
                 let lambda_let_names: Vec<String> =
                     lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                let ctx = MirCodegenContext {
+                let mut refs = FlatRefs {
                     db,
                     slots,
-                    classes,
                     class_object_indices,
                     enum_object_indices,
+                };
+                let ctx = MirCodegenContext {
+                    db,
+                    refs: &mut refs,
                     class_fields,
                     objects: &mut program.objects,
                     objects_base: 0,

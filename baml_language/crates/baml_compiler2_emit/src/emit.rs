@@ -10,9 +10,9 @@ use std::{
 };
 
 use baml_base::Span;
-use baml_compiler2_hir::loc::DeclRef;
+use baml_compiler2_hir::loc::{DeclRef, LetLoc};
 use baml_compiler2_hir_ty::{
-    extern_loc::{ClassRef, FunctionRef},
+    extern_loc::{ClassRef, EnumRef, FunctionRef},
     layout,
 };
 use baml_compiler2_mir::{
@@ -284,6 +284,46 @@ enum PendingJumpTarget {
     Trap,
 }
 
+/// The one surface codegen reaches the rest of the program through: every
+/// declaration a body references, by identity, to the index it links as. The
+/// flat whole-program emitter answers from its pooled tables
+/// ([`crate::FlatRefs`]); the per-package emitter answers with a local
+/// ordinal for its own declarations and an import ordinal for everyone
+/// else's. Codegen sees no spelling either way.
+///
+/// A trait only while two emitters drive one codegen: the per-package
+/// resolver is the only implementation once the flat emitter is gone, and
+/// codegen then holds it directly.
+#[deprecated(
+    note = "polymorphic only while the flat emitter is the byte-identity oracle; collapses into the per-package resolver when that emitter is deleted"
+)]
+pub(crate) trait CodegenRefs<'db> {
+    /// The pooled object of `class`. `None` exists only for the flat
+    /// emitter's stub-skipped mounted class (the `Null`-instance fall-open
+    /// at [`StackifyCodegen::alloc_instance_of`]); the per-package resolver
+    /// always answers, and the `Option` goes with the flat emitter.
+    fn class(&mut self, class: ClassRef<'db>) -> Option<ObjectIndex>;
+    /// The pooled object of the class `tn` spells — a type template's class
+    /// head.
+    #[deprecated(
+        note = "a by-name door into `class`: gone when the world's viewpoint resolver maps a type template's head to its declaration before codegen asks"
+    )]
+    fn class_named(&mut self, tn: &TypeName) -> Option<ObjectIndex>;
+    /// The pooled object of `enum_ref`; an emitted enum always has one.
+    fn enum_(&mut self, enum_ref: EnumRef<'db>) -> ObjectIndex;
+    /// The pooled object of the enum `tn` spells.
+    #[deprecated(
+        note = "a by-name door into `enum_`: gone when the world's viewpoint resolver maps a type template's head to its declaration before codegen asks"
+    )]
+    fn enum_named(&mut self, tn: &TypeName) -> Option<ObjectIndex>;
+    /// The global slot `func` links as, or `None` when nothing slots it: a
+    /// required interface method, an intrinsic, or a served row no lane
+    /// slots — the caller's law decides what that means.
+    fn function(&mut self, func: FunctionRef<'db>) -> Option<GlobalIndex>;
+    /// The global slot of a top-level `let`.
+    fn let_global(&mut self, binding: LetLoc<'db>) -> GlobalIndex;
+}
+
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
     /// MIR body being compiled.
@@ -295,16 +335,8 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// The database link names are rendered through at this boundary.
     db: &'ctx dyn baml_compiler2_mir::Db,
 
-    /// The Pass-1 slot registry every direct callee and top-level `let` read
-    /// resolves through, by declaration identity.
-    slots: &'ctx crate::GlobalSlots<'ctx>,
-    /// Resolved class field indices.
-    #[allow(dead_code)]
-    classes: &'ctx HashMap<String, HashMap<String, usize>>,
-    /// Pre-allocated Class object indices.
-    class_object_indices: &'ctx HashMap<String, usize>,
-    /// Pre-allocated Enum object indices.
-    enum_object_indices: &'ctx HashMap<String, usize>,
+    /// The resolution surface every declaration reference goes through.
+    refs: &'obj mut (dyn CodegenRefs<'ctx> + 'ctx),
     /// Read-only snapshot of pooled class field metadata (name + type, in
     /// field order), keyed by every name registered in `class_object_indices`.
     /// Field lookups resolve through this map instead of reading the object
@@ -445,10 +477,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             arity,
             line_starts,
             db: ctx.db,
-            slots: ctx.slots,
-            classes: ctx.classes,
-            class_object_indices: ctx.class_object_indices,
-            enum_object_indices: ctx.enum_object_indices,
+            refs: ctx.refs,
             class_fields: ctx.class_fields,
             objects: ctx.objects,
             objects_base: ctx.objects_base,
@@ -509,19 +538,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     fn class_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
-        let full_name = tn.render_dotted(false);
-        let idx = self
-            .class_object_indices
-            .get(&full_name)
-            .copied()
-            .or_else(|| {
-                self.class_object_indices
-                    .get(tn.display_name().as_str())
-                    .copied()
-            })
-            .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied());
+        let idx = self.refs.class_named(tn).map(ObjectIndex::raw);
         if idx.is_some() {
-            self.references.record(&full_name);
+            self.references.record(&tn.render_dotted(false));
         }
         idx
     }
@@ -541,19 +560,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// enum identity (`ConstValue::Object`) rather than the shared `ENUM` tag,
     /// which cannot distinguish two enum types (`Color` vs `Status`).
     fn enum_object_index_for_type_name(&mut self, tn: &TypeName) -> Option<usize> {
-        let full_name = tn.render_dotted(false);
-        let idx = self
-            .enum_object_indices
-            .get(&full_name)
-            .copied()
-            .or_else(|| {
-                self.enum_object_indices
-                    .get(tn.display_name().as_str())
-                    .copied()
-            })
-            .or_else(|| self.enum_object_indices.get(tn.name().as_str()).copied());
+        let idx = self.refs.enum_named(tn).map(ObjectIndex::raw);
         if idx.is_some() {
-            self.references.record(&full_name);
+            self.references.record(&tn.render_dotted(false));
         }
         idx
     }
@@ -1527,8 +1536,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_operand(inst, OperandMeta::Field(display_fields.join(", ")));
     }
 
-    fn emit_init_instance(&mut self, class_name: &str, ntypeargs: u16, field_count: usize) {
-        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+    fn emit_init_instance(&mut self, class: ClassRef<'ctx>, ntypeargs: u16, field_count: usize) {
+        let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
+        if let Some(class_obj_idx) = self.refs.class(class) {
             self.references.record(class_name);
             let fields = (0..field_count).collect::<Vec<_>>();
             let display_fields = fields
@@ -1537,7 +1547,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 .collect::<Vec<_>>();
             let plan_idx = self.bytecode.class_init_plans.len();
             self.bytecode.class_init_plans.push(ClassInitPlan {
-                class_obj: ObjectIndex::from_raw(class_obj_idx),
+                class_obj: class_obj_idx,
                 ntypeargs,
                 fields,
             });
@@ -1573,7 +1583,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn try_emit_class_aggregate_init_instance(
         &mut self,
-        class_name: &str,
+        class: ClassRef<'ctx>,
         type_arg_templates: &[TyTemplate],
         fields: &[Operand<'ctx>],
     ) -> bool {
@@ -1594,7 +1604,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         for template in type_arg_templates {
             unwrap_infallible(self.load_type(template));
         }
-        self.emit_init_instance(class_name, ntypeargs, fields.len());
+        self.emit_init_instance(class, ntypeargs, fields.len());
         true
     }
 
@@ -1632,10 +1642,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn try_emit_class_aggregate_field_copy_sets(
         &mut self,
-        class_name: &str,
+        class: ClassRef<'ctx>,
         type_arg_templates: &[TyTemplate],
         fields: &[Operand<'ctx>],
     ) -> bool {
+        let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
         if !fields
             .iter()
             .any(|field| Self::field_copy_operand(field).is_some())
@@ -1648,7 +1659,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         for template in type_arg_templates {
             unwrap_infallible(self.load_type(template));
         }
-        self.alloc_class_instance_named(class_name, ntypeargs);
+        self.alloc_instance_of(class, ntypeargs);
 
         let mut field_idx = 0usize;
         while field_idx < fields.len() {
@@ -1769,8 +1780,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             fields,
         } = rvalue
         {
-            let name = baml_compiler2_mir::class_link_name(self.db, *class);
-            if !self.class_object_indices.contains_key(&name) {
+            if self.refs.class(*class).is_none() {
                 for field in fields {
                     self.emit_operand_pull(field);
                 }
@@ -1779,13 +1789,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 for template in type_arg_templates {
                     unwrap_infallible(self.load_type(template));
                 }
-                self.emit_init_instance(&name, ntypeargs, fields.len());
+                self.emit_init_instance(*class, ntypeargs, fields.len());
                 return;
             }
-            if self.try_emit_class_aggregate_init_instance(&name, type_arg_templates, fields) {
+            if self.try_emit_class_aggregate_init_instance(*class, type_arg_templates, fields) {
                 return;
             }
-            if self.try_emit_class_aggregate_field_copy_sets(&name, type_arg_templates, fields) {
+            if self.try_emit_class_aggregate_field_copy_sets(*class, type_arg_templates, fields) {
                 return;
             }
         }
@@ -1906,7 +1916,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// slot; callers fall back or panic per their own law. An interface body
     /// reaching codegen unslotted is a loud panic, never a fallback.
     fn try_function_global_index(&mut self, func: FunctionRef<'ctx>) -> Option<usize> {
-        let slot = self.slots.functions.get(&func).copied();
+        let slot = self.refs.function(func).map(GlobalIndex::raw);
         if slot.is_none()
             && let DeclRef::Source(decl) = func
             && baml_compiler2_mir::function_is_interface_body(self.db, decl)
@@ -2066,11 +2076,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.db,
                     baml_compiler2_hir::contributions::Definition::Let(*binding),
                 );
-                let global_idx = *self
-                    .slots
-                    .lets
-                    .get(binding)
-                    .unwrap_or_else(|| panic!("undefined global item: {name_str}"));
+                let global_idx = self.refs.let_global(*binding).raw();
                 self.references.record(&name_str);
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
@@ -2089,14 +2095,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // can name but cannot stub — in Pass 4, or a seeded pool
                 // object of the precompiled stdlib. A miss is an internal
                 // error, never a `Null` where a variant belongs.
-                let enum_obj_idx = *self.enum_object_indices.get(&enum_name_str).unwrap_or_else(
-                    || {
-                        panic!(
-                            "internal error: no enum object for `{enum_name_str}` (referenced as \
-                             its variant #{index})"
-                        )
-                    },
-                );
+                let enum_obj_idx = self.refs.enum_(*enum_ref);
                 self.references.record(&enum_name_str);
 
                 // The discriminant travels in the constant; the name is
@@ -2114,9 +2113,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     lc_inst,
                     OperandMeta::Const(format!("{enum_name_str}.{variant_str}")),
                 );
-                let inst = self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
-                    enum_obj_idx,
-                )));
+                let inst = self.emit(Instruction::AllocVariant(enum_obj_idx));
                 self.set_operand(inst, OperandMeta::Object(enum_name_str));
             }
         }
@@ -3412,8 +3409,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         class: ClassRef<'ctx>,
         ntypeargs: u16,
     ) -> Result<(), Self::Error> {
-        let class_name = baml_compiler2_mir::class_link_name(self.db, class);
-        self.alloc_class_instance_named(&class_name, ntypeargs);
+        self.alloc_instance_of(class, ntypeargs);
         Ok(())
     }
 
@@ -3423,8 +3419,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error> {
-        let class_name = baml_compiler2_mir::class_link_name(self.db, class);
-        self.emit_init_instance(&class_name, ntypeargs, field_count);
+        self.emit_init_instance(class, ntypeargs, field_count);
         Ok(())
     }
 
@@ -3739,19 +3734,18 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
     }
 }
 
-impl StackifyCodegen<'_, '_> {
-    /// `AllocInstance` for the class registered under `class_name` (the wire
-    /// spelling emit pooled it under). The name-taking twin of the
-    /// `PullSink::alloc_class_instance` implementation above, shared with the
-    /// field-copy-set route, which resolves the class the same way.
-    fn alloc_class_instance_named(&mut self, class_name: &str, ntypeargs: u16) {
-        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+impl<'ctx> StackifyCodegen<'ctx, '_> {
+    /// `AllocInstance` for `class`: the `PullSink::alloc_class_instance`
+    /// implementation above and the field-copy-set route share it.
+    fn alloc_instance_of(&mut self, class: ClassRef<'ctx>, ntypeargs: u16) {
+        let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
+        if let Some(class_obj_idx) = self.refs.class(class) {
             self.references.record(class_name);
             let inst = self.emit(Instruction::AllocInstance {
-                class_obj: ObjectIndex::from_raw(class_obj_idx),
+                class_obj: class_obj_idx,
                 ntypeargs,
             });
-            self.set_operand(inst, OperandMeta::Object(class_name.to_string()));
+            self.set_operand(inst, OperandMeta::Object(class_name.clone()));
         } else {
             // BUG: the class MIR resolved the literal to has no pooled object
             // under its wire spelling, and the literal becomes a silent
@@ -3922,7 +3916,6 @@ mod tests {
         };
 
         let slots = crate::GlobalSlots::default();
-        let classes = HashMap::new();
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
         let class_fields = HashMap::new();
@@ -3935,6 +3928,12 @@ mod tests {
         let mut references = crate::UnitReferences::default();
 
         let db = crate::tests::TestDb::default();
+        let mut refs = crate::FlatRefs {
+            db: &db,
+            slots: &slots,
+            class_object_indices: &class_object_indices,
+            enum_object_indices: &enum_object_indices,
+        };
         let function = compile_mir_function(
             &body,
             1,
@@ -3942,10 +3941,7 @@ mod tests {
             &line_starts,
             MirCodegenContext {
                 db: &db,
-                slots: &slots,
-                classes: &classes,
-                class_object_indices: &class_object_indices,
-                enum_object_indices: &enum_object_indices,
+                refs: &mut refs,
                 class_fields: &class_fields,
                 objects: &mut objects,
                 objects_base: 0,
