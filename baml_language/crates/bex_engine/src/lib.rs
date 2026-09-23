@@ -6123,25 +6123,38 @@ impl BexEngine {
             extent,
         } = body;
         // Link each user-provided `CancelToken` into this spawn's effective
-        // token. Firing a linked token cancels the child; the watcher
-        // self-terminates when `child_cancel` fires (body done / cancelled
-        // / parent cascade) so it never outlives the spawn. (The token itself
-        // — fresh for a root task, a child of the parent's otherwise — is
-        // derived at the dispatch site, where the future is also allocated.)
-        for user in linked_cancel {
-            let linked = child_cancel.clone();
-            let watcher = async move {
-                tokio::select! {
-                    biased;
-                    () = user.cancelled() => linked.cancel(),
-                    () = linked.cancelled() => {}
-                }
-            };
-            #[cfg(not(target_arch = "wasm32"))]
-            tokio::spawn(watcher);
-            #[cfg(target_arch = "wasm32")]
-            wasm_bindgen_futures::spawn_local(watcher);
-        }
+        // token: firing one cancels the child. (The token itself — fresh for a
+        // root task, a child of the parent's otherwise — is derived at the
+        // dispatch site, where the future is also allocated.)
+        //
+        // A forwarder must end with the TASK, not with either token: a body
+        // that completes normally fires neither — `child_cancel` must not
+        // fire, since the task's attached children outlive it — and a linked
+        // token may live for the whole program. So each forwarder also ends
+        // on a done signal whose guard the task owns: it fires however the
+        // task ends — completed, aborted, or dropped before its first poll,
+        // since the guard is built here and moved in rather than created by
+        // the task's body.
+        let end_linked_forwarders = (!linked_cancel.is_empty()).then(|| {
+            let done = CancellationToken::new();
+            for user in linked_cancel {
+                let linked = child_cancel.clone();
+                let done = done.clone();
+                let watcher = async move {
+                    tokio::select! {
+                        biased;
+                        () = user.cancelled() => linked.cancel(),
+                        () = linked.cancelled() => {}
+                        () = done.cancelled() => {}
+                    }
+                };
+                #[cfg(not(target_arch = "wasm32"))]
+                tokio::spawn(watcher);
+                #[cfg(target_arch = "wasm32")]
+                wasm_bindgen_futures::spawn_local(watcher);
+            }
+            done.drop_guard()
+        });
 
         // Register with the entry gate *synchronously*, here (before the body
         // task is polled), so a count read right after `spawn` already
@@ -6205,6 +6218,8 @@ impl BexEngine {
         let engine = self;
         let return_type = RuntimeTy::Null;
         let task = async move {
+            // Owned by the task: dropping it ends the forwarders above.
+            let _end_linked_forwarders = end_linked_forwarders;
             // Outlives the execution locals (but not SpawnedWork): if dropped at
             // any await below (before the event loop takes over), the closer
             // emits the child's EndFunction/BexThreadEnd (follow-up 11).

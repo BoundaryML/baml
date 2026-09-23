@@ -60,3 +60,76 @@ function rooted_spawn_completes() -> int {
 test "rooted_spawn_completes" {
     assert.equal(rooted_spawn_completes(), 42)
 }
+
+// `CancelToken.any` holds its inputs rather than forwarding them through a
+// task, so a composite reports an input's cancellation at once — no watcher
+// has to be scheduled first.
+function any_reports_an_input_at_once() -> bool[] {
+    let a = baml.spawn.CancelToken.new();
+    let b = baml.spawn.CancelToken.new();
+    let either = baml.spawn.CancelToken.any([a, b]);
+    let before = either.is_cancelled();
+    let _ = b.cancel();
+    [before, either.is_cancelled(), either.cancel() == 0]
+}
+
+test "any_reports_an_input_at_once" {
+    assert.equal(any_reports_an_input_at_once(), [false, true, true])
+}
+
+// Cancelling a composite never reaches its inputs.
+function any_cancel_is_one_way() -> bool[] {
+    let a = baml.spawn.CancelToken.new();
+    let either = baml.spawn.CancelToken.any([a]);
+    let _ = either.cancel();
+    [either.is_cancelled(), a.is_cancelled()]
+}
+
+test "any_cancel_is_one_way" {
+    assert.equal(any_cancel_is_one_way(), [true, false])
+}
+
+// A composite of a composite fires on the innermost input.
+function nested_any_fires_on_an_inner_input() -> bool {
+    let inner = baml.spawn.CancelToken.new();
+    let outer = baml.spawn.CancelToken.any([
+        baml.spawn.CancelToken.any([inner]),
+        baml.spawn.CancelToken.new(),
+    ]);
+    let _ = inner.cancel();
+    outer.is_cancelled()
+}
+
+test "nested_any_fires_on_an_inner_input" {
+    assert.is_true(nested_any_fires_on_an_inner_input())
+}
+
+// A spawn linked to a composite is cancelled by any input...
+function spawn_with_any_cancelled_by_an_input() -> int {
+    let a = baml.spawn.CancelToken.new();
+    let f = spawn with baml.spawn.CancelToken.any([baml.spawn.CancelToken.new(), a]) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+        42
+    };
+    let _ = a.cancel();
+    (await f) catch (e) { baml.panics.Cancelled => 0 }
+}
+
+test "spawn_with_any_cancelled_by_an_input" {
+    assert.equal(spawn_with_any_cancelled_by_an_input(), 0)
+}
+
+// ...and by the composite itself.
+function spawn_with_any_cancelled_by_the_composite() -> int {
+    let either = baml.spawn.CancelToken.any([baml.spawn.CancelToken.new()]);
+    let f = spawn with either {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+        42
+    };
+    let _ = either.cancel();
+    (await f) catch (e) { baml.panics.Cancelled => 0 }
+}
+
+test "spawn_with_any_cancelled_by_the_composite" {
+    assert.equal(spawn_with_any_cancelled_by_the_composite(), 0)
+}

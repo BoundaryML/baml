@@ -8242,7 +8242,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at,
-                    purpose: obligations::GoalPurpose::ConcreteBound,
+                    purpose: obligations::GoalPurpose::Bound,
                     depth: 0,
                 });
             }
@@ -8933,7 +8933,7 @@ impl<'db> InferenceContext<'db> {
                     ty: arg.clone(),
                     interface,
                     at: object,
-                    purpose: obligations::GoalPurpose::ConcreteBound,
+                    purpose: obligations::GoalPurpose::Bound,
                     depth: 0,
                 });
             }
@@ -13695,7 +13695,7 @@ fn widen_fresh_literal(ty: &Ty) -> Ty {
 /// at the receiver's own annotation, so it is a coercion of the receiver.
 fn call_bound_purpose(param: &baml_type::ParamTy, own_start: usize) -> obligations::GoalPurpose {
     if (param.index() as usize) >= own_start {
-        obligations::GoalPurpose::ConcreteBound
+        obligations::GoalPurpose::Bound
     } else {
         obligations::GoalPurpose::Coercion
     }

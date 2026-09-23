@@ -51,15 +51,16 @@ pub(super) enum GoalPurpose {
     /// iterated, or the receiver a method call dispatches on. Dispatch is
     /// keyed by the value at run time, so this is value inhabitation.
     Coercion,
-    /// A bound an impl's header places on its own generic param, replayed
-    /// when the impl is selected. The body may dispatch on the TYPE
-    /// (`(T as I).make()`), so it is nominal; an existential argument proves
-    /// it by its own reference and `requires` closure.
+    /// A declared bound on a generic param — a function's or class's own, or
+    /// an impl header's, replayed when the impl is selected. Code under the
+    /// bound may dispatch on the TYPE (`(T as I).make()`), so it is nominal,
+    /// and the argument must be concrete (E0001): an abstract type has no
+    /// single runtime type to dispatch on, and no impl makes an existential
+    /// an implementor (`TYPE_SYSTEM.md`, "Generics on Functions"). The impl
+    /// header is no exception — a blanket impl applies "to all concrete
+    /// types satisfying the bounds" — and the ground resolver already rejects
+    /// the candidate there, so selection must too or the two disagree.
     Bound,
-    /// A declared bound on a function's or class's own generic param:
-    /// [`GoalPurpose::Bound`], and the argument must be concrete (E0001) -
-    /// an abstract type has no single runtime type to dispatch on.
-    ConcreteBound,
 }
 
 /// One registered obligation.
@@ -219,8 +220,11 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
                 // An abstract argument has no single runtime type to
-                // dispatch on (E0001), whatever its args become.
-                if purpose == GoalPurpose::ConcreteBound
+                // dispatch on (E0001), whatever its args become. Checked
+                // before the shared verdict, whose existential arm answers by
+                // the existential's own reference — right for a coercion
+                // (a `Show` value is usable as a `Show`), never for a bound.
+                if purpose == GoalPurpose::Bound
                     && matches!(ty.kind(), InferTy::Interface(..) | InferTy::Union(..))
                 {
                     self.pending_diags

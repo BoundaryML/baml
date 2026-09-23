@@ -14,13 +14,25 @@
 //! its first attempt — without the heap permit, so a parked task never blocks
 //! GC. The [`Admission`] releases every slot on drop and admits whoever it can.
 //!
+//! Fairness: a free slot goes to the oldest queued launch that can take it.
+//! Every event that can make a launch admissible runs promotion — a release,
+//! and an arrival that finds others already queued, which joins the back of
+//! the queue rather than taking the slot — so an arrival racing a release
+//! never takes the slot the release was about to hand on. A launch whose
+//! other limits are full is passed over, not waited for (BEP-040 promises no
+//! fairness across admission sets).
+//!
 //! Locking: each limit has its own mutex, and whenever more than one is held
 //! they are taken in address order — the order a [`LimitSet`] keeps — so
 //! releases and admissions racing in different tasks cannot deadlock. A launch
-//! needing several limits is queued in each and admitted by whichever release
+//! needing several limits is queued in each and admitted by whichever event
 //! finds every slot free; while queued it counts in none of them, so a lone
 //! limit's `active_count` is exact and a multi-limit launch's is consistent
 //! only once admitted.
+//!
+//! Cost: admission and withdrawal almost always happen at the front of a
+//! queue (oldest first), and every queue operation here starts from the
+//! front, so fanning out `n` launches under one limit is linear in `n`.
 
 use std::{
     collections::VecDeque,
@@ -55,6 +67,21 @@ struct LimitState {
     /// Launches waiting on this limit, oldest first. One needing other limits
     /// too is queued in each of them and leaves all of them at once.
     waiters: VecDeque<Arc<Waiter>>,
+}
+
+impl LimitState {
+    /// Take `id` out of this limit's queue; `false` if it was not queued.
+    /// Searches from the front, where admission and withdrawal almost always
+    /// happen; a `retain` would walk the whole queue every time.
+    fn dequeue(&mut self, id: u64) -> bool {
+        match self.waiters.iter().position(|waiter| waiter.id == id) {
+            Some(at) => {
+                self.waiters.remove(at);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// Waiter ids are process-global: two waiters queued in one limit never
@@ -165,17 +192,37 @@ impl LimitInner {
         self.lock().waiters.len()
     }
 
-    /// A slot was released: admit queued waiters, oldest first, while a slot
-    /// is free. A waiter whose other limits are full is bypassed, not waited
-    /// for (BEP-040 promises no fairness across admission sets).
+    /// A slot was released, or a launch arrived behind others: admit queued
+    /// waiters, oldest first, while a slot is free. A waiter whose other
+    /// limits are full is passed over, not waited for.
+    ///
+    /// Walks the queue one waiter at a time from the front instead of copying
+    /// it, so a release under a long queue of launches needing only this
+    /// limit admits one and stops. Passed-over waiters are remembered by id,
+    /// which stays valid while others leave the queue concurrently (a
+    /// position would not).
     fn promote(self: &Arc<Self>) {
-        let candidates: Vec<Arc<Waiter>> = self.lock().waiters.iter().cloned().collect();
-        for waiter in candidates {
-            if self.lock().active >= self.capacity.get() {
-                break;
-            }
+        let mut passed_over = std::collections::HashSet::new();
+        loop {
+            let next = {
+                let state = self.lock();
+                if state.active >= self.capacity.get() {
+                    return;
+                }
+                state
+                    .waiters
+                    .iter()
+                    .find(|waiter| !passed_over.contains(&waiter.id))
+                    .cloned()
+            };
+            let Some(waiter) = next else {
+                return;
+            };
             match waiter.try_admit() {
-                TryAdmit::Admitted | TryAdmit::Skipped => {}
+                TryAdmit::Admitted => {}
+                TryAdmit::Skipped => {
+                    passed_over.insert(waiter.id);
+                }
                 TryAdmit::Abandoned(admission) => drop(admission),
             }
         }
@@ -217,9 +264,10 @@ impl LimitSet {
         self.0.iter()
     }
 
-    /// Register a launch: take a slot in every limit if all are free, else
-    /// queue it in every limit. Synchronous, so a lone limit's counts observe
-    /// the launch before its task has been polled.
+    /// Register a launch: take a slot in every limit if all are free and
+    /// nobody is queued for them, else queue it in every limit. Synchronous,
+    /// so a lone limit's counts observe the launch before its task has been
+    /// polled.
     pub fn admit(&self) -> AdmissionTicket {
         let admitted = || AdmissionTicket {
             state: TicketState::Admitted(Admission {
@@ -230,11 +278,12 @@ impl LimitSet {
             return admitted();
         }
         let mut guards = lock_all(&self.0);
-        if guards
+        let free: Vec<bool> = guards
             .iter()
             .zip(self.iter())
-            .all(|(state, limit)| state.active < limit.capacity.get())
-        {
+            .map(|(state, limit)| state.active < limit.capacity.get())
+            .collect();
+        if free.iter().all(|&free| free) && guards.iter().all(|state| state.waiters.is_empty()) {
             for state in &mut guards {
                 state.active += 1;
             }
@@ -249,6 +298,17 @@ impl LimitSet {
         for state in &mut guards {
             state.waiters.push_back(Arc::clone(&waiter));
         }
+        drop(guards);
+        // An arrival is an admission event, like a release: a slot free while
+        // others are queued goes to the oldest one that can take it — this
+        // launch only if that is this launch. Taking the slot directly would
+        // let an arrival racing a release take the slot that release is about
+        // to hand on. A full limit admits nobody, so it needs no walk.
+        for (limit, free) in self.iter().zip(free) {
+            if free {
+                limit.promote();
+            }
+        }
         AdmissionTicket {
             state: TicketState::Parked(ParkedWaiter { waiter, granted }),
         }
@@ -262,17 +322,19 @@ impl Waiter {
     /// admission in the channel.
     fn try_admit(&self) -> TryAdmit {
         let mut guards = lock_all(&self.limits.0);
-        let queued = guards[0].waiters.iter().any(|waiter| waiter.id == self.id);
         let free = guards
             .iter()
             .zip(self.limits.iter())
             .all(|(state, limit)| state.active < limit.capacity.get());
-        if !queued || !free {
+        // Queued in every limit of its set or in none: `admit` and every
+        // removal act on the whole set under all of its locks.
+        if !free || !guards[0].waiters.iter().any(|waiter| waiter.id == self.id) {
             return TryAdmit::Skipped;
         }
         for state in &mut guards {
             state.active += 1;
-            state.waiters.retain(|waiter| waiter.id != self.id);
+            let dequeued = state.dequeue(self.id);
+            debug_assert!(dequeued, "a waiter is queued in every limit of its set");
         }
         let grant = self
             .grant
@@ -293,10 +355,18 @@ impl Waiter {
     /// it, which releases the slots, so a launch that never runs holds
     /// nothing. Idempotent.
     fn withdraw(&self, granted: &mut oneshot::Receiver<Admission>) {
-        {
+        // `try_admit` takes the grant only after dequeuing, under the same
+        // locks, so a waiter whose grant is gone is in no queue. That is the
+        // common case — every admitted launch withdraws once it has run.
+        let still_queued = self
+            .grant
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some();
+        if still_queued {
             let mut guards = lock_all(&self.limits.0);
             for state in &mut guards {
-                state.waiters.retain(|waiter| waiter.id != self.id);
+                state.dequeue(self.id);
             }
         }
         if let Ok(admission) = granted.try_recv() {
@@ -407,6 +477,58 @@ mod tests {
         assert_eq!((a.active_count(), a.queued_count()), (2, 0));
         drop((third_admission, fourth_admission));
         assert_eq!(a.active_count(), 0);
+    }
+
+    #[test]
+    fn an_arrival_never_takes_a_slot_a_queued_waiter_can_take() {
+        let a = limit(1);
+        let hold = admitted(set(&[&a]).admit());
+        let token = CancellationToken::new();
+        let mut older = pin!(set(&[&a]).admit().acquire(&token));
+        assert!(poll_once(&mut older).is_pending());
+
+        // A release preempted between freeing its slot and promoting: the
+        // state `Admission::drop` passes through between its two loops. The
+        // slot is free, and `older` is still queued for it.
+        std::mem::forget(hold);
+        a.lock().active -= 1;
+
+        let newer = set(&[&a]).admit();
+        let Poll::Ready(Some(older_admission)) = poll_once(&mut older) else {
+            panic!("the freed slot goes to the waiter queued for it, not the arrival")
+        };
+        let mut newer = pin!(newer.acquire(&token));
+        assert!(
+            poll_once(&mut newer).is_pending(),
+            "the arrival queues behind it"
+        );
+        assert_eq!((a.active_count(), a.queued_count()), (1, 1));
+
+        drop(older_admission);
+        let Poll::Ready(Some(newer_admission)) = poll_once(&mut newer) else {
+            panic!("and is admitted next")
+        };
+        drop(newer_admission);
+        assert_eq!((a.active_count(), a.queued_count()), (0, 0));
+    }
+
+    #[test]
+    fn an_arrival_still_bypasses_a_waiter_blocked_on_another_limit() {
+        let a = limit(1);
+        let b = limit(1);
+        let hold_b = admitted(set(&[&b]).admit());
+        let token = CancellationToken::new();
+        // Blocked on B, while A has its slot free.
+        let mut both = pin!(set(&[&a, &b]).admit().acquire(&token));
+        assert!(poll_once(&mut both).is_pending());
+
+        // A slot nobody queued can take is not held back for `both`.
+        let only_a = admitted(set(&[&a]).admit());
+        assert_eq!((a.active_count(), a.queued_count()), (1, 1));
+
+        drop(only_a);
+        drop(hold_b);
+        assert!(matches!(poll_once(&mut both), Poll::Ready(Some(_))));
     }
 
     #[test]

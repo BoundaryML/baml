@@ -32,20 +32,57 @@ use crate::{
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
 };
 
-/// Read the runtime `CancellationToken` out of a `baml.spawn.CancelToken`
-/// receiver. Field 0 (`_handle`) is the `Object::RustData` wrapping the token.
-/// Returns `None` if the value is not a well-formed `CancelToken` instance
-/// (including the `OmittedArg` sentinel for an omitted optional argument).
-fn as_cancellation_token(vm: &BexVm, value: Value) -> Option<CancellationToken> {
-    let instance = vm.as_instance(&value).ok()?;
-    let handle = instance.load_field(0);
-    vm.as_rust_data::<CancellationToken>(&handle).ok().cloned()
+/// What a `baml.spawn.CancelToken` holds: it has fired once its own token or
+/// any of `inputs` has. `cancel()` fires only `own`, so cancelling a
+/// `CancelToken.any` composite never reaches its inputs, and linking the token
+/// into a plan links every one of them.
+///
+/// A composite keeps its inputs rather than forwarding them into a fresh token,
+/// because a forwarder has nothing to end it: no signal marks the composite's
+/// last clone being dropped, so a forwarding task holds every input until one
+/// fires — for a long-lived input, for the life of the program. Holding them
+/// also makes `is_cancelled` exact at once, where a forwarder answered only
+/// after it had been scheduled.
+struct CancelTokenState {
+    own: CancellationToken,
+    /// Flattened: an input that is itself a composite contributes its tokens.
+    inputs: Box<[CancellationToken]>,
 }
 
-/// Allocate a fresh `baml.spawn.CancelToken` instance wrapping `token`.
-fn alloc_cancel_token(vm: &mut BexVm, token: CancellationToken) -> Value {
+impl CancelTokenState {
+    fn fresh() -> Self {
+        Self {
+            own: CancellationToken::new(),
+            inputs: Box::new([]),
+        }
+    }
+
+    /// Every token whose firing fires this one.
+    fn tokens(&self) -> impl Iterator<Item = &CancellationToken> {
+        std::iter::once(&self.own).chain(self.inputs.iter())
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.tokens().any(CancellationToken::is_cancelled)
+    }
+}
+
+/// The tokens a `baml.spawn.CancelToken` value fires on (see
+/// [`CancelTokenState`]). Field 0 (`_handle`) is the `Object::RustData`
+/// holding the state. Returns `None` if the value is not a well-formed
+/// `CancelToken` instance (including the `OmittedArg` sentinel for an omitted
+/// optional argument).
+fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationToken>> {
+    let instance = vm.as_instance(&value).ok()?;
+    let handle = instance.load_field(0);
+    let state = vm.as_rust_data::<CancelTokenState>(&handle).ok()?;
+    Some(state.tokens().cloned().collect())
+}
+
+/// Allocate a `baml.spawn.CancelToken` instance holding `state`.
+fn alloc_cancel_token(vm: &mut BexVm, state: CancelTokenState) -> Value {
     let class = vm.resolve_class("baml.spawn.CancelToken");
-    let handle = Value::object(vm.alloc_rust_data(Arc::new(token)));
+    let handle = Value::object(vm.alloc_rust_data(Arc::new(state)));
     Value::object(vm.alloc_instance(class, vec![handle]))
 }
 
@@ -62,34 +99,24 @@ impl BamlClassSpawnCancelToken for PackageBamlImpl {
     // `CancelToken` instance), so it cannot return `Self`.
     #[allow(clippy::new_ret_no_self)]
     fn new(vm: &mut BexVm) -> Value {
-        alloc_cancel_token(vm, CancellationToken::new())
+        alloc_cancel_token(vm, CancelTokenState::fresh())
     }
 
     fn any(vm: &mut BexVm, tokens: &[Value]) -> Value {
-        // A fresh composite token that fires when any input fires. One watcher
-        // task per input links `input.cancelled() -> composite.cancel()`; each
-        // watcher self-terminates when the composite is cancelled (directly or
-        // by a sibling), so they never outlive the composite. Cancelling the
-        // composite does not propagate back to the inputs (one-directional).
-        let composite = CancellationToken::new();
-        for &token in tokens {
-            let Some(input) = as_cancellation_token(vm, token) else {
-                continue;
-            };
-            let out = composite.clone();
-            let watcher = async move {
-                tokio::select! {
-                    biased;
-                    () = input.cancelled() => out.cancel(),
-                    () = out.cancelled() => {}
-                }
-            };
-            #[cfg(not(target_arch = "wasm32"))]
-            tokio::spawn(watcher);
-            #[cfg(target_arch = "wasm32")]
-            wasm_bindgen_futures::spawn_local(watcher);
-        }
-        alloc_cancel_token(vm, composite)
+        // Holds its inputs instead of forwarding them (see `CancelTokenState`),
+        // under a fresh own token so cancelling the composite stays one-way.
+        let inputs = tokens
+            .iter()
+            .filter_map(|&token| cancel_token_members(vm, token))
+            .flatten()
+            .collect();
+        alloc_cancel_token(
+            vm,
+            CancelTokenState {
+                own: CancellationToken::new(),
+                inputs,
+            },
+        )
     }
 
     fn cancel(vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> i64 {
@@ -97,26 +124,27 @@ impl BamlClassSpawnCancelToken for PackageBamlImpl {
         // 0 if the token was already cancelled. `CancellationToken::cancel`
         // returns (), so we snapshot `is_cancelled` first (a benign TOCTOU
         // under concurrent cancels — the count is best-effort).
-        let token = canceltoken._handle::<CancellationToken>(vm);
-        let was_cancelled = token.is_cancelled();
-        token.cancel();
+        let state = canceltoken._handle::<CancelTokenState>(vm);
+        let was_cancelled = state.is_cancelled();
+        state.own.cancel();
         i64::from(!was_cancelled)
     }
 
     fn is_cancelled(vm: &BexVm, canceltoken: &view::spawn::CancelToken<'_>) -> bool {
-        canceltoken._handle::<CancellationToken>(vm).is_cancelled()
+        canceltoken._handle::<CancelTokenState>(vm).is_cancelled()
     }
 }
 
 impl BamlClassSpawnModifier_T__E__for_CancelToken for PackageBamlImpl {
     /// Links the token into the plan: once it fires, the task is cancelled.
+    /// A composite links each token it fires on.
     fn apply(vm: &mut BexVm, canceltoken: &Value, plan: &Value) -> Result<Value, VmRustFnError> {
-        let token =
-            as_cancellation_token(vm, *canceltoken).ok_or_else(|| VmInternalError::TypeError {
+        let tokens =
+            cancel_token_members(vm, *canceltoken).ok_or_else(|| VmInternalError::TypeError {
                 expected: ObjectType::RustData.into(),
                 got: vm.type_of(canceltoken),
             })?;
-        let linked = plan_data(vm, *plan)?.with_cancel(token);
+        let linked = plan_data(vm, *plan)?.with_cancel(tokens);
         Ok(alloc_plan(vm, linked))
     }
 }

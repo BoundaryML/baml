@@ -147,11 +147,12 @@ impl SpawnPlanData {
         }
     }
 
-    /// This plan with `token` linked into the launch's cancellation.
+    /// This plan with `tokens` linked into the launch's cancellation: the
+    /// launch is cancelled when any of them fires.
     #[must_use]
-    pub fn with_cancel(&self, token: CancellationToken) -> Self {
+    pub fn with_cancel(&self, tokens: impl IntoIterator<Item = CancellationToken>) -> Self {
         let mut cancel = self.cancel.to_vec();
-        cancel.push(token);
+        cancel.extend(tokens);
         Self {
             id: mint_plan_id(),
             cancel: cancel.into_boxed_slice(),

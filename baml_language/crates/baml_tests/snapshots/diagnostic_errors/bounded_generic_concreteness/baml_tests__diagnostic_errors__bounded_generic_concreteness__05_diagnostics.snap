@@ -73,3 +73,21 @@ source: crates/baml_tests/src/generated_tests.rs
  68 │     Pairer.pair_static(a, b);
     ·     ────────────────────────
     ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+     ╭─[bounded_generic_concreteness.baml:108:5]
+ 108 │     holds(h);
+     ·     ────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[bounded_generic_concreteness.baml:109:33]
+ 109 │     let ground: Holds<string> = h;
+     ·                                 ┬
+     ·                                 ╰── expected `Holds<string>`, found `Holder<Combinable>`
+     ╰────

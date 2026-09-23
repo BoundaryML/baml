@@ -85,3 +85,38 @@ function accepted() -> void {
     Pairer { key: a }.pair(A {}, A {});
     Pairer.pair_static(B {}, B {});
 }
+
+// The rule covers an impl header's bounded parameter too: a blanket impl
+// applies "to all concrete types satisfying the bounds". `Holder<Combinable>`
+// would bind the header's `T` to the existential, and `held` could meet two
+// implementors through one `T`. The impl is reached by two roads that must
+// agree: a goal with an argument only the impl can supply (`X` below) goes
+// through impl selection, which replays the header's bound; a goal with none
+// open asks the resolver directly.
+interface Holds<X> {
+    function held(self) -> X throws never;
+}
+
+class Holder<T> {
+    item: T,
+}
+
+implements<T extends Combinable> Holds<string> for Holder<T> {
+    function held(self) -> string throws never {
+        self.item.combine(self.item)
+    }
+}
+
+function holds<X, H extends Holds<X>>(h: H) -> int throws never {
+    0
+}
+
+function rejected_through_impl_header(h: Holder<Combinable>) -> void {
+    holds(h);
+    let ground: Holds<string> = h;
+}
+
+function accepted_through_impl_header(h: Holder<A>) -> void {
+    holds(h);
+    let ground: Holds<string> = h;
+}

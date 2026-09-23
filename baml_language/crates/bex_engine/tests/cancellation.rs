@@ -985,3 +985,84 @@ fn spawn_with_non_modifier_is_rejected() {
         "`spawn with helper()` should fail to compile (`with` takes a modifier value)"
     );
 }
+
+// ============================================================================
+// Linked cancel tokens do not outlive the work they are linked to
+// ============================================================================
+
+/// A task that completes normally never fires the token it was linked to, so
+/// whatever forwards that token's cancellation has to end with the task — not
+/// with the token, which may live for the whole program. Each iteration is
+/// three successful linkings: a plain `spawn with token`, one through a
+/// `CancelToken.any` composite, and the stdlib's own `with_timeout`, which is
+/// a `spawn with` a fresh token. A forwarder that outlives its task grows the
+/// runtime's live task count on every call.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn linked_tokens_do_not_outlive_their_spawns() {
+    let source = r#"
+        function main(n: int) -> int {
+            let shared = baml.spawn.CancelToken.new();
+            let total = 0;
+            for (let i = 0; i < n; i += 1) {
+                let direct = spawn with shared { 1 };
+                total += await direct;
+                let composite = baml.spawn.CancelToken.any([shared]);
+                let through_any = spawn with composite { 1 };
+                total += await through_any;
+                total += baml.future.with_timeout(
+                    baml.time.Duration.from_seconds(60n),
+                    () -> int { 1 },
+                );
+            }
+            total
+        }
+    "#;
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+    let call = |n: i64| {
+        let engine = Arc::clone(&engine);
+        async move {
+            engine
+                .call_function(
+                    "main",
+                    vec![BexExternalValue::Int(n)],
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await
+                .expect("main completes")
+        }
+    };
+    // Whatever the engine keeps running across calls is not a leak: measure
+    // from after a first call.
+    call(1).await;
+    let metrics = tokio::runtime::Handle::current().metrics();
+    let baseline = metrics.num_alive_tasks();
+
+    let iterations = 200;
+    assert_eq!(
+        call(iterations).await,
+        BexExternalValue::Int(3 * iterations)
+    );
+
+    // A task woken by its stop signal still has to be polled to exit: give
+    // the runtime a bounded window to reap whatever is ending.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut alive = metrics.num_alive_tasks();
+    while alive > baseline && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        alive = metrics.num_alive_tasks();
+    }
+    assert!(
+        alive <= baseline,
+        "{} tasks outlived {} completed linkings",
+        alive - baseline,
+        3 * iterations,
+    );
+}
