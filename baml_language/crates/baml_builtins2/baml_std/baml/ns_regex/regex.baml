@@ -1,10 +1,10 @@
 // Regular expressions: recognizing, extracting, and rewriting structured text.
 //
-// A pattern is compiled once with `baml.regex.compile` and the resulting
+// A pattern is compiled once with `baml.regex.new` and the resulting
 // `Regex` is an immutable, reusable value — it never remembers a previous
 // match, so sharing one across calls or fibers cannot change a later result.
 //
-// Two engines back this namespace, selected by `compile`'s `backtracking`
+// Two engines back this namespace, selected by `new`'s `backtracking`
 // argument. The default engine has a predictable upper bound on matching time
 // and refuses lookaround, backreferences, and subroutine calls. The opt-in
 // engine accepts them and can take exponential time on some inputs.
@@ -66,15 +66,15 @@ enum ErrorKind {
 
 /// A pattern that could not be compiled.
 ///
-/// Thrown only by `compile` and `word`. Matching an existing `Regex` never
-/// throws a regex error.
+/// Thrown only by `new`. Matching an existing `Regex` never throws a regex
+/// error.
 class Error {
     /// For portable handling: `Unsupported` is a valid pattern outside the
     /// selected dialect, `Syntax` is a malformed one.
     kind: ErrorKind,
     /// Human-readable description, including the engine's own diagnostic.
     message: string,
-    /// The pattern as it was passed to `compile` or built by `word`.
+    /// The pattern as it was passed to `new`.
     pattern: string,
     /// Codepoint offset into `pattern` where the problem starts, when the
     /// engine reports one.
@@ -85,9 +85,9 @@ class Error {
 
 /// A compiled regular expression.
 ///
-/// Build one with `baml.regex.compile` or `baml.regex.word`. Every method is a
-/// pure function of its arguments: a `Regex` holds no scan position, so the
-/// same call on the same haystack always returns the same result.
+/// Build one with `baml.regex.new`. Every method is a pure function of its
+/// arguments: a `Regex` holds no scan position, so the same call on the same
+/// haystack always returns the same result.
 ///
 /// No method here throws: a pattern that compiled is a pattern that matches.
 /// A `Regex` built with `backtracking = true` can still exhaust the engine's
@@ -100,17 +100,17 @@ class Regex {
 
     /// Returns `true` if the pattern matches anywhere in `haystack`.
     ///
-    /// Cheaper than `find` when the match itself is not needed: no capture
-    /// groups are recorded.
+    /// Cheaper than `match_once` when the match itself is not needed: no
+    /// capture groups are recorded.
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile("\\d+").is_match("a1")   // true
-    /// baml.regex.compile("\\d+").is_match("abc")  // false
+    /// baml.regex.new("\\d+").has_match("a1")   // true
+    /// baml.regex.new("\\d+").has_match("abc")  // false
     /// ```
     //baml:mut_vm
     //baml:fallible
-    function is_match(self, haystack: string) -> bool throws never {
+    function has_match(self, haystack: string) -> bool throws never {
         $rust_function
     }
 
@@ -121,12 +121,12 @@ class Regex {
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile("(\\d+)").find("a 42 b")?.text  // "42"
-    /// baml.regex.compile("\\d+").find("abc")             // null
+    /// baml.regex.new("(\\d+)").match_once("a 42 b")?.text  // "42"
+    /// baml.regex.new("\\d+").match_once("abc")             // null
     /// ```
     //baml:mut_vm
     //baml:fallible
-    function find(self, haystack: string) -> Match? throws never {
+    function match_once(self, haystack: string) -> Match? throws never {
         $rust_function
     }
 
@@ -138,12 +138,12 @@ class Regex {
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile("\\d+").find_all("a1 b22").map((m) => m.text)  // ["1", "22"]
-    /// baml.regex.compile("x").find_all("abc")                           // []
+    /// baml.regex.new("\\d+").match_all("a1 b22").map((m) => m.text)  // ["1", "22"]
+    /// baml.regex.new("x").match_all("abc")                           // []
     /// ```
     //baml:mut_vm
     //baml:fallible
-    function find_all(self, haystack: string) -> Match[] throws never {
+    function match_all(self, haystack: string) -> Match[] throws never {
         $rust_function
     }
 
@@ -156,12 +156,12 @@ class Regex {
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile("\\d+").exact_match("42")     // matches
-    /// baml.regex.compile("\\d+").exact_match("42 a")   // null
+    /// baml.regex.new("\\d+").match_full("42")     // matches
+    /// baml.regex.new("\\d+").match_full("42 a")   // null
     /// ```
     //baml:mut_vm
     //baml:fallible
-    function exact_match(self, haystack: string) -> Match? throws never {
+    function match_full(self, haystack: string) -> Match? throws never {
         $rust_function
     }
 
@@ -179,10 +179,10 @@ class Regex {
     ///
     /// # Examples
     /// ```
-    /// baml.regex.compile(",").split("a,b,c")       // ["a", "b", "c"]
-    /// baml.regex.compile("x").split("x")           // ["", ""]
-    /// baml.regex.compile("(,)").split("a,b")       // ["a", ",", "b"]
-    /// baml.regex.compile(",").split("abc")         // ["abc"]
+    /// baml.regex.new(",").split("a,b,c")       // ["a", "b", "c"]
+    /// baml.regex.new("x").split("x")           // ["", ""]
+    /// baml.regex.new("(,)").split("a,b")       // ["a", ",", "b"]
+    /// baml.regex.new(",").split("abc")         // ["abc"]
     /// ```
     //baml:mut_vm
     //baml:fallible
@@ -237,52 +237,20 @@ class Regex {
 ///
 /// # Examples
 /// ```
-/// baml.regex.compile("\\b\\d{4}-\\d{2}-\\d{2}\\b")
-/// baml.regex.compile("(?i)^(yes|no)$")
-/// baml.regex.compile("\\b(\\w+)\\s+\\1\\b", backtracking = true)
+/// baml.regex.new("\\b\\d{4}-\\d{2}-\\d{2}\\b")
+/// baml.regex.new("(?i)^(yes|no)$")
+/// baml.regex.new("\\b(\\w+)\\s+\\1\\b", backtracking = true)
 /// ```
-function compile(pattern: string, backtracking: bool = false) -> Regex throws Error {
+function new(pattern: string, backtracking: bool = false) -> Regex throws Error {
     // A `$rust_function` body has no prologue to evaluate a default in, so the
     // default lives on this wrapper and the native entry point takes both
     // arguments outright.
     _compile(pattern, backtracking)
 }
 
-/// `compile` with the default already resolved.
+/// `new` with the default already resolved.
 //baml:mut_vm
 function _compile(pattern: string, backtracking: bool) -> Regex throws Error {
-    $rust_function
-}
-
-/// Compiles a whole-word matcher for the literal text `literal`.
-///
-/// `literal` is escaped, so any metacharacters it contains match themselves —
-/// a term read from a correction list or a user's vocabulary cannot become
-/// pattern syntax. The match succeeds only where `literal` is not touching a
-/// Unicode word character (a letter, a number, or `_`) on either side;
-/// whitespace inside `literal` stays exact.
-///
-/// With `ignore_case = true` the comparison is Unicode-aware
-/// case-insensitive. An empty `literal` matches nowhere, which is what a
-/// user-maintained list of terms wants: a blank entry rewrites nothing rather
-/// than matching at every position.
-///
-/// `word` always uses the default non-backtracking dialect.
-///
-/// # Examples
-/// ```
-/// baml.regex.word("2.5%").is_match("a 2.5% raise")   // true
-/// baml.regex.word("2.5%").is_match("a 2.5%raise")    // false
-/// baml.regex.word("cat").is_match("concatenate")     // false
-/// baml.regex.word("cat", ignore_case = true).is_match("a Cat")  // true
-/// ```
-function word(literal: string, ignore_case: bool = false) -> Regex throws Error {
-    _word(literal, ignore_case)
-}
-
-/// `word` with the default already resolved.
-//baml:mut_vm
-function _word(literal: string, ignore_case: bool) -> Regex throws Error {
     $rust_function
 }
 
@@ -290,13 +258,12 @@ function _word(literal: string, ignore_case: bool) -> Regex throws Error {
 /// itself when embedded in a pattern.
 ///
 /// Use it whenever runtime data is interpolated into a pattern the application
-/// owns. For a whole-word replacement of a dynamic term, prefer `word`, which
-/// escapes and adds the boundaries in one step.
+/// owns.
 ///
 /// # Examples
 /// ```
 /// baml.regex.escape("a.b")            // "a\\.b"
-/// baml.regex.compile(`(?s)<${baml.regex.escape(tag)}>(.*?)</${baml.regex.escape(tag)}>`)
+/// baml.regex.new(`(?s)<${baml.regex.escape(tag)}>(.*?)</${baml.regex.escape(tag)}>`)
 /// ```
 function escape(literal: string) -> string throws never {
     $rust_function
@@ -385,9 +352,9 @@ function _replace_pattern_with<E>(
     all: bool,
 ) -> string throws E {
     let matches: Match[] = if (all) {
-        search.find_all(haystack)
+        search.match_all(haystack)
     } else {
-        match (search.find(haystack)) {
+        match (search.match_once(haystack)) {
             null => [],
             let first: Match => [first],
         }

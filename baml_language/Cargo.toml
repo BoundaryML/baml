@@ -218,7 +218,7 @@ rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 # Pattern AST/HIR parser, used to report precise spans for a bad pattern.
 regex-syntax = { version = "0.8" }
-# Backtracking regex engine backing `baml.regex.compile(..., backtracking = true)`
+# Backtracking regex engine backing `baml.regex.new(..., backtracking = true)`
 # (lookaround, backreferences, bounded recursive subroutines).
 fancy-regex = { version = "0.19" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)

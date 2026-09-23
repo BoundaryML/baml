@@ -276,17 +276,15 @@ namespace baml.regex:
   enum ErrorKind
   class Group { methods: [] }
   class Match { methods: [] }
-  class Regex { methods: [is_match, find, find_all, exact_match, split, _replace_template, _replace_all_template] }
+  class Regex { methods: [has_match, match_once, match_all, match_full, split, _replace_template, _replace_all_template] }
   function _compile
   function _index_of_from
   function _literal_match
   function _replace
   function _replace_literal_with<E>
   function _replace_pattern_with<E>
-  function _word
-  function compile
   function escape
-  function word
+  function new
 namespace baml.sap:
   class _NoYield { methods: [] }
   class _ParseCache<T> { methods: [_parse_final, _parse_partial] }

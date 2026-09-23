@@ -29,13 +29,6 @@
 //! offsets in one pass over the subject rather than re-counting from the start
 //! for each one.
 
-/// Pattern that can never match, used for `word("")`.
-///
-/// An empty literal has no whole-word occurrence to find, and treating it as an
-/// empty match at every position would make a blank entry in a correction list
-/// rewrite the entire document.
-const NEVER_MATCHES: &str = "[^\\s\\S]";
-
 // =============================================================================
 // Errors
 // =============================================================================
@@ -159,6 +152,13 @@ impl Program {
     /// selected dialect, or compiles to a program past the engine's size limit.
     pub fn compile(pattern: &str, backtracking: bool) -> Result<Self, BuildError> {
         let engine = build_engine(pattern, backtracking)?;
+        if backtracking && let Some(start) = whole_pattern_recursion(pattern) {
+            return Err(BuildError {
+                kind: ErrorKind::Unsupported,
+                message: "whole-pattern recursion (`\\g<0>`) is not supported".to_owned(),
+                span: Some((start, start + r"\g<0>".len())),
+            });
+        }
         // Enable extended mode before the newline: it is ignored whether or
         // not the original pattern enabled `x`. If the pattern ends in an
         // extended-mode comment, the newline ends that comment before our
@@ -179,45 +179,6 @@ impl Program {
             pattern: pattern.to_owned(),
             backtracking,
         })
-    }
-
-    /// Compile the whole-word matcher for the literal text `literal`.
-    ///
-    /// The literal is escaped, so metacharacters in it match themselves. Always
-    /// uses the default dialect.
-    ///
-    /// # Errors
-    /// [`BuildError`] if the escaped literal still exceeds the engine's size
-    /// limit. The returned error's `span` refers to the *built* pattern, which
-    /// [`Program::word_pattern`] reproduces.
-    pub fn word(literal: &str, ignore_case: bool) -> Result<Self, BuildError> {
-        Self::compile(&Self::word_pattern(literal, ignore_case), false)
-    }
-
-    /// The pattern [`Program::word`] compiles for `literal`.
-    ///
-    /// `\b` asserts a boundary, which is only the right assertion when the
-    /// literal's outermost character is itself a word character. For `"2.5%"` a
-    /// trailing `\b` would demand a word character *after* the `%`, rejecting
-    /// `"a 2.5% raise"` — exactly backwards. Where the outermost character is
-    /// not a word character, `\B` is the assertion that means "the neighbour is
-    /// not a word character either".
-    #[must_use]
-    pub fn word_pattern(literal: &str, ignore_case: bool) -> String {
-        if literal.is_empty() {
-            return NEVER_MATCHES.to_owned();
-        }
-        let leads_with_word = literal.chars().next().is_some_and(is_word_char);
-        let ends_with_word = literal.chars().next_back().is_some_and(is_word_char);
-
-        let mut pattern = String::new();
-        if ignore_case {
-            pattern.push_str("(?i)");
-        }
-        pattern.push_str(if leads_with_word { "\\b" } else { "\\B" });
-        pattern.push_str(&escape(literal));
-        pattern.push_str(if ends_with_word { "\\b" } else { "\\B" });
-        pattern
     }
 
     /// The pattern this program was compiled from.
@@ -341,11 +302,29 @@ pub fn escape(literal: &str) -> String {
     regex::escape(literal)
 }
 
-/// Whether `c` is a word character for the purpose of [`Program::word`]'s
-/// boundaries. Use exactly the same Unicode definition as the engine's `\b`
-/// and `\B`, including combining marks, join controls and connector punctuation.
-fn is_word_char(c: char) -> bool {
-    regex_syntax::is_word_character(c)
+/// Find an unescaped whole-pattern recursion token.
+///
+/// `match_full` compiles an anchored twin of every pattern. A `\g<0>` call
+/// changes meaning inside that wrapper, so reject it instead of letting the
+/// search and full-match forms disagree. Escaped backslashes remain literals.
+fn whole_pattern_recursion(pattern: &str) -> Option<usize> {
+    let bytes = pattern.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'\\' {
+            i += 1;
+            continue;
+        }
+        if bytes.get(i + 1) == Some(&b'\\') {
+            i += 2;
+            continue;
+        }
+        if bytes[i..].starts_with(br"\g<0>") {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Convert byte offsets into `s` to codepoint offsets, in one pass.
@@ -599,22 +578,16 @@ mod tests {
     }
 
     #[test]
-    fn word_boundaries_follow_the_literal_edges() {
-        let pct = Program::word("2.5%", false).unwrap();
-        assert!(pct.is_match("a 2.5% raise").unwrap());
-        assert!(!pct.is_match("a 2.5%raise").unwrap());
+    fn whole_pattern_recursion_is_rejected_before_anchoring() {
+        let err = Program::compile(r"a\g<0>?", true).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::Unsupported);
+        assert_eq!(err.span, Some((1, 6)));
 
-        let cat = Program::word("cat", false).unwrap();
-        assert!(!cat.is_match("concatenate").unwrap());
-        assert!(cat.is_match("a cat.").unwrap());
+        let escaped = Program::compile(r"\\g<0>", true).unwrap();
+        assert!(escaped.find_exact(r"\g<0>").unwrap().is_some());
 
-        assert!(!Program::word("", false).unwrap().is_match("").unwrap());
-        assert!(
-            !Program::word("", false)
-                .unwrap()
-                .is_match("anything")
-                .unwrap()
-        );
+        let malformed = Program::compile(r"(a\g<0>?", true).unwrap_err();
+        assert_eq!(malformed.kind, ErrorKind::Syntax);
     }
 
     #[test]
@@ -649,17 +622,6 @@ mod tests {
             assert!(re.find_exact("a").unwrap().is_none());
             let re = Program::compile("a|ab", backtracking).unwrap();
             assert_eq!(re.find_exact("ab").unwrap().unwrap().span(), (0, 2));
-        }
-    }
-
-    #[test]
-    fn word_uses_the_engines_unicode_word_definition() {
-        for literal in ["e\u{301}", "\u{301}e", "\u{203f}", "\u{200d}"] {
-            let re = Program::word(literal, false).unwrap();
-            assert!(re.is_match(literal).unwrap(), "{literal:?}");
-            assert!(re.is_match(&format!(" {literal} ")).unwrap());
-            assert!(!re.is_match(&format!("a{literal}")).unwrap());
-            assert!(!re.is_match(&format!("{literal}a")).unwrap());
         }
     }
 

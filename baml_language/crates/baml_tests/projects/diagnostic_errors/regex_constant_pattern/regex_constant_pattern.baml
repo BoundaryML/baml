@@ -1,71 +1,66 @@
-// A constant pattern argument to `baml.regex.compile` is compiled while the
+// A constant pattern argument to `baml.regex.new` is compiled while the
 // BAML program is, so a bad pattern is E0174 here rather than a
 // `baml.regex.Error` the program has to run to reach.
 
 // Malformed in every dialect.
 function unclosed_group() -> baml.regex.Regex {
-    baml.regex.compile("(unclosed")
+    baml.regex.new("(unclosed")
 }
 
 // Well-formed, but outside the default dialect: the diagnostic names the
 // opt-in rather than sending the author looking for a typo.
 function lookahead_without_opt_in() -> baml.regex.Regex {
-    baml.regex.compile("\\d+(?= USD)")
+    baml.regex.new("\\d+(?= USD)")
 }
 
 function backreference_without_opt_in() -> baml.regex.Regex {
-    baml.regex.compile("(\\w+) \\1")
+    baml.regex.new("(\\w+) \\1")
 }
 
 // A recursive subroutine that could re-enter itself without consuming input
 // is rejected by the backtracking engine too.
 function unbounded_recursion() -> baml.regex.Regex {
-    baml.regex.compile("(?<expr>\\g<expr>a|a)", backtracking = true)
+    baml.regex.new("(?<expr>\\g<expr>a|a)", backtracking = true)
 }
 
 // Duplicate bindings are rejected, and constant validation follows the first
 // argument actually bound to the parameter, exactly as runtime lowering does.
 function duplicate_pattern_ignores_unbound_invalid_literal() -> baml.regex.Regex {
-    baml.regex.compile("valid", pattern = "(")
+    baml.regex.new("valid", pattern = "(")
 }
 
 function duplicate_pattern_validates_bound_invalid_literal() -> baml.regex.Regex {
-    baml.regex.compile("(", pattern = "valid")
+    baml.regex.new("(", pattern = "valid")
 }
 
 function repeated_pattern_label_reports_one_duplicate() -> baml.regex.Regex {
-    baml.regex.compile(pattern = "valid", pattern = "(")
+    baml.regex.new(pattern = "valid", pattern = "(")
 }
 
 // ─── Accepted: no diagnostic below this line ─────────────────────────────────
 
 function valid_default_dialect() -> baml.regex.Regex {
-    baml.regex.compile("\\b\\d{4}-\\d{2}-\\d{2}\\b")
+    baml.regex.new("\\b\\d{4}-\\d{2}-\\d{2}\\b")
 }
 
 // The same construct rejected above, with the opt-in.
 function lookahead_with_opt_in() -> baml.regex.Regex {
-    baml.regex.compile("\\d+(?= USD)", backtracking = true)
+    baml.regex.new("\\d+(?= USD)", backtracking = true)
 }
 
 // A pattern that is only computable at runtime is not the compiler's to
 // check; that is what `baml.regex.Error` carries a message and a span for.
 function dynamic_pattern(p: string) -> baml.regex.Regex {
-    baml.regex.compile(p)
+    baml.regex.new(p)
 }
 
 // The dialect is computed, so only a pattern *both* dialects reject would be
 // reported. This one is fine under `backtracking = true`.
 function computed_dialect(on: bool) -> baml.regex.Regex {
-    baml.regex.compile("\\d+(?= USD)", backtracking = on)
-}
-
-// `word` escapes its literal, so its argument is text, not syntax.
-function word_argument_is_never_a_pattern() -> baml.regex.Regex {
-    baml.regex.word("(unclosed")
+    baml.regex.new("\\d+(?= USD)", backtracking = on)
 }
 
 // Named arguments may appear in a different order than the parameters.
 function reordered_named_arguments() -> baml.regex.Regex {
-    baml.regex.compile(backtracking = true, pattern = "\\d+(?= USD)")
+    baml.regex.new(backtracking = true, pattern = "\\d+(?= USD)")
 }

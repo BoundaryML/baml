@@ -7,7 +7,7 @@
 //!
 //! # Errors are a construction-time concern
 //!
-//! `compile` and `word` throw `baml.regex.Error`; nothing else here throws.
+//! `new` throws `baml.regex.Error`; nothing else here throws.
 //! That is the point of a compiled `Regex` value: a program holding one is past
 //! the only step that could reject the pattern. A backtracking search can still
 //! run out of budget, which panics rather than reporting a false "no match" —
@@ -73,7 +73,7 @@ fn group_value(vm: &mut BexVm, hay: &BexStr, span: (usize, usize), chars: (usize
 }
 
 /// Convert every match's spans in one pass over the haystack. Restarting the
-/// codepoint count for each match makes even `find_all("")` quadratic.
+/// codepoint count for each match makes even `match_all("")` quadratic.
 fn match_values(
     vm: &mut BexVm,
     hay: &BexStr,
@@ -258,14 +258,14 @@ fn aborted(prog: &Program, abort: SearchAborted) -> VmRustFnError {
 
 impl BamlClassRegexRegex for PackageBamlImpl {
     /// Report whether the pattern matches, turning engine exhaustion into a panic.
-    fn is_match(vm: &mut BexVm, regex: &Value, haystack: &BexStr) -> Result<bool, VmRustFnError> {
+    fn has_match(vm: &mut BexVm, regex: &Value, haystack: &BexStr) -> Result<bool, VmRustFnError> {
         let prog = program_of(vm, *regex)?;
         prog.is_match(haystack.as_str())
             .map_err(|abort| aborted(&prog, abort))
     }
 
     /// Materialize the first match with codepoint offsets, or return `None`.
-    fn find(
+    fn match_once(
         vm: &mut BexVm,
         regex: &Value,
         haystack: &BexStr,
@@ -278,7 +278,7 @@ impl BamlClassRegexRegex for PackageBamlImpl {
     }
 
     /// Materialize all non-overlapping matches with one batched offset conversion.
-    fn find_all(
+    fn match_all(
         vm: &mut BexVm,
         regex: &Value,
         haystack: &BexStr,
@@ -291,7 +291,7 @@ impl BamlClassRegexRegex for PackageBamlImpl {
     }
 
     /// Return captures only when the complete subject matches the anchored program.
-    fn exact_match(
+    fn match_full(
         vm: &mut BexVm,
         regex: &Value,
         haystack: &BexStr,
@@ -382,21 +382,6 @@ impl BamlNamespaceRegex for PackageBamlImpl {
         match Program::compile(pattern.as_str(), backtracking) {
             Ok(prog) => Ok(regex_value(vm, prog)),
             Err(err) => Err(throw_build_error(vm, pattern.as_str(), &err)),
-        }
-    }
-
-    /// Escape a literal and compile its Unicode word-boundary pattern.
-    fn _word(vm: &mut BexVm, literal: &BexStr, ignore_case: bool) -> Result<Value, VmRustFnError> {
-        match Program::word(literal.as_str(), ignore_case) {
-            Ok(prog) => Ok(regex_value(vm, prog)),
-            // The literal is escaped, so the only way here is an input the
-            // engine still rejects (a size limit). The error's span refers to
-            // the pattern `word` built, so report that pattern, not the literal.
-            Err(err) => Err(throw_build_error(
-                vm,
-                &Program::word_pattern(literal.as_str(), ignore_case),
-                &err,
-            )),
         }
     }
 

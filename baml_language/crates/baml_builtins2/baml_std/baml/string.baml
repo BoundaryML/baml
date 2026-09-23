@@ -320,8 +320,8 @@ class String {
     /// # Examples
     /// ```
     /// "a.b".replace(".", "-")                                  // "a-b"
-    /// "a.b".replace(baml.regex.compile("."), "-")              // "-.b"
-    /// "5 cm".replace(baml.regex.compile("(\\d+) cm"), "${1}mm") // "5mm"
+    /// "a.b".replace(baml.regex.new("."), "-")              // "-.b"
+    /// "5 cm".replace(baml.regex.new("(\\d+) cm"), "${1}mm") // "5mm"
     /// ```
     function replace(
         self,
@@ -447,7 +447,7 @@ class String {
     /// # Examples
     /// ```
     /// "a.b.c".replace_all(".", "-")                       // "a-b-c"
-    /// "a1b2".replace_all(baml.regex.compile("\\d"), "#") // "a#b#"
+    /// "a1b2".replace_all(baml.regex.new("\\d"), "#") // "a#b#"
     /// ```
     function replace_all(
         self,

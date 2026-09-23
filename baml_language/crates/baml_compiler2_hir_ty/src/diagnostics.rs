@@ -164,7 +164,7 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
-    /// A constant pattern argument to `baml.regex.compile` does not compile.
+    /// A constant pattern argument to `baml.regex.new` does not compile.
     /// Checked here so a typo in a literal pattern is a source error rather
     /// than a throw the program has to reach to discover.
     InvalidRegexPattern {

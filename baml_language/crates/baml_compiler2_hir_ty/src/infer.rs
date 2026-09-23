@@ -5272,18 +5272,15 @@ impl<'db> InferenceContext<'db> {
         ret
     }
 
-    /// Whether `callee` names `baml.regex.compile`.
+    /// Whether `callee` names `baml.regex.new`.
     ///
     /// Both resolution roads are checked. Compiled from source (the usual case
     /// — the stdlib type-checks alongside user files) the callee is a
     /// `Free { func }` whose source `FunctionLoc` equals the one
-    /// `baml.regex.compile` resolves to. From a source-less package, its
+    /// `baml.regex.new` resolves to. From a source-less package, its
     /// external declaration address identifies the trusted builtin slot.
     ///
-    /// `word` is deliberately not included: it escapes its literal, so the
-    /// pattern it builds can only fail on a size limit no realistic term
-    /// reaches, and its argument is text, not syntax.
-    fn is_regex_compile(&mut self, callee: ExprId) -> bool {
+    fn is_regex_new(&mut self, callee: ExprId) -> bool {
         let resolution = self
             .result
             .member_resolutions
@@ -5303,7 +5300,7 @@ impl<'db> InferenceContext<'db> {
                 let segments = [
                     baml_type::Name::new("baml"),
                     baml_type::Name::new("regex"),
-                    baml_type::Name::new("compile"),
+                    baml_type::Name::new("new"),
                 ];
                 matches!(
                     self.lower.resolve_value(&segments),
@@ -5319,13 +5316,13 @@ impl<'db> InferenceContext<'db> {
                     if self.lang().is(baml_base::LangPackage::Baml, function.root())
                         && function.namespace().len() == 1
                         && function.namespace()[0].as_str() == "regex"
-                        && function.name().as_str() == "compile"
+                        && function.name().as_str() == "new"
             ),
             _ => false,
         }
     }
 
-    /// Compile a constant `baml.regex.compile` pattern now, so a typo in a
+    /// Compile a constant `baml.regex.new` pattern now, so a typo in a
     /// literal is a source diagnostic instead of a throw the program has to
     /// reach to discover.
     ///
@@ -5353,7 +5350,7 @@ impl<'db> InferenceContext<'db> {
         let Expr::Literal(Literal::String(pattern)) = &body.exprs[expr] else {
             return;
         };
-        if !self.is_regex_compile(callee) {
+        if !self.is_regex_new(callee) {
             return;
         }
 
