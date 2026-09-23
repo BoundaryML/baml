@@ -441,6 +441,66 @@ async fn start_process_stdout_close_cancels_pending_read() {
 
 #[tokio::test]
 #[cfg(unix)]
+async fn claude_code_client_streams_large_prompt_without_pipe_deadlock() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let temp = tempfile::tempdir().expect("tempdir for Claude Code stdin probe");
+    let script = temp.path().join("claude-code-stdin-probe.sh");
+    std::fs::write(
+        &script,
+        r#"#!/bin/sh
+set -eu
+for arg in "$@"; do
+    test "${#arg}" -lt 65536 || exit 42
+done
+# Fill stdout before reading stdin to exercise concurrent pipe draining.
+printf '{"type":"system","padding":"'
+dd if=/dev/zero bs=1024 count=256 2>/dev/null | tr '\000' x
+printf '"}\n'
+cat > "$(dirname "$0")/stdin.txt"
+printf '%s\n' '{"type":"result","subtype":"success","structured_output":"ok"}'
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let payload = format!("BEGIN-{}-雪-END", "x".repeat(1024 * 1024));
+    let output = baml_test! {
+        baml: r#"
+            function LargePrompt(payload: string) -> string {
+                client: "openai/gpt-4o-mini"
+                prompt: `${payload} ${ctx.output_format()}`
+            }
+
+            function main(executable: string, payload: string) -> string {
+                let spec = LargePrompt@spec(payload);
+                let cl = claude_code.ClaudeCodeClient.new(
+                    executable = executable,
+                    timeout_ms = 10000,
+                );
+                cl.invoke(ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal.new(spec),
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                });
+                "ok"
+            }
+        "#,
+        args: {
+            "executable" => BexExternalValue::String(script.to_string_lossy().into_owned().into()),
+            "payload" => BexExternalValue::String(payload.clone().into()),
+        },
+    };
+    assert_eq!(output.result, Ok(BexExternalValue::String("ok".into())));
+    let received = std::fs::read_to_string(temp.path().join("stdin.txt")).unwrap();
+    assert!(
+        received.contains(&payload),
+        "complete UTF-8 prompt must reach stdin"
+    );
+}
+
+#[tokio::test]
+#[cfg(unix)]
 async fn claude_code_client_preserves_process_wait_timeout() {
     use std::os::unix::fs::PermissionsExt as _;
 
@@ -480,7 +540,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
                 let cl = claude_code.ClaudeCodeClient.new(
                     model = "offline-timeout-probe",
                     executable = executable,
-                    timeout_ms = 25,
+                    timeout_ms = 500,
                 );
                 let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
                     let timeout: baml.errors.Timeout => {
@@ -500,8 +560,8 @@ async fn claude_code_client_preserves_process_wait_timeout() {
         panic!("expected a string timeout result, got {:?}", output.result);
     };
     assert!(result.starts_with("Timeout:"), "{result}");
-    assert!(result.contains("timed out after 25ms"), "{result}");
-    assert!(result.ends_with(":25"), "{result}");
+    assert!(result.contains("timed out after 500ms"), "{result}");
+    assert!(result.ends_with(":500"), "{result}");
 }
 
 #[tokio::test]
