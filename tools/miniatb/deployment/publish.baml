@@ -15,6 +15,10 @@ function safe_change(name: string) -> bool {
                     ".claude",
                     ".ssh",
                     ".aws",
+                    ".infisical-scan.toml",
+                    ".infisical-scan-ignore",
+                    ".gitleaks.toml",
+                    ".gitleaksignore",
                     "__pycache__",
                     "node_modules",
                     "target",
@@ -70,6 +74,23 @@ function require_publish_enabled() -> void {
     );
 }
 
+/// Scanner policy belongs to the controller, never to the agent worktree.
+function scan_worktree(tree: string) -> void {
+    safe_exec(
+        "infisical",
+        [
+            "scan",
+            "--no-git",
+            "--source",
+            tree,
+            "--config",
+            app_dir() + "/deployment/secret-scan.toml",
+            "--redact",
+            "--telemetry=false",
+        ],
+    );
+}
+
 function publish(issue: Issue, fix: Fix) -> string {
     require_publish_enabled();
     let tree = run_dir() + "/worktree";
@@ -81,7 +102,6 @@ function publish(issue: Issue, fix: Fix) -> string {
             && safe_exec("git", ["-C", tree, "branch", "--show-current"]) == branch,
         "Unexpected branch",
     );
-    safe_exec("infisical", ["scan", "--no-git", "--source", tree, "--redact", "--telemetry=false"]);
     let changed = safe_exec("git", ["-C", tree, "ls-files", "--modified", "--others", "--exclude-standard", "-z"])
         .split("\0");
     for (let name in changed) {
@@ -89,6 +109,7 @@ function publish(issue: Issue, fix: Fix) -> string {
             validate_change(tree, name);
         }
     }
+    scan_worktree(tree);
     safe_exec("git", ["-C", tree, "add", "-A"]);
     safe_exec("git", ["-C", tree, "diff", "--cached", "--check"]);
     let base = safe_exec("git", ["-C", tree, "rev-parse", "HEAD"]);
