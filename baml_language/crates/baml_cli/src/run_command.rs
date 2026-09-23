@@ -235,8 +235,8 @@ pub struct RunArgs {
 
     /// Write BAML `log.*` events to a file.
     ///
-    /// Captures all levels by default. If terminal logs are enabled, it uses
-    /// that threshold. It does not enable terminal output.
+    /// Uses the terminal log threshold (default: info). With --log off, captures
+    /// all levels and disables terminal logs.
     #[arg(long, help_heading = "Run output options")]
     pub log_file: Option<PathBuf>,
 
