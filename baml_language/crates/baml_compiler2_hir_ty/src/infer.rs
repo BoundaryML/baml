@@ -47,7 +47,7 @@ use baml_type::{
     interned::{ClosedTy, InferInterface, InferTy, Ty},
     normalize::canonical_union_interned,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callable::{
@@ -5750,6 +5750,14 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
+        self.seed_absent_callback_effects(
+            callee_fn_ty,
+            call,
+            &params,
+            args,
+            &matched,
+            &label_fallback,
+        );
         // Parameter-ordered bindings: provided slots from the matching,
         // omitted OPTIONAL slots as defaults (required gaps get no entry;
         // arity is S17's).
@@ -9845,6 +9853,145 @@ impl<'db> InferenceContext<'db> {
             }
         }
         resolved
+    }
+
+    /// A non-callable argument contributes an empty callback effect. In
+    /// `string | (() -> T throws E)`, a string argument supplies no callback
+    /// constraint for `E`. Leaving it open leaks an unresolved effect into an
+    /// enclosing lambda's runtime signature.
+    ///
+    /// Seed after checking arguments so a lambda does not inherit `never`
+    /// before its body contributes its actual effect. A lower bound (not an
+    /// equality) preserves other callbacks' contributions. Variables also
+    /// used as values, including type arguments inside an error class, retain
+    /// ordinary inference and must not default to `never`.
+    fn seed_absent_callback_effects(
+        &mut self,
+        signature: &Ty,
+        call: ExprId,
+        params: &[baml_type::interned::InferFunctionParamTy],
+        args: &[baml_compiler2_ast::CallArg],
+        matched: &[Option<usize>],
+        label_fallback: &[bool],
+    ) {
+        fn collect(
+            ty: &Ty,
+            effect: bool,
+            effects: &mut FxHashSet<baml_type::interned::InferVar>,
+            values: &mut FxHashSet<baml_type::interned::InferVar>,
+        ) {
+            match ty.kind() {
+                InferTy::InferVar { var, .. } => {
+                    if effect { effects } else { values }.insert(*var);
+                }
+                InferTy::Function {
+                    params,
+                    ret,
+                    throws,
+                } => {
+                    for param in params {
+                        collect(&param.ty, false, effects, values);
+                    }
+                    collect(ret, false, effects, values);
+                    collect(throws, true, effects, values);
+                }
+                InferTy::Union(members) => {
+                    for member in members {
+                        collect(member, effect, effects, values);
+                    }
+                }
+                _ => baml_type::interned::for_each_child(ty.kind(), |child| {
+                    collect(child, false, effects, values);
+                }),
+            }
+        }
+        fn collect_callback_roots(
+            this: &mut InferenceContext<'_>,
+            ty: &Ty,
+            effects: &mut FxHashSet<baml_type::interned::InferVar>,
+            values: &mut FxHashSet<baml_type::interned::InferVar>,
+            fuel: u8,
+        ) {
+            if fuel == 0 {
+                return;
+            }
+            let expanded = this.expand_alias_ty(ty);
+            match expanded.kind() {
+                InferTy::Function { .. } => {
+                    let callback = this.table.resolve_completely(&expanded);
+                    collect(&callback, false, effects, values);
+                }
+                InferTy::Union(members) => {
+                    let members = members.to_vec();
+                    for member in &members {
+                        collect_callback_roots(
+                            this,
+                            member,
+                            effects,
+                            values,
+                            fuel.saturating_sub(1),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !signature.has_infer() {
+            return;
+        }
+        let mut absent_effects = FxHashSet::default();
+        let mut values = FxHashSet::default();
+        for ((arg, param_index), is_label_fallback) in args.iter().zip(matched).zip(label_fallback)
+        {
+            // An unknown label is checked positionally for diagnostics, but
+            // does not fill the parameter or establish an absent callback.
+            if *is_label_fallback {
+                continue;
+            }
+            let Some(index) = param_index else { continue };
+            let expected = &params[*index].ty;
+            if !expected.has_infer() {
+                continue;
+            }
+            let Some(actual) = self.result.type_of_expr.get(&arg.expr) else {
+                continue;
+            };
+            let actual = self.table.resolve_completely(actual);
+            let actual = self.expand_alias_ty(&actual);
+            // A union/unknown/type variable may still carry a callback, so it
+            // supplies no evidence that the callback arm was absent.
+            if actual.has_infer()
+                || actual.has_error()
+                || matches!(
+                    actual.kind(),
+                    InferTy::Function { .. }
+                        | InferTy::Union(_)
+                        | InferTy::Unknown
+                        | InferTy::TypeVar(_)
+                        | InferTy::AssociatedTypeProjection { .. }
+                )
+            {
+                continue;
+            }
+            let expected = self.expand_alias_ty(expected);
+            if !matches!(expected.kind(), InferTy::Union(_)) {
+                continue;
+            }
+            collect_callback_roots(self, &expected, &mut absent_effects, &mut values, 16);
+        }
+        if absent_effects.is_empty() {
+            return;
+        }
+        let signature = self.table.resolve_completely(signature);
+        collect(&signature, false, &mut FxHashSet::default(), &mut values);
+        for var in absent_effects.difference(&values) {
+            // Existing lowers may carry an unsolved sibling callback effect.
+            // A ground `never` must not decide that variable ahead of them.
+            if self.table.is_solved(*var) || !self.table.var_bounds(*var).lowers.is_empty() {
+                continue;
+            }
+            self.table.add_lower_bound(*var, Ty::never(), Some(call));
+        }
     }
 
     /// The sole concrete function type at a callback root: `ty` itself, or

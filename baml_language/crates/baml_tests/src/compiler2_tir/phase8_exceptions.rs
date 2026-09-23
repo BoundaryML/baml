@@ -3,6 +3,162 @@
 use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;
 
+#[test]
+fn absent_callback_effect_is_never_in_a_stored_lambda_signature() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function invoke<E>(cb: string | (() -> int throws E)) -> int throws E {
+    match (cb) {
+        string => 1,
+        let f: () -> int throws E => f(),
+    }
+}
+function invoke_optional<E>(cb: (() -> int throws E)?) -> int throws E {
+    match (cb) {
+        null => 1,
+        let f: () -> int throws E => f(),
+    }
+}
+function invoke_wide<E>(cb: int | string | (() -> int throws E)) -> int throws E {
+    match (cb) {
+        int => cb,
+        string => 1,
+        let f: () -> int throws E => f(),
+    }
+}
+function invoke_multiple<E1, E2>(cb: string | (() -> int throws E1) | ((int) -> int throws E2)) -> int throws E1 | E2 {
+    match (cb) {
+        string => 1,
+        let f: () -> int throws E1 => f(),
+        let f: (int) -> int throws E2 => f(1),
+    }
+}
+function pair<E>(first: string | (() -> int throws E), second: () -> int throws E) -> int throws E {
+    invoke(first) + second()
+}
+function sample(cb: string | (() -> int throws string), error: string) -> void {
+    let pure = () -> int { invoke("literal") };
+    let named = () -> int { invoke(cb = "literal") };
+    let optional = () -> int { invoke_optional(null) };
+    let wide = () -> int { invoke_wide(42) };
+    let multiple = () -> int { invoke_multiple("literal") };
+    let risky = () -> int { invoke(() -> int throws string { throw "boom" }) };
+    let shared = () -> int { pair("literal", () -> int throws string { throw "boom" }) };
+    let inferred_pure = () -> int { pair("literal", () -> int { 1 }) };
+    let inferred_shared = () -> int { pair("literal", () -> int { throw error }) };
+    let stored_callback = () -> int { throw error };
+    let stored_shared = () -> int { pair("literal", stored_callback) };
+    let dynamic = () -> int { invoke(cb) };
+    pure;
+    named;
+    optional;
+    wide;
+    multiple;
+    risky;
+    shared;
+    inferred_pure;
+    inferred_shared;
+    stored_shared;
+    dynamic;
+}
+"#,
+    );
+    // Inspect stored closure signatures, not just the enclosing function: an
+    // unresolved effect here used to panic during runtime type lowering.
+    for binding in [
+        "pure",
+        "named",
+        "optional",
+        "wide",
+        "multiple",
+        "inferred_pure",
+    ] {
+        assert_eq!(
+            super::support::expr_type_in_function(&db, file, "sample", binding),
+            "() -> int throws never",
+            "expected the absent callback in {binding} to infer throws never"
+        );
+    }
+    for binding in [
+        "risky",
+        "shared",
+        "inferred_shared",
+        "stored_shared",
+        "dynamic",
+    ] {
+        assert_eq!(
+            super::support::expr_type_in_function(&db, file, "sample", binding),
+            "() -> int throws string",
+            "expected {binding} to retain its concrete callback effect"
+        );
+    }
+}
+
+#[test]
+fn unknown_argument_label_does_not_seed_an_absent_callback_effect() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function invoke<E>(cb: string | (() -> int throws E)) -> int throws E {
+    match (cb) {
+        string => 1,
+        let f: () -> int throws E => f(),
+    }
+}
+function sample() -> void {
+    let invalid = () -> int { invoke(typo = "literal") };
+    invalid;
+}
+"#,
+    );
+    let signature = super::support::expr_type_in_function(&db, file, "sample", "invalid");
+    assert_ne!(
+        signature, "() -> int throws never",
+        "an unknown label leaves the callback parameter unfilled and must not prove its effect empty"
+    );
+    let output = render_tir(&db, file);
+    assert!(output.contains("unknown named argument `typo`"), "{output}");
+    assert!(
+        output.contains("missing required argument `cb`"),
+        "{output}"
+    );
+}
+
+#[test]
+fn callback_effect_also_used_as_a_value_keeps_its_inferred_type() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Box<T> { value T }
+
+function choose<E>(value: E, cb: string | (() -> int throws E)) -> E throws E {
+    value
+}
+function choose_wrapped<E>(value: Box<E>, cb: string | (() -> int throws E)) -> E throws E {
+    value.value
+}
+function sample() -> void {
+    let direct = choose("value", "literal");
+    let wrapped = choose_wrapped(Box<string> { value: "value" }, "literal");
+    direct;
+    wrapped;
+}
+"#,
+    );
+    assert_eq!(
+        super::support::expr_type_in_function(&db, file, "sample", "direct"),
+        "string"
+    );
+    assert_eq!(
+        super::support::expr_type_in_function(&db, file, "sample", "wrapped"),
+        "string"
+    );
+}
+
 fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, message: &str) {
     let expected =
         format!("declared throws is `{declared}`, but this function may also throw `{thrown}`");
