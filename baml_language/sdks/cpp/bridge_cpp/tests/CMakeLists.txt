@@ -10,6 +10,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/fetch_protobuf.cmake)
 set(PB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../pb/baml_bridge/cffi/v1)
 add_executable(runtime_smoke
   runtime_smoke.cc
+  windows_minmax_guard.cc
   ${PB_DIR}/baml_handle.pb.cc
   ${PB_DIR}/baml_inbound.pb.cc
   ${PB_DIR}/baml_outbound.pb.cc
