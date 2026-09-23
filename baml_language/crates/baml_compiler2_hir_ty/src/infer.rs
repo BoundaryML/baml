@@ -946,6 +946,13 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
     },
+    /// A constant pattern argument that does not compile.
+    InvalidRegexPattern {
+        expr: ExprId,
+        kind: sys_regex::ErrorKind,
+        message: String,
+        offset: Option<usize>,
+    },
     MountedPackageCallUnsupported {
         expr: ExprId,
         path: baml_type::Name,
@@ -5259,9 +5266,131 @@ impl<'db> InferenceContext<'db> {
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
         self.report_mounted_reserved_call(call, callee);
         self.seed_implicit_llm_schema(body, call, callee, args);
+        self.report_constant_regex_pattern(body, callee, args);
         let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
         self.default_uncontracted_session_eval(body, call, callee);
         ret
+    }
+
+    /// Whether `callee` names `baml.regex.compile`.
+    ///
+    /// Both resolution roads are checked. Compiled from source (the usual case
+    /// — the stdlib type-checks alongside user files) the callee is a
+    /// `Free { func }` whose source `FunctionLoc` equals the one
+    /// `baml.regex.compile` resolves to. From a source-less package, its
+    /// external declaration address identifies the trusted builtin slot.
+    ///
+    /// `word` is deliberately not included: it escapes its literal, so the
+    /// pattern it builds can only fail on a size limit no realistic term
+    /// reaches, and its argument is text, not syntax.
+    fn is_regex_compile(&mut self, callee: ExprId) -> bool {
+        let resolution = self
+            .result
+            .member_resolutions
+            .get(&callee)
+            .or_else(|| {
+                self.result
+                    .path_resolutions
+                    .get(&callee)
+                    .and_then(|path| path.segments.last())
+                    .and_then(|segment| segment.resolution.as_ref())
+            })
+            .cloned();
+        match resolution {
+            Some(MemberResolution::Free {
+                func: DeclRef::Source(func),
+            }) => {
+                let segments = [
+                    baml_type::Name::new("baml"),
+                    baml_type::Name::new("regex"),
+                    baml_type::Name::new("compile"),
+                ];
+                matches!(
+                    self.lower.resolve_value(&segments),
+                    Some(ResolvedValue::Source(Definition::Function(target)))
+                        if target == func
+                )
+            }
+            Some(MemberResolution::Free {
+                func: DeclRef::External(external),
+            }) => matches!(
+                external.slot(self.db),
+                crate::callable::ExternalCallTarget::Free { function }
+                    if self.lang().is(baml_base::LangPackage::Baml, function.root())
+                        && function.namespace().len() == 1
+                        && function.namespace()[0].as_str() == "regex"
+                        && function.name().as_str() == "compile"
+            ),
+            _ => false,
+        }
+    }
+
+    /// Compile a constant `baml.regex.compile` pattern now, so a typo in a
+    /// literal is a source diagnostic instead of a throw the program has to
+    /// reach to discover.
+    ///
+    /// The check goes through the same `sys_regex::Program::compile` the
+    /// runtime uses, so it cannot drift: a pattern accepted here is accepted
+    /// there, with the same classification and message. A dynamically built
+    /// pattern is left alone — `baml.regex.Error` and its span are what that
+    /// case has.
+    fn report_constant_regex_pattern(
+        &mut self,
+        body: &ExprBody,
+        callee: ExprId,
+        args: &[baml_compiler2_ast::CallArg],
+    ) {
+        let Some(pattern_arg) = args
+            .iter()
+            .find(|arg| arg.label.as_ref().is_some_and(|l| l.as_str() == "pattern"))
+            .or_else(|| args.iter().find(|arg| arg.label.is_none()))
+        else {
+            return;
+        };
+        let Expr::Literal(Literal::String(pattern)) = &body.exprs[pattern_arg.expr] else {
+            return;
+        };
+        if !self.is_regex_compile(callee) {
+            return;
+        }
+        let expr = pattern_arg.expr;
+
+        // The dialect follows the `backtracking` argument when it is itself
+        // constant. When it is computed, only a pattern *both* dialects reject
+        // is reported — flagging one that a `backtracking = true` call would
+        // have accepted would be a false positive.
+        let backtracking = args
+            .iter()
+            .find(|arg| {
+                arg.label
+                    .as_ref()
+                    .is_some_and(|l| l.as_str() == "backtracking")
+            })
+            .or_else(|| args.iter().filter(|arg| arg.label.is_none()).nth(1))
+            .map_or(Some(false), |arg| match &body.exprs[arg.expr] {
+                Expr::Literal(Literal::Bool(value)) => Some(*value),
+                _ => None,
+            });
+        let error = match backtracking {
+            Some(backtracking) => sys_regex::Program::compile(pattern, backtracking).err(),
+            None => sys_regex::Program::compile(pattern, false)
+                .err()
+                .and_then(|_| sys_regex::Program::compile(pattern, true).err()),
+        };
+        let Some(error) = error else {
+            return;
+        };
+        // The engine reports a byte offset into the pattern; the user reads
+        // characters, and `baml.regex.Error` reports codepoints too.
+        let offset = error
+            .span
+            .map(|(start, _)| sys_regex::char_offsets(pattern, &[start])[0]);
+        self.pending_diags.push(PendingDiag::InvalidRegexPattern {
+            expr,
+            kind: error.kind,
+            message: error.message,
+            offset,
+        });
     }
 
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
@@ -11310,6 +11439,19 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
+                    PendingDiag::InvalidRegexPattern {
+                        expr,
+                        kind,
+                        message,
+                        offset,
+                    } => (
+                        TirTypeError::InvalidRegexPattern {
+                            kind,
+                            message,
+                            offset,
+                        },
+                        expr,
+                    ),
                     PendingDiag::ScopedTypeEscapesBlock {
                         at,
                         name,

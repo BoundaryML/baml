@@ -1493,7 +1493,7 @@ fn render_describe_methods_respect_budget() {
     // every impl the class falls under, rustdoc parity — is part of it). What
     // the test pins is the *property* the helper checks — the hinted budget
     // is minimal and renders everything.
-    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 131);
+    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 137);
 }
 
 #[test]

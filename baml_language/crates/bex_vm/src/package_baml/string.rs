@@ -116,7 +116,7 @@ impl BamlClassString for PackageBamlImpl {
         string.substring_by_char(start, end)
     }
 
-    fn replace(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
+    fn _replace_literal(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
         BexStr::from(
             string
                 .as_str()
@@ -157,7 +157,7 @@ impl BamlClassString for PackageBamlImpl {
         string.repeat(count)
     }
 
-    fn replace_all(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
+    fn _replace_all_literal(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
         BexStr::from(
             string
                 .as_str()

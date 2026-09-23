@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: "describe_via_dispatch(&db, \"string\")"
 ---
-class String  (string)  <builtin>/baml/string.baml:17-802
+class String  (string)  <builtin>/baml/string.baml:17-857
 
 /// A UTF-8 encoded string.
 ///
@@ -33,12 +33,12 @@ methods:
   function byte_length(self) -> int throws never  <builtin>/baml/string.baml:88-90
   /// Returns the lowercase equivalent of this string.
   function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:107-109
-  … 76 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
+  … 82 more lines (re-run with a higher `--budget` to see more; use `--budget 137` for full output)
 
 static_methods:
-  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
+  … 6 more lines (re-run with a higher `--budget` to see more; use `--budget 137` for full output)
 
 implementations (5):
-  … 15 more lines (re-run with a higher `--budget` to see more; use `--budget 131` for full output)
+  … 15 more lines (re-run with a higher `--budget` to see more; use `--budget 137` for full output)
 
 references (0):
