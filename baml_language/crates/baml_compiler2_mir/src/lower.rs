@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{Name, TypePath};
+use baml_base::Name;
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     callable::{
@@ -1302,6 +1302,22 @@ pub fn function_link_name<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -
     }
 }
 
+/// The name a class links as, wherever it is declared: the wire spelling
+/// emit registers its pooled object under and renders into operand metadata.
+pub fn class_link_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> String {
+    match class {
+        DeclRef::Source(class_loc) => definition_link_name(db, Definition::Class(class_loc)),
+        DeclRef::External(class_loc) => {
+            let head = class_loc.head(db);
+            link_name(
+                spelling(db).of(head.root()),
+                head.namespace(),
+                &[head.name().as_str()],
+            )
+        }
+    }
+}
+
 /// The name an enum links as, wherever it is declared.
 pub fn enum_link_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
     match enum_ref {
@@ -1380,12 +1396,11 @@ use baml_compiler2_hir::{
         PathResolution,
     },
 };
-use rustc_hash::{FxHashMap, FxHashSet};
-
 /// What ONE interface declaration says a member name is — MIR's name for
 /// the layout answer (the crate's own [`InterfaceMember`] is the resolved
 /// view across a `requires` closure).
 use baml_compiler2_hir_ty::layout::InterfaceMember as DeclaredMember;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 type InterfaceTypeView = (TypeName, Box<[Tir2Ty]>, Box<[(Name, Tir2Ty)]>);
 
@@ -1928,6 +1943,38 @@ impl<'db> LoweringContext<'db> {
                 "TIR admitted the enum `{}`, which no declaration in this compilation names",
                 qtn.name()
             ))
+        })
+    }
+
+    /// The discriminant of `variant` in `enum_ref`'s declared order. TIR
+    /// admitted the variant against this very declaration, so a miss is a
+    /// compiler bug.
+    fn enum_variant_index(&self, enum_ref: EnumRef<'db>, variant: &Name) -> Lowered<u32> {
+        layout::enum_variant_index(self.db, enum_ref, variant).ok_or_else(|| {
+            self.internal_error_here(&format!(
+                "TIR admitted the variant `{variant}` of `{}`, which the enum does not declare",
+                enum_link_name(self.db, enum_ref)
+            ))
+        })
+    }
+
+    /// A class the language ships and lowering constructs by identity
+    /// (`baml.TaggedString`, `baml.spawn.Params`), whichever lane serves the
+    /// package. Its absence is a compiler/stdlib mismatch.
+    fn lang_class(
+        &self,
+        package: baml_base::LangPackage,
+        namespace: &[&str],
+        name: &str,
+    ) -> ClassRef<'db> {
+        layout::lang_class(self.db, package, namespace, name).unwrap_or_else(|| {
+            let path = namespace
+                .iter()
+                .copied()
+                .chain(std::iter::once(name))
+                .collect::<Vec<_>>()
+                .join(".");
+            panic!("internal error: the `{package:?}` language package declares no class `{path}`")
         })
     }
 
@@ -5495,7 +5542,11 @@ impl<'db> LoweringContext<'db> {
                     Place::local(ret),
                     Rvalue::Aggregate {
                         kind: AggregateKind::Class {
-                            name: "baml.TaggedString".to_string(),
+                            class: self.lang_class(
+                                baml_base::LangPackage::Baml,
+                                &[],
+                                "TaggedString",
+                            ),
                             type_arg_templates: vec![],
                         },
                         fields: vec![
@@ -5916,13 +5967,12 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Object {
-                type_name,
                 type_args,
                 fields,
                 spreads,
                 ..
             } => {
-                self.lower_object(expr_id, &type_name, &type_args, &fields, &spreads, dest)?;
+                self.lower_object(expr_id, &type_args, &fields, &spreads, dest)?;
             }
 
             AstExpr::MemberAccess { base, member } => {
@@ -6181,7 +6231,7 @@ impl<'db> LoweringContext<'db> {
                 Place::Local(params_local),
                 Rvalue::Aggregate {
                     kind: AggregateKind::Class {
-                        name: "baml.spawn.Params".to_string(),
+                        class: self.lang_class(baml_base::LangPackage::Baml, &["spawn"], "Params"),
                         type_arg_templates: Vec::new(),
                     },
                     fields: vec![
@@ -6598,12 +6648,10 @@ impl<'db> LoweringContext<'db> {
                 .as_ref()
             {
                 let enum_ref = self.enum_ref_of(qtn)?;
+                let index = self.enum_variant_index(enum_ref, variant)?;
                 self.builder.assign(
                     dest,
-                    Rvalue::Use(Operand::Constant(Constant::EnumVariant {
-                        enum_ref,
-                        variant: variant.clone(),
-                    })),
+                    Rvalue::Use(Operand::Constant(Constant::EnumVariant { enum_ref, index })),
                 );
                 return Ok(());
             }
@@ -6842,12 +6890,10 @@ impl<'db> LoweringContext<'db> {
             .as_ref()
         {
             let enum_ref = self.enum_ref_of(qtn)?;
+            let index = self.enum_variant_index(enum_ref, variant)?;
             self.builder.assign(
                 dest,
-                Rvalue::Use(Operand::Constant(Constant::EnumVariant {
-                    enum_ref,
-                    variant: variant.clone(),
-                })),
+                Rvalue::Use(Operand::Constant(Constant::EnumVariant { enum_ref, index })),
             );
             return Ok(());
         }
@@ -10596,43 +10642,40 @@ impl<'db> LoweringContext<'db> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_name: &TypePath,
         type_args: &[AstTypeExpr],
         fields: &[baml_compiler2_ast::ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
     ) -> Lowered<()> {
         let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
-        // Prefer the explicitly written type name. If absent (e.g., when the
-        // type is a qualified path like `baml.errors.Io`), fall back to
-        // the TIR-inferred type to get the short class name.
-        //
-        // The class's LAYOUT (slot order, slot count) comes from the
-        // declaration TIR resolved the literal to, whichever lane declares it.
+        // The literal constructs the declaration TIR resolved its type to,
+        // whichever lane declares it; the class's LAYOUT (slot order, slot
+        // count) and its wire spelling both come from that declaration. TIR
+        // types every object literal — user-written or synthesized by the AST
+        // lowering — so a literal with no class behind its type is a compiler
+        // bug, never a source-order guess.
         let ty = self.expr_ty(expr_id);
-        let type_name_key: Option<TypeName> = match &ty {
-            RuntimeTy::Class(tn, _) => Some(tn.clone()),
+        let class = match &ty {
+            RuntimeTy::Class(tn, _) => self.class_ref_of_type_name(tn),
             _ => None,
         };
-        let class: Option<ClassRef<'db>> = type_name_key
-            .as_ref()
-            .and_then(|tn| self.class_ref_of_type_name(tn));
-        // Prefer the TIR-resolved fully-qualified name (`<package>.<ns>.<name>`)
-        // because that matches the bytecode emitter's FQN registry. The parser
-        // stores qualified paths verbatim from source (e.g. `root.http.Response`
-        // for user types), but the emitter registers user types under the `user.`
-        // prefix — so the source-verbatim form would miss the lookup. Falling
-        // back to the parser name only when TIR has no type info handles
-        // synthetic Object exprs from `lower_cst.rs` that already use registry-
-        // matching dotted forms like "ai.Prompt".
-        let class_name = if let Some(tn) = &type_name_key {
-            tn.render_dotted(false)
-        } else {
-            type_name.to_string()
+        let Some(class) = class else {
+            return Err(self.internal_error_here(&format!(
+                "object literal typed `{ty}` names no class this compilation declares"
+            )));
         };
-        let slot_of = |this: &Self, class: ClassRef<'db>, field: &Name| {
+        // TIR admitted every written field against this declaration, so a
+        // field the layout does not know is a compiler bug, never a value
+        // silently dropped on the floor.
+        let slot_of = |this: &Self, class: ClassRef<'db>, field: &Name| -> Lowered<usize> {
             layout::class_field_index(this.db, class, field)
                 .map(|index| usize::try_from(index).expect("u32 fits usize"))
+                .ok_or_else(|| {
+                    this.internal_error_here(&format!(
+                        "object literal names field `{field}`, which `{}` does not declare",
+                        class_link_name(this.db, class)
+                    ))
+                })
         };
 
         if spreads.is_empty() {
@@ -10642,31 +10685,19 @@ impl<'db> LoweringContext<'db> {
             // would otherwise put `absolute` into whichever slot happens to be
             // first. TIR resolves every user-written class literal to its
             // declaration, so the layout is always known here.
-            let field_operands: Vec<Operand<'db>> = if let Some(class) = class {
-                let mut result: Vec<Operand<'db>> = (0..layout::class_field_count(self.db, class))
+            let mut field_operands: Vec<Operand<'db>> =
+                (0..layout::class_field_count(self.db, class))
                     .map(|_| Operand::Constant(Constant::Null))
                     .collect();
-                for field in fields {
-                    if let Some(idx) = slot_of(self, class, &field.name) {
-                        result[idx] = self.lower_to_operand(field.value)?;
-                    }
-                }
-                result
-            } else {
-                // Synthetic Object exprs without TIR type info (e.g. compiler
-                // sugar for retry policies) fall back to source order. These
-                // construction sites build full, ordered literals so the order
-                // matches the class definition.
-                fields
-                    .iter()
-                    .map(|field| self.lower_to_operand(field.value))
-                    .collect::<Lowered<Vec<_>>>()?
-            };
+            for field in fields {
+                let idx = slot_of(self, class, &field.name)?;
+                field_operands[idx] = self.lower_to_operand(field.value)?;
+            }
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
                     kind: AggregateKind::Class {
-                        name: class_name,
+                        class,
                         type_arg_templates,
                     },
                     fields: field_operands,
@@ -10682,7 +10713,7 @@ impl<'db> LoweringContext<'db> {
                 Named(Name, Operand<'db>),
             }
 
-            let field_count = class.map_or(0, |class| layout::class_field_count(self.db, class));
+            let field_count = layout::class_field_count(self.db, class);
 
             // Lower all spread expressions into locals.
             let spread_locals: Vec<(usize, Local)> = spreads
@@ -10716,25 +10747,6 @@ impl<'db> LoweringContext<'db> {
 
             // Build per-class-field operand array. Process all entries in source
             // position order; later entries overwrite earlier ones.
-            let Some(class) = class else {
-                // Unknown class — just emit named fields in order.
-                let field_operands: Vec<Operand<'db>> = fields
-                    .iter()
-                    .map(|field| self.lower_to_operand(field.value))
-                    .collect::<Lowered<Vec<_>>>()?;
-                self.builder.assign(
-                    dest,
-                    Rvalue::Aggregate {
-                        kind: AggregateKind::Class {
-                            name: class_name,
-                            type_arg_templates,
-                        },
-                        fields: field_operands,
-                    },
-                );
-                return Ok(());
-            };
-
             // Merge all entries into a single sorted list by source position.
             let mut entries: Vec<(usize, Entry)> = Vec::new();
             for (pos, local) in &spread_locals {
@@ -10762,9 +10774,8 @@ impl<'db> LoweringContext<'db> {
                         }
                     }
                     Entry::Named(name, op) => {
-                        if let Some(idx) = slot_of(self, class, name) {
-                            result[idx] = op.clone();
-                        }
+                        let idx = slot_of(self, class, name)?;
+                        result[idx] = op.clone();
                     }
                 }
             }
@@ -10773,7 +10784,7 @@ impl<'db> LoweringContext<'db> {
                 dest,
                 Rvalue::Aggregate {
                     kind: AggregateKind::Class {
-                        name: class_name,
+                        class,
                         type_arg_templates,
                     },
                     fields: result,
@@ -10897,12 +10908,10 @@ impl<'db> LoweringContext<'db> {
             .as_ref()
         {
             let enum_ref = self.enum_ref_of(qtn)?;
+            let index = self.enum_variant_index(enum_ref, variant)?;
             self.builder.assign(
                 dest,
-                Rvalue::Use(Operand::Constant(Constant::EnumVariant {
-                    enum_ref,
-                    variant: variant.clone(),
-                })),
+                Rvalue::Use(Operand::Constant(Constant::EnumVariant { enum_ref, index })),
             );
             return Ok(());
         }
@@ -14169,11 +14178,11 @@ impl<'db> LoweringContext<'db> {
                         unreachable!("guarded by matches! above");
                     };
                     let enum_ref = self.enum_ref_of(qtn)?;
-                    let variant = variant.clone();
+                    let index = self.enum_variant_index(enum_ref, variant)?;
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
                         left: Operand::Copy(Place::Local(scrutinee)),
-                        right: Operand::Constant(Constant::EnumVariant { enum_ref, variant }),
+                        right: Operand::Constant(Constant::EnumVariant { enum_ref, index }),
                     };
                     let test_local = self.builder.temp(RuntimeTy::Bool);
                     self.builder.assign(Place::local(test_local), test);

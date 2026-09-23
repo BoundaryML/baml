@@ -54,6 +54,22 @@ pub fn class_ref_of<'db>(
     }
 }
 
+/// The class a language package declares at `namespace.name`, whichever
+/// lane serves the package — the class twin of
+/// [`crate::callable::lang_function`]. `None` when the package is not
+/// installed or declares no such class.
+pub fn lang_class<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    package: baml_base::LangPackage,
+    namespace: &[&str],
+    name: &str,
+) -> Option<ClassRef<'db>> {
+    let root = baml_compiler2_hir::package::lang_roots(db).get(package)?;
+    let namespace: Vec<Name> = namespace.iter().copied().map(Name::new).collect();
+    let head = DeclName::in_root(root, namespace, Name::new(name));
+    class_ref_of(db, &head)
+}
+
 /// The enum `head` names, wherever it is declared.
 pub fn enum_ref_of<'db>(
     db: &'db dyn baml_compiler2_hir::Db,

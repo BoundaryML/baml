@@ -1145,6 +1145,14 @@ impl BamlClassPackage for PackageReflectImpl {
             .iter()
             .map(|(name, index)| (name.clone(), objects[index.raw()]))
             .collect::<IndexMap<_, _>>();
+        // A recursive alias is a pooled declaration and relocates exactly like
+        // a class; published so a dependent can reach it through this
+        // package's tables (a consumer's `app.Tree` head binds to it).
+        let type_aliases = program_package
+            .type_aliases
+            .iter()
+            .map(|(name, index)| (name.clone(), objects[index.raw()]))
+            .collect::<IndexMap<_, _>>();
         let mut impl_rules = IndexMap::new();
         for (interface_index, rules) in &program_package.impl_rules {
             let interface_ptr = objects[interface_index.raw()];
@@ -1246,6 +1254,7 @@ impl BamlClassPackage for PackageReflectImpl {
         package.classes = classes;
         package.enums = enums;
         package.interfaces = interfaces;
+        package.type_aliases = type_aliases;
         package.impl_rules = impl_rules;
         package.functions = functions;
         package.test_init = test_init;
@@ -1609,10 +1618,24 @@ impl BamlClassPackage for PackageReflectImpl {
 /// same-named declarations would be tag-equal — reminting to a counter tag
 /// makes each graft's declarations identity-distinct by construction.
 ///
-/// Safe against baked bytecode: jump tables carry only the coarse kind tags
-/// (`realized_type_tag` answers `None` for declared heads), and class/enum
-/// match arms compare `IsType` pointers, which the graft resolved to these
-/// same objects.
+/// BUG: this is NOT safe against every baked tag. Emit's `is_type` road does
+/// answer `None` for declared heads (`realized_type_tag`) and `IsType` arms
+/// compare pointers, but MIR's `SwitchKind::TypeTag` road bakes the CONTENT
+/// class tag of every class arm (`type_tag_for_ty` → `class_type_tags`) into
+/// a `switch` whose keys become jump-table / hash-table entries or plain
+/// `Int` constants — and a `match` with four or more bare class type
+/// patterns (`A => .., B => .., C => .., D => ..`) takes that road. The
+/// `TypeTag` instruction then pushes the REMINTED tag, no key matches, and an
+/// exhaustive match reaches its `unreachable` otherwise block: verified
+/// 2026-09-23 by execution — `baml.panics.Unreachable { "unreachable code
+/// executed" }` from a `reflect.Package.compile`d function whose static twin
+/// passes. Nothing here nor in `bind_graft_type_heads` walks those keys
+/// (`relink::visit_index_operands` and `head_walk` never visit switch data).
+/// The remint is still required (generativity); the missing half is the
+/// relocation of baked switch keys through the same `old → live` map, which
+/// needs the keys to be distinguishable from ordinary `Int` constants on the
+/// wire — a format change that rides the unit-format bump — or MIR sending
+/// class arms down the pointer `IsType` chain in every lane.
 ///
 /// Returns the `old content tag → reminted head` rows the head bind uses to
 /// bridge the plan's internal references onto the new identities.

@@ -549,10 +549,10 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             match kind {
                 AggregateKind::Array => write!(f, "array")?,
                 AggregateKind::Class {
-                    name,
+                    class,
                     type_arg_templates,
                 } => {
-                    write!(f, "{name}")?;
+                    write!(f, "{}", crate::lower::class_link_name(db, *class))?;
                     if !type_arg_templates.is_empty() {
                         write!(f, "<")?;
                         for (i, t) in type_arg_templates.iter().enumerate() {
@@ -563,9 +563,6 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                         }
                         write!(f, ">")?;
                     }
-                }
-                AggregateKind::EnumVariant { enum_name, variant } => {
-                    write!(f, "{enum_name}::{variant}")?;
                 }
             }
             write!(f, " {{ ")?;
@@ -756,11 +753,17 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
                 args.join(", ")
             )
         }
-        Constant::EnumVariant { enum_ref, variant } => write!(
-            f,
-            "const {}.{variant}",
-            crate::lower::enum_link_name(db, *enum_ref)
-        ),
+        Constant::EnumVariant { enum_ref, index } => {
+            let variants = baml_compiler2_hir_ty::layout::enum_variants(db, *enum_ref);
+            let variant = variants
+                .get(usize::try_from(*index).expect("u32 fits usize"))
+                .map_or_else(|| format!("#{index}"), ToString::to_string);
+            write!(
+                f,
+                "const {}.{variant}",
+                crate::lower::enum_link_name(db, *enum_ref)
+            )
+        }
     }
 }
 

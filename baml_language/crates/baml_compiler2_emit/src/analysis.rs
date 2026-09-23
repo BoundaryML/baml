@@ -2301,6 +2301,8 @@ mod tests {
     fn call_result_immediate_rejects_incremental_class_spread_init() {
         let result = Local(1);
         let spread_base = Local(2);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let body = MirFunctionBody {
             blocks: vec![
                 BasicBlock {
@@ -2326,7 +2328,7 @@ mod tests {
                             destination: Place::Local(Local(0)),
                             value: Rvalue::Aggregate {
                                 kind: baml_compiler2_mir::AggregateKind::Class {
-                                    name: "GuideHooks".to_string(),
+                                    class: crate::tests::class_ref(&db, file, "GuideHooks"),
                                     type_arg_templates: vec![],
                                 },
                                 fields: vec![

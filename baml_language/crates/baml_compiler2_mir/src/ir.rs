@@ -894,9 +894,10 @@ pub enum Rvalue<'db> {
     /// key/value types.
     Map(TyTemplate, TyTemplate, Vec<(Operand<'db>, Operand<'db>)>),
 
-    /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
+    /// Create an aggregate (array, class instance): `ClassName { _1, _2 }`. An
+    /// enum variant is a [`Constant::EnumVariant`], never an aggregate.
     Aggregate {
-        kind: AggregateKind,
+        kind: AggregateKind<'db>,
         fields: Vec<Operand<'db>>,
     },
 
@@ -1164,22 +1165,23 @@ impl Rvalue<'_> {
 
 /// The kind of aggregate being constructed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggregateKind {
+pub enum AggregateKind<'db> {
     /// An array.
     Array,
     /// A class instance with optional type-arg templates.
     ///
-    /// `type_arg_templates` is non-empty only for generic class instantiations:
-    /// each element corresponds to one class-level type parameter in De Bruijn
-    /// order (matching `enclosing_generic_params()`).  These templates are
-    /// emitted as `LoadType` instructions before `AllocInstance` so the VM can
-    /// store resolved `Ty` values in `Instance::class_type_args`.
+    /// `class` is the declaration the literal constructs, wherever it lives;
+    /// its wire spelling is rendered only at emit's boundary
+    /// ([`crate::class_link_name`]). `type_arg_templates` is non-empty only
+    /// for generic class instantiations: each element corresponds to one
+    /// class-level type parameter in De Bruijn order (matching
+    /// `enclosing_generic_params()`). These templates are emitted as
+    /// `LoadType` instructions before `AllocInstance` so the VM can store
+    /// resolved `Ty` values in `Instance::class_type_args`.
     Class {
-        name: String,
+        class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<baml_type::TyTemplate>,
     },
-    /// An enum variant.
-    EnumVariant { enum_name: String, variant: String },
 }
 
 // ============================================================================
@@ -1259,8 +1261,11 @@ pub enum Constant<'db> {
     EnumVariant {
         /// The enum's declaration, wherever it lives.
         enum_ref: baml_compiler2_hir_ty::extern_loc::EnumRef<'db>,
-        /// The variant name within the enum.
-        variant: Name,
+        /// The variant's discriminant: its index in the enum's declared
+        /// variant order (`layout::enum_variant_index`), the value the
+        /// runtime `AllocVariant` carries. The name is rendered from it only
+        /// for display.
+        index: u32,
     },
 }
 

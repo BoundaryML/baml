@@ -11,7 +11,10 @@ use std::{
 
 use baml_base::Span;
 use baml_compiler2_hir::loc::DeclRef;
-use baml_compiler2_hir_ty::extern_loc::FunctionRef;
+use baml_compiler2_hir_ty::{
+    extern_loc::{ClassRef, FunctionRef},
+    layout,
+};
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
@@ -302,8 +305,6 @@ struct StackifyCodegen<'ctx, 'obj> {
     class_object_indices: &'ctx HashMap<String, usize>,
     /// Pre-allocated Enum object indices.
     enum_object_indices: &'ctx HashMap<String, usize>,
-    /// Enum variant mappings (enum name -> variant name -> variant index).
-    enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Read-only snapshot of pooled class field metadata (name + type, in
     /// field order), keyed by every name registered in `class_object_indices`.
     /// Field lookups resolve through this map instead of reading the object
@@ -448,7 +449,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
-            enum_variants: ctx.enum_variants,
             class_fields: ctx.class_fields,
             objects: ctx.objects,
             objects_base: ctx.objects_base,
@@ -1648,7 +1648,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         for template in type_arg_templates {
             unwrap_infallible(self.load_type(template));
         }
-        unwrap_infallible(self.alloc_class_instance(class_name, ntypeargs));
+        self.alloc_class_instance_named(class_name, ntypeargs);
 
         let mut field_idx = 0usize;
         while field_idx < fields.len() {
@@ -1763,13 +1763,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         if let Rvalue::Aggregate {
             kind:
                 baml_compiler2_mir::AggregateKind::Class {
-                    name,
+                    class,
                     type_arg_templates,
                 },
             fields,
         } = rvalue
         {
-            if !self.class_object_indices.contains_key(name) {
+            let name = baml_compiler2_mir::class_link_name(self.db, *class);
+            if !self.class_object_indices.contains_key(&name) {
                 for field in fields {
                     self.emit_operand_pull(field);
                 }
@@ -1778,13 +1779,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 for template in type_arg_templates {
                     unwrap_infallible(self.load_type(template));
                 }
-                self.emit_init_instance(name, ntypeargs, fields.len());
+                self.emit_init_instance(&name, ntypeargs, fields.len());
                 return;
             }
-            if self.try_emit_class_aggregate_init_instance(name, type_arg_templates, fields) {
+            if self.try_emit_class_aggregate_init_instance(&name, type_arg_templates, fields) {
                 return;
             }
-            if self.try_emit_class_aggregate_field_copy_sets(name, type_arg_templates, fields) {
+            if self.try_emit_class_aggregate_field_copy_sets(&name, type_arg_templates, fields) {
                 return;
             }
         }
@@ -2079,7 +2080,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // concrete type arguments so calling it seeds `frame.type_args`.
                 self.emit_pooled_function_value(*func, type_args);
             }
-            Constant::EnumVariant { enum_ref, variant } => {
+            Constant::EnumVariant { enum_ref, index } => {
                 let enum_name_str = baml_compiler2_mir::enum_link_name(self.db, *enum_ref);
                 // TIR admitted the enum and MIR resolved it to a declaration
                 // (`enum_ref_of`), so this compilation registered an object
@@ -2092,21 +2093,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     || {
                         panic!(
                             "internal error: no enum object for `{enum_name_str}` (referenced as \
-                             `{enum_name_str}.{variant}`)"
+                             its variant #{index})"
                         )
                     },
                 );
                 self.references.record(&enum_name_str);
 
-                let variant_str = variant.to_string();
-                let variant_idx = *self
-                    .enum_variants
-                    .get(&enum_name_str)
-                    .and_then(|variants| variants.get(&variant_str))
-                    .unwrap_or_else(|| panic!("undefined variant: {enum_name_str}.{variant_str}"));
+                // The discriminant travels in the constant; the name is
+                // rendered from the declaration only for operand metadata.
+                let variant_str = layout::enum_variants(self.db, *enum_ref)
+                    .get(usize::try_from(*index).expect("u32 fits usize"))
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| {
+                        panic!("internal error: `{enum_name_str}` declares no variant #{index}")
+                    });
 
-                #[allow(clippy::cast_possible_wrap)]
-                let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
+                let idx = self.add_constant(ConstValue::Int(i64::from(*index)));
                 let lc_inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(
                     lc_inst,
@@ -3407,80 +3409,28 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
     fn alloc_class_instance(
         &mut self,
-        class_name: &str,
+        class: ClassRef<'ctx>,
         ntypeargs: u16,
     ) -> Result<(), Self::Error> {
-        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
-            self.references.record(class_name);
-            let inst = self.emit(Instruction::AllocInstance {
-                class_obj: ObjectIndex::from_raw(class_obj_idx),
-                ntypeargs,
-            });
-            self.set_operand(inst, OperandMeta::Object(class_name.to_string()));
-        } else {
-            // Class not found — this can happen when the parser produces an
-            // anonymous or misidentified object literal (e.g., `null { }` from
-            // an ambiguous if-condition). Emit a null constant as a fallback so
-            // compilation doesn't panic; the runtime behavior is best-effort.
-            // BUG: a CHECKED program reaches this arm too, and then constructs
-            // a silent `null`: a runtime-mounted class the link stub skipped
-            // (its own name or a field name is not a BAML identifier) that a
-            // consumer can still name — through a spellable export alias, or
-            // by omitting the unspellable field when it is optional. The enum
-            // twin (`Constant::EnumVariant`) is refused at the mount instead;
-            // this one dies with stub generation, once class objects are
-            // reached by identity.
-            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
-            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
-            self.set_operand(
-                inst,
-                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
-            );
-        }
+        let class_name = baml_compiler2_mir::class_link_name(self.db, class);
+        self.alloc_class_instance_named(&class_name, ntypeargs);
         Ok(())
     }
 
     fn init_class_instance(
         &mut self,
-        class_name: &str,
+        class: ClassRef<'ctx>,
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error> {
-        self.emit_init_instance(class_name, ntypeargs, field_count);
+        let class_name = baml_compiler2_mir::class_link_name(self.db, class);
+        self.emit_init_instance(&class_name, ntypeargs, field_count);
         Ok(())
     }
 
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
         let idx = self.emit(Instruction::InitField(field_idx));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
-        Ok(())
-    }
-
-    fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error> {
-        let enum_obj_idx = self
-            .enum_object_indices
-            .get(enum_name)
-            .copied()
-            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
-
-        let variant_idx = self
-            .enum_variants
-            .get(enum_name)
-            .and_then(|variants| variants.get(variant))
-            .copied()
-            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
-
-        #[allow(clippy::cast_possible_wrap)]
-        let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
-        let lc_inst = self.emit(Instruction::LoadConst(idx));
-        self.set_operand(
-            lc_inst,
-            OperandMeta::Const(format!("{enum_name}.{variant}")),
-        );
-        let inst = self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
-            enum_obj_idx,
-        )));
-        self.set_operand(inst, OperandMeta::Object(enum_name.to_string()));
         Ok(())
     }
 
@@ -3639,21 +3589,22 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             | TyTemplate::TypeAlias(..)
             | TyTemplate::Never) => {
                 // A fully-realized leaf (primitive, enum, alias, literal, ...):
-                // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag when one exactly represents the test. Tagless leaves use
+                // enum-pointer identity for an `Enum`, otherwise its type tag
+                // when one exactly represents the test. Tagless leaves use
                 // the canonical structural matcher instead of silently
                 // compiling to false.
                 let realized = <&RealizedTy>::try_from(other)
                     .expect("exhaustive realized-leaf template classification");
-                if let RealizedTy::TypeAlias(tn) = realized {
-                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
-                        let c = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                        let inst = self.emit(Instruction::IsType(c));
-                        self.set_operand(inst, OperandMeta::Const(tn.display_name().to_string()));
-                    } else {
-                        emit_false(self);
-                    }
+                if let RealizedTy::TypeAlias(_) = realized {
+                    // Only a RECURSIVE alias survives lowering as a head (a
+                    // non-recursive one was expanded); membership in it is
+                    // the equirecursive set its definition unfolds to, which
+                    // the VM's matcher decides by unfolding the pooled
+                    // `Object::TypeAlias` the head binds to at load. An alias
+                    // is not a class: the class-object identity test this
+                    // arm used to attempt could never find one, so `v is
+                    // Tree` compiled to constant false.
+                    emit_structural(self, other);
                 } else if let RealizedTy::Enum(tn) = realized {
                     // Enum-pointer identity: `is Color` tests the value's enum
                     // object, so it discriminates `Color` from `Status` - the
@@ -3785,6 +3736,41 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
     fn class_field_name(&self, class_name: &str, field_idx: usize) -> String {
         self.lookup_class_field_name(baml_type::typetag::TypeTag::of_head(class_name), field_idx)
             .unwrap_or_else(|| format!("{field_idx}"))
+    }
+}
+
+impl StackifyCodegen<'_, '_> {
+    /// `AllocInstance` for the class registered under `class_name` (the wire
+    /// spelling emit pooled it under). The name-taking twin of the
+    /// `PullSink::alloc_class_instance` implementation above, shared with the
+    /// field-copy-set route, which resolves the class the same way.
+    fn alloc_class_instance_named(&mut self, class_name: &str, ntypeargs: u16) {
+        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+            self.references.record(class_name);
+            let inst = self.emit(Instruction::AllocInstance {
+                class_obj: ObjectIndex::from_raw(class_obj_idx),
+                ntypeargs,
+            });
+            self.set_operand(inst, OperandMeta::Object(class_name.to_string()));
+        } else {
+            // BUG: the class MIR resolved the literal to has no pooled object
+            // under its wire spelling, and the literal becomes a silent
+            // `null`. MIR refuses a literal with no declaration behind it, so
+            // the only way here is a runtime-mounted class whose link stub was
+            // skipped (its own name or a field name is not a BAML identifier)
+            // yet which a consumer can still name — through a spellable export
+            // alias, or by omitting the unspellable field when it is optional.
+            // The enum twin (`Constant::EnumVariant`) is refused at the mount
+            // instead; this one dies with stub generation, once class objects
+            // are placed by identity and a missing placement is an internal
+            // error.
+            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
+            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
+            );
+        }
     }
 }
 
@@ -3939,7 +3925,6 @@ mod tests {
         let classes = HashMap::new();
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
-        let enum_variants = HashMap::new();
         let class_fields = HashMap::new();
         let mut objects = ObjectPool::default();
         let lambda_object_indices = Vec::new();
@@ -3961,7 +3946,6 @@ mod tests {
                 classes: &classes,
                 class_object_indices: &class_object_indices,
                 enum_object_indices: &enum_object_indices,
-                enum_variants: &enum_variants,
                 class_fields: &class_fields,
                 objects: &mut objects,
                 objects_base: 0,

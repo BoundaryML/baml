@@ -8,6 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
     AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
 };
@@ -48,17 +49,18 @@ pub(crate) trait PullSink<'db> {
         len: usize,
     ) -> Result<(), Self::Error>;
 
-    fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
-    -> Result<(), Self::Error>;
+    fn alloc_class_instance(
+        &mut self,
+        class: ClassRef<'db>,
+        ntypeargs: u16,
+    ) -> Result<(), Self::Error>;
     fn init_class_instance(
         &mut self,
-        class_name: &str,
+        class: ClassRef<'db>,
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error>;
     fn init_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
-
-    fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
 
     fn discriminant(&mut self) -> Result<(), Self::Error>;
     fn type_tag(&mut self) -> Result<(), Self::Error>;
@@ -410,7 +412,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                 )
             }
             AggregateKind::Class {
-                name: class_name,
+                class,
                 type_arg_templates,
             } => {
                 let ntypeargs = u16::try_from(type_arg_templates.len())
@@ -421,7 +423,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                     for template in type_arg_templates {
                         sink.load_type(template)?;
                     }
-                    return sink.alloc_class_instance(class_name, ntypeargs);
+                    return sink.alloc_class_instance(*class, ntypeargs);
                 }
 
                 for field_operand in fields {
@@ -430,10 +432,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
                 for template in type_arg_templates {
                     sink.load_type(template)?;
                 }
-                sink.init_class_instance(class_name, ntypeargs, fields.len())
-            }
-            AggregateKind::EnumVariant { enum_name, variant } => {
-                sink.alloc_enum_variant(enum_name, variant)
+                sink.init_class_instance(*class, ntypeargs, fields.len())
             }
         },
         Rvalue::Discriminant(place) => {

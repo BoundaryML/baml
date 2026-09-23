@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
     AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue,
     StatementKind, Terminator,
@@ -1503,7 +1504,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn alloc_class_instance(
         &mut self,
-        _class_name: &str,
+        _class: ClassRef<'a>,
         ntypeargs: u16,
     ) -> Result<(), Self::Error> {
         // LoadType instructions for type args were already emitted and pushed.
@@ -1519,7 +1520,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn init_class_instance(
         &mut self,
-        _class_name: &str,
+        _class: ClassRef<'a>,
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error> {
@@ -1535,13 +1536,6 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
-        Ok(())
-    }
-
-    fn alloc_enum_variant(&mut self, _enum_name: &str, _variant: &str) -> Result<(), Self::Error> {
-        // Emitter loads variant index constant, then AllocVariant (pop1 push1).
-        // Net stack effect from this aggregate shape is +1.
-        self.sim.push();
         Ok(())
     }
 
@@ -1955,10 +1949,12 @@ mod tests {
             used: false,
         };
 
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
-                    name: "Box".to_string(),
+                    class: crate::tests::class_ref(&db, file, "Box"),
                     type_arg_templates: vec![TyTemplate::from(baml_type::RealizedTy::int())],
                 },
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
@@ -1976,9 +1972,11 @@ mod tests {
     #[test]
     fn class_aggregate_with_field_copy_is_not_modeled_as_init_plan() {
         let carried = Local(1);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
-                name: "Box".to_string(),
+                class: crate::tests::class_ref(&db, file, "Box"),
                 type_arg_templates: vec![],
             },
             fields: vec![Operand::Copy(Place::Field {
@@ -2004,9 +2002,11 @@ mod tests {
     fn class_spread_rejects_call_result_immediate_before_incremental_init() {
         let carried = Local(1);
         let spread_base = Local(2);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
-                name: "GuideHooks".to_string(),
+                class: crate::tests::class_ref(&db, file, "GuideHooks"),
                 type_arg_templates: vec![],
             },
             fields: vec![
@@ -2089,7 +2089,10 @@ mod tests {
             def_use: &def_use,
         };
 
-        sink.init_class_instance("Box", 1, 2).unwrap();
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
+        sink.init_class_instance(crate::tests::class_ref(&db, file, "Box"), 1, 2)
+            .unwrap();
 
         assert_eq!(sim.depth, Some(2));
     }

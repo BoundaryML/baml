@@ -458,3 +458,55 @@ test "an alias of a mounted class qualifies its statics" {
     let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
     assert.equal(main(), "6:8:7:int:5:12:string")
 }
+
+test "a recursive alias of a mounted package crosses the mount" {
+    // A recursive alias survives lowering as a pooled declaration of the
+    // library, so the consumer's `app.Tree` head must bind to that object at
+    // the graft — here in a binding annotation and through a parameter. The
+    // graft used to publish every declaration kind of a runtime-compiled
+    // package except its aliases, and the bind then refused the head as one
+    // "nothing declares".
+    //
+    // BUG: an exported shape that mentions the alias — `wrap(t: Tree) ->
+    // Tree` — still fails the consumer's compile with a phantom `E0002
+    // unresolved type: Tree` in the mount's generated link stub, which names
+    // the alias its stub file never declares. That is the stub lane's own
+    // defect and dies with stub generation; add the return-position form to
+    // this block then.
+    let app = reflect.Package.compile(
+        {
+            "lib.baml": `
+                type Tree = int | Tree[]
+
+                function depth(t: Tree) -> int throws never {
+                    match (t) {
+                        let n: int => 0,
+                        let xs: Tree[] => {
+                            let best = 0;
+                            for (let x in xs) {
+                                let d = depth(x);
+                                if (d > best) { best = d; }
+                            }
+                            best + 1
+                        },
+                    }
+                }
+            `,
+        },
+    );
+    assert.equal(app.diagnostics().length(), 0);
+    let consumer = reflect.Package.compile(
+        {
+            "main.baml": `
+                function main() -> int throws never {
+                    let t: app.Tree = [1, [2, [3]]];
+                    app.depth(t)
+                }
+            `,
+        },
+        packages = { "app": app },
+    );
+    assert.equal(consumer.diagnostics().length(), 0);
+    let main = consumer.get_function<() -> int>("root.main") ?? throw "missing root.main";
+    assert.equal(main(), 3)
+}

@@ -1383,7 +1383,6 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
     pub class_object_indices: &'ctx HashMap<String, usize>,
     pub enum_object_indices: &'ctx HashMap<String, usize>,
-    pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     pub class_fields: &'ctx ClassFieldSnapshot,
     pub objects: &'obj mut ObjectPool,
     /// Program-absolute index of `objects[0]`: 0 when `objects` is the whole
@@ -2517,6 +2516,20 @@ fn decompose_units_after_prefix<'db>(
                         Ok(flat_local(target))
                     } else {
                         let sym = object_symbol(program, target, &fn_obj_name, &slot_to_name)?;
+                        // BUG: the dedup key is `fq_name` alone, which for a
+                        // `SymbolKind::GenericFn` is only the BASE function's
+                        // name — two instantiations of one generic value owned
+                        // by an earlier file (`show<int>` and `show<string>`
+                        // both minted by `a.baml`) collapse into one import
+                        // here, so the second instantiation's operands in this
+                        // unit resolve to the first one's object at link
+                        // (verified 2026-09-23: `link(emit_units)` diverges from
+                        // the flat program on that two-file fixture, while
+                        // `link_dynamic`'s `import_key` includes the type
+                        // arguments). Dies with decompose itself: under
+                        // per-unit emission a generic value is a unit-local
+                        // copy the linker deduplicates by (base slot, type
+                        // args), and nothing is ever imported for it.
                         let import_idx = intern_import(
                             &mut object_imports,
                             &mut obj_import_idx,
@@ -3873,8 +3886,6 @@ struct EmitTables {
     /// (`typetag::TypeTag::of_head`), so MIR agrees by construction; a 47-bit
     /// hash collision is reported as a compile error via [`claim_type_tag`].
     type_tags: HashMap<baml_type::typetag::TypeTag, String>,
-    /// Enum fq-name → (variant name → variant index) (Pass 3).
-    enum_variants: HashMap<String, HashMap<String, usize>>,
     /// Enum fq-name → `ObjectPool` index (Pass 3).
     enum_object_indices: HashMap<String, usize>,
     /// Interface type-name → `ObjectPool` index (Pass 3b).
@@ -3934,15 +3945,9 @@ impl EmitTables {
                     tables.type_tags.insert(class.type_tag, fq);
                 }
                 Object::Enum(enum_def) => {
-                    let fq = enum_def.name.to_string();
-                    let variant_indices = enum_def
-                        .variants
-                        .iter()
-                        .enumerate()
-                        .map(|(i, v)| (v.name.clone(), i))
-                        .collect();
-                    tables.enum_variants.insert(fq.clone(), variant_indices);
-                    tables.enum_object_indices.insert(fq, idx);
+                    tables
+                        .enum_object_indices
+                        .insert(enum_def.name.to_string(), idx);
                 }
                 Object::Interface(iface) => {
                     tables
@@ -4046,7 +4051,6 @@ fn emit_file_group<'db>(
         classes,
         class_object_indices,
         type_tags,
-        enum_variants,
         enum_object_indices,
         interface_object_indices,
         program_packages,
@@ -4376,10 +4380,8 @@ fn emit_file_group<'db>(
             )
             .render_dotted(false);
 
-            let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
-            for (idx, variant) in enm.variants.iter().enumerate() {
-                variant_map.insert(variant.name.to_string(), idx);
+            for variant in &enm.variants {
                 variants.push(EnumVariant {
                     name: variant.name.to_string(),
                     description: variant.attrs.schema.description.clone(),
@@ -4400,7 +4402,7 @@ fn emit_file_group<'db>(
                 other: indexmap::IndexMap::new(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));
-            enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
+            enum_object_indices.insert(fq_name, enum_obj_idx);
             program_packages
                 .entry(spelling(db).of(pkg_info.root).clone())
                 .or_default()
@@ -4412,7 +4414,6 @@ fn emit_file_group<'db>(
                     },
                     ObjectIndex::from_raw(enum_obj_idx),
                 );
-            enum_variants.insert(fq_name, variant_map);
         }
     }
 
@@ -4550,7 +4551,6 @@ fn emit_file_group<'db>(
             classes,
             class_object_indices,
             enum_object_indices,
-            enum_variants,
             &class_fields,
             alias_caches,
             program,
@@ -4567,7 +4567,6 @@ fn emit_file_group<'db>(
             classes,
             class_object_indices,
             enum_object_indices,
-            enum_variants,
             &class_fields,
             alias_caches,
             program,
@@ -4644,7 +4643,6 @@ fn emit_file_group<'db>(
                 classes,
                 class_object_indices,
                 enum_object_indices,
-                enum_variants,
                 &class_fields,
                 &mut *program,
                 file_references,
@@ -5634,7 +5632,6 @@ fn emit_functions_serial<'db>(
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
@@ -5687,7 +5684,6 @@ fn emit_functions_serial<'db>(
                         classes,
                         class_object_indices,
                         enum_object_indices,
-                        enum_variants,
                         class_fields,
                         &mut program.objects,
                         0,
@@ -5704,7 +5700,6 @@ fn emit_functions_serial<'db>(
                         classes,
                         class_object_indices,
                         enum_object_indices,
-                        enum_variants,
                         class_fields,
                         objects: &mut program.objects,
                         objects_base: 0,
@@ -5946,7 +5941,6 @@ fn emit_functions_parallel<'db>(
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
     alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
@@ -6045,7 +6039,6 @@ fn emit_functions_parallel<'db>(
                     classes,
                     class_object_indices,
                     enum_object_indices,
-                    enum_variants,
                     class_fields,
                     &mut fragment,
                     watermark,
@@ -6062,7 +6055,6 @@ fn emit_functions_parallel<'db>(
                     classes,
                     class_object_indices,
                     enum_object_indices,
-                    enum_variants,
                     class_fields,
                     objects: &mut fragment,
                     objects_base: watermark,
@@ -6411,7 +6403,6 @@ fn compile_lambdas_flat<'db>(
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
     objects_base: usize,
@@ -6448,7 +6439,6 @@ fn compile_lambdas_flat<'db>(
                     classes,
                     class_object_indices,
                     enum_object_indices,
-                    enum_variants,
                     class_fields,
                     objects,
                     objects_base,
@@ -6465,7 +6455,6 @@ fn compile_lambdas_flat<'db>(
                     classes,
                     class_object_indices,
                     enum_object_indices,
-                    enum_variants,
                     class_fields,
                     objects,
                     objects_base,
@@ -6516,7 +6505,6 @@ fn compile_init_function<'db>(
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
-    enum_variants: &HashMap<String, HashMap<String, usize>>,
     class_fields: &ClassFieldSnapshot,
     program: &mut Program,
     file_references: &mut HashMap<String, UnitReferences>,
@@ -6563,7 +6551,6 @@ fn compile_init_function<'db>(
                     classes,
                     class_object_indices,
                     enum_object_indices,
-                    enum_variants,
                     class_fields,
                     &mut program.objects,
                     0,
@@ -6580,7 +6567,6 @@ fn compile_init_function<'db>(
                     classes,
                     class_object_indices,
                     enum_object_indices,
-                    enum_variants,
                     class_fields,
                     objects: &mut program.objects,
                     objects_base: 0,
@@ -6776,7 +6762,7 @@ mod tests {
 
     impl TestDb {
         /// Add a workspace file (registered on the workspace root).
-        fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
+        pub(crate) fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
             let root = self
                 .workspace
@@ -6788,6 +6774,30 @@ mod tests {
             root.set_files(self).to(files);
             file
         }
+    }
+
+    /// Classes the codegen unit tests build aggregates of.
+    pub(crate) const CLASSES_FOR_TESTS: &str =
+        "class Box<T> {\n  item T\n}\nclass GuideHooks {\n  a int\n  b int\n}\n";
+
+    /// The declaration of the class named `name` in `file`, for a test that
+    /// needs a real [`ClassRef`] behind a MIR aggregate.
+    pub(crate) fn class_ref<'db>(
+        db: &'db TestDb,
+        file: SourceFile,
+        name: &str,
+    ) -> baml_compiler2_hir_ty::extern_loc::ClassRef<'db> {
+        let baml_compiler2_hir::contributions::Definition::Class(class) =
+            baml_compiler2_hir::package::package_items(
+                db,
+                baml_compiler2_hir::file_package::file_package(db, file).root,
+            )
+            .lookup_type(&[], &Name::new(name))
+            .unwrap_or_else(|| panic!("test source declares `{name}`"))
+        else {
+            panic!("`{name}` is not a class")
+        };
+        baml_compiler2_hir::loc::DeclRef::Source(class)
     }
 
     #[salsa::db]
