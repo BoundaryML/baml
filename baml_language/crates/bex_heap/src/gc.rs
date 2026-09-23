@@ -722,10 +722,19 @@ impl BexHeap {
             // every object kind; what these two arms add is the back-edge to the
             // package that owns them, so reaching a member keeps its package —
             // and so its globals and dependencies — alive.
+            // A class's inherent method bodies are direct pointers, like an
+            // interface's default bodies.
             Object::Class(class) => {
                 if !class.owner.as_ptr().is_null() {
                     worklist.push(class.owner);
                 }
+                worklist.extend(
+                    class
+                        .methods
+                        .values()
+                        .map(|method| method.function_ptr)
+                        .filter(|ptr| !ptr.as_ptr().is_null()),
+                );
             }
             Object::Enum(enm) => {
                 if !enm.owner.as_ptr().is_null() {
@@ -1015,6 +1024,11 @@ impl BexHeap {
             Object::Class(class) => {
                 if let Some(&new_ptr) = forwarding.get(&class.owner) {
                     class.owner = new_ptr;
+                }
+                for method in class.methods.values_mut() {
+                    if let Some(&new_ptr) = forwarding.get(&method.function_ptr) {
+                        method.function_ptr = new_ptr;
+                    }
                 }
             }
             Object::Enum(enm) => {
@@ -1404,6 +1418,15 @@ impl BexHeap {
                 if !class.owner.as_ptr().is_null() && self.generation_of(class.owner).is_young() {
                     worklist.push(class.owner);
                 }
+                worklist.extend(
+                    class
+                        .methods
+                        .values()
+                        .map(|method| method.function_ptr)
+                        .filter(|ptr| {
+                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
+                        }),
+                );
             }
             Object::Enum(enm) => {
                 if !enm.owner.as_ptr().is_null() && self.generation_of(enm.owner).is_young() {
@@ -1879,6 +1902,7 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         }))];
@@ -2498,6 +2522,7 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -2772,6 +2797,7 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -2914,6 +2940,7 @@ mod tests {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));
@@ -3354,6 +3381,7 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));

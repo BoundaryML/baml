@@ -89,6 +89,9 @@ pub struct Program {
     /// replay over the artifact's globals (the stdlib splice, the one
     /// genuine cross-process boundary), or the impl-rule tables / the
     /// interface's `default` operand (rule baking, dispatch).
+    #[deprecated(
+        note = "flat name map of the executable: consumers re-express over the identity tables (`ProgramPackage::globals` and the per-package declaration tables), then it is deleted"
+    )]
     pub function_indices: HashMap<String, usize>,
 
     /// Maps function names to their global indices.
@@ -96,31 +99,44 @@ pub struct Program {
     ///
     /// Interface-machinery bodies are excluded (see
     /// [`Self::function_indices`]).
+    #[deprecated(
+        note = "flat name map of the executable: consumers re-express over the identity tables (`ProgramPackage::globals` and the per-package declaration tables), then it is deleted"
+    )]
     pub function_global_indices: HashMap<String, usize>,
 
     /// Maps let-binding fully-qualified names to their global slot indices.
     /// E.g., `"user.my_const" -> 5`. Populated in Pass 1; slots hold `ConstValue::Null`
     /// until `$init` runs at load time via `StoreGlobal`.
+    #[deprecated(
+        note = "flat name map of the executable: consumers re-express over the identity tables (`ProgramPackage::globals` and the per-package declaration tables), then it is deleted"
+    )]
     pub let_global_indices: HashMap<String, usize>,
 
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
+    #[deprecated(note = "never written; deleted with the unit-format switch")]
     pub client_metadata: HashMap<String, ClientBuildMeta>,
 
     /// Ordered list of `$init` function names to run at load time.
     /// E.g., `["baml.$init", "$init"]` — builtins before user package.
     /// Empty when there are no top-level let bindings in any package.
+    #[deprecated(
+        note = "rendered `$init` order: the loader runs `ProgramPackage::init` in package order instead, then it is deleted"
+    )]
     pub package_init_order: Vec<String>,
 
-    /// Per-package program structure (global-index-keyed), sorted by package name
-    /// for deterministic output. Holds each package's classes, enums, interfaces,
-    /// impl rules, and recursive type aliases. The loader allocates the heap
-    /// `Object::Package` / `Object::Interface` / `Object::ImplRule` objects and the
-    /// `vm.packages` index from this, resolving each `ObjectIndex` to a
-    /// compile-time `HeapPtr` (every slot is pre-allocated, so cross-package
-    /// references are order-independent). The single source of truth for interface
-    /// dispatch, named-item lookup, and recursive-alias rendering.
-    pub packages: IndexMap<baml_type::Name, ProgramPackage>,
+    /// Per-package program structure (global-index-keyed), by package
+    /// ordinal. A package's identity in the executable is its position here;
+    /// its `name` is display metadata (and the spelling the prelude is bound
+    /// by at load). Ordered by name for deterministic output — an order, not
+    /// a key. Holds each package's classes, enums, interfaces, impl rules, and
+    /// recursive type aliases. The loader allocates the heap `Object::Package`
+    /// / `Object::Interface` / `Object::ImplRule` objects and the `vm.packages`
+    /// index from this, resolving each `ObjectIndex` to a compile-time
+    /// `HeapPtr` (every slot is pre-allocated, so cross-package references are
+    /// order-independent). The single source of truth for interface dispatch,
+    /// named-item lookup, and recursive-alias rendering.
+    pub packages: Vec<ProgramPackage>,
 
     /// Conservative source-content identity of the compiled file set
     /// (streams spec §2.3): SHA-256 over the domain string, compiler
@@ -194,7 +210,8 @@ impl Program {
     /// where the identity comes from.
     pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
         let mut out = IndexMap::new();
-        for (pkg_name, package) in &self.packages {
+        for package in &self.packages {
+            let pkg_name = &package.name;
             for (local, idx) in &package.type_aliases {
                 let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
                     // An index that does not resolve to an alias means the pool

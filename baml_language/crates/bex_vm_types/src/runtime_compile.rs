@@ -12,7 +12,7 @@ use std::sync::{
 use baml_type::{Interface, Name, RealizedTy, Ty, TypeName};
 use indexmap::IndexMap;
 
-use crate::CompilationUnit;
+use crate::legacy_unit::CompilationUnit;
 
 /// Compiler-neutral structural projection of one runtime class definition.
 ///

@@ -44,7 +44,7 @@ use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
     FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
     InterfaceBound, Object, ObjectIndex, ObjectPool, Program,
-    unit::{
+    legacy_unit::{
         CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
         Symbol, SymbolKind,
     },
@@ -1465,7 +1465,7 @@ impl std::error::Error for LoweringError {}
 
 #[derive(Debug)]
 pub enum MountedPackageLinkError {
-    DependencyLink(bex_vm_types::link::LinkError),
+    DependencyLink(bex_vm_types::legacy_link::LinkError),
     Consumer(LoweringError),
 }
 
@@ -1737,7 +1737,7 @@ pub fn generate_project_bytecode_with_mounted_units(
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<Program, MountedPackageLinkError> {
-    let base = bex_vm_types::link::link(dependency_units)
+    let base = bex_vm_types::legacy_link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
     generate_impl(db, &EmitWorld::of_root(db, root), opt, Some(&base), None)
         .map(|(program, _)| program)
@@ -1755,7 +1755,7 @@ pub fn generate_project_bytecode_with_mounted_units_artifacts(
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<(Program, Vec<CompilationUnit>), MountedPackageLinkError> {
-    let base = bex_vm_types::link::link(dependency_units)
+    let base = bex_vm_types::legacy_link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
     let world = EmitWorld::of_root(db, root);
     let (program, coords) = generate_impl(db, &world, opt, Some(&base), None)
@@ -1917,7 +1917,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
         carrier.init_tail = Some(tail);
     }
 
-    let program = bex_vm_types::link::link(&assembled)
+    let program = bex_vm_types::legacy_link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
     let mut program = program;
     program.source_content_hash = Some(project_source_content_hash(db, root));
@@ -2030,7 +2030,7 @@ enum PoolObjKind {
 }
 
 /// Decompose an already-compiled `Program` into per-file symbolic
-/// [`CompilationUnit`]s — the inverse of [`link`](bex_vm_types::link::link).
+/// [`CompilationUnit`]s — the inverse of [`link`](bex_vm_types::legacy_link::link).
 ///
 /// Used by the CLI to persist content-addressed units after a compile so the
 /// next incremental compile can reuse clean files independently.
@@ -2042,6 +2042,9 @@ enum PoolObjKind {
 ///
 /// [`LoweringError::Internal`] if the program holds a pool object the
 /// decomposition cannot attribute to a source file.
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
 fn decompose_units<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     files: &[baml_base::SourceFile],
@@ -2073,6 +2076,9 @@ fn interface_body_link_key<'db>(
 }
 
 #[expect(clippy::too_many_lines)]
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
 fn decompose_units_after_prefix<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
@@ -2644,7 +2650,8 @@ fn decompose_units_after_prefix<'db>(
     for (u, pkg) in unit_package.iter().enumerate() {
         package_first_unit.entry(pkg.clone()).or_insert(u);
     }
-    for (pkg_name, pkg) in &program.packages {
+    for pkg in &program.packages {
+        let pkg_name = &pkg.name;
         let Some(&carrier) = package_first_unit.get(pkg_name) else {
             // Source-less dependency packages are supplied by the linked
             // prefix. Their package fragments must stay in that immutable
@@ -2712,7 +2719,8 @@ fn decompose_units_after_prefix<'db>(
         // interface iteration order, deterministic).
         let mut unit_rules: Vec<indexmap::IndexMap<String, Vec<ProgramImplRuleFrag>>> =
             vec![indexmap::IndexMap::new(); n_files];
-        for (pkg_name, pkg) in &program.packages {
+        for pkg in &program.packages {
+            let pkg_name = &pkg.name;
             if !package_first_unit.contains_key(pkg_name) {
                 // Source-less dependency package: its rules live in the
                 // immutable prefix image, not in these units.
@@ -2972,7 +2980,7 @@ fn unit_generic_base_name(unit: &CompilationUnit, base_raw: usize) -> Option<Str
 /// (design §9 R1 tail edge)? Such a duplicate cannot be deduped by the linker's
 /// code-bucket interning, so the reuse path must fall back for it.
 fn tail_generic_dupes_clean(
-    tail: &bex_vm_types::InitTail,
+    tail: &bex_vm_types::legacy_unit::InitTail,
     prev_units: &[CompilationUnit],
     effective_clean: &HashSet<String>,
 ) -> bool {
@@ -3042,7 +3050,7 @@ fn object_symbol(
             Ok(Symbol {
                 kind: SymbolKind::GenericFn,
                 fq_name: base_fn.clone(),
-                generic: Some(bex_vm_types::GenericFnKey {
+                generic: Some(bex_vm_types::legacy_unit::GenericFnKey {
                     base_fn,
                     type_args: gf.type_args.to_vec(),
                 }),
@@ -3136,7 +3144,7 @@ fn build_package_fragment(
 
 /// Extract the `$init`/`$init_test` tail (design §9 R2) from a flat `Program`:
 /// the objects in `[tail_start, program.objects.len())`, with operands rewritten
-/// to the tail-local/import convention of [`bex_vm_types::InitTail`].
+/// to the tail-local/import convention of [`bex_vm_types::legacy_unit::InitTail`].
 #[allow(clippy::too_many_lines)]
 fn build_init_tail(
     program: &Program,
@@ -3144,7 +3152,7 @@ fn build_init_tail(
     fn_obj_name: &HashMap<usize, String>,
     slot_to_name: &[Option<String>],
     let_name_to_file: &HashMap<String, usize>,
-) -> Result<bex_vm_types::InitTail, LoweringError> {
+) -> Result<bex_vm_types::legacy_unit::InitTail, LoweringError> {
     let n_obj = program.objects.len();
     let n_tail_objects = n_obj - tail_start;
 
@@ -3246,7 +3254,7 @@ fn build_init_tail(
         objects.push(object);
     }
 
-    Ok(bex_vm_types::InitTail {
+    Ok(bex_vm_types::legacy_unit::InitTail {
         objects,
         object_imports,
         global_imports,
@@ -3284,6 +3292,9 @@ pub fn take_lowered_files() -> Vec<String> {
 /// compile. Clean function *object* placeholders are injected separately, after
 /// the tail is emitted (see [`inject_clean_object_placeholders`]), so they land
 /// past the real pool.
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
 fn inject_clean_slots<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     files: &[baml_base::SourceFile],
@@ -3335,6 +3346,9 @@ fn inject_clean_slots<'db>(
 /// name. Each placeholder is past the real pool (only ever reversed to a name,
 /// never pool-indexed). Must run **after** the `$init`/`$init_test` tail is
 /// emitted so the placeholders do not collide with the tail's real objects.
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
 fn inject_clean_object_placeholders<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     files: &[baml_base::SourceFile],
@@ -3407,9 +3421,15 @@ enum PlacedFunction {
     Live { object: usize },
     /// Source-visible and type-checked here; the compiled object was spliced
     /// in from the precompiled artifact at a stable pool index.
+    #[deprecated(
+        note = "the stdlib splice / served-row seeding of the flat emitter: dies with it (the stdlib becomes linked units)"
+    )]
     Spliced { object: usize },
     /// Stage-6 clean reuse: type-checked here, bytecode reused from the
     /// previous compile's unit at link — NOT pooled by this emit.
+    #[deprecated(
+        note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+    )]
     ReusedClean {
         /// Past-the-pool index used only in reference position.
         placeholder_object: usize,
@@ -3736,7 +3756,7 @@ fn generate_impl<'db>(
                 continue;
             }
             let pkg_name = spelling(db).of(root).clone();
-            let Some(base_pkg) = base.packages.get(&pkg_name) else {
+            let Some(base_pkg) = base.packages.iter().find(|pkg| pkg.name == pkg_name) else {
                 continue;
             };
             match tables.program_packages.get_mut(&pkg_name) {
@@ -3757,7 +3777,14 @@ fn generate_impl<'db>(
         }
     }
     tables.program_packages.sort_keys();
-    program.packages = tables.program_packages;
+    program.packages = tables
+        .program_packages
+        .into_iter()
+        .map(|(name, mut pkg)| {
+            pkg.name = name;
+            pkg
+        })
+        .collect();
 
     Ok((
         program,
@@ -3777,6 +3804,9 @@ fn generate_impl<'db>(
 /// virtually (a default is a body, a required one has no slot), and stubs
 /// carry no `implements` blocks. The stubs die once link resolves by
 /// identity.
+#[deprecated(
+    note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+)]
 fn served_row_of_stub<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
@@ -3813,6 +3843,9 @@ fn served_row_of_stub<'db>(
 /// (an intrinsic never has one; a dependency spelled differently by its own
 /// compile resolves through the linker's symbolic lane until the wire key is
 /// structural).
+#[deprecated(
+    note = "the stdlib splice / served-row seeding of the flat emitter: dies with it (the stdlib becomes linked units)"
+)]
 fn seed_served_rows<'db>(
     db: &'db dyn crate::Db,
     world: &EmitWorld,
@@ -3873,6 +3906,9 @@ fn seed_served_rows<'db>(
 /// enums, and interfaces by the indices the builtin group assigned. Global
 /// slots live in [`GlobalSlots`], keyed by declaration.
 #[derive(Default)]
+#[deprecated(
+    note = "the flat whole-program emitter lane: dies with `decompose` when every lane is `link(emit_units)`"
+)]
 struct EmitTables {
     /// Class fq-name → (field name → field index) (Pass 2).
     classes: HashMap<String, HashMap<String, usize>>,
@@ -3917,6 +3953,9 @@ impl EmitTables {
     /// per declaring file (Pass 3c) and the builtin group is not re-emitted on
     /// this path; the spliced pool preserves the base's object indices, so the
     /// entries stay valid exactly as the class/enum/interface ones do.
+    #[deprecated(
+        note = "the stdlib splice / served-row seeding of the flat emitter: dies with it (the stdlib becomes linked units)"
+    )]
     fn from_stdlib_program(base: &Program) -> Self {
         let mut tables = EmitTables::default();
 
@@ -3961,7 +4000,8 @@ impl EmitTables {
         tables.program_packages = base
             .packages
             .iter()
-            .map(|(pkg_name, pkg)| {
+            .map(|pkg| {
+                let pkg_name = &pkg.name;
                 let mut pkg = pkg.clone();
                 pkg.impl_rules.clear();
                 (pkg_name.clone(), pkg)
@@ -4310,6 +4350,7 @@ fn emit_file_group<'db>(
                 stream_done: class.attrs.stream_done,
                 type_tag,
                 has_cleanup,
+                methods: indexmap::IndexMap::new(),
                 generic_param_count: class.generic_params.len(),
                 owner: bex_vm_types::HeapPtr::null(),
             })));

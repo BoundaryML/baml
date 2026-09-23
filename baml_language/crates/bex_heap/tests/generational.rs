@@ -144,6 +144,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
             owner: package_ptr,
         })));
@@ -1147,6 +1148,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::of_head("FieldOwner"),
         has_cleanup: false,
+        methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));
@@ -1321,6 +1323,72 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     assert_eq!(body.as_str(), "default body");
 }
 
+/// A class's inherent method bodies are direct pointers, exactly like an
+/// interface's default bodies: traced, forwarded across minor and major
+/// collections, and never reachable through a name.
+#[test]
+fn class_method_bodies_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let body_ptr = tlab.alloc_string("method body".to_string());
+    let class_name = QualifiedTypeName::local(Name::new("SessionClass"));
+    let mut methods = IndexMap::new();
+    methods.insert(
+        Name::new("greet"),
+        bex_vm_types::types::ClassMethodDef {
+            function: bex_vm_types::ObjectIndex::from_raw(0),
+            function_ptr: body_ptr,
+        },
+    );
+    let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+        name: bex_vm_types::DeclarationName::Declared(class_name.clone()),
+        fields: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        stream_done: false,
+        type_tag: baml_type::typetag::TypeTag::of_head("SessionClass"),
+        has_cleanup: false,
+        methods,
+        generic_param_count: 0,
+        owner: package_ptr,
+    })));
+
+    let mut roots = vec![class_ptr];
+    let mut expected_body = body_ptr;
+    let mut expected_owner = package_ptr;
+    for level in [
+        CollectionLevel::Minor,
+        CollectionLevel::Minor,
+        CollectionLevel::Major,
+    ] {
+        let (stats, next_roots, forwarding) =
+            unsafe { heap.collect_garbage_generational(&roots, level) };
+        assert_eq!(stats.live_count, 3);
+        let next_body = forwarding[&expected_body];
+        let next_owner = forwarding[&expected_owner];
+        assert_ne!(next_body, expected_body);
+        assert_ne!(next_owner, expected_owner);
+        expected_body = next_body;
+        expected_owner = next_owner;
+        roots = next_roots;
+    }
+    let Object::Class(class) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the class")
+    };
+    assert_eq!(class.owner, expected_owner);
+    assert_eq!(
+        class.methods[&Name::new("greet")].function_ptr,
+        expected_body
+    );
+    let Object::String(body) = (unsafe { expected_body.get() }) else {
+        panic!("body was not forwarded")
+    };
+    assert_eq!(body.as_str(), "method body");
+}
+
 /// A runtime-declared alias back-references its owning package; the collector
 /// must keep the package alive through the alias alone.
 #[test]
@@ -1379,6 +1447,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         stream_done: false,
         type_tag,
         has_cleanup: false,
+        methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));

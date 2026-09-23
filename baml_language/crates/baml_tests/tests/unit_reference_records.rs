@@ -28,7 +28,7 @@
 mod common;
 
 use baml_compiler2_emit::{OptLevel, emit_units};
-use bex_vm_types::CompilationUnit;
+use bex_vm_types::legacy_unit::CompilationUnit;
 use common::build_db;
 
 /// The fixture's workspace root — `emit_units` emits from a viewing package.

@@ -245,10 +245,10 @@ fn placeholder() -> Object {
 /// `ProgramPackage` stay valid.
 fn reserve_package_slots(
     compile_time_objects: &mut Vec<Object>,
-    packages: &IndexMap<Name, ProgramPackage>,
-) -> IndexMap<Name, PackageSlots> {
-    let mut layout = IndexMap::new();
-    for (name, pkg) in packages {
+    packages: &[ProgramPackage],
+) -> Vec<PackageSlots> {
+    let mut layout = Vec::with_capacity(packages.len());
+    for pkg in packages {
         let mut impl_rule_slots = IndexMap::new();
         for (iface_idx, rules) in &pkg.impl_rules {
             let slots: Vec<usize> = rules
@@ -263,13 +263,10 @@ fn reserve_package_slots(
         }
         let package_slot = compile_time_objects.len();
         compile_time_objects.push(placeholder());
-        layout.insert(
-            name.clone(),
-            PackageSlots {
-                package_slot,
-                impl_rule_slots,
-            },
-        );
+        layout.push(PackageSlots {
+            package_slot,
+            impl_rule_slots,
+        });
     }
     layout
 }
@@ -303,12 +300,21 @@ pub struct PackageIndex {
     /// interface in the program, in package-load order.
     impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
     /// Static image object symbols used by the runtime linker.
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     objects_by_name: HashMap<String, HeapPtr>,
     /// Static image global symbols used by the runtime linker.
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     globals_by_name: HashMap<String, GlobalIndex>,
 }
 
 impl PackageIndex {
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     pub fn install_image_symbols(
         &mut self,
         objects_by_name: HashMap<String, HeapPtr>,
@@ -318,6 +324,9 @@ impl PackageIndex {
         self.globals_by_name = globals_by_name;
     }
 
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     pub fn object_by_name(&self, name: &str) -> Option<HeapPtr> {
         self.objects_by_name
             .get(name)
@@ -325,6 +334,9 @@ impl PackageIndex {
             .or_else(|| lookup_type_by_fqn(self, name))
     }
 
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     pub fn global_by_name(&self, name: &str) -> Option<GlobalIndex> {
         self.globals_by_name.get(name).copied()
     }
@@ -339,6 +351,9 @@ impl PackageIndex {
     }
 
     /// The canonical static package name for a package pointer.
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     pub fn package_name(&self, package: HeapPtr) -> Option<&Name> {
         self.by_name
             .iter()
@@ -401,12 +416,11 @@ fn resolve_impl_rule(heap: &BexHeap, rule: &ProgramImplRule) -> RuntimeImplRule 
 /// [`PackageIndex`].
 fn fill_package_slots(
     heap: &mut BexHeap,
-    packages: &IndexMap<Name, ProgramPackage>,
-    layout: &IndexMap<Name, PackageSlots>,
+    packages: &[ProgramPackage],
+    layout: &[PackageSlots],
 ) -> PackageIndex {
     let mut index = PackageIndex::default();
-    for (name, pkg) in packages {
-        let slots = &layout[name];
+    for (pkg, slots) in packages.iter().zip(layout) {
         // Impl rules first: a package's `impl_rules` map points at their slots.
         let mut impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>> = IndexMap::new();
         for (iface_idx, rules) in &pkg.impl_rules {
@@ -456,7 +470,7 @@ fn fill_package_slots(
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
         index
             .by_name
-            .insert(name.clone(), heap.compile_time_ptr(slots.package_slot));
+            .insert(pkg.name.clone(), heap.compile_time_ptr(slots.package_slot));
     }
     index
 }
@@ -536,7 +550,7 @@ pub fn all_recursive_type_aliases(
 /// the [`PackageIndex`]. The heap is sealed on return.
 pub fn build_heap_with_packages(
     mut compile_time_objects: Vec<Object>,
-    packages: &IndexMap<Name, ProgramPackage>,
+    packages: &[ProgramPackage],
 ) -> (Arc<BexHeap>, PackageIndex) {
     let layout = reserve_package_slots(&mut compile_time_objects, packages);
     let mut heap = BexHeap::build_unsealed_default(compile_time_objects);

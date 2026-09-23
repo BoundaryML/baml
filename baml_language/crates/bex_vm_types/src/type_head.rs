@@ -571,6 +571,7 @@ mod tests {
             stream_done: false,
             type_tag: TypeTag::of_head(&name.render_dotted(false)),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }));
@@ -609,6 +610,7 @@ mod tests {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }));

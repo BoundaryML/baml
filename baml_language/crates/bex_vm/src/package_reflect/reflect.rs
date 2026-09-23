@@ -23,7 +23,7 @@ use bex_vm_types::{
     ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
     RuntimeCompileArtifactSlot, RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
     SessionEvalLease, Ty, TyTemplate,
-    link::link_dynamic,
+    legacy_link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
         LocalName, MethodImpl, Package, PackageKind, RuntimeImplRule, RuntimePackage, SessionState,
@@ -499,6 +499,9 @@ fn check_function_contract(
     ))
 }
 
+#[deprecated(
+    note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+)]
 fn dependency_object(vm: &BexVm, package_ptr: HeapPtr, local: &str) -> Option<HeapPtr> {
     let Object::Package(package) = vm.get_object(package_ptr) else {
         return None;
@@ -522,6 +525,9 @@ fn dependency_object(vm: &BexVm, package_ptr: HeapPtr, local: &str) -> Option<He
 /// registered the function under — so it resolves exactly as the global lane
 /// resolves an alias-qualified global: `user.<local>` for a runtime image,
 /// `<canonical package>.<local>` for a static one.
+#[deprecated(
+    note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+)]
 fn dependency_named_object(
     vm: &BexVm,
     package_ptr: HeapPtr,
@@ -937,7 +943,8 @@ impl BamlClassPackage for PackageReflectImpl {
         let program_package = plan
             .program
             .packages
-            .get(&baml_type::Name::new("user"))
+            .iter()
+            .find(|package| package.name.as_str() == "user")
             .cloned()
             .unwrap_or_default();
         let package = Package {
@@ -980,7 +987,10 @@ impl BamlClassPackage for PackageReflectImpl {
             // `"<runtime-import>"` placeholder as a live object would
             // surface later as an inscrutable error at first use.
             if let Some(symbol) = external_objects.get(&index)
-                && !matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn)
+                && !matches!(
+                    symbol.kind,
+                    bex_vm_types::legacy_unit::SymbolKind::GenericFn
+                )
             {
                 let resolved = vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
                     // Alias-qualified names — a dependency's own exports and
@@ -1663,6 +1673,9 @@ fn remint_grafted_declarations(
 /// named-surface bridge: the dependency's exported declarations and its
 /// mounted types (whose values are `Object::Type`s wrapping the declaration's
 /// own head). Non-declarations are filtered by the bind itself.
+#[deprecated(
+    note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+)]
 fn dependency_named_declarations(
     vm: &BexVm,
     alias: &str,
@@ -2076,7 +2089,10 @@ fn graft_session_submission(
         // graft the linker's `"<runtime-import>"` placeholder as a live
         // object.
         if let Some(symbol) = external_objects.get(&index)
-            && !matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn)
+            && !matches!(
+                symbol.kind,
+                bex_vm_types::legacy_unit::SymbolKind::GenericFn
+            )
         {
             let pointer = existing_objects
                 .get(&symbol.fq_name)
@@ -2198,7 +2214,8 @@ fn graft_session_submission(
     let program_package = plan
         .program
         .packages
-        .get(&baml_type::Name::new("user"))
+        .iter()
+        .find(|package| package.name.as_str() == "user")
         .cloned()
         .unwrap_or_default();
     let new_classes = program_package

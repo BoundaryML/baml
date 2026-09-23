@@ -5299,6 +5299,7 @@ mod union_container_selection_tests {
                 stream_done: false,
                 type_tag,
                 has_cleanup: false,
+                methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
                 owner: bex_vm_types::HeapPtr::null(),
             })))

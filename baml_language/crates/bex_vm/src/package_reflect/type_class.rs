@@ -1463,6 +1463,7 @@ mod renderability_tests {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
             owner,
         })));

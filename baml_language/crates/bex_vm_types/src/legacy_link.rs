@@ -1,5 +1,7 @@
-//! Load-time linker (B-693 §3): folds symbolic [`CompilationUnit`]s into a
-//! runnable [`Program`].
+//! LEGACY linker over the string-keyed [`CompilationUnit`] of
+//! [`crate::legacy_unit`]: folds symbolic units into a runnable [`Program`].
+//! Survives only until every producer and consumer of that format is on
+//! [`crate::link`]; nothing new may depend on it.
 //!
 //! The linker assigns final absolute `ObjectIndex`/`GlobalIndex` values,
 //! resolves each import against the merged export table, and patches operands
@@ -32,15 +34,18 @@ use baml_base::Name;
 
 use crate::{
     ConstValue, GlobalIndex, HeapPtr, Object, ObjectIndex, Program,
+    legacy_unit::{CompilationUnit, ExportTable, LocalRef, ProgramPackageFrag, Symbol, SymbolKind},
     relink::{IndexOperand, visit_object_operands},
-    types::{ProgramImplRule, ProgramMethodImpl},
-    unit::{CompilationUnit, ExportTable, LocalRef, ProgramPackageFrag, Symbol, SymbolKind},
+    types::{ProgramImplRule, ProgramMethodImpl, ProgramPackage},
 };
 
 /// A program linked for grafting into a live VM, plus the symbolic entries in
 /// its synthetic external prefix. The runtime replaces those prefix slots with
 /// pointers/values from the live image and allocates every other slot anew.
 #[derive(Clone, Debug)]
+#[deprecated(
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+)]
 pub struct DynamicLinkPlan {
     pub program: Program,
     pub external_objects: Vec<(ObjectIndex, Symbol)>,
@@ -61,6 +66,9 @@ fn import_key(symbol: &Symbol) -> String {
 /// function supplies a synthetic builtin unit that exports inert placeholders
 /// for otherwise-unresolved imports, invokes `link`, then reports which linked
 /// prefix indices the VM must graft from its live static/dependency images.
+#[deprecated(
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+)]
 pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkError> {
     let object_exports: HashSet<&str> = units
         .iter()
@@ -410,6 +418,9 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
 
 /// An error raised while linking symbolic units into a [`Program`].
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[deprecated(
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+)]
 pub enum LinkError {
     /// An import named a fully-qualified name that no unit exports.
     UnresolvedImport(String),
@@ -637,6 +648,9 @@ fn sole_init_tail(units: &[CompilationUnit], group: &[usize]) -> Result<Option<u
 /// unit exports, and [`LinkError::DuplicateExport`] if two units export the same
 /// name.
 #[allow(clippy::too_many_lines)]
+#[deprecated(
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+)]
 pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // ---- Group ordering (design §9 R3) --------------------------------------
     // Process builtin units first, then user units; within each group the passes
@@ -1209,7 +1223,19 @@ fn merge_package_fragment(
             .map(ObjectIndex::from_raw)
             .ok_or_else(|| LinkError::UnresolvedImport(fq.to_string()))
     };
-    let pkg = program.packages.entry(package.clone()).or_default();
+    let pkg = match program.packages.iter().position(|pkg| pkg.name == *package) {
+        Some(index) => &mut program.packages[index],
+        None => {
+            program.packages.push(ProgramPackage {
+                name: package.clone(),
+                ..ProgramPackage::default()
+            });
+            program
+                .packages
+                .last_mut()
+                .unwrap_or_else(|| unreachable!("just pushed"))
+        }
+    };
     pkg.exported_names
         .extend(frag.exported_names.iter().cloned());
     for (local, fq) in &frag.classes {
@@ -1299,10 +1325,10 @@ fn merge_package_fragment(
 /// `build_packages` tail does. Declaration maps retain the fragment's source
 /// order; the top-level package map remains content-sorted.
 fn sort_packages(program: &mut Program) {
-    for pkg in program.packages.values_mut() {
+    for pkg in &mut program.packages {
         pkg.canonicalize_impl_rules();
     }
-    program.packages.sort_keys();
+    program.packages.sort_by(|a, b| a.name.cmp(&b.name));
 }
 
 #[cfg(test)]
@@ -1311,8 +1337,8 @@ mod tests {
     use crate::{
         Instruction, Object,
         bytecode::Bytecode,
+        legacy_unit::{ExportTable, InitTail, ProgramPackageFrag},
         types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
-        unit::{ExportTable, InitTail, ProgramPackageFrag},
     };
 
     fn func(name: &str, instructions: Vec<Instruction>) -> Object {
@@ -1364,6 +1390,7 @@ mod tests {
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(type_tag),
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: crate::HeapPtr::null(),
         }))

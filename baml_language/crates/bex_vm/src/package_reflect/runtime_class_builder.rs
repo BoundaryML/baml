@@ -868,6 +868,7 @@ fn build_group(
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));

@@ -239,9 +239,16 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
                 }
             }
         }
+        // A class names each inherent method's pooled function — relocated
+        // exactly like an interface's default bodies.
+        Object::Class(class) => {
+            let mut visit = visit;
+            for method in class.methods.values_mut() {
+                visit(IndexOperand::Object(&mut method.function));
+            }
+        }
         // Inert at relink time: no cross-function index operands.
-        Object::Class(..)
-        | Object::Enum(..)
+        Object::Enum(..)
         | Object::TypeAlias(..)
         | Object::Package(..)
         | Object::ImplRule(..)

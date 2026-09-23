@@ -9,8 +9,8 @@ mod common;
 use baml_compiler2_emit::{OptLevel, emit_units};
 use bex_vm_types::{
     Object,
-    link::{LinkError, link},
-    unit::LocalRef,
+    legacy_link::{LinkError, link},
+    legacy_unit::LocalRef,
 };
 use common::build_db;
 

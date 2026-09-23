@@ -19,7 +19,7 @@ use baml_compiler2_emit::{
     generate_project_bytecode_with_stdlib, generate_stdlib_program, take_lowered_files,
 };
 use baml_db::ProjectDatabase;
-use bex_vm_types::{CompilationUnit, Object, Program};
+use bex_vm_types::{Object, Program, legacy_unit::CompilationUnit};
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
 const ROOT: &str = "/relink-oracle";

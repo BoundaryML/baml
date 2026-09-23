@@ -1,92 +1,303 @@
-//! Symbolic, relocatable per-source-file compilation units (B-693 §2).
+//! Relocatable compilation units — one package's compiled output for one
+//! link — and the package-level products a link needs beside them.
 //!
-//! A [`CompilationUnit`] is the relocatable artifact emit produces for one
-//! source file. Where today's per-file bytecode reuse *reconstructs* a file's
-//! object boundaries by scanning a flat `Program`, a unit *stores* them: the
-//! file's own compiled objects carry **unit-local** index operands, an
-//! **import table** names every external reference by fully-qualified name, and
-//! an **export table** names what the unit provides.
+//! A [`CompilationUnit`] is what the emitter produces for ONE package. It is
+//! a pure function of the package's sources and of the interfaces of the
+//! packages it reaches: the package's own definitions in per-kind buckets, a
+//! [dependency table](DependencyEntry), an [import table](ImportEntry) whose
+//! entries name a declaration *inside* a dependency by that package's own
+//! item coordinates, an [export table](ExportTable) in the same coordinates,
+//! and code whose index operands are local-or-import ordinals. The linker
+//! ([`crate::link`]) binds each dependency slot to a package, matches every
+//! import against the bound package's own exports, and lays the units out
+//! into one runnable [`Program`](crate::Program).
 //!
-//! The instruction/[`Object`] structs are unchanged — a unit merely
-//! reinterprets the existing `ObjectIndex`/`GlobalIndex` *values* through a
-//! per-unit convention (§2a): a unit's object address space is
-//! `[0 .. n_local_objects)` for its own definitions and `[n_local_objects ..)`
-//! for imports, and symmetrically for globals. The [`link`](crate::link) step
-//! folds units into a runnable `Program` by resolving imports and rebasing
-//! local operands through the existing `relink` operand walkers.
+//! The grain is the package because the package is the unit of naming and
+//! dependency in the language — a file is not a semantic entity, and cutting
+//! a package at file boundaries would turn every intra-package reference
+//! into an import of the package itself. The one place a unit is smaller
+//! than a package is a session: each submission is a unit of the growing
+//! session package, and reaches earlier submissions' declarations as
+//! imports at [`DepSlot::SELF`].
 //!
+//! Nothing in a unit is a rendered spelling of a foreign declaration: a
+//! declaration is addressed by *which dependency* and *which item path in
+//! that package* — the way ELF, WebAssembly, the JVM constant pool, and
+//! rustc's `CrateNum` + `DefPath` all address a foreign symbol. A package has
+//! no intrinsic name and a unit never states one; the link set says which
+//! package a unit is.
+//!
+//! # Operand convention
+//!
+//! The instruction and [`Object`] structs are unchanged; a unit reinterprets
+//! their `ObjectIndex` / `GlobalIndex` VALUES:
+//!
+//! - an object operand `raw < n_local_objects` is unit-local, laid out
+//!   bucket by bucket — classes, enums, interfaces, recursive aliases, then
+//!   code — so class `k` is `k`, enum `k` is `C + k`, interface `k` is
+//!   `C + E + k`, alias `k` is `C + E + I + k`, and code `k` is
+//!   `C + E + I + A + k`;
+//! - a global operand `raw < n_local_globals` is unit-local: functions and
+//!   interface bodies in `[0, F)` in emit order, then `let`s in `[F, F + L)`
+//!   (the partition [`ExportTable::globals`] records);
+//! - an operand `raw >= IMPORT_BASE` is import ordinal `raw - IMPORT_BASE`
+//!   into [`CompilationUnit::object_imports`] or
+//!   [`CompilationUnit::global_imports`].
+//!
+//! Imports live in a fixed range rather than "past the locals" because the
+//! import count is unknown until a unit closes, and rebasing operands at close
+//! would collide with parallel codegen's fragment rebase. An [`InitTail`]
+//! uses the same convention over its own tables.
+
 use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    Object, RealizedTy, TyTemplate,
-    types::{InterfaceBound, LocalName},
+    Object, ObjectIndex, TyTemplate,
+    types::{ImplCoherenceKey, InterfaceBound, LocalName},
 };
 
-/// The kind of definition a [`Symbol`] refers to. Selects which of the linked
-/// `Program`'s name maps resolves the symbol.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub enum SymbolKind {
-    /// A named function (owns a global slot *and* a pool object).
-    Function,
-    /// A top-level `let` binding (owns a global slot, initialized by `$init`).
-    Let,
-    /// A class definition.
-    Class,
-    /// An enum definition.
-    Enum,
-    /// An interface definition.
-    Interface,
-    /// A generic-function instantiation (`foo<int>`) referenced as a value. The
-    /// instantiation is not itself in any name map; the linker re-interns it
-    /// from the [`Symbol::generic`] key (design §9 R1).
-    GenericFn,
+/// The first import ordinal in every per-unit index space (see the module
+/// doc). Kept below `2^32` so it is a valid `usize` on every target this crate
+/// builds for — wasm32 has a 32-bit `usize` — while leaving `2^31` local
+/// objects or slots, far beyond any real unit.
+pub const IMPORT_BASE: usize = 1 << 31;
+
+/// The import ordinal an operand encodes, or `None` for a local operand.
+#[must_use]
+pub fn import_ordinal(raw: usize) -> Option<usize> {
+    raw.checked_sub(IMPORT_BASE)
 }
 
-/// The re-intern key for a [`SymbolKind::GenericFn`] symbol.
+/// The operand value encoding import ordinal `ordinal`.
+#[must_use]
+pub fn import_operand(ordinal: usize) -> usize {
+    IMPORT_BASE + ordinal
+}
+
+/// A package-relative item coordinate: namespace path plus item name. The
+/// owning package's own coordinates — never a consumer's spelling of them.
+pub type ItemPath = LocalName;
+
+/// SHA-256 over the raw Borsh payload of a package interface: the surface a
+/// compile assumed of a dependency, checked at link against the package that
+/// binds the slot.
+pub type Digest = [u8; 32];
+
+/// A slot in a unit's (or tail's) dependency table. Slot `0` is the unit's own
+/// package and is never stored; slot `k >= 1` is `dependencies[k - 1]`.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub struct DepSlot(pub u32);
+
+impl DepSlot {
+    /// The unit's own package. As an IMPORT's slot it is meaningful only for
+    /// a session submission, whose package already holds the declarations of
+    /// earlier submissions; any other unit's own declarations are locals.
+    pub const SELF: Self = Self(0);
+
+    #[must_use]
+    pub fn is_self(self) -> bool {
+        self == Self::SELF
+    }
+
+    /// The slot for entry `index` of a dependency table.
+    #[must_use]
+    pub fn of_dependency_index(index: usize) -> Self {
+        Self(u32::try_from(index + 1).expect("dependency tables fit u32"))
+    }
+
+    /// The dependency-table entry this slot names, or `None` for
+    /// [`Self::SELF`].
+    #[must_use]
+    pub fn dependency_index(self) -> Option<usize> {
+        self.0.checked_sub(1).map(|k| k as usize)
+    }
+}
+
+/// One dependency of a unit: which package binds slot `k + 1`, and the
+/// interface the compile assumed of it.
 ///
-/// A generic-function value (`foo<int>` used as a value, i.e. an
-/// `Object::GenericFunction`) is interned across the whole program by
-/// `(base function, type arguments)`, so `foo<int>` exists once. Under per-unit
-/// emit each unit emits its own local copy; the linker dedups them at link time
-/// (design §9 R1) keyed by this pair — hence it must round-trip losslessly.
+/// One entry per package ROOT: a package mounted under two aliases is one
+/// root, located by its first alias. The table is topologically ordered —
+/// `via` always names an earlier slot — so a transitive root (one the
+/// consumer cannot spell from source but can reach through a dependency's
+/// API) is located through its parent's edge table.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct GenericFnKey {
-    /// Fully-qualified name of the base function being instantiated. Resolves
-    /// to a global slot in the linked image (same key space as
-    /// `Program::function_global_indices`).
-    pub base_fn: String,
-    /// Concrete type arguments seeded into `frame.type_args` when the value is
-    /// called. Together with `base_fn` this is the whole-program intern key
-    /// (mirrors `GenericFunction::type_args`: typevars are invalid in a called
-    /// frame's args, so these are `RealizedTy`, not `TyTemplate`).
-    pub type_args: Vec<RealizedTy>,
+pub struct DependencyEntry {
+    /// The edge name that locates the package in `via`'s edge table.
+    pub edge: Name,
+    /// Whose edge table `edge` is read from: [`DepSlot::SELF`] for a direct
+    /// dependency, an earlier slot for a transitive one.
+    pub via: DepSlot,
+    /// Digest of the interface payload this compile read; `None` for a
+    /// transitive root, whose interface the consumer never read.
+    pub fingerprint: Option<Digest>,
 }
 
-/// A cross-unit symbol: what an import references. Exports never use a `Symbol`
-/// (they use [`LocalRef`]). `fq_name` is the resolution key in the linked
-/// `Program`'s name maps for every kind except [`SymbolKind::GenericFn`], which
-/// resolves through [`Self::generic`].
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct Symbol {
-    /// Which definition kind (and hence which name map) resolves this symbol.
-    pub kind: SymbolKind,
-    /// Fully-qualified name — the same key space as `Program::function_indices`
-    /// / `function_global_indices` / `let_global_indices` / the per-package
-    /// class/enum/interface maps. For a [`SymbolKind::GenericFn`] this carries
-    /// the base function's name (for determinism/debugging); the true intern
-    /// key is [`Self::generic`].
-    pub fq_name: String,
-    /// Present iff `kind == SymbolKind::GenericFn`: the `(base_fn, type_args)`
-    /// re-intern key. `None` for every other kind.
-    pub generic: Option<GenericFnKey>,
+/// A function's path within its package.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub enum FnPath {
+    /// A free function.
+    Free(ItemPath),
+    /// A class-inherent method (static or instance), reached through the
+    /// class's method table.
+    Method { class: ItemPath, name: Name },
 }
 
-/// Which per-unit bucket + offset an export (or local reference) points at. The
-/// linker places each bucket at its own base (classes, then enums, then
-/// interfaces, then code — design §3b), so a bare flat offset is not enough to
-/// name a definition symbolically.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+/// The interface an impl-provided body belongs to, spelled from the body's
+/// own package: [`baml_type::Package::Local`] for an interface of that
+/// package, [`baml_type::Package::Dep`] by manifest edge otherwise.
+///
+/// This is an identity COMPONENT of the body, not a reference the linker
+/// binds (a body is reached rule-relatively; the direct-call import resolves
+/// the body itself). Edges are manifest-fixed, so every submission of a
+/// session spells the same interface the same way — which a dependency-table
+/// slot, numbered per table in first-use order, would not.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceKey {
+    pub package: baml_type::Package,
+    pub path: ItemPath,
+}
+
+/// The identity of an interface-machinery body. A body has no runtime name:
+/// an adopted default is reached through its interface object, a provided
+/// method through its impl rule. These keys exist so a later session
+/// submission can call an earlier submission's body directly.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub enum BodyKey {
+    /// An interface's default-method body; the interface is declared by the
+    /// body's own package.
+    Default { interface: ItemPath, method: Name },
+    /// A method an `implements` block provides. Importable only at
+    /// [`DepSlot::SELF`]: an impl-provided body is never addressed across
+    /// packages (dispatch is virtual). Boxed: the coherence key carries type
+    /// templates, and a [`DeclPath`] is a map key everywhere else.
+    ImplMethod(Box<ImplBodyKey>),
+}
+
+/// The identity of an impl-provided body: the interface, the impl's coherence
+/// key (injective over admitted impls), and the method name.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct ImplBodyKey {
+    pub interface: InterfaceKey,
+    pub coherence: ImplCoherenceKey,
+    pub method: Name,
+}
+
+/// A declaration's coordinates within its package. The variant IS the kind,
+/// so an import of one kind can never bind an export of another.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub enum DeclPath {
+    Class(ItemPath),
+    Enum(ItemPath),
+    Interface(ItemPath),
+    /// A recursive alias (the only kind pooled; others expand at lowering).
+    TypeAlias(ItemPath),
+    /// A top-level `let`. Owns a global slot and no pool object.
+    Let(ItemPath),
+    /// A named function. Owns a pool object and a global slot.
+    Function(FnPath),
+    /// An interface-machinery body. Owns a pool object and a global slot,
+    /// and appears in no runtime name table.
+    InterfaceBody(BodyKey),
+}
+
+impl DeclPath {
+    /// Is this a type declaration — one whose references bake a type tag?
+    #[must_use]
+    pub fn is_type(&self) -> bool {
+        matches!(
+            self,
+            Self::Class(_) | Self::Enum(_) | Self::Interface(_) | Self::TypeAlias(_)
+        )
+    }
+
+    /// Does this declaration own a global slot?
+    #[must_use]
+    pub fn owns_global_slot(&self) -> bool {
+        matches!(
+            self,
+            Self::Let(_) | Self::Function(_) | Self::InterfaceBody(_)
+        )
+    }
+
+    /// Does this declaration own a pool object?
+    #[must_use]
+    pub fn owns_object(&self) -> bool {
+        !matches!(self, Self::Let(_))
+    }
+
+    /// Does `local_ref` name the bucket a declaration of this kind is pooled
+    /// in? Never true for a `let`, which owns no pool object.
+    #[must_use]
+    pub fn matches_bucket(&self, local_ref: LocalRef) -> bool {
+        matches!(
+            (self, local_ref),
+            (Self::Class(_), LocalRef::Class(_))
+                | (Self::Enum(_), LocalRef::Enum(_))
+                | (Self::Interface(_), LocalRef::Interface(_))
+                | (Self::TypeAlias(_), LocalRef::TypeAlias(_))
+                | (
+                    Self::Function(_) | Self::InterfaceBody(_),
+                    LocalRef::Code(_)
+                )
+        )
+    }
+}
+
+impl std::fmt::Display for DeclPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Class(path) => write!(f, "class {path}"),
+            Self::Enum(path) => write!(f, "enum {path}"),
+            Self::Interface(path) => write!(f, "interface {path}"),
+            Self::TypeAlias(path) => write!(f, "type alias {path}"),
+            Self::Let(path) => write!(f, "let {path}"),
+            Self::Function(FnPath::Free(path)) => write!(f, "function {path}"),
+            Self::Function(FnPath::Method { class, name }) => {
+                write!(f, "method {class}.{name}")
+            }
+            Self::InterfaceBody(BodyKey::Default { interface, method }) => {
+                write!(f, "default body {interface}.{method}")
+            }
+            Self::InterfaceBody(BodyKey::ImplMethod(body)) => write!(
+                f,
+                "impl body <(_ as {}.{})>.{}",
+                body.interface.package.as_name(),
+                body.interface.path,
+                body.method
+            ),
+        }
+    }
+}
+
+/// An import: the declaration a unit references, addressed inside the package
+/// bound to `dep`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct DeclKey {
+    pub dep: DepSlot,
+    pub path: DeclPath,
+}
+
+/// One entry of a unit's import table. The table is TOTAL over the foreign
+/// declarations the unit references in any way — by an index operand, or only
+/// by a type head baked into a type operand — so a reference the executable
+/// must bind is never implied by an operand the linker cannot see.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct ImportEntry {
+    pub key: DeclKey,
+    /// For a type declaration, the tag this unit's bytecode carries for it
+    /// (its heads, jump tables, and type operands) — a relocation record the
+    /// runtime binder maps to the bound declaration's live head. `Some` iff
+    /// `key.path` is a type kind.
+    pub baked_tag: Option<baml_type::typetag::TypeTag>,
+}
+
+/// Which per-unit bucket + offset an export points at. The linker places each
+/// bucket at its own base, so a bare flat offset cannot name a definition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum LocalRef {
     /// Offset into the unit's `classes` bucket.
     Class(u32),
@@ -96,68 +307,34 @@ pub enum LocalRef {
     Interface(u32),
     /// Offset into the unit's `type_alias_objects` bucket.
     TypeAlias(u32),
-    /// Offset into the unit's `code` bucket (functions, lambdas, interned
-    /// literals, local generic-fns).
+    /// Offset into the unit's `code` bucket.
     Code(u32),
 }
 
-/// The names a unit provides, mapped to its own local indices. `Vec` (not a
-/// `HashMap`) so the on-wire order is the deterministic emit order.
+/// What a unit provides, in its own package's coordinates. `Vec`s, not maps,
+/// so the on-wire order is the deterministic emit order.
 #[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ExportTable {
-    /// Fully-qualified name to the local bucket+offset that defines it. Covers
-    /// functions (`LocalRef::Code`) and class/enum/interface definitions.
-    pub objects: Vec<(String, LocalRef)>,
-    /// Fully-qualified name of each function / `let` that owns a global slot, to
-    /// its local global ordinal (dense, `0 .. n_local_globals`). This is the
-    /// unit's *complete* local global table, not just an externally-visible
-    /// subset — the linker relies on it to size and fill the globals pool.
-    pub globals: Vec<(String, u32)>,
+    /// Every pooled declaration the unit defines — types, functions, and
+    /// interface bodies — to its bucket + offset.
+    pub objects: Vec<(DeclPath, LocalRef)>,
+    /// The unit's COMPLETE local global-slot table: every
+    /// [`DeclPath::Function`] / [`DeclPath::InterfaceBody`] at slots `[0, F)`
+    /// in emit order, then every [`DeclPath::Let`] at `[F, F + L)`. The linker
+    /// sizes and fills the slot pool from it; a slot holds `Object(the
+    /// exported object)` for a function or body and `Null` (filled by `$init`)
+    /// for a `let`.
+    pub globals: Vec<(DeclPath, u32)>,
 }
 
-/// The symbolic (name-referencing, not `ObjectIndex`) twin of a `ProgramPackage`
-/// fragment contributed by one unit. The linker merges every unit's fragment
-/// into the image's `packages` map, resolving each fully-qualified name to an
-/// absolute `ObjectIndex` (design §3b step 5). `Vec` preserves the deterministic
-/// emit order the `IndexMap`s in `ProgramPackage` require.
-#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
-pub struct ProgramPackageFrag {
-    /// All source-visible declaration names (types, aliases, and values).
-    pub exported_names: Vec<LocalName>,
-    /// Local class name to fully-qualified class name (resolved to `ObjectIndex`
-    /// at link).
-    pub classes: Vec<(LocalName, String)>,
-    /// Local enum name to fully-qualified enum name.
-    pub enums: Vec<(LocalName, String)>,
-    /// Local interface name to fully-qualified interface name.
-    pub interfaces: Vec<(LocalName, String)>,
-    /// Local exported free-function name to its fully-qualified symbol.
-    pub functions: Vec<(LocalName, String)>,
-    /// Implemented-interface fully-qualified name to the impl rules THIS
-    /// UNIT'S FILE declares for it (the interface may live in another file or
-    /// a dependency package). Rules ride their declaring unit — never a
-    /// package carrier — so each rule's provided-method bodies are objects in
-    /// this unit's own `code` bucket ([`ProgramMethodImplFrag::code_offset`]).
-    pub impl_rules: Vec<(String, Vec<ProgramImplRuleFrag>)>,
-    /// Recursive type aliases defined in this unit, by fully-qualified name of
-    /// the emitted `Object::TypeAlias`. Non-recursive aliases are expanded at
-    /// lowering and never appear.
-    pub type_aliases: Vec<(LocalName, String)>,
-    /// Versioned artifact containing the whole-package enriched interface.
-    /// Exactly one unit is its carrier.
-    pub interface_blob: Vec<u8>,
-    /// Fully-qualified synthesized `$init_test` symbol, when present.
-    pub test_init: Option<String>,
-}
-
-/// Symbolic twin of `ProgramImplRule`: `interface_head` is a fully-qualified
-/// name the linker resolves to an `ObjectIndex`; each provided method
-/// references its body by `code_offset` into the declaring unit's own `code`
-/// bucket — a body has no name on any wire.
+/// One `implements` rule a unit declares, in unit convention. Rules ride the
+/// unit that declares them, so each rule's provided-method bodies are objects
+/// in that unit's own `code` bucket.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ProgramImplRuleFrag {
-    /// Fully-qualified name of the interface this rule heads.
-    pub interface_head: String,
+    /// The implemented interface, in the unit's object convention (a local
+    /// interface or an import).
+    pub interface_head: ObjectIndex,
     /// Pattern type this rule implements the interface for.
     pub for_ty_pattern: TyTemplate,
     /// Interface bounds on each generic parameter of the rule.
@@ -166,46 +343,36 @@ pub struct ProgramImplRuleFrag {
     pub interface_args: Vec<TyTemplate>,
     /// Associated-type bindings, by associated-type name.
     pub interface_assoc: Vec<(Name, TyTemplate)>,
-    /// Method name to its symbolic implementation.
+    /// Method name to its provided implementation. Provided-only: an adopted
+    /// interface default is not in this table (the resolver adopts it at
+    /// dispatch through the interface's `default_fn`).
     pub methods: Vec<(Name, ProgramMethodImplFrag)>,
     /// See [`RuntimeImplRule::field_links`](crate::types::RuntimeImplRule::field_links).
-    /// Slot indices are layout, not symbols, so they survive relinking unchanged.
+    /// Slot indices are layout, not symbols, so they survive linking unchanged.
     pub field_links: Box<[u32]>,
 }
 
-/// Symbolic twin of `ProgramMethodImpl`. Rule method tables are
-/// PROVIDED-ONLY, and a provided body is declared by the same file as its
-/// `implements` block — so the callee is always an object in the DECLARING
-/// unit's own `code` bucket, referenced by offset. An interface body has no
-/// name on any
-/// wire: an adopted interface default is not in this table at all (the
-/// resolver adopts it at dispatch through the interface's `default_fn`).
+/// A provided method's body: an offset into the declaring unit's `code`
+/// bucket (a body has no name on any wire) plus the callee's type-argument
+/// frame at the impl site.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ProgramMethodImplFrag {
-    /// Offset of the callee body in the declaring unit's `code` bucket.
     pub code_offset: u32,
-    /// The callee's type-argument frame at the impl site.
     pub frame: Vec<TyTemplate>,
 }
 
-/// One source file's relocatable compiled output — the B-693 unit format
-/// (design §2b).
+/// One package's relocatable compiled output for one link.
 ///
-/// Definitions are bucketed by emit pass (`classes` / `enums` / `interfaces` /
-/// `code`) so the linker can interleave them pass-major across units to
-/// reproduce today's flat pool order (design §9 R3 — appending a unit as one
-/// block would reorder the pool and break byte-identity). Every index operand
-/// inside these objects uses the per-unit convention of §2a, which the linker
-/// resolves into program indices.
+/// Definitions are bucketed by kind so the linker can interleave them
+/// pass-major across the units of a package group, reproducing the flat pool
+/// order of a whole-program emit. Every index operand inside these objects
+/// uses the module-level convention.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct CompilationUnit {
-    /// Project-root-relative source path (equals `Function::source_file`). Never
-    /// absolute, so the artifact relocates across checkouts (design §9 R7).
-    pub source_file: String,
-    /// Package this file contributes to.
-    pub package: Name,
+    /// The packages this unit reaches, by slot (see [`DepSlot`]).
+    pub dependencies: Vec<DependencyEntry>,
 
-    // --- definitions, bucketed by emit pass (design §3b / §9 R3) ---
+    // --- definitions, bucketed by kind ---
     /// `Object::Class` definitions, in declaration order.
     pub classes: Vec<Object>,
     /// `Object::Enum` definitions.
@@ -214,92 +381,74 @@ pub struct CompilationUnit {
     pub interfaces: Vec<Object>,
     /// `Object::TypeAlias` definitions (recursive aliases only).
     pub type_alias_objects: Vec<Object>,
-    /// The pass-4 block: functions, lambdas, interned literals, and local
-    /// generic-fn objects, in emit order.
+    /// Functions, lambdas, interned literals, and this unit's own copies of
+    /// the generic-function values it uses, in emit order.
     pub code: Vec<Object>,
 
-    // --- symbolic cross-unit tables ---
-    /// Every non-local `ObjectIndex` reference this unit makes, by name.
-    pub object_imports: Vec<Symbol>,
-    /// Every non-local `GlobalIndex` reference this unit makes, by name.
-    pub global_imports: Vec<Symbol>,
-    /// The names this unit provides, mapped to local indices.
+    // --- cross-unit tables ---
+    /// Every foreign object reference, by ordinal.
+    pub object_imports: Vec<ImportEntry>,
+    /// Every foreign global-slot reference, by ordinal.
+    pub global_imports: Vec<ImportEntry>,
+    /// What this unit provides.
     pub exports: ExportTable,
-
-    // --- side-table fragments the whole-program passes consume at link ---
-    /// This unit's symbolic contribution to its package's structure.
-    pub package_fragment: ProgramPackageFrag,
-    /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes
-    /// because `bex_vm_types` sits below `baml_compiler2_hir_ty`, which owns the
-    /// typed fragment — the same decoupling as the stdlib-interface blob. Empty
-    /// for builtins (their interface rides in the stdlib blob) and for any file
-    /// whose fragment failed to serialize. Populated by `decompose_units`;
-    /// consumed by the cache layer to project a `callable_throws` seed. Not
-    /// folded into `Program`, carries no absolute paths (design §9 R7).
-    pub callable_throws_fragment: Vec<u8>,
-
-    /// Last-segment names of every item this unit's compiled code statically
-    /// resolved — functions (including interface-machinery bodies, which have
-    /// no runtime name), `let` globals, classes, and enums. Codegen records
-    /// each name AT the site that resolves it to a baked operand, and the
-    /// record travels with the artifact; it is never reconstructed from the
-    /// compiled operands afterwards, because a reconstruction joins the
-    /// operands against the runtime name maps and severs silently whenever a
-    /// name class leaves them (interface bodies did exactly that). Sorted and
-    /// deduplicated, so identical compiles stay byte-identical. Consumed by
-    /// the CLI's incremental dirty partition as its reverse-dependency edges.
-    pub referenced_names: Vec<String>,
-    /// Whether any compiled code in this unit bakes a type's *layout* through
-    /// an operand that carries no recoverable type identity — a positional
-    /// field offset, an enum discriminant, a jump table, a dispatch slot, or
-    /// a type operand (the classification lives in
-    /// [`crate::relink::visit_index_operands_ref`]). The dirty partition
-    /// pairs this with its layout sentinel so any type-layout change
-    /// re-lowers the unit.
-    pub bakes_type_layout: bool,
-
-    /// The whole-*group* `$init` / `$init_test` tail (design §9 R2), carried on
-    /// one unit of the group that produces it (empty on every other unit). The
-    /// tail cannot be a per-file product — `$init` topo-sorts a package's `let`s
-    /// across files — so it is captured pre-synthesized and the linker places it
-    /// after the group's regular code (see [`InitTail`]).
-    pub init_tail: Option<InitTail>,
+    /// The `implements` rules this unit declares.
+    pub impl_rules: Vec<ProgramImplRuleFrag>,
 }
 
-/// The pre-synthesized `$init` / `$init_test` tail of one emit **group** (design
-/// §9 R2). Its objects are the per-package `$init` helper functions (with any
-/// lambdas + interned literals), the `$init` functions themselves, and the
-/// `$init_test` chainers, in the exact pool order a full compile emits them. The
-/// linker appends them after the group's regular code and assigns their global
-/// slots after the group's function+`let` slots, reproducing the flat layout.
+/// The whole-package products of a compile, produced beside the unit
+/// (rustc's crate metadata beside its codegen units): what the package exports
+/// by name, and the interface a dependent compiles against.
+#[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct PackageRecord {
+    /// All source-visible declaration names (types, aliases, and values),
+    /// including aliases that have no pool object of their own.
+    pub exported_names: Vec<LocalName>,
+    /// Exported callables by their package-local name, to the function each
+    /// resolves to, in interface order.
+    pub functions: Vec<(LocalName, FnPath)>,
+    /// Versioned artifact containing the whole-package enriched interface.
+    pub interface_blob: Vec<u8>,
+}
+
+/// One package's `$init` / `$init_test` tail: the package's `$init_let_{i}`
+/// helpers and `$init` (its init part), then its `$init_test` chainer (its
+/// test part), with tables of its own in the unit convention.
+///
+/// A tail is kept apart from the unit because it is placed apart: the linker
+/// places every package's init part after its group's regular code in
+/// package initialization order, then every package's test part in
+/// package-name order — a group-wide `$init` cannot reach another package's
+/// `let`s through a slot its own package has no edge for.
 ///
 /// # Operand convention
 ///
-/// A tail object's index operands use a per-tail local/import convention
-/// mirroring §2a: an `ObjectIndex` `raw < objects.len()` is tail-local (the
-/// linker rebases it `tail_object_base + raw`); otherwise it indexes
-/// [`Self::object_imports`]. A `GlobalIndex` `raw < slot_objects.len()` is a
-/// tail-local slot (a nameless `$init` helper slot, or a named `$init`/
-/// `$init_test` slot — rebased `tail_slot_base + raw`); otherwise it indexes
-/// [`Self::global_imports`] (a `let`/function slot in the main image).
+/// Object operand `raw < objects.len()` is tail-local; global operand
+/// `raw < slot_objects.len()` is a tail-local slot (the slot's ordinal). An
+/// operand `>= IMPORT_BASE` indexes [`Self::object_imports`] /
+/// [`Self::global_imports`], resolved through [`Self::dependencies`].
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct InitTail {
-    /// Tail objects (helpers, their lambdas/literals, `$init`s, `$init_test`s)
-    /// in pool order, operands in the tail-local convention above.
+    /// The packages this tail reaches, by slot (see [`DepSlot`]).
+    pub dependencies: Vec<DependencyEntry>,
+    /// Tail objects in pool order: the init part `[0, test_objects_start)`
+    /// then the test part.
     pub objects: Vec<Object>,
-    /// Cross-tail object references (main-image classes/enums/interfaces/
-    /// functions/generic-fns), by symbol.
-    pub object_imports: Vec<Symbol>,
-    /// Cross-tail global references (main-image functions/`let`s), by symbol.
-    pub global_imports: Vec<Symbol>,
-    /// Tail-local object index of each tail object that owns a global slot, in
-    /// slot-assignment order. Every such slot holds `Object(that object)`; the
-    /// index into this vec is the tail-local slot ordinal.
+    /// Every foreign object reference, by ordinal.
+    pub object_imports: Vec<ImportEntry>,
+    /// Every foreign global-slot reference, by ordinal.
+    pub global_imports: Vec<ImportEntry>,
+    /// Tail-local object index of each tail object that owns a global slot,
+    /// in slot order: init-part slots `[0, test_slots_start)` then test-part
+    /// slots. Every such slot holds `Object(that object)`.
     pub slot_objects: Vec<u32>,
-    /// The named tail functions (`$init` / `$init_test` chainers) to register in
-    /// `function_indices` / `function_global_indices`: fq name → tail-local
-    /// object index.
-    pub named: Vec<(String, u32)>,
-    /// This group's contribution to `Program::package_init_order`, in order.
-    pub package_init_order: Vec<String>,
+    /// Tail-local index of the package's `$init`, when it has `let`s.
+    pub init: Option<u32>,
+    /// Tail-local index of the package's `$init_test` chainer, when it has
+    /// tests.
+    pub init_test: Option<u32>,
+    /// Where the test part of [`Self::objects`] begins.
+    pub test_objects_start: u32,
+    /// Where the test part of [`Self::slot_objects`] begins.
+    pub test_slots_start: u32,
 }

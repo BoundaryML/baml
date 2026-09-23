@@ -53,7 +53,7 @@ use bex_cache::{
     compute_key, content_hash, env_flag, manifest_key, rel_path, stdlib_diagnostics_key,
     stdlib_interface_key, test_discovery_key,
 };
-use bex_vm_types::{CompilationUnit, Program};
+use bex_vm_types::{Program, legacy_unit::CompilationUnit};
 
 use crate::{
     file_signature::{file_layout_hash, file_signature_hash},

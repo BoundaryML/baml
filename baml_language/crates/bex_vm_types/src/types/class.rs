@@ -1,7 +1,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, RuntimeTy, Value, types::TypeValue};
+use crate::{
+    AtomicValueSlot, CleanupLatch, HeapPtr, ObjectIndex, RuntimeTy, Value, types::TypeValue,
+};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -88,6 +90,31 @@ pub struct Class {
     /// and `TypeAliasDef::owner`.
     #[borsh(skip)]
     pub owner: HeapPtr,
+
+    /// The class's inherent methods (static and instance, natives included),
+    /// by name, in declaration order. Impl-provided methods are not here:
+    /// they are reached through the impl rules. A class created at run time
+    /// through `reflect` has an empty table.
+    ///
+    /// This is the class's method surface by identity — how a package's
+    /// export table names a method (`FnPath::Method`), and how a consumer
+    /// binds one without a rendered spelling.
+    pub methods: IndexMap<baml_type::Name, ClassMethodDef>,
+}
+
+/// One inherent method of a [`Class`]: the pooled function on the wire, bound
+/// to a pointer at load — exactly as an interface's
+/// [`InterfaceMethodDef::default`](super::InterfaceMethodDef::default) becomes
+/// its `default_fn`.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct ClassMethodDef {
+    /// The method's function object, relocated by the linker like any other
+    /// cross-object operand (see `relink::visit_object_operands`).
+    pub function: ObjectIndex,
+    /// The loaded function: null until the pool is bound. Never serialized —
+    /// pointers are runtime-only. A GC edge like `default_fn`.
+    #[borsh(skip)]
+    pub function_ptr: HeapPtr,
 }
 
 impl std::fmt::Display for Class {

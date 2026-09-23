@@ -5,14 +5,30 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
 use crate::{
-    AtomicValueSlot, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate, Value,
-    types::interface::InterfaceBound,
+    AtomicValueSlot, GlobalIndex, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate,
+    Value, types::interface::InterfaceBound, unit::DeclPath,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize)]
 pub struct LocalName {
     pub namespace: Vec<Name>,
     pub name: Name,
+}
+
+impl LocalName {
+    pub fn new(namespace: Vec<Name>, name: Name) -> Self {
+        Self { namespace, name }
+    }
+}
+
+/// Dotted, package-relative: `ns.sub.Item`.
+impl std::fmt::Display for LocalName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for segment in &self.namespace {
+            write!(f, "{}.", segment.as_str())?;
+        }
+        f.write_str(self.name.as_str())
+    }
 }
 
 /// A package object on the heap.
@@ -120,10 +136,16 @@ pub struct RuntimePackage {
     pub objects: Box<[HeapPtr]>,
     /// Newest-wins dynamic object link table. Old objects stay in `objects`,
     /// while later submissions resolve a repeated source name to this entry.
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     pub object_names: IndexMap<String, HeapPtr>,
     /// Package-local global slots, mutable only while `$init` is running.
     pub globals: Box<[AtomicValueSlot]>,
     /// Fully-qualified function/let name to this image's local global slot.
+    #[deprecated(
+        note = "name-keyed graft resolution: the graft binds `DeclKey`s through the pinned package tables, then this is deleted"
+    )]
     pub global_names: IndexMap<String, usize>,
     /// Created-once reflected class, enum, and interface type values, keyed by
     /// the declaration each one names.
@@ -166,6 +188,11 @@ impl RuntimePackage {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
+    /// The package's display spelling — the package half of the rendered
+    /// name views, and the name the prelude is bound by at load. Display and
+    /// boundary data only: the package's identity in the executable is its
+    /// position in [`Program::packages`](crate::Program::packages).
+    pub name: Name,
     pub exported_names: Vec<LocalName>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
@@ -182,6 +209,14 @@ pub struct ProgramPackage {
     pub interface_blob: Vec<u8>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,
+    /// The package's synthesized `$init`, if it has `let`s.
+    pub init: Option<ObjectIndex>,
+    /// The package's own global slots by declaration — every named function
+    /// (free or method) and every `let`. Interface bodies own slots too but
+    /// are not table-addressable, so they are absent. This is how a consumer
+    /// binds a function VALUE (`GenericFunction { function: GlobalIndex }`)
+    /// without a rendered spelling.
+    pub globals: IndexMap<DeclPath, GlobalIndex>,
 }
 
 impl ProgramPackage {
@@ -256,7 +291,7 @@ pub struct ProgramImplRule {
 /// pins are inputs and ride inside each [`InterfaceBound`]. The interface
 /// itself is not a field because every consumer already groups per
 /// interface; this struct is the per-interface discriminant.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct ImplCoherenceKey {
     pub for_ty_pattern: TyTemplate,
     pub interface_args: Vec<TyTemplate>,

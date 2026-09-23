@@ -70,6 +70,7 @@ impl BexVm {
                 stream_done: false,
                 type_tag,
                 has_cleanup: false,
+                methods: IndexMap::new(),
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::HeapPtr::null(),
             })));
@@ -530,6 +531,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
             stream_done: false,
             type_tag,
             has_cleanup: false,
+            methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
         })));

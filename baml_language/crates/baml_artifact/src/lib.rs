@@ -43,7 +43,15 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 8: every type dropped its `TyAttr` payload and the runtime `Class`
 /// and `Enum` their `ty_attr` field (BEP-075 removed type attributes), so the
 /// serialized shape of every type-bearing record changed.
-pub const FORMAT_VERSION: u32 = 8;
+///
+/// Version 9: `Object::Class` gained `methods` (its inherent methods by name,
+/// each an `ObjectIndex` bound to a pointer at load), `ProgramPackage` gained
+/// `globals` (its own function and `let` slots by declaration path), `init`,
+/// and `name`, and `Program::packages` became a `Vec` (a package's identity in
+/// the executable is its position; its name is display metadata), so every
+/// serialized program changed shape. The identity-keyed unit format that
+/// produces them (`bex_vm_types::unit`) rides the same version.
+pub const FORMAT_VERSION: u32 = 9;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

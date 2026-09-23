@@ -81,7 +81,7 @@ pub struct InterfaceMethodDef {
 /// those args/assoc* — the runtime twin of a `T: Iface<Args, Assoc = …>`
 /// predicate instantiated with the impl substitutions (rustc). Bounds are
 /// interfaces, not types, so an intersection of bounds is a *set* of these.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceBound {
     pub interface: crate::TypeHead,
     pub args: Vec<crate::TyTemplate>,

@@ -305,7 +305,7 @@ pub fn canonicalize_lossy(path: &Path) -> PathBuf {
 /// separator, and on Windows that rewrites the virtual `<builtin>/pkg/…`
 /// paths to `<builtin>\pkg\…` — breaking every consumer of the `<builtin>/`
 /// prefix contract (the compiler's builtin-syntax gate, emit's builtin
-/// filter, `bex_vm_types::link`), which must see the same spelling on every
+/// filter, `bex_vm_types::legacy_link`), which must see the same spelling on every
 /// platform.
 fn lexically_normalize(path: &Path) -> PathBuf {
     let needs_normalization = path.components().any(|component| {
@@ -1534,7 +1534,7 @@ mod tests {
     fn virtual_paths_are_stored_byte_for_byte_as_spelled() {
         // The `<builtin>/` prefix is a wire contract read by string
         // comparison (the compiler's builtin-syntax gate, emit's builtin
-        // filter, `bex_vm_types::link`), so the stored spelling must keep its
+        // filter, `bex_vm_types::legacy_link`), so the stored spelling must keep its
         // forward slashes on every platform. Rebuilding the path from
         // components would rejoin with `\` on Windows; the byte-level
         // assertions here are what a component-wise `Path` comparison would

@@ -32,7 +32,7 @@ use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, e
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
-use bex_vm_types::{CompilationUnit, Program};
+use bex_vm_types::{Program, legacy_unit::CompilationUnit};
 use indexmap::IndexMap;
 
 const ROOT: &str = "/mounted-parity";
@@ -628,7 +628,9 @@ fn mounted_unit_api_preserves_dependency_link_errors() {
             .expect_err("duplicate dependency export must fail before consumer emit");
     assert!(matches!(
         error,
-        MountedPackageLinkError::DependencyLink(bex_vm_types::link::LinkError::DuplicateExport(_))
+        MountedPackageLinkError::DependencyLink(
+            bex_vm_types::legacy_link::LinkError::DuplicateExport(_)
+        )
     ));
 }
 

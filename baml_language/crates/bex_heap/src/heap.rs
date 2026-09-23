@@ -453,6 +453,12 @@ impl BexHeap {
                         method.default_fn = resolve_idx(default);
                     }
                 }
+            } else if let Object::Class(class) = obj {
+                // Likewise the one place a static class's inherent methods
+                // become pointers.
+                for method in class.methods.values_mut() {
+                    method.function_ptr = resolve_idx(method.function);
+                }
             }
         }
     }
@@ -544,6 +550,9 @@ impl BexHeap {
     /// caller running its own bind over freshly grafted objects (the runtime
     /// twin of [`Self::bind_type_heads`]). Built per call and dropped by the
     /// caller: pointer-first lookup means no tag index survives into the VM.
+    #[deprecated(
+        note = "the graft's tag-index fallback for binding heads: the graft binds heads from the import table's baked tags, then this is deleted"
+    )]
     pub fn compile_time_declaration_index(&self) -> HashMap<baml_type::typetag::TypeTag, HeapPtr> {
         let mut by_tag = HashMap::with_capacity(self.compile_time.len() / 4);
         for index in 0..self.compile_time.len() {

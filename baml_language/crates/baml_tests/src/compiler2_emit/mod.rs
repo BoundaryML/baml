@@ -615,7 +615,7 @@ function main() -> int { 0 }
 
     let rules: Vec<_> = program
         .packages
-        .values()
+        .iter()
         .flat_map(|pkg| pkg.impl_rules.values().flatten())
         .filter(|rule| !rule.field_links.is_empty())
         .collect();
@@ -660,7 +660,7 @@ function main() -> int { 0 }
 
     let rule = program
         .packages
-        .values()
+        .iter()
         .flat_map(|pkg| pkg.impl_rules.values().flatten())
         .find(|rule| !rule.field_links.is_empty())
         .expect("expected a field-bearing impl rule");

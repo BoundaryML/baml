@@ -23,7 +23,7 @@ use std::{
     time::SystemTime,
 };
 
-use bex_vm_types::{CompilationUnit, Program};
+use bex_vm_types::{Program, legacy_unit::CompilationUnit};
 use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
@@ -137,7 +137,19 @@ use sha2::{Digest, Sha256};
 /// Version 16: `DiagnosticId` dropped `FieldAttributeInTypePosition` (E0106,
 /// BEP-075 removed type attributes), shifting the borsh discriminants of all
 /// later variants.
-pub const FORMAT_VERSION: u32 = 16;
+///
+/// Version 17: the identity-keyed unit format (`bex_vm_types::unit`): one
+/// `CompilationUnit` per package with a dependency table and
+/// `DeclKey`-keyed import/export tables, a `PackageRecord`, and a per-package
+/// `InitTail`. `Object::Class` gained `methods` (its inherent methods by name,
+/// each an `ObjectIndex`), `ProgramPackage` gained `globals` (its own
+/// function and `let` slots by declaration path), `init`, and `name`, and
+/// `Program::packages` became a `Vec` — a package's identity in the
+/// executable is its position, its name display metadata — so every
+/// serialized `Program` changed shape. The string-keyed legacy unit format is
+/// what the cache still stores until every lane produces the new one; both
+/// are covered by this version.
+pub const FORMAT_VERSION: u32 = 17;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

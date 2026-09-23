@@ -25,14 +25,14 @@ use baml_db::{Dependency, ProjectDatabase, SourceRootSpec, collect_diagnostics};
 use baml_type::TypeName;
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
-    InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
-    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
-    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
-    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimePackageMount,
-    RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
-    RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, SessionVisibleKind,
-    SessionVisibleSymbol,
+    RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
+    RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
+    RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
+    RuntimeDiagnosticSeverity, RuntimePackageMount, RuntimeSessionCompileArtifact,
+    RuntimeSessionCompileRequest, RuntimeSessionInitializer, RuntimeSessionStep,
+    RuntimeSessionStepKind, RuntimeSourceSpan, SessionVisibleKind, SessionVisibleSymbol,
     bytecode::Instruction,
+    legacy_unit::InitTail,
     relink::{IndexOperand, visit_object_operands},
 };
 use indexmap::IndexMap;
@@ -42,6 +42,9 @@ type RuntimeLinkStub = (Vec<Name>, Name, String);
 type EnrichedRuntimeMount = (Vec<u8>, Vec<RuntimeLinkStub>);
 
 #[derive(Default)]
+#[deprecated(
+    note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+)]
 struct MountedDeclarationDocs {
     declaration: Option<String>,
     members: IndexMap<Name, Option<String>>,
@@ -64,6 +67,9 @@ fn runtime_source_virtual_path(path: &str) -> PathBuf {
 }
 
 /// Construct the virtual source path for a link stub in a mounted package.
+#[deprecated(
+    note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+)]
 fn runtime_mount_virtual_path(
     alias: &str,
     namespace: &[Name],
@@ -98,6 +104,9 @@ fn runtime_relative_virtual_path(path: &Path) -> String {
 /// spelling means nothing here. Rendering it into a stub would produce
 /// diagnostics in a phantom `runtime_mount_*` file, so such types widen to
 /// `unknown` and mounted inference owns the real type.
+#[deprecated(
+    note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+)]
 struct StubViewpoint<'a> {
     aliases: &'a [Name],
 }
@@ -277,10 +286,16 @@ fn enrich_runtime_mount(
     /// condition under which a link stub is mandatory rather than optional:
     /// a row nothing can name is dead weight, a row source can name and the
     /// stub lane cannot spell is a reference with nothing behind it.
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn nameable_from_source(namespace: &[Name], name: &Name) -> bool {
         source_identifier(name) && namespace.iter().all(source_identifier)
     }
 
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
         let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
             return;
@@ -297,6 +312,9 @@ fn enrich_runtime_mount(
     /// spelling as a source stub is invalid (`$init`) or would redeclare the
     /// authored function (`Extract@spec` is postfix syntax, not a declaration
     /// identifier).
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn stubbable(function: &ExportedFunction<TypeName>) -> bool {
         use baml_compiler2_hir_ty::callable::ExternalLinkability;
 
@@ -304,6 +322,9 @@ fn enrich_runtime_mount(
             && source_identifier(&function.name)
     }
 
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn stub_type(ty: &baml_type::Ty<TypeName>, viewpoint: &StubViewpoint<'_>) -> String {
         // Hide a type only when its source spelling would name a package this
         // compile world cannot resolve and so produce diagnostics in a
@@ -315,6 +336,9 @@ fn enrich_runtime_mount(
         }
     }
 
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn stub_interface(
         interface: &baml_type::Interface<TypeName>,
         viewpoint: &StubViewpoint<'_>,
@@ -333,6 +357,9 @@ fn enrich_runtime_mount(
     /// bound. Link-only stubs are the source declarations the conformance
     /// checker sees, so dropping interface generic bounds here would make a
     /// mounted declaration weaker than the package interface that owns it.
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn stub_generic_params(
         generic_params: &[baml_type::ParamTy],
         generic_param_bounds: &[Vec<baml_type::Interface<TypeName>>],
@@ -371,6 +398,9 @@ fn enrich_runtime_mount(
     /// `<T extends A & B, U>` for the function's own generic parameters, or
     /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
     /// this world cannot name is dropped rather than widened).
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn stub_generics(
         function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
@@ -391,6 +421,9 @@ fn enrich_runtime_mount(
     /// `unknown`, and named error types retain the dependency package's
     /// nominal identity in the mounted interface without necessarily being
     /// source-spellable from this mounted package.
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn free_function_stub(
         function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,
@@ -446,6 +479,9 @@ fn enrich_runtime_mount(
 
     /// How a method stub is spelled inside its owner's stub body.
     #[derive(Clone, Copy)]
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     enum MethodStubKind {
         /// A class-inherent method: a `$rust_function` body the emitter slots
         /// under the class-qualified name the runtime linker resolves.
@@ -466,6 +502,9 @@ fn enrich_runtime_mount(
     /// method the type checker sees — a consumer `implement` block is checked
     /// for conformance against it, and a call on a mounted value is typed by
     /// it.
+    #[deprecated(
+        note = "runtime-mount link stub: a served root has no files once the graft loads units directly; the stub generator is deleted"
+    )]
     fn method_stub(
         function: &ExportedFunction<TypeName>,
         viewpoint: &StubViewpoint<'_>,

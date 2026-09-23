@@ -15,7 +15,7 @@ use baml_compiler2_emit::{
 };
 use baml_db::{ProjectDatabase, discover_baml_files};
 use baml_tests::engine::TestDbExt;
-use bex_vm_types::{CompilationUnit, RuntimeCompileRequest};
+use bex_vm_types::{RuntimeCompileRequest, legacy_unit::CompilationUnit};
 
 /// Read every `.baml` file under `root` into memory, in discovery order.
 fn read_project(root: &Path) -> Vec<(PathBuf, String)> {

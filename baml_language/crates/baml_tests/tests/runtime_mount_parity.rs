@@ -30,9 +30,9 @@ use baml_compiler2_emit::{OptLevel, emit_units};
 use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{
-    CompilationUnit, RuntimeCompileRequest, RuntimeMountedClass, RuntimeMountedEnum,
-    RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs, RuntimePackageIdentity,
-    RuntimePackageMount, RuntimeTypeMount,
+    RuntimeCompileRequest, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
+    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount, RuntimeTypeMount,
+    legacy_unit::CompilationUnit,
 };
 
 /// The runtime compile's opt level (`bex_project::precompiled_stdlib_config`):

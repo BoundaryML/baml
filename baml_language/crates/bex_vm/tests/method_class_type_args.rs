@@ -116,6 +116,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
         has_cleanup: false,
+        methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));
@@ -171,6 +172,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(101),
         has_cleanup: false,
+        methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
     })));

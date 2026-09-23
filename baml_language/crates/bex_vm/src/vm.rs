@@ -833,6 +833,7 @@ pub(crate) mod tests {
             stream_done: false,
             type_tag: tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -897,6 +898,7 @@ pub(crate) mod tests {
             stream_done: false,
             type_tag: tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -953,6 +955,7 @@ pub(crate) mod tests {
             stream_done: false,
             type_tag: tag,
             has_cleanup: false,
+            methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: HeapPtr::null(),
         })));
@@ -1581,7 +1584,7 @@ pub struct BytecodeProgram {
     /// the heap `Object::Package` / `Object::ImplRule` objects and the
     /// `vm.packages` index from this, resolving each `ObjectIndex` to a
     /// compile-time `HeapPtr`.
-    pub packages: indexmap::IndexMap<baml_type::Name, bex_vm_types::types::ProgramPackage>,
+    pub packages: Vec<bex_vm_types::types::ProgramPackage>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.

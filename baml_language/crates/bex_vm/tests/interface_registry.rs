@@ -39,7 +39,7 @@ fn for_ty_head_name<'a>(program: &'a Program, pat: &TyTemplate) -> Option<&'a st
 fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, String)> {
     let rule = program
         .packages
-        .values()
+        .iter()
         .flat_map(|pkg| pkg.impl_rules.values().flatten())
         .filter(|rule| {
             program.objects[rule.interface_head]

@@ -14,7 +14,7 @@ use std::path::Path;
 use baml_compiler2_emit::{OptLevel, emit_units, generate_project_bytecode_with_opt};
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
-use bex_vm_types::link::link;
+use bex_vm_types::legacy_link::link;
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
 const ROOT: &str = "/link-oracle";
