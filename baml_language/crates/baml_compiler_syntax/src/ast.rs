@@ -915,7 +915,8 @@ impl FunctionDef {
     /// Accepts BEP-044 keyword tokens (`implements`, `extends`, `interface`)
     /// in addition to plain WORD tokens — the parser admits them as method
     /// names so reflection helpers like `TypeValue.implements(...)` parse
-    /// without renaming.
+    /// without renaming. `match` is admitted for the same reason, for
+    /// `baml.regex.Regex.match`.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
@@ -927,7 +928,8 @@ impl FunctionDef {
                     || kind == SyntaxKind::KW_IMPLEMENT
                     || kind == SyntaxKind::KW_EXTENDS
                     || kind == SyntaxKind::KW_REQUIRES
-                    || kind == SyntaxKind::KW_INTERFACE;
+                    || kind == SyntaxKind::KW_INTERFACE
+                    || kind == SyntaxKind::KW_MATCH;
                 is_name && token.parent() == Some(self.syntax.clone())
             })
             .nth(0)
@@ -2130,6 +2132,7 @@ impl MethodSig {
                     || kind == SyntaxKind::KW_EXTENDS
                     || kind == SyntaxKind::KW_REQUIRES
                     || kind == SyntaxKind::KW_INTERFACE
+                    || kind == SyntaxKind::KW_MATCH
             })
     }
 

@@ -70,6 +70,22 @@ pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
     )
 }
 
+/// Tokens that can name a member after a `.` — in a `FIELD_ACCESS_EXPR`, or as
+/// a non-leading segment of a `PATH_EXPR`.
+///
+/// Wider than [`is_ident_token`]: a keyword that could never start an
+/// expression is unambiguous after a dot, so the parser admits it there and the
+/// name lowers by text. `match` is the case that needs it — `re.match(haystack)`
+/// and `baml.regex.Regex.match(re, haystack)` — and it is deliberately *not* in
+/// `is_ident_token`, where it would also make a bare `match` token lower as an
+/// identifier and shadow the match expression.
+///
+/// Mirrors the `segment` allowlist in `parse_path_or_ident` and
+/// `kind_is_member_name`, both in `baml_compiler_parser`.
+pub(crate) fn is_member_name_token(kind: SyntaxKind) -> bool {
+    is_ident_token(kind) || matches!(kind, SyntaxKind::KW_MATCH)
+}
+
 /// Locate the `GENERIC_ARGS` node that should be treated as the *call-site*
 /// type-args for a `CALL_EXPR` whose callee is `callee_node`.
 ///
@@ -3616,7 +3632,10 @@ impl LoweringContext {
 
         for elem in node.children_with_tokens() {
             if let rowan::NodeOrToken::Token(token) = elem {
-                if is_ident_token(token.kind()) {
+                // `is_member_name_token`, not `is_ident_token`: the parser
+                // admits `match` as a non-leading segment, and a segment
+                // dropped here would silently shorten the path.
+                if is_member_name_token(token.kind()) {
                     segments.push((Name::new(token.text()), token.text_range()));
                 }
             }
@@ -3745,7 +3764,7 @@ impl LoweringContext {
                         // of these (and returns None for anything else, leaving
                         // the Missing recovery below intact).
                         base = self.try_lower_bare_token(&token);
-                    } else if seen_accessor && is_ident_token(token.kind()) {
+                    } else if seen_accessor && is_member_name_token(token.kind()) {
                         field = Some(Name::new(token.text()));
                         field_range = Some(token.text_range());
                     }
@@ -3834,7 +3853,7 @@ impl LoweringContext {
             // The full member-name set, not just `WORD`: an interface method
             // may be named with a contextual keyword (`implements`, `extends`),
             // and the parser accepts those here.
-            .filter(|token| is_ident_token(token.kind()));
+            .filter(|token| is_member_name_token(token.kind()));
         let Some(member_token) = member_token else {
             return self.alloc_expr(Expr::Missing, span);
         };
@@ -3970,7 +3989,7 @@ impl LoweringContext {
                         // numeric literal in `7?.foo`). `try_lower_bare_token`
                         // handles identifiers, keywords, and numeric literals.
                         base = self.try_lower_bare_token(&token);
-                    } else if seen_question_dot && is_ident_token(token.kind()) {
+                    } else if seen_question_dot && is_member_name_token(token.kind()) {
                         field = Some(Name::new(token.text()));
                         field_range = Some(token.text_range());
                     }
