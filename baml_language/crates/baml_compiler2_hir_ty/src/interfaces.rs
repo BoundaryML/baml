@@ -241,45 +241,21 @@ pub fn package_resolved_aliases(
     aliases
 }
 
-/// The aliases `pkg` declares, whichever lane serves it: a source package's
-/// alias items; a mounted package's exported alias rows — its link stubs
-/// carry no aliases, and a stub-less served root has no files at all, so the
-/// rows are the only place they exist; both for a precompiled stdlib root,
-/// which has source and a seeded interface. The one-shot oracle
-/// [`crate::facts::uncached_alias_def`] answers by the same two lanes; an
-/// environment that read only one would judge an alias it cannot see as an
-/// opaque head, and the overlap engine's verdict on an opaque head is
-/// "disjoint" — a fails-open coherence hole.
+/// The aliases `pkg` declares, whichever lane serves it — the one
+/// declaration enumerator ([`crate::layout::package_aliases`]): a source
+/// package's alias items, a served package's exported alias rows. The
+/// one-shot oracle [`crate::facts::uncached_alias_def`] answers by the same
+/// two lanes; an environment that read only one would judge an alias it
+/// cannot see as an opaque head, and the overlap engine's verdict on an
+/// opaque head is "disjoint" — a fails-open coherence hole.
 pub(crate) fn package_declared_aliases(
     db: &dyn baml_compiler2_hir::Db,
     pkg: baml_base::SourceRoot,
     out: &mut std::collections::HashMap<DeclName, Ty>,
 ) {
-    let items = baml_compiler2_hir::package::package_items(db, pkg);
-    for ns in items.namespaces.values() {
-        for (name, def) in &ns.types {
-            if let Definition::TypeAlias(loc) = def {
-                out.entry(qualify_def(db, Definition::TypeAlias(*loc), name))
-                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
-            }
-        }
-    }
-    if let Some(interface) = crate::package_interface::mounted_interface(db, pkg) {
-        interface_declared_aliases(interface, out);
-    }
-}
-
-/// The alias rows of an exported interface — the mounted lane of
-/// [`package_declared_aliases`], and the only alias source for an interface
-/// judged before it is installed.
-pub(crate) fn interface_declared_aliases(
-    interface: &crate::package_interface::PackageInterface,
-    out: &mut std::collections::HashMap<DeclName, Ty>,
-) {
-    for exported in interface.types.values().flat_map(|types| types.values()) {
-        if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } = exported {
-            out.entry(qtn.clone()).or_insert_with(|| resolved.clone());
-        }
+    for alias in crate::layout::package_aliases(db, pkg) {
+        out.entry(crate::layout::alias_head(db, alias))
+            .or_insert_with(|| crate::layout::alias_value(db, alias));
     }
 }
 

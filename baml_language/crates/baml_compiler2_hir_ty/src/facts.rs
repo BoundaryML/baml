@@ -79,7 +79,7 @@ impl<'db> Facts<'db> {
 /// whether or not stubs happen to be present. A stub file lowering its OWN
 /// bare names never comes through here: `lower_ctx_for_file` binds the
 /// file's package items directly (the mount as its own viewer).
-pub(crate) fn definition_of<'db>(
+pub fn definition_of<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     name: &DeclName,
 ) -> Option<Definition<'db>> {

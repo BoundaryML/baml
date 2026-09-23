@@ -4198,6 +4198,20 @@ fn emit_file_group<'db>(
             // validator enforces/link-checks them before emit.
             let merged_fields =
                 collect_class_fields_with_implements(&pkg_info.namespace_path, class);
+            // The slot order pooled here is the order MIR bakes field indices
+            // against, read through `hir_ty::layout` — one declaration, one
+            // layout; pinned where both are in hand.
+            debug_assert!(
+                merged_fields.iter().map(|(name, ..)| name.as_str()).eq(
+                    baml_compiler2_hir_ty::layout::class_fields(
+                        db,
+                        baml_compiler2_hir::loc::DeclRef::Source(class_loc)
+                    )
+                    .iter()
+                    .map(|(name, _)| name.as_str())
+                ),
+                "emit's pooled field order for `{fq_name}` differs from the declaration's layout"
+            );
             for (idx, (name, type_ref, attrs, docstring, _gen_params, _ns)) in
                 merged_fields.iter().enumerate()
             {
