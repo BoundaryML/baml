@@ -658,6 +658,57 @@ test "two_throwing_defers_on_normal_exit_each_run_once_and_chain" {
     assert.equal(throwing_two_defers(), ["b", "a", "c:A", "cause:B"])
 }
 
+// A defer whose body completes while an error unwinds re-raises that error to
+// the next handler out, and landing there fills the handler's error AND
+// context. Two shapes where the next handler is in the same function, which
+// once got the error alone:
+
+// ...a `catch (e, ctx)` right outside the block: `ctx` must be the context of
+// the error it caught, not an unwritten slot (reading one was a fatal VM
+// internal error, not a catchable one).
+function cascade_boom() -> void { throw "x" }
+function same_function_catch_sees_its_context() -> string[] {
+    let log: string[] = []
+    let _ = {
+        defer { log.push("d") }
+        cascade_boom()
+        1
+    } catch (e, ctx) {
+        _ => { log.push(`c:${e}`); log.push(`ctx:${ctx.error}`); 0 }
+    }
+    log
+}
+test "a defer cascading into a catch in the same function hands it the context" {
+    assert.equal(same_function_catch_sees_its_context(), ["d", "c:x", "ctx:x"])
+}
+
+// ...an outer block's defer: the inner pad cascades across blocks into the
+// outer pad, whose throw must still chain the original error as its cause.
+// (Two defers in ONE block share a pad's slots and always kept the chain.)
+function nested_defers_body(log: string[]) -> void {
+    defer { log.push("A"); throw "A" }
+    {
+        defer { log.push("B") }
+        cascade_boom()
+    }
+}
+function nested_defers_keep_the_cause() -> string[] {
+    let log: string[] = []
+    nested_defers_body(log) catch (e, ctx) {
+        _ => {
+            log.push(`e:${e}`)
+            match (ctx.cause) {
+                let c: baml.errors.Context => { log.push(`cause:${c.error}`) },
+                _ => { log.push("nocause") },
+            }
+        }
+    }
+    log
+}
+test "a defer cascading into an outer block's defer keeps the cause chain" {
+    assert.equal(nested_defers_keep_the_cause(), ["B", "A", "e:A", "cause:x"])
+}
+
 function throwing_catch_then_defer_boom() -> void { throw "x" }
 function throwing_catch_then_defer() -> string[] {
     let log: string[] = []

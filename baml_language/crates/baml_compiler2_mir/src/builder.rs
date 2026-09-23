@@ -248,13 +248,6 @@ impl<'db> MirBuilder<'db> {
         id
     }
 
-    /// What the VM lands in `handler` with.
-    pub(crate) fn landing(&self, handler: BlockId) -> Landing {
-        self.blocks[handler.0]
-            .landing
-            .unwrap_or_else(|| unreachable!("{handler:?} is not a handler block"))
-    }
-
     /// Lower what follows with `unwind` as its handler. Live code needs a
     /// block created under the new handler, so the current block (created
     /// under the old one) is left with a `goto` to a fresh block, which

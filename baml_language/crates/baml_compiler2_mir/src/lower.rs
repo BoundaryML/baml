@@ -6166,27 +6166,24 @@ impl<'db> LoweringContext<'db> {
             // error.
             let out_of_line = self.builder.begin_out_of_line(pad, armed.unwind, Some(pad));
             self.lower_shielded_defer_body(armed.body)?;
-            // A body that completes normally cascades explicitly.
+            // A body that completes normally re-raises the in-flight error.
+            // This block unwinds to the handler in force where the defer was
+            // armed — an enclosing pad or `catch` in this function, or the
+            // caller — and landing there fills that handler's error AND
+            // context slots, as any throw does. Jumping to an enclosing
+            // handler directly would have to write both by hand; leaving the
+            // context unwritten made a same-function `catch (e, ctx)` read an
+            // uninitialized `ctx`, and an enclosing pad lose the error's cause
+            // chain. A rethrow, not a fresh throw, so the cause pre-walk does
+            // not chain the error onto its own context (a self-link).
             if !self.builder.is_current_terminated() {
                 let error = shared_error.expect("a defer pad implies a shared error local exists");
-                match armed.unwind {
-                    Some(outer) => {
-                        let outer_error = self.builder.landing(outer).error_local;
-                        if outer_error != error {
-                            self.builder.assign(
-                                Place::local(outer_error),
-                                Rvalue::Use(Operand::Copy(Place::Local(error))),
-                            );
-                        }
-                        self.builder.goto(outer);
-                    }
-                    None => {
-                        // Re-raise the in-flight error unchanged: a rethrow,
-                        // not a fresh throw, so the cause pre-walk does not
-                        // chain it onto its own context (a self-link).
-                        self.builder.rethrow(Operand::Copy(Place::Local(error)));
-                    }
-                }
+                debug_assert_eq!(
+                    self.builder.unwind(),
+                    armed.unwind,
+                    "a pad's cascade unwinds to the handler its defer was armed under"
+                );
+                self.builder.rethrow(Operand::Copy(Place::Local(error)));
             }
             self.builder.end_out_of_line(out_of_line);
         }
