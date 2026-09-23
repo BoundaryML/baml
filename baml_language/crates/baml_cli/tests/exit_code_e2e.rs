@@ -594,6 +594,8 @@ function logged() -> string {
             "logged",
             "--from",
             ".",
+            "--log",
+            "off",
             "--log-file",
             log_path.to_str().unwrap(),
         ],
