@@ -455,71 +455,65 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
 "#,
     );
 
-    let expression = run_baml_cli(
-        built,
-        tmp.path(),
-        &[
-            "run",
-            "--from",
-            ".",
-            "-e",
-            r#"log.debug("expression-debug-detail"); log.info("expression-detail"); 7"#,
-        ],
-    );
-    assert!(
-        expression.status.success(),
-        "logged expression failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&expression.stdout),
-        String::from_utf8_lossy(&expression.stderr),
-    );
-    let stdout = String::from_utf8_lossy(&expression.stdout);
-    assert!(
-        stdout.contains("[INFO] expression-detail"),
-        "stdout: {stdout}"
-    );
-    assert!(
-        !stdout.contains("expression-debug-detail"),
-        "stdout: {stdout}"
-    );
-    let lines: Vec<_> = stdout.lines().collect();
-    let log_line = lines
-        .iter()
-        .position(|line| line.contains("[INFO] expression-detail"))
-        .expect("expression log");
-    let result_line = lines
-        .iter()
-        .position(|line| line.trim() == "7")
-        .expect("expression return value");
-    assert!(
-        log_line < result_line,
-        "expression logs must be flushed before the return value: {stdout}"
-    );
+    let expression_source = r#"
+log.debug("expression-debug-detail");
+log.info("expression-info-detail");
+log.warn("expression-warn-detail");
+log.error("expression-error-detail");
+7
+"#;
+    let log_lines = [
+        "[DEBUG] expression-debug-detail",
+        "[INFO] expression-info-detail",
+        "[WARN] expression-warn-detail",
+        "[ERROR] expression-error-detail",
+    ];
+    for (threshold, expected) in [
+        (None, [false, true, true, true]),
+        (Some("OFF"), [false, false, false, false]),
+        (Some("ERROR"), [false, false, false, true]),
+        (Some("WARN"), [false, false, true, true]),
+        (Some("INFO"), [false, true, true, true]),
+        (Some("DEBUG"), [true, true, true, true]),
+        (Some("TRACE"), [true, true, true, true]),
+    ] {
+        let mut args = vec!["run", "--from", "."];
+        if let Some(threshold) = threshold {
+            args.extend(["--log", threshold]);
+        }
+        args.extend(["-e", expression_source]);
 
-    let quiet = run_baml_cli(
-        built,
-        tmp.path(),
-        &[
-            "run",
-            "--from",
-            ".",
-            "--log",
-            "OFF",
-            "-e",
-            r#"log.info("disabled-detail"); 8"#,
-        ],
-    );
-    assert!(
-        quiet.status.success(),
-        "explicitly disabled logs failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&quiet.stdout),
-        String::from_utf8_lossy(&quiet.stderr),
-    );
-    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
-    assert!(quiet_stdout.lines().any(|line| line.trim() == "8"));
-    assert!(
-        !quiet_stdout.contains("disabled-detail"),
-        "stdout: {quiet_stdout}"
-    );
+        let expression = run_baml_cli(built, tmp.path(), &args);
+        assert!(
+            expression.status.success(),
+            "logged expression failed at threshold {threshold:?}; stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&expression.stdout),
+            String::from_utf8_lossy(&expression.stderr),
+        );
+        let stdout = String::from_utf8_lossy(&expression.stdout);
+        let lines: Vec<_> = stdout.lines().collect();
+        let result_line = lines
+            .iter()
+            .position(|line| line.trim() == "7")
+            .expect("expression return value");
+        for (log_line, should_be_visible) in log_lines.into_iter().zip(expected) {
+            assert_eq!(
+                stdout.contains(log_line),
+                should_be_visible,
+                "unexpected discovery for `{log_line}` at threshold {threshold:?}; stdout: {stdout}"
+            );
+            if should_be_visible {
+                let log_line = lines
+                    .iter()
+                    .position(|line| line.contains(log_line))
+                    .expect("visible expression log");
+                assert!(
+                    log_line < result_line,
+                    "expression logs must be flushed before the return value at threshold {threshold:?}: {stdout}"
+                );
+            }
+        }
+    }
 
     let conversion = run_baml_cli_with_env(
         built,
