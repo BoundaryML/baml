@@ -265,6 +265,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
         }
         Terminator::Call {
             callee,
+            trace_options,
             args,
             ntypeargs,
 
@@ -274,6 +275,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
             ..
         } => {
             write!(f, "{destination} = call ")?;
+            if let Some(options) = trace_options {
+                write!(f, "[$trace = ")?;
+                write_operand(f, options)?;
+                write!(f, "] ")?;
+            }
             write_operand(f, callee)?;
             if *ntypeargs > 0 {
                 write!(f, "<")?;

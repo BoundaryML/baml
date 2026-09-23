@@ -451,6 +451,8 @@ pub enum Terminator<'db> {
         argument_layout: Option<baml_type::CallLayout>,
         /// The function to call.
         callee: Operand<'db>,
+        /// Per-call tracing override, not part of the argument layout.
+        trace_options: Option<Operand<'db>>,
         /// Arguments to pass.
         ///
         /// The first `ntypeargs` operands are type-argument values (`Object::Type`)

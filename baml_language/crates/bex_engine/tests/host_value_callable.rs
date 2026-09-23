@@ -373,6 +373,57 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_trace_rejection_preserves_reservation_and_clears_override() {
+    let source = r#"
+        function IsCurrent(id: trace.SpanId) -> bool {
+            trace.current_span_id() == id
+        }
+        function IsHidden() -> bool {
+            trace.current_span_id() == null
+        }
+        function RejectHostTrace(f: (int) -> int) -> bool {
+            let reservation = trace.span().reserve();
+            let rejected = f(1, $trace = reservation) catch (e) {
+                let p: baml.panics.UserPanic => p.message
+                _ => "wrong error"
+            };
+            if (rejected != "Explicit tracing is not supported for host callables") {
+                return false;
+            }
+            if (!IsHidden()) {
+                return false;
+            }
+            IsCurrent(reservation.id(), $trace = reservation)
+        }
+    "#;
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let calls_in_host = Arc::clone(&calls);
+    let arc = register_host_callable(move |_| {
+        calls_in_host.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        FakeReturn::Ok(BexExternalValue::Int(1))
+    });
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("engine construction"),
+    );
+    let result = engine
+        .call_function(
+            "RejectHostTrace",
+            vec![BexExternalValue::HostValue(arc)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("host trace rejection should be catchable");
+    assert!(matches!(result, BexExternalValue::Bool(true)), "{result:?}");
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same

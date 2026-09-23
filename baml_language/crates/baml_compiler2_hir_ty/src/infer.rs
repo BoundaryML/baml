@@ -863,6 +863,10 @@ enum PendingDiag<'db> {
         expr: ExprId,
         class_name: baml_type::DeclName,
     },
+    CannotConstructOpaqueClass {
+        expr: ExprId,
+        class_name: baml_type::DeclName,
+    },
     CannotConstructBuiltinCompanion {
         expr: ExprId,
         class_name: baml_type::DeclName,
@@ -5404,6 +5408,29 @@ impl<'db> InferenceContext<'db> {
         bound_receiver: bool,
         args: &[baml_compiler2_ast::CallArg],
     ) -> Ty {
+        let mut ordinary_args = Vec::with_capacity(args.len());
+        let mut saw_trace = false;
+        for arg in args {
+            if arg.is_trace() {
+                if saw_trace {
+                    self.pending_diags.push(PendingDiag::DuplicateNamedArg {
+                        expr: arg.expr,
+                        name: baml_type::Name::new("$trace"),
+                    });
+                }
+                saw_trace = true;
+                let members: Vec<_> = ["Options", "ReservedSpan"]
+                    .into_iter()
+                    .filter_map(|name| self.lang_decl(baml_base::LangPackage::Trace, &[], name))
+                    .map(|decl| Ty::intern(InferTy::Class(decl, Box::new([]), TyAttr::default())))
+                    .collect();
+                let expected = syntactic_union(&members);
+                self.check_expr(body, arg.expr, &expected);
+            } else {
+                ordinary_args.push(arg.clone());
+            }
+        }
+        let args = ordinary_args.as_slice();
         // The call is a STRUCTURE demand on the callee (rustc's
         // `check_call` structurally resolves before matching
         // callability): `inc2` holding a still-unsolved `?T` bounded
@@ -8552,6 +8579,24 @@ impl<'db> InferenceContext<'db> {
         };
         let db = self.db;
         let class_name = crate::lower::class_qualified_name(db, class);
+        if !self.is_builtin_source()
+            && crate::lower::class_field_types(db, class)
+                .iter()
+                .any(|(_, ty)| matches!(ty, baml_type::Ty::RustType { .. }))
+        {
+            self.pending_diags
+                .push(PendingDiag::CannotConstructOpaqueClass {
+                    expr: object,
+                    class_name,
+                });
+            for field in fields {
+                self.infer_expr(body, field.value, &Expectation::None);
+            }
+            for spread in spreads {
+                self.infer_expr(body, spread.expr, &Expectation::None);
+            }
+            return Ty::error();
+        }
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -8712,6 +8757,24 @@ impl<'db> InferenceContext<'db> {
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
+        if !self.is_builtin_source()
+            && exported_fields
+                .iter()
+                .any(|(_, ty, _)| matches!(ty, baml_type::Ty::RustType { .. }))
+        {
+            self.pending_diags
+                .push(PendingDiag::CannotConstructOpaqueClass {
+                    expr: object,
+                    class_name,
+                });
+            for field in fields {
+                self.infer_expr(body, field.value, &Expectation::None);
+            }
+            for spread in spreads {
+                self.infer_expr(body, spread.expr, &Expectation::None);
+            }
+            return Ty::error();
+        }
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -8877,11 +8940,35 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    fn is_builtin_source(&self) -> bool {
+        self.owner_file.source_root(self.db).kind(self.db) == baml_base::SourceRootKind::Stdlib
+    }
+
+    fn reject_opaque_field(
+        &mut self,
+        at: ExprId,
+        base: &Ty,
+        member: &baml_type::Name,
+        field_ty: &baml_type::Ty,
+    ) -> bool {
+        if self.is_builtin_source() || !matches!(field_ty, baml_type::Ty::RustType { .. }) {
+            return false;
+        }
+        if self.member_probe_depth == 0 {
+            self.pending_diags.push(PendingDiag::UnresolvedMember {
+                expr: at,
+                base: base.clone(),
+                member: member.clone(),
+            });
+        }
+        true
+    }
+
     /// The resolution core behind [`InferenceContext::field_access`]:
-    /// hands the resolution BACK instead of recording, so the union arm
+    /// hands the resolution back instead of recording, so the union arm
     /// can drop its per-member recursion's resolutions (one expression,
     /// one recorded entry) and `member_callee` can key a call's entry on
-    /// the CALLEE expression rather than the anchor.
+    /// the callee expression rather than the anchor.
     fn field_access_resolved(
         &mut self,
         at: ExprId,
@@ -8911,6 +8998,9 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .find(|(field, _)| field == member)
         {
+            if self.reject_opaque_field(at, &resolved, member, field_ty) {
+                return (Ty::error(), None);
+            }
             return (
                 substitute_params(&crate::impls::interned_ty(field_ty), args),
                 Some(MemberResolution::Field {
@@ -8924,6 +9014,9 @@ impl<'db> InferenceContext<'db> {
                 crate::package_interface::mounted_type_row(self.db, qtn)
             && let Some((_, field_ty, _)) = fields.iter().find(|(field, ..)| field == member)
         {
+            if self.reject_opaque_field(at, &resolved, member, field_ty) {
+                return (Ty::error(), None);
+            }
             return (
                 substitute_params(&Ty::from_plain(field_ty), args),
                 Some(MemberResolution::ExternalField {
@@ -11217,6 +11310,10 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::CannotConstructReflectionKind { expr, class_name } => (
                         TirTypeError::CannotConstructReflectionKind { class_name },
+                        expr,
+                    ),
+                    PendingDiag::CannotConstructOpaqueClass { expr, class_name } => (
+                        TirTypeError::CannotConstructOpaqueClass { class_name },
                         expr,
                     ),
                     PendingDiag::CannotConstructBuiltinCompanion {

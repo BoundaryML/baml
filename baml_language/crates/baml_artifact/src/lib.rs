@@ -43,7 +43,8 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 8 removes the runtime-ID instruction variants, renumbering the
 /// serialized instructions and compact opcodes.
 /// Version 9 removes serialized function capture-policy fields.
-pub const FORMAT_VERSION: u32 = 9;
+/// Version 10 adds `SetTraceOptions` and the built-in `trace` package.
+pub const FORMAT_VERSION: u32 = 10;
 
 /// Git commit used to build this crate, or the canonical BAML version when the
 /// source was built outside a Git checkout.
@@ -349,6 +350,21 @@ mod tests {
         let artifact = encode(ArtifactKind::Program, &vec![1_u32, 2, 3]).unwrap();
         let decoded: Vec<u32> = decode(ArtifactKind::Program, &artifact).unwrap();
         assert_eq!(decoded, [1, 2, 3]);
+    }
+
+    #[test]
+    fn pre_trace_abi_is_rejected_before_payload_decode() {
+        let artifact = encode_payload_with_metadata(
+            9,
+            BUILD_FINGERPRINT,
+            ArtifactKind::Program,
+            b"not a valid program",
+        )
+        .unwrap();
+        assert!(matches!(
+            decode::<u32>(ArtifactKind::Program, &artifact),
+            Err(Error::Incompatible { .. })
+        ));
     }
 
     #[test]

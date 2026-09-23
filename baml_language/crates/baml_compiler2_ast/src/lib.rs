@@ -639,6 +639,30 @@ function deep_copy<T>(value: T) -> T {
     }
 
     #[test]
+    fn ast_preserves_reserved_trace_label() {
+        let function = first_function(parse_and_lower(
+            "function Demo() -> int { F(1, $trace = opts, limit = 2) }",
+        ));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let args = body
+            .exprs
+            .iter()
+            .find_map(|(_, expr)| match expr {
+                Expr::Call { args, .. } => Some(args),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(args.len(), 3);
+        assert!(args[1].is_trace());
+        assert_eq!(args[1].label.as_ref().unwrap().as_str(), "$trace");
+        assert!(
+            matches!(&body.exprs[args[1].expr], Expr::Path(path) if path[0].as_str() == "opts")
+        );
+    }
+
+    #[test]
     fn ast_preserves_parameter_defaults_and_call_labels() {
         let source = r#"
 function Search(query: string, max_results: int = 10) -> int {

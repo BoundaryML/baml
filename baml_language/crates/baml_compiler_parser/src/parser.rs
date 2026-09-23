@@ -11859,6 +11859,20 @@ type Searcher = (query: string = make_default("cats"), limit?: int) -> int
     }
 
     #[test]
+    fn reserved_trace_call_argument_parses() {
+        let (root, errors) =
+            parse_source("function Demo() -> int { Search(1, $trace = options, limit = 2) }");
+        assert_no_errors(&errors);
+        let args: Vec<_> = root
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::CALL_ARG)
+            .collect();
+        assert_eq!(args.len(), 3);
+        assert!(args[1].children_with_tokens()
+            .any(|element| matches!(element, rowan::NodeOrToken::Token(token) if token.text() == "$trace")));
+    }
+
+    #[test]
     fn named_call_arguments_parse_as_call_args() {
         let source = r#"
 function Demo() -> int {

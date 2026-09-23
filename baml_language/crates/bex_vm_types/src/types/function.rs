@@ -312,8 +312,8 @@ pub struct Closure {
 ///
 /// The type environment resolved when the method is bound is curried in via
 /// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
-/// See the field documentation for the ordinary-bound-method limitation around
-/// a later explicit generic application.
+/// A later explicit generic application appends its method type arguments
+/// while retaining the receiver and the existing type environment.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.

@@ -487,11 +487,15 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             match term {
                 Terminator::Call {
                     callee,
+                    trace_options,
                     args,
                     destination,
                     ..
                 } => {
                     scan_operand(callee, &mut set);
+                    if let Some(options) = trace_options {
+                        scan_operand(options, &mut set);
+                    }
                     for a in args {
                         scan_operand(a, &mut set);
                     }
@@ -790,11 +794,15 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
         Terminator::Switch { discriminant, .. } => count_in_operand(discriminant, uses),
         Terminator::Call {
             callee,
+            trace_options,
             args,
             destination,
             ..
         } => {
             count_in_operand(callee, uses);
+            if let Some(options) = trace_options {
+                count_in_operand(options, uses);
+            }
             for arg in args {
                 count_in_operand(arg, uses);
             }
@@ -1177,8 +1185,16 @@ fn apply_subst_to_terminator<'db>(
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::NarrowBind { source, .. } => apply_subst_to_operand(source, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
-        Terminator::Call { callee, args, .. } => {
+        Terminator::Call {
+            callee,
+            trace_options,
+            args,
+            ..
+        } => {
             apply_subst_to_operand(callee, subst);
+            if let Some(options) = trace_options {
+                apply_subst_to_operand(options, subst);
+            }
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
@@ -1508,11 +1524,15 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Switch { discriminant, .. } => remap_operand(discriminant, map),
         Terminator::Call {
             callee,
+            trace_options,
             args,
             destination,
             ..
         } => {
             remap_operand(callee, map);
+            if let Some(options) = trace_options {
+                remap_operand(options, map);
+            }
             for arg in args {
                 remap_operand(arg, map);
             }
@@ -1774,11 +1794,15 @@ fn verify_mir(body: &MirFunctionBody<'_>, name: &crate::ItemRef) {
                 Terminator::Switch { discriminant, .. } => check_operand(discriminant, &blk),
                 Terminator::Call {
                     callee,
+                    trace_options,
                     args,
                     destination,
                     ..
                 } => {
                     check_operand(callee, &blk);
+                    if let Some(options) = trace_options {
+                        check_operand(options, &blk);
+                    }
                     for a in args {
                         check_operand(a, &blk);
                     }

@@ -3802,6 +3802,17 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         dest: &Place,
     ) {
+        self.emit_resolved_call_with_trace(callee_op, arg_operands, None, expr_id, dest);
+    }
+
+    fn emit_resolved_call_with_trace(
+        &mut self,
+        callee_op: Operand<'db>,
+        arg_operands: Vec<Operand<'db>>,
+        trace_options: Option<Operand<'db>>,
+        expr_id: AstExprId,
+        dest: &Place,
+    ) {
         let argument_layout = self.call_argument_layout(expr_id, arg_operands.len());
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
@@ -3816,6 +3827,7 @@ impl<'db> LoweringContext<'db> {
                     unwind,
                 );
                 self.builder.set_call_layout(argument_layout);
+                self.builder.set_call_trace_options(trace_options);
                 self.builder.set_current_block(target);
             }
             _ => {
@@ -3830,6 +3842,7 @@ impl<'db> LoweringContext<'db> {
                     unwind,
                 );
                 self.builder.set_call_layout(argument_layout);
+                self.builder.set_call_trace_options(trace_options);
                 self.builder.set_current_block(target);
                 self.builder
                     .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
@@ -7992,10 +8005,38 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         args: &[AstExprId],
     ) -> Vec<Operand<'db>> {
+        self.lower_call_arg_operands_with_trace(expr_id, args).0
+    }
+
+    fn trace_arg(&self, expr_id: AstExprId) -> Option<AstExprId> {
+        match &self.body.exprs[expr_id] {
+            AstExpr::Call { args, .. } | AstExpr::OptionalCall { args, .. } => {
+                args.iter().find(|arg| arg.is_trace()).map(|arg| arg.expr)
+            }
+            _ => None,
+        }
+    }
+
+    fn lower_call_arg_operands_with_trace(
+        &mut self,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+    ) -> (Vec<Operand<'db>>, Option<Operand<'db>>) {
+        let trace_arg = self.trace_arg(expr_id);
+        let mut trace_options = None;
         let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
             // No call plan: lower each arg in order (the type checker would
             // have already flagged any mismatch).
-            return args.iter().map(|&a| self.lower_to_operand(a)).collect();
+            let mut values = Vec::new();
+            for &arg in args {
+                let operand = self.lower_to_operand(arg);
+                if Some(arg) == trace_arg {
+                    trace_options = Some(operand);
+                } else {
+                    values.push(operand);
+                }
+            }
+            return (values, trace_options);
         };
 
         // If this call targets a sys_op (`$rust_io_function`), an omitted
@@ -8025,12 +8066,15 @@ impl<'db> LoweringContext<'db> {
         let provided_args: Vec<_> = plan.provided_args().collect();
         let mut lowered_args: FxHashMap<AstExprId, Operand<'db>> = FxHashMap::default();
         for &arg in args {
-            if provided_args.contains(&arg) {
+            if Some(arg) == trace_arg {
+                trace_options = Some(self.lower_to_operand(arg));
+            } else if provided_args.contains(&arg) {
                 lowered_args.insert(arg, self.lower_to_operand(arg));
             }
         }
 
-        plan.bindings
+        let values = plan
+            .bindings
             .into_iter()
             .map(|binding| match binding {
                 crate::inference_provider::ParamBinding::Provided { arg, .. } => lowered_args
@@ -8045,7 +8089,8 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             })
-            .collect()
+            .collect();
+        (values, trace_options)
     }
 
     /// Materialize a sys-op parameter's omitted default as a constant operand.
@@ -8619,6 +8664,44 @@ impl<'db> LoweringContext<'db> {
         self.lower_to_operand(callee)
     }
 
+    fn lower_traced_call(
+        &mut self,
+        expr_id: AstExprId,
+        callee: AstExprId,
+        callee_expr: &AstExpr,
+        args: &[AstExprId],
+        dest: &Place,
+    ) {
+        // Explicit overrides use the callable-value path so native and
+        // intrinsic shortcuts cannot bypass the call's tracing boundary.
+        let mut callee_op = self.lower_normalized_callee_operand(callee, callee_expr);
+        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() {
+            let generic_params = self.enclosing_generic_params();
+            let type_arg_templates: Vec<_> = if !plan.slots.is_empty() {
+                plan.slots
+                    .iter()
+                    .map(|slot| self.ty_to_template(&slot.emission_ty, &generic_params))
+                    .collect()
+            } else {
+                plan.type_args[plan.own_offset..]
+                    .iter()
+                    .map(|ty| self.inferred_ty_to_template(ty, &generic_params))
+                    .collect()
+            };
+            if !type_arg_templates.is_empty() {
+                let tmp = self.builder.temp(self.expr_ty(callee));
+                let specialized = Rvalue::MakeGenericFunctionFromValue {
+                    value: callee_op,
+                    type_arg_templates,
+                };
+                self.builder.assign(Place::local(tmp), specialized);
+                callee_op = Operand::Copy(Place::local(tmp));
+            }
+        }
+        let (arg_operands, trace_options) = self.lower_call_arg_operands_with_trace(expr_id, args);
+        self.emit_resolved_call_with_trace(callee_op, arg_operands, trace_options, expr_id, dest);
+    }
+
     fn lower_call_with_callee(
         &mut self,
         expr_id: AstExprId,
@@ -8630,6 +8713,11 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_hir_ty::callable::ExternalCallTarget;
 
         use crate::inference_provider::MemberResolution;
+
+        if self.trace_arg(expr_id).is_some() {
+            self.lower_traced_call(expr_id, callee, callee_expr, args, &dest);
+            return;
+        }
 
         // A UFCS interface-item call, whatever its spelling — the resolution
         // record, not the syntax, routes it.

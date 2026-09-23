@@ -579,11 +579,13 @@ impl BamlNamespaceClass for PackageReflectImpl {
             let Object::Class(class) = vm.get_object(instance.class) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
-            let Some(index) = class
-                .fields
-                .iter()
-                .position(|field| field.name == name.as_str())
-            else {
+            let Some(index) = class.fields.iter().position(|field| {
+                field.name == name.as_str()
+                    && !matches!(
+                        field.field_template,
+                        bex_vm_types::TyTemplate::RustType { .. }
+                    )
+            }) else {
                 return Err(fail(
                     vm,
                     format!(
@@ -1612,6 +1614,12 @@ impl BamlClassClassType for PackageReflectImpl {
         Ok(class
             .fields
             .iter()
+            .filter(|field| {
+                !matches!(
+                    field.field_template,
+                    bex_vm_types::TyTemplate::RustType { .. }
+                )
+            })
             .map(|field| {
                 let name = Value::object(vm.alloc_string(field.name.as_str()));
                 let r#type = if let Some(type_value) = &field.runtime_type {

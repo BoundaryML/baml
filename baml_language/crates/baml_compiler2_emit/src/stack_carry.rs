@@ -617,11 +617,15 @@ fn simulate_terminator_stack<'db>(
         }
         Terminator::Call {
             callee,
+            trace_options,
             args,
 
             destination,
             ..
         } => {
+            if trace_options.is_some() {
+                return false;
+            }
             if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
                 let direct = pull_semantics::resolve_constant_function_item(
                     callee,
@@ -1716,6 +1720,7 @@ mod tests {
         });
         body.blocks[0].terminator = Some(Terminator::Call {
             argument_layout: None,
+            trace_options: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,

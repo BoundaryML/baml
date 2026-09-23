@@ -1126,6 +1126,12 @@ pub struct CallArg {
 }
 
 impl CallArg {
+    pub fn is_trace(&self) -> bool {
+        self.label
+            .as_ref()
+            .is_some_and(|label| label.as_str() == "$trace")
+    }
+
     pub fn positional(expr: ExprId) -> Self {
         Self { label: None, expr }
     }
