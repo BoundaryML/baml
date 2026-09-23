@@ -21,7 +21,13 @@ use wiremock::{
     matchers::{method, path},
 };
 
+#[path = "support/finish.rs"]
+mod finish;
+#[path = "support/prepare_requests.rs"]
+mod prepare_requests;
 mod support;
+use finish::finish;
+use prepare_requests::prepare_requests;
 use support::response;
 
 fn config(server: &MockServer) -> DeliveryConfig {
@@ -89,12 +95,6 @@ fn proposed(id: u32, kind: UploadKind, members: &[u32]) -> ProposedUploadTarget 
         kind,
         candidate_indices: members.to_vec(),
     }
-}
-
-async fn finish(delivery: Arc<BcsDelivery>) -> Result<(), DeliveryError> {
-    tokio::task::spawn_blocking(move || delivery.finish())
-        .await
-        .unwrap()
 }
 
 #[tokio::test]
@@ -1002,15 +1002,9 @@ async fn drain_finishes_multiple_plans_without_cas_blocking_the_recording_lane()
     assert_eq!(pool.stats().in_use, 0);
     assert_eq!(delivery.result(), Some(Ok(())));
     let requests = server.received_requests().await.unwrap();
-    let sequences: Vec<_> = requests
+    let sequences: Vec<_> = prepare_requests(&requests)
         .iter()
-        .filter(|r| r.method == "POST")
-        .map(|r| {
-            serde_json::from_slice::<PrepareUploadsRequest>(&r.body)
-                .unwrap()
-                .recording
-                .recording_file_sequence
-        })
+        .map(|request| request.recording.recording_file_sequence)
         .collect();
     assert_eq!(sequences, [1, 2]);
 }

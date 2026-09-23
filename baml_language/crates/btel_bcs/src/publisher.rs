@@ -250,9 +250,7 @@ impl CloudPublisher {
             || file.bytes().len() > limits.max_recording_body_bytes
         {
             let evictions = self.metadata.retain(&file);
-            for _ in 0..evictions {
-                self.delivery.record_metadata_replay_eviction();
-            }
+            self.delivery.record_metadata_replay_evictions(evictions);
             self.drop_pending_payload();
             return;
         }
@@ -260,9 +258,7 @@ impl CloudPublisher {
             .max_recording_body_bytes
             .min(remaining_bytes.saturating_sub(std::mem::size_of::<SealedFile>()));
         let evictions = self.metadata.prepare(&mut file, body_limit);
-        for _ in 0..evictions {
-            self.delivery.record_metadata_replay_eviction();
-        }
+        self.delivery.record_metadata_replay_evictions(evictions);
         self.staged_recording_bytes += file.retained_bytes();
         self.staged.push(PendingFile {
             file,

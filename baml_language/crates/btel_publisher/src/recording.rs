@@ -300,8 +300,7 @@ impl RecordingBuilder {
         self.clear_batch();
         let now = Instant::now();
         if records != 0 {
-            self.deadline
-                .get_or_insert(now + self.config.flush_interval_duration);
+            self.start_deadline(now);
         }
         self.service(now, false)
     }

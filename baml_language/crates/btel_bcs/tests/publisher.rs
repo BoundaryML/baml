@@ -3,7 +3,6 @@ use std::time::Duration;
 use btel_bcs::{
     delivery::{BcsDelivery, DeliveryConfig, DeliveryError},
     publisher::{CloudPublisher, PublisherConfig},
-    wire::PrepareUploadsRequest,
 };
 use btel_processor::{AggregateDelta, Publisher};
 use btel_publisher::{RecordingConfig, RecordingId};
@@ -13,7 +12,13 @@ use btel_types::{CallPathId, ClockInstant, allocate_telemetry_id};
 use prost::Message;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
 
+#[path = "support/finish.rs"]
+mod finish;
+#[path = "support/prepare_requests.rs"]
+mod prepare_requests;
 mod support;
+use finish::finish;
+use prepare_requests::prepare_requests;
 
 fn capture(publisher: &mut CloudPublisher, pool: &SnapshotPool, value: i64) {
     capture_at(
@@ -91,12 +96,6 @@ async fn setup(config: PublisherConfig) -> (MockServer, BcsDelivery, CloudPublis
     )
 }
 
-async fn finish(delivery: BcsDelivery) -> Result<(), DeliveryError> {
-    tokio::task::spawn_blocking(move || delivery.finish())
-        .await
-        .unwrap()
-}
-
 #[tokio::test]
 async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_file() {
     let (server, delivery, mut publisher, pool) = setup(PublisherConfig {
@@ -119,11 +118,7 @@ async fn windows_cross_batches_deduplicate_and_finish_drains_the_final_partial_f
     finish(delivery).await.unwrap();
     assert_eq!(pool.stats().in_use, 0);
     let requests = server.received_requests().await.unwrap();
-    let prepares: Vec<PrepareUploadsRequest> = requests
-        .iter()
-        .filter(|request| request.method == "POST")
-        .map(|request| serde_json::from_slice(&request.body).unwrap())
-        .collect();
+    let prepares = prepare_requests(&requests);
     assert_eq!(
         prepares
             .iter()
@@ -164,11 +159,7 @@ async fn one_chunk_can_stage_multiple_windows_without_publishing_while_borrowed(
     finish(delivery).await.unwrap();
     assert_eq!(pool.stats().in_use, 0);
     let requests = server.received_requests().await.unwrap();
-    let prepares: Vec<PrepareUploadsRequest> = requests
-        .iter()
-        .filter(|request| request.method == "POST")
-        .map(|request| serde_json::from_slice(&request.body).unwrap())
-        .collect();
+    let prepares = prepare_requests(&requests);
     assert_eq!(prepares.len(), 3);
     assert!(prepares.iter().all(|request| request.candidates.len() == 2));
 }
@@ -297,11 +288,7 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
     assert_eq!(handle.metadata_replay_evictions(), 0);
 
     let requests = server.received_requests().await.unwrap();
-    let prepares: Vec<PrepareUploadsRequest> = requests
-        .iter()
-        .filter(|request| request.method == "POST")
-        .map(|request| serde_json::from_slice(&request.body).unwrap())
-        .collect();
+    let prepares = prepare_requests(&requests);
     assert_eq!(prepares.len(), 3);
     assert_eq!(prepares[0].candidates.len(), 1);
     assert_eq!(prepares[1].candidates.len(), 1);

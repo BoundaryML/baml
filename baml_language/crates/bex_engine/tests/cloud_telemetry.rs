@@ -16,6 +16,8 @@ use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
 
 #[path = "../../btel_bcs/tests/support/mod.rs"]
 mod cloud_protocol;
+#[path = "../../btel_bcs/tests/support/prepare_requests.rs"]
+mod prepare_requests;
 #[path = "support/telemetry.rs"]
 mod telemetry;
 
@@ -371,11 +373,7 @@ async fn cloud_delivery_failure_does_not_change_execution() {
     assert_eq!(engine.telemetry_result(), Some(Err(failure)));
     let requests = server.received_requests().await.unwrap();
     assert!(requests.iter().any(|request| request.method == "PUT"));
-    let prepares: Vec<btel_bcs::wire::PrepareUploadsRequest> = requests
-        .iter()
-        .filter(|request| request.method == "POST")
-        .map(|request| serde_json::from_slice(&request.body).unwrap())
-        .collect();
+    let prepares = prepare_requests::prepare_requests(&requests);
     let initial_ids: BTreeSet<_> = prepares[0]
         .candidates
         .iter()

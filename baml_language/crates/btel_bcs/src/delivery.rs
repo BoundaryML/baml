@@ -136,6 +136,7 @@ impl DeliveryConfig {
     }
 }
 
+#[derive(Default)]
 struct State {
     sender: Option<mpsc::Sender<Work>>,
     failure: Option<DeliveryError>,
@@ -247,19 +248,9 @@ impl DeliveryHandle {
         Self {
             shared: Arc::new(Shared {
                 state: Mutex::new(State {
-                    sender: None,
                     failure: Some(error),
-                    last_error: None,
-                    loss_count: 0,
-                    metadata_replay_evictions: 0,
-                    progress: DeliveryProgress::default(),
-                    recording_bytes: 0,
-                    cas_bytes: 0,
-                    snapshots: 0,
-                    plans: 0,
-                    cas_targets: 0,
-                    last_file: None,
                     finished: true,
+                    ..State::default()
                 }),
                 config: DeliveryConfig::default(),
                 capacity: Condvar::new(),
@@ -284,9 +275,12 @@ impl DeliveryHandle {
         self.shared.state.lock().unwrap().metadata_replay_evictions
     }
 
-    pub(crate) fn record_metadata_replay_eviction(&self) {
+    pub(crate) fn record_metadata_replay_evictions(&self, count: u64) {
+        if count == 0 {
+            return;
+        }
         let mut state = self.shared.state.lock().unwrap();
-        state.metadata_replay_evictions = state.metadata_replay_evictions.saturating_add(1);
+        state.metadata_replay_evictions = state.metadata_replay_evictions.saturating_add(count);
     }
 
     pub(crate) fn record_payload_loss(&self, error: DeliveryError, reset_cas: bool) {
@@ -553,18 +547,7 @@ impl BcsDelivery {
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 sender: Some(sender),
-                failure: None,
-                last_error: None,
-                loss_count: 0,
-                metadata_replay_evictions: 0,
-                progress: DeliveryProgress::default(),
-                recording_bytes: 0,
-                cas_bytes: 0,
-                snapshots: 0,
-                plans: 0,
-                cas_targets: 0,
-                last_file: None,
-                finished: false,
+                ..State::default()
             }),
             config,
             capacity: Condvar::new(),
@@ -1141,8 +1124,9 @@ mod tests {
             state.metadata_replay_evictions = u64::MAX - 1;
             state.progress.recording_acked_through = 7;
         }
-        handle.record_metadata_replay_eviction();
-        handle.record_metadata_replay_eviction();
+        handle.record_metadata_replay_evictions(0);
+        assert_eq!(handle.metadata_replay_evictions(), u64::MAX - 1);
+        handle.record_metadata_replay_evictions(2);
         assert_eq!(handle.metadata_replay_evictions(), u64::MAX);
         assert_eq!(handle.loss_count(), u64::MAX - 1);
         assert_eq!(handle.last_error(), None);
