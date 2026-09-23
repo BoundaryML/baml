@@ -307,6 +307,20 @@ pub struct NativeFrame {
     /// Nearest bytecode caller. Hidden native continuations are transparent to
     /// call-path attribution and await ownership; this avoids walking ancestors.
     pub(crate) bytecode_caller: usize,
+    pub(crate) telemetry: Option<FrameTelemetry>,
+    pub(crate) telemetry_caller: usize,
+}
+
+#[derive(Clone, Copy)]
+enum NativeInvocation {
+    Hidden,
+    Observed(FrameTelemetry),
+}
+
+impl From<Option<FrameTelemetry>> for NativeInvocation {
+    fn from(telemetry: Option<FrameTelemetry>) -> Self {
+        telemetry.map_or(Self::Hidden, Self::Observed)
+    }
 }
 
 impl RootHaver for NativeFrame {
@@ -395,6 +409,7 @@ pub(crate) mod tests {
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
             argv: Arc::from([]),
+            pending_trace_call: None,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
@@ -406,6 +421,8 @@ pub(crate) mod tests {
                 crate::telemetry::test_runtime(),
             )),
             pending_telemetry_wait: None,
+            pending_sysop_telemetry: None,
+            current_native_invocation: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
         }
@@ -1442,6 +1459,9 @@ pub struct BexVm {
     /// here for the explicit completion boundary to finish.
     pending_telemetry_wait: Option<(usize, ClockInstant)>,
 
+    pending_sysop_telemetry: Option<(HeapPtr, FrameTelemetry)>,
+    current_native_invocation: Option<NativeInvocation>,
+
     /// BEP-042 cause chain across a transparent re-raise: the `cause` context
     /// computed at each error value's original (fresh) throw site, keyed by the
     /// thrown value. A later *rethrow* of the same value (a non-throwing
@@ -1467,6 +1487,9 @@ pub struct BexVm {
 
     /// Process arguments exposed by `baml.sys.argv()`. Shared across VMs.
     pub argv: Arc<[String]>,
+
+    /// Explicit options for the immediately following call, with no VM-heap values.
+    pending_trace_call: Option<crate::trace::TraceCall>,
 
     /// Type-args of the *currently dispatching* call, populated by the
     /// `Instruction::Call` handler from the leading `ntypeargs` `Object::Type`
@@ -2019,12 +2042,15 @@ impl BexVm {
             thrown_value_contexts: Vec::new(),
             preserved_throw_contexts: Vec::new(),
             argv,
+            pending_trace_call: None,
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
             telemetry,
             pending_telemetry_wait: None,
+            pending_sysop_telemetry: None,
+            current_native_invocation: None,
             packages,
             dynamic_dispatch,
         }
@@ -5091,6 +5117,7 @@ impl BexVm {
         function: &mut &'static Function,
         thrown: VmThrown,
     ) -> Result<(), VmError> {
+        self.pending_trace_call = None;
         let exception_value = thrown.value;
         let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
         let is_rethrow = thrown.language_is_rethrow;
@@ -5157,6 +5184,7 @@ impl BexVm {
             // Native continuation frames have no exception handlers and own
             // no eval stack region — just pop and continue unwinding.
             if matches!(frame, Frame::Native(_)) {
+                self.complete_bytecode_invocation(depth, telemetry_outcome, Some(exception_value));
                 if self.frames.len() <= 1 {
                     // No bytecode handler remains for this native entry frame.
                     return Err(VmError::thrown_fresh(exception_value));
@@ -5688,6 +5716,20 @@ impl BexVm {
         })
     }
 
+    fn reject_host_trace_options(&mut self) -> Result<(), VmError> {
+        if self.pending_trace_call.take().is_some() {
+            // Host closures have no Function identity for invocation records.
+            // Consume the override before failing so it cannot reach another call.
+            // Do not attach a reservation: no supported invocation has begun.
+            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                VmPanic::UserPanic {
+                    message: "Explicit tracing is not supported for host callables".to_owned(),
+                },
+            )));
+        }
+        Ok(())
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -5723,6 +5765,7 @@ impl BexVm {
         // the engine completes the op, exactly as for a bytecode callback's
         // return value.
         if matches!(callee_object, Object::HostClosure(_)) {
+            self.reject_host_trace_options()?;
             let user_args: Vec<Value> = self.stack.drain(locals_offset..).collect();
             let state = self.host_closure_call_sysop(callee_ptr, user_args);
             return Ok(Some(state));
@@ -5821,6 +5864,13 @@ impl BexVm {
             ));
         }
 
+        let trace_override = self
+            .pending_trace_call
+            .take()
+            .map(|call| call.attach(&self.heap))
+            .transpose()
+            .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))?;
+
         match callee_kind {
             FunctionKind::Native(func_ptr) => {
                 // Cast the type-erased pointer back to NativeFunction.
@@ -5835,6 +5885,17 @@ impl BexVm {
                 // They have no data on the stack.
                 // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
                 let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
+                let native_telemetry = trace_override.and_then(|(options, reserved_id)| {
+                    self.enter_explicit_callable(
+                        callee,
+                        callee_fn_ptr,
+                        *frame_idx,
+                        call_site,
+                        &args,
+                        options,
+                        reserved_id,
+                    )
+                });
 
                 // For a generic-instantiation-valued native callee, seed the
                 // native's type args so it reads them via
@@ -5859,7 +5920,12 @@ impl BexVm {
                 } else {
                     None
                 };
+                let previous_native = self.current_native_invocation;
+                if !Self::is_trace_introspection(callee) {
+                    self.current_native_invocation = Some(native_telemetry.into());
+                }
                 let native_result = func(self, &args);
+                self.current_native_invocation = previous_native;
                 if let Some(prev) = restore_pending {
                     self.pending_call_type_args = prev;
                 }
@@ -5867,10 +5933,20 @@ impl BexVm {
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
                     NativeCallResult::Done(v) => {
+                        if let Some(telemetry) = native_telemetry {
+                            self.complete_bytecode_invocation_with_function(
+                                callee,
+                                telemetry,
+                                InvocationOutcome::Ok,
+                                Some(v),
+                            );
+                        }
                         self.stack.push(v);
                     }
                     NativeCallResult::Error(e) => {
-                        return Err(self.native_error_to_vm_error(e));
+                        let error = self.native_error_to_vm_error(e);
+                        self.complete_native_error(callee, native_telemetry, &error);
+                        return Err(error);
                     }
                     NativeCallResult::YieldToCall {
                         callee,
@@ -5886,6 +5962,8 @@ impl BexVm {
                             function: callee_ptr,
                             continuation,
                             bytecode_caller: self.bytecode_caller_index(*frame_idx),
+                            telemetry: native_telemetry,
+                            telemetry_caller: self.telemetry_caller_index(self.frames.len() - 1),
                         }));
 
                         // If callee is a BoundMethod, insert receiver into args.
@@ -5954,20 +6032,22 @@ impl BexVm {
                 };
 
                 let frame_telemetry = if self.telemetry.is_some() {
-                    let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
+                    let caller_frame_idx = self.telemetry_caller_index(self.frames.len() - 1);
                     let actual_caller = self.frame_function_identity(caller_frame_idx);
-                    let caller_is_observed = matches!(
-                        self.frames.get(caller_frame_idx),
-                        Some(Frame::Bytecode(BytecodeFrame {
-                            telemetry: Some(_),
-                            ..
-                        }))
-                    );
+                    let caller_is_observed = self.frame_telemetry(caller_frame_idx).is_some();
                     let caller_pc = if caller_frame_idx == *frame_idx {
                         call_site
                     } else {
-                        let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
-                            unreachable!("native continuation retains its bytecode caller");
+                        let caller = match &self.frames[caller_frame_idx] {
+                            Frame::Bytecode(caller) => caller,
+                            Frame::Native(caller) => {
+                                let Frame::Bytecode(bytecode) =
+                                    &self.frames[caller.bytecode_caller]
+                                else {
+                                    unreachable!("native continuation retains its bytecode caller");
+                                };
+                                bytecode
+                            }
                         };
                         caller.faulting_pc
                     };
@@ -5976,13 +6056,16 @@ impl BexVm {
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                        telemetry.enter_bytecode(
+                        let (options, reserved_id) = trace_override.unwrap_or_default();
+                        telemetry.enter_with_options(
                             callee,
                             callee_fn_ptr,
                             actual_caller,
                             caller_pc,
                             caller_is_observed,
                             args,
+                            options,
+                            reserved_id,
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -6047,6 +6130,22 @@ impl BexVm {
                     "sysop dispatch received type args, which it cannot thread to the op",
                 );
                 let state = self.dispatch_sysop_yield(callee_fn_ptr)?;
+                if let Some((options, reserved_id)) = trace_override {
+                    let VmExecState::SysOp { args, .. } = &state else {
+                        unreachable!("sys-op dispatch yields a sys-op");
+                    };
+                    self.pending_sysop_telemetry = self
+                        .enter_explicit_callable(
+                            callee,
+                            callee_fn_ptr,
+                            *frame_idx,
+                            call_site,
+                            args,
+                            options,
+                            reserved_id,
+                        )
+                        .map(|telemetry| (callee_fn_ptr, telemetry));
+                }
                 return Ok(Some(state));
             }
 
@@ -6361,6 +6460,7 @@ impl BexVm {
     ) {
         let telemetry = match self.frames.get_mut(frame_idx) {
             Some(Frame::Bytecode(frame)) => frame.telemetry.take(),
+            Some(Frame::Native(frame)) => frame.telemetry.take(),
             _ => None,
         };
         let Some(telemetry) = telemetry else {
@@ -6368,7 +6468,7 @@ impl BexVm {
         };
         // SAFETY: the frame remains rooted until after producer completion.
         let function = unsafe { self.load_function(frame_idx) }
-            .expect("bytecode frame must retain its function through completion");
+            .expect("frame must retain its function through completion");
         self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
     }
 
@@ -6408,6 +6508,120 @@ impl BexVm {
         }
     }
 
+    fn is_trace_introspection(function: &Function) -> bool {
+        function.native_key.as_deref() == Some("trace.current_span_id")
+    }
+
+    pub fn current_span_id(&self) -> Option<crate::telemetry::TelemetryId> {
+        let frame = match self.current_native_invocation {
+            Some(NativeInvocation::Hidden) => None,
+            Some(NativeInvocation::Observed(frame)) => Some(frame),
+            None => self
+                .frames
+                .len()
+                .checked_sub(1)
+                .and_then(|idx| self.frame_telemetry(idx)),
+        }?;
+        if !frame.is_span() {
+            return None;
+        }
+        Some(self.telemetry.as_ref()?.active_id())
+    }
+
+    fn frame_telemetry(&self, frame_idx: usize) -> Option<FrameTelemetry> {
+        match self.frames.get(frame_idx)? {
+            Frame::Bytecode(frame) => frame.telemetry,
+            Frame::Native(frame) => frame.telemetry,
+        }
+    }
+
+    fn telemetry_caller_index(&self, frame_idx: usize) -> usize {
+        match &self.frames[frame_idx] {
+            Frame::Native(frame) if frame.telemetry.is_none() => frame.telemetry_caller,
+            _ => frame_idx,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn enter_explicit_callable(
+        &mut self,
+        function: &Function,
+        callee: HeapPtr,
+        frame_idx: usize,
+        call_site: usize,
+        args: &[Value],
+        options: crate::trace::TraceOptions,
+        reserved_id: Option<crate::telemetry::TelemetryId>,
+    ) -> Option<FrameTelemetry> {
+        self.telemetry.as_ref()?;
+        let caller_idx = self.telemetry_caller_index(self.frames.len() - 1);
+        let caller = self.frame_function_identity(caller_idx);
+        let observed = self.frame_telemetry(caller_idx).is_some();
+        let pc = if caller_idx == frame_idx {
+            call_site
+        } else {
+            let Frame::Bytecode(frame) = &self.frames[self.bytecode_caller_index(caller_idx)]
+            else {
+                unreachable!("native continuation retains its bytecode caller");
+            };
+            frame.faulting_pc
+        };
+        // SAFETY: execution holds the permit and arguments remain live.
+        unsafe {
+            self.telemetry.as_mut()?.enter_with_options(
+                function,
+                callee,
+                caller,
+                u32::try_from(pc).unwrap_or(u32::MAX),
+                observed,
+                args,
+                options,
+                reserved_id,
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        }
+    }
+
+    fn complete_native_error(
+        &mut self,
+        function: &Function,
+        telemetry: Option<FrameTelemetry>,
+        error: &VmError,
+    ) {
+        if let Some(telemetry) = telemetry {
+            let (outcome, value) = match error {
+                VmError::Thrown(thrown) => (
+                    self.telemetry_outcome_for_exception(thrown.value),
+                    Some(thrown.value),
+                ),
+                _ => (InvocationOutcome::Errored, None),
+            };
+            self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
+        }
+    }
+
+    pub fn complete_sys_op_telemetry(&mut self, outcome: InvocationOutcome, value: Option<Value>) {
+        if self.pending_sysop_telemetry.is_none() {
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.stop_disabled_telemetry();
+        #[cfg(not(target_arch = "wasm32"))]
+        let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
+        self.finish_pending_telemetry_wait();
+        self.complete_pending_sysop(outcome, value);
+    }
+
+    fn complete_pending_sysop(&mut self, outcome: InvocationOutcome, value: Option<Value>) {
+        if let Some((function, telemetry)) = self.pending_sysop_telemetry.take() {
+            // SAFETY: pending sys-op identity is rooted until this completion.
+            let Object::Function(function) = (unsafe { function.get() }) else {
+                unreachable!("sys-op telemetry retains its function");
+            };
+            self.complete_bytecode_invocation_with_function(function, telemetry, outcome, value);
+        }
+    }
+
     /// Resolve hidden native continuations to their bytecode caller in O(1).
     fn bytecode_caller_index(&self, frame_idx: usize) -> usize {
         match &self.frames[frame_idx] {
@@ -6418,6 +6632,18 @@ impl BexVm {
 
     /// Only the engine knows whether a yielded sys-op is asynchronous.
     pub fn begin_sys_op_telemetry_wait(&mut self) {
+        if self.pending_sysop_telemetry.is_some() {
+            // The suspended sys-op occupies the logical slot above the frame stack.
+            self.pending_telemetry_wait = Some((
+                self.frames.len(),
+                self.telemetry
+                    .as_ref()
+                    .expect("observed sys-op has telemetry")
+                    .clock()
+                    .read(),
+            ));
+            return;
+        }
         if let Some(frame_idx) = self.frames.len().checked_sub(1) {
             self.begin_telemetry_wait(frame_idx);
         }
@@ -6426,8 +6652,8 @@ impl BexVm {
     #[allow(clippy::inline_always, reason = "semantic wait producer fast path")]
     #[inline(always)]
     fn begin_telemetry_wait(&mut self, frame_idx: usize) {
-        let frame_idx = self.bytecode_caller_index(frame_idx);
-        if matches!(&self.frames[frame_idx], Frame::Bytecode(frame) if frame.telemetry.is_some()) {
+        let frame_idx = self.telemetry_caller_index(frame_idx);
+        if self.frame_telemetry(frame_idx).is_some() {
             debug_assert!(self.pending_telemetry_wait.is_none());
             self.pending_telemetry_wait = Some((
                 frame_idx,
@@ -6462,10 +6688,19 @@ impl BexVm {
     /// Charge a completed semantic wait after reacquiring the heap permit.
     /// Its duration was already measured, so reacquisition time is excluded.
     pub fn record_telemetry_wait(&mut self, frame_idx: Option<usize>, elapsed: ClockDuration) {
-        if let Some(frame_idx) = frame_idx
-            && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frame_idx)
-            && let Some(telemetry) = &mut frame.telemetry
-        {
+        let Some(frame_idx) = frame_idx else { return };
+        let telemetry = if frame_idx == self.frames.len() {
+            self.pending_sysop_telemetry
+                .as_mut()
+                .map(|(_, telemetry)| telemetry)
+        } else {
+            match self.frames.get_mut(frame_idx) {
+                Some(Frame::Bytecode(frame)) => frame.telemetry.as_mut(),
+                Some(Frame::Native(frame)) => frame.telemetry.as_mut(),
+                None => None,
+            }
+        };
+        if let Some(telemetry) = telemetry {
             telemetry.add_await(elapsed);
         }
     }
@@ -6481,9 +6716,11 @@ impl BexVm {
         {
             self.telemetry.take().unwrap().abandon();
             self.pending_telemetry_wait = None;
+            self.pending_sysop_telemetry = None;
             for frame in &mut self.frames {
-                if let Frame::Bytecode(frame) = frame {
-                    frame.telemetry = None;
+                match frame {
+                    Frame::Bytecode(frame) => frame.telemetry = None,
+                    Frame::Native(frame) => frame.telemetry = None,
                 }
             }
         }
@@ -6504,6 +6741,7 @@ impl BexVm {
             return;
         }
         self.finish_pending_telemetry_wait();
+        self.complete_pending_sysop(outcome, None);
         for frame_idx in (0..self.frames.len()).rev() {
             self.complete_bytecode_invocation(frame_idx, outcome, None);
         }
@@ -6586,6 +6824,10 @@ impl BexVm {
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
+        self.complete_pending_sysop(
+            self.telemetry_outcome_for_exception(exception_value),
+            Some(exception_value),
+        );
         if self.frames.is_empty() {
             let trace = self.capture_user_stack_trace();
             return Err(VmError::ThrownUnhandled {
@@ -6880,22 +7122,39 @@ impl BexVm {
             // ── CPS continuation handler (identical to exec_inner) ────────
             while matches!(self.frames.last(), Some(Frame::Native(_))) {
                 let v = self.stack.ensure_pop();
+                // SAFETY: the native frame still roots its callable under the permit.
+                let native_function = unsafe { self.load_function(self.frames.len() - 1)? };
                 let Some(Frame::Native(nf)) = self.frames.pop() else {
                     unreachable!("just matched Some(Frame::Native(_))");
                 };
                 let native_fn_ptr = nf.function;
 
-                match nf.continuation.call(self, v) {
+                let previous_native = self.current_native_invocation.replace(nf.telemetry.into());
+                let result = nf.continuation.call(self, v);
+                self.current_native_invocation = previous_native;
+                match result {
                     NativeCallResult::Done(val) => {
+                        if let Some(telemetry) = nf.telemetry {
+                            self.complete_bytecode_invocation_with_function(
+                                native_function,
+                                telemetry,
+                                InvocationOutcome::Ok,
+                                Some(val),
+                            );
+                        }
                         self.stack.push(val);
                     }
-                    NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
-                        VmError::Thrown(thrown) => {
-                            self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
-                            break;
+                    NativeCallResult::Error(e) => {
+                        let error = self.native_error_to_vm_error(e);
+                        self.complete_native_error(native_function, nf.telemetry, &error);
+                        match error {
+                            VmError::Thrown(thrown) => {
+                                self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
+                                break;
+                            }
+                            other => return Err(other),
                         }
-                        other => return Err(other),
-                    },
+                    }
                     NativeCallResult::YieldToCall {
                         callee,
                         args: mut callback_args,
@@ -6906,6 +7165,8 @@ impl BexVm {
                             function: native_fn_ptr,
                             continuation,
                             bytecode_caller: nf.bytecode_caller,
+                            telemetry: nf.telemetry,
+                            telemetry_caller: nf.telemetry_caller,
                         }));
 
                         let real_callee =
@@ -7669,6 +7930,30 @@ impl BexVm {
                         }));
                     }
 
+                    OpCode::SetTraceOptions => {
+                        if !matches!(
+                            code.get(*pc)
+                                .copied()
+                                .and_then(|byte| OpCode::try_from(byte).ok()),
+                            Some(
+                                OpCode::Call
+                                    | OpCode::CallExactArgs
+                                    | OpCode::CallIndirect
+                                    | OpCode::VirtualCall
+                            )
+                        ) {
+                            return Err(VmInternalError::TraceOptionsWithoutCall.into());
+                        }
+                        let value = self
+                            .stack
+                            .pop()
+                            .ok_or(VmInternalError::UnexpectedEmptyStack)?;
+                        self.pending_trace_call =
+                            Some(self.decode_trace_options(value).map_err(|panic| {
+                                VmError::thrown_fresh(self.panic_to_exception_value(panic))
+                            })?);
+                    }
+
                     // ── Call ──────────────────────────────────────────────────────
                     OpCode::Call | OpCode::CallExactArgs => {
                         let raw = read_u32_unchecked(code, pc);
@@ -7679,6 +7964,7 @@ impl BexVm {
                             self.load_global_in(function.runtime_package, callee_global);
 
                         if op == OpCode::CallExactArgs
+                            && self.pending_trace_call.is_none()
                             && self.pending_call_type_args.is_empty()
                             && self.pending_call_type_values.is_empty()
                         {
@@ -8042,6 +8328,7 @@ impl BexVm {
                             // `Instruction::CallIndirect` / `host_closure_call_sysop`
                             // for the args-layout rationale.
                             let arity = host_closure.arity;
+                            self.reject_host_trace_options()?;
                             let _popped_callee = self.stack.ensure_pop();
                             let arity = match Self::recorded_call_layout(function, self.cur_pc) {
                                 Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
@@ -8874,43 +9161,39 @@ impl BexVm {
                         // captures, if it is already a closure).
                         let callable_ptr =
                             self.as_object_ptr(callable, FunctionType::Callable.into())?;
-                        // A plain function or closure is wrapped in a closure
-                        // carrying the type args (closures carry over their existing
-                        // `captured_type_args` — the outer/class generic environment
-                        // — then append the new instantiation args in call order, so
-                        // a later indirect call seeds a complete `frame.type_args`).
-                        //
-                        // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
-                        // in a closure without losing its receiver, so it is passed
-                        // through unchanged: the explicit type args are dropped, but
-                        // the call still dispatches with the correct `self`. This is
-                        // correct for the common case of a method that does not reify
-                        // `T` at runtime, and — unlike closure-wrapping it — never
-                        // crashes. (`GenericFunction` does not reach here: TIR rejects
-                        // type args on an already-specialized value.)
-                        let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
-                            match self.get_object(callable_ptr) {
-                                Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
-                                Object::Closure(c) => Some((
-                                    c.function,
-                                    c.captures.to_vec(),
-                                    c.captured_type_args.to_vec(),
-                                )),
-                                _ => None,
-                            };
-                        match wrap {
-                            Some((function_ptr, captures, mut captured_type_args)) => {
-                                captured_type_args.extend(type_args.tys);
-                                let closure = Object::Closure(Closure {
-                                    function: function_ptr,
-                                    captures: captures.into_boxed_slice(),
-                                    captured_type_args: captured_type_args.into_boxed_slice(),
-                                });
-                                let ptr = self.tlab.alloc(closure);
-                                self.stack.push(Value::object(ptr));
+                        let specialized = match self.get_object(callable_ptr) {
+                            Object::Function(_) => Some(Object::Closure(Closure {
+                                function: callable_ptr,
+                                captures: Box::new([]),
+                                captured_type_args: type_args.tys.into_boxed_slice(),
+                            })),
+                            Object::Closure(closure) => {
+                                let mut closure = closure.clone();
+                                let mut captured = closure.captured_type_args.into_vec();
+                                captured.extend(type_args.tys);
+                                closure.captured_type_args = captured.into_boxed_slice();
+                                Some(Object::Closure(closure))
                             }
-                            None => self.stack.push(callable),
-                        }
+                            Object::BoundMethod(method) => {
+                                let mut method = method.clone();
+                                let mut captured = method.type_args.into_vec();
+                                captured.extend(type_args.tys);
+                                method.type_args = captured.into_boxed_slice();
+                                Some(Object::BoundMethod(method))
+                            }
+                            Object::GenericFunction(function) => {
+                                let mut function = function.clone();
+                                let mut captured = function.type_args.into_vec();
+                                captured.extend(type_args.tys);
+                                function.type_args = captured.into_boxed_slice();
+                                Some(Object::GenericFunction(function))
+                            }
+                            _ => None,
+                        };
+                        let value = specialized
+                            .map(|object| Value::object(self.tlab.alloc(object)))
+                            .unwrap_or(callable);
+                        self.stack.push(value);
                     }
 
                     // ── LoadDeref / StoreDeref ────────────────────────────────────
@@ -9685,6 +9968,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
+        if let Some((function, _)) = self.pending_sysop_telemetry {
+            roots.push(function);
+        }
         if let Some(telemetry) = &self.telemetry {
             telemetry.collect_roots(roots);
         }
@@ -9700,6 +9986,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // fresh chunk. Drop them so the next allocation refills from the
         // post-GC cursor.
         self.tlab.invalidate();
+        if let Some((function, _)) = &mut self.pending_sysop_telemetry {
+            *function = roots.get(function).copied().unwrap_or(*function);
+        }
 
         // Stack values
         for value in &mut self.stack {

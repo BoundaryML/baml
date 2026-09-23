@@ -190,6 +190,8 @@ pub enum TirTypeError {
     /// Sealed reflection-kind values are VM views and cannot be constructed
     /// with an object literal.
     CannotConstructReflectionKind { class_name: baml_type::DeclName },
+    /// Classes containing Rust-managed state can only be constructed by builtins.
+    CannotConstructOpaqueClass { class_name: baml_type::DeclName },
     /// Builtin companion carriers (`baml.Int`, `baml.Map`, …) hold no fields
     /// and cannot be constructed with an object literal.
     CannotConstructBuiltinCompanion {
@@ -1083,6 +1085,11 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
+                TirTypeError::CannotConstructOpaqueClass { class_name } => write!(
+                    f,
+                    "cannot construct opaque class `{}`; use its builtin factory methods",
+                    class_name.spell(vp)
+                ),
                 TirTypeError::CannotConstructBuiltinCompanion {
                     class_name,
                     companion,

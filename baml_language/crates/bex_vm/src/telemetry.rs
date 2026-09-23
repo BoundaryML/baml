@@ -28,6 +28,8 @@ pub use btel_types::{
 use btel_types::{FunctionId, allocate_telemetry_id};
 use rustc_hash::FxHashMap;
 
+use crate::trace::TraceOptions;
+
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
 
@@ -53,7 +55,7 @@ use btel_settings::policy::{
 };
 // The resolver below uses the measured single-entry fast path.
 const _: () = assert!(CALL_PATH_CACHE_SLOTS == 1);
-// Native instrumentation is unsupported; changing this requires a producer implementation.
+// Native calls stay hidden unless explicitly configured at the call site.
 const _: () = assert!(matches!(NATIVE_DEFAULT_MODE, InvocationMode::Hidden));
 
 const SPAN: u8 = 1 << 0;
@@ -280,18 +282,52 @@ impl TelemetryState {
         args: &[Value],
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> Option<FrameTelemetry> {
-        if function.telemetry_function_id.is_none()
-            || !matches!(function.kind, FunctionKind::Bytecode)
-        {
-            return None;
+        // SAFETY: the caller retains the same arguments and callable under its permit.
+        unsafe {
+            self.enter_with_options(
+                function,
+                callee,
+                visible_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                TraceOptions::default(),
+                None,
+                register,
+            )
         }
+    }
+
+    /// Enter an invocation with call-site overrides without changing its function policy.
+    ///
+    /// # Safety
+    /// Arguments and their reachable objects must remain live under the VM heap
+    /// permit throughout capture.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn enter_with_options(
+        &mut self,
+        function: &Function,
+        callee: HeapPtr,
+        visible_caller: Option<HeapPtr>,
+        caller_pc: u32,
+        caller_is_observed: bool,
+        args: &[Value],
+        options: TraceOptions,
+        reserved_id: Option<TelemetryId>,
+        register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
+    ) -> Option<FrameTelemetry> {
+        function.telemetry_function_id?;
 
         let policy_id = function.telemetry_policy_id.load();
-        if policy_id == btel_types::TelemetryPolicyId::NONE {
+        if options.mode.is_none()
+            && reserved_id.is_none()
+            && policy_id == btel_types::TelemetryPolicyId::NONE
+        {
             if self.mode == btel_settings::mode::TelemetryMode::Low {
                 return None;
             }
             if self.mode == btel_settings::mode::TelemetryMode::Auto
+                && matches!(function.kind, FunctionKind::Bytecode)
                 && !matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }))
             {
                 return Some(self.enter_timing(
@@ -305,7 +341,11 @@ impl TelemetryState {
         }
         let policy = self.policy_by_id(policy_id);
         let mode = default_mode(function, policy);
-        let mode = if self.mode == btel_settings::mode::TelemetryMode::High
+        let mode = if reserved_id.is_some() {
+            InvocationMode::Span
+        } else if let Some(mode) = options.mode {
+            mode
+        } else if self.mode == btel_settings::mode::TelemetryMode::High
             && mode != InvocationMode::Hidden
         {
             InvocationMode::Span
@@ -345,23 +385,34 @@ impl TelemetryState {
         if mode == InvocationMode::Span {
             flags |= SPAN;
         }
-        if policy.capture_output || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT) {
+        if policy.capture_output
+            || options
+                .output
+                .unwrap_or(is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT)
+        {
             flags |= CAPTURE_OUTPUT;
         }
-        if policy.capture_error || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR) {
+        if policy.capture_error
+            || options
+                .error
+                .unwrap_or(is_ai && btel_settings::policy::AI_CAPTURE_ERROR)
+        {
             flags |= CAPTURE_ERROR;
         }
 
         let captured_inputs = (mode == InvocationMode::Span
-            && (policy.capture_inputs || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)))
-            .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
-            .flatten();
+            && (policy.capture_inputs
+                || options
+                    .inputs
+                    .unwrap_or(is_ai && btel_settings::policy::AI_CAPTURE_INPUTS)))
+        .then(|| self.capture(snapshot::Input::FunctionArgs(args)))
+        .flatten();
         if captured_inputs.is_some() {
             flags |= REQUIRES_ANNOUNCEMENT;
         }
         let entered_at = self.clock.read();
         if mode == InvocationMode::Span {
-            let id = allocate_telemetry_id();
+            let id = reserved_id.unwrap_or_else(allocate_telemetry_id);
             self.thread.active_id = id;
             self.write_span(SpanRecord::FunctionSpanAnnouncement {
                 id,
@@ -715,6 +766,7 @@ impl TelemetryState {
     pub fn clock(&self) -> &Arc<ClockEpoch> {
         &self.clock
     }
+
     pub fn is_root_thread(&self) -> bool {
         self.thread.parent_id.is_none()
     }
@@ -1102,6 +1154,105 @@ mod tests {
         drop(state);
     }
 
+    #[test]
+    fn call_capture_flags_cannot_veto_function_policy() {
+        let function = function(FunctionKind::Bytecode, None);
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        state
+            .set_policy(
+                &function,
+                TelemetryPolicy {
+                    capture_inputs: true,
+                    capture_output: true,
+                    capture_error: true,
+                    ..TelemetryPolicy::NONE
+                },
+            )
+            .unwrap();
+        let reserved = allocate_telemetry_id();
+        // SAFETY: only immediate values are captured; registration does not dereference the pointer.
+        let frame = unsafe {
+            state.enter_with_options(
+                &function,
+                HeapPtr::null(),
+                None,
+                0,
+                false,
+                &[Value::int(41)],
+                TraceOptions {
+                    mode: Some(InvocationMode::Span),
+                    inputs: Some(false),
+                    output: Some(false),
+                    error: Some(false),
+                },
+                Some(reserved),
+                |_, _| (None, function.telemetry_function_id.unwrap()),
+            )
+        }
+        .unwrap();
+        assert_eq!(state.active_id(), reserved);
+        assert_ne!(frame.flags & CAPTURE_ERROR, 0);
+        // SAFETY: the result is an immediate value.
+        unsafe {
+            state.complete_invocation(
+                frame,
+                &function,
+                InvocationOutcome::Ok,
+                Some(Value::int(42)),
+            );
+        }
+        assert!(state.span_records().iter().any(|record| matches!(
+            record,
+            SpanRecord::FunctionSpanAnnouncement { id, captured_inputs: Some(_), .. }
+                if *id == reserved
+        )));
+        assert!(state.span_records().iter().any(|record| matches!(
+            record,
+            SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                id, captured_value: Some(_), ..
+            } if *id == reserved
+        )));
+    }
+
+    #[test]
+    fn explicit_call_modes_override_global_defaults() {
+        use btel_settings::mode::TelemetryMode;
+
+        for global in [TelemetryMode::Low, TelemetryMode::Auto, TelemetryMode::High] {
+            for requested in [
+                InvocationMode::Hidden,
+                InvocationMode::Timing,
+                InvocationMode::Span,
+            ] {
+                let function = function(FunctionKind::Bytecode, None);
+                let mut state =
+                    test_state(Arc::new(TelemetryPolicies::with_mode(global)), test_clock());
+                // SAFETY: there are no arguments and registration does not dereference the pointer.
+                let frame = unsafe {
+                    state.enter_with_options(
+                        &function,
+                        HeapPtr::null(),
+                        None,
+                        0,
+                        false,
+                        &[],
+                        TraceOptions {
+                            mode: Some(requested),
+                            ..TraceOptions::default()
+                        },
+                        None,
+                        |_, _| (None, function.telemetry_function_id.unwrap()),
+                    )
+                };
+                match requested {
+                    InvocationMode::Hidden => assert!(frame.is_none()),
+                    InvocationMode::Timing => assert!(!frame.unwrap().is_span()),
+                    InvocationMode::Span => assert!(frame.unwrap().is_span()),
+                }
+            }
+        }
+    }
+
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
         Function {
             name: "telemetry_test".to_string(),
@@ -1178,7 +1329,8 @@ mod tests {
         let pointer_bytes = size_of::<HeapPtr>();
         assert!(matches!(pointer_bytes, 8 | 16));
         assert_eq!(size_of::<crate::vm::BytecodeFrame>(), 88 + pointer_bytes);
-        assert_eq!(size_of::<crate::vm::NativeFrame>(), 24 + pointer_bytes);
+        // Native telemetry fits inside the existing bytecode-sized frame slot.
+        assert_eq!(size_of::<crate::vm::NativeFrame>(), 64 + pointer_bytes);
         assert_eq!(size_of::<crate::vm::Frame>(), 88 + pointer_bytes);
     }
 

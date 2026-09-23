@@ -1893,6 +1893,7 @@ fn tir_type_error_to_diagnostic_id(
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotConstructOpaqueClass { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
             DiagnosticId::CannotConstructBuiltinCompanion
         }

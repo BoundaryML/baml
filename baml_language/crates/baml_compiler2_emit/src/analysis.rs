@@ -1046,11 +1046,15 @@ fn collect_uses_in_terminator<'db>(
         }
         Terminator::Call {
             callee,
+            trace_options,
             args,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
+            if let Some(options) = trace_options {
+                collect_uses_in_operand(options, block, StatementRef::Terminator, def_use);
+            }
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
@@ -2709,6 +2713,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        trace_options: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,
@@ -2773,6 +2778,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        trace_options: None,
                         destination: Place::Local(result),
                         target: BlockId(1),
                         unwind: None,
@@ -3338,6 +3344,7 @@ mod tests {
     fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator<'static> {
         Terminator::Call {
             argument_layout: None,
+            trace_options: None,
             callee: Operand::Constant(Constant::Null),
             args: vec![],
             ntypeargs: 0,
@@ -3603,6 +3610,7 @@ mod tests {
                     statements: vec![],
                     terminator: Some(Terminator::Call {
                         argument_layout: None,
+                        trace_options: None,
                         callee: Operand::Constant(Constant::Null),
                         args: vec![Operand::copy_local(array)],
                         ntypeargs: 0,

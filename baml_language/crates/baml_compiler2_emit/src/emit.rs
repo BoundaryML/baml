@@ -2395,6 +2395,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Call {
                 argument_layout,
                 callee,
+                trace_options,
                 args,
                 ntypeargs,
 
@@ -2418,6 +2419,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
+                    if let Some(options) = trace_options {
+                        self.emit_operand_pull(options);
+                        self.emit(Instruction::SetTraceOptions);
+                    }
                     let instruction = Instruction::Call {
                         callee: global_callee,
                         ntypeargs,
@@ -2444,6 +2449,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
+                    if let Some(options) = trace_options {
+                        self.emit_operand_pull(options);
+                        self.emit(Instruction::SetTraceOptions);
+                    }
                     let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);

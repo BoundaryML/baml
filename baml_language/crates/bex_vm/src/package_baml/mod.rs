@@ -344,6 +344,10 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
+    (
+        "trace.",
+        <crate::package_trace::PackageTraceImpl as crate::package_trace::BamlPackageTrace>::get_native_fn,
+    ),
 ];
 
 /// Resolves native function pointers for `NativeUnresolved` functions at load.

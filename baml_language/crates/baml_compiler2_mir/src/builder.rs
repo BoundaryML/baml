@@ -368,12 +368,20 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::Call {
             argument_layout: None,
             callee,
+            trace_options: None,
             args,
             ntypeargs,
             destination,
             target,
             unwind,
         });
+    }
+
+    pub(crate) fn set_call_trace_options(&mut self, options: Option<Operand<'db>>) {
+        match &mut self.current_block_mut().terminator {
+            Some(Terminator::Call { trace_options, .. }) => *trace_options = options,
+            _ => unreachable!("trace options require a call terminator"),
+        }
     }
 
     /// Attach the checked argument layout to the call terminator just emitted.

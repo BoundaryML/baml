@@ -1196,7 +1196,10 @@ impl<'db> InferenceContext<'db> {
         let mut field_covers = true;
         let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
         for (name, field_pat) in field_pats {
-            let index = declared.iter().position(|(field, _)| field == name);
+            let index = declared.iter().position(|(field, ty)| {
+                field == name
+                    && (self.is_builtin_source() || !matches!(ty, baml_type::Ty::RustType { .. }))
+            });
             match index {
                 Some(index) => {
                     let field_ty = crate::lower::substitute_params(
@@ -1215,7 +1218,14 @@ impl<'db> InferenceContext<'db> {
                             pat,
                             class_name: qtn.clone(),
                             field_name: name.clone(),
-                            declared: declared.iter().map(|(field, _)| field.clone()).collect(),
+                            declared: declared
+                                .iter()
+                                .filter(|(_, ty)| {
+                                    self.is_builtin_source()
+                                        || !matches!(ty, baml_type::Ty::RustType { .. })
+                                })
+                                .map(|(field, _)| field.clone())
+                                .collect(),
                         });
                     self.lower_pattern(body, *field_pat, &Ty::error());
                 }

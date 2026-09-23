@@ -2274,6 +2274,19 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
         }
         for (path, source) in files {
+            if path.split(['/', '\\']).any(|component| component == "..") {
+                return Err(vec![RuntimeCompileDiagnostic {
+                    code: "E_RUNTIME_SOURCE".to_string(),
+                    message: "runtime source names cannot contain parent directory components"
+                        .to_string(),
+                    severity: RuntimeDiagnosticSeverity::Error,
+                    span: Some(RuntimeSourceSpan {
+                        file: path,
+                        start: 0,
+                        end: 0,
+                    }),
+                }]);
+            }
             // Runtime input names are package-relative. Mounting them beneath
             // the synthetic root makes `ns_foo/` namespace derivation behave
             // exactly like an ordinary project without exposing the synthetic

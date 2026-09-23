@@ -139,6 +139,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::Await
             | I::AwaitAny
             | I::CallIndirect
+            | I::SetTraceOptions
             | I::Throw
             | I::Rethrow
             | I::Return

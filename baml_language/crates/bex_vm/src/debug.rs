@@ -240,6 +240,7 @@ pub(crate) fn display_instruction(
         | Instruction::StoreMapElement
         | Instruction::Await
         | Instruction::AwaitAny
+        | Instruction::SetTraceOptions
         | Instruction::CallIndirect
         | Instruction::Throw
         | Instruction::Rethrow
@@ -419,9 +420,10 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
-        Instruction::Call { .. } | Instruction::CallIndirect | Instruction::VirtualCall { .. } => {
-            Style::new().magenta()
-        }
+        Instruction::Call { .. }
+        | Instruction::SetTraceOptions
+        | Instruction::CallIndirect
+        | Instruction::VirtualCall { .. } => Style::new().magenta(),
         Instruction::Return
         | Instruction::Pop(_)
         | Instruction::Copy(_)
@@ -932,6 +934,7 @@ fn display_instruction_textual(
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
+        Instruction::SetTraceOptions => "set_trace_options".to_string(),
 
         Instruction::VirtualCall { nargs, ntypeargs } => {
             format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
@@ -1275,6 +1278,7 @@ pub fn display_compact_bytecode(
             | OpCode::LoadMapElement
             | OpCode::StoreArrayElement
             | OpCode::StoreMapElement
+            | OpCode::SetTraceOptions
             | OpCode::CallIndirect
             | OpCode::Discriminant
             | OpCode::TypeTag

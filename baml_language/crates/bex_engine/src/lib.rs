@@ -5440,6 +5440,10 @@ impl BexEngine {
                                         )?
                                     };
 
+                                    thread.vm.complete_sys_op_telemetry(
+                                        InvocationOutcome::Ok,
+                                        Some(value),
+                                    );
                                     thread.vm.stack.push(value);
                                 }
                             }

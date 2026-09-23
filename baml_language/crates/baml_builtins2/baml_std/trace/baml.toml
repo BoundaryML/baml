@@ -1,0 +1,6 @@
+[package]
+name = "trace"
+prelude = true
+
+[dependencies]
+baml = { path = "../baml" }
