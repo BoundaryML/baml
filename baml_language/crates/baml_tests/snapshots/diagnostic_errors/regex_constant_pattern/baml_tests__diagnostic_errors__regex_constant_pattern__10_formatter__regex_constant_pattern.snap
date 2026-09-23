@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 // A constant pattern argument to `baml.regex.compile` is compiled while the
-// BAML program is, so a bad pattern is E0173 here rather than a
+// BAML program is, so a bad pattern is E0174 here rather than a
 // `baml.regex.Error` the program has to run to reach.
 
 // Malformed in every dialect.
@@ -24,6 +24,20 @@ function backreference_without_opt_in() -> baml.regex.Regex {
 // is rejected by the backtracking engine too.
 function unbounded_recursion() -> baml.regex.Regex {
     baml.regex.compile("(?<expr>\\g<expr>a|a)", backtracking = true)
+}
+
+// Duplicate bindings are rejected, and constant validation follows the first
+// argument actually bound to the parameter, exactly as runtime lowering does.
+function duplicate_pattern_ignores_unbound_invalid_literal() -> baml.regex.Regex {
+    baml.regex.compile("valid", pattern = "(")
+}
+
+function duplicate_pattern_validates_bound_invalid_literal() -> baml.regex.Regex {
+    baml.regex.compile("(", pattern = "valid")
+}
+
+function repeated_pattern_label_reports_one_duplicate() -> baml.regex.Regex {
+    baml.regex.compile(pattern = "valid", pattern = "(")
 }
 
 // ─── Accepted: no diagnostic below this line ─────────────────────────────────
@@ -52,4 +66,9 @@ function computed_dialect(on: bool) -> baml.regex.Regex {
 // `word` escapes its literal, so its argument is text, not syntax.
 function word_argument_is_never_a_pattern() -> baml.regex.Regex {
     baml.regex.word("(unclosed")
+}
+
+// Named arguments may appear in a different order than the parameters.
+function reordered_named_arguments() -> baml.regex.Regex {
+    baml.regex.compile(backtracking = true, pattern = "\\d+(?= USD)")
 }

@@ -20,7 +20,7 @@ After renaming the search methods to `find()` and `find_all()`, the qualified an
 | --- | --- |
 | `regex.baml` and `replace.baml` | User-visible BEP behavior through the compiler, VM, and standard library. Invalid runtime patterns are built dynamically so constant validation does not intercept them. |
 | `crates/sys_regex/src/lib.rs` | Compilation, error classification, exact-match wrapping, Unicode boundaries, and offset conversion at the engine boundary. |
-| `crates/baml_tests/projects/diagnostic_errors/regex_constant_pattern/` | Constant-pattern errors reported at compile time (currently E0174). Snapshots are generated from this fixture, not imported expected-output files. |
+| `crates/baml_tests/projects/diagnostic_errors/regex_constant_pattern/` | Constant-pattern errors reported at compile time (currently E0174). Includes regressions for CodeRabbit’s duplicate-argument finding: validation follows the call’s bound pattern/dialect, while duplicate bindings are rejected. Snapshots are generated from this fixture, not imported expected-output files. |
 | `crates/baml_tests/src/compiler2_tir/phase8_exceptions.rs` | Stored closure signatures for pure, throwing, union, and shared generic callback effects. |
 | `crates/bex_str/src/tests.rs` | Offset search compared with a straightforward string-search oracle, including Unicode and invalid start positions. |
 

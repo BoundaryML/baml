@@ -5266,8 +5266,8 @@ impl<'db> InferenceContext<'db> {
         let (callee_fn_ty, bound_receiver) = self.infer_callee(body, call, callee);
         self.report_mounted_reserved_call(call, callee);
         self.seed_implicit_llm_schema(body, call, callee, args);
-        self.report_constant_regex_pattern(body, callee, args);
         let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
+        self.report_constant_regex_pattern(body, call, callee);
         self.default_uncontracted_session_eval(body, call, callee);
         ret
     }
@@ -5334,43 +5334,37 @@ impl<'db> InferenceContext<'db> {
     /// there, with the same classification and message. A dynamically built
     /// pattern is left alone — `baml.regex.Error` and its span are what that
     /// case has.
-    fn report_constant_regex_pattern(
-        &mut self,
-        body: &ExprBody,
-        callee: ExprId,
-        args: &[baml_compiler2_ast::CallArg],
-    ) {
-        let Some(pattern_arg) = args
-            .iter()
-            .find(|arg| arg.label.as_ref().is_some_and(|l| l.as_str() == "pattern"))
-            .or_else(|| args.iter().find(|arg| arg.label.is_none()))
-        else {
+    fn report_constant_regex_pattern(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) {
+        // Use the same parameter bindings as lowering, including reordered
+        // named arguments. An unbound duplicate must not replace the pattern
+        // or dialect that the call will actually use.
+        let Some(plan) = self.result.call_plans.get(&call) else {
             return;
         };
-        let Expr::Literal(Literal::String(pattern)) = &body.exprs[pattern_arg.expr] else {
+        let provided = |index| {
+            plan.bindings.iter().find_map(|binding| match binding {
+                ParamBinding::Provided { param_index, arg } if *param_index == index => Some(*arg),
+                _ => None,
+            })
+        };
+        let (Some(expr), backtracking_arg) = (provided(0), provided(1)) else {
+            return;
+        };
+        let Expr::Literal(Literal::String(pattern)) = &body.exprs[expr] else {
             return;
         };
         if !self.is_regex_compile(callee) {
             return;
         }
-        let expr = pattern_arg.expr;
 
         // The dialect follows the `backtracking` argument when it is itself
         // constant. When it is computed, only a pattern *both* dialects reject
         // is reported — flagging one that a `backtracking = true` call would
         // have accepted would be a false positive.
-        let backtracking = args
-            .iter()
-            .find(|arg| {
-                arg.label
-                    .as_ref()
-                    .is_some_and(|l| l.as_str() == "backtracking")
-            })
-            .or_else(|| args.iter().filter(|arg| arg.label.is_none()).nth(1))
-            .map_or(Some(false), |arg| match &body.exprs[arg.expr] {
-                Expr::Literal(Literal::Bool(value)) => Some(*value),
-                _ => None,
-            });
+        let backtracking = backtracking_arg.map_or(Some(false), |arg| match &body.exprs[arg] {
+            Expr::Literal(Literal::Bool(value)) => Some(*value),
+            _ => None,
+        });
         let error = match backtracking {
             Some(backtracking) => sys_regex::Program::compile(pattern, backtracking).err(),
             None => sys_regex::Program::compile(pattern, false)
@@ -5866,7 +5860,14 @@ impl<'db> InferenceContext<'db> {
                 match &arg.label {
                     Some(label) if label.as_str() == "$id" => {}
                     Some(label) => {
-                        if seen_labels.contains(&label) {
+                        // A named argument can also duplicate a parameter
+                        // already supplied positionally. Report it once,
+                        // including when the label itself was repeated.
+                        let duplicates_binding = !label_fallback[index]
+                            && matched[index].is_some_and(|param_index| {
+                                slots[param_index].is_some_and(|first| first != arg.expr)
+                            });
+                        if seen_labels.contains(&label) || duplicates_binding {
                             self.pending_diags.push(PendingDiag::DuplicateNamedArg {
                                 expr: arg.expr,
                                 name: label.clone(),

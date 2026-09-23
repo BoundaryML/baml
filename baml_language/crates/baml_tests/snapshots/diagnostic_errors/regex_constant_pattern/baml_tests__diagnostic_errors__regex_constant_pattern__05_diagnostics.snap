@@ -35,3 +35,35 @@ source: crates/baml_tests/src/generated_tests.rs
  23 │     baml.regex.compile("(?<expr>\\g<expr>a|a)", backtracking = true)
     ·                        ───────────────────────
     ╰────
+
+  [type] E0005
+
+  × duplicate named argument `pattern`
+    ╭─[regex_constant_pattern.baml:29:43]
+ 29 │     baml.regex.compile("valid", pattern = "(")
+    ·                                           ───
+    ╰────
+
+  [type] E0174
+
+  × invalid regex pattern at character 0: unclosed group
+    ╭─[regex_constant_pattern.baml:33:24]
+ 33 │     baml.regex.compile("(", pattern = "valid")
+    ·                        ───
+    ╰────
+
+  [type] E0005
+
+  × duplicate named argument `pattern`
+    ╭─[regex_constant_pattern.baml:33:39]
+ 33 │     baml.regex.compile("(", pattern = "valid")
+    ·                                       ───────
+    ╰────
+
+  [type] E0005
+
+  × duplicate named argument `pattern`
+    ╭─[regex_constant_pattern.baml:37:53]
+ 37 │     baml.regex.compile(pattern = "valid", pattern = "(")
+    ·                                                     ───
+    ╰────
