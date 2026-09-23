@@ -861,8 +861,8 @@ test "passes" {
     common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
 }
 
-/// BAML log events stay silent by default and become stdout lines only when
-/// the caller opts into a level threshold with `--log` or `BAML_LOG`.
+/// BAML test log events default to INFO and remain configurable through
+/// `--log` or `BAML_LOG` without changing test exit codes.
 #[test]
 fn test_log_sources_route_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
     let built = &common::baml_cli();
@@ -887,37 +887,20 @@ test "fails" {
 "#,
     );
 
-    let quiet = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
-    assert!(
-        quiet.status.success(),
-        "expected default log mode to pass; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&quiet.stdout),
-        String::from_utf8_lossy(&quiet.stderr),
-    );
-    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
-    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
-    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
-    assert!(
-        format!("{quiet_stdout}{quiet_stderr}").contains("1 passed, 0 failed, 1 total"),
-        "stdout: {quiet_stdout}\nstderr: {quiet_stderr}"
-    );
-    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
-
-    // Uppercase is intentional: this is the documented shell spelling and
-    // guards clap's case-insensitive value parsing.
-    let info = run_baml_cli_with_env(
-        built,
-        tmp.path(),
-        &["test", "--from", ".", "-i", "::logs"],
-        &[("BAML_LOG", "INFO")],
-    );
+    let info = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
     assert!(
         info.status.success(),
-        "expected BAML_LOG=INFO to pass; stdout: {}\nstderr: {}",
+        "expected default INFO log mode to pass; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&info.stdout),
         String::from_utf8_lossy(&info.stderr),
     );
     let stdout = String::from_utf8_lossy(&info.stdout);
+    let stderr = String::from_utf8_lossy(&info.stderr);
+    assert!(stdout.contains("PASS"), "stdout: {stdout}");
+    assert!(
+        format!("{stdout}{stderr}").contains("1 passed, 0 failed, 1 total"),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
     assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
     assert!(
@@ -936,6 +919,42 @@ test "fails" {
         stdout.find("[ERROR] error-detail") < stdout.find("PASS"),
         "the final captured log must be printed before the test report: {stdout}"
     );
+
+    let quiet = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs", "--log", "OFF"],
+    );
+    assert!(
+        quiet.status.success(),
+        "expected --log OFF to pass; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&quiet.stdout),
+        String::from_utf8_lossy(&quiet.stderr),
+    );
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
+    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+
+    // Uppercase is intentional: this is the documented shell spelling and
+    // guards clap's case-insensitive environment value parsing.
+    let error = run_baml_cli_with_env(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs"],
+        &[("BAML_LOG", "ERROR")],
+    );
+    assert!(error.status.success(), "BAML_LOG=ERROR must pass");
+    let error_stdout = String::from_utf8_lossy(&error.stdout);
+    assert!(
+        error_stdout.contains("[ERROR] error-detail"),
+        "stdout: {error_stdout}"
+    );
+    for filtered in ["debug-detail", "info-detail", "warn-detail"] {
+        assert!(
+            !error_stdout.contains(filtered),
+            "BAML_LOG=ERROR leaked `{filtered}`: {error_stdout}"
+        );
+    }
 
     let failure = run_baml_cli(
         built,

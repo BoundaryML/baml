@@ -745,7 +745,7 @@ mod tests {
             (
                 &["test"],
                 &[
-                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: off] [possible values: off, error,\n          warn, info, debug, trace]",
+                    "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,\n          warn, info, debug, trace]",
                 ],
             ),
             (
