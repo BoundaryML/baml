@@ -272,29 +272,46 @@ function escape(literal: string) -> string throws never {
 // ─── Replacement plumbing ────────────────────────────────────────────────────
 //
 // `string.replace` and `string.replace_all` differ only in a `bool`, so the
-// search dispatch lives in one place.
+// four-way search × replacement dispatch lives in one place. It sits here
+// rather than on `String` so the class that every BAML program touches does
+// not carry three private helpers written against types it does not own.
+//
+// Each leaf is the cheapest form of the job: two literal-only native calls,
+// two engine-side template expansions, and two BAML scan loops for the
+// callback forms, which are the only ones that have to re-enter user code per
+// match.
 
 /// Shared body of `string.replace` (`all = false`) and `string.replace_all`.
-function _replace(
+function _replace<E>(
     haystack: string,
     search: string | Regex,
-    replacement: string,
+    replacement: string | ((Match) -> string throws E),
     all: bool,
-) -> string throws never {
+) -> string throws E {
     match (search) {
-        string => {
-            if (all) {
-                haystack._replace_all_literal(search, replacement)
-            } else {
-                haystack._replace_literal(search, replacement)
-            }
+        string => match (replacement) {
+            string => {
+                if (all) {
+                    haystack._replace_all_literal(search, replacement)
+                } else {
+                    haystack._replace_literal(search, replacement)
+                }
+            },
+            let f: (Match) -> string throws E => {
+                _replace_literal_with(haystack, search, f, all)
+            },
         },
-        Regex => {
-            if (all) {
-                search._replace_all_template(haystack, replacement)
-            } else {
-                search._replace_template(haystack, replacement)
-            }
+        Regex => match (replacement) {
+            string => {
+                if (all) {
+                    search._replace_all_template(haystack, replacement)
+                } else {
+                    search._replace_template(haystack, replacement)
+                }
+            },
+            let f: (Match) -> string throws E => {
+                _replace_pattern_with(haystack, search, f, all)
+            },
         },
     }
 }
