@@ -93,7 +93,7 @@ Build from the repository root. The image compiles the controller from this
 checkout and includes Rust with an offline dependency cache for fix verification.
 
 ```sh
-docker build -t miniatb:local -f tools/miniatb/deployment/Dockerfile .
+docker build --build-arg BAML_GIT_SHA="$(git rev-parse HEAD)" -t miniatb:local -f tools/miniatb/deployment/Dockerfile .
 ```
 
 The explicit Linux sandbox checks need a disposable privileged container and do

@@ -331,27 +331,36 @@ mod tests {
             resolution(&[fixed.clone(), issue("i2", "approved", None)], "0.18.0"),
             "in_progress"
         );
-        assert_eq!(resolution(&[fixed.clone()], "0.18.0"), "fixed");
-        assert_eq!(resolution(&[fixed.clone()], "0.19.0"), "resolved");
+        assert_eq!(resolution(std::slice::from_ref(&fixed), "0.18.0"), "fixed");
+        assert_eq!(
+            resolution(std::slice::from_ref(&fixed), "0.19.0"),
+            "resolved"
+        );
         assert_eq!(resolution(&[fixed], "0.19.0-nightly.1"), "fixed");
     }
     #[test]
     fn nightly_fixes_count_and_order_like_installs() {
         let nightly = issue("i1", "shipped", Some("0.18.1-nightly.20260908.a"));
-        assert_eq!(resolution(&[nightly.clone()], "0.18.0"), "fixed");
         assert_eq!(
-            resolution(&[nightly.clone()], "0.18.1-nightly.20260907.b"),
+            resolution(std::slice::from_ref(&nightly), "0.18.0"),
             "fixed"
         );
         assert_eq!(
-            resolution(&[nightly.clone()], "0.18.1-nightly.20260908.a"),
+            resolution(std::slice::from_ref(&nightly), "0.18.1-nightly.20260907.b"),
+            "fixed"
+        );
+        assert_eq!(
+            resolution(std::slice::from_ref(&nightly), "0.18.1-nightly.20260908.a"),
             "resolved"
         );
         assert_eq!(
-            resolution(&[nightly.clone()], "0.18.1-nightly.20260908.b"),
+            resolution(std::slice::from_ref(&nightly), "0.18.1-nightly.20260908.b"),
             "resolved"
         );
-        assert_eq!(resolution(&[nightly.clone()], "0.18.1"), "resolved");
+        assert_eq!(
+            resolution(std::slice::from_ref(&nightly), "0.18.1"),
+            "resolved"
+        );
         assert_eq!(
             resolution(
                 &[issue("i1", "merged", Some("0.18.1-nightly.20260908.a"))],
@@ -420,7 +429,10 @@ mod tests {
     #[test]
     fn cancelled_reports_are_not_fixed_or_resolved() {
         let cancelled = issue("i1", "cancelled", None);
-        assert_eq!(resolution(&[cancelled.clone()], "0.18.0"), "cancelled");
+        assert_eq!(
+            resolution(std::slice::from_ref(&cancelled), "0.18.0"),
+            "cancelled"
+        );
         assert_eq!(
             resolution(&[cancelled, issue("i2", "approved", None)], "0.18.0"),
             "in_progress"

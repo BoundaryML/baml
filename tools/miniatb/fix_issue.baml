@@ -164,8 +164,18 @@ function autofix_blocker(allow_push: string?, client_id: string?, private_key: s
 /// Discard generated source files after building, then replay the original report.
 function verify_fix(issue: Issue) -> void {
     record("verify_fix", "running", baml.json.parse("{}"));
+    let revision = safe_exec("git", ["-C", run_dir() + "/worktree", "rev-parse", "HEAD"]);
+    require(
+        revision.length() == 40
+            && revision.chars().every((char) -> {
+                "0123456789abcdef".includes(char)
+            }),
+        "Invalid build revision",
+    );
     let built = sandbox(
-        "set -eu; rm -rf /scratch/target /scratch/verified-target /scratch/verified-cli; cd /workspace/baml_language; cargo build --offline --locked -p baml_cli --bin baml-cli --target-dir /scratch/verified-target; mkdir -p /scratch/verified-cli/bin; cp /scratch/verified-target/debug/baml-cli /scratch/verified-cli/bin/baml-cli; ln -s baml-cli /scratch/verified-cli/bin/baml; rm -rf /scratch/verified-target",
+        "export BAML_GIT_SHA="
+            + revision
+            + "; set -eu; rm -rf /scratch/target /scratch/verified-target /scratch/verified-cli; cd /workspace/baml_language; cargo build --offline --locked -p baml_cli --bin baml-cli --target-dir /scratch/verified-target; mkdir -p /scratch/verified-cli/bin; cp /scratch/verified-target/debug/baml-cli /scratch/verified-cli/bin/baml-cli; ln -s baml-cli /scratch/verified-cli/bin/baml; rm -rf /scratch/verified-target",
         run_dir() + "/worktree",
         run_dir() + "/scratch",
         writable = true,

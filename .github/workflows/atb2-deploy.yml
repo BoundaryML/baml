@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - run: docker build -f tools/miniatb/deployment/Dockerfile -t miniatb:ci .
+      - run: docker build --build-arg BAML_GIT_SHA="$GITHUB_SHA" -f tools/miniatb/deployment/Dockerfile -t miniatb:ci .
       - name: Verify Linux resource and filesystem boundaries
         run: docker run --rm --privileged -e MINIATB_LINUX_TEST=1 -e MINIATB_RUN=0123456789abcdef01234567 miniatb:ci sh deployment/test-linux.sh
 
@@ -66,4 +66,4 @@ jobs:
         if: env.FLY_API_TOKEN != ''
         run: |
           flyctl apps list --json | grep -q '"atb2-runner"' || { echo "the Fly app atb2-runner does not exist yet; see tools/miniatb/README.md"; exit 1; }
-          flyctl deploy . --config tools/miniatb/deployment/fly.toml --remote-only --ha=false
+          flyctl deploy . --build-arg BAML_GIT_SHA="$GITHUB_SHA" --config tools/miniatb/deployment/fly.toml --remote-only --ha=false

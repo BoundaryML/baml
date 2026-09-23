@@ -981,6 +981,53 @@ fn post_event(body: &Value) -> Result<()> {
     Ok(())
 }
 
+fn resolution_text(report: &FeedbackRecord) -> String {
+    let details = report
+        .issues
+        .iter()
+        .map(|i| {
+            match (
+                i.fixed_in
+                    .as_ref()
+                    .filter(|_| matches!(i.state.as_str(), "merged" | "shipped")),
+                &report.cli_version,
+            ) {
+                (Some(v), Some(reported)) => {
+                    format!("{} reported on {reported}, fixed in {v}", i.issue_id)
+                }
+                (Some(v), None) => format!("{} fixed in {}", i.issue_id, v),
+                (None, _) => format!("{} {}", i.issue_id, i.state),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    if details.is_empty() {
+        report.resolution.clone()
+    } else {
+        format!("{}: {}", report.resolution, details)
+    }
+}
+
+pub(crate) fn poll_resolutions() {
+    use std::io::IsTerminal as _;
+    if !std::io::stderr().is_terminal() || !std::io::stdout().is_terminal() {
+        return;
+    }
+    let Ok(store) = FeedbackStore::load() else {
+        return;
+    };
+    if !store.enabled {
+        return;
+    }
+    let ids = store
+        .reports
+        .iter()
+        .filter(|r| r.status != ReportStatus::Open)
+        .map(|r| r.event_uuid)
+        .collect::<Vec<_>>();
+    let _ = crate::feedback_resolution::refresh(&ids, false, true, baml_version::CANONICAL_VERSION);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1115,51 +1162,4 @@ mod tests {
         assert!(err.contains("unknown feedback field"), "{err}");
         assert!(err.contains("issue"), "{err}");
     }
-}
-
-fn resolution_text(report: &FeedbackRecord) -> String {
-    let details = report
-        .issues
-        .iter()
-        .map(|i| {
-            match (
-                i.fixed_in
-                    .as_ref()
-                    .filter(|_| matches!(i.state.as_str(), "merged" | "shipped")),
-                &report.cli_version,
-            ) {
-                (Some(v), Some(reported)) => {
-                    format!("{} reported on {reported}, fixed in {v}", i.issue_id)
-                }
-                (Some(v), None) => format!("{} fixed in {}", i.issue_id, v),
-                (None, _) => format!("{} {}", i.issue_id, i.state),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    if details.is_empty() {
-        report.resolution.clone()
-    } else {
-        format!("{}: {}", report.resolution, details)
-    }
-}
-
-pub(crate) fn poll_resolutions() {
-    use std::io::IsTerminal as _;
-    if !std::io::stderr().is_terminal() || !std::io::stdout().is_terminal() {
-        return;
-    }
-    let Ok(store) = FeedbackStore::load() else {
-        return;
-    };
-    if !store.enabled {
-        return;
-    }
-    let ids = store
-        .reports
-        .iter()
-        .filter(|r| r.status != ReportStatus::Open)
-        .map(|r| r.event_uuid)
-        .collect::<Vec<_>>();
-    let _ = crate::feedback_resolution::refresh(&ids, false, true, baml_version::CANONICAL_VERSION);
 }

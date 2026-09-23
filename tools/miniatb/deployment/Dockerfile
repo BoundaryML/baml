@@ -4,6 +4,9 @@ WORKDIR /src/baml_language
 COPY baml_language/ ./
 COPY release/platforms.json /src/release/platforms.json
 COPY skills/baml-core/SKILL.md /src/skills/baml-core/SKILL.md
+ARG BAML_GIT_SHA
+ENV BAML_GIT_SHA=${BAML_GIT_SHA}
+RUN test -n "$BAML_GIT_SHA"
 ENV CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0
 RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,target=/usr/local/cargo/git --mount=type=cache,target=/src/baml_language/target \
     cargo build --locked -p baml_cli --bin baml-cli -j 2 && cp target/debug/baml-cli /tmp/baml-cli && \
