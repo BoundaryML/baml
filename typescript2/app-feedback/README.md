@@ -1,7 +1,6 @@
 # Feedback website
 
-The issue and report interface shared by ATB2 and MiniATB. The UI in this branch
-comes from the current `baml/feedback-7b-try-shirts` working tree.
+The issue and report interface for MiniATB, with views for historical ATB2 records.
 
 - `/`: your issues or all confirmed feedback requests, with filters and a board.
 - `/issues/[id]`: short description, investigation with source citations, native
@@ -26,7 +25,7 @@ before issuing a signed, expiring session cookie. Register the callback at
 `<ATB2_UI_URL>/api/auth/github/callback`.
 
 Comments, Linear export and transcripts use authenticated, HMAC-signed requests to
-`ATB2_RUNNER_URL`, defaulting to `https://atb2-runner.fly.dev` in this branch. The shared
+`ATB2_RUNNER_URL`, defaulting to `https://atb2-runner.fly.dev`. The shared
 `ATB2_UI_RUNNER_SECRET` must match the runner and contain at least 32 characters.
 `ATB2_UI_SESSION_SECRET` is a separate key of at least 32 characters. Mutations
 check the same-origin request and the runner scopes access to its configured
@@ -39,10 +38,5 @@ bun test ./tests
 bun run typecheck
 bun run build
 ```
-
-The current dependency environment produces an ESLint `context.getAncestors`
-compatibility error during the Next build's lint phase. TypeScript, tests and
-production compilation are checked separately; a successful build exit does not
-mean lint passed. Production builds fetch Google Fonts.
 
 See `tools/miniatb/README.md` for the implemented pipeline and remaining parity gaps.

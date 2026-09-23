@@ -16,29 +16,12 @@ investigated even when their example runs. Invalid or unsupported repros stop
 without a ticket. Tickets contain a two-sentence description, four investigation
 sentences with source links, and the native BAML repro with its execution output.
 
-## Code map
+## Layout
 
-| File | Responsibility |
-| --- | --- |
-| `models.baml`, `clients.baml` | Data shapes, JEV and ClaudeCodeClient. |
-| `pipeline.baml` | Prompts and sequence of triage, replay, investigation, dedup and ticket persistence. |
-| `fix_issue.baml` | Fix, test and publish before notifying the shepherd; never merge. |
-| `connections/database.baml` | Reports, issues, lifecycle events, comments and duplicate links. |
-| `connections/posthog.baml`, `posthog_state.baml` | Paginated PostHog intake with durable checkpoints. |
-| `connections/github.baml` | Poll open BoundaryML/baml issues; preserve title, full body and canonical URL. |
-| `connections/slack.baml` | Signed ingress, shepherd routing, notifications and authorized cancellation. |
-| `connections/website.baml` | Signed private API for live transcripts, comments and export. |
-| `connections/linear.baml` | Create or update an export using an exact issue marker. |
-| `deployment/runtime.baml` | Queue, worker lock, current nightly installation and Git worktrees. |
-| `deployment/sandbox.baml` | Isolated tool execution and independent repro replay. |
-| `deployment/publish.baml` | Scan and validate changes, commit, push a new branch and open a draft PR. |
-| `tests.baml`, `deployment/runtime_tests.baml` | Offline behavior and boundary checks. |
-| `deployment/Dockerfile`, `fly.toml`, launcher scripts | Existing `atb2-runner` deployment. Secrets come from Fly. |
-
-The website is `typescript2/app-feedback`, copied from the feedback branch's
-working tree, including its latest uncommitted UI fixes. It reads the existing
-Supabase views. Private actions and transcripts go through the signed MiniATB API.
-No DDL is included.
+`pipeline.baml` handles triage, repro, investigation and dedup; `fix_issue.baml`
+creates draft fixes. `connections/` contains service integrations. `deployment/`
+contains the queue, sandbox, publisher and Fly configuration. The website is
+`typescript2/app-feedback`.
 
 ## Runtime boundaries
 
@@ -84,32 +67,17 @@ Claude's machine login lives in `MINIATB_CLAUDE_HOME` (the existing Fly volume u
 Use the website's `.env.example` for its separate OAuth/session/anon-read settings.
 The website never receives the Supabase service key or other controller tokens.
 
-Slack `app_mention` events enter through `POST /slack/events`. Every human mention
-in `ATB_SLACK_FIX_CHANNEL` becomes feedback with the exact message text and thread
-reference. Command-like mentions such as `babysit`, `try` or `shirt` follow that
-same feedback path for now. Configure Slack's event subscription for `app_mention`;
-requests are signature-checked and acknowledged after durable enqueue.
+Slack mentions in the configured channel become feedback. Mapped shepherds can
+cancel an issue by reacting X to its announcement. Cancellation is checked before
+publishing; it does not interrupt an in-flight push.
 
-Intake deduplicates by source report ID. PostHog and GitHub poll every 60 seconds
-and overlap completed scans by five minutes. Older delayed events require replay.
-GitHub PRs and closed issues are excluded; later edits to a previously queued
-issue do not start another run. GitHub comment synchronization is not implemented.
+PostHog and GitHub poll every 60 seconds with a five-minute overlap. GitHub PRs
+and closed issues are excluded. Updates to queued reports do not start new runs.
+Dedup compares the latest 100 unresolved issues in the same dataset, including
+in-progress and deferred fixes. Duplicate reports attach to the existing ticket.
 
-Investigation dedup compares the latest 100 open issues in the same
-dataset. A match attaches the report and repro to that issue, without creating a
-second fix. Historical ATB2 issues in that window are included.
-
-Every new issue is saved before the pipeline starts its fix worker. The first
-shepherd notification follows the fix attempt and includes the draft PR, or says
-that no PR was produced. Missing publishing credentials and failed fixes leave
-the ticket available with a deferred status and a recorded reason. Duplicate
-reports do not start another fix.
-
-Each issue notification starts a distinct thread in the configured channel.
-X on that issue announcement cancels it only for mapped shepherds. Fix workers
-check cancellation before starting and before publishing; cancellation does not
-terminate an already executing tool or undo an in-flight push. There are no
-approval gates and no automatic merges.
+The first shepherd notification follows the fix attempt and includes the draft
+PR or explains that no PR was produced. Failed fixes leave the ticket deferred.
 
 ## Verification and operation
 
@@ -151,8 +119,9 @@ MINIATB_ALLOW_PUSH=1 baml run --agent-skill-check off fix -- --id <run-id>
 
 Publishing runs the agent's tests, rebuilds the modified CLI offline, and replays
 the original repro with that binary. Build-generated source changes are discarded
-with the verification overlay. Only then does it scan the worktree, reject
-protected paths and binary artifacts, and create a draft PR against canary.
+with the verification overlay. It then rejects protected
+paths and binary artifacts, scans with controller-owned policy, and creates a
+draft PR against canary.
 A local publication journal reconciles existing commits, branches and PRs on retry.
 Remote changes or closed PRs require inspection; retries never overwrite them.
 
@@ -163,25 +132,15 @@ commands have five minutes, and controller builds have thirty. Limits require
 Linux cgroups v1 or v2 and fail closed if unavailable. Completed run directories
 still need operator retention management on the shared volume.
 
-Linear exports use a per-issue
-lock plus an exact remote marker; an interrupted export's stale lock must be
+Linear exports use a per-issue lock plus an exact remote marker; an interrupted export's stale lock must be
 inspected before removal.
 
-## Parity boundary
-
-The core feedback-to-ticket path, automatic draft fix, notifications, persisted
-timeline, comments, export and private transcript endpoint are implemented.
-The copied UI retains historical PR/run/proposal pages so existing data remains
-readable. Those pages are not proof that MiniATB implements their producers.
+## Not implemented
 
 Standalone CI/CodeRabbit babysitting, try/chat sessions, shirts, release detection
-and GitHub comment synchronization are **not ported**. The CLI resolution cache
-and update warnings are included; they consume existing published-fix metadata. Linear export
-links to the full reproduction rather than duplicating all repro files or mapping
-Linear assignees. Live model/service integration and Linux container verification
-are still required before replacing ATB2. Offline tests do not establish end-to-end
-parity with the deployed system.
-
+and GitHub comment synchronization are not implemented. Historical UI pages remain
+available for existing ATB2 records. Linear exports link to the reproduction and
+do not map assignees. Model/service integration requires separate live testing.
 
 ## CLI update notices
 
