@@ -306,8 +306,7 @@ class String {
     /// Replaces the first occurrence of `search`.
     ///
     /// `search` is either a `string`, matched literally, or a
-    /// `baml.regex.Regex`, matched as a pattern. `replacement` is either a
-    /// `string` or a callback receiving the `baml.regex.Match`.
+    /// `baml.regex.Regex`, matched as a pattern. `replacement` is a `string`.
     ///
     /// With a `baml.regex.Regex` search, a `string` replacement is a template:
     /// `$0` is the whole match, `$1`..`$n` the numbered groups, `$name` and
@@ -318,25 +317,17 @@ class String {
     /// With a literal `string` search, a `string` replacement stays literal:
     /// `$1` in existing code keeps meaning `$1`.
     ///
-    /// A callback's return value is inserted verbatim, so case adaptation,
-    /// table lookup, and macro expansion need no separate method. Under a
-    /// literal search the `Match` it receives has only the whole match in
-    /// `groups` and an empty `named`.
-    ///
     /// # Examples
     /// ```
     /// "a.b".replace(".", "-")                                  // "a-b"
     /// "a.b".replace(baml.regex.compile("."), "-")              // "-.b"
     /// "5 cm".replace(baml.regex.compile("(\\d+) cm"), "${1}mm") // "5mm"
     /// ```
-    function replace<E>(
+    function replace(
         self,
         search: string | root.regex.Regex,
-        replacement: string | ((root.regex.Match) -> string throws E),
-    ) -> string throws E {
-        // The dispatch and the two callback scan loops live in `baml.regex`,
-        // next to the types they are written against, rather than adding three
-        // private helpers to the surface of the class every program touches.
+        replacement: string,
+    ) -> string throws never {
         root.regex._replace(self._as_string(), search, replacement, false)
     }
 
@@ -456,13 +447,13 @@ class String {
     /// # Examples
     /// ```
     /// "a.b.c".replace_all(".", "-")                       // "a-b-c"
-    /// text.replace_all(baml.regex.word(term, ignore_case = true), adapt)
+    /// "a1b2".replace_all(baml.regex.compile("\\d"), "#") // "a#b#"
     /// ```
-    function replace_all<E>(
+    function replace_all(
         self,
         search: string | root.regex.Regex,
-        replacement: string | ((root.regex.Match) -> string throws E),
-    ) -> string throws E {
+        replacement: string,
+    ) -> string throws never {
         root.regex._replace(self._as_string(), search, replacement, true)
     }
 
