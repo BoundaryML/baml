@@ -1,44 +1,16 @@
 //! Backtick-string dedenting.
 //!
 //! [`dedent_backtick`] is the whole surface: multi-line auto-dedent for BEP-049
-//! backtick string literals. It removes the layout the author used to lay a
-//! literal out across several lines, and nothing else — see its docs for why
-//! that distinction has to be exact.
-// Walk leading whitespace by *char* so we never split a multi-byte
-// Unicode whitespace codepoint (NBSP U+00A0 = 2 bytes, LINE SEPARATOR
-// U+2028 = 3 bytes, etc.). A naive `line.len() - line.trim_start().len()`
-// mixed with `&line[min_indent..]` panics when an NBSP-indented line is
-// sliced at a byte offset derived from a sibling ASCII-indented line.
-fn leading_whitespace_bytes(line: &str) -> usize {
-    line.chars()
-        .take_while(|c| c.is_whitespace())
-        .map(char::len_utf8)
-        .sum()
-}
+//! backtick string literals. Its whitespace behavior intentionally matches the
+//! legacy hash-string pipeline so migrating delimiters does not change values.
 
-// Strip leading-whitespace chars from a line until we've stripped at
-// least `target_bytes` bytes — always stopping on a char boundary, even
-// if that means over-stripping by a few bytes when a multi-byte
-// whitespace char straddles the target. (Under-stripping into the
-// middle of a char would panic; over-stripping at most one whitespace
-// char is benign — the line was leading-whitespace anyway.)
-fn strip_leading_indent(line: &str, target_bytes: usize) -> &str {
-    if target_bytes == 0 {
-        return line;
-    }
-    let mut consumed = 0usize;
-    let mut split_at = 0usize;
-    for c in line.chars() {
-        if !c.is_whitespace() {
-            break;
-        }
-        consumed += c.len_utf8();
-        split_at += c.len_utf8();
-        if consumed >= target_bytes {
-            break;
-        }
-    }
-    &line[split_at..]
+/// Leading whitespace, ending on a character boundary.
+fn leading_whitespace(line: &str) -> &str {
+    let end = line
+        .char_indices()
+        .find_map(|(index, character)| (!character.is_whitespace()).then_some(index))
+        .unwrap_or(line.len());
+    &line[..end]
 }
 
 /// Longest common prefix of two strings, ending on a char boundary.
@@ -53,59 +25,33 @@ fn common_prefix<'a>(a: &'a str, b: &str) -> &'a str {
     &a[..end]
 }
 
-/// Strip the layout of a multi-line backtick string literal (BEP-049 §12),
-/// leaving everything the author actually wrote.
+/// Strip the layout of a backtick string literal (BEP-049 §12).
 ///
-/// Three steps, in order:
+/// This mirrors the legacy hash-string pipeline, in order:
 ///
 /// 1. Normalize `\r\n` and lone `\r` to `\n` (§AA, TypeScript parity).
-/// 2. Drop the line break that follows the opening delimiter and the line break
-///    plus indentation that precedes the closing one. These belong to the
-///    delimiters, not the content.
-/// 3. Strip the longest common leading-whitespace prefix from the remaining
-///    lines (§12 Rule 2: compared char-by-char, so tabs and spaces don't mix).
+/// 2. Remove every leading line break and all body-final whitespace.
+/// 3. Strip the longest exact leading-whitespace prefix shared by nonblank
+///    lines, empty whitespace-only lines, and discard leading empty lines.
 ///
-/// What it deliberately does *not* do is trim. Blank lines the author left at
-/// either end, trailing spaces, and a `\n` written as an escape all survive.
-/// That last one is why a blanket trim was wrong: it silently ate the newline
-/// in `` `${host}\n` ``, so a generated `/etc/hostname` came out without one.
-///
-/// Runs on the *raw* literal text, before escapes are decoded, so an authored
-/// `\n` is still two opaque characters here and can never be mistaken for a
-/// line break of the layout. A single-line literal is returned unchanged: with
-/// no layout to strip, its leading and trailing spaces are content.
+/// Dedenting runs on raw literal text before escapes are decoded. An authored
+/// `\n` is therefore two non-whitespace characters here and survives the trim.
 pub fn dedent_backtick(text: &str) -> String {
-    if !text.contains(['\n', '\r']) {
-        return text.to_string();
-    }
     let normalized = normalize_newlines(text);
-    let mut body = normalized.as_ref();
-
-    // The line break after the opening delimiter (any spaces/tabs in front of
-    // it are part of that same break).
-    if let Some(rest) = body.trim_start_matches([' ', '\t']).strip_prefix('\n') {
-        body = rest;
-    }
-    // The line break before the closing delimiter, plus the indent that lines
-    // the delimiter up with the code around it.
-    if let Some(rest) = body.trim_end_matches([' ', '\t']).strip_suffix('\n') {
-        body = rest;
-    }
-
-    // Split on '\n' rather than `str::lines`, which would silently swallow a
-    // trailing newline the author asked for (a blank line before the closer).
-    let lines: Vec<&str> = body.split('\n').collect();
+    let body = normalized.trim_start_matches('\n').trim_end();
+    let lines: Vec<&str> = body.lines().collect();
     let strip = common_indent(&lines);
     lines
         .iter()
         .map(|line| {
-            if leading_whitespace_bytes(line) >= strip {
-                strip_leading_indent(line, strip)
+            if line.chars().any(|character| !character.is_whitespace()) {
+                line.strip_prefix(strip)
+                    .expect("common indent must prefix every nonblank line")
             } else {
-                // Whitespace-only line shorter than the common indent.
                 ""
             }
         })
+        .skip_while(|line| line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -131,18 +77,17 @@ fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(out)
 }
 
-/// Byte length of the longest common leading-whitespace prefix across the
-/// non-blank lines.
-fn common_indent(lines: &[&str]) -> usize {
-    let mut common: Option<&str> = None;
+/// Longest exact leading-whitespace prefix across the nonblank lines.
+fn common_indent<'a>(lines: &[&'a str]) -> &'a str {
+    let mut common: Option<&'a str> = None;
     for line in lines.iter().filter(|line| !line.trim().is_empty()) {
-        let ws = &line[..leading_whitespace_bytes(line)];
+        let ws = leading_whitespace(line);
         common = Some(match common {
             None => ws,
             Some(prev) => common_prefix(prev, ws),
         });
     }
-    common.map_or(0, str::len)
+    common.unwrap_or("")
 }
 
 #[cfg(test)]
@@ -212,9 +157,8 @@ mod tests {
     }
 
     #[test]
-    fn backtick_single_line_is_untouched() {
-        // No layout to strip, so the spaces are content.
-        assert_eq!(dedent_backtick("  hello  "), "  hello  ");
+    fn backtick_single_line_matches_hash_string_dedent() {
+        assert_eq!(dedent_backtick("  hello  "), "hello");
     }
 
     #[test]
@@ -232,27 +176,35 @@ mod tests {
     #[test]
     fn backtick_keeps_trailing_escaped_newline() {
         // B-1474. The escape is two raw characters at this point, so nothing
-        // here can read it as layout, and no trim runs to eat it either.
+        // here can read it as layout and trim cannot eat it.
         assert_eq!(dedent_backtick(r"a\n"), r"a\n");
         assert_eq!(dedent_backtick("\n    a\\n\n"), "a\\n");
     }
 
     #[test]
-    fn backtick_blank_line_before_closer_yields_trailing_newline() {
-        // Only *one* line break belongs to the closing delimiter; the blank
-        // line the author left in front of it is content.
-        assert_eq!(dedent_backtick("\n    a\n    b\n\n    "), "a\nb\n");
+    fn backtick_discards_blank_line_before_closer() {
+        assert_eq!(dedent_backtick("\n    a\n    b\n\n    "), "a\nb");
     }
 
     #[test]
-    fn backtick_keeps_leading_and_trailing_blank_content_lines() {
-        assert_eq!(dedent_backtick("\n\n    a\n\n"), "\na\n");
+    fn backtick_discards_leading_and_trailing_blank_content_lines() {
+        assert_eq!(dedent_backtick("\n\n    a\n\n"), "a");
     }
 
     #[test]
     fn backtick_keeps_trailing_spaces_inside_content() {
         // Trailing spaces on an interior line are content, not layout.
         assert_eq!(dedent_backtick("\n    a  \n    b\n"), "a  \nb");
+    }
+
+    #[test]
+    fn backtick_discards_trailing_spaces_at_end_of_body() {
+        assert_eq!(dedent_backtick("\n    a\n    b    \n"), "a\nb");
+    }
+
+    #[test]
+    fn backtick_empties_whitespace_only_lines() {
+        assert_eq!(dedent_backtick("\n    a\n     \n    b\n"), "a\n\nb");
     }
 
     #[test]
@@ -265,5 +217,75 @@ mod tests {
     #[test]
     fn backtick_normalizes_crlf() {
         assert_eq!(dedent_backtick("\r\n    a\r\n    b\r\n"), "a\nb");
+    }
+
+    // Ported from engine/bstd/src/dedent.rs, which defined the dedent behavior
+    // used by legacy hash strings.
+    mod legacy_hash_string_dedent {
+        use super::*;
+
+        #[test]
+        fn test_basic_dedent() {
+            let input = r#"
+            hello
+            world
+            "#;
+            let expected = r#"hello
+world"#;
+            assert_eq!(dedent_backtick(input), expected);
+        }
+
+        #[test]
+        fn test_mixed_indentation() {
+            let input = r#"
+            first line
+                indented line
+            back to first level
+        "#;
+            let expected = r#"first line
+    indented line
+back to first level"#;
+            assert_eq!(dedent_backtick(input), expected);
+        }
+
+        #[test]
+        fn test_empty_lines() {
+            let input = ["", "        line1", "", "        ", "        line2"].join("\n");
+            let expected = r#"line1
+
+
+line2"#;
+            assert_eq!(dedent_backtick(&input), expected);
+        }
+
+        #[test]
+        fn test_no_indentation() {
+            assert_eq!(dedent_backtick("hello\nworld"), "hello\nworld");
+        }
+
+        #[test]
+        fn test_different_line_starts() {
+            let input = r#"
+            def function():
+                # comment
+                print("hello")
+            "#;
+            let expected = r#"def function():
+    # comment
+    print("hello")"#;
+            assert_eq!(dedent_backtick(input), expected);
+        }
+
+        #[test]
+        fn test_tabs_and_spaces() {
+            let input = "\n    mixed\n\t\tindentation";
+            let expected = "    mixed\n\t\tindentation";
+            assert_eq!(dedent_backtick(input), expected);
+        }
+
+        #[test]
+        fn test_single_line() {
+            assert_eq!(dedent_backtick("    single line"), "single line");
+        }
     }
 }
