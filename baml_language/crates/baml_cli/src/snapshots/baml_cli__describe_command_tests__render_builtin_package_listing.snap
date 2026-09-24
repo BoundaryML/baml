@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 813
 expression: output
 ---
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
@@ -212,6 +211,13 @@ interface        baml.random.Rng                  <builtin>/baml/ns_random/rando
 class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
 class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
 class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
+class            baml.regex.Group                 <builtin>/baml/ns_regex/regex.baml:19
+class            baml.regex.Match                 <builtin>/baml/ns_regex/regex.baml:39
+enum             baml.regex.ErrorKind             <builtin>/baml/ns_regex/regex.baml:55
+class            baml.regex.Error                 <builtin>/baml/ns_regex/regex.baml:71
+class            baml.regex.Regex                 <builtin>/baml/ns_regex/regex.baml:97
+function         baml.regex.new                   <builtin>/baml/ns_regex/regex.baml:244
+function         baml.regex.escape                <builtin>/baml/ns_regex/regex.baml:268
 function         baml.sap.parse                   <builtin>/baml/ns_sap/sap.baml:41
 function         baml.sap.parse_type              <builtin>/baml/ns_sap/sap.baml:54
 class            baml.spawn.Params                <builtin>/baml/ns_spawn/spawn.baml:17

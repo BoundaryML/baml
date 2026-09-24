@@ -996,13 +996,15 @@ function positional_default() -> string { search("cats", 5) }
 function positional_after_named() -> string { search(query = "cats", 5) }
 function duplicate_named() -> string { search(query = "cats", max = 1, max = 2) }
 function unknown_named() -> string { search(q = "cats") }
+function positional_then_same_named() -> string { search("cats", query = "dogs") }
 "#,
     );
     let tir = render_tir(&db, file);
     insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
     assert!(tir.contains("defaulted parameter `max` must be passed by name"));
     assert!(tir.contains("positional arguments cannot appear after named arguments"));
-    assert!(tir.contains("duplicate named argument `max`"));
+    assert_eq!(tir.matches("duplicate named argument `max`").count(), 1);
+    assert_eq!(tir.matches("duplicate named argument `query`").count(), 1);
     assert!(tir.contains("unknown named argument `q`"));
     assert!(tir.contains("missing required argument `query`"));
 }
