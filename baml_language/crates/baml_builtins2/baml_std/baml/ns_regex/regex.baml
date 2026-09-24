@@ -190,7 +190,7 @@ class Regex {
         $rust_function
     }
 
-    /// Replaces the first match with `template`, expanding `$0` / `$1` /
+    /// (internal) Replaces the first match with `template`, expanding `$0` / `$1` /
     /// `$name` / `${name}` / `$$`. Backs `string.replace`.
     //baml:mut_vm
     //baml:fallible
@@ -198,7 +198,7 @@ class Regex {
         $rust_function
     }
 
-    /// Replaces every match with `template`, expanding `$0` / `$1` / `$name` /
+    /// (internal) Replaces every match with `template`, expanding `$0` / `$1` / `$name` /
     /// `${name}` / `$$`. Backs `string.replace_all`.
     //baml:mut_vm
     //baml:fallible
@@ -248,7 +248,7 @@ function new(pattern: string, backtracking: bool = false) -> Regex throws Error 
     _compile(pattern, backtracking)
 }
 
-/// `new` with the default already resolved.
+/// (internal) `new` with the default already resolved.
 //baml:mut_vm
 function _compile(pattern: string, backtracking: bool) -> Regex throws Error {
     $rust_function
@@ -274,7 +274,7 @@ function escape(literal: string) -> string throws never {
 // `string.replace` and `string.replace_all` differ only in a `bool`, so the
 // search dispatch lives in one place.
 
-/// Shared body of `string.replace` (`all = false`) and `string.replace_all`.
+/// (internal) Shared body of `string.replace` (`all = false`) and `string.replace_all`.
 function _replace(
     haystack: string,
     search: string | Regex,
@@ -299,7 +299,7 @@ function _replace(
     }
 }
 
-/// Literal `search`, replacement computed per occurrence by `f`.
+/// (internal) Literal `search`, replacement computed per occurrence by `f`.
 function _replace_literal_with<E>(
     haystack: string,
     search: string,
@@ -344,7 +344,7 @@ function _replace_literal_with<E>(
     pieces.join("")
 }
 
-/// Pattern `search`, replacement computed per match by `f`.
+/// (internal) Pattern `search`, replacement computed per match by `f`.
 function _replace_pattern_with<E>(
     haystack: string,
     search: Regex,
@@ -370,7 +370,7 @@ function _replace_pattern_with<E>(
     pieces.join("")
 }
 
-/// Builds the `Match` that a literal (non-pattern) search reports.
+/// (internal) Builds the `Match` that a literal (non-pattern) search reports.
 ///
 /// A literal search has no capture groups, so `groups` holds only the whole
 /// match and `named` is empty. Used by `string.replace` / `string.replace_all`
@@ -386,7 +386,7 @@ function _literal_match(text: string, start: int) -> Match throws never {
     }
 }
 
-/// Internal offset search for callback replacement; returns an absolute
+/// (internal) Offset search for callback replacement; returns an absolute
 /// codepoint index without constructing the remaining suffix. An offset
 /// outside `[0, length]` returns null, including for an empty search.
 function _index_of_from(haystack: string, search: string, start: int) -> int? throws never {
