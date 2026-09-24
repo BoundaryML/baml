@@ -437,8 +437,11 @@ Require(
     "TaskGroup state methods changed");
 
 using Boundary.LocalId localId = Boundary.Functions.Id();
-using Boundary.LocalId capturedId = localId.Capture(inputs: true, output: false, error: true);
-Require(!capturedId.IsClosed, "boundary.LocalId.capture returned a closed resource");
+Baml.BamlErrorException captureUnavailable = Expect<Baml.BamlErrorException>(
+    () => _ = localId.Capture(inputs: true, output: false, error: true));
+Require(
+    captureUnavailable.ErrorName == "baml.errors.InvalidArgument" && !localId.IsClosed,
+    "unavailable profiling capture must report a typed error and preserve the local ID resource");
 
 _ = csvReader.Close();
 

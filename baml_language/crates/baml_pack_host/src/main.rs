@@ -277,10 +277,6 @@ fn finalize_dispatch(
         }
     }
 
-    // Drain the direct profiling consumer before exit (no-op when profiling
-    // is off). `baml.sys.exit()` paths bypass this explicit host flush.
-    bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
-
     match result {
         Ok(DispatchResult::Ok) if !unhandled_spawn_failed => ExitCode::SUCCESS,
         Ok(DispatchResult::Ok) => ExitCode::FAILURE,

@@ -380,20 +380,7 @@ impl RunArgs {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let outcome = self.run_with_reporter(&reporter);
-        emit_profiling_status();
-        outcome
-    }
-}
-
-/// A profiling failure never breaks the run, so by default it is invisible;
-/// verbose is the window into why a store is absent — or where an active one
-/// actually wrote. Must run on EVERY exit path, including the
-/// `std::process::exit` branches for program-controlled exit codes.
-fn emit_profiling_status() {
-    if crate::reporter::verbose() {
-        let status = bex_events::prof::backend::ProfilerSession::global().status_line();
-        crate::reporter::print_verbose(format_args!("profiling: {status}"));
+        self.run_with_reporter(&reporter)
     }
 }
 
@@ -750,15 +737,6 @@ impl RunArgs {
             Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
-                // Streams spec §7.5: the profiler's durability window ends
-                // here — flush before the process exits.
-                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
-                if !flushed {
-                    crate::reporter::print_verbose(format_args!(
-                        "profiling: final flush did not complete; this run's profile may be incomplete"
-                    ));
-                }
-                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -1183,15 +1161,6 @@ impl RunArgs {
             Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
             Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
-                // Streams spec §7.5: the profiler's durability window ends
-                // here — flush before the process exits.
-                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
-                if !flushed {
-                    crate::reporter::print_verbose(format_args!(
-                        "profiling: final flush did not complete; this run's profile may be incomplete"
-                    ));
-                }
-                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {

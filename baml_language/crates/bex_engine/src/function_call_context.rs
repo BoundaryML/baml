@@ -1,4 +1,4 @@
-use bex_events::{ids::BoundaryId, prof::backend::RootProfileIntent};
+use bex_events::ids::BoundaryId;
 use indexmap::IndexMap;
 use sys_types::{CallId, CancellationToken};
 
@@ -33,7 +33,7 @@ pub struct FunctionCallContext {
     pub boundary: BoundaryContext,
     pub logger: TraceLogger,
     pub cancel: CancellationToken,
-    pub profile_intent: RootProfileIntent,
+
     /// Named `TypeVar` bindings for a generic call. Each entry is
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
     /// Bruijn order. Sourced from a host SDK call (`CallFunctionArgs.type_args`)
@@ -54,7 +54,7 @@ pub struct FunctionCallContextBuilder {
     boundary: BoundaryContext,
     logger: TraceLogger,
     cancel: Option<CancellationToken>,
-    profile_intent: RootProfileIntent,
+
     type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
     type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
 }
@@ -64,9 +64,6 @@ impl FunctionCallContextBuilder {
         let boundary = BoundaryContext::new(BoundaryId::new_random());
         Self {
             host_call_id,
-            profile_intent: RootProfileIntent::UserRoot {
-                runtime_id: boundary.boundary_id,
-            },
             boundary,
             logger: TraceLogger::disabled(),
             cancel: None,
@@ -82,7 +79,7 @@ impl FunctionCallContextBuilder {
             boundary: self.boundary,
             logger: self.logger,
             cancel: self.cancel.unwrap_or_default(),
-            profile_intent: self.profile_intent,
+
             type_args: self.type_args.unwrap_or_default(),
             type_defs: self.type_defs.unwrap_or_default(),
         }
@@ -91,11 +88,6 @@ impl FunctionCallContextBuilder {
     #[must_use]
     pub fn with_boundary_id(mut self, boundary_id: BoundaryId) -> Self {
         self.boundary.boundary_id = boundary_id;
-        if matches!(self.profile_intent, RootProfileIntent::UserRoot { .. }) {
-            self.profile_intent = RootProfileIntent::UserRoot {
-                runtime_id: boundary_id,
-            };
-        }
         self
     }
 
@@ -126,12 +118,6 @@ impl FunctionCallContextBuilder {
     #[must_use]
     pub fn with_cancel_token(mut self, cancel: CancellationToken) -> Self {
         self.cancel = Some(cancel);
-        self
-    }
-
-    #[must_use]
-    pub fn suppress_internal_profile(mut self) -> Self {
-        self.profile_intent = RootProfileIntent::SuppressInternal;
         self
     }
 }
