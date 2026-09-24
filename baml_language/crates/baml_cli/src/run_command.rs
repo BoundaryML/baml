@@ -752,11 +752,9 @@ impl RunArgs {
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 // Streams spec §7.5: the profiler's durability window ends
                 // here — flush before the process exits.
-                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+                let flushed = crate::flush_profiler();
                 if !flushed {
-                    crate::reporter::print_verbose(format_args!(
-                        "profiling: final flush did not complete; this run's profile may be incomplete"
-                    ));
+                    std::process::exit(crate::ExitCode::Other.into());
                 }
                 emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
@@ -1185,11 +1183,9 @@ impl RunArgs {
             Err(bex_engine::EngineError::Exit { code }) => {
                 // Streams spec §7.5: the profiler's durability window ends
                 // here — flush before the process exits.
-                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+                let flushed = crate::flush_profiler();
                 if !flushed {
-                    crate::reporter::print_verbose(format_args!(
-                        "profiling: final flush did not complete; this run's profile may be incomplete"
-                    ));
+                    std::process::exit(crate::ExitCode::Other.into());
                 }
                 emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));

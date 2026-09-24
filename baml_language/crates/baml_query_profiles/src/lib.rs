@@ -12,7 +12,7 @@
 // types (`bex_prof_store` readers, folds, row builders) crate-private
 // stops a future consumer (the playground endpoint) from walking the
 // store around the QuerySession's snapshot/budget/authorization seam.
-mod decode;
+pub mod decode;
 mod fold;
 mod relations;
 mod resolver;
@@ -28,7 +28,7 @@ use baml_query::{
     scope::QueryScope,
     session::{QuerySession, QuerySessionBuilder},
 };
-pub use resolver::ProfilesResolver;
+pub use resolver::{ProfilesResolver, loss_unavailability};
 use universe::ProfilesUniverse;
 
 /// Bind a `profiles-v1` store and build a ready query session with the
@@ -67,4 +67,19 @@ pub async fn profiles_session_with(
     .with_capabilities(CapabilityRegistry::new())
     .build()
     .await
+}
+
+/// Materialize canonical physical rows for a trusted evidence projector.
+/// Values remain opaque handles; this does not evaluate user SQL or decode CAS bodies.
+pub fn projection_batches(
+    store_root: &Path,
+    max_fold_bytes: u64,
+) -> Result<Vec<datafusion::arrow::record_batch::RecordBatch>, QueryError> {
+    let universe = ProfilesUniverse::bind(store_root)?;
+    let folds = fold::FoldCache::new(max_fold_bytes);
+    CatalogProfile::public()
+        .relations()
+        .iter()
+        .map(|relation| relations::build_relation_batch(relation, &universe, &folds, None))
+        .collect()
 }

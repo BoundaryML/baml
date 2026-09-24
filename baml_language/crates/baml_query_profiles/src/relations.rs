@@ -364,7 +364,7 @@ impl Row<'_> {
     }
 }
 
-fn build_relation_batch(
+pub(crate) fn build_relation_batch(
     relation: &RelationDef,
     universe: &ProfilesUniverse,
     folds: &FoldCache,
