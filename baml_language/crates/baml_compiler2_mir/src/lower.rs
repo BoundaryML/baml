@@ -3871,7 +3871,6 @@ impl<'db> LoweringContext<'db> {
     /// first argument, from which the VM derives `Self`. The call plan
     /// covers every written argument, `self` included, so the list is
     /// lowered ONCE and split.
-    #[expect(clippy::too_many_arguments)]
     fn emit_item_call_on_receiver(
         &mut self,
         expr_id: AstExprId,
