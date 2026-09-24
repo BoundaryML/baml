@@ -18,7 +18,7 @@
 //! media wrapper own independent references.
 
 use bex_project::MediaKind;
-use bridge_cffi::handle::{self as handle_core, HandleError, HandleParts};
+use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -75,7 +75,7 @@ macro_rules! define_media_napi_class {
             #[napi(factory, js_name = "fromUrl")]
             pub fn from_url(url: String, mime_type: Option<String>) -> napi::Result<Self> {
                 let (key, handle_type) = create_media(
-                    handle_core::media_from_url,
+                    handle_cffi::media_from_url,
                     $media_kind,
                     url,
                     mime_type,
@@ -87,7 +87,7 @@ macro_rules! define_media_napi_class {
             #[napi(factory, js_name = "fromFile")]
             pub fn from_file(file: String, mime_type: Option<String>) -> napi::Result<Self> {
                 let (key, handle_type) = create_media(
-                    handle_core::media_from_file,
+                    handle_cffi::media_from_file,
                     $media_kind,
                     file,
                     mime_type,
@@ -99,7 +99,7 @@ macro_rules! define_media_napi_class {
             #[napi(factory, js_name = "fromBase64")]
             pub fn from_base64(base64: String, mime_type: Option<String>) -> napi::Result<Self> {
                 let (key, handle_type) = create_media(
-                    handle_core::media_from_base64,
+                    handle_cffi::media_from_base64,
                     $media_kind,
                     base64,
                     mime_type,
@@ -110,12 +110,12 @@ macro_rules! define_media_napi_class {
 
             #[napi]
             pub fn url(&self) -> napi::Result<Option<String>> {
-                media_string(self.key, self.handle_type, handle_core::media_url, "url")
+                media_string(self.key, self.handle_type, handle_cffi::media_url, "url")
             }
 
             #[napi]
             pub fn file(&self) -> napi::Result<Option<String>> {
-                media_string(self.key, self.handle_type, handle_core::media_file, "file")
+                media_string(self.key, self.handle_type, handle_cffi::media_file, "file")
             }
 
             #[napi]
@@ -123,7 +123,7 @@ macro_rules! define_media_napi_class {
                 media_string(
                     self.key,
                     self.handle_type,
-                    handle_core::media_base64,
+                    handle_cffi::media_base64,
                     "base64",
                 )
             }
@@ -133,7 +133,7 @@ macro_rules! define_media_napi_class {
                 media_string(
                     self.key,
                     self.handle_type,
-                    handle_core::media_mime_type,
+                    handle_cffi::media_mime_type,
                     "mimeType",
                 )
             }
@@ -173,7 +173,7 @@ macro_rules! define_media_napi_class {
 
         impl ObjectFinalize for $name {
             fn finalize(self, _env: Env) -> napi::Result<()> {
-                let _ = handle_core::release_handle(self.key);
+                let _ = handle_cffi::release_handle(self.key);
                 Ok(())
             }
         }

@@ -13,7 +13,7 @@
 //! a `.baml` source-syntax keyword (substituted to the current package
 //! during HIR resolution) and never appears as `Name::pkg`.
 //!
-//! Builtin packages (`baml`, `ai`, `reflect`) route under their own names; other external packages route under `vendor/<pkg>/`.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_codegen_types::namespace_segments`.
 
 #[cfg(test)]
 use std::path::PathBuf;

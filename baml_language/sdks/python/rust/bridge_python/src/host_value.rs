@@ -439,7 +439,7 @@ fn rollback_failed_encode(registered: &Bound<'_, PyList>, cloned_handles: &Bound
     }
     for item in cloned_handles.iter() {
         if let Ok(key) = item.extract::<u64>() {
-            let _ = bridge_cffi::handle::release_handle(key);
+            let _ = bridge_cffi::handle_cffi::release_handle(key);
         }
     }
 }

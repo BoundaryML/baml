@@ -4,7 +4,7 @@
 //! The package of the codegen-facing `Name` is `Local` for project files
 //! (`is_local()`), `"baml"` for stdlib, `"<vendor>"` for declared external
 //! packages. Local symbols route to the crate root's namespace tree,
-//! builtin packages under their own names, external packages under `vendor/<pkg>/` — the same
+//! core language packages under their own names, other dependencies under `vendor/<pkg>/` — the same
 //! placement rules as the python and typescript emitters.
 
 use baml_codegen_types::Name;

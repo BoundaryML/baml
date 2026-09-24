@@ -14,7 +14,7 @@
 //! name from HIR — `"user"` for project files, `"baml"` for stdlib,
 //! `"<vendor>"` for declared external packages.
 //!
-//! Builtin packages (`baml`, `ai`, `reflect`) route under their own names; other external packages route under `vendor/<pkg>/`.
+//! Core language packages route under their own names; other dependencies route under `vendor/<pkg>/`, as defined by `baml_codegen_types::namespace_segments`.
 //! Routing is independent of the symbol kind.
 //!
 //! Unlike TS (where `sanitize_module_segment` is a no-op), Java package

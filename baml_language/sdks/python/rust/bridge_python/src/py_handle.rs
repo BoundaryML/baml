@@ -25,7 +25,7 @@
 //! `BamlHandle.handle_type`, the Python object stores it on construction,
 //! and Rust-internal callers (media class validation) read the field directly.
 
-use bridge_cffi::{BamlCffiStatus, handle as handle_core};
+use bridge_cffi::{BamlCffiStatus, handle_cffi};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
@@ -35,11 +35,11 @@ pub(crate) fn status_to_pyerr(context: &str, status: BamlCffiStatus) -> PyErr {
 }
 
 pub(crate) fn handle_clone(key: u64, context: &str) -> PyResult<u64> {
-    handle_core::clone_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
+    handle_cffi::clone_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
 pub(crate) fn release_wire_handle(key: u64, context: &str) -> PyResult<()> {
-    handle_core::release_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
+    handle_cffi::release_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
 #[gen_stub_pyclass]
@@ -120,7 +120,7 @@ impl Drop for BamlPyHandle {
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
             || ht_i32 == BamlHandleType::HostValueOpaque as i32;
         if !is_host_value {
-            let _ = handle_core::release_handle(self.handle_key);
+            let _ = handle_cffi::release_handle(self.handle_key);
         }
     }
 }
@@ -131,7 +131,7 @@ impl Drop for BamlPyHandle {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
-    let parts = handle_core::seed_function_ref_handle(global_index);
+    let parts = handle_cffi::seed_function_ref_handle(global_index);
     Ok((parts.key, parts.handle_type as u64))
 }
 
@@ -139,7 +139,7 @@ pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
-    let parts = handle_core::seed_generic_media_handle();
+    let parts = handle_cffi::seed_generic_media_handle();
     Ok((parts.key, parts.handle_type as u64))
 }
 
@@ -149,7 +149,7 @@ pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_heap_handle(slab_key: u64) -> PyResult<(u64, u64)> {
-    let parts = handle_core::seed_heap_handle(slab_key);
+    let parts = handle_cffi::seed_heap_handle(slab_key);
     Ok((parts.key, parts.handle_type as u64))
 }
 
@@ -166,7 +166,7 @@ pub fn _release_wire_handle(key: u64) -> PyResult<()> {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _live_handle_count() -> usize {
-    bridge_cffi::handle::live_handle_count()
+    bridge_cffi::handle_cffi::live_handle_count()
 }
 
 /// Test-only: the outstanding ownership count of a live key — the releases it
@@ -175,5 +175,5 @@ pub fn _live_handle_count() -> usize {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _handle_refcount(key: u64) -> Option<u64> {
-    bridge_cffi::handle::handle_refcount(key)
+    bridge_cffi::handle_cffi::handle_refcount(key)
 }

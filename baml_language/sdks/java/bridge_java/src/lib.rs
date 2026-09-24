@@ -19,7 +19,7 @@
 use std::sync::{Arc, Once, OnceLock};
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
-use bridge_cffi::handle::media_kind_from_proto;
+use bridge_cffi::handle_cffi::media_kind_from_proto;
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
 use jni::{
     JNIEnv, JavaVM,

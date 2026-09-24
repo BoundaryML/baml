@@ -12,7 +12,7 @@
 //! generator a concrete target to lower into.
 
 use bex_project::MediaKind;
-use bridge_cffi::handle::{self as handle_core, HandleError, HandleParts};
+use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
@@ -99,7 +99,7 @@ macro_rules! define_media_pyclass {
             #[pyo3(signature = (url, mime_type=None))]
             fn from_url(py: Python<'_>, url: String, mime_type: Option<String>) -> PyResult<Self> {
                 let (key, handle_type) = create_media(
-                    handle_core::media_from_url,
+                    handle_cffi::media_from_url,
                     $media_kind,
                     url,
                     mime_type,
@@ -118,7 +118,7 @@ macro_rules! define_media_pyclass {
                 mime_type: Option<String>,
             ) -> PyResult<Self> {
                 let (key, handle_type) = create_media(
-                    handle_core::media_from_file,
+                    handle_cffi::media_from_file,
                     $media_kind,
                     file,
                     mime_type,
@@ -137,7 +137,7 @@ macro_rules! define_media_pyclass {
                 mime_type: Option<String>,
             ) -> PyResult<Self> {
                 let (key, handle_type) = create_media(
-                    handle_core::media_from_base64,
+                    handle_cffi::media_from_base64,
                     $media_kind,
                     base64,
                     mime_type,
@@ -149,19 +149,19 @@ macro_rules! define_media_pyclass {
             }
 
             fn url(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, handle_core::media_url, "url")
+                self.access_optional_string(py, handle_cffi::media_url, "url")
             }
 
             fn file(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, handle_core::media_file, "file")
+                self.access_optional_string(py, handle_cffi::media_file, "file")
             }
 
             fn base64(&self, py: Python<'_>) -> PyResult<String> {
-                self.access_string(py, handle_core::media_base64, "base64")
+                self.access_string(py, handle_cffi::media_base64, "base64")
             }
 
             fn mime_type(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, handle_core::media_mime_type, "mime_type")
+                self.access_optional_string(py, handle_cffi::media_mime_type, "mime_type")
             }
 
             /// Internal: build a `$name` from a `BamlPyHandle`. Used by

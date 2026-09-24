@@ -1,17 +1,21 @@
+use baml_base::LangPackage;
+
 use crate::Name;
 
 /// Package and namespace segments before target-language identifier escaping.
-/// Builtin packages live at the SDK root; external packages live under vendor.
+/// Core language packages live at the SDK root; other dependencies live under vendor.
 pub fn namespace_segments(name: &Name) -> Vec<String> {
     let mut segments = Vec::new();
     if !name.is_local() {
-        match name.package().as_str() {
-            "baml" | "ai" | "reflect" => segments.push(name.package().as_str().to_owned()),
-            package => {
-                segments.push("vendor".to_owned());
-                segments.push(package.to_owned());
-            }
+        // This is SDK layout policy, not a list of all builtin packages.
+        // Bundled provider packages and `boundary` retain their vendor paths.
+        let at_sdk_root = [LangPackage::Baml, LangPackage::Ai, LangPackage::Reflect]
+            .iter()
+            .any(|package| package.manifest_name() == name.package().as_str());
+        if !at_sdk_root {
+            segments.push("vendor".to_owned());
         }
+        segments.push(name.package().as_str().to_owned());
     }
     segments.extend(name.namespace().iter().map(|part| part.as_str().to_owned()));
     segments
@@ -27,6 +31,8 @@ mod tests {
             ("baml", vec!["baml", "nested"]),
             ("ai", vec!["ai", "nested"]),
             ("reflect", vec!["reflect", "nested"]),
+            ("boundary", vec!["vendor", "boundary", "nested"]),
+            ("aws", vec!["vendor", "aws", "nested"]),
             ("vendor_pkg", vec!["vendor", "vendor_pkg", "nested"]),
         ] {
             let name = Name::new(package.into(), vec!["nested".into()], "Thing".into());

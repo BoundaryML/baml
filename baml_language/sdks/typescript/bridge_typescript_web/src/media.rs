@@ -1,14 +1,14 @@
 //! Raw media handle bindings.
 
 use bex_project::MediaKind;
-use bridge_cffi::handle::{self as handle_core, HandleError, HandleParts};
+use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use wasm_bindgen::prelude::*;
 
 use crate::errors::{handle_error, unexpected_handle_type};
 
 fn media_kind(media_kind: i32, operation: &'static str) -> Result<MediaKind, JsError> {
-    handle_core::media_kind_from_proto(media_kind)
+    handle_cffi::media_kind_from_proto(media_kind)
         .ok_or_else(|| handle_error(operation, &HandleError::UnsupportedHandleType))
 }
 
@@ -42,7 +42,7 @@ pub fn media_from_url(
     mime_type: Option<String>,
 ) -> Result<u64, JsError> {
     let kind = media_kind(media_kind_value, "mediaFromUrl")?;
-    let parts = handle_core::media_from_url(kind, url, mime_type.as_deref())
+    let parts = handle_cffi::media_from_url(kind, url, mime_type.as_deref())
         .map_err(|error| handle_error("mediaFromUrl", &error))?;
     media_key("mediaFromUrl", kind, parts)
 }
@@ -55,7 +55,7 @@ pub fn media_from_file(
     mime_type: Option<String>,
 ) -> Result<u64, JsError> {
     let kind = media_kind(media_kind_value, "mediaFromFile")?;
-    let parts = handle_core::media_from_file(kind, file, mime_type.as_deref())
+    let parts = handle_cffi::media_from_file(kind, file, mime_type.as_deref())
         .map_err(|error| handle_error("mediaFromFile", &error))?;
     media_key("mediaFromFile", kind, parts)
 }
@@ -68,28 +68,28 @@ pub fn media_from_base64(
     mime_type: Option<String>,
 ) -> Result<u64, JsError> {
     let kind = media_kind(media_kind_value, "mediaFromBase64")?;
-    let parts = handle_core::media_from_base64(kind, base64, mime_type.as_deref())
+    let parts = handle_cffi::media_from_base64(kind, base64, mime_type.as_deref())
         .map_err(|error| handle_error("mediaFromBase64", &error))?;
     media_key("mediaFromBase64", kind, parts)
 }
 
 #[wasm_bindgen(js_name = mediaUrl)]
 pub fn media_url(key: u64, handle_type: i32) -> Result<Option<String>, JsError> {
-    handle_core::media_url(key, handle_type).map_err(|error| handle_error("mediaUrl", &error))
+    handle_cffi::media_url(key, handle_type).map_err(|error| handle_error("mediaUrl", &error))
 }
 
 #[wasm_bindgen(js_name = mediaFile)]
 pub fn media_file(key: u64, handle_type: i32) -> Result<Option<String>, JsError> {
-    handle_core::media_file(key, handle_type).map_err(|error| handle_error("mediaFile", &error))
+    handle_cffi::media_file(key, handle_type).map_err(|error| handle_error("mediaFile", &error))
 }
 
 #[wasm_bindgen(js_name = mediaBase64)]
 pub fn media_base64(key: u64, handle_type: i32) -> Result<String, JsError> {
-    handle_core::media_base64(key, handle_type).map_err(|error| handle_error("mediaBase64", &error))
+    handle_cffi::media_base64(key, handle_type).map_err(|error| handle_error("mediaBase64", &error))
 }
 
 #[wasm_bindgen(js_name = mediaMimeType)]
 pub fn media_mime_type(key: u64, handle_type: i32) -> Result<Option<String>, JsError> {
-    handle_core::media_mime_type(key, handle_type)
+    handle_cffi::media_mime_type(key, handle_type)
         .map_err(|error| handle_error("mediaMimeType", &error))
 }

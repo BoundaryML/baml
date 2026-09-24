@@ -134,7 +134,7 @@ pub(crate) fn register_active_call_runtime(
 pub mod baml_to_host;
 pub mod buffer;
 pub mod error;
-pub mod handle;
+pub mod handle_cffi;
 mod identity;
 
 pub use baml_to_host::{
