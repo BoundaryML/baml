@@ -392,6 +392,45 @@ test "a bound method is a task's body" {
     assert.equal(bound_method_body(), 42)
 }
 
+// A body may also be a function whose parameters all have defaults: the task
+// starts it with those defaults, as a call through the `() -> T` value would.
+// (Every LLM function has such parameters.) Each kind below enters the task
+// differently: a function, a specialized generic function, a static method,
+// and a stdlib method.
+function with_default(x: int = 3) -> int throws never { x }
+
+function generic_with_default<T>(x: T? = null) -> string throws never {
+    if (x == null) { "default" } else { "given" }
+}
+
+class Defaults {
+    function fixed(x: int = 5) -> int throws never { x }
+}
+
+class UseBody<T> { body: () -> T throws never }
+
+implements<T> baml.spawn.Modifier<T, never> for UseBody<T> {
+    function apply(self, plan: baml.spawn.Plan<T, never>) -> baml.spawn.Plan<T, never> throws never {
+        baml.spawn.Plan { ...plan, body: self.body }
+    }
+}
+
+function defaulted_bodies() -> string {
+    let plain = UseBody<int> { body: with_default };
+    let generic = UseBody<string> { body: generic_with_default<int> };
+    let fixed = UseBody<int> { body: Defaults.fixed };
+    let random = UseBody<bool> { body: bool.random };
+    let a = await spawn with plain { 0 };
+    let b = await spawn with generic { "" };
+    let c = await spawn with fixed { 0 };
+    let d = await spawn with random { true };
+    `${a}:${b}:${c}:${d || !d}`
+}
+
+test "a function with defaulted parameters is a task's body" {
+    assert.equal(defaulted_bodies(), "3:default:5:true")
+}
+
 // ─── Limit ───────────────────────────────────────────────────────────────────
 
 function limit_rejects_zero() -> string {

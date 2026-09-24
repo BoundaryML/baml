@@ -3736,20 +3736,13 @@ impl BexVm {
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
         // A bound method enters as its function, with the receiver as the
         // leading argument and the type arguments it curried at bind time -
-        // the frame `CallIndirect` builds for the same value. Its visible
-        // parameters may be a prefix of the function's (trailing optionals
-        // the function-typed value does not mention), so the arguments are
-        // laid over the callee's slots as for any yielded call.
+        // the frame `CallIndirect` builds for the same value.
         if let Object::BoundMethod(bound) = self.get_object(function) {
             let inner = bound.function;
             let type_args = bound.type_args.to_vec();
-            let mut args = args.to_vec();
-            self.resolve_bound_method_callee(function, &mut args)
-                .unwrap_or_else(|error| {
-                    unreachable!(
-                        "the type checker admits a bound method only where its parameters fit: {error}"
-                    )
-                });
+            let args: Vec<Value> = std::iter::once(bound.receiver)
+                .chain(args.iter().copied())
+                .collect();
             self.set_entry_point_positional(inner, &args, type_args);
             return;
         }
@@ -3845,6 +3838,19 @@ impl BexVm {
             "expect callable as entry point, got {:?}",
             self.get_object(function)
         );
+
+        // The callee may declare trailing optionals `args` does not supply: a
+        // function value of type `() -> T` can be a function with defaulted
+        // parameters, and every LLM function has some. They are laid over the
+        // callee's slots as for a call through a function value, so an omitted
+        // optional reads the omission sentinel and the callee computes its
+        // default.
+        let args = self
+            .lay_over_callee_slots(function, args.to_vec())
+            .unwrap_or_else(|error| {
+                unreachable!("an entry point is started with arguments that fit it: {error}")
+            });
+        let args = args.as_slice();
 
         // A fresh top-level run starts with no in-flight throw, so drop the
         // per-run throw bookkeeping from the previous run. These vectors are
@@ -5876,17 +5882,30 @@ impl BexVm {
             // Prepend receiver so the inner function sees [self, arg1, ..., argN].
             args.insert(0, bm.receiver);
         }
-        let params = self.callee_params(callee)?;
-        if args.len() != params.arity() {
-            let mapping = baml_type::CallLayout::positional(args.len())
-                .map_to(&params.layout())
-                .map_err(VmInternalError::CallLayout)?;
-            *args = mapping
-                .into_iter()
-                .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index]))
-                .collect();
-        }
+        *args = self.lay_over_callee_slots(callee, std::mem::take(args))?;
         Ok(callee)
+    }
+
+    /// `args` laid over `callee`'s parameter slots. A list as long as the
+    /// callee's parameter list is its complete frame and stays as it is; a
+    /// shorter one supplies the required parameters in order, and every
+    /// optional it omits receives the omission sentinel.
+    fn lay_over_callee_slots(
+        &self,
+        callee: HeapPtr,
+        args: Vec<Value>,
+    ) -> Result<Vec<Value>, VmInternalError> {
+        let params = self.callee_params(callee)?;
+        if args.len() == params.arity() {
+            return Ok(args);
+        }
+        let mapping = baml_type::CallLayout::positional(args.len())
+            .map_to(&params.layout())
+            .map_err(VmInternalError::CallLayout)?;
+        Ok(mapping
+            .into_iter()
+            .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index]))
+            .collect())
     }
 
     /// The class-level type arguments to curry into a bound method whose
