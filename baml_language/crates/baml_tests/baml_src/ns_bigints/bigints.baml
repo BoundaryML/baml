@@ -866,22 +866,14 @@ test "bigint_hex_beyond_int_range" {
 
 // ─── regression: bigint binary ops in indexed compound assignments ───────
 
-function bigint_array_index_subtraction() -> bigint {
+test "test_bigint_array_entry_subtraction" {
     let values: bigint[] = [15n];
     values[0] -= 6n;
-    values[0]
+    assert.equal(values[0], 9n)
 }
 
-test "test_bigint_subtraction_assigned_to_array_index" {
-    assert.equal(bigint_array_index_subtraction(), 9n)
-}
-
-function bigint_map_index_subtraction() -> bigint {
+test "test_bigint_map_entry_addition" {
     let values: map<string, bigint> = { "remaining": 15n };
-    values["remaining"] -= 6n;
-    values["remaining"]
-}
-
-test "test_bigint_subtraction_assigned_to_map_index" {
-    assert.equal(bigint_map_index_subtraction(), 9n)
+    values["remaining"] += 6n;
+    assert.equal(values["remaining"], 21n)
 }
