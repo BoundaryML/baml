@@ -221,3 +221,31 @@ async fn spawn_shared_bigint_subtraction_uses_generic_binop() {
     assert!(output.bytecode.contains("bin_op -"));
     assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(4))));
 }
+
+#[tokio::test]
+async fn spawn_shared_bigint_mixed_with_int_uses_generic_binop() {
+    let output = baml_test!(
+        r#"
+        function spawn_bigint_mixed(n: int) -> bigint {
+            let x = 10n;
+            let f = spawn { x = 6n; 0n };
+            let _ = await f;
+            let a = x - n;
+            let b = n - x;
+            let c = x << n;
+            a + b + c
+        }
+
+        function main() -> bigint {
+            spawn_bigint_mixed(2)
+        }
+        "#
+    );
+
+    assert!(output.bytecode.contains("bin_op -"));
+    assert!(output.bytecode.contains("bin_op <<"));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Bigint(BigInt::from(24)))
+    );
+}

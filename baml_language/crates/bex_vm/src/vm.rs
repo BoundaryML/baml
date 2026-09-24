@@ -4267,6 +4267,20 @@ impl BexVm {
         }
     }
 
+    /// Checked counterpart of [`Self::pop_bigint_operand`] for the generic
+    /// `BinOp` path, where no static type vouches for the operand: `None`
+    /// unless `v` is an `int` or an `Object::Bigint`. Classifies without
+    /// widening an `int` to a `BigInt`.
+    fn bigint_operand_of(&self, v: Value) -> Option<BigintOperand> {
+        if let Some(n) = v.as_int() {
+            Some(BigintOperand::Int(n))
+        } else if let Some(ptr) = v.as_object_ptr() {
+            matches!(self.get_object(ptr), Object::Bigint(_)).then_some(BigintOperand::Heap(ptr))
+        } else {
+            None
+        }
+    }
+
     /// Resolve a [`BigintOperand`] to a borrowable `BigInt`.
     ///
     /// A heap operand borrows the heap-resident `BigInt` directly; an `int`
@@ -4287,8 +4301,10 @@ impl BexVm {
     /// (owned `Cow`, no heap alloc), a heap `Object::Bigint` is borrowed.
     /// Returns `None` for anything else (float, string, …).
     ///
-    /// Used by generic comparison and arithmetic when the static types were
-    /// erased or specialization was disabled for spawn-shared operands.
+    /// Used by the generic comparison path (`exec_cmpop`) so a `bigint` vs
+    /// `int` mix compares by value — matching the specialized `CmpBigint*`
+    /// opcodes (`bigint_cmp`) — when the static types were erased (e.g. a
+    /// union/`any` operand) and the generic `CmpOp` was emitted instead.
     fn value_as_bigint_cow(&self, v: Value) -> Option<std::borrow::Cow<'_, num_bigint::BigInt>> {
         if let Some(n) = v.as_int() {
             Some(std::borrow::Cow::Owned(num_bigint::BigInt::from(n)))
@@ -4302,40 +4318,46 @@ impl BexVm {
         }
     }
 
-    /// Evaluate a specialized or generic bigint arithmetic / bitwise / shift op.
+    /// Reconstruct the original `Value` for a [`BigintOperand`].
+    ///
+    /// Used to populate panic payloads (e.g. `DivisionByZero`) without
+    /// allocating: the `int` operand stays an `int`, the heap operand stays a
+    /// pointer.
+    fn bigint_operand_value(op: BigintOperand) -> Value {
+        match op {
+            BigintOperand::Heap(ptr) => Value::object(ptr),
+            BigintOperand::Int(n) => Value::int(n),
+        }
+    }
+
+    /// Evaluate a bigint arithmetic / bitwise / shift op for the specialized
+    /// `*Bigint` opcodes and the generic `BinOp` path.
     ///
     /// Concentrates all the caps and panics that the per-opcode handlers used
     /// to copy-paste. The borrows of the two operands are scoped to a block so
     /// they drop before any heap allocation; only the resulting `BigInt` (or a
     /// `VmPanic`) escapes.
-    fn bigint_binop(&mut self, op: BinOp, l: Value, r: Value) -> Result<Value, VmError> {
+    fn bigint_binop(
+        &mut self,
+        op: BinOp,
+        l: BigintOperand,
+        r: BigintOperand,
+    ) -> Result<Value, VmError> {
         let outcome: Result<num_bigint::BigInt, VmPanic> = {
             match op {
                 BinOp::Add => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     Ok(&*lb + &*rb)
                 }
                 BinOp::Sub => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     Ok(&*lb - &*rb)
                 }
                 BinOp::Mul => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     // Pre-flight bit-length check: `bits(lb * rb) ≤ bits(lb) +
                     // bits(rb)` exactly. Reject before materializing the product
                     // so two operands near `MAX_BIGINT_BITS` can't blow memory
@@ -4353,56 +4375,42 @@ impl BexVm {
                     }
                 }
                 BinOp::Div => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     if *rb == num_bigint::BigInt::ZERO {
-                        Err(VmPanic::DivisionByZero { left: l, right: r })
+                        Err(VmPanic::DivisionByZero {
+                            left: Self::bigint_operand_value(l),
+                            right: Self::bigint_operand_value(r),
+                        })
                     } else {
                         Ok(&*lb / &*rb)
                     }
                 }
                 BinOp::Mod => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     if *rb == num_bigint::BigInt::ZERO {
-                        Err(VmPanic::DivisionByZero { left: l, right: r })
+                        Err(VmPanic::DivisionByZero {
+                            left: Self::bigint_operand_value(l),
+                            right: Self::bigint_operand_value(r),
+                        })
                     } else {
                         Ok(&*lb % &*rb)
                     }
                 }
                 BinOp::BitAnd => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     Ok(&*lb & &*rb)
                 }
                 BinOp::BitOr => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     Ok(&*lb | &*rb)
                 }
                 BinOp::BitXor => {
-                    let lb = self
-                        .value_as_bigint_cow(l)
-                        .unwrap_or_else(|| verifier_unreachable!());
-                    let rb = self
-                        .value_as_bigint_cow(r)
-                        .unwrap_or_else(|| verifier_unreachable!());
+                    let lb = self.bigint_operand(l);
+                    let rb = self.bigint_operand(r);
                     Ok(&*lb ^ &*rb)
                 }
                 BinOp::Shl => {
@@ -4413,45 +4421,44 @@ impl BexVm {
                     //
                     // Resolve the count directly from `r`: an `int` count avoids
                     // even a local `BigInt`.
-                    let shift: Result<usize, VmPanic> = if let Some(n) = r.as_int() {
-                        if n < 0 {
-                            Err(VmPanic::NegativeBitShift {
-                                message: format!("bigint shl: negative shift count ({n})"),
-                            })
-                        } else {
-                            // On 64-bit targets a non-negative `i64` always
-                            // fits in `usize`; on 32-bit targets (wasm32) a
-                            // huge count overflows `usize`, so the would-be
-                            // result is unrepresentable — `AllocFailure`,
-                            // matching the `Heap` path and the old `ShlBigint`.
-                            usize::try_from(n).map_err(|_| VmPanic::AllocFailure {
-                                message: format!(
-                                    "bigint shl: shift count ({n}) does not fit in usize"
-                                ),
-                            })
+                    let shift: Result<usize, VmPanic> = match r {
+                        BigintOperand::Int(n) => {
+                            if n < 0 {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shl: negative shift count ({n})"),
+                                })
+                            } else {
+                                // On 64-bit targets a non-negative `i64` always
+                                // fits in `usize`; on 32-bit targets (wasm32) a
+                                // huge count overflows `usize`, so the would-be
+                                // result is unrepresentable — `AllocFailure`,
+                                // matching the `Heap` path and the old `ShlBigint`.
+                                usize::try_from(n).map_err(|_| VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: shift count ({n}) does not fit in usize"
+                                    ),
+                                })
+                            }
                         }
-                    } else {
-                        let rb = self
-                            .value_as_bigint_cow(r)
-                            .unwrap_or_else(|| verifier_unreachable!());
-                        if rb.sign() == num_bigint::Sign::Minus {
-                            Err(VmPanic::NegativeBitShift {
-                                message: format!("bigint shl: negative shift count ({rb})"),
-                            })
-                        } else {
-                            usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
-                                message: format!(
-                                    "bigint shl: shift count ({rb}) does not fit in usize"
-                                ),
-                            })
+                        BigintOperand::Heap(_) => {
+                            let rb = self.bigint_operand(r);
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shl: negative shift count ({rb})"),
+                                })
+                            } else {
+                                usize::try_from(rb.as_ref()).map_err(|_| VmPanic::AllocFailure {
+                                    message: format!(
+                                        "bigint shl: shift count ({rb}) does not fit in usize"
+                                    ),
+                                })
+                            }
                         }
                     };
                     match shift {
                         Err(panic) => Err(panic),
                         Ok(shift) => {
-                            let lb = self
-                                .value_as_bigint_cow(l)
-                                .unwrap_or_else(|| verifier_unreachable!());
+                            let lb = self.bigint_operand(l);
                             let estimated_bits = lb.bits().saturating_add(shift as u64);
                             if estimated_bits > crate::package_baml::bigint::MAX_BIGINT_BITS {
                                 Err(VmPanic::AllocFailure {
@@ -4470,24 +4477,25 @@ impl BexVm {
                     // Reject negative shift counts as `baml.panics.NegativeBitShift`
                     // (mirrors `Shl`). Non-negative counts that don't fit in a
                     // `usize` saturate to `0n`/`-1n` below.
-                    let shift_opt: Result<Option<usize>, VmPanic> = if let Some(n) = r.as_int() {
-                        if n < 0 {
-                            Err(VmPanic::NegativeBitShift {
-                                message: format!("bigint shr: negative shift count ({n})"),
-                            })
-                        } else {
-                            Ok(usize::try_from(n).ok())
+                    let shift_opt: Result<Option<usize>, VmPanic> = match r {
+                        BigintOperand::Int(n) => {
+                            if n < 0 {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shr: negative shift count ({n})"),
+                                })
+                            } else {
+                                Ok(usize::try_from(n).ok())
+                            }
                         }
-                    } else {
-                        let rb = self
-                            .value_as_bigint_cow(r)
-                            .unwrap_or_else(|| verifier_unreachable!());
-                        if rb.sign() == num_bigint::Sign::Minus {
-                            Err(VmPanic::NegativeBitShift {
-                                message: format!("bigint shr: negative shift count ({rb})"),
-                            })
-                        } else {
-                            Ok(usize::try_from(rb.as_ref()).ok())
+                        BigintOperand::Heap(_) => {
+                            let rb = self.bigint_operand(r);
+                            if rb.sign() == num_bigint::Sign::Minus {
+                                Err(VmPanic::NegativeBitShift {
+                                    message: format!("bigint shr: negative shift count ({rb})"),
+                                })
+                            } else {
+                                Ok(usize::try_from(rb.as_ref()).ok())
+                            }
                         }
                     };
                     match shift_opt {
@@ -4499,9 +4507,7 @@ impl BexVm {
                             // arithmetic right shift (rounds toward -∞), so
                             // positives saturate to 0 and negatives to -1 —
                             // matching `i*::shr`.
-                            let lb = self
-                                .value_as_bigint_cow(l)
-                                .unwrap_or_else(|| verifier_unreachable!());
+                            let lb = self.bigint_operand(l);
                             Ok(match shift_opt {
                                 Some(shift) => &*lb >> shift,
                                 None if lb.sign() == num_bigint::Sign::Minus => {
@@ -7633,14 +7639,14 @@ impl BexVm {
                 }
             };
             Value::object(self.alloc_float(f))
-        } else if self.value_as_bigint_cow(left).is_some()
-            && self.value_as_bigint_cow(right).is_some()
+        } else if let Some(l) = self.bigint_operand_of(left)
+            && let Some(r) = self.bigint_operand_of(right)
         {
             // Spawn-shared operands intentionally use generic opcodes because
             // another task may update the cell between evaluations. Preserve
             // bigint semantics on that path instead of falling through to the
             // object/object string-concatenation case.
-            self.bigint_binop(op, left, right)?
+            self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;
@@ -10161,62 +10167,62 @@ impl BexVm {
 
                 // ── Specialized bigint arithmetic (skip type dispatch) ────────
                 OpCode::AddBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Add, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::SubBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Sub, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::MulBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Mul, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::DivBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Div, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::ModBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Mod, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::BitAndBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::BitOrBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::BitOr, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::BitXorBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::BitXor, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::ShlBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Shl, l, r)?;
                     self.stack.push(value);
                 }
                 OpCode::ShrBigint => {
-                    let r = self.stack.ensure_pop();
-                    let l = self.stack.ensure_pop();
+                    let r = self.pop_bigint_operand();
+                    let l = self.pop_bigint_operand();
                     let value = self.bigint_binop(BinOp::Shr, l, r)?;
                     self.stack.push(value);
                 }
