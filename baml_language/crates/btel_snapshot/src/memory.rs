@@ -107,21 +107,8 @@ fn type_bytes(root: &OwnedType) -> Option<usize> {
             TypeAlias, Uint8Array, Union, Unknown, Void,
         };
         match ty {
-            Int { .. }
-            | Bigint { .. }
-            | Float { .. }
-            | String { .. }
-            | Bool { .. }
-            | Null { .. }
-            | Uint8Array { .. }
-            | Media(..)
-            | RustType { .. }
-            | Type { .. }
-            | Resource { .. }
-            | PromptAst { .. }
-            | Void { .. }
-            | Unknown { .. }
-            | Never { .. } => {}
+            Int | Bigint | Float | String | Bool | Null | Uint8Array | Media(..) | RustType
+            | Type | Resource | PromptAst | Void | Unknown | Never => {}
             Literal(literal, ..) => {
                 bytes = bytes.checked_add(match literal {
                     baml_type::Literal::Bigint(_) => return None,
@@ -131,21 +118,21 @@ fn type_bytes(root: &OwnedType) -> Option<usize> {
                     baml_type::Literal::Int(_) | baml_type::Literal::Bool(_) => 0,
                 })?;
             }
-            Enum(identity, _) | TypeAlias(identity, _) => {
+            Enum(identity) | TypeAlias(identity) => {
                 bytes = bytes.checked_add(identity_bytes(identity)?)?;
             }
-            EnumVariant(identity, name, _) => {
+            EnumVariant(identity, name) => {
                 bytes = bytes
                     .checked_add(identity_bytes(identity)?)?
                     .checked_add(name_bytes(name)?)?;
             }
-            Class(identity, args, _) => {
+            Class(identity, args) => {
                 bytes = bytes
                     .checked_add(identity_bytes(identity)?)?
                     .checked_add(args.len().checked_mul(size_of::<OwnedType>())?)?;
                 pending.extend(args.iter());
             }
-            Interface(identity, args, bindings, _) => {
+            Interface(identity, args, bindings) => {
                 bytes = bytes
                     .checked_add(identity_bytes(identity)?)?
                     .checked_add(args.len().checked_mul(size_of::<OwnedType>())?)?
@@ -156,11 +143,11 @@ fn type_bytes(root: &OwnedType) -> Option<usize> {
                     pending.push(ty);
                 }
             }
-            Union(args, _) => {
+            Union(args) => {
                 bytes = bytes.checked_add(args.len().checked_mul(size_of::<OwnedType>())?)?;
                 pending.extend(args.iter());
             }
-            List(inner, _) => {
+            List(inner) => {
                 bytes = bytes.checked_add(size_of::<OwnedType>())?;
                 pending.push(inner);
             }
@@ -169,7 +156,7 @@ fn type_bytes(root: &OwnedType) -> Option<usize> {
                 value: right,
                 ..
             }
-            | Future(left, right, _) => {
+            | Future(left, right) => {
                 bytes = bytes.checked_add(2usize.checked_mul(size_of::<OwnedType>())?)?;
                 pending.extend([left.as_ref(), right.as_ref()]);
             }
@@ -258,7 +245,6 @@ mod tests {
         let literal = OwnedType::Literal(
             baml_type::Literal::Bigint(num_bigint::BigInt::from(0)),
             baml_type::Freshness::Regular,
-            baml_type::TyAttr::default(),
         );
         assert!(type_bytes(&OwnedType::list(literal)).is_none());
     }
@@ -271,7 +257,6 @@ mod tests {
         let ty = OwnedType::list(OwnedType::Literal(
             baml_type::Literal::String(value),
             baml_type::Freshness::Regular,
-            baml_type::TyAttr::default(),
         ));
         assert_eq!(type_bytes(&ty), Some(size_of::<OwnedType>() + capacity));
     }

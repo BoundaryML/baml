@@ -444,3 +444,31 @@ test "selfless_member_through_the_type_carries_the_whole_frame" {
     let stamp: (int) -> string throws never = (Plate<int> as Embosser).emboss
     assert.equal(stamp(7), "emboss int")
 }
+
+// The turbofish VALUE form of an interface item: the written arguments ride
+// the same type-keyed callable the bare reference is — an interface item has
+// no global of its own to pool.
+interface Labeler {
+    function label_as<T>(self, tag: T) -> string throws never
+}
+
+class Parcel {
+    name string
+
+    implements Labeler {
+        function label_as<T>(self, tag: T) -> string throws never {
+            if reflect.Type.of<T>() == reflect.Type.of<int>() {
+                self.name + ":int"
+            } else {
+                self.name + ":other"
+            }
+        }
+    }
+}
+
+test "turbofish_value_of_an_interface_item" {
+    let f = Parcel.label_as<int>
+    assert.equal(f(Parcel { name: "c" }, 1), "c:int")
+    let g = Parcel.label_as<string>
+    assert.equal(g(Parcel { name: "d" }, "x"), "d:other")
+}

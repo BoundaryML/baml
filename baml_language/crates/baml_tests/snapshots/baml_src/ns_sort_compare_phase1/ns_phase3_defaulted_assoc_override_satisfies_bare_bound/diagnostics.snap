@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: sort_compare_phase1.phase3_defaulted_assoc_override_satisfies_bare_bound.BoomD
+    ╭─[phase3_defaulted_assoc_override_satisfies_bare_bound.baml:26:76]
+ 26 │ ╭─▶         function comp(self, other: Self) -> baml.ops.Ordering throws BoomD {
+ 27 │ │               return baml.ops.Ordering.Equal;
+ 28 │ ╰─▶         }
+    ╰────

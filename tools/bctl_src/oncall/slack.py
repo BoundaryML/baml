@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 from typing import Any
 
@@ -26,11 +27,40 @@ def post(
     text: str,
     *,
     blocks: list[dict[str, Any]] | None = None,
-) -> None:
-    wc.chat_postMessage(
+) -> str:
+    """Post a message and return its Slack timestamp for threaded replies."""
+    response = wc.chat_postMessage(
         channel=channel,
         text=text,
         blocks=blocks,
+        unfurl_links=False,
+        unfurl_media=False,
+    )
+    return response["ts"]
+
+
+def schedule(
+    wc: WebClient,
+    channel: str,
+    text: str,
+    post_at: datetime.datetime,
+    *,
+    blocks: list[dict[str, Any]] | None = None,
+    thread_ts: str | None = None,
+) -> None:
+    """Schedule a message for later delivery via chat.scheduleMessage.
+
+    Slack requires `post_at` to be in the future and within 120 days. Pass the
+    parent message's timestamp as `thread_ts` to schedule a threaded reply.
+    """
+    if post_at.tzinfo is None:
+        raise ValueError("post_at must be timezone-aware")
+    wc.chat_scheduleMessage(
+        channel=channel,
+        post_at=int(post_at.timestamp()),
+        text=text,
+        blocks=blocks,
+        thread_ts=thread_ts,
         unfurl_links=False,
         unfurl_media=False,
     )

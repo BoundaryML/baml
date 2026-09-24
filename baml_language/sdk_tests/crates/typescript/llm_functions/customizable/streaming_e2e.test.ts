@@ -6,8 +6,8 @@
 // StreamAccumulator → SAP → Stream.next()/final() path is exercised with **no
 // `OPENAI_API_KEY`**.
 //
-//   stream_e2e_extract$stream(text)     -> Stream<string | null, string>
-//   stream_e2e_extract_doc$stream(text) -> Stream<StreamingDoc$stream | null, StreamingDoc>
+//   stream_e2e_extract$stream(text)     -> Stream<string, string>
+//   stream_e2e_extract_doc$stream(text) -> Stream<StreamingDoc, StreamingDoc>
 //
 // The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
 // before `Done` (asserted below); finals are checked for type, not
@@ -33,7 +33,7 @@ if (isTestRuntime("node")) {
 
 const T = 30_000;
 
-// The replay harness owns a local node:http listener. Web HTTP streaming is deliberately unsupported; browser/workerd tagged-handle selection, cloning, and prompt failure live in bridge_typescript_web/tests/typemap_builtins.test.ts, while generated stream-companion shapes run everywhere in type_shapes/roundtrip_streams.test.ts.
+// The replay harness owns a local node:http listener. Web HTTP streaming is deliberately unsupported; browser/workerd tagged-handle selection, cloning, and prompt failure live in bridge_typescript_web/tests/typemap_builtins.test.ts.
 describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => {
   it(
     "streaming_e2e_next_yields_10_partials_and_drains_to_stream_finished",
@@ -47,7 +47,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
         const v: unknown = stream.next();
         if (v instanceof Done) break;
         results += 1;
-        expect(v === null || typeof v === "string").toBe(true);
+        expect(typeof v).toBe("string");
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
@@ -67,7 +67,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
         const v: unknown = await stream.nextAsync();
         if (v instanceof Done) break;
         results += 1;
-        expect(v === null || typeof v === "string").toBe(true);
+        expect(typeof v).toBe("string");
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
@@ -83,7 +83,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — string-typed T", () => 
       expect(result).toBeInstanceOf(lorem.StreamE2ECollectResult);
       expect(result.next_calls.length).toBeGreaterThanOrEqual(10);
       for (const item of result.next_calls) {
-        expect(item === null || typeof item === "string").toBe(true);
+        expect(typeof item).toBe("string");
       }
       expect(typeof result.final_call).toBe("string");
     }),
@@ -104,7 +104,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
         const v: unknown = stream.next();
         if (v instanceof Done) break;
         results += 1;
-        if (v !== null) expect(v).toHaveProperty("title");
+        expect(v).toBeInstanceOf(lorem.StreamingDoc);
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);
@@ -124,7 +124,7 @@ describe.runIf(isTestRuntime("node"))("streaming e2e — class-typed T", () => {
         const v: unknown = await stream.nextAsync();
         if (v instanceof Done) break;
         results += 1;
-        if (v !== null) expect(v).toHaveProperty("title");
+        expect(v).toBeInstanceOf(lorem.StreamingDoc);
         expect(results).toBeLessThan(10_000);
       }
       expect(results).toBeGreaterThanOrEqual(10);

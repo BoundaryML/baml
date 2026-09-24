@@ -432,9 +432,7 @@ pub(crate) mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            return_type: bex_vm_types::TyTemplate::Int {
-                attr: baml_type::TyAttr::default(),
-            },
+            return_type: bex_vm_types::TyTemplate::Int,
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
@@ -442,9 +440,7 @@ pub(crate) mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "int".to_string(),
-            throws_type: bex_vm_types::TyTemplate::Never {
-                attr: baml_type::TyAttr::default(),
-            },
+            throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
             is_interface_body: false,
             native_key: None,
@@ -962,8 +958,8 @@ pub(crate) mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
+            stream_done: false,
             type_tag: tag,
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: HeapPtr::null(),
@@ -971,7 +967,6 @@ pub(crate) mod tests {
         let bound = TypeValue::new(bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
-            baml_type::TyAttr::default(),
         ));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
@@ -1027,8 +1022,8 @@ pub(crate) mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
+            stream_done: false,
             type_tag: tag,
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: HeapPtr::null(),
@@ -1039,7 +1034,6 @@ pub(crate) mod tests {
         frame.type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
-            baml_type::TyAttr::default(),
         )];
         assert!(frame.type_metadata.is_none());
 
@@ -1084,8 +1078,8 @@ pub(crate) mod tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
+            stream_done: false,
             type_tag: tag,
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: HeapPtr::null(),
@@ -1093,7 +1087,6 @@ pub(crate) mod tests {
         vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
-            baml_type::TyAttr::default(),
         )];
 
         let mut roots = Vec::new();
@@ -1134,11 +1127,7 @@ pub(crate) mod tests {
             definition_ptr,
             baml_type::typetag::TypeTag::fresh_dynamic(),
         );
-        let exact = TypeValue::new(bex_vm_types::RealizedTy::Class(
-            head,
-            Box::new([]),
-            baml_type::TyAttr::default(),
-        ));
+        let exact = TypeValue::new(bex_vm_types::RealizedTy::Class(head, Box::new([])));
 
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
@@ -1763,7 +1752,7 @@ fn function_object_ty<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHea
     type_args: &[bex_vm_types::RealizedTy],
     drop_receiver: bool,
 ) -> Result<bex_vm_types::ConcreteRealizedTy, VmInternalError> {
-    use baml_type::{FunctionParamMode, TyAttr};
+    use baml_type::FunctionParamMode;
     use bex_vm_types::{ConcreteRealizedTy, RealizedFunctionParamTy};
 
     // `type_args` may legitimately be SHORTER than the declared arity: an
@@ -1802,7 +1791,6 @@ fn function_object_ty<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHea
         params: params.into(),
         ret: Box::new(materialize(&f.return_type)?),
         throws: Box::new(materialize(&f.throws_type)?),
-        attr: TyAttr::default(),
     })
 }
 
@@ -3018,9 +3006,9 @@ impl BexVm {
     /// replacing it: impl-registry dispatch keys on that one, and `implement I
     /// for int` must resolve for every int, not for the singleton `1`.
     pub(crate) fn value_singleton_ty(&self, value: Value) -> Option<bex_vm_types::RealizedTy> {
-        use baml_type::{Freshness, TyAttr};
+        use baml_type::Freshness;
         use bex_vm_types::RealizedTy;
-        let literal = |lit| RealizedTy::Literal(lit, Freshness::Regular, TyAttr::default());
+        let literal = |lit| RealizedTy::Literal(lit, Freshness::Regular);
         if let Some(n) = value.as_int() {
             return Some(literal(baml_type::Literal::Int(n)));
         }
@@ -3147,7 +3135,7 @@ impl BexVm {
             let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
             match self.get_object(iface_ptr) {
                 Object::Type(type_value) => match &type_value.ty {
-                    bex_vm_types::RealizedTy::Interface(head, args, _assoc, _attr) => {
+                    bex_vm_types::RealizedTy::Interface(head, args, _assoc) => {
                         (*head, args.clone())
                     }
                     other => unreachable!(
@@ -3201,36 +3189,21 @@ impl BexVm {
         &self,
         value: Value,
     ) -> Option<bex_vm_types::ConcreteRealizedTy> {
-        use baml_type::TyAttr;
         use bex_vm_types::ConcreteRealizedTy;
         if value.as_int().is_some() {
-            return Some(ConcreteRealizedTy::Int {
-                attr: TyAttr::default(),
-            });
+            return Some(ConcreteRealizedTy::Int);
         }
         if value.as_bool().is_some() {
-            return Some(ConcreteRealizedTy::Bool {
-                attr: TyAttr::default(),
-            });
+            return Some(ConcreteRealizedTy::Bool);
         }
         if value.is_null() {
-            return Some(ConcreteRealizedTy::Null {
-                attr: TyAttr::default(),
-            });
+            return Some(ConcreteRealizedTy::Null);
         }
         Some(match self.get_object(value.as_object_ptr()?) {
-            Object::Float(_) => ConcreteRealizedTy::Float {
-                attr: TyAttr::default(),
-            },
-            Object::Bigint(_) => ConcreteRealizedTy::Bigint {
-                attr: TyAttr::default(),
-            },
-            Object::String(_) => ConcreteRealizedTy::String {
-                attr: TyAttr::default(),
-            },
-            Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array {
-                attr: TyAttr::default(),
-            },
+            Object::Float(_) => ConcreteRealizedTy::Float,
+            Object::Bigint(_) => ConcreteRealizedTy::Bigint,
+            Object::String(_) => ConcreteRealizedTy::String,
+            Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array,
             Object::Instance(inst) => match self.get_object(inst.class) {
                 Object::Class(class) => {
                     // Media values are `Object::Instance`s of the std media classes
@@ -3241,7 +3214,7 @@ impl BexVm {
                     if let Some(kind) = crate::package_baml::json::media_kind_from_fqn(
                         class.name.display_name().as_str(),
                     ) {
-                        ConcreteRealizedTy::Media(kind, TyAttr::default())
+                        ConcreteRealizedTy::Media(kind)
                     } else {
                         debug_assert_eq!(inst.class_type_args.len(), class.generic_param_count);
                         // A generic instance's stored `class_type_args` are already
@@ -3250,7 +3223,6 @@ impl BexVm {
                         ConcreteRealizedTy::Class(
                             bex_vm_types::TypeHead::new(inst.class, class.type_tag),
                             inst.class_type_args.clone(),
-                            TyAttr::default(),
                         )
                     }
                 }
@@ -3260,10 +3232,9 @@ impl BexVm {
                 ),
             },
             Object::Variant(v) => match self.get_object(v.enm) {
-                Object::Enum(e) => ConcreteRealizedTy::Enum(
-                    bex_vm_types::TypeHead::new(v.enm, e.type_tag),
-                    TyAttr::default(),
-                ),
+                Object::Enum(e) => {
+                    ConcreteRealizedTy::Enum(bex_vm_types::TypeHead::new(v.enm, e.type_tag))
+                }
                 other => unreachable!(
                     "Variant.enm must point to an Enum, found {:?}",
                     ObjectType::of(other)
@@ -3273,18 +3244,13 @@ impl BexVm {
             // itself. The nine kind views are ordinary wrapper classes whose
             // instances take the `Object::Instance` arm above; nothing about a
             // type value's membership depends on classifying its payload.
-            Object::Type(_) => ConcreteRealizedTy::Type {
-                attr: TyAttr::default(),
-            },
+            Object::Type(_) => ConcreteRealizedTy::Type,
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
-            Object::Array(arr) => {
-                ConcreteRealizedTy::List(Box::new((*arr.element_ty).clone()), TyAttr::default())
-            }
+            Object::Array(arr) => ConcreteRealizedTy::List(Box::new((*arr.element_ty).clone())),
             Object::Map(map) => ConcreteRealizedTy::Map {
                 key: Box::new((*map.key_ty).clone()),
                 value: Box::new((*map.value_ty).clone()),
-                attr: TyAttr::default(),
             },
             // A cell is a transparent capture/mutable-binding slot, not a value
             // of its own: its concrete type is that of the value it holds.
@@ -3322,7 +3288,6 @@ impl BexVm {
                 params: (*hc.params).clone().into(),
                 ret: Box::new((*hc.ret_ty).clone()),
                 throws: Box::new((*hc.throws_ty).clone()),
-                attr: TyAttr::default(),
             },
             // A bound method's type is its function's type with the receiver
             // already applied, so the leading `self` parameter drops. Its
@@ -3357,7 +3322,6 @@ impl BexVm {
             Object::Future(fut) => ConcreteRealizedTy::Future(
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
-                TyAttr::default(),
             ),
             // An `UnscheduledFuture` is the engine's spawn-request slot, consumed
             // before control returns to the VM. It is never a value user code can
@@ -3427,7 +3391,7 @@ impl BexVm {
             unreachable!("as_object_ptr(Type) guarantees a Type object")
         };
         let (interface_head, interface_args) = match &type_value.ty {
-            bex_vm_types::RealizedTy::Interface(head, args, _, _) => (*head, args.clone()),
+            bex_vm_types::RealizedTy::Interface(head, args, _) => (*head, args.clone()),
             other => unreachable!(
                 "VirtualCall interface operand must be an Interface type, found {other:?}"
             ),
@@ -4871,7 +4835,7 @@ impl BexVm {
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
         match self.get_object(iface_ptr) {
             Object::Type(type_value) => match &type_value.ty {
-                bex_vm_types::RealizedTy::Interface(head, args, _assoc, _attr) => {
+                bex_vm_types::RealizedTy::Interface(head, args, _assoc) => {
                     Ok((*head, args.clone()))
                 }
                 other => unreachable!(
@@ -7876,7 +7840,7 @@ impl BexVm {
                                 unreachable!("as_object_ptr(Type) guarantees a Type object")
                             };
                             let (interface_head, interface_args) = match &type_value.ty {
-                                bex_vm_types::RealizedTy::Interface(head, args, _, _) => {
+                                bex_vm_types::RealizedTy::Interface(head, args, _) => {
                                     (*head, args.clone())
                                 }
                                 other => unreachable!(
@@ -7916,12 +7880,9 @@ impl BexVm {
                                     // instantiations. Associated types are outputs,
                                     // not part of the resolver key.
                                     Object::Type(type_value) => match &type_value.ty {
-                                        bex_vm_types::RealizedTy::Interface(
-                                            qtn,
-                                            args,
-                                            _assoc,
-                                            _attr,
-                                        ) => (*qtn, args.clone()),
+                                        bex_vm_types::RealizedTy::Interface(qtn, args, _assoc) => {
+                                            (*qtn, args.clone())
+                                        }
                                         other => unreachable!(
                                             "VirtualCall interface operand must be an Interface type, found {other:?}"
                                         ),

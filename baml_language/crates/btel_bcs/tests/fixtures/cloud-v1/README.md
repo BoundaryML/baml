@@ -1,5 +1,9 @@
 # Cloud v1 contract fixtures
 
+The cloud envelope, protobuf package, and JSON protocol remain v1. Embedded
+snapshots use CAS blob format v2 and snapshot hash domain v2; `cloud-v1` names
+the outer protocol, not the embedded CAS version.
+
 Proposed client contract examples for sharing with BCS. **Not yet approved by
 BCS.** These are independent scenarios, not successive requests in one recording.
 They deliberately reuse a fixed recording ID and file sequence.
@@ -42,9 +46,9 @@ delivery drains, including expiration and all-skip.
 
 ## Sources and provenance
 
-`sources/manifest.json` freezes the initial existing encodings, not invented CAS
-bytes: five `SnapshotPool` scalar integer values 10 through 14, their existing
-SnapshotIds, CAS v1 blobs, lengths, and SHA-256s. `golden_uploads.rs` constructs
+`sources/manifest.json` freezes real source encodings, not invented CAS
+bytes: five `SnapshotPool` scalar integer values 10 through 14, their v2
+SnapshotIds, CAS v2 blobs, lengths, and SHA-256s. `golden_uploads.rs` constructs
 these structured owners again and compares the exact source encodings.
 
 Recordings were initially sealed by the real `RecordingBuilder`, with recording
@@ -75,6 +79,14 @@ separately as fixed tables. Expected envelope bytes were generated using vendore
 against `proto/cloud.proto`, supplying the frozen recording/CAS bytes and authored
 plan/upload IDs. They were also decoded using that schema. No production cloud
 envelope encoder or incoming HTTP request produced the expected envelopes.
+
+The CAS v2 refresh used the manual source-inspection command below to reseal the
+same recording identities and scalar values with v2 snapshot IDs. Prepare
+metadata and embedded blob headers now advertise v2. Envelopes were regenerated
+independently with the same vendored `protoc`, then decoded and re-encoded for
+byte equality. Source and envelope SHA-256s changed; all byte lengths remained
+unchanged. Server response plans, dispositions, placement, and headers did not
+change. The zero-candidate recording and its envelope remain byte-identical.
 
 Tests independently check envelope version, IDs, ordered membership, recording
 presence and exact source bytes, CAS format version and exact blob bytes, each
@@ -108,13 +120,13 @@ protobuf content type.
 From `baml_language`:
 
 ```sh
-cargo +1.98.0 test -p btel_bcs --test golden_uploads
+cargo +1.98.0 test --locked -p btel_bcs --test golden_uploads
 ```
 
 To inspect current source encodings without overwriting any golden:
 
 ```sh
-cargo +1.98.0 test -p btel_bcs --test golden_uploads \
+cargo +1.98.0 test --locked -p btel_bcs --test golden_uploads \
   print_source_encodings -- --ignored --nocapture
 ```
 

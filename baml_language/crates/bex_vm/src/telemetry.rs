@@ -1119,9 +1119,7 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            return_type: bex_vm_types::TyTemplate::Null {
-                attr: baml_type::TyAttr::default(),
-            },
+            return_type: bex_vm_types::TyTemplate::Null,
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
@@ -1129,9 +1127,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: bex_vm_types::TyTemplate::Never {
-                attr: baml_type::TyAttr::default(),
-            },
+            throws_type: bex_vm_types::TyTemplate::Never,
             origin: bex_vm_types::FunctionOrigin::Internal,
             is_interface_body: false,
             native_key: None,

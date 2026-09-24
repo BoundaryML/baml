@@ -52,8 +52,12 @@ content within the authorized organization, not merely an existing S3 object.
 
 Each surviving target is an ordinary HTTP PUT containing a
 `btel.cloud.v1.CloudUploadEnvelope` from `proto/cloud.proto`, format version 1.
-It embeds the exact recording bytes and the canonical CAS v1 blobs. The blob
+It embeds the exact recording bytes and the canonical CAS v2 blobs. The blob
 SHA-256 is an integrity check separate from the snapshot identity.
+
+Snapshot/hash format v2 uses the attribute-free type representation introduced
+by BEP-075. BCS must decode version 2; old v1 CAS objects remain a separate
+namespace and are not reused as v2 content. The upload envelope remains v1.
 
 Only prepare requests receive the BCS bearer credential. Upload requests use the
 returned URL and required headers; redirects are not followed. URLs and headers

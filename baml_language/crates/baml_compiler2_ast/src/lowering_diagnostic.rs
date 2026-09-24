@@ -115,11 +115,6 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A field attribute (`@alias`, `@description`, `@skip`) appeared in a type
-    /// expression where only type attributes are valid (e.g. inside parens, on a
-    /// non-final union member, or in a function signature).
-    FieldAttributeInTypePosition { attr_name: String, span: TextRange },
-
     /// A byte string literal contains an invalid escape sequence.
     InvalidByteStringEscape { message: String, span: TextRange },
 
@@ -476,16 +471,6 @@ impl LoweringDiagnostic {
                 error.to_string(),
                 *span,
                 "missing options",
-            ),
-            LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span } => (
-                DiagnosticId::FieldAttributeInTypePosition,
-                Severity::Error,
-                format!(
-                    "`@{attr_name}` is only allowed on class fields and enum variants; \
-                     remove it here"
-                ),
-                *span,
-                "field attribute here",
             ),
             LoweringDiagnostic::InvalidByteStringEscape { message, span } => (
                 DiagnosticId::InvalidByteStringEscape,

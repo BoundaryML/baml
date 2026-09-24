@@ -169,10 +169,9 @@ function LlmMixedConfigs(
     llm_cfg.model
 }
 
-// ── Stream companion types ──────────────────────────────────────
-// Classes with cross-namespace field types.
-// The $stream companions must resolve all field types, including
-// types from root and sibling namespaces.
+// ── Cross-namespace field types ─────────────────────────────────
+// Classes with cross-namespace field types, including types from root and
+// sibling namespaces.
 
 // llm class with fields from root and sibling namespaces
 class LlmWithCrossNsFields {

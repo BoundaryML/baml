@@ -54,19 +54,17 @@ where
     /// `[(value, count)]`
     StrMatchOneFromMany(Vec<(Cow<'t, str>, usize)>),
 
-    /// When a field is missing (in complete objects) or not yet started (in incomplete objects)
-    /// and has been filled with a default value.
-    ///
-    /// The value used is either [`crate::sap_model::AnnotatedField::class_in_progress_field_missing`]
-    /// or [`crate::sap_model::AnnotatedField::class_completed_field_missing`].
+    /// A complete object omitted a required-but-defaultable field (an array or map) and it was
+    /// filled with [`crate::sap_model::TypeRefDb::missing_default`].
     DefaultFromNoValue,
-    /// When a value is incomplete and the [`crate::sap_model::TypeAnnotations::in_progress`] is set.
-    /// The type of `in_progress` should match the expected type.
+    /// A field's value is incomplete and has no partial parse (its type has none, or the field
+    /// is `@stream.done`), so it holds [`crate::sap_model::TypeRefDb::field_default`] instead.
     ///
     /// Includes the partial value that was present in the input.
-    /// Implies [`Flag::Incomplete`].
     DefaultFromInProgress(Cow<'v, crate::jsonish::Value<'s>>),
+    /// A value that is not `null` was accepted as `null`.
     DefaultButHadValue(Cow<'v, crate::jsonish::Value<'s>>),
+    /// A complete object omitted a nullable field and it was filled with `null`.
     OptionalDefaultFromNoValue,
 
     /// `int` value was converted from a parsed string value
@@ -105,6 +103,8 @@ where
 
     /// Completion state for the top-level node of the value is Incomplete.
     Incomplete,
+    /// An incomplete object has not reached this field yet; it holds
+    /// [`crate::sap_model::TypeRefDb::field_default`].
     Pending,
 }
 
@@ -151,7 +151,7 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
                 write!(f, "Default value")?;
             }
             Flag::DefaultFromInProgress(value) => {
-                write!(f, "Default value from in_progress: {}", value.r#type())?;
+                write!(f, "Default value for incomplete: {}", value.r#type())?;
             }
             Flag::ObjectFromFixedJson(fixes) => {
                 write!(f, "JSON (Fixed {} mistakes)", fixes.len())?;

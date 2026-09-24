@@ -14,7 +14,6 @@ baml_codegen_types = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_hir_ty = { workspace = true }
-baml_compiler2_ppir = { workspace = true }
 baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
@@ -31,4 +30,5 @@ serde_json = { workspace = true }
 text-size = { workspace = true }
 
 [dev-dependencies]
+baml_artifact = { workspace = true }
 insta = { workspace = true }

@@ -1,4 +1,4 @@
-//! Stable tag assignments for CAS blob format 1 and snapshot hash format 1.
+//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 and 2.
 //! Changing an assignment requires a format version change.
 
 use crate::{Description, Limit};

@@ -123,7 +123,12 @@ fn selected_project_uses_its_skill() {
     .unwrap();
 
     let output = run_as_detected_agent(
-        &["check", "--project", project.path().to_str().unwrap()],
+        &[
+            "fmt",
+            "--dry-run",
+            "--project",
+            project.path().to_str().unwrap(),
+        ],
         cwd.path(),
     );
 

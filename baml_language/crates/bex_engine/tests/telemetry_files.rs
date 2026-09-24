@@ -298,7 +298,7 @@ fn assert_cas_blob(project: &std::path::Path, id: proto::SnapshotId) {
         write!(&mut name, "{byte:02x}").unwrap();
     }
     let path = project
-        .join(".baml/btel/cas/v1")
+        .join(".baml/btel/cas/v2")
         .join(&name[..2])
         .join(&name[2..4])
         .join(&name[4..6])

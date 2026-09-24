@@ -163,11 +163,11 @@ corpus (see Testing below). The reference architecture is rust-analyzer's
 ## Principles
 
 1. Layering mirrors rust-analyzer (`hir-def -> hir-ty -> hir`). This crate
-   depends on ast/hir/ppir/baml_type and never on
+   depends on ast/hir/baml_type and never on
    tir/mir/emit.
 2. Leaf crate until cutover (S16). Until then its only consumer is the test
    harness in `baml_tests`, and every existing compiler snapshot stays
-   byte-identical. A slice that changes a `03_ppir`/`04_tir`/`04_5_mir`/
+   byte-identical. A slice that changes a `03_hir`/`04_tir`/`04_5_mir`/
    codegen snapshot has leaked.
 3. Slice-local correctness. Each slice's tests assert only what that slice
    implements. Constructs the engine does not handle yet infer to an error

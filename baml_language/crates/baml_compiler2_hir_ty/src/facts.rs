@@ -1,5 +1,5 @@
 //! The engine's fact oracle: a [`TypeContext`] implementation backed by
-//! ppir's item data, consulted by every subtype/equivalence/canonicalization
+//! HIR's item data, consulted by every subtype/equivalence/canonicalization
 //! query. Facts are FAIL-SAFE per the trait's contract: an unanswerable
 //! question returns the conservative answer, never a guess.
 //!
@@ -17,7 +17,7 @@ use baml_type::{
 };
 
 pub struct Facts<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     /// The current scope's param env (I2): each rigid variable's declared
     /// bound conjunction, as plain constraints (the trait's vocabulary).
     bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
@@ -29,7 +29,7 @@ pub struct Facts<'db> {
 }
 
 impl<'db> Facts<'db> {
-    pub fn new(db: &'db dyn baml_compiler2_ppir::Db) -> Facts<'db> {
+    pub fn new(db: &'db dyn baml_compiler2_hir::Db) -> Facts<'db> {
         Facts {
             db,
             bounds: rustc_hash::FxHashMap::default(),
@@ -39,7 +39,7 @@ impl<'db> Facts<'db> {
     }
 
     pub fn with_bounds(
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         bounds: rustc_hash::FxHashMap<ParamTy, Vec<Interface>>,
     ) -> Facts<'db> {
         Facts {
@@ -62,7 +62,7 @@ impl<'db> Facts<'db> {
     }
 
     /// Resolves a qualified name back to its definition through the owning
-    /// package's canonical (ppir) items.
+    /// package's canonical HIR items.
     pub fn definition_of(&self, name: &DeclName) -> Option<Definition<'db>> {
         definition_of(self.db, name)
     }
@@ -70,16 +70,29 @@ impl<'db> Facts<'db> {
 
 /// The source definition a qualified type name points at, if its package is
 /// served from source and declares the item.
+///
+/// A root served from its interface answers `None` outright: its files are
+/// link-only STUBS the runtime compile generates from the rows (bodies are
+/// `$rust_function`, signatures spell `unknown`, interfaces carry no bounds
+/// or defaults), never declarations. Its declarations are its ROWS, read
+/// through the `extern_loc` row reads — so every consumer sees one lane,
+/// whether or not stubs happen to be present. A stub file lowering its OWN
+/// bare names never comes through here: `lower_ctx_for_file` binds the
+/// file's package items directly (the mount as its own viewer).
 pub(crate) fn definition_of<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     name: &DeclName,
 ) -> Option<Definition<'db>> {
-    baml_compiler2_ppir::package_items(db, name.root()).lookup_type(name.namespace(), name.name())
+    if baml_compiler2_hir::package::is_served_from_interface(db, name.root()) {
+        return None;
+    }
+    baml_compiler2_hir::package::package_items(db, name.root())
+        .lookup_type(name.namespace(), name.name())
 }
 
 /// Resolves an alias without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
-pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_ppir::Db, name: &DeclName) -> Option<Ty> {
+pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_hir::Db, name: &DeclName) -> Option<Ty> {
     if let Some(Definition::TypeAlias(alias)) = definition_of(db, name) {
         return Some(crate::lower::type_alias_value(db, alias));
     }
@@ -94,12 +107,12 @@ pub(crate) fn uncached_alias_def(db: &dyn baml_compiler2_ppir::Db, name: &DeclNa
 /// Resolves enum variants without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
 pub(crate) fn uncached_enum_variants(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     name: &DeclName,
 ) -> Option<Vec<Name>> {
     if let Some(Definition::Enum(enum_loc)) = definition_of(db, name) {
         return Some(
-            baml_compiler2_ppir::item_data::enum_data(db, enum_loc)
+            baml_compiler2_hir::item_data::enum_data(db, enum_loc)
                 .variants
                 .iter()
                 .map(|variant| variant.name.clone())
@@ -174,10 +187,7 @@ impl TypeContext for Facts<'_> {
         // args with `Self` left symbolic (the trait's contract: the oracle
         // is a function of the reference, not an implementor) - rustc's
         // `explicit_item_bounds` instantiated.
-        let symbolic_self = Ty::TypeVar(
-            ParamTy::new(0, Name::new("Self")),
-            baml_type::TyAttr::default(),
-        );
+        let symbolic_self = Ty::TypeVar(ParamTy::new(0, Name::new("Self")));
         crate::impls::realized_assoc_bound_plain(self.db, interface, &symbolic_self, &assoc)
             .and_then(|bound| bound.as_interface())
             .map(|bound| {
@@ -242,7 +252,7 @@ impl TypeContext for Facts<'_> {
         }
         let target = InferInterface::from_constraint(interface);
         let eq = crate::impls::AliasOnlyFacts::new(self.db);
-        if let Ty::TypeVar(param, _) = base {
+        if let Ty::TypeVar(param) = base {
             let base_interned = crate::impls::interned_ty(base);
             let mut candidates: Vec<baml_type::interned::Ty> = Vec::new();
             for bound in self.type_var_bound(param) {
@@ -283,7 +293,7 @@ impl TypeContext for Facts<'_> {
                 _ => ProjectionStep::Opaque,
             };
         }
-        if let Ty::Interface(name, args, pins, _) = base {
+        if let Ty::Interface(name, args, pins) = base {
             if let Some((_, pin)) = pins.iter().find(|(pin_name, _)| pin_name == member) {
                 return ProjectionStep::Reduced(pin.clone());
             }

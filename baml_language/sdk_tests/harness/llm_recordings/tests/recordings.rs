@@ -7,7 +7,7 @@
 //!   * `<name>.snap` / `<name>.snap.sse` — the raw SSE response body, captured
 //!     once with `curl` against the real provider (the request is built via the
 //!     the fixture's recorder-only request helper, which delegates to the
-//!     same native-BAML provider lowering as `$stream`) and served verbatim
+//!     same native-BAML provider lowering as `@stream`) and served verbatim
 //!     by the BAML replay server.
 //!
 //! Whether the network is hit is decided **only by insta state**: a capture

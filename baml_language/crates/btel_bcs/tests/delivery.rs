@@ -363,6 +363,7 @@ async fn advisory_heartbeat_failure_does_not_interrupt_draining_uploads() {
     let mut session = None;
     let mut sequences = std::collections::HashSet::new();
     let mut heartbeat_count = 0;
+    let mut draining = false;
     for request in requests {
         if request.method == "PUT" {
             assert!(!request.headers.contains_key("authorization"));
@@ -378,7 +379,12 @@ async fn advisory_heartbeat_failure_does_not_interrupt_draining_uploads() {
         assert!(sequences.insert(body["liveness_sequence"].as_u64().unwrap()));
         if request.url.path().ends_with("/heartbeat") {
             heartbeat_count += 1;
-            assert_eq!(body["state"], "DRAINING");
+            // A heartbeat started before finish closes admission can still be RUNNING.
+            match body["state"].as_str() {
+                Some("RUNNING") => assert!(!draining, "heartbeat state regressed"),
+                Some("DRAINING") => draining = true,
+                state => panic!("unexpected heartbeat state: {state:?}"),
+            }
         }
     }
     assert!(heartbeat_count > 0);
@@ -529,7 +535,7 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
             (body.upload_id == "1-0").then_some(&recording_bytes)
         );
         for object in body.cas_objects {
-            assert_eq!(object.snapshot_format_version, 1);
+            assert_eq!(object.snapshot_format_version, 2);
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
             uploaded.push((object.snapshot_id, object.blob));
         }

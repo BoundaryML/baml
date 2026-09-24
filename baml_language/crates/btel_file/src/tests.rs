@@ -327,7 +327,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     assert_eq!(filename.len(), 32);
     assert_eq!(
         path,
-        cas.join("v1")
+        cas.join("v2")
             .join(&filename[..2])
             .join(&filename[2..4])
             .join(&filename[4..6])
@@ -354,6 +354,25 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
         modified,
         "existing CAS entry was reused"
     );
+}
+
+#[test]
+fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let value = snapshot(&pool, 42);
+    let path = cas_path(root.path(), value.id());
+    let legacy = root
+        .path()
+        .join("v1")
+        .join(path.strip_prefix(root.path().join("v2")).unwrap());
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&legacy, b"existing v1 entry").unwrap();
+    crate::cas::write_snapshot(root.path(), &value).unwrap();
+    let mut expected = Vec::new();
+    value.write_blob(&mut expected).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), expected);
+    assert_eq!(fs::read(&legacy).unwrap(), b"existing v1 entry");
 }
 
 #[test]
