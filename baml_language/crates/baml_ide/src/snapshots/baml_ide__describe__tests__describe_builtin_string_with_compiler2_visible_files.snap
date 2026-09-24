@@ -67,12 +67,6 @@ methods:
   function repeat(self, count: int) -> string throws never
   /// Replaces every occurrence of `search`.
   function replace_all(self, search: string | baml.regex.Regex, replacement: string) -> string throws never
-  /// `self` as the `string` primitive.
-  function _as_string(self) -> string throws never
-  /// `replace` restricted to a literal search and a literal replacement.
-  function _replace_literal(self, search: string, replacement: string) -> string throws never
-  /// `replace_all` restricted to a literal search and a literal replacement.
-  function _replace_all_literal(self, search: string, replacement: string) -> string throws never
   /// Returns true if every character is numeric per Unicode: general categories
   function is_numeric(self) -> bool throws never
   /// Returns true if every character has the Unicode `Alphabetic` property.

@@ -457,7 +457,7 @@ class String {
         root.regex._replace(self._as_string(), search, replacement, true)
     }
 
-    /// `self` as the `string` primitive.
+    /// (internal) `self` as the `string` primitive.
     ///
     /// Inside a `class String` body `self` is the class, not the primitive, so
     /// it cannot be handed to an API declared over `string` — `baml.regex`'s
@@ -468,13 +468,13 @@ class String {
         self.slice(0, self.length())
     }
 
-    /// `replace` restricted to a literal search and a literal replacement.
+    /// (internal) `replace` restricted to a literal search and a literal replacement.
     /// Called from `baml.regex._replace`, which owns the dispatch.
     function _replace_literal(self, search: string, replacement: string) -> string throws never {
         $rust_function
     }
 
-    /// `replace_all` restricted to a literal search and a literal replacement.
+    /// (internal) `replace_all` restricted to a literal search and a literal replacement.
     /// Called from `baml.regex._replace`, which owns the dispatch.
     function _replace_all_literal(
         self,
