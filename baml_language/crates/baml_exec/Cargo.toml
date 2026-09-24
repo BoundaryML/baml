@@ -27,6 +27,7 @@ clap = { workspace = true }
 console = { workspace = true }
 indexmap = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "time", "macros" ] }
 
 [dev-dependencies]
 baml_tests = { workspace = true }

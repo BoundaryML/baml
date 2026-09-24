@@ -76,9 +76,10 @@ Run output options:
           warn, info, debug, trace]
 
       --log-file <LOG_FILE>
-          Write CLI diagnostic logs to a file.
+          Write BAML `log.*` events to a file.
 
-          Unrelated to `--log`, which prints BAML `log.*` events to stdout.
+          Uses the terminal log threshold (default: info). With --log off, captures all levels and
+          disables terminal logs.
 
       --include-generated
           Include compiler-synthesized functions in `--list` output
