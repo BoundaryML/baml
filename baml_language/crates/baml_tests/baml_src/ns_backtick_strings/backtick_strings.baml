@@ -376,7 +376,8 @@ test "backtick_interp_class_without_to_string_renders_structurally" {
     assert.equal(bt_point_structural(), "p = Point { x: 1, y: 2 }")
 }
 
-// (K) Backtick string as a parameter's default value.
+// (K) Backtick string as a parameter's default value. Legacy-compatible
+// dedent treats single-line boundary spaces as layout.
 function bt_case_k_greet(name: string, prefix: string = `Hello, `) -> string {
     prefix + name
 }
@@ -386,7 +387,7 @@ function bt_case_k() -> string {
 }
 
 test "backtick_case_k_default_parameter_value" {
-    assert.equal(bt_case_k(), "Hello, world")
+    assert.equal(bt_case_k(), "Hello,world")
 }
 
 // (L) Backtick used as an expression-statement (value discarded).
@@ -975,14 +976,14 @@ test "backtick_keeps_repeated_trailing_escaped_newlines" {
     assert.equal(bt_keeps_repeated_trailing_escaped_newlines(), "LANG=C\n\n")
 }
 
-// `\n` and `\t` are two source characters each. Nothing may read them as
-// layout, so the literal spaces around them survive too.
+// `\n` and `\t` are two source characters each. They survive the raw-text
+// trim even though single-line boundary spaces are removed.
 function bt_escape_not_indentation() -> string {
     ` a\n b\t `
 }
 
 test "backtick_escape_does_not_look_like_indentation" {
-    assert.equal(bt_escape_not_indentation(), " a\n b\t ")
+    assert.equal(bt_escape_not_indentation(), "a\n b\t")
 }
 
 // The same escape on a literal that really is dedented: the shared indent goes,
@@ -998,8 +999,8 @@ test "backtick_multiline_keeps_trailing_escaped_newline" {
     assert.equal(bt_multiline_keeps_trailing_escaped_newline(), "line one\nline two\n")
 }
 
-// Only one line break belongs to the closing delimiter, so a blank line in
-// front of it is how you ask for a trailing newline without an escape.
+// Legacy-compatible dedent discards blank lines at the body boundary. Use an
+// authored `\n` escape when the runtime value needs a trailing newline.
 function bt_blank_line_before_closer() -> string {
     `
     line one
@@ -1007,6 +1008,6 @@ function bt_blank_line_before_closer() -> string {
     `
 }
 
-test "backtick_blank_line_before_closer_is_content" {
-    assert.equal(bt_blank_line_before_closer(), "line one\n")
+test "backtick_blank_line_before_closer_is_layout" {
+    assert.equal(bt_blank_line_before_closer(), "line one")
 }

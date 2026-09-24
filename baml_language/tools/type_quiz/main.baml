@@ -228,7 +228,7 @@ function read_back(transcript: root.engine.Transcript) -> string throws never {
             if (root.engine.agrees(outcome)) {
                 null
             } else {
-                `  ${exchange.question.item} (seed ${exchange.question.seed}): ${outcome}`
+                "  " + `${exchange.question.item} (seed ${exchange.question.seed}): ${outcome}`
             }
         })
     });
