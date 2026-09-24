@@ -1976,13 +1976,8 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
             ),
             None => format!("compile_error!(\"unknown type arg `{name}`\")"),
         },
-        BamlType::Media(kind) => format!(
-            "baml_type::RealizedTy::Media({}, baml_type::TyAttr::default())",
-            media_kind_path(kind)
-        ),
-        BamlType::RustType => {
-            "baml_type::RealizedTy::RustType { attr: baml_type::TyAttr::default() }".to_string()
-        }
+        BamlType::Media(kind) => format!("baml_type::RealizedTy::Media({})", media_kind_path(kind)),
+        BamlType::RustType => "baml_type::RealizedTy::RustType".to_string(),
         // `Named` is a lossy catch-all: the type parser discards a class's
         // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
         // unions/unresolved types through it (`Named("union")`,

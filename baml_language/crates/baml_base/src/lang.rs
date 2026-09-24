@@ -22,10 +22,13 @@ pub enum LangPackage {
     /// LLM functions and clients; the `client:` desugar and prompt lowering
     /// name its declarations.
     Ai,
+    /// The `log` package, whose `info`/`debug`/`warn`/`error` are the
+    /// compiler intrinsics MIR lowers to log statements.
+    Log,
 }
 
 impl LangPackage {
-    pub const ALL: [Self; 3] = [Self::Baml, Self::Reflect, Self::Ai];
+    pub const ALL: [Self; 4] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
     /// spelling the installer matches to find the root.
@@ -34,6 +37,7 @@ impl LangPackage {
             Self::Baml => "baml",
             Self::Reflect => "reflect",
             Self::Ai => "ai",
+            Self::Log => "log",
         }
     }
 }
@@ -46,6 +50,7 @@ pub struct LangRoots {
     baml: Option<SourceRoot>,
     reflect: Option<SourceRoot>,
     ai: Option<SourceRoot>,
+    log: Option<SourceRoot>,
 }
 
 impl LangRoots {
@@ -56,6 +61,7 @@ impl LangRoots {
             LangPackage::Baml => self.baml,
             LangPackage::Reflect => self.reflect,
             LangPackage::Ai => self.ai,
+            LangPackage::Log => self.log,
         }
     }
 
@@ -72,6 +78,7 @@ impl LangRoots {
             LangPackage::Baml => &mut self.baml,
             LangPackage::Reflect => &mut self.reflect,
             LangPackage::Ai => &mut self.ai,
+            LangPackage::Log => &mut self.log,
         };
         *slot = Some(root);
         self

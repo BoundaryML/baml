@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[to_baml_witness_roundtrip.baml:47:14]
+ 47 │         _ => "wrong error",
+    ·              ─────────────
+    ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[to_baml_witness_roundtrip.baml:59:14]
+ 59 │         _ => "wrong error",
+    ·              ─────────────
+    ╰────

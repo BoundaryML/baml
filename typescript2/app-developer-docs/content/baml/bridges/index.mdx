@@ -1,6 +1,6 @@
 ---
 title: Language bridges
-description: Compatibility and type-transition guidance between BAML and application host languages.
+description: Generate an SDK to call BAML functions from your application.
 breadcrumbs:
   - href: /baml
     label: BAML
@@ -9,11 +9,11 @@ breadcrumbs:
 
 ## The bridge contract
 
-Bridge pages focus on compatibility, type mappings, nullability, streaming, errors, generated names, and host-language gotchas.
+Generate an SDK when your application needs to call BAML functions. The SDK maps BAML types to host-language types and uses a runtime package to execute the calls.
 
 ## Host languages
 
-Each supported host language receives one canonical compatibility page. Speculative deeper routes are intentionally absent.
+Start with the TypeScript guide below. For other generators available in your installed toolchain, run `baml generate add --help`.
 
 <div className="docs-card-grid">
   <DocsCard description="Type mappings, generated client calls, streaming, errors, and TypeScript-specific gotchas." href="/baml/bridges/typescript" title="TypeScript" />

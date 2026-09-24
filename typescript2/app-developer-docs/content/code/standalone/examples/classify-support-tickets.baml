@@ -7,14 +7,15 @@ enum Category {
   Question
 }
 
-function ClassifyMessage(input: string) -> Category {
-  client: "openai/gpt-4o-mini"
+function classify_message(input: string) -> Category {
+  client: openai.ResponsesClient.new(model = "gpt-4.1-mini", api_key = env.OPENAI_API_KEY)
   prompt: `
-    Classify the following message into one category:
-
-    ${input}
-
+    ${role("system")}
+    Classify the support message into one category.
     ${ctx.output_format()}
+
+    ${role("user")}
+    ${input}
   `
 }
 // docs:end example

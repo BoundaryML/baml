@@ -131,6 +131,17 @@ test(
     assert.equal(secondPublication.snapshotReusedCount, 1);
     assert.equal(secondPublication.snapshotDeduplicationRatio, 1);
     process.env.GENERATED_CONTENT_DATABASE_URL = databaseUrl;
+    // The test releases intentionally lack the required package-index route.
+    // Selection must reach validation of the newest stored release, not assume
+    // the public site's version exists in this database.
+    await assert.rejects(
+      verifyGeneratedRelease('latest'),
+      new RegExp(`Release ${secondVersion} is missing required route`),
+    );
+    await assert.rejects(
+      verifyGeneratedRelease('0.0.0-missing'),
+      /release 0.0.0-missing does not exist/,
+    );
     const secondVersionRoutes = await listStoredRoutesForVersion(secondVersion);
     assert.equal(secondVersionRoutes.length, 1);
     assert.equal(secondVersionRoutes[0]?.version, secondVersion);

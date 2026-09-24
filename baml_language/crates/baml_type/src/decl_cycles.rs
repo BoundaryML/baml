@@ -121,14 +121,14 @@ fn extract_type_alias_deps(
         in_structural: bool,
     ) {
         match ty {
-            Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => {
+            Ty::TypeAlias(qn) if aliases.contains_key(qn) => {
                 if in_structural {
                     structural.insert(qn.clone());
                 } else {
                     non_structural.insert(qn.clone());
                 }
             }
-            Ty::List(inner, _) => {
+            Ty::List(inner) => {
                 // List provides structural guard (can be empty)
                 visit(inner, aliases, non_structural, structural, true);
             }
@@ -137,13 +137,13 @@ fn extract_type_alias_deps(
                 visit(key, aliases, non_structural, structural, true);
                 visit(value, aliases, non_structural, structural, true);
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 // Union passes through the structural context
                 for m in members {
                     visit(m, aliases, non_structural, structural, in_structural);
                 }
             }
-            Ty::Class(_, type_args, _) => {
+            Ty::Class(_, type_args) => {
                 // Nominal type_args are pass-through for cycle classification.
                 // User-defined nominal types are not structural guards like List/Map,
                 // so their generic arguments inherit the surrounding context.
@@ -151,7 +151,7 @@ fn extract_type_alias_deps(
                     visit(t, aliases, non_structural, structural, in_structural);
                 }
             }
-            Ty::Interface(_, type_args, associated_bindings, _) => {
+            Ty::Interface(_, type_args, associated_bindings) => {
                 for t in type_args {
                     visit(t, aliases, non_structural, structural, in_structural);
                 }
@@ -422,12 +422,12 @@ fn extract_required_class_deps(
 ) {
     match ty {
         // Only add if the field is truly required.
-        Ty::Class(qn, _, _) if !optional && !in_list_or_map && class_fields.contains_key(qn) => {
+        Ty::Class(qn, _) if !optional && !in_list_or_map && class_fields.contains_key(qn) => {
             deps.insert(qn.clone());
         }
-        Ty::Class(_, _, _) => {}
+        Ty::Class(_, _) => {}
         // Resolve through type aliases (only if still required context).
-        Ty::TypeAlias(qn, _) if !optional && !in_list_or_map && !visiting.contains(qn) => {
+        Ty::TypeAlias(qn) if !optional && !in_list_or_map && !visiting.contains(qn) => {
             if let Some(alias_ty) = type_aliases.get(qn) {
                 visiting.insert(qn.clone());
                 extract_required_class_deps(
@@ -442,11 +442,11 @@ fn extract_required_class_deps(
                 visiting.remove(qn);
             }
         }
-        Ty::TypeAlias(_, _) => {}
+        Ty::TypeAlias(_) => {}
         // `T?` lowers to `Union([T, Null])` (canary removed the `Ty::Optional`
         // variant), so optionals are handled by the `Ty::Union` arm below —
         // which already yields no hard dependency (Null breaks it).
-        Ty::List(inner, _) => {
+        Ty::List(inner) => {
             // List breaks the hard dependency (can be empty)
             extract_required_class_deps(
                 inner,
@@ -479,7 +479,7 @@ fn extract_required_class_deps(
                 visiting,
             );
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             // Union: only a hard dependency if ALL variants lead to the same class.
             // If any variant provides an alternative (e.g. string), the cycle is broken.
             let mut variant_deps_list = Vec::new();
@@ -510,7 +510,6 @@ fn extract_required_class_deps(
 
 #[cfg(test)]
 mod tests {
-    use baml_base::TyAttr;
 
     use super::*;
 
@@ -519,7 +518,7 @@ mod tests {
     }
 
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(qn(name), TyAttr::default())
+        Ty::TypeAlias(qn(name))
     }
 
     #[test]
@@ -528,15 +527,7 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert(
             qn("List"),
-            Ty::Union(
-                Box::new([
-                    Ty::Null {
-                        attr: TyAttr::default(),
-                    },
-                    type_alias("List"),
-                ]),
-                TyAttr::default(),
-            ),
+            Ty::Union(Box::new([Ty::Null, type_alias("List")])),
         );
 
         assert!(
@@ -550,12 +541,7 @@ mod tests {
     fn non_recursive_alias_is_not_marked() {
         // `type MyInt = int`
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("MyInt"),
-            Ty::Int {
-                attr: TyAttr::default(),
-            },
-        );
+        aliases.insert(qn("MyInt"), Ty::Int);
 
         assert!(
             !crate::ResolvedAliases::from_aliases(aliases.clone())
@@ -570,10 +556,7 @@ mod tests {
         // Cycle detection must descend into class type_args or it would miss this
         // and expansion would recurse forever.
         let mut aliases = HashMap::new();
-        aliases.insert(
-            qn("A"),
-            Ty::Class(qn("Box"), Box::new([type_alias("A")]), TyAttr::default()),
-        );
+        aliases.insert(qn("A"), Ty::Class(qn("Box"), Box::new([type_alias("A")])));
 
         assert!(
             crate::ResolvedAliases::from_aliases(aliases.clone())
@@ -590,12 +573,7 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert(
             qn("A"),
-            Ty::Interface(
-                qn("BoxLike"),
-                Box::new([type_alias("A")]),
-                Box::new([]),
-                TyAttr::default(),
-            ),
+            Ty::Interface(qn("BoxLike"), Box::new([type_alias("A")]), Box::new([])),
         );
 
         assert!(

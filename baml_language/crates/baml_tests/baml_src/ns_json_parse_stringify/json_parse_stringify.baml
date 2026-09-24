@@ -71,6 +71,22 @@ test "parse_float_disambiguation" {
     assert.is_true(parse_is_float())
 }
 
+function parse_is_bigint() -> bool {
+    match (baml.json.parse("123123123123123123123123")) {
+        let n: bigint => n == 123123123123123123123123n
+        _ => false
+    }
+}
+
+test "parse_bigint_disambiguation" {
+    assert.is_true(parse_is_bigint())
+}
+
+test "roundtrip_nested_bigint" {
+    let source = "{\"foo\":123123123123123123123123}";
+    assert.equal(baml.json.stringify(baml.json.parse(source)), source)
+}
+
 // ─── 2.5 Parse throws on garbage input ───────────────────────────────────────
 
 test "parse_throws_on_garbage" {

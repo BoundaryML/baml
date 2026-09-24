@@ -244,7 +244,6 @@ async fn partial_explicit_seed_then_infer() {
         indexmap! {
             "A" => RuntimeTy::Union(
                 Box::new([RuntimeTy::int(), RuntimeTy::float()]),
-                baml_type::TyAttr::default(),
             )
         },
     )
@@ -275,7 +274,6 @@ async fn explicit_binding_widens_inferred_type() {
         indexmap! {
             "T" => RuntimeTy::Union(
                 Box::new([RuntimeTy::int(), RuntimeTy::string()]),
-                baml_type::TyAttr::default(),
             )
         },
     )
@@ -650,7 +648,7 @@ async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     );
     let arg = BEV::Map {
         key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default()),
+        value_type: RuntimeTy::List(Box::new(RuntimeTy::int())),
         entries,
     };
     let out = call_infer(src, "map_key", vec![arg]).await.unwrap();
@@ -1061,7 +1059,6 @@ fn pair_rt(first: RuntimeTy, second: RuntimeTy) -> RuntimeTy {
     RuntimeTy::Class(
         baml_type::TypeName::local(baml_type::Name::new("GenericPair")),
         Box::new([first, second]),
-        baml_type::TyAttr::default(),
     )
 }
 
@@ -1248,7 +1245,6 @@ fn box_rt(inner: RuntimeTy) -> RuntimeTy {
     RuntimeTy::Class(
         baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
         Box::new([inner]),
-        baml_type::TyAttr::default(),
     )
 }
 

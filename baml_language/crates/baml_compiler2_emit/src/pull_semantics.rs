@@ -9,7 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
+    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
 };
 use baml_type::TyTemplate;
 
@@ -100,7 +100,7 @@ pub(crate) trait PullSink<'db> {
     /// preceding `load_type` calls) and resolves `item` to a function global.
     fn make_generic_function(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef<'db>,
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error>;
 
@@ -110,9 +110,18 @@ pub(crate) trait PullSink<'db> {
     /// `MakeGenericFunctionFromValue`.
     fn make_generic_function_from_value(&mut self, ntypeargs: usize) -> Result<(), Self::Error>;
 
-    /// Load a captured variable from the current closure's captures array.
-    /// Emits `LoadCapture(idx)` in the bytecode emitter.
-    fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error>;
+    /// Load the value behind a captured local's cell (`Place::Deref` of a
+    /// `Local`). Emits `LoadDeref(slot)` in the bytecode emitter.
+    fn load_deref_local(&mut self, local: Local) -> Result<(), Self::Error>;
+
+    /// Load the value behind the `idx`-th capture's cell (`Place::Deref` of a
+    /// `Capture`). Emits `LoadCapture(idx)` in the bytecode emitter.
+    fn load_capture_value(&mut self, idx: usize) -> Result<(), Self::Error>;
+
+    /// Load the `idx`-th capture's cell pointer itself (a bare
+    /// `Place::Capture`), to forward it to a nested closure. Emits
+    /// `CaptureRef(idx)` in the bytecode emitter.
+    fn load_capture_ref(&mut self, idx: usize) -> Result<(), Self::Error>;
 
     /// Resolve the field name for a `Place::Field { base, field }` access.
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String;
@@ -126,10 +135,6 @@ pub(crate) trait StackEffectSink<'db>: PullSink<'db> {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
-
-    /// Store a value into a captured variable (via the closure's captures array).
-    /// Emits `StoreCapture(idx)` in the bytecode emitter.
-    fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -187,7 +192,8 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
 /// Shared evaluation order for projection stores (`base/index -> value -> store`).
 ///
 /// Returns `Ok(true)` when `destination` is a projection and was handled here.
-/// Returns `Ok(false)` for `Place::Local(_)` or `Place::Capture(_)`.
+/// Returns `Ok(false)` for `Place::Local(_)` and `Place::Deref(_)`, which the
+/// caller stores to a slot or through a cell.
 pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
     sink: &mut S,
     destination: &Place,
@@ -208,9 +214,8 @@ pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
             sink.store_index_value(*kind)?;
             Ok(true)
         }
-        Place::Local(_) => Ok(false),
-        // Place::Capture stores are handled by the caller (emit StoreCapture).
-        Place::Capture(_) => Ok(false),
+        Place::Local(_) | Place::Deref(_) => Ok(false),
+        Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
     }
 }
 
@@ -250,7 +255,7 @@ pub(crate) fn resolve_constant_function_item<'db>(
     operand: &Operand<'db>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
-) -> Option<baml_compiler2_mir::ItemRef<'db>> {
+) -> Option<baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>> {
     resolve_constant_function_item_inner(operand, classifications, def_use, &mut HashSet::new())
 }
 
@@ -259,9 +264,9 @@ fn resolve_constant_function_item_inner<'db>(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     visited_locals: &mut HashSet<Local>,
-) -> Option<baml_compiler2_mir::ItemRef<'db>> {
+) -> Option<baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>> {
     match operand {
-        Operand::Constant(Constant::Function(item_ref)) => Some(item_ref.clone()),
+        Operand::Constant(Constant::Function(func)) => Some(*func),
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
             if !visited_locals.insert(*local) {
                 return None;
@@ -341,7 +346,9 @@ pub(crate) fn walk_place_pull<'db, S: PullSink<'db>>(
             LocalPullAction::Done => Ok(()),
             LocalPullAction::Inline(rvalue) => walk_rvalue_pull(sink, &rvalue),
         },
-        Place::Capture(idx) => sink.load_capture(*idx),
+        Place::Capture(idx) => sink.load_capture_ref(*idx),
+        Place::Deref(CellId::Local(local)) => sink.load_deref_local(*local),
+        Place::Deref(CellId::Capture(idx)) => sink.load_capture_value(*idx),
         Place::Field { base, field } => {
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
@@ -480,7 +487,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")
         }
         Rvalue::MakeGenericFunction {
-            item,
+            func,
             type_arg_templates,
         } => {
             // Push the type-arg templates (resolved against the current frame),
@@ -488,7 +495,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             for template in type_arg_templates {
                 sink.load_type(template)?;
             }
-            sink.make_generic_function(item, type_arg_templates.len())
+            sink.make_generic_function(*func, type_arg_templates.len())
         }
         Rvalue::MakeGenericFunctionFromValue {
             value,

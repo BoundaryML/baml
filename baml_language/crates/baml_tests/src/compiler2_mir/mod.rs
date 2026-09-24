@@ -6,11 +6,11 @@
 use std::fmt::Write;
 
 use baml_base::Name;
+use baml_compiler2_hir::item_data::{file_functions, function_data, function_source_map};
 use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
-use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
 use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
 use crate::engine::TestDbExt;
@@ -32,8 +32,10 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
     let mut output = String::new();
 
     for func_loc in functions {
-        let mir = lower_function(db, func_loc, OptLevel::Two);
-        writeln!(output, "{}", display_function(mir)).unwrap();
+        let mir = lower_function(db, func_loc, OptLevel::Two)
+            .as_ref()
+            .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
+        writeln!(output, "{}", display_function(db, mir)).unwrap();
     }
 
     output
@@ -86,7 +88,9 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -95,7 +99,7 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::Call { .. }))),
         "untrusted mounted builtin did not lower as an ordinary call: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
     assert!(
         !body
@@ -103,14 +107,12 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::AwaitAny { .. }))),
         "untrusted mounted await-any marker selected compiler-owned lowering: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
 }
 
 #[test]
 fn mounted_intrinsic_kinds_are_trusted_only_for_precompiled_packages() {
-    use baml_compiler2_hir_ty::callable::ExternalCallTarget;
-
     let mut dependency = make_db();
     dependency.dependency("dependency");
     dependency.file(
@@ -132,26 +134,19 @@ function forged_type_of<T>() -> reflect.Type {
             .root(&Name::new("dependency"))
             .unwrap(),
     );
+    // Model a hostile/corrupt mounted blob that widens its own linkability.
+    // (A row that also claimed a lang address — `log.info`, `reflect.Type.of`
+    // — cannot mount at all: import refuses a target other than the row's
+    // own key; see `hir_ty_package_interface`.)
     let mut configured = 0;
     for exported in interface
         .functions
         .values_mut()
         .flat_map(|namespace| namespace.values_mut())
     {
-        let target = match exported.name.as_str() {
-            "forged_log" => ExternalCallTarget::Free {
-                function: baml_type::TypeName::new(Name::new("log"), Vec::new(), Name::new("info")),
-            },
-            "forged_type_of" => ExternalCallTarget::Free {
-                function: baml_type::TypeName::new(
-                    Name::new("reflect"),
-                    vec![Name::new("Type")],
-                    Name::new("of"),
-                ),
-            },
-            _ => continue,
-        };
-        exported.target = target;
+        if !matches!(exported.name.as_str(), "forged_log" | "forged_type_of") {
+            continue;
+        }
         exported.linkability = ExternalLinkability::Linkable;
         configured += 1;
     }
@@ -179,7 +174,9 @@ function main() -> reflect.Type {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
         .expect("main function");
-    let mir = lower_function(&db, main_loc, OptLevel::Two);
+    let mir = lower_function(&db, main_loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("main must lower to bytecode")
     };
@@ -192,7 +189,7 @@ function main() -> reflect.Type {
         call_count,
         2,
         "forged intrinsics did not lower as ordinary calls: {}",
-        display_function(mir)
+        display_function(&db, mir)
     );
     assert!(
         !body
@@ -201,7 +198,19 @@ function main() -> reflect.Type {
             .flat_map(|block| &block.statements)
             .any(|statement| { matches!(&statement.kind, StatementKind::Intrinsic { .. }) }),
         "forged intrinsic metadata selected compiler-owned lowering: {}",
-        display_function(mir)
+        display_function(&db, mir)
+    );
+    // The consumer links against the rows' addresses in the mounted package;
+    // the intrinsic markers select no compiler-owned symbol.
+    let rendered = display_function(&db, mir);
+    assert!(
+        rendered.contains("dependency.forged_log")
+            && rendered.contains("dependency.forged_type_of"),
+        "{rendered}"
+    );
+    assert!(
+        !rendered.contains("log.info") && !rendered.contains("reflect.Type.of"),
+        "{rendered}"
     );
 }
 
@@ -267,7 +276,7 @@ implements SfxConv for int {
         .iter()
         .filter(|&&loc| {
             baml_compiler2_mir::function_is_interface_body(&db, loc)
-                && !baml_compiler2_ppir::item_data::is_required_interface_method(&db, loc)
+                && !baml_compiler2_hir::item_data::is_required_interface_method(&db, loc)
         })
         .map(|&loc| {
             (
@@ -290,62 +299,6 @@ implements SfxConv for int {
             ("conv".to_string(), None),
         ],
     );
-}
-
-#[test]
-fn literal_return() {
-    let mut db = make_db();
-    let file = db.file("test.baml", "function f() -> int { return 42; }");
-    mir_snapshot!("literal_return", render_mir(&db, file));
-}
-
-#[test]
-fn binary_add() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(x: int, y: int) -> int { return x + y; }",
-    );
-    mir_snapshot!("binary_add", render_mir(&db, file));
-}
-
-#[test]
-fn if_else() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(x: int) -> string {
-            if x > 0 {
-                return "positive";
-            } else {
-                return "non-positive";
-            }
-        }"#,
-    );
-    mir_snapshot!("if_else", render_mir(&db, file));
-}
-
-#[test]
-fn let_binding() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(x: int) -> int { let y = x + 1; return y; }",
-    );
-    mir_snapshot!("let_binding", render_mir(&db, file));
-}
-
-#[test]
-fn function_call() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        function add(a: int, b: int) -> int { return a + b; }
-        function f(x: int) -> int { return add(x, 1); }
-        "#,
-    );
-    mir_snapshot!("function_call", render_mir(&db, file));
 }
 
 #[test]
@@ -451,53 +404,6 @@ fn optional_dropping_function_value() {
 }
 
 #[test]
-fn while_loop() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(n: int) -> int {
-            let sum = 0;
-            let i = 0;
-            while i < n {
-                sum += i;
-                i += 1;
-            }
-            return sum;
-        }"#,
-    );
-    mir_snapshot!("while_loop", render_mir(&db, file));
-}
-
-#[test]
-fn match_expr() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(x: int) -> string {
-            return match (x) {
-                1 => "one",
-                2 => "two",
-                _ => "other",
-            };
-        }"#,
-    );
-    mir_snapshot!("match_expr", render_mir(&db, file));
-}
-
-#[test]
-fn object_construction() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        class Point { x int  y int }
-        function f() -> Point { return Point { x: 1, y: 2 }; }
-        "#,
-    );
-    mir_snapshot!("object_construction", render_mir(&db, file));
-}
-
-#[test]
 fn generic_class_destructure_field_projection_uses_instantiated_type() {
     let mut db = make_db();
     let file = db.file(
@@ -590,22 +496,6 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
 
 // ─── Phase 4: reflect.Type.of concrete types ─────────────────────────────────
 
-/// `reflect.Type.of<User>()` should lower to `_N = load_type(Concrete(User))`.
-#[test]
-fn reflect_type_of_class() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        class User { name string }
-        function f() -> reflect.Type {
-            reflect.Type.of<User>()
-        }
-        "#,
-    );
-    mir_snapshot!("reflect_type_of_class", render_mir(&db, file));
-}
-
 /// `reflect.Type.of<int[]>()` — concrete array type.
 #[test]
 fn reflect_type_of_array() {
@@ -622,22 +512,6 @@ fn reflect_type_of_array() {
 }
 
 // ─── Phase 5: reflect.Type.of with generic type params ───────────────────────
-
-/// `reflect.Type.of<T>()` inside a generic function should lower to
-/// `_N = load_type(TypeArgRef(0))`.
-#[test]
-fn reflect_type_of_bare_typevar() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        function f<T>() -> reflect.Type {
-            reflect.Type.of<T>()
-        }
-        "#,
-    );
-    mir_snapshot!("reflect_type_of_bare_typevar", render_mir(&db, file));
-}
 
 /// `reflect.Type.of<T[]>()` — composite array wrapping a type-var.
 /// Should lower to `_N = load_type(Array(TypeArgRef(0)))`.

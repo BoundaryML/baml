@@ -1,0 +1,62 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase7.rs
+expression: "render_labeled_cases(&[(\"early_return_null_check_narrows_rest_of_block\",\nr#\"function f(x: int?) -> int {\n  if (x == null) {\n    return 0;\n  }\n  return x;\n}\"#,),\n(\"early_return_ne_null_check_narrows_rest_of_block\",\nr#\"function f(x: int?) -> int? {\n  if (x != null) {\n    return x;\n  }\n  return x;\n}\"#,),\n(\"snapshot_narrowing_patterns\",\nr#\"function f(a: int?, b: string?) -> int {\n  if (a == null) {\n    return 0;\n  }\n  if (b == null) {\n    return a;\n  }\n  let result = a;\n  return result;\n}\"#,),\n(\"early_return_string_null_check\",\nr#\"function f(s: string?) -> string {\n  if (s == null) {\n    return \"\";\n  }\n  return s;\n}\"#,),])"
+---
+=== early_return_null_check_narrows_rest_of_block ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x == null : bool) : void
+      { : never
+        return 0 : 0
+      }
+    return x : int
+  }
+}
+block user.f {
+}
+
+=== early_return_ne_null_check_narrows_rest_of_block ===
+function user.f(x: int | null) -> int | null throws never {
+  { : never
+    if (x != null : bool) : void
+      { : never
+        return x : int
+      }
+    return x : null
+  }
+}
+block user.f {
+}
+
+=== snapshot_narrowing_patterns ===
+function user.f(a: int | null, b: string | null) -> int throws never {
+  { : never
+    if (a == null : bool) : void
+      { : never
+        return 0 : 0
+      }
+    if (b == null : bool) : void
+      { : never
+        return a : int
+      }
+    let result = a : int
+    return result : int
+  }
+}
+block user.f {
+}
+block user.f {
+}
+
+=== early_return_string_null_check ===
+function user.f(s: string | null) -> string throws never {
+  { : never
+    if (s == null : bool) : void
+      { : never
+        return "" : ""
+      }
+    return s : string
+  }
+}
+block user.f {
+}

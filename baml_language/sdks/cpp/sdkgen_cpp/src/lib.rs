@@ -454,6 +454,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
         include_str!("../../bridge_cpp/include/baml/baml.h"),
     ),
     (
+        "include/baml/bigint.h",
+        include_str!("../../bridge_cpp/include/baml/bigint.h"),
+    ),
+    (
         "include/baml/box.h",
         include_str!("../../bridge_cpp/include/baml/box.h"),
     ),
@@ -532,8 +536,7 @@ const OPTS_MEMBER: &str = "opts";
 const ASYNC_MEMBER: &str = "async";
 
 /// One typed request per identifier any emit pass may need. Mirrors the
-/// pool-level skip filters (`pkg`, partial `$stream` types, legacy `$`
-/// companions); symbols that
+/// pool-level skip filters (`pkg`, legacy `$` companions); symbols that
 /// only emission can rule out (unsupported field types, broken cycles) still
 /// get allocations, which are simply never rendered.
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
@@ -664,10 +667,40 @@ fn request_callable_members(
 
 #[cfg(test)]
 mod injected_argument_tests {
-    use baml_base::{Name as BaseName, TyAttr};
+    use baml_base::Name as BaseName;
     use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Origin};
 
     use super::*;
+
+    #[test]
+    fn bigint_literal_return_type_does_not_hide_callable() {
+        let name = Name::new(BaseName::new("user"), vec![], BaseName::new("exact"));
+        let function = Function {
+            name: BaseName::new("exact"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![],
+            return_type: Ty::Literal(
+                baml_base::Literal::Bigint(42.into()),
+                baml_codegen_types::Freshness::Regular,
+            ),
+            throws: None,
+            watchers: vec![],
+            origin: Origin {
+                source_file_path: "bigint.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let files = to_source_code_with_bytecode(
+            &SymbolPool::from([(name, Symbol::Function(function))]),
+            &[],
+            &[],
+        );
+        let header = &files[&PathBuf::from("include/baml_sdk.h")];
+        let bindings = &files[&PathBuf::from("src/bindings.cc")];
+        assert!(header.contains("::baml::bigint exact("), "{header}");
+        assert!(bindings.contains("\"user.exact\""), "{bindings}");
+    }
 
     #[test]
     fn injected_callback_does_not_hide_callable() {
@@ -679,18 +712,11 @@ mod injected_argument_tests {
         let callback = Ty::Function {
             params: Box::new([CallableParam {
                 name: None,
-                ty: Ty::String {
-                    attr: TyAttr::default(),
-                },
+                ty: Ty::String,
                 mode: CodegenFunctionParamMode::Required,
             }]),
-            ret: Box::new(Ty::Void {
-                attr: TyAttr::default(),
-            }),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
-            attr: TyAttr::default(),
+            ret: Box::new(Ty::Void),
+            throws: Box::new(Ty::Never),
         };
         let function = Function {
             name: BaseName::new("extract"),
@@ -700,31 +726,19 @@ mod injected_argument_tests {
                 FunctionArgument {
                     name: BaseName::new("input"),
                     docstring: None,
-                    ty: Ty::String {
-                        attr: TyAttr::default(),
-                    },
+                    ty: Ty::String,
                     default: None,
                     injected: false,
                 },
                 FunctionArgument {
                     name: BaseName::new("on_event"),
                     docstring: None,
-                    ty: Ty::Union(
-                        Box::new([
-                            callback,
-                            Ty::Null {
-                                attr: TyAttr::default(),
-                            },
-                        ]),
-                        TyAttr::default(),
-                    ),
+                    ty: Ty::Union(Box::new([callback, Ty::Null])),
                     default: Some(FunctionArgumentDefault::Null),
                     injected: true,
                 },
             ],
-            return_type: Ty::String {
-                attr: TyAttr::default(),
-            },
+            return_type: Ty::String,
             throws: None,
             watchers: vec![],
             origin: Origin {
@@ -749,11 +763,11 @@ mod injected_argument_tests {
     }
 }
 
-/// Legacy `$`-suffixed companion functions are not part of the host surface.
-/// Partial `$stream` types route under `stream_types`, while callable
-/// `@spec`/`@stream` companions continue to ordinary function emission.
+/// Legacy `$`-suffixed companion functions are not part of the host surface;
+/// callable `@spec`/`@stream` companions continue to ordinary function
+/// emission.
 fn skip_symbol(name: &Name) -> bool {
-    name.bare_name().contains('$')
+    name.name().as_str().contains('$')
 }
 
 /// Whether `name` is a NON-recursive type alias, i.e. one that emits a
@@ -1206,7 +1220,7 @@ fn emit_callable(
         }
     }
     let ret = match &function.return_type {
-        Ty::Void { .. } => "void".to_string(),
+        Ty::Void => "void".to_string(),
         Ty::Function { params, ret, .. } => {
             translate_callable_ty(pool, names, params, ret, emitted_types)?.0
         }
@@ -1222,7 +1236,7 @@ fn emit_callable(
 
     let raises = match &function.throws {
         None => Vec::new(),
-        Some(Ty::Union(items, _)) => items.iter().map(unqualified_leaf_name).collect(),
+        Some(Ty::Union(items)) => items.iter().map(unqualified_leaf_name).collect(),
         Some(ty) => vec![unqualified_leaf_name(ty)],
     };
 
@@ -1305,7 +1319,7 @@ fn translate_callable_ty(
                 .unwrap_or_default(),
         );
     }
-    let ret_ty = if matches!(ret, Ty::Void { .. }) {
+    let ret_ty = if matches!(ret, Ty::Void) {
         "void".to_string()
     } else {
         match translate_ty(pool, names, ret, emitted_types, &BTreeSet::new()) {
@@ -1323,9 +1337,7 @@ fn translate_callable_ty(
 
 fn unqualified_leaf_name(ty: &Ty) -> String {
     match ty {
-        Ty::Class(name, ..) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
-            name.bare_name().to_string()
-        }
+        Ty::Class(name, ..) | Ty::Enum(name) | Ty::TypeAlias(name) => name.name().to_string(),
         other => other.to_string(),
     }
 }
@@ -1370,10 +1382,10 @@ fn undeclared_alias_issue(
     complete_types: &BTreeSet<Name>,
 ) -> Option<String> {
     match ty {
-        Ty::Class(_, args, _) => args
+        Ty::Class(_, args) => args
             .iter()
             .find_map(|arg| undeclared_alias_issue(pool, arg, complete_types)),
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             let forward_declarable = matches!(
                 pool.get(name),
                 Some(Symbol::TypeAlias(alias)) if alias.recursive
@@ -1384,10 +1396,10 @@ fn undeclared_alias_issue(
                 None
             }
         }
-        Ty::List(item, _) => undeclared_alias_issue(pool, item, complete_types),
+        Ty::List(item) => undeclared_alias_issue(pool, item, complete_types),
         Ty::Map { key, value, .. } => undeclared_alias_issue(pool, key, complete_types)
             .or_else(|| undeclared_alias_issue(pool, value, complete_types)),
-        Ty::Union(items, _) => items
+        Ty::Union(items) => items
             .iter()
             .find_map(|item| undeclared_alias_issue(pool, item, complete_types)),
         Ty::Function {
@@ -1400,7 +1412,7 @@ fn undeclared_alias_issue(
             .find_map(|param| undeclared_alias_issue(pool, &param.ty, complete_types))
             .or_else(|| undeclared_alias_issue(pool, ret, complete_types))
             .or_else(|| undeclared_alias_issue(pool, throws, complete_types)),
-        Ty::Future(value, throws, _) => undeclared_alias_issue(pool, value, complete_types)
+        Ty::Future(value, throws) => undeclared_alias_issue(pool, value, complete_types)
             .or_else(|| undeclared_alias_issue(pool, throws, complete_types)),
         _ => None,
     }
@@ -1418,10 +1430,10 @@ fn incomplete_stored_type_issue(
     complete_types: &BTreeSet<Name>,
 ) -> Option<String> {
     match ty {
-        Ty::Class(name, _, _) if !complete_types.contains(name) => {
+        Ty::Class(name, _) if !complete_types.contains(name) => {
             Some(format!("stores incomplete class `{name}`"))
         }
-        Ty::TypeAlias(name, _)
+        Ty::TypeAlias(name)
             if matches!(
                 pool.get(name),
                 Some(Symbol::TypeAlias(alias)) if alias.recursive
@@ -1429,12 +1441,12 @@ fn incomplete_stored_type_issue(
         {
             Some(format!("stores incomplete recursive alias `{name}`"))
         }
-        Ty::List(item, _) => incomplete_stored_type_issue(pool, item, complete_types),
+        Ty::List(item) => incomplete_stored_type_issue(pool, item, complete_types),
         Ty::Map { key, value, .. } => incomplete_stored_type_issue(pool, key, complete_types)
             .or_else(|| incomplete_stored_type_issue(pool, value, complete_types)),
-        Ty::Union(items, _) => items
+        Ty::Union(items) => items
             .iter()
-            .filter(|item| !matches!(item, Ty::Null { .. }))
+            .filter(|item| !matches!(item, Ty::Null))
             .find_map(|item| incomplete_stored_type_issue(pool, item, complete_types)),
         _ => None,
     }
@@ -1463,19 +1475,17 @@ fn translate_ty(
     boxed: &BTreeSet<Name>,
 ) -> Translated {
     let translated = match ty {
-        Ty::Int { .. } => "int64_t".to_string(),
-        Ty::Float { .. } => "double".to_string(),
-        Ty::String { .. } => "std::string".to_string(),
-        Ty::Bool { .. } => "bool".to_string(),
-        Ty::Null { .. } => "std::monostate".to_string(),
-        Ty::Uint8Array { .. } => "std::vector<uint8_t>".to_string(),
-        Ty::RustType { .. } => {
+        Ty::Int => "int64_t".to_string(),
+        Ty::Float => "double".to_string(),
+        Ty::String => "std::string".to_string(),
+        Ty::Bool => "bool".to_string(),
+        Ty::Null => "std::monostate".to_string(),
+        Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
+        Ty::RustType => {
             return Translated::Unsupported("handle type (post-step-8)".to_string());
         }
-        Ty::Bigint { .. } => {
-            return Translated::Unsupported("bigint (post-step-8)".to_string());
-        }
-        Ty::Media(kind, _) => match kind {
+        Ty::Bigint => "::baml::bigint".to_string(),
+        Ty::Media(kind) => match kind {
             baml_base::MediaKind::Image => "::baml::image".to_string(),
             baml_base::MediaKind::Audio => "::baml::audio".to_string(),
             baml_base::MediaKind::Video => "::baml::video".to_string(),
@@ -1490,9 +1500,7 @@ fn translate_ty(
             // C++20 and BAML has no float literal types in practice.
             match lit {
                 baml_base::Literal::Int(v) => format!("::baml::lit<{}>", lit_int_spelling(*v)),
-                baml_base::Literal::Bigint(_) => {
-                    return Translated::Unsupported("bigint literal (post-step-8)".to_string());
-                }
+                baml_base::Literal::Bigint(_) => "::baml::bigint".to_string(),
                 baml_base::Literal::Float(_) => "double".to_string(),
                 baml_base::Literal::String(s) => {
                     let chars: Vec<String> = s.bytes().map(lit_char_spelling).collect();
@@ -1501,10 +1509,10 @@ fn translate_ty(
                 baml_base::Literal::Bool(b) => format!("::baml::lit<{b}>"),
             }
         }
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             return Translated::Unsupported(format!("TypeVar {name} (generics post-step-8)"));
         }
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             // Aliases render by name once declared: recursive aliases
             // reference their wrapper struct like a class (boxed inside
             // their own cycle, since the box needs only the forward
@@ -1541,7 +1549,7 @@ fn translate_ty(
                     .to_string(),
             );
         }
-        Ty::Enum(name, _) => {
+        Ty::Enum(name) => {
             return if emitted_types.contains(name) {
                 Translated::Cpp(
                     names
@@ -1556,7 +1564,7 @@ fn translate_ty(
         // An enum-variant type (`Sentiment.Positive`) is a singleton Lit
         // over the enum value, so unions of variants dispatch and match
         // per-variant at compile time.
-        Ty::EnumVariant(name, variant, _) => {
+        Ty::EnumVariant(name, variant) => {
             return if emitted_types.contains(name) {
                 let enum_path = names
                     .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
@@ -1573,7 +1581,7 @@ fn translate_ty(
                 Translated::NotYet
             };
         }
-        Ty::Class(name, args, _) => {
+        Ty::Class(name, args) => {
             let wire_name = name.to_string();
             if wire_name == "ai.Prompt" && args.is_empty() {
                 return Translated::Cpp("::baml::prompt".to_string());
@@ -1585,16 +1593,12 @@ fn translate_ty(
                 };
                 return Translated::Cpp(format!("::baml::function_spec<{output}>"));
             }
-            if wire_name == "ai.stream.Stream" && args.len() == 2 {
-                let partial = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
+            if wire_name == "ai.stream.Stream" && args.len() == 1 {
+                let value = match translate_ty(pool, names, &args[0], emitted_types, boxed) {
                     Translated::Cpp(ty) => ty,
                     other => return other,
                 };
-                let output = match translate_ty(pool, names, &args[1], emitted_types, boxed) {
-                    Translated::Cpp(ty) => ty,
-                    other => return other,
-                };
-                return Translated::Cpp(format!("::baml::stream<{partial}, {output}>"));
+                return Translated::Cpp(format!("::baml::stream<{value}>"));
             }
             // Type args occur only on generic-class instantiations, and
             // generic classes never emit this slice.
@@ -1618,12 +1622,12 @@ fn translate_ty(
             }
             return Translated::Cpp(base);
         }
-        Ty::List(inner, _) => match translate_ty(pool, names, inner, emitted_types, boxed) {
+        Ty::List(inner) => match translate_ty(pool, names, inner, emitted_types, boxed) {
             Translated::Cpp(inner) => format!("std::vector<{inner}>"),
             other => return other,
         },
         Ty::Map { key, value, .. } => {
-            if !matches!(key.as_ref(), Ty::String { .. }) {
+            if !matches!(key.as_ref(), Ty::String) {
                 return Translated::Unsupported("non-string map key".to_string());
             }
             match translate_ty(pool, names, value, emitted_types, boxed) {
@@ -1634,15 +1638,12 @@ fn translate_ty(
         Ty::Function { .. } => {
             return Translated::Unsupported("nested callable type".to_string());
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             // Null-normalization (spec D-unions v2): strip the null member,
             // dedup alternatives that map to the same C++ type, emit a
             // variant (or the bare type when one alternative remains), and
             // wrap in optional when null was a member.
-            let non_null: Vec<&Ty> = items
-                .iter()
-                .filter(|t| !matches!(t, Ty::Null { .. }))
-                .collect();
+            let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
             let had_null = non_null.len() != items.len();
             let mut alternatives: Vec<String> = Vec::new();
             for item in non_null {
@@ -2524,8 +2525,6 @@ mod bytecode_escape_tests {
 mod declaration_safety_tests {
     use std::collections::BTreeSet;
 
-    use baml_base::TyAttr;
-
     use super::{Name, SymbolPool, Ty, incomplete_stored_type_issue, undeclared_alias_issue};
 
     fn qualified(name: &str) -> Name {
@@ -2536,14 +2535,10 @@ mod declaration_safety_tests {
         )
     }
 
-    fn attr() -> TyAttr {
-        TyAttr::default()
-    }
-
     #[test]
     fn required_and_return_types_can_name_later_classes() {
         let later = qualified("Later");
-        let later_ty = Ty::Class(later, Box::new([]), TyAttr::default());
+        let later_ty = Ty::Class(later, Box::new([]));
         let pool = SymbolPool::new();
         let complete = BTreeSet::new();
 
@@ -2556,20 +2551,16 @@ mod declaration_safety_tests {
     #[test]
     fn optional_arg_storage_rejects_later_classes_in_every_container() {
         let later = qualified("Later");
-        let class = Ty::Class(later.clone(), Box::new([]), TyAttr::default());
+        let class = Ty::Class(later.clone(), Box::new([]));
         let types = [
             class.clone(),
-            Ty::List(Box::new(class.clone()), attr()),
+            Ty::List(Box::new(class.clone())),
             Ty::Map {
-                key: Box::new(Ty::String { attr: attr() }),
+                key: Box::new(Ty::String),
                 value: Box::new(class.clone()),
-                attr: attr(),
             },
-            Ty::Union(
-                Box::new([class.clone(), Ty::String { attr: attr() }]),
-                attr(),
-            ),
-            Ty::Union(Box::new([class, Ty::Null { attr: attr() }]), attr()),
+            Ty::Union(Box::new([class.clone(), Ty::String])),
+            Ty::Union(Box::new([class, Ty::Null])),
         ];
         let pool = SymbolPool::new();
         let mut complete = BTreeSet::new();
@@ -2590,7 +2581,7 @@ mod declaration_safety_tests {
     #[test]
     fn aliases_must_precede_in_class_method_declarations() {
         let alias = qualified("PayloadAlias");
-        let alias_ty = Ty::TypeAlias(alias.clone(), TyAttr::default());
+        let alias_ty = Ty::TypeAlias(alias.clone());
         let pool = SymbolPool::new();
         let mut complete = BTreeSet::new();
 

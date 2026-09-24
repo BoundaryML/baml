@@ -5,7 +5,7 @@
 //! per-road recording semantics the gate builds on.
 
 use baml_compiler2_hir_ty::{
-    infer::{CallTypeArgPlan, MemberResolution, infer_body},
+    infer::{CallTypeArgPlan, MemberResolution, MethodCallee, Receiver, infer_body},
     render::Viewpoint,
 };
 
@@ -18,8 +18,8 @@ fn member_resolutions(source: &str) -> Vec<(String, String)> {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut out = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -33,21 +33,59 @@ fn member_resolutions(source: &str) -> Vec<(String, String)> {
     out
 }
 
+/// The dispatch MODE of a resolution. A class-inherent method spells its
+/// binding too, as the historical names did; an interface method's binding
+/// is the separate axis [`receiver`] reads.
 fn kind(resolution: &MemberResolution<'_>) -> &'static str {
     match resolution {
         MemberResolution::Field { .. } => "Field",
         MemberResolution::Variant { .. } => "Variant",
         MemberResolution::Free { .. } => "Free",
-        MemberResolution::BoundMethod { .. } => "BoundMethod",
-        MemberResolution::UnboundMethod { .. } => "UnboundMethod",
-        MemberResolution::InterfaceVirtualMethod { .. } => "InterfaceVirtualMethod",
-        MemberResolution::InterfaceConcreteMethod { .. } => "InterfaceConcreteMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Inherent(_),
+            receiver: Receiver::Bound,
+        } => "BoundMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Inherent(_),
+            receiver: Receiver::Unbound,
+        } => "UnboundMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Virtual { .. },
+            ..
+        } => "InterfaceVirtualMethod",
+        MemberResolution::Method {
+            callee: MethodCallee::Concrete { .. },
+            ..
+        } => "InterfaceConcreteMethod",
         MemberResolution::InterfaceVirtualField { .. } => "InterfaceVirtualField",
-        MemberResolution::External(_) => "External",
-        MemberResolution::ExternalField { .. } => "ExternalField",
-        MemberResolution::ExternalVariant { .. } => "ExternalVariant",
-        MemberResolution::ExternalInterfaceVirtualField { .. } => "ExternalInterfaceVirtualField",
     }
+}
+
+/// Every recorded METHOD resolution in `source` with whether the access
+/// binds its receiver, as sorted `(snippet, "Bound" | "Unbound")` pairs.
+fn method_receivers(source: &str) -> Vec<(String, &'static str)> {
+    let mut db = crate::compiler2_tir::support::make_db();
+    let file = db.file("test.baml", source);
+    let mut out = Vec::new();
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
+            continue;
+        };
+        let result = infer_body(&db, owner);
+        for (&expr, resolution) in &result.member_resolutions {
+            let MemberResolution::Method { receiver, .. } = resolution else {
+                continue;
+            };
+            let range = source_map.expr_span(expr);
+            let receiver = match receiver {
+                Receiver::Bound => "Bound",
+                Receiver::Unbound => "Unbound",
+            };
+            out.push((source[range].to_string(), receiver));
+        }
+    }
+    out.sort();
+    out
 }
 
 #[test]
@@ -159,6 +197,64 @@ function mr_concrete(d: Dog) -> string throws never {
     );
 }
 
+/// The binding axis is independent of the dispatch mode: `recv.m()` binds
+/// its receiver whether the callee is inherent, a virtual slot, or a
+/// statically-matched impl; `I.m(recv)` and `(C as I).m(recv)` never do —
+/// there `self` is the written first argument.
+#[test]
+fn records_method_binding_axis() {
+    let source = r#"
+interface Counter {
+    function start(self) -> int throws never
+}
+class Tally {
+    n int
+    implements Counter {
+        function start(self) -> int throws never {
+            self.n
+        }
+    }
+}
+function mr_bound(t: Tally, c: Counter) -> int throws never {
+    t.start() + c.start()
+}
+function mr_unbound(t: Tally) -> int throws never {
+    Counter.start(t) + (Tally as Counter).start(t)
+}
+"#;
+    let kinds = member_resolutions(source);
+    let receivers = method_receivers(source);
+    assert!(
+        kinds.contains(&("t.start".into(), "InterfaceConcreteMethod".into()))
+            && receivers.contains(&("t.start".into(), "Bound")),
+        "concrete receiver access is Bound: {kinds:?} / {receivers:?}"
+    );
+    assert!(
+        kinds.contains(&("c.start".into(), "InterfaceVirtualMethod".into()))
+            && receivers.contains(&("c.start".into(), "Bound")),
+        "existential receiver access is Bound: {kinds:?} / {receivers:?}"
+    );
+    assert!(
+        kinds.contains(&("Counter.start".into(), "InterfaceVirtualMethod".into()))
+            && receivers.contains(&("Counter.start".into(), "Unbound")),
+        "interface-qualified access is Unbound: {kinds:?} / {receivers:?}"
+    );
+    assert!(
+        receivers.iter().any(
+            |(snippet, receiver)| snippet.ends_with("Counter).start") && *receiver == "Unbound"
+        ),
+        "written-qualifier access is Unbound: {receivers:?}"
+    );
+    assert!(
+        !receivers.iter().any(|(snippet, receiver)| {
+            (snippet == "t.start" || snippet == "c.start") && *receiver == "Unbound"
+        }) && !receivers
+            .iter()
+            .any(|(snippet, receiver)| snippet.contains("Counter") && *receiver == "Bound"),
+        "no access records both bindings: {receivers:?}"
+    );
+}
+
 #[test]
 fn records_variant() {
     let resolutions = member_resolutions(
@@ -201,8 +297,8 @@ function mr_chain(p: Person) -> string throws never {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut ladders = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -259,8 +355,8 @@ function cp_use() -> int throws never {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut plans = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -325,8 +421,8 @@ function rt_owner_use() -> RtBox<int> throws never {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut seen = false;
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -396,8 +492,8 @@ function sc_companion() -> baml.Map<string, int> throws never {
     let mut errors = Vec::new();
     let mut extraction_throws = None;
     let mut session_args = None;
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let source_map = baml_compiler2_ppir::body_source_map(&db, owner);
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let source_map = baml_compiler2_hir::body::body_source_map(&db, owner);
         let result = infer_body(&db, owner);
         errors.extend(result.diagnostics.iter().map(|diag| diag.error.clone()));
         let Some(source_map) = source_map else {
@@ -498,8 +594,8 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
     let mut saw_bad_operand = false;
     let mut saw_static_shape_error = false;
     let mut diagnostics = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -532,7 +628,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 assert!(binding.parameter.index() & 0x8000_0000 != 0);
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param)
                         if param == &binding.parameter)
                 ));
             }
@@ -541,7 +637,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_branch = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param)
                         if param == &binding.parameter)
                 ));
             }
@@ -583,11 +679,11 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
-    let functions = baml_compiler2_ppir::item_data::file_functions(&db, file);
+    let functions = baml_compiler2_hir::item_data::file_functions(&db, file);
     let function = *functions.first().expect("one function");
     let owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function);
     let result = infer_body(&db, owner);
-    let defaults = baml_compiler2_ppir::function_parameter_defaults(&db, function);
+    let defaults = baml_compiler2_hir::signature::function_parameter_defaults(&db, function);
     let rendered: Vec<String> = defaults
         .params
         .iter()
@@ -643,8 +739,8 @@ function de_probe() -> bool throws never {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut plans = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -688,8 +784,8 @@ function ir_probe() -> int {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut plans = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
@@ -789,12 +885,12 @@ function pa_probe() -> int {
     let mut db = crate::compiler2_tir::support::make_db();
     let file = db.file("test.baml", source);
     let mut renders = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(&db, file) {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(&db, owner) else {
             continue;
         };
         let result = infer_body(&db, owner);
-        let body = baml_compiler2_ppir::body(&db, owner);
+        let body = baml_compiler2_hir::body::body(&db, owner);
         let Some(arena) = body.expr_body() else {
             continue;
         };

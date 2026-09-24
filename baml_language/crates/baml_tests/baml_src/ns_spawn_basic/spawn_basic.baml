@@ -30,3 +30,12 @@ function spawn_with_name_literal() -> int {
 test "spawn_with_name_literal" {
     assert.equal(spawn_with_name_literal(), 42)
 }
+
+function zero_duration_sleep_returns() -> int {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(0));
+    42
+}
+
+test "sys_sleep_accepts_time_duration" {
+    assert.equal(zero_duration_sleep_returns(), 42)
+}
