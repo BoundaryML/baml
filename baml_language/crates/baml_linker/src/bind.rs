@@ -1,11 +1,12 @@
 //! Dependency binding: each slot of a unit's or tail's dependency table
 //! bound to a package of the set, through the edge tables.
 
+use baml_linker_types::DependencyEntry;
+
 use super::{LinkError, LinkPackageId, Linker, PerPackage};
-use crate::unit::DependencyEntry;
 
 /// A package's bound dependency tables: its unit's and its tail's, each
-/// indexed by [`DepSlot`](crate::unit::DepSlot) (slot 0 is the package
+/// indexed by [`DepSlot`](baml_linker_types::DepSlot) (slot 0 is the package
 /// itself).
 pub(super) struct Tables {
     pub(super) unit: Vec<LinkPackageId>,

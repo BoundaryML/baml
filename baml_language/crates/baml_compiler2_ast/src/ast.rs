@@ -1467,6 +1467,10 @@ pub enum FunctionOrigin {
     /// Synthesized by the auto-derive pass (e.g. `to_json` / `from_json`
     /// methods generated on every user class).
     AutoDerive,
+    /// The per-file test registrar lowering synthesizes for a file with
+    /// tests (`$init_test_<file>`): the one function a package's
+    /// `$init_test` chainer calls per file.
+    TestInitializer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

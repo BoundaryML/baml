@@ -8,7 +8,7 @@
 //! consumes the same unit format directly, resolves each import against the
 //! live package objects it was compiled against, and relocates operands into
 //! pointers with the same walk
-//! ([`relink::visit_object_operands`](crate::relink::visit_object_operands)).
+//! ([`relink::visit_object_operands`](bex_vm_types::relink::visit_object_operands)).
 //! The two share the format and its index arithmetic, not a driver: there is
 //! nothing for a link to bind at run time except the graft itself.
 //!
@@ -51,11 +51,8 @@ use std::{
 };
 
 use baml_base::Name;
-
-use crate::{
-    Program,
-    unit::{CompilationUnit, InitTail, PackageRecord},
-};
+use baml_linker_types::{CompilationUnit, InitTail, PackageRecord};
+use bex_vm_types::Program;
 
 mod assemble;
 mod bind;
@@ -104,7 +101,8 @@ pub struct LinkPackage<'a> {
     /// half of the rendered name views, and the name the prelude is bound by
     /// at load. Display and boundary data — a package's link identity is its
     /// [`LinkPackageId`], and its executable identity its position in
-    /// [`Program::packages`]. Two packages may not share a spelling
+    /// [`Program::packages`](bex_vm_types::Program::packages). Two packages may
+    /// not share a spelling
     /// ([`LinkError::DuplicateLinkName`]), or the rendered views would collide.
     pub name: Name,
     pub group: LinkGroup,

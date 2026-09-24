@@ -8,9 +8,9 @@
 //! entries name a declaration *inside* a dependency by that package's own
 //! item coordinates, an [export table](ExportTable) in the same coordinates,
 //! and code whose index operands are local-or-import ordinals. The linker
-//! ([`crate::link`]) binds each dependency slot to a package, matches every
+//! (`baml_linker`) binds each dependency slot to a package, matches every
 //! import against the bound package's own exports, and lays the units out
-//! into one runnable [`Program`](crate::Program).
+//! into one runnable [`Program`](bex_vm_types::Program).
 //!
 //! The grain is the package because the package is the unit of naming and
 //! dependency in the language — a file is not a semantic entity, and cutting
@@ -50,12 +50,10 @@
 //! uses the same convention over its own tables.
 
 use baml_base::Name;
-use borsh::{BorshDeserialize, BorshSerialize};
-
-use crate::{
-    Object, ObjectIndex, TyTemplate,
-    types::{ImplCoherenceKey, InterfaceBound, LocalName},
+use bex_vm_types::{
+    DeclPath, FnPath, InterfaceBound, Object, ObjectIndex, TyTemplate, types::LocalName,
 };
+use borsh::{BorshDeserialize, BorshSerialize};
 
 /// The first import ordinal in every per-unit index space (see the module
 /// doc). Kept below `2^32` so it is a valid `usize` on every target this crate
@@ -136,143 +134,6 @@ pub struct DependencyEntry {
     pub fingerprint: Option<Digest>,
 }
 
-/// A function's path within its package.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
-pub enum FnPath {
-    /// A free function.
-    Free(ItemPath),
-    /// A class-inherent method (static or instance), reached through the
-    /// class's method table.
-    Method { class: ItemPath, name: Name },
-}
-
-/// The interface an impl-provided body belongs to, spelled from the body's
-/// own package: [`baml_type::Package::Local`] for an interface of that
-/// package, [`baml_type::Package::Dep`] by manifest edge otherwise.
-///
-/// This is an identity COMPONENT of the body, not a reference the linker
-/// binds (a body is reached rule-relatively; the direct-call import resolves
-/// the body itself). Edges are manifest-fixed, so every submission of a
-/// session spells the same interface the same way — which a dependency-table
-/// slot, numbered per table in first-use order, would not.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
-pub struct InterfaceKey {
-    pub package: baml_type::Package,
-    pub path: ItemPath,
-}
-
-/// The identity of an interface-machinery body. A body has no runtime name:
-/// an adopted default is reached through its interface object, a provided
-/// method through its impl rule. These keys exist so a later session
-/// submission can call an earlier submission's body directly.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
-pub enum BodyKey {
-    /// An interface's default-method body; the interface is declared by the
-    /// body's own package.
-    Default { interface: ItemPath, method: Name },
-    /// A method an `implements` block provides. Importable only at
-    /// [`DepSlot::SELF`]: an impl-provided body is never addressed across
-    /// packages (dispatch is virtual). Boxed: the coherence key carries type
-    /// templates, and a [`DeclPath`] is a map key everywhere else.
-    ImplMethod(Box<ImplBodyKey>),
-}
-
-/// The identity of an impl-provided body: the interface, the impl's coherence
-/// key (injective over admitted impls), and the method name.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
-pub struct ImplBodyKey {
-    pub interface: InterfaceKey,
-    pub coherence: ImplCoherenceKey,
-    pub method: Name,
-}
-
-/// A declaration's coordinates within its package. The variant IS the kind,
-/// so an import of one kind can never bind an export of another.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
-pub enum DeclPath {
-    Class(ItemPath),
-    Enum(ItemPath),
-    Interface(ItemPath),
-    /// A recursive alias (the only kind pooled; others expand at lowering).
-    TypeAlias(ItemPath),
-    /// A top-level `let`. Owns a global slot and no pool object.
-    Let(ItemPath),
-    /// A named function. Owns a pool object and a global slot.
-    Function(FnPath),
-    /// An interface-machinery body. Owns a pool object and a global slot,
-    /// and appears in no runtime name table.
-    InterfaceBody(BodyKey),
-}
-
-impl DeclPath {
-    /// Is this a type declaration — one whose references bake a type tag?
-    #[must_use]
-    pub fn is_type(&self) -> bool {
-        matches!(
-            self,
-            Self::Class(_) | Self::Enum(_) | Self::Interface(_) | Self::TypeAlias(_)
-        )
-    }
-
-    /// Does this declaration own a global slot?
-    #[must_use]
-    pub fn owns_global_slot(&self) -> bool {
-        matches!(
-            self,
-            Self::Let(_) | Self::Function(_) | Self::InterfaceBody(_)
-        )
-    }
-
-    /// Does this declaration own a pool object?
-    #[must_use]
-    pub fn owns_object(&self) -> bool {
-        !matches!(self, Self::Let(_))
-    }
-
-    /// Does `local_ref` name the bucket a declaration of this kind is pooled
-    /// in? Never true for a `let`, which owns no pool object.
-    #[must_use]
-    pub fn matches_bucket(&self, local_ref: LocalRef) -> bool {
-        matches!(
-            (self, local_ref),
-            (Self::Class(_), LocalRef::Class(_))
-                | (Self::Enum(_), LocalRef::Enum(_))
-                | (Self::Interface(_), LocalRef::Interface(_))
-                | (Self::TypeAlias(_), LocalRef::TypeAlias(_))
-                | (
-                    Self::Function(_) | Self::InterfaceBody(_),
-                    LocalRef::Code(_)
-                )
-        )
-    }
-}
-
-impl std::fmt::Display for DeclPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Class(path) => write!(f, "class {path}"),
-            Self::Enum(path) => write!(f, "enum {path}"),
-            Self::Interface(path) => write!(f, "interface {path}"),
-            Self::TypeAlias(path) => write!(f, "type alias {path}"),
-            Self::Let(path) => write!(f, "let {path}"),
-            Self::Function(FnPath::Free(path)) => write!(f, "function {path}"),
-            Self::Function(FnPath::Method { class, name }) => {
-                write!(f, "method {class}.{name}")
-            }
-            Self::InterfaceBody(BodyKey::Default { interface, method }) => {
-                write!(f, "default body {interface}.{method}")
-            }
-            Self::InterfaceBody(BodyKey::ImplMethod(body)) => write!(
-                f,
-                "impl body <(_ as {}.{})>.{}",
-                body.interface.package.as_name(),
-                body.interface.path,
-                body.method
-            ),
-        }
-    }
-}
-
 /// An import: the declaration a unit references, addressed inside the package
 /// bound to `dep`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
@@ -311,6 +172,25 @@ pub enum LocalRef {
     Code(u32),
 }
 
+impl LocalRef {
+    /// Is this the bucket a declaration at `path` is pooled in? Never true
+    /// for a `let`, which owns no pool object.
+    #[must_use]
+    pub fn holds(self, path: &DeclPath) -> bool {
+        matches!(
+            (path, self),
+            (DeclPath::Class(_), Self::Class(_))
+                | (DeclPath::Enum(_), Self::Enum(_))
+                | (DeclPath::Interface(_), Self::Interface(_))
+                | (DeclPath::TypeAlias(_), Self::TypeAlias(_))
+                | (
+                    DeclPath::Function(_) | DeclPath::InterfaceBody(_),
+                    Self::Code(_)
+                )
+        )
+    }
+}
+
 /// What a unit provides, in its own package's coordinates. `Vec`s, not maps,
 /// so the on-wire order is the deterministic emit order.
 #[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -347,7 +227,7 @@ pub struct ProgramImplRuleFrag {
     /// interface default is not in this table (the resolver adopts it at
     /// dispatch through the interface's `default_fn`).
     pub methods: Vec<(Name, ProgramMethodImplFrag)>,
-    /// See [`RuntimeImplRule::field_links`](crate::types::RuntimeImplRule::field_links).
+    /// See [`RuntimeImplRule::field_links`](bex_vm_types::types::RuntimeImplRule::field_links).
     /// Slot indices are layout, not symbols, so they survive linking unchanged.
     pub field_links: Box<[u32]>,
 }

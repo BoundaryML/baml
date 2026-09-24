@@ -2,13 +2,15 @@
 
 use std::collections::HashMap;
 
+use baml_linker_types::{CompilationUnit, ImportEntry, InitTail};
+use bex_vm_types::{BodyKey, DeclPath};
+
 use super::{
     LinkError, LinkPackageId, LinkSet, Linker, PerPackage,
     bind::Tables,
     order::{Objects, Slots},
     space::Resolved,
 };
-use crate::unit::{BodyKey, CompilationUnit, DeclPath, ImportEntry, InitTail};
 
 pub(super) type PathKey = (LinkPackageId, DeclPath);
 
@@ -44,7 +46,7 @@ pub(super) fn export_objects(
     for id in set.ids() {
         let package = set.package(id);
         for (path, local) in &package.unit.exports.objects {
-            if !path.matches_bucket(*local) {
+            if !local.holds(path) {
                 return Err(LinkError::invalid(format!(
                     "package `{}` exports {path} from the {local:?} bucket",
                     package.name

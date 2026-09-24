@@ -2,15 +2,15 @@
 //! map into the image, and the one relocation walk over them.
 
 use baml_base::Name;
+use baml_linker_types::{CompilationUnit, InitTail, import_ordinal};
+use bex_vm_types::{
+    GlobalIndex, Object, ObjectIndex,
+    relink::{IndexOperand, visit_object_operands},
+};
 
 use super::{
     LinkError, PerPackage,
     layout::{Placed, SlotLayout, TailSlots, UnitObjects},
-};
-use crate::{
-    GlobalIndex, Object, ObjectIndex,
-    relink::{IndexOperand, visit_object_operands},
-    unit::{CompilationUnit, InitTail, import_ordinal},
 };
 
 /// Resolve a global operand in unit or tail convention: an import ordinal

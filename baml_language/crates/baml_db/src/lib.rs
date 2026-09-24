@@ -17,6 +17,7 @@ pub mod check;
 pub mod db;
 pub mod discovery;
 pub mod manifest;
+pub mod program;
 pub mod project_resolution;
 pub mod stdlib_prefix;
 pub mod testing;
@@ -38,6 +39,7 @@ pub use check::{
 };
 pub use db::{EventCallback, ProjectDatabase, SourceRootError, SourceRootSpec, canonicalize_lossy};
 pub use discovery::discover_baml_files;
+pub use program::{CompileProgramError, compile_program};
 pub use project_resolution::{
     BAML_SRC_DIR, BAML_TOML, find_baml_project_root, find_baml_project_root_from_ancestors,
     project_search_dir, project_source_root, resolve_project_search_start,

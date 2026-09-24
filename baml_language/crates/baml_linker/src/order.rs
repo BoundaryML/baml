@@ -4,13 +4,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use baml_base::Name;
+use baml_linker_types::InitTail;
 
 use super::{
     LinkError, LinkGroup, LinkPackageId, LinkSet, PerPackage,
     layout::{Bucket, Interner, Placed, SlotLayout, TailPart, TailSlots, UnitObjects},
     space::{Resolved, global_operand},
 };
-use crate::unit::InitTail;
 
 /// One layout group: its packages in set order, and the order its package
 /// tails are placed in.

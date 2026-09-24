@@ -133,6 +133,32 @@ pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Op
         .map(|dependency| dependency.root)
 }
 
+/// A package's edge table: every package it reaches, by the name it reaches
+/// it under — its manifest edges, then the language packages under their
+/// fixed names. The language packages are reachable from every package,
+/// their own siblings included: `baml` calls the metatype's companion
+/// methods in `reflect` while `reflect` depends on `baml`, which no manifest
+/// edge could express without a cycle. A non-stdlib root already carries the
+/// prelude as explicit edges, so for it the fixed names add nothing.
+pub fn edge_table(db: &dyn crate::Db, root: SourceRoot) -> Vec<(Name, SourceRoot)> {
+    let mut edges: Vec<(Name, SourceRoot)> = root
+        .dependencies(db)
+        .iter()
+        .map(|dependency| (dependency.name.clone(), dependency.root))
+        .collect();
+    let lang = lang_roots(db);
+    for package in baml_base::LangPackage::ALL {
+        let Some(lang_root) = lang.get(package) else {
+            continue;
+        };
+        let name = Name::new(package.manifest_name());
+        if lang_root != root && !edges.iter().any(|(edge, _)| *edge == name) {
+            edges.push((name, lang_root));
+        }
+    }
+    edges
+}
+
 /// The package `root` spells as `name`: itself, when `name` is its own
 /// declared name (a named package may qualify its own items by it), else the
 /// dependency reached by the edge named `name`. Anything else is invisible.

@@ -1,6 +1,6 @@
 //! LEGACY unit format: string-keyed symbolic per-source-file compilation
 //! units. Survives only until every producer and consumer is on the
-//! identity-keyed format of [`crate::unit`]; nothing new may depend on it.
+//! identity-keyed format of `baml_linker_types`; nothing new may depend on it.
 //!
 //! A [`CompilationUnit`] is the relocatable artifact emit produces for one
 //! source file. Where today's per-file bytecode reuse *reconstructs* a file's
@@ -29,7 +29,7 @@ use crate::{
 /// `Program`'s name maps resolves the symbol.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub enum SymbolKind {
     /// A named function (owns a global slot *and* a pool object).
@@ -57,7 +57,7 @@ pub enum SymbolKind {
 /// (design §9 R1) keyed by this pair — hence it must round-trip losslessly.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct GenericFnKey {
     /// Fully-qualified name of the base function being instantiated. Resolves
@@ -77,7 +77,7 @@ pub struct GenericFnKey {
 /// resolves through [`Self::generic`].
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct Symbol {
     /// Which definition kind (and hence which name map) resolves this symbol.
@@ -99,7 +99,7 @@ pub struct Symbol {
 /// name a definition symbolically.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub enum LocalRef {
     /// Offset into the unit's `classes` bucket.
@@ -119,7 +119,7 @@ pub enum LocalRef {
 /// `HashMap`) so the on-wire order is the deterministic emit order.
 #[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct ExportTable {
     /// Fully-qualified name to the local bucket+offset that defines it. Covers
@@ -139,7 +139,7 @@ pub struct ExportTable {
 /// emit order the `IndexMap`s in `ProgramPackage` require.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct ProgramPackageFrag {
     /// All source-visible declaration names (types, aliases, and values).
@@ -176,7 +176,7 @@ pub struct ProgramPackageFrag {
 /// bucket — a body has no name on any wire.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct ProgramImplRuleFrag {
     /// Fully-qualified name of the interface this rule heads.
@@ -205,7 +205,7 @@ pub struct ProgramImplRuleFrag {
 /// resolver adopts it at dispatch through the interface's `default_fn`).
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct ProgramMethodImplFrag {
     /// Offset of the callee body in the declaring unit's `code` bucket.
@@ -225,7 +225,7 @@ pub struct ProgramMethodImplFrag {
 /// resolves into program indices.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct CompilationUnit {
     /// Project-root-relative source path (equals `Function::source_file`). Never
@@ -313,7 +313,7 @@ pub struct CompilationUnit {
 /// [`Self::global_imports`] (a `let`/function slot in the main image).
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct InitTail {
     /// Tail objects (helpers, their lambdas/literals, `$init`s, `$init_test`s)

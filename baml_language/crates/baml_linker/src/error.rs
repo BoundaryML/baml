@@ -2,8 +2,7 @@
 
 use baml_base::Name;
 use baml_type::typetag::TypeTag;
-
-use crate::unit::DeclPath;
+use bex_vm_types::DeclPath;
 
 /// An error raised while linking.
 #[derive(Clone, Debug, PartialEq, Eq)]

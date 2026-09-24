@@ -4,12 +4,10 @@
 use std::{collections::HashMap, ops::Range};
 
 use baml_base::Name;
+use baml_linker_types::{CompilationUnit, InitTail, LocalRef};
+use bex_vm_types::{DeclPath, Object, RealizedTy};
 
 use super::LinkError;
-use crate::{
-    Object, RealizedTy,
-    unit::{CompilationUnit, DeclPath, InitTail, LocalRef},
-};
 
 /// The per-kind object buckets of a unit, in pool order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

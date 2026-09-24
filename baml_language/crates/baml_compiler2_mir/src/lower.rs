@@ -93,13 +93,48 @@ use baml_type::{FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as
 /// (recursive → pooled as a declaration) or expanded (non-recursive →
 /// inlined) — it survives as a name nothing declares, which `lower_to_runtime`
 /// rejects.
+#[salsa::tracked(returns(ref))]
 pub fn resolved_aliases_for_package(
     db: &dyn crate::Db,
     pkg_id: baml_base::SourceRoot,
-) -> ResolvedAliases {
-    ResolvedAliases::from_aliases(
+) -> PackageAliases {
+    PackageAliases(ResolvedAliases::from_aliases(
         baml_compiler2_hir_ty::interfaces::package_resolved_aliases(db, pkg_id).clone(),
-    )
+    ))
+}
+
+/// A package's memoized alias environment ([`resolved_aliases_for_package`]).
+/// `baml_type` owns [`ResolvedAliases`] and knows nothing of salsa; this
+/// wrapper is what makes it a query value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackageAliases(pub ResolvedAliases);
+
+impl std::ops::Deref for PackageAliases {
+    type Target = ResolvedAliases;
+
+    fn deref(&self) -> &ResolvedAliases {
+        &self.0
+    }
+}
+
+// Safety: contains `Ty` (which has `Name`, a Salsa interned type). Manual
+// `Update` impl uses `PartialEq` for early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for PackageAliases {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old_ref = unsafe { &*old_pointer };
+        if *old_ref == new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
 }
 
 // ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
@@ -552,7 +587,18 @@ pub struct RuntimeLowering<'a> {
     pub viewpoint: baml_base::SourceRoot,
 }
 
-impl RuntimeLowering<'_> {
+impl<'a> RuntimeLowering<'a> {
+    /// The crossing for `root`'s declarations: its alias environment and the
+    /// database's spelling table, both memoized.
+    pub fn of(db: &'a dyn crate::Db, root: baml_base::SourceRoot) -> Self {
+        Self {
+            aliases: &resolved_aliases_for_package(db, root).0,
+            spelling: baml_compiler2_hir::package::spelling(db),
+            db,
+            viewpoint: root,
+        }
+    }
+
     /// A compile-time type as the runtime carries it.
     pub fn convert(&self, ty: &Tir2Ty) -> RuntimeTy {
         self.aliases
@@ -1622,7 +1668,7 @@ fn class_type_tags_within(db: &dyn crate::Db, root: baml_base::SourceRoot) -> Pr
 fn package_lowering_data(db: &dyn crate::Db, pkg_id: baml_base::SourceRoot) -> PackageLoweringData {
     use baml_compiler2_hir::package::package_dependency_closure;
 
-    let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
+    let resolved_aliases = resolved_aliases_for_package(db, pkg_id).0.clone();
 
     // Collect every interface-declared method name in scope (own package +
     // dependency closure). `dispatch_target_for_concrete` previously enumerated

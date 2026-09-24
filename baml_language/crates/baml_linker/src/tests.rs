@@ -1,18 +1,18 @@
+use baml_linker_types::{
+    DeclKey, DepSlot, DependencyEntry, Digest, ExportTable, ImportEntry, LocalRef, import_operand,
+};
 use baml_type::typetag::TypeTag;
-
-use super::*;
-use crate::{
-    ConstValue, GlobalIndex, Instruction, Object, ObjectIndex, RealizedTy,
+use bex_vm_types::{
+    BodyKey, ConstValue, DeclPath, FnPath, GlobalIndex, ImplBodyKey, Instruction, InterfaceKey,
+    Object, ObjectIndex, RealizedTy,
     bytecode::Bytecode,
     types::{
         Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin, GenericFunction,
         LocalName, ProgramPackage,
     },
-    unit::{
-        BodyKey, DeclKey, DeclPath, DepSlot, DependencyEntry, Digest, ExportTable, FnPath,
-        ImplBodyKey, ImportEntry, InterfaceKey, LocalRef, import_operand,
-    },
 };
+
+use super::*;
 
 fn item(name: &str) -> LocalName {
     LocalName::new(Vec::new(), Name::new(name))
@@ -34,7 +34,7 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        return_type: crate::TyTemplate::Unknown,
+        return_type: bex_vm_types::TyTemplate::Unknown,
         param_names: Vec::new(),
         param_types: Vec::new(),
         param_has_default: Vec::new(),
@@ -42,14 +42,14 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         generic_param_bounds: Vec::new(),
         display_param_types: Vec::new(),
         display_return_type: String::new(),
-        throws_type: crate::TyTemplate::Never,
+        throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Internal,
         is_interface_body: false,
         native_key: None,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0,
-        runtime_package: crate::HeapPtr::null(),
+        runtime_package: bex_vm_types::HeapPtr::null(),
     }))
 }
 
@@ -69,9 +69,9 @@ fn func_with_constants(name: &str, refs: &[usize]) -> Object {
 /// A class named `name` in the local package (displays as `user.<name>`).
 fn class(name: &str) -> Object {
     Object::Class(Box::new(Class {
-        name: crate::DeclarationName::Declared(baml_type::QualifiedTypeName::local(Name::new(
-            name,
-        ))),
+        name: bex_vm_types::DeclarationName::Declared(baml_type::QualifiedTypeName::local(
+            Name::new(name),
+        )),
         fields: Vec::new(),
         description: None,
         alias: None,
@@ -82,7 +82,7 @@ fn class(name: &str) -> Object {
         has_cleanup: false,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
-        owner: crate::HeapPtr::null(),
+        owner: bex_vm_types::HeapPtr::null(),
     }))
 }
 
@@ -90,7 +90,7 @@ fn generic_value(function: usize, type_args: Vec<RealizedTy>) -> Object {
     Object::GenericFunction(GenericFunction {
         function: GlobalIndex::from_raw(function),
         type_args: type_args.into_boxed_slice(),
-        runtime_package: crate::HeapPtr::null(),
+        runtime_package: bex_vm_types::HeapPtr::null(),
     })
 }
 
@@ -549,8 +549,8 @@ fn impl_body_import_from_a_dependency_is_refused() {
             package: baml_type::Package::Local,
             path: item("Greeter"),
         },
-        coherence: crate::types::ImplCoherenceKey {
-            for_ty_pattern: crate::TyTemplate::Int,
+        coherence: bex_vm_types::ImplCoherenceKey {
+            for_ty_pattern: bex_vm_types::TyTemplate::Int,
             interface_args: Vec::new(),
             generic_param_bounds: Vec::new(),
         },

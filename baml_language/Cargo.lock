@@ -763,6 +763,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
+ "baml_linker_types",
  "baml_type",
  "baml_type_runtime",
  "bex_vm_types",
@@ -902,6 +903,8 @@ dependencies = [
  "baml_compiler_lexer",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_linker",
+ "baml_linker_types",
  "baml_type",
  "bex_vm_types",
  "borsh",
@@ -981,6 +984,27 @@ dependencies = [
  "serde",
  "serde_json",
  "text-size",
+]
+
+[[package]]
+name = "baml_linker"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_linker_types",
+ "baml_type",
+ "bex_vm_types",
+ "indexmap",
+]
+
+[[package]]
+name = "baml_linker_types"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_type",
+ "bex_vm_types",
+ "borsh",
 ]
 
 [[package]]

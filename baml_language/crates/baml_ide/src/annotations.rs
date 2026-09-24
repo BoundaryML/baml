@@ -138,7 +138,9 @@ pub fn file_annotations(
         // calls, and since we don't recurse into skipped functions, their
         // internals stay hidden.
         match func_data.metadata.origin {
-            FunctionOrigin::UserDefined | FunctionOrigin::Internal => {}
+            FunctionOrigin::UserDefined
+            | FunctionOrigin::Internal
+            | FunctionOrigin::TestInitializer => {}
             FunctionOrigin::Companion | FunctionOrigin::AutoDerive => continue,
         }
         if baml_compiler2_hir::item_data::function_llm_meta(db, func_loc).is_some() {

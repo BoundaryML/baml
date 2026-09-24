@@ -982,7 +982,7 @@ fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
 ///
 /// The initializer failed to lower (an internal error, attributed to the
 /// `let`'s file).
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn compile_let_helper<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     binding: LetLoc<'db>,

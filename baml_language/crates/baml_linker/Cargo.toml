@@ -1,0 +1,25 @@
+[package]
+name = "baml_linker"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "The static linker: compilation units of a program bound by identity into one runnable image"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_linker_types = { workspace = true }
+baml_type = { workspace = true }
+bex_vm_types = { workspace = true }
+indexmap = { workspace = true }

@@ -121,9 +121,12 @@ allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "bam
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
+# `baml_linker_types` carries the compilation-unit wire format over the
+# runtime's object types, and `baml_linker` folds units into a `Program`:
+# both sit on the compiler's output side, beside emit.
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
-reason = "Only compiler_emit and baml_db crates should depend on bex_vm_types (pure data layer)."
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host"]
+reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer)."
 
 
 # tools namespace configuration

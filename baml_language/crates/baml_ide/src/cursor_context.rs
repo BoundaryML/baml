@@ -47,7 +47,7 @@ fn func_origin_rank(origin: baml_compiler2_ast::ast::FunctionOrigin) -> u8 {
     match origin {
         FunctionOrigin::UserDefined => 0,
         FunctionOrigin::Companion => 1,
-        FunctionOrigin::Internal => 2,
+        FunctionOrigin::Internal | FunctionOrigin::TestInitializer => 2,
         FunctionOrigin::AutoDerive => 3,
     }
 }

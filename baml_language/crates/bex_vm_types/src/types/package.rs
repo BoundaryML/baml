@@ -6,7 +6,8 @@ use indexmap::IndexMap;
 
 use crate::{
     AtomicValueSlot, GlobalIndex, HeapPtr, ObjectIndex, RuntimeCompileDiagnostic, TyTemplate,
-    Value, types::interface::InterfaceBound, unit::DeclPath,
+    Value,
+    types::{DeclPath, interface::InterfaceBound},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize)]

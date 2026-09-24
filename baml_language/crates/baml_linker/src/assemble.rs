@@ -5,6 +5,10 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 use baml_type::typetag::TypeTag;
+use bex_vm_types::{
+    ConstValue, DeclPath, FnPath, GlobalIndex, Object, ObjectIndex, Program,
+    types::{ProgramImplRule, ProgramMethodImpl, ProgramPackage},
+};
 
 use super::{
     LinkError, LinkPackageId, LinkSet, PerPackage, TagCollision,
@@ -12,11 +16,6 @@ use super::{
     order::{LayoutOrder, Objects, Slots, tail_of},
     resolve::PathKey,
     space::{Imports, OperandSpace, TailSpace, UnitSpace, relocate},
-};
-use crate::{
-    ConstValue, GlobalIndex, Object, ObjectIndex, Program,
-    types::{ProgramImplRule, ProgramMethodImpl, ProgramPackage},
-    unit::{DeclPath, FnPath},
 };
 
 /// Everything resolved; builds the image.

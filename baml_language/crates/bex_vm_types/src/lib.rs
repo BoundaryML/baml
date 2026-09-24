@@ -20,14 +20,12 @@ pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod legacy_link;
 pub mod legacy_unit;
-pub mod link;
 pub mod relink;
 mod roots;
 pub mod runtime_compile;
 pub mod task_group;
 pub mod type_head;
 pub mod types;
-pub mod unit;
 
 pub use bex_str::BexStr;
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
@@ -35,7 +33,6 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
-pub use link::{LinkError, TagCollision};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
     ArtifactKind, RuntimeCompileArtifact, RuntimeCompileArtifactSlot, RuntimeCompileDiagnostic,
@@ -158,20 +155,16 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
-    CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch, ClientBuildMeta,
-    ClientBuildType, ConstValue, DeclarationName, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
-    GenericFunction, HostClosure, ImplCoherenceKey, Instance, InterfaceBound, LockedContainer,
-    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
-    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
-    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
-};
-pub use unit::{
-    BodyKey, CompilationUnit, DeclKey, DeclPath, DepSlot, DependencyEntry, Digest, ExportTable,
-    FnPath, IMPORT_BASE, ImplBodyKey, ImportEntry, InitTail, InterfaceKey, ItemPath, LocalRef,
-    PackageRecord, ProgramImplRuleFrag, ProgramMethodImplFrag,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
+    CaptureCategory, CaptureOption, Class, ClassField, ClassMethodDef, CleanupLatch,
+    ClientBuildMeta, ClientBuildType, ConstValue, DeclPath, DeclarationName, Enum, EnumVariant,
+    FnPath, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Future,
+    FutureRead, GenericFunction, HostClosure, ImplBodyKey, ImplCoherenceKey, Instance,
+    InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
+    MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program,
+    PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer,
+    Uint8ArrayReadGuard, Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant,
+    format_float, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

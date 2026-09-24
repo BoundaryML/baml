@@ -1,7 +1,7 @@
 //! LEGACY linker over the string-keyed [`CompilationUnit`] of
 //! [`crate::legacy_unit`]: folds symbolic units into a runnable [`Program`].
 //! Survives only until every producer and consumer of that format is on
-//! [`crate::link`]; nothing new may depend on it.
+//! `baml_linker`; nothing new may depend on it.
 //!
 //! The linker assigns final absolute `ObjectIndex`/`GlobalIndex` values,
 //! resolves each import against the merged export table, and patches operands
@@ -44,7 +44,7 @@ use crate::{
 /// pointers/values from the live image and allocates every other slot anew.
 #[derive(Clone, Debug)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub struct DynamicLinkPlan {
     pub program: Program,
@@ -67,7 +67,7 @@ fn import_key(symbol: &Symbol) -> String {
 /// for otherwise-unresolved imports, invokes `link`, then reports which linked
 /// prefix indices the VM must graft from its live static/dependency images.
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkError> {
     let object_exports: HashSet<&str> = units
@@ -419,7 +419,7 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
 /// An error raised while linking symbolic units into a [`Program`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub enum LinkError {
     /// An import named a fully-qualified name that no unit exports.
@@ -649,7 +649,7 @@ fn sole_init_tail(units: &[CompilationUnit], group: &[usize]) -> Result<Option<u
 /// name.
 #[allow(clippy::too_many_lines)]
 #[deprecated(
-    note = "legacy string-keyed unit format: dies when every producer and consumer is on `bex_vm_types::unit` and `bex_vm_types::link`"
+    note = "legacy string-keyed unit format: dies when every producer and consumer is on `baml_linker_types` and `baml_linker`"
 )]
 pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // ---- Group ordering (design §9 R3) --------------------------------------

@@ -5,7 +5,9 @@
 mod analysis;
 mod emit;
 mod items;
+mod package;
 mod pull_semantics;
+mod refs;
 mod stack_carry;
 #[cfg(any(debug_assertions, test))]
 mod verifier;
@@ -31,8 +33,8 @@ use baml_compiler2_hir::{
     },
 };
 use baml_compiler2_mir::{
-    BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases,
-    RuntimeLowering, Rvalue, StatementKind, definition_link_name, lower_function,
+    BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeLowering, Rvalue,
+    StatementKind, definition_link_name, lower_function,
     memory::{self, CellId},
     native_key_for,
 };
@@ -45,36 +47,7 @@ use bex_vm_types::{
         Symbol, SymbolKind,
     },
 };
-
-/// Build a per-package `ResolvedAliases` cache, keyed by package.
-fn build_alias_caches(
-    db: &dyn baml_compiler2_mir::Db,
-    all_files: &[baml_base::SourceFile],
-) -> HashMap<baml_base::SourceRoot, ResolvedAliases> {
-    let mut caches: HashMap<baml_base::SourceRoot, ResolvedAliases> = HashMap::new();
-    for file in all_files {
-        let pkg_info = file_package(db, *file);
-        caches
-            .entry(pkg_info.root)
-            .or_insert_with(|| baml_compiler2_mir::resolved_aliases_for_package(db, pkg_info.root));
-    }
-    caches
-}
-
-/// The compile-time → wire crossing for `root`'s declarations: its alias
-/// environment plus the program's spelling.
-fn runtime_lowering<'a>(
-    db: &'a dyn baml_compiler2_mir::Db,
-    caches: &'a HashMap<baml_base::SourceRoot, ResolvedAliases>,
-    root: baml_base::SourceRoot,
-) -> RuntimeLowering<'a> {
-    RuntimeLowering {
-        aliases: &caches[&root],
-        spelling: spelling(db),
-        db,
-        viewpoint: root,
-    }
-}
+pub use package::{EmittedPackage, emit_package};
 
 /// The source-less package surface captured before MIR/codegen starts.
 ///
@@ -270,7 +243,6 @@ impl<'db> InterfaceBodyStore<'_, 'db> {
 fn build_packages<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
-    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
     metadata: &PackageBuildMetadata<'_, 'db>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
@@ -322,7 +294,7 @@ fn build_packages<'db>(
 
     for file in all_files {
         let pkg_info = file_package(db, *file);
-        let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
+        let resolved = &RuntimeLowering::of(db, pkg_info.root);
         for &impl_loc in file_impls(db, *file) {
             // The rule's identity + lowering context, from the ONE helper the
             // decomposition's rule-attribution replay also uses.
@@ -500,7 +472,9 @@ fn emitted_function_origin(
         match origin {
             baml_compiler2_ast::FunctionOrigin::UserDefined => FunctionOrigin::UserDefined,
             baml_compiler2_ast::FunctionOrigin::Companion => FunctionOrigin::Companion,
-            baml_compiler2_ast::FunctionOrigin::Internal => FunctionOrigin::Internal,
+            // A test registrar is language-internal machinery on the wire.
+            baml_compiler2_ast::FunctionOrigin::Internal
+            | baml_compiler2_ast::FunctionOrigin::TestInitializer => FunctionOrigin::Internal,
             baml_compiler2_ast::FunctionOrigin::AutoDerive => FunctionOrigin::AutoDerive,
         }
     }
@@ -1073,7 +1047,6 @@ pub fn reuse_throws_mismatches(
         })
         .collect();
     let all_files = world_files(db, root);
-    let alias_caches = build_alias_caches(db, all_files);
     let mut mismatches = HashMap::new();
 
     for &file in all_files {
@@ -1082,12 +1055,9 @@ pub fn reuse_throws_mismatches(
             continue;
         }
         let pkg = file_package(db, file);
-        if let Err(detail) = spliced_throws_match(
-            db,
-            file,
-            &previous,
-            &runtime_lowering(db, &alias_caches, pkg.root),
-        ) {
+        if let Err(detail) =
+            spliced_throws_match(db, file, &previous, &RuntimeLowering::of(db, pkg.root))
+        {
             mismatches.insert(rel, detail);
         }
     }
@@ -1805,7 +1775,6 @@ fn decompose_units_after_prefix<'db>(
     {
         // Per pooled interface: each declaring block's coherence key + file.
         type RuleOwner = (bex_vm_types::ImplCoherenceKey, usize);
-        let alias_caches = build_alias_caches(db, all_files);
         // Pooled interface object index by declared type name (the bake's
         // `interface_indices` reconstructed from the pool, exactly as
         // `EmitTables::from_stdlib_program` does).
@@ -1817,7 +1786,7 @@ fn decompose_units_after_prefix<'db>(
         }
         let mut rule_owners: HashMap<usize, Vec<RuleOwner>> = HashMap::new();
         for (fi, file) in all_files.iter().enumerate() {
-            let resolved = &runtime_lowering(db, &alias_caches, file_package(db, *file).root);
+            let resolved = &RuntimeLowering::of(db, file_package(db, *file).root);
             for &impl_loc in baml_compiler2_hir::item_data::file_impls(db, *file) {
                 let Some(target) = items::impl_rule_target(db, impl_loc, resolved) else {
                     continue;
@@ -2808,7 +2777,6 @@ fn generate_impl<'db>(
             .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
             .count()
     };
-    let alias_caches = build_alias_caches(db, all_files);
 
     // Emit in two file groups — builtin stubs first, then user files — so the
     // stdlib occupies a contiguous, user-independent prefix of the ObjectPool
@@ -2916,7 +2884,6 @@ fn generate_impl<'db>(
             builtin_files,
             &mut tables,
             &mut program,
-            &alias_caches,
             &mut placements,
             &mut slots,
             &mut file_references,
@@ -2929,7 +2896,6 @@ fn generate_impl<'db>(
         user_files,
         &mut tables,
         &mut program,
-        &alias_caches,
         &mut placements,
         &mut slots,
         &mut file_references,
@@ -2954,7 +2920,6 @@ fn generate_impl<'db>(
     let interface_default_backfill = build_packages(
         db,
         all_files,
-        &alias_caches,
         &tables.interface_object_indices,
         &PackageBuildMetadata {
             package_exports: &package_exports,
@@ -3278,7 +3243,6 @@ fn emit_file_group<'db>(
     files: &[baml_base::SourceFile],
     tables: &mut EmitTables,
     program: &mut Program,
-    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     placements: &mut FunctionPlacements<'db>,
     slots: &mut GlobalSlots<'db>,
     file_references: &mut HashMap<String, UnitReferences>,
@@ -3388,7 +3352,7 @@ fn emit_file_group<'db>(
 
     for file in files {
         let pkg_info = file_package(db, *file);
-        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
+        let cache = &RuntimeLowering::of(db, pkg_info.root);
         for &class_loc in file_classes(db, *file) {
             let class = class_data(db, class_loc);
             // The fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
@@ -3441,7 +3405,7 @@ fn emit_file_group<'db>(
 
     for file in files {
         let pkg_info = file_package(db, *file);
-        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
+        let cache = &RuntimeLowering::of(db, pkg_info.root);
         for &enum_loc in file_enums(db, *file) {
             let enm = enum_data(db, enum_loc);
             // Same single renderer as the class pass / MIR (see above): keep the
@@ -3482,7 +3446,7 @@ fn emit_file_group<'db>(
     // package's impl rules below.
     for file in files {
         let pkg_info = file_package(db, *file);
-        let resolved = &runtime_lowering(db, alias_caches, pkg_info.root);
+        let resolved = &RuntimeLowering::of(db, pkg_info.root);
         for &iface_loc in baml_compiler2_hir::item_data::file_interfaces(db, *file) {
             let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
             let iface_tn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -3540,7 +3504,7 @@ fn emit_file_group<'db>(
     let mut emitted_aliases = HashSet::new();
     for file in files {
         let pkg_info = file_package(db, *file);
-        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
+        let cache = &RuntimeLowering::of(db, pkg_info.root);
         for &alias_loc in baml_compiler2_hir::item_data::file_type_aliases(db, *file) {
             let alias_data = baml_compiler2_hir::item_data::type_alias_data(db, alias_loc);
             let qtn = baml_compiler2_hir_ty::lower::qualify_def(
@@ -3590,7 +3554,6 @@ fn emit_file_group<'db>(
             class_object_indices,
             enum_object_indices,
             &class_fields,
-            alias_caches,
             program,
             placements,
             file_references,
@@ -3605,7 +3568,6 @@ fn emit_file_group<'db>(
             class_object_indices,
             enum_object_indices,
             &class_fields,
-            alias_caches,
             program,
             placements,
             file_references,
@@ -4614,7 +4576,6 @@ fn emit_functions_serial<'db>(
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
-    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
     file_references: &mut HashMap<String, UnitReferences>,
@@ -4636,7 +4597,7 @@ fn emit_functions_serial<'db>(
         let line_starts = build_line_starts(file.text(db));
         let pkg_info_pass4 = file_package(db, *file);
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
-        let cache_pass4 = &runtime_lowering(db, alias_caches, pkg_info_pass4.root);
+        let cache_pass4 = &RuntimeLowering::of(db, pkg_info_pass4.root);
         for &func_loc in file_functions(db, *file) {
             // Required interface methods are signature-only items: nothing
             // to compile or index (mirrors their pre-item invisibility here).
@@ -4922,7 +4883,6 @@ fn emit_functions_parallel<'db>(
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
-    alias_caches: &HashMap<baml_base::SourceRoot, ResolvedAliases>,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
     file_references: &mut HashMap<String, UnitReferences>,
@@ -5101,7 +5061,7 @@ fn emit_functions_parallel<'db>(
         };
 
         let pkg_info = file_package(db, item.file);
-        let cache = &runtime_lowering(db, alias_caches, pkg_info.root);
+        let cache = &RuntimeLowering::of(db, pkg_info.root);
         attach_function_metadata(
             db,
             func_loc,
@@ -5730,7 +5690,7 @@ mod tests {
             .expect("test file declares `f`");
         let parameter_defaults =
             baml_compiler2_hir::signature::function_parameter_defaults(&db, func_loc);
-        let aliases = ResolvedAliases {
+        let aliases = baml_compiler2_mir::ResolvedAliases {
             aliases: HashMap::new(),
             recursive: HashSet::new(),
         };
@@ -5763,7 +5723,7 @@ mod tests {
                     == name
             })
             .expect("test file declares the interface");
-        let aliases = ResolvedAliases {
+        let aliases = baml_compiler2_mir::ResolvedAliases {
             aliases: HashMap::new(),
             recursive: HashSet::new(),
         };
