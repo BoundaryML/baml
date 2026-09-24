@@ -449,7 +449,7 @@ impl PlaygroundSeam {
             })?;
         lease
             .engine
-            .call_function_with_trace(
+            .call_function_with_outcome(
                 "testing.TestRegistry.run_test",
                 vec![
                     bex_project::BexExternalValue::Handle(lease.handle.clone()),

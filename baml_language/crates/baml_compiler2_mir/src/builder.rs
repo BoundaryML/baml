@@ -360,38 +360,13 @@ impl<'db> MirBuilder<'db> {
         self.call_with_type_args(callee, args, 0, destination, target, unwind);
     }
 
-    /// Emit a function call with an explicit type-argument count.
-    ///
-    /// The first `ntypeargs` entries of `args` must be `Object::Type` values
-    /// produced by `Rvalue::LoadType`.  Regular value args follow after them.
+    /// Emit a call whose leading `ntypeargs` operands are runtime types,
+    /// followed by the ordinary value arguments.
     pub(crate) fn call_with_type_args(
         &mut self,
         callee: Operand<'db>,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        destination: Place,
-        target: BlockId,
-        unwind: Option<BlockId>,
-    ) {
-        self.call_with_type_args_and_runtime_id(
-            callee,
-            args,
-            ntypeargs,
-            None,
-            destination,
-            target,
-            unwind,
-        );
-    }
-
-    /// Emit a function call with an optional hidden runtime-id operand.
-    #[expect(clippy::too_many_arguments)]
-    pub(crate) fn call_with_type_args_and_runtime_id(
-        &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
-        ntypeargs: usize,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -405,7 +380,6 @@ impl<'db> MirBuilder<'db> {
             callee,
             args,
             ntypeargs,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -427,16 +401,14 @@ impl<'db> MirBuilder<'db> {
         }
     }
 
-    /// Emit an open-world virtual interface-method call with an optional hidden
-    /// runtime-id operand.
+    /// Resolve an interface method from the receiver's concrete type at runtime.
     #[expect(clippy::too_many_arguments)]
-    pub(crate) fn virtual_call_with_runtime_id(
+    pub(crate) fn virtual_call(
         &mut self,
         iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -455,7 +427,6 @@ impl<'db> MirBuilder<'db> {
             method,
             args,
             ntypeargs,
-            runtime_id,
             destination,
             target,
             unwind,
@@ -483,12 +454,10 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::ThrowIfPanic { value, otherwise });
     }
 
-    /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
-    pub(crate) fn sys_op_with_runtime_id(
+    pub(crate) fn sys_op(
         &mut self,
         callee: Operand<'db>,
         args: Vec<Operand<'db>>,
-        runtime_id: Option<Operand<'db>>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -500,7 +469,6 @@ impl<'db> MirBuilder<'db> {
         self.set_terminator(Terminator::SysOp {
             callee,
             args,
-            runtime_id,
             destination,
             target,
             unwind,

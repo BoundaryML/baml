@@ -172,7 +172,7 @@ fn calls_batch(relation: &RelationDef, rows: &[CallRow]) -> RecordBatch {
                 }
                 Arc::new(b.finish())
             }
-            "selection_reasons" | "roles" | "runtime_ids" => {
+            "selection_reasons" | "roles" => {
                 let mut b = ListBuilder::new(StringBuilder::new()).with_field(
                     datafusion::arrow::datatypes::Field::new(
                         "item",

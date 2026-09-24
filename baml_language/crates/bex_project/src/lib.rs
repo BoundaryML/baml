@@ -10,7 +10,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-pub use bex::{Bex, BexCallTraceResult};
+pub use bex::{Bex, BexRunResult};
 // The engine type itself, and the compiled program it is built from, for
 // hosts that manage engine lifecycles (the LSP server's and the browser's
 // playground runtimes): the blessed seam stays this crate rather than a

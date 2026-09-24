@@ -1453,7 +1453,7 @@ fn resolution_external_function<'db>(
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
 use baml_compiler2_ast::{
-    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
+    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, LoopOrigin,
     PatId as AstPatId, Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId,
     TypeExpr as AstTypeExpr, TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
@@ -2410,7 +2410,6 @@ impl<'db> LoweringContext<'db> {
             &iter_method,
             body,
             &[],
-            None,
             &Place::local(iter_local),
         )?;
 
@@ -2442,7 +2441,6 @@ impl<'db> LoweringContext<'db> {
             &next_method,
             body,
             &[],
-            None,
             &Place::local(next_local),
         )?;
         self.emit_is_type_branch(next_local, Self::baml_iter_done_ty(), bb_exit, bb_body);
@@ -3740,7 +3738,6 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         use crate::inference_provider::MemberResolution;
@@ -3803,7 +3800,6 @@ impl<'db> LoweringContext<'db> {
                     return self.emit_item_call_on_receiver(
                         expr_id,
                         args,
-                        runtime_id,
                         dest,
                         &iface_tn,
                         &iface_args,
@@ -3819,7 +3815,7 @@ impl<'db> LoweringContext<'db> {
                         expr_id,
                     ));
                 };
-                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue)?;
+                self.emit_item_call_type_keyed(expr_id, args, dest, rvalue)?;
                 Ok(true)
             }
             MethodCallee::Concrete {
@@ -3831,11 +3827,11 @@ impl<'db> LoweringContext<'db> {
                 let method = callable_display_name(self.db, func).clone();
                 if callable_takes_self(self.db, func) {
                     return self.emit_item_call_on_receiver(
-                        expr_id, args, runtime_id, dest, &view.0, &view.1, &method,
+                        expr_id, args, dest, &view.0, &view.1, &method,
                     );
                 }
                 let rvalue = self.type_keyed_function_rvalue(expr_id, &self_ty, &view, &method);
-                self.emit_item_call_type_keyed(expr_id, args, runtime_id, dest, rvalue)?;
+                self.emit_item_call_type_keyed(expr_id, args, dest, rvalue)?;
                 Ok(true)
             }
             MethodCallee::Inherent(_) => Ok(false),
@@ -3875,12 +3871,10 @@ impl<'db> LoweringContext<'db> {
     /// first argument, from which the VM derives `Self`. The call plan
     /// covers every written argument, `self` included, so the list is
     /// lowered ONCE and split.
-    #[expect(clippy::too_many_arguments)]
     fn emit_item_call_on_receiver(
         &mut self,
         expr_id: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
         iface_tn: &TypeName,
         iface_args: &[Tir2Ty],
@@ -3910,7 +3904,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             arg_operands,
-            runtime_id,
             dest,
         )
     }
@@ -3921,7 +3914,6 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
         rvalue: Rvalue<'db>,
     ) -> Lowered<()> {
@@ -3932,7 +3924,6 @@ impl<'db> LoweringContext<'db> {
             Operand::Copy(Place::local(callable)),
             arg_operands,
             expr_id,
-            runtime_id,
             dest,
         )?;
         Ok(())
@@ -4206,20 +4197,17 @@ impl<'db> LoweringContext<'db> {
         callee_op: Operand<'db>,
         arg_operands: Vec<Operand<'db>>,
         expr_id: AstExprId,
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<()> {
         let argument_layout = self.call_argument_layout(expr_id, arg_operands.len())?;
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
         match dest {
             Place::Local(_) => {
-                self.builder.call_with_type_args_and_runtime_id(
+                self.builder.call_with_type_args(
                     callee_op,
                     arg_operands,
                     0,
-                    runtime_id_operand,
                     dest.clone(),
                     target,
                     unwind,
@@ -4230,11 +4218,10 @@ impl<'db> LoweringContext<'db> {
             _ => {
                 let call_ty = self.expr_ty(expr_id);
                 let tmp = self.builder.temp(call_ty);
-                self.builder.call_with_type_args_and_runtime_id(
+                self.builder.call_with_type_args(
                     callee_op,
                     arg_operands,
                     0,
-                    runtime_id_operand,
                     Place::local(tmp),
                     target,
                     unwind,
@@ -6267,35 +6254,6 @@ impl<'db> LoweringContext<'db> {
         Ok(())
     }
 
-    fn planned_call_args(
-        &self,
-        expr_id: AstExprId,
-        args: &[CallArg],
-    ) -> (Vec<AstExprId>, Option<AstExprId>) {
-        let runtime_id = self
-            .tir_call_plan(self.expr_metadata_key(expr_id))
-            .and_then(|plan| plan.runtime_id);
-        let ordinary_args = args
-            .iter()
-            .filter_map(|arg| (Some(arg.expr) != runtime_id).then_some(arg.expr))
-            .collect();
-        (ordinary_args, runtime_id)
-    }
-
-    fn lower_runtime_id_operand(
-        &mut self,
-        runtime_id: Option<AstExprId>,
-    ) -> Lowered<Option<Operand<'db>>> {
-        let Some(expr_id) = runtime_id else {
-            return Ok(None);
-        };
-        let operand = self.lower_to_operand(expr_id)?;
-        let ty = self.expr_ty(expr_id);
-        Ok(Some(Operand::Copy(Place::Local(
-            self.operand_to_local(operand, ty),
-        ))))
-    }
-
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) -> Lowered<()> {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
@@ -6350,8 +6308,8 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Call { callee, args, .. } => {
-                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
-                self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest)?;
+                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
+                self.lower_call(expr_id, callee, &arg_exprs, dest)?;
             }
 
             AstExpr::Array { elements } => {
@@ -6440,8 +6398,8 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::OptionalCall { callee, args } => {
-                let (arg_exprs, runtime_id) = self.planned_call_args(expr_id, &args);
-                self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest)?;
+                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
+                self.lower_optional_call(expr_id, callee, &arg_exprs, dest)?;
             }
 
             AstExpr::Index { base, index } => {
@@ -7078,10 +7036,6 @@ impl<'db> LoweringContext<'db> {
         }
 
         let name = &segments[0];
-        if name.as_str() == "$id" {
-            self.lower_current_runtime_id(dest);
-            return Ok(());
-        }
 
         if let Some(place) = self.place_for_path(expr_id, name) {
             self.builder.assign(dest, Rvalue::Use(Operand::Copy(place)));
@@ -7849,7 +7803,6 @@ impl<'db> LoweringContext<'db> {
             vec![lhs_op, rhs_op],
             /* ntypeargs */ 0,
             /* argument_layout */ None,
-            /* runtime_id */ None,
             bool_ty,
             unwind,
             dest,
@@ -8249,7 +8202,6 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         let callee_op = self.lower_to_operand(callee)?;
@@ -8269,7 +8221,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest)?;
+            self.lower_call(expr_id, callee, args, dest)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -8278,7 +8230,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, runtime_id, dest.clone())?;
+            self.lower_call(expr_id, callee, args, dest.clone())?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -8872,7 +8824,6 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         // `x?.m(...)` is a guarded *method call*, not a call of a bound-method
@@ -8886,19 +8837,11 @@ impl<'db> LoweringContext<'db> {
         // the call itself exactly as `x.m(...)`.
         if let AstExpr::OptionalMemberAccess { base, member } = self.body.exprs[callee].clone() {
             let member_call = AstExpr::MemberAccess { base, member };
-            self.lower_optional_method_call(
-                expr_id,
-                callee,
-                base,
-                &member_call,
-                args,
-                runtime_id,
-                dest,
-            )?;
+            self.lower_optional_method_call(expr_id, callee, base, &member_call, args, dest)?;
             return Ok(());
         }
         let callee_expr = self.body.exprs[callee].clone();
-        self.lower_call_with_callee(expr_id, callee, &callee_expr, args, runtime_id, dest)?;
+        self.lower_call_with_callee(expr_id, callee, &callee_expr, args, dest)?;
         Ok(())
     }
 
@@ -8912,7 +8855,6 @@ impl<'db> LoweringContext<'db> {
     /// `callee` itself stays the original expression id, so every TIR lookup
     /// (resolution, call plan, receiver type) keys on the node the type checker
     /// recorded.
-    #[expect(clippy::too_many_arguments)]
     fn lower_optional_method_call(
         &mut self,
         expr_id: AstExprId,
@@ -8920,7 +8862,6 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         member_call: &AstExpr,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         let base_op = self.lower_to_operand(base)?;
@@ -8940,7 +8881,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call_with_callee(expr_id, callee, member_call, args, runtime_id, dest)?;
+            self.lower_call_with_callee(expr_id, callee, member_call, args, dest)?;
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -8949,14 +8890,7 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call_with_callee(
-                expr_id,
-                callee,
-                member_call,
-                args,
-                runtime_id,
-                dest.clone(),
-            )?;
+            self.lower_call_with_callee(expr_id, callee, member_call, args, dest.clone())?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -9002,14 +8936,13 @@ impl<'db> LoweringContext<'db> {
         callee: AstExprId,
         callee_expr: &AstExpr,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: Place,
     ) -> Lowered<()> {
         use crate::inference_provider::MemberResolution;
 
         // A UFCS interface-item call, whatever its spelling — the resolution
         // record, not the syntax, routes it.
-        if self.try_lower_interface_item_call(expr_id, callee, args, runtime_id, &dest)? {
+        if self.try_lower_interface_item_call(expr_id, callee, args, &dest)? {
             return Ok(());
         }
         if let AstExpr::MemberAccess { base, member } = callee_expr {
@@ -9024,7 +8957,6 @@ impl<'db> LoweringContext<'db> {
                 base_id,
                 &member_name,
                 args,
-                runtime_id,
                 &dest,
             )? {
                 return Ok(());
@@ -9038,7 +8970,6 @@ impl<'db> LoweringContext<'db> {
                 base_id,
                 &member_name,
                 args,
-                runtime_id,
                 &dest,
             )? {
                 return Ok(());
@@ -9143,18 +9074,10 @@ impl<'db> LoweringContext<'db> {
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(self.value_place(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
-                let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
                 let target = self.builder.create_block();
                 let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-                self.builder.call_with_type_args_and_runtime_id(
-                    callee_op,
-                    all_args,
-                    ntypeargs,
-                    runtime_id_operand,
-                    dest,
-                    target,
-                    unwind,
-                );
+                self.builder
+                    .call_with_type_args(callee_op, all_args, ntypeargs, dest, target, unwind);
                 self.builder.set_current_block(target);
                 return Ok(());
             }
@@ -9290,7 +9213,6 @@ impl<'db> LoweringContext<'db> {
                         &method_name,
                         expr_id,
                         args,
-                        runtime_id,
                         &dest,
                     )? {
                         return Ok(());
@@ -9315,7 +9237,6 @@ impl<'db> LoweringContext<'db> {
                             &method_name,
                             expr_id,
                             args,
-                            runtime_id,
                             &dest,
                         )?
                     {
@@ -9835,11 +9756,9 @@ impl<'db> LoweringContext<'db> {
             } else {
                 arg_operands
             };
-            let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
-            self.builder.sys_op_with_runtime_id(
+            self.builder.sys_op(
                 callee_operand,
                 sys_op_arg_operands,
-                runtime_id_operand,
                 Place::Local(dest_local),
                 target,
                 unwind,
@@ -9859,12 +9778,10 @@ impl<'db> LoweringContext<'db> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
-                    self.builder.call_with_type_args_and_runtime_id(
+                    self.builder.call_with_type_args(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
-                        runtime_id_operand,
                         dest,
                         target,
                         unwind,
@@ -9874,12 +9791,10 @@ impl<'db> LoweringContext<'db> {
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
-                    self.builder.call_with_type_args_and_runtime_id(
+                    self.builder.call_with_type_args(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
-                        runtime_id_operand,
                         Place::local(tmp),
                         target,
                         unwind,
@@ -10925,44 +10840,6 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    fn lower_current_runtime_id(&mut self, dest: Place) {
-        let callee = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["id"],
-            "current",
-        )));
-        let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        self.builder.call(callee, Vec::new(), dest, resume, unwind);
-        self.builder.set_current_block(resume);
-    }
-
-    fn lower_set_runtime_id(&mut self, value: AstExprId) -> Lowered<()> {
-        let callee = Operand::Constant(Constant::Function(self.lang_function(
-            baml_base::LangPackage::Baml,
-            &["id"],
-            "set",
-        )));
-        let arg = self.lower_to_operand(value)?;
-        let dest = self.builder.temp(RuntimeTy::String);
-        let resume = self.builder.create_block();
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        self.builder
-            .call(callee, vec![arg], Place::local(dest), resume, unwind);
-        self.builder.set_current_block(resume);
-        Ok(())
-    }
-
-    /// The `$id` runtime-identity special form. MIR owns its lowering (reads
-    /// → `baml.id.current()`, plain `=` writes → `baml.id.set(...)`); TIR
-    /// owns its typing and rejects the invalid shapes (compound assignment,
-    /// member access, call-site labels, `$id` bindings) — see
-    /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
-    /// `hir_ty`'s inference. Keep the two layers in sync.
-    fn is_runtime_id_path(expr: &AstExpr) -> bool {
-        matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
-    }
-
     /// Lowers a condition/logical-operand expression to an operand,
     /// applying the checker-recorded truthiness coercion (B-1563,
     /// `Adjust::Truthy`). A `bool`-typed condition records nothing and
@@ -11717,7 +11594,6 @@ impl<'db> LoweringContext<'db> {
     /// Returns `true` when dispatch was emitted. Returns `false` (without
     /// touching the builder) when the receiver isn't interface-typed or no
     /// implementors are registered — the regular call lowering then runs.
-    #[expect(clippy::too_many_arguments)]
     fn try_lower_interface_dispatch(
         &mut self,
         expr_id: AstExprId,
@@ -11725,7 +11601,6 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         // Same view the field form uses, so `x?.m()` dispatches on the non-null
@@ -11769,7 +11644,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             args,
-            runtime_id,
             dest,
         )
     }
@@ -11791,7 +11665,6 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
         expr_id: AstExprId,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         let arg_ops = self.lower_call_arg_operands(expr_id, args)?;
@@ -11803,7 +11676,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             arg_ops,
-            runtime_id,
             dest,
         )
     }
@@ -11818,7 +11690,6 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
         expr_id: AstExprId,
         arg_ops: Vec<Operand<'db>>,
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         let method_arg_count = self
@@ -11852,7 +11723,6 @@ impl<'db> LoweringContext<'db> {
             &generic_params,
         );
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id)?;
         let result_ty = self.expr_ty(expr_id);
         let argument_layout = self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
         self.emit_virtual_call_with_operands(
@@ -11861,7 +11731,6 @@ impl<'db> LoweringContext<'db> {
             all_args,
             ntypeargs,
             argument_layout,
-            runtime_id_operand,
             result_ty,
             unwind,
             dest.clone(),
@@ -11899,7 +11768,6 @@ impl<'db> LoweringContext<'db> {
         args: Vec<Operand<'db>>,
         ntypeargs: usize,
         argument_layout: Option<baml_type::CallLayout>,
-        runtime_id: Option<Operand<'db>>,
         result_ty: RuntimeTy,
         unwind: Option<BlockId>,
         dest: Place,
@@ -11912,12 +11780,11 @@ impl<'db> LoweringContext<'db> {
                 (Place::local(tmp), Some(projection))
             }
         };
-        self.builder.virtual_call_with_runtime_id(
+        self.builder.virtual_call(
             iface,
             method.to_string(),
             args,
             ntypeargs,
-            runtime_id,
             call_dest.clone(),
             resume,
             unwind,
@@ -12010,7 +11877,6 @@ impl<'db> LoweringContext<'db> {
     /// so a virtual call keyed on the shared interface resolves its impl. Falls
     /// through (returns false) when the members share no providing interface, so
     /// the caller can report the real error.
-    #[expect(clippy::too_many_arguments)]
     fn try_lower_union_iface_dispatch(
         &mut self,
         expr_id: AstExprId,
@@ -12018,7 +11884,6 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> Lowered<bool> {
         let Some(members) = self
@@ -12044,7 +11909,6 @@ impl<'db> LoweringContext<'db> {
             method,
             expr_id,
             args,
-            runtime_id,
             dest,
         )
     }
@@ -13066,9 +12930,7 @@ impl LoweringContext<'_> {
 
             AstStmt::Assign { target, value } => {
                 let target_expr = &self.body.exprs[target];
-                if Self::is_runtime_id_path(target_expr) {
-                    self.lower_set_runtime_id(value)?;
-                } else if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
                     self.lower_assign_optional_chain(inner, value)?;
                 } else if self.try_lower_virtual_field_assign(target, value)? {
@@ -13142,11 +13004,6 @@ impl LoweringContext<'_> {
         let expr = self.body.exprs[expr_id].clone();
         match &expr {
             AstExpr::Path(segments) if segments.len() == 1 => {
-                // Unresolved single-segment assignment target: only reachable
-                // for programs TIR already rejected (an unresolved name, or a
-                // special form like `$id` in a position its TIR checks forbid)
-                // — a silent temp here is how `$id = ...` once compiled to a
-                // no-op.
                 self.place_for_path(expr_id, &segments[0]).ok_or_else(|| {
                     self.internal_error(
                         &format!(

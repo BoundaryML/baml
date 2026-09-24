@@ -96,7 +96,7 @@ use async_trait::async_trait;
 pub use bex_events::ids::configure_workerd_runtime;
 pub use bex_events::{
     FunctionMetadataTable, ProgramMetadata,
-    ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ProgramId},
+    ids::{BexThreadId, EngineId, FunctionId, ProcessEuid, ProgramId},
 };
 pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
@@ -177,8 +177,6 @@ pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::BexThread,
 };
-const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
-const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
 
 /// Definitions attached to runtime-minted type arguments for one sys-op call.
 ///
@@ -271,9 +269,6 @@ enum EngineLifecycle {
     Closed,
 }
 
-const UNKNOWN_FUNCTION_FQN: &str = "baml.<unknown-function>";
-const UNKNOWN_FUNCTION_DISPLAY_NAME: &str = "<unknown-function>";
-
 /// Outcome of running a single [`BexThread`] to termination.
 ///
 /// Used by [`BexEngine::run_thread_event_loop`] to distinguish whether the
@@ -320,7 +315,6 @@ pub struct UserFunctionInfo {
 
 pub struct BexCallResult {
     pub value: Result<BexExternalValue, EngineError>,
-    pub entry_call_ref: CallRef,
 }
 
 #[derive(Clone)]
@@ -775,12 +769,7 @@ pub struct BexEngine {
     process_euid: ProcessEuid,
     engine_id: EngineId,
     program_metadata: ProgramMetadata,
-    /// Function identity by heap address: maps each compile-time
-    /// `Object::Function`'s stable `HeapPtr` (as a raw address) to its
-    /// `FunctionId`. Call notifications carry the
-    /// resolved function pointer, so per-call identity resolution is one
-    /// hash lookup — never a name scan.
-    /// Synthetic id for spawn-closure child roots (see `SPAWN_CLOSURE_FQN`).
+    /// Allocates logical thread identities for structured logs.
     next_thread_id: AtomicU64,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
@@ -1416,12 +1405,9 @@ impl BexEngine {
     }
 
     fn build_program_metadata(program: &bex_vm_types::Program) -> ProgramMetadata {
-        // Ids are 1-based sequential in pool order (`0` = unassigned) — the
-        // exact sequence the pre-heap walk in `new()` stamps onto each
-        // `Function.function_id`, so metadata and compact producer records
-        // agree byte-for-byte. M0 moves this to compile time.
+        // Metadata IDs are local to this table, in compiled-function order.
         let mut next_function_id: u32 = 0;
-        let mut functions: Vec<bex_events::FunctionMetadata> = program
+        let functions: Vec<bex_events::FunctionMetadata> = program
             .objects
             .iter()
             .filter_map(|obj| {
@@ -1468,56 +1454,9 @@ impl BexEngine {
                     definition_key: Some(bex_events::DefinitionKey(format!("function:{fqn}"))),
                     package_name,
                     namespace,
-                    source_snapshot_id: None,
-                    revision_id: None,
-                    semantic_lanes: None,
                 })
             })
             .collect();
-
-        // Synthetic rows live just past the pool indices, so they can never
-        // collide with a real function's id.
-        functions.push(bex_events::FunctionMetadata {
-            function_id: FunctionId(next_function_id + 1),
-            fqn: SPAWN_CLOSURE_FQN.to_string(),
-            display_name: SPAWN_CLOSURE_DISPLAY_NAME.to_string(),
-            source_file: None,
-            source_span: None,
-            kind: bex_events::RuntimeFunctionKind::Bytecode,
-            origin: bex_events::RuntimeFunctionOrigin::Internal,
-            owner_type: None,
-            parent_function: None,
-            lambda_path: Some(SPAWN_CLOSURE_DISPLAY_NAME.to_string()),
-            definition_key: Some(bex_events::DefinitionKey(format!(
-                "function:{SPAWN_CLOSURE_FQN}"
-            ))),
-            package_name: Some("baml".to_string()),
-            namespace: Vec::new(),
-            source_snapshot_id: None,
-            revision_id: None,
-            semantic_lanes: None,
-        });
-
-        functions.push(bex_events::FunctionMetadata {
-            function_id: FunctionId(next_function_id + 2),
-            fqn: UNKNOWN_FUNCTION_FQN.to_string(),
-            display_name: UNKNOWN_FUNCTION_DISPLAY_NAME.to_string(),
-            source_file: None,
-            source_span: None,
-            kind: bex_events::RuntimeFunctionKind::Bytecode,
-            origin: bex_events::RuntimeFunctionOrigin::Internal,
-            owner_type: None,
-            parent_function: None,
-            lambda_path: None,
-            definition_key: Some(bex_events::DefinitionKey(format!(
-                "function:{UNKNOWN_FUNCTION_FQN}"
-            ))),
-            package_name: Some("baml".to_string()),
-            namespace: Vec::new(),
-            source_snapshot_id: None,
-            revision_id: None,
-            semantic_lanes: None,
-        });
 
         // Preserve a supplied source hash as snapshot metadata without allowing
         // that path to mint ProgramId differently from other constructions.
@@ -1528,7 +1467,6 @@ impl BexEngine {
         ProgramMetadata {
             program_id,
             source_snapshot_id,
-            revision_id: None,
             function_table: FunctionMetadataTable { functions },
         }
     }
@@ -1595,14 +1533,11 @@ impl BexEngine {
             &bytecode.globals,
         );
 
-        let mut next_function_id: u32 = 0;
         let compile_time_objects: Vec<Object> = compile_time_objects
             .into_iter()
             .map(|mut obj| {
                 if let Object::Function(ref mut func) = obj {
                     func.bytecode.compact = Some(func.bytecode.lower_to_compact());
-                    next_function_id += 1;
-                    func.function_id = next_function_id;
                 }
                 obj
             })
@@ -1694,11 +1629,6 @@ impl BexEngine {
                     (name, (ptr, kind))
                 })
                 .collect();
-
-        // Function identity by heap address. Ids are 1-based sequential in
-        // pool walk order (the same walk that stamped `Function.function_id`
-        // and built the metadata table), and compile-time objects never
-        // move, so this is built once and valid for the engine's lifetime.
 
         // Build class name lookup table from pre-computed indices.
         let resolved_class_names: indexmap::IndexMap<String, HeapPtr> = class_indices
@@ -1931,11 +1861,6 @@ impl BexEngine {
 
     fn next_bex_thread_id(&self) -> BexThreadId {
         BexThreadId(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
-    }
-
-    fn on_thread_resume(_vm: &mut bex_vm::BexVm) {
-        // IMPLEMENTATION_PLAN.md §3 in the external Btel handoff preserves this
-        // resume hook for future VM integration. No tracing runs here.
     }
 
     /// Pre-extract LLM function metadata from heap objects.
@@ -2858,12 +2783,12 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_function_with_trace(function_name, args, call_ctx, copy_objects)
+        self.call_function_with_outcome(function_name, args, call_ctx, copy_objects)
             .await
             .and_then(|result| result.value)
     }
 
-    pub async fn call_function_with_trace(
+    pub async fn call_function_with_outcome(
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexExternalValue>,
@@ -2882,7 +2807,7 @@ impl BexEngine {
             .into_iter()
             .map(|arg| BexCallArg::Provided(Box::new(arg)))
             .collect();
-        self.call_function_bound_args_with_trace(
+        self.call_function_bound_args_with_outcome(
             function_name,
             args,
             FunctionCallContext {
@@ -2906,12 +2831,12 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_function_bound_args_with_trace(function_name, args, call_ctx, copy_objects)
+        self.call_function_bound_args_with_outcome(function_name, args, call_ctx, copy_objects)
             .await
             .and_then(|result| result.value)
     }
 
-    pub async fn call_function_bound_args_with_trace(
+    pub async fn call_function_bound_args_with_outcome(
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
@@ -3323,7 +3248,6 @@ impl BexEngine {
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.thread_id = self.next_bex_thread_id().0;
-        vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
         let root_thread = BexThread::new_root(vm, cancel);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
@@ -3404,19 +3328,10 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
-        Self::on_thread_resume(&mut thread.vm);
         thread
             .vm
             .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
-        thread
-            .vm
-            .install_boundary_id_for_current_call(boundary.boundary_id);
-        let entry_call_ref = CallRef {
-            process_euid: self.process_euid,
-            engine_id: self.engine_id,
-            thread_id: BexThreadId(thread.vm.thread_id),
-            call_id: BexCallId(thread.vm.current_call_id()),
-        };
+
         let log_capture = logger.is_enabled().then(|| LogCaptureContext {
             boundary_id: boundary.boundary_id,
             logger: logger.clone(),
@@ -3449,22 +3364,15 @@ impl BexEngine {
         // opcode, or synthesized by engine safepoints (see
         // `cancelled_unhandled_throw`).
         match result {
-            Ok(ThreadOutcome::RootValue(value)) => Ok(BexCallResult {
-                value: Ok(value),
-                entry_call_ref,
-            }),
+            Ok(ThreadOutcome::RootValue(value)) => Ok(BexCallResult { value: Ok(value) }),
             Ok(ThreadOutcome::SettledChild) => Ok(BexCallResult {
                 // Root threads should never produce SettledChild; treat as an
                 // engine invariant violation rather than silently returning Null.
                 value: Err(EngineError::Other(
                     "BEP-034: root thread terminated as SettledChild".to_string(),
                 )),
-                entry_call_ref,
             }),
-            Err(err) => Ok(BexCallResult {
-                value: Err(err),
-                entry_call_ref,
-            }),
+            Err(err) => Ok(BexCallResult { value: Err(err) }),
         }
     }
 
@@ -3485,7 +3393,7 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_callable_with_trace_impl(
+        self.call_callable_with_outcome_impl(
             handle,
             CallableArgs::Positional(args),
             call_ctx,
@@ -3495,14 +3403,14 @@ impl BexEngine {
         .and_then(|result| result.value)
     }
 
-    pub async fn call_callable_with_trace(
+    pub async fn call_callable_with_outcome(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: Vec<BexExternalValue>,
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
-        self.call_callable_with_trace_impl(
+        self.call_callable_with_outcome_impl(
             handle,
             CallableArgs::Positional(args),
             call_ctx,
@@ -3521,7 +3429,7 @@ impl BexEngine {
         call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        self.call_callable_with_trace_impl(
+        self.call_callable_with_outcome_impl(
             handle,
             CallableArgs::Named { required, optional },
             call_ctx,
@@ -3531,7 +3439,7 @@ impl BexEngine {
         .and_then(|result| result.value)
     }
 
-    async fn call_callable_with_trace_impl(
+    async fn call_callable_with_outcome_impl(
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: CallableArgs,
@@ -4430,11 +4338,10 @@ impl BexEngine {
         let Some(capture) = capture else {
             return;
         };
-        let call = bex_events::run::TraceCallKey {
+        let call = bex_events::run::ThreadRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
             thread_id: BexThreadId(thread.vm.thread_id),
-            call_id: BexCallId(thread.vm.current_call_id()),
         };
         capture
             .logger
@@ -4642,9 +4549,6 @@ impl BexEngine {
             value: vm_value,
             throw_kind,
             language_is_rethrow: false,
-            origin: bex_vm::errors::VmUnwindOrigin::unresolved(
-                bex_vm::errors::VmUnwindSource::EngineCall,
-            ),
         };
         let unwind_result = thread.vm.try_handle_external_thrown(thrown);
 
@@ -4867,7 +4771,6 @@ impl BexEngine {
             Arc::clone(&self.panic_class_ptrs),
         );
         child_vm.thread_id = thread_id;
-        child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
 
         child_vm.set_entry_point(closure, &[]);
 
@@ -4993,8 +4896,6 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         loop {
-            Self::on_thread_resume(&mut thread.vm);
-
             let vm_exec_result = thread.vm.exec();
 
             let exec_result = match vm_exec_result {
@@ -5269,11 +5170,6 @@ impl BexEngine {
                             };
                             thread = inactive.acquire().await;
 
-                            // Re-snapshot post-await (D5a): the task may be on a different
-                            // OS thread now, and engine-driven VM re-entries before the
-                            // next loop-head refresh (inject_sysop_throw's unwind) push
-                            // through this snapshot.
-                            Self::on_thread_resume(&mut thread.vm);
                             match outcome {
                                 SysOpOutcome::Cancelled => {
                                     if let Some(future_id) = thread.vm_thread_settles_future() {
@@ -5553,11 +5449,6 @@ impl BexEngine {
                     };
                     thread = inactive.acquire().await;
 
-                    // Re-snapshot post-await (D5a): the task may be on a different
-                    // OS thread now, and engine-driven VM re-entries before the
-                    // next loop-head refresh (inject_sysop_throw's unwind) push
-                    // through this snapshot.
-                    Self::on_thread_resume(&mut thread.vm);
                     match outcome {
                         AwaitOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {
@@ -5631,11 +5522,6 @@ impl BexEngine {
                     };
                     thread = inactive.acquire().await;
 
-                    // Re-snapshot post-await (D5a): the task may be on a different
-                    // OS thread now, and engine-driven VM re-entries before the
-                    // next loop-head refresh (inject_sysop_throw's unwind) push
-                    // through this snapshot.
-                    Self::on_thread_resume(&mut thread.vm);
                     match outcome {
                         AwaitAnyOutcome::Cancelled => {
                             if let Some(future_id) = thread.vm_thread_settles_future() {

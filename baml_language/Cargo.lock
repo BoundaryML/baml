@@ -777,7 +777,6 @@ name = "baml_compiler2_hir"
 version = "0.1.0"
 dependencies = [
  "baml_base",
- "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
@@ -1413,7 +1412,6 @@ dependencies = [
  "baml_db",
  "baml_type",
  "base64",
- "bex_events",
  "bex_heap",
  "bex_str",
  "bex_vm_types",

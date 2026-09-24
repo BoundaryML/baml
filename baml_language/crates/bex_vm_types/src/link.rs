@@ -1311,7 +1311,7 @@ mod tests {
     use crate::{
         Instruction, Object,
         bytecode::Bytecode,
-        types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
+        types::{Class, Function, FunctionKind, FunctionOrigin},
         unit::{ExportTable, InitTail, ProgramPackageFrag},
     };
 
@@ -1345,8 +1345,7 @@ mod tests {
             is_interface_body: false,
             native_key: None,
             body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0,
+
             runtime_package: HeapPtr::null(),
         }))
     }

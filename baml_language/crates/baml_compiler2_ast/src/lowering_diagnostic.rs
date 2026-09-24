@@ -177,11 +177,6 @@ pub enum LoweringDiagnostic {
     /// binding name.
     ReservedConstBindingName { span: TextRange },
 
-    /// `$id` is the runtime-identity special form (reads lower to
-    /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
-    /// `$id` would be silently dead, so it is rejected.
-    ReservedRuntimeIdBindingName { span: TextRange },
-
     /// An assignment operator (`=`, `+=`, …) appeared in expression position,
     /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
     /// has no value; without this diagnostic it would lower to a `Missing` that
@@ -638,13 +633,6 @@ impl LoweringDiagnostic {
                 "`const` is reserved and cannot be used as a binding name".to_string(),
                 *span,
                 "`const` is reserved here",
-            ),
-            LoweringDiagnostic::ReservedRuntimeIdBindingName { span } => (
-                DiagnosticId::InvalidSyntax,
-                Severity::Error,
-                "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
-                *span,
-                "`$id` is reserved here",
             ),
             LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
                 DiagnosticId::InvalidSyntax,

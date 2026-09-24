@@ -845,7 +845,7 @@ function merge_issue_loop(
     if (!db_configured()) {
         baml.sys.panic("merge_issue_loop needs the store (FEEDBACK_SUPABASE_URL/KEY)");
     };
-    let runner = (baml.env.get("HOSTNAME") ?? baml.env.get("USER") ?? "runner") + "/" + baml.id.new().slice(0, 8);
+    let runner = (baml.env.get("HOSTNAME") ?? baml.env.get("USER") ?? "runner") + "/" + baml.random.SystemRandom.get().random(16).to_hex().slice(0, 8);
     let served = 0;
     log.info({ "merge_request": runner, "polling_s": poll_s(), "once": once });
     while (true) {
@@ -1037,7 +1037,7 @@ testset "merge_issue" {
     }
 
     test "merge state round-trips outside the run dir" {
-        let branch = "agent/test-merge-state-" + baml.id.new();
+        let branch = "agent/test-merge-state-" + baml.random.SystemRandom.get().random(16).to_hex();
         assert.equal(read_merge_state(branch).rounds, 0);
         write_merge_state(branch, MergeState { rounds: 2, handled_ids: [5, 6] });
         let s = read_merge_state(branch);
@@ -1048,7 +1048,7 @@ testset "merge_issue" {
     }
 
     test "a round's outcome is read back and kept per round" {
-        let branch = "agent/test-round-outcome-" + baml.id.new();
+        let branch = "agent/test-round-outcome-" + baml.random.SystemRandom.get().random(16).to_hex();
         // no outcome.json: the agent never got as far as writing one
         assert.equal(round_outcome(branch, 1), "agent_stopped");
         baml.fs.mkdir(run_dir_for(branch), baml.fs.MkdirOptions { recursive: true });

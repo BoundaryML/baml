@@ -198,8 +198,8 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
-        run::TraceCallKey,
+        ids::{BexThreadId, BoundaryId, EngineId, ProcessEuid},
+        run::ThreadRef,
         value::{
             BlobStore, ByteValueArtifactSink, LogEventRecord, ValueArtifactRef, ValueCodec,
             ValueFileRecord, ValueIdAllocator, ValueWriter, read_bamlvalue_from_bytes,
@@ -208,11 +208,10 @@ mod tests {
 
     fn log_event() -> LogEventRecord {
         LogEventRecord {
-            call: TraceCallKey {
+            call: ThreadRef {
                 process_euid: ProcessEuid([1; 16]),
                 engine_id: EngineId(2),
                 thread_id: BexThreadId(3),
-                call_id: BexCallId(4),
             },
             level: Some("info".to_string()),
             source: None,

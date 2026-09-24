@@ -308,15 +308,6 @@ metric extract_resume {
   }
 }`;
 
-const BAML_METRIC_USE = `let id = boundary.id()
-let resume = extract_resume(doc, $id = id)
-// field_count, judge, quality fire now — they only need output.
-// precision, recall, f1 are pending: no ground truth yet.
-
-// ...four hours later, a human labels the doc:
-id.set_expected(ground_truth)     // type-checked: Resume
-let f1 = await id.get_f1()        // -> float`;
-
 /* ------------------- captured terminal transcripts ------------------- */
 
 const PACK_EVENTS: TermEvent[] = [
@@ -909,14 +900,9 @@ export function getSlides(): Slide[] {
           <Split
             left={
               <>
-                <BamlCode
-                  code={BAML_METRIC_USE}
-                  filename="usage.baml (proposed)"
-                  lang="baml"
-                />
                 <Callout tone="warn">
                   {
-                    'This is the part we want torn apart. The runtime already records a trace of every call; this design is the layer on top. Objections welcome — that is why it is in this deck.'
+                    'Runtime tracing and per-call ID correlation are unavailable. This metrics design remains a proposal; its invocation and delayed-input APIs are not implemented.'
                   }
                 </Callout>
               </>

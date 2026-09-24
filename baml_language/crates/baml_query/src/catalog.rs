@@ -494,11 +494,6 @@ fn threads_v1() -> RelationDef {
                 "Root rows only: human source label from EngineStarted.",
             ),
             nullable(
-                "runtime_id",
-                DataType::Utf8,
-                "Root rows only: the host runtime token (baml_id_1_…) the root returned.",
-            ),
-            nullable(
                 "entry_function_id",
                 DataType::UInt32,
                 "Root rows only: the root span's function id; NULL if the root span is not retained.",
@@ -801,10 +796,6 @@ fn calls_v1() -> RelationDef {
             utf8_list(
                 "roles",
                 "Captured roles present on this span: input|output|error.",
-            ),
-            utf8_list(
-                "runtime_ids",
-                "Initial + SpanRuntimeId overrides (baml_id_1_…), in order.",
             ),
             col(
                 "args_state",
@@ -1282,7 +1273,6 @@ mod tests {
                 "program_id:Utf8?",
                 "revision_id:Utf8?",
                 "source_label:Utf8?",
-                "runtime_id:Utf8?",
                 "entry_function_id:UInt32?",
                 "entry_fqn:Utf8?",
                 "status:Utf8?",
@@ -1357,7 +1347,6 @@ mod tests {
                 "status:Utf8?",
                 "selection_reasons:List(Field { data_type: Utf8 })",
                 "roles:List(Field { data_type: Utf8 })",
-                "runtime_ids:List(Field { data_type: Utf8 })",
                 "args_state:Utf8",
                 "output_state:Utf8",
                 "error_state:Utf8",

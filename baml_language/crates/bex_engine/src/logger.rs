@@ -10,7 +10,7 @@ use std::{
 
 use bex_events::{
     ids::BoundaryId,
-    run::{SourceLocation, TraceCallKey},
+    run::{SourceLocation, ThreadRef},
 };
 
 use crate::{
@@ -29,7 +29,7 @@ pub struct TraceLogMetadata {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EncodedTraceLog {
     pub boundary_id: BoundaryId,
-    pub call: TraceCallKey,
+    pub call: ThreadRef,
     pub metadata: TraceLogMetadata,
     pub body: Vec<u8>,
 }
@@ -49,7 +49,7 @@ pub enum TraceLogFailureReason {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceLogFailure {
     pub boundary_id: BoundaryId,
-    pub call: TraceCallKey,
+    pub call: ThreadRef,
     pub metadata: TraceLogMetadata,
     pub reason: TraceLogFailureReason,
     pub diagnostic: String,
@@ -96,7 +96,7 @@ struct TraceLoggerInner {
 #[derive(Debug)]
 struct TraceLogDraft {
     boundary_id: BoundaryId,
-    call: TraceCallKey,
+    call: ThreadRef,
     metadata: TraceLogMetadata,
     snapshot: TraceSnapshotHandle,
 }
@@ -130,7 +130,7 @@ impl TraceLogger {
     pub fn capture_with(
         &self,
         boundary_id: BoundaryId,
-        call: TraceCallKey,
+        call: ThreadRef,
         copy_snapshot: impl FnOnce(&TraceHeap) -> (TraceLogMetadata, TraceSnapshotHandle),
     ) {
         let Some(mut reservation) = self.try_reserve(boundary_id, call) else {
@@ -212,11 +212,7 @@ impl TraceLogger {
             })
     }
 
-    fn try_reserve(
-        &self,
-        boundary_id: BoundaryId,
-        call: TraceCallKey,
-    ) -> Option<TraceLogReservation> {
+    fn try_reserve(&self, boundary_id: BoundaryId, call: ThreadRef) -> Option<TraceLogReservation> {
         let enabled = self.enabled.as_ref()?;
         let mut inner = enabled
             .inner
@@ -266,7 +262,7 @@ impl TraceLogger {
 struct TraceLogReservation {
     enabled: Arc<TraceLoggerEnabled>,
     boundary_id: BoundaryId,
-    call: TraceCallKey,
+    call: ThreadRef,
     committed: bool,
 }
 
@@ -307,8 +303,8 @@ impl Drop for TraceLogReservation {
 #[cfg(test)]
 mod tests {
     use bex_events::{
-        ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
-        run::TraceCallKey,
+        ids::{BexThreadId, BoundaryId, EngineId, ProcessEuid},
+        run::ThreadRef,
     };
 
     use crate::{
@@ -316,12 +312,11 @@ mod tests {
         trace_heap::{TraceSnapshot, TraceValue},
     };
 
-    fn call() -> TraceCallKey {
-        TraceCallKey {
+    fn call() -> ThreadRef {
+        ThreadRef {
             process_euid: ProcessEuid([1; 16]),
             engine_id: EngineId(2),
             thread_id: BexThreadId(3),
-            call_id: BexCallId(4),
         }
     }
 
