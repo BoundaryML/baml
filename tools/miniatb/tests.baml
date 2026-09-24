@@ -387,7 +387,29 @@ test "autofix reports configuration blockers before starting an agent" {
     assert.is_true(autofix_blocker("1", null, "key") != null);
     assert.is_true(autofix_blocker("1", "client", "") != null);
     assert.is_true(autofix_blocker("1", "client", "key") != null);
+    for (
+        let repository in [
+            "",
+            "BoundaryML/baml",
+            "boundaryml/other",
+            "BOUNDARYML/baml",
+            "../baml",
+            "example/baml?x",
+            "example/",
+            "/baml",
+            "example/baml/extra",
+            "-owner/baml",
+            "example/.repo",
+            "example/baml\n",
+        ]
+    ) {
+        assert.is_true(autofix_blocker("1", "client", "key", publish_repo = repository) != null);
+    }
     assert.equal(autofix_blocker("1", "client", "key", publish_repo = "example/baml"), null);
+    assert.equal(
+        autofix_blocker("1", "client", "key", publish_repo = "Example-Owner/Baml_fork.test"),
+        null,
+    );
 }
 
 test "first issue announcement includes the draft or reports no PR" {

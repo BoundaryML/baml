@@ -152,6 +152,30 @@ function autofix(issue: Issue) -> void {
     };
 }
 
+/// Mirror the publisher's owner/name policy before spending a fix-worker run.
+function valid_publish_repo(value: string) -> bool {
+    let parts = value.split("/");
+    if (parts.length() != 2) {
+        return false;
+    }
+    let owner = parts[0];
+    let repo = parts[1];
+    let alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    owner.to_lower_case() != "boundaryml"
+        && owner.length() >= 1
+        && owner.length() <= 39
+        && repo.length() >= 1
+        && repo.length() <= 100
+        && alphanumeric.includes(owner.slice(0, 1))
+        && alphanumeric.includes(repo.slice(0, 1))
+        && owner.chars().every((char) -> {
+            (alphanumeric + "-").includes(char)
+        })
+        && repo.chars().every((char) -> {
+            (alphanumeric + "_.-").includes(char)
+        })
+}
+
 function autofix_blocker(
     allow_push: string?,
     client_id: string?,
@@ -162,7 +186,7 @@ function autofix_blocker(
         "Automatic fix publishing is disabled (MINIATB_ALLOW_PUSH)"
     } else if (client_id == null || client_id == "" || private_key == null || private_key == "") {
         "Automatic fix requires Bammy GitHub App credentials"
-    } else if (publish_repo == null || publish_repo == "") {
+    } else if (!valid_publish_repo(publish_repo ?? "")) {
         "Automatic fix requires a dedicated fork (MINIATB_PUBLISH_REPO)"
     } else {
         null
