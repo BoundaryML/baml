@@ -17,12 +17,13 @@ workspace = true
 [dependencies]
 btel_publisher = { workspace = true }
 btel_settings = { workspace = true }
+btel_snapshot = { workspace = true }
 prost = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
 btel_processor = { workspace = true }
 btel_types = { workspace = true }
-tempfile = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

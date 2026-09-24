@@ -62,6 +62,7 @@ impl EncodedSpans {
     fn completion(&mut self, tag: u8, message: &crate::proto::FunctionCompletion) {
         // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
         // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
+        // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes.
         // Indexing stays checked; only publishing initialized bytes is unsafe.
         let start = self.bytes.len();
         let region = &mut self.bytes.spare_capacity_mut()[..MAX_COMPLETION_BYTES];
@@ -77,6 +78,14 @@ impl EncodedSpans {
         writer.fixed64(0x29, message.exited_at_ticks);
         writer.fixed64(0x31, message.self_await_ticks);
         writer.varint(0x38, u64::from(message.completion_flags));
+        if let Some(id) = &message.value_cas_id {
+            writer.byte(0x42);
+            let prefix = writer.len;
+            writer.byte(0);
+            writer.fixed64(0x09, id.low);
+            writer.fixed64(0x11, id.high);
+            writer.region[prefix].write(u8::try_from(writer.len - prefix - 1).unwrap());
+        }
         let length = writer.len;
         writer.region[1].write(u8::try_from(length - 2).expect("bounded completion"));
         writer.region[3].write(u8::try_from(length - 4).expect("bounded completion"));
@@ -193,7 +202,11 @@ mod tests {
             entered_at_ticks: u64::MAX,
             exited_at_ticks: u64::MAX,
             self_await_ticks: u64::MAX,
-            completion_flags: 7,
+            completion_flags: 3,
+            value_cas_id: Some(proto::SnapshotId {
+                low: u64::MAX,
+                high: u64::MAX,
+            }),
         };
         let events = vec![
             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
@@ -206,10 +219,13 @@ mod tests {
                 parent_id: u64::MAX,
                 call_path_id: u32::MAX,
                 entered_at_ticks: u64::MAX,
-                inputs: proto::CaptureState::Deferred as i32,
+                inputs_cas_id: Some(proto::SnapshotId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
             }),
             Event::FunctionCompletion(proto::FunctionCompletion {
-                completion_flags: 15,
+                completion_flags: 11,
                 ..completion
             }),
             Event::LateFunctionCompletion(completion),
@@ -258,7 +274,7 @@ mod equivalence_tests {
             .into_iter()
             .chain((1..64).flat_map(|bit| [(1_u64 << bit) - 1, 1_u64 << bit]));
         for value in values {
-            for field in 0..7 {
+            for field in 0..10 {
                 let mut message = proto::FunctionCompletion::default();
                 match field {
                     0 => message.id = value,
@@ -267,7 +283,25 @@ mod equivalence_tests {
                     3 => message.entered_at_ticks = value,
                     4 => message.exited_at_ticks = value,
                     5 => message.self_await_ticks = value,
-                    _ => message.completion_flags = u32::try_from(value).unwrap_or(u32::MAX),
+                    6 => message.completion_flags = u32::try_from(value).unwrap_or(u32::MAX),
+                    7 => {
+                        message.value_cas_id = Some(proto::SnapshotId {
+                            low: value,
+                            high: 0,
+                        });
+                    }
+                    8 => {
+                        message.value_cas_id = Some(proto::SnapshotId {
+                            low: 0,
+                            high: value,
+                        });
+                    }
+                    _ => {
+                        message.value_cas_id = Some(proto::SnapshotId {
+                            low: value,
+                            high: value,
+                        });
+                    }
                 }
                 for event in [
                     Event::FunctionCompletion(message),

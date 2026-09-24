@@ -6,10 +6,11 @@
 //! Files are written, closed and renamed without forcing storage synchronization.
 //! Successful finish means every accepted file completed that procedure. Recent
 //! data can be lost or damaged after a machine crash or power loss. It does not imply
-//! `RecordingEnd`, settled clock validity, available captures, or complete metadata.
+//! `RecordingEnd`, settled clock validity, or complete metadata. Accepted CAS blobs
+//! are written before later recording files on the same queue.
 //!
 //! A full queue blocks the delivery worker until capacity is available. The queue
-//! bounds retained sealed files; the publisher seals on size or elapsed time.
+//! bounds retained files and snapshot owners; the publisher seals on size or elapsed time.
 //! Call finish after stopping the publisher; Drop only provides cleanup.
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -25,6 +26,8 @@ use std::{
 use btel_publisher::{RecordingId, SealedFile};
 pub use btel_settings::local_files::FileSinkConfig;
 
+mod cas;
+pub use cas::cas_path;
 mod reader;
 pub use reader::{ReadIssue, RecordingRead, read_directory};
 
@@ -53,6 +56,7 @@ fn io_error(path: &Path, error: &io::Error) -> FileSinkError {
 
 enum Command {
     File(SealedFile),
+    Snapshot(btel_snapshot::Snapshot),
     Finish,
 }
 
@@ -64,12 +68,19 @@ impl FileSender {
     /// Called only after input chunk release. Full queues apply bounded backpressure
     /// to the delivery worker; disk errors and closed writers remain errors.
     pub fn send(&self, file: SealedFile) -> Result<(), FileSinkError> {
+        self.enqueue(Command::File(file))
+    }
+    /// Move a frozen snapshot to the same bounded writer queue as recording files.
+    pub fn send_snapshot(&self, snapshot: btel_snapshot::Snapshot) -> Result<(), FileSinkError> {
+        self.enqueue(Command::Snapshot(snapshot))
+    }
+    fn enqueue(&self, command: Command) -> Result<(), FileSinkError> {
         if let Some(result) = self.result.get() {
             return result
                 .clone()
                 .and(Err(FileSinkError("telemetry file sink is closed".into())));
         }
-        self.sender.send(Command::File(file)).map_err(|_| {
+        self.sender.send(command).map_err(|_| {
             if let Some(Err(failure)) = self.result.get() {
                 return failure.clone();
             }
@@ -100,6 +111,18 @@ impl FileSink {
         config: FileSinkConfig,
         on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
     ) -> io::Result<Self> {
+        Self::create_with_cas(root, &root.join("cas"), id, config, on_failure)
+    }
+
+    /// Explicit shared CAS location. A recording owns its sequence directory;
+    /// CAS blobs are shared across every recording using this project/home root.
+    pub fn create_with_cas(
+        root: &Path,
+        cas_root: &Path,
+        id: RecordingId,
+        config: FileSinkConfig,
+        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+    ) -> io::Result<Self> {
         if root.as_os_str().is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -109,22 +132,44 @@ impl FileSink {
         // Keep the writer bound to its original destination if the host later
         // changes its process working directory.
         let root = std::path::absolute(root)?;
+        let cas_root = std::path::absolute(cas_root)?;
         fs::create_dir_all(&root)?;
         let directory = recording_directory(&root, id);
         fs::create_dir(&directory)?;
         let writer_directory = directory.clone();
-        Self::start(
+        Self::start_with_snapshots(
             directory,
             config,
             move |file| write_file(&writer_directory, id, file),
+            move |snapshot| cas::write_snapshot(&cas_root, snapshot),
             on_failure,
         )
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     fn start(
         directory: PathBuf,
         config: FileSinkConfig,
+        write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
+        on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
+    ) -> io::Result<Self> {
+        let cas_root = directory.join("cas");
+        Self::start_with_snapshots(
+            directory,
+            config,
+            write,
+            move |snapshot| cas::write_snapshot(&cas_root, snapshot),
+            on_failure,
+        )
+    }
+
+    fn start_with_snapshots(
+        directory: PathBuf,
+        config: FileSinkConfig,
         mut write: impl FnMut(&SealedFile) -> Result<(), FileSinkError> + Send + 'static,
+        mut write_snapshot: impl FnMut(&btel_snapshot::Snapshot) -> Result<(), FileSinkError>
+        + Send
+        + 'static,
         on_failure: impl FnOnce(&FileSinkError) + Send + 'static,
     ) -> io::Result<Self> {
         let (sender, receiver) = mpsc::sync_channel(config.queue_files.get());
@@ -138,6 +183,7 @@ impl FileSink {
                     while let Ok(command) = receiver.recv() {
                         match command {
                             Command::Finish => return Ok(()),
+                            Command::Snapshot(snapshot) => write_snapshot(&snapshot)?,
                             Command::File(file) => {
                                 if next != Some(file.sequence().get()) {
                                     return Err(FileSinkError(

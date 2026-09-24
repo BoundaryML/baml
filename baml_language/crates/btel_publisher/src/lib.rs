@@ -5,7 +5,8 @@
 //! completed-file callback; no storage or networking is implemented here.
 
 use btel_processor::AggregateDelta;
-use btel_records::{CaptureDeferred, SpanRecord};
+use btel_records::SpanRecord;
+use btel_snapshot::Snapshot;
 use btel_types::{CallPathNodeId, TelemetryId};
 
 mod clock;
@@ -20,7 +21,7 @@ pub use recording::{RecordingConfig, RecordingError, RecordingId, RecordingPubli
 /// messages encode while borrowed; no input references escape the callback.
 #[allow(clippy::all, clippy::pedantic, clippy::empty_structs_with_brackets)]
 pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/baml.btel.recording.v1.rs"));
+    include!(concat!(env!("OUT_DIR"), "/baml.btel.recording.v2.rs"));
 }
 
 /// Cold sections retained until sealing; spans are already encoded.
@@ -109,7 +110,7 @@ impl ConversionBuffer {
             .saturating_add(btel_settings::publisher::FILE_ENVELOPE_BYTES)
     }
 
-    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
+    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<Snapshot, Snapshot>) {
         use proto::span_event::Event;
         match record {
             SpanRecord::ThreadSelected { .. } => panic!("processor must consume selectors"),
@@ -160,11 +161,7 @@ impl ConversionBuffer {
                         parent_id: parent_id.get(),
                         call_path_id: call_path.get(),
                         entered_at_ticks: entered_at.get(),
-                        inputs: if captured_inputs.is_some() {
-                            proto::CaptureState::Deferred
-                        } else {
-                            proto::CaptureState::NotRecorded
-                        } as i32,
+                        inputs_cas_id: captured_inputs.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -229,11 +226,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            1,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -255,11 +249,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            9,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(9).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -281,11 +272,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            1,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -307,11 +295,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            9,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(9).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -333,11 +318,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            2,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -359,11 +341,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            10,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -385,11 +364,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            2,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -411,11 +387,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            10,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(10).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -437,11 +410,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            3,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -463,11 +433,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            11,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(11).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -489,11 +456,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            3,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -515,11 +479,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            11,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(11).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -541,11 +502,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            1,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -567,11 +525,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            1,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(1).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -593,11 +548,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            2,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -619,11 +571,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            2,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(2).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -645,11 +594,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            3,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -671,11 +617,8 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         exited_at_ticks: exited_at.get(),
                         self_await_ticks: await_time.get().get(),
-                        completion_flags: CompletionFlags::from_variant(
-                            3,
-                            captured_value.is_some(),
-                        )
-                        .bits(),
+                        completion_flags: CompletionFlags::from_variant(3).bits(),
+                        value_cas_id: captured_value.as_ref().map(snapshot_id),
                     }),
                 );
             }
@@ -693,3 +636,11 @@ impl ConversionBuffer {
 
 #[cfg(test)]
 mod tests;
+
+fn snapshot_id(snapshot: &Snapshot) -> proto::SnapshotId {
+    let bytes = snapshot.id();
+    proto::SnapshotId {
+        low: u64::from_le_bytes(bytes.as_bytes()[..8].try_into().unwrap()),
+        high: u64::from_le_bytes(bytes.as_bytes()[8..].try_into().unwrap()),
+    }
+}

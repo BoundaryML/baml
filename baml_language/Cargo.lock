@@ -1418,6 +1418,7 @@ dependencies = [
  "bytecount",
  "codspeed-divan-compat",
  "indexmap",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1438,6 +1439,7 @@ dependencies = [
  "btel_processor",
  "btel_records",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "chacha20poly1305",
  "console",
@@ -1756,6 +1758,7 @@ dependencies = [
  "btel_processor",
  "btel_publisher",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "prost",
  "tempfile",
@@ -1769,6 +1772,7 @@ dependencies = [
  "btel_clock",
  "btel_records",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "rustc-hash 2.1.2",
 ]
@@ -1782,6 +1786,7 @@ dependencies = [
  "btel_processor",
  "btel_records",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
  "prost",
  "prost-build",
@@ -1796,6 +1801,7 @@ version = "0.0.0-beta"
 dependencies = [
  "btel_clock",
  "btel_settings",
+ "btel_snapshot",
  "btel_types",
 ]
 
@@ -1811,6 +1817,18 @@ dependencies = [
 [[package]]
 name = "btel_settings"
 version = "0.0.0-beta"
+
+[[package]]
+name = "btel_snapshot"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "bex_str",
+ "borsh",
+ "btel_settings",
+ "num-bigint",
+ "xxhash-rust",
+]
 
 [[package]]
 name = "btel_types"
@@ -8784,6 +8802,12 @@ dependencies = [
  "libc",
  "rustix",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yaml_serde"

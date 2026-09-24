@@ -51,7 +51,7 @@ impl Drop for Capture {
     }
 }
 
-fn span(capture: Capture) -> SpanRecord<[Capture], Capture> {
+fn span(capture: Capture) -> SpanRecord<Box<[Capture]>, Box<Capture>> {
     SpanRecord::LateFunctionSpanCompletionOk {
         id: allocate_telemetry_id(),
         parent_id: allocate_telemetry_id(),
@@ -242,7 +242,7 @@ fn destructor_panic_is_preserved_and_stops_producers() {
         entered_at: ClockInstant::from_ticks(1),
         exited_at: ClockInstant::from_ticks(2),
         await_time: AwaitDuration::ZERO,
-        captured_value: Some(Box::new(BrokenCapture)),
+        captured_value: Some(BrokenCapture),
     });
     let panic = catch_unwind(AssertUnwindSafe(|| processor.run())).unwrap_err();
     assert_eq!(*panic.downcast::<u32>().unwrap(), 42);
@@ -258,17 +258,17 @@ struct RecordingPublisher {
     captured_addresses: Vec<usize>,
     flushes: usize,
 }
-impl Publisher<[Capture], Capture> for RecordingPublisher {
+impl Publisher<Box<[Capture]>, Box<Capture>> for RecordingPublisher {
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.deltas.push(delta);
     }
-    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<[Capture], Capture>) {
+    fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Box<[Capture]>, Box<Capture>>) {
         self.threads.push(thread);
         if let Some(completion) = record.completion()
             && let Some(value) = completion.captured_value
         {
             self.captured_addresses
-                .push(std::ptr::from_ref(value).addr());
+                .push(std::ptr::from_ref(&**value).addr());
         }
     }
     fn flush(&mut self) {
@@ -578,7 +578,7 @@ fn idle_deadline_flushes_without_new_input() {
             fn aggregate(&mut self, d: AggregateDelta) {
                 self.1 += d.count;
             }
-            fn span(&mut self, _: TelemetryId, _: &SpanRecord<(), ()>) {}
+            fn span(&mut self, _: TelemetryId, _: &mut SpanRecord<(), ()>) {}
             fn flush(&mut self) {
                 if self.1 != 0 {
                     self.0.send(std::mem::take(&mut self.1)).unwrap();
@@ -612,7 +612,7 @@ fn publisher_flush_failure_is_terminal_even_after_the_last_chunk() {
     struct BrokenPublisher;
     impl Publisher<(), ()> for BrokenPublisher {
         fn aggregate(&mut self, _: AggregateDelta) {}
-        fn span(&mut self, _: TelemetryId, _: &SpanRecord<(), ()>) {}
+        fn span(&mut self, _: TelemetryId, _: &mut SpanRecord<(), ()>) {}
         fn flush(&mut self) {
             std::panic::panic_any(43_u32);
         }
@@ -640,9 +640,9 @@ fn publisher_flush_failure_is_terminal_even_after_the_last_chunk() {
 #[test]
 fn borrowed_callback_panic_recycles_input_and_never_replays() {
     struct BrokenPublisher;
-    impl Publisher<[Capture], Capture> for BrokenPublisher {
+    impl Publisher<Box<[Capture]>, Box<Capture>> for BrokenPublisher {
         fn aggregate(&mut self, _: AggregateDelta) {}
-        fn span(&mut self, _: TelemetryId, _: &SpanRecord<[Capture], Capture>) {
+        fn span(&mut self, _: TelemetryId, _: &mut SpanRecord<Box<[Capture]>, Box<Capture>>) {
             std::panic::panic_any(44_u32);
         }
         fn flush(&mut self) {}

@@ -245,3 +245,135 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
         |i| matches!(i, ReadIssue::InvalidFile { reason, .. } if reason.contains("identity"))
     ));
 }
+
+fn snapshot(pool: &btel_snapshot::SnapshotPool, n: i64) -> btel_snapshot::Snapshot {
+    pool.try_acquire()
+        .unwrap()
+        .finish_value(btel_snapshot::SnapshotValue::Int(n))
+}
+
+#[test]
+fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
+    let root = tempfile::tempdir().unwrap();
+    let cas = root.path().join("cas");
+    let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let value = snapshot(&pool, 42);
+    let id = value.id();
+    let mut expected = Vec::new();
+    value.write_blob(&mut expected).unwrap();
+    drop(value);
+    let mut a = FileSink::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        FileSinkConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    let mut b = FileSink::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        FileSinkConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    a.take_sender().send_snapshot(snapshot(&pool, 42)).unwrap();
+    b.take_sender().send_snapshot(snapshot(&pool, 42)).unwrap();
+    a.finish().unwrap();
+    b.finish().unwrap();
+    assert_eq!(pool.stats().in_use, 0);
+    let path = cas_path(&cas, id);
+    assert_eq!(fs::read(&path).unwrap(), expected);
+    let filename = path.file_name().unwrap().to_str().unwrap();
+    assert_eq!(filename.len(), 32);
+    assert_eq!(
+        path,
+        cas.join("v2")
+            .join(&filename[..2])
+            .join(&filename[2..4])
+            .join(&filename[4..6])
+            .join(filename)
+    );
+    assert_eq!(
+        fs::read_dir(path.parent().unwrap()).unwrap().count(),
+        1,
+        "no partials left behind"
+    );
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    let mut c = FileSink::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        FileSinkConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    c.take_sender().send_snapshot(snapshot(&pool, 42)).unwrap();
+    c.finish().unwrap();
+    assert_eq!(
+        fs::metadata(path).unwrap().modified().unwrap(),
+        modified,
+        "existing CAS entry was reused"
+    );
+}
+
+#[test]
+fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let value = snapshot(&pool, 42);
+    let path = cas_path(root.path(), value.id());
+    let legacy = root
+        .path()
+        .join("v1")
+        .join(path.strip_prefix(root.path().join("v2")).unwrap());
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&legacy, b"existing v1 entry").unwrap();
+    crate::cas::write_snapshot(root.path(), &value).unwrap();
+    let mut expected = Vec::new();
+    value.write_blob(&mut expected).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), expected);
+    assert_eq!(fs::read(&legacy).unwrap(), b"existing v1 entry");
+}
+
+#[test]
+fn cas_failure_releases_full_queue_and_retained_snapshot_owners() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let mut sink = FileSink::start_with_snapshots(
+        root.path().to_owned(),
+        FileSinkConfig {
+            queue_files: NonZeroUsize::new(1).unwrap(),
+        },
+        |_| Ok(()),
+        move |_| {
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(5)).unwrap();
+            Err(FileSinkError("injected ENOSPC".into()))
+        },
+        |_| {},
+    )
+    .unwrap();
+    let sender = sink.take_sender();
+    sender.send_snapshot(snapshot(&pool, 1)).unwrap();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    sender.send_snapshot(snapshot(&pool, 2)).unwrap();
+    let third = snapshot(&pool, 3);
+    let (completed, completion) = mpsc::channel();
+    let waiting = std::thread::spawn(move || completed.send(sender.send_snapshot(third)).unwrap());
+    let early = completion.recv_timeout(Duration::from_millis(50));
+    release.send(()).unwrap();
+    assert!(matches!(early, Err(mpsc::RecvTimeoutError::Timeout)));
+    assert!(
+        completion
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .is_err()
+    );
+    waiting.join().unwrap();
+    assert!(sink.finish().is_err());
+    assert_eq!(pool.stats().in_use, 0);
+}

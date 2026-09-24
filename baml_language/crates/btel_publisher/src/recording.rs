@@ -2,8 +2,9 @@
 use std::{fmt, num::NonZeroU64, time::Instant};
 
 use btel_processor::{AggregateDelta, Publisher};
-use btel_records::{CaptureDeferred, SpanRecord};
+use btel_records::SpanRecord;
 use btel_settings::{encoding, publisher as settings};
+use btel_snapshot::Snapshot;
 use btel_types::TelemetryId;
 use prost::Message;
 pub use settings::RecordingConfig;
@@ -60,22 +61,39 @@ impl SealedFile {
 /// only automatic sealing triggers; explicit flush/shutdown also seal pending data.
 /// No output is replayed after an error. Final epoch lifecycle is separate: this
 /// implementation seals data on shutdown but does not claim RecordingEnd/finality.
-pub struct RecordingPublisher<F> {
+pub struct RecordingPublisher<F, C = fn(Snapshot)> {
     id: RecordingId,
     config: RecordingConfig,
     source_snapshot_id: Option<[u8; 32]>,
     buffer: ConversionBuffer,
     receive: F,
+    receive_snapshot: C,
+    captures: btel_processor::CaptureProcessor,
+    pending_captures: Vec<Snapshot>,
     next_sequence: Option<NonZeroU64>,
     deadline: Option<Instant>,
     pending_span_reservation: usize,
     span_credit: usize,
 }
 impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
+    /// Snapshots are captured and hashed, but released without persistence.
+    /// Files contain real CAS references whose payloads may be unavailable.
     pub fn new(
         id: RecordingId,
         config: RecordingConfig,
         receive: F,
+    ) -> Result<Self, RecordingError> {
+        Self::with_snapshot_receiver(id, config, receive, drop::<Snapshot>)
+    }
+}
+impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
+    /// Both callbacks run after input chunk recycling. Snapshot ownership moves
+    /// without copying; receivers must not wait for the VM to release resources.
+    pub fn with_snapshot_receiver(
+        id: RecordingId,
+        config: RecordingConfig,
+        receive: F,
+        receive_snapshot: C,
     ) -> Result<Self, RecordingError> {
         config
             .validate()
@@ -86,6 +104,9 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
             source_snapshot_id: None,
             buffer: ConversionBuffer::default(),
             receive,
+            receive_snapshot,
+            captures: btel_processor::CaptureProcessor::default(),
+            pending_captures: Vec::new(),
             next_sequence: NonZeroU64::new(1),
             deadline: None,
             pending_span_reservation: 0,
@@ -169,6 +190,12 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         Ok(())
     }
     fn service(&mut self, now: Instant, force: bool) -> Result<(), RecordingError> {
+        // Never hold capture slots until the file seal threshold: the VM could
+        // exhaust its snapshot pool before producing enough bytes to seal.
+        // Drain drops the remaining owners if a receiver unwinds.
+        for snapshot in self.pending_captures.drain(..) {
+            (self.receive_snapshot)(snapshot);
+        }
         if force
             || self.buffer.encoded_size_hint() >= self.config.target_bytes.get()
             || self.deadline.is_some_and(|deadline| now >= deadline)
@@ -189,16 +216,23 @@ impl<F: FnMut(SealedFile)> RecordingPublisher<F> {
         }
     }
 }
-impl<F: FnMut(SealedFile)> Publisher<CaptureDeferred, CaptureDeferred> for RecordingPublisher<F> {
+impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> Publisher<Snapshot, Snapshot>
+    for RecordingPublisher<F, C>
+{
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.buffer.aggregate(delta);
     }
-    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<CaptureDeferred, CaptureDeferred>) {
+    fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
         if self.span_credit == 0 {
             Self::terminal(self.admit_spans());
         }
         self.span_credit -= 1;
         self.buffer.span(thread, record);
+        if let Some(snapshot) = record.take_capture()
+            && let Some(snapshot) = self.captures.retain(snapshot)
+        {
+            self.pending_captures.push(snapshot);
+        }
     }
     fn before_batch(&mut self, records: usize) {
         self.clear_batch();

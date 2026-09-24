@@ -1,7 +1,7 @@
-// Btel recording v1. Rust types are generated into OUT_DIR by btel_publisher.
+// Btel recording v2. Rust types are generated into OUT_DIR by btel_publisher.
 // RecordingPublisher seals this format; destination delivery is separate.
 syntax = "proto3";
-package baml.btel.recording.v1;
+package baml.btel.recording.v2;
 
 // One complete protobuf message per immutable local file or S3 object.
 // All sections may coexist. References may resolve in earlier OR later files.
@@ -233,7 +233,7 @@ message FunctionAnnouncement {
   uint64 parent_id = 2;        // Nonzero thread/function node ID.
   uint32 call_path_id = 3;     // Nonzero; producer announcement has no reentry bit.
   fixed64 entered_at_ticks = 4;
-  CaptureState inputs = 5;
+  SnapshotId inputs_cas_id = 5; // Presence does not promise payload availability.
 }
 
 message FunctionCompletion {
@@ -244,11 +244,12 @@ message FunctionCompletion {
   fixed64 exited_at_ticks = 5;
   fixed64 self_await_ticks = 6;
   // Bits 0..1: InvocationOutcome (1=OK, 2=ERRORED, 3=CANCELLED; 0 invalid).
-  // Bit 2: value capture deferred. Bit 3: requires entry input announcement.
-  // All other bits must be zero in v1. Reentry is already encoded in node.
+  // Bit 3: requires entry input announcement.
+  // All other bits must be zero in v2. Reentry is already encoded in node.
   // Late completions must not set bit 3. This is an explicit wire mapping,
   // unrelated to the Rust enum's discriminants or memory layout.
   uint32 completion_flags = 7;
+  SnapshotId value_cas_id = 8; // Output/error identity; absence means no captured value.
 }
 
 enum InvocationOutcome {
@@ -258,10 +259,12 @@ enum InvocationOutcome {
   INVOCATION_OUTCOME_CANCELLED = 3;
 }
 
-// No owned snapshot format in this phase. NOT_RECORDED does not prove policy off.
-enum CaptureState {
-  CAPTURE_STATE_NOT_RECORDED = 0;
-  CAPTURE_STATE_DEFERRED = 1;
+// XXH3-128 snapshot-format-1 digest, seed zero. Words are little-endian.
+// All-zero is valid. Message presence distinguishes no capture from that ID.
+// A reference can be unresolved: this schema does not assert CAS delivery.
+message SnapshotId {
+  fixed64 low = 1;
+  fixed64 high = 2;
 }
 
 // Present only in the last file; its containing sequence declares the file count.

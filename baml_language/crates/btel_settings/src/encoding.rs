@@ -5,7 +5,7 @@
 pub const MAX_EVENT_BYTES: usize = 128;
 /// **Correctness bound.** The specialized writer relies on this reserved region. Update only
 /// with encoder changes and worst-case/equivalence tests.
-pub const MAX_COMPLETION_BYTES: usize = 70;
+pub const MAX_COMPLETION_BYTES: usize = 90;
 /// **Format limit.** Length backpatching uses u32; changing the cap requires reviewing that
 /// representation and allocation checks.
 pub const MAX_BUFFER_BYTES: usize = u32::MAX as usize;
@@ -14,7 +14,7 @@ pub const MAX_BUFFER_BYTES: usize = u32::MAX as usize;
 pub const LENGTH_BYTES: usize = 5;
 /// **Wire compatibility.** Coordinate with readers/schema evolution; never a performance
 /// knob.
-pub const FORMAT_MAJOR: u32 = 1;
+pub const FORMAT_MAJOR: u32 = 2;
 /// **Wire compatibility.** Coordinate with readers/schema evolution; never a performance
 /// knob.
 pub const FORMAT_MINOR: u32 = 0;
