@@ -26,14 +26,6 @@ pub fn format(source: &str, options: &FormatOptions) -> Result<String, Formatter
     format_salsa(&db, source_file, *options)
 }
 
-/// Whether a source file contains a formatter ignore directive in a comment.
-pub fn has_ignore_directive(source: &str) -> bool {
-    let (db, source_file) = single_file_db("file.baml", source);
-    let tokens = baml_compiler_lexer::lex_file(&db, source_file);
-    let (parsed, _errors) = baml_compiler_parser::parse_file(&tokens);
-    cst_has_ignore_directive(&SyntaxNode::new_root(parsed))
-}
-
 /// A throwaway database holding exactly one workspace file.
 ///
 /// Formatting is purely syntactic (lexer + parser over one file), so the
@@ -69,7 +61,7 @@ pub fn format_salsa(
     // must not disable formatting. This check intentionally precedes the parse
     // error gate so the directive can protect an incomplete or intentionally
     // non-canonical file.
-    if cst_has_ignore_directive(&cst) {
+    if has_ignore_directive(&cst) {
         return Ok(file.text(db).clone());
     }
 
@@ -92,7 +84,7 @@ pub fn format_salsa(
     Ok(printer.output)
 }
 
-fn cst_has_ignore_directive(cst: &SyntaxNode) -> bool {
+fn has_ignore_directive(cst: &SyntaxNode) -> bool {
     cst.descendants_with_tokens().any(|element| {
         let SyntaxElement::Token(token) = element else {
             return false;
