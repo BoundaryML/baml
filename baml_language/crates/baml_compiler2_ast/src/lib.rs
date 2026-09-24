@@ -2168,7 +2168,7 @@ function Demo() -> string {
     }
 
     #[test]
-    fn backtick_boundary_trim_keeps_escaped_newline() {
+    fn backtick_single_line_keeps_escaped_newline() {
         let source = r#"
 function Demo() -> string {
     `hostname\n`

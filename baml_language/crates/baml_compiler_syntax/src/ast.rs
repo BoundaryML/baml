@@ -1216,7 +1216,7 @@ impl BacktickStringLiteral {
     /// For `` `Hello, ${user.name}!` `` returns:
     /// `[Text("Hello, "), Interp(<${user.name}>), Text("!")]`.
     ///
-    /// Content is dedented per BEP §12 (see
+    /// Multiline content is dedented per BEP §12 (see
     /// [`baml_base::dedent::dedent_backtick`]) with interpolations excluded from
     /// the min-indent calculation (§12 rule 8 — "Whitespace inside `${...}` is
     /// preserved verbatim"), §13 block-tag whitespace control is applied, and
