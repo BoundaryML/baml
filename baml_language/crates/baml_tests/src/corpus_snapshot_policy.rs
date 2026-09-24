@@ -5,12 +5,12 @@
 pub(super) struct Example {
     pub path: &'static str,
     /// MIR: source-level names. Bytecode: fully qualified emitted names.
-    /// PPIR/formatter select the whole source file, so this is empty.
+    /// HIR/formatter select the whole source file, so this is empty.
     pub functions: &'static [&'static str],
     pub reason: &'static str,
 }
 
-pub(super) const PPIR: &[Example] = &[
+pub(super) const HIR: &[Example] = &[
     Example {
         path: "ns_fixtures/ns_namespaces_nested/main.baml",
         functions: &[],
@@ -48,6 +48,7 @@ pub(super) const MIR: &[Example] = &[
         path: "ns_fixtures/ns_short_circuit_locals/short_circuit_locals.baml",
         functions: &[
             "chained_and",
+            "coalesced_lengths_compared_apart",
             "conditional_short_circuit_in_loop",
             "mixed_join",
         ],
@@ -107,12 +108,13 @@ pub(super) const BYTECODE: &[Example] = &[
         path: "ns_fixtures/ns_short_circuit_locals/short_circuit_locals.baml",
         functions: &[
             "user.fixtures.short_circuit_locals.chained_and",
+            "user.fixtures.short_circuit_locals.coalesced_lengths_compared_apart",
             "user.fixtures.short_circuit_locals.conditional_short_circuit",
             "user.fixtures.short_circuit_locals.conditional_short_circuit_in_loop",
             "user.fixtures.short_circuit_locals.initialized_local_in_branch_loop",
             "user.fixtures.short_circuit_locals.mixed_join",
         ],
-        reason: "All five predecessor-coverage regressions: stack-carried values versus local slots.",
+        reason: "The predecessor-coverage regressions and a use forwarded past a second carried value: stack-carried values versus local slots.",
     },
     Example {
         path: "ns_fixtures/ns_lambda_basic/lambda_basic.baml",
@@ -121,6 +123,17 @@ pub(super) const BYTECODE: &[Example] = &[
             "user.fixtures.lambda_basic.test_nested",
         ],
         reason: "Closure construction, capture and indirect calls.",
+    },
+    Example {
+        path: "ns_lambda_owners/lambda_owners.baml",
+        functions: &[
+            "user.lambda_owners.Retry.scaled",
+            "user.lambda_owners.Runner.twice",
+            "user.lambda_owners.<(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run",
+            "user.lambda_owners.<(user.lambda_owners.Other as user.lambda_owners.Runner)>.run",
+            "user.lambda_owners.<(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run",
+        ],
+        reason: "A lambda's owner segment is the owner's link-name tail for every method kind: inherent, interface default, in-body impl, out-of-body impl, generic impl. Impl- and interface-owned owners once lost their qualification, colliding across impl blocks.",
     },
     Example {
         path: "ns_fixtures/ns_patterns_new/patterns_new.baml",

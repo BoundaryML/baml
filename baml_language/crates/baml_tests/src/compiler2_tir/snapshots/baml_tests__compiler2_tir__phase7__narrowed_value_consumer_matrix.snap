@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase7.rs
+expression: "render_labeled_cases(&[(\"narrowed_type_captured_in_let_binding\",\nr#\"function f(x: int?) -> int {\n  if (x == null) {\n    return 0;\n  }\n  let y = x;\n  return y;\n}\"#,),\n(\"narrowed_int_arithmetic_no_error\",\nr#\"function f(x: int?) -> int {\n  if (x != null) {\n    return x + 1;\n  }\n  return 0;\n}\"#,),])"
+---
+=== narrowed_type_captured_in_let_binding ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x == null : bool) : void
+      { : never
+        return 0 : 0
+      }
+    let y = x : int
+    return y : int
+  }
+}
+block user.f {
+}
+
+=== narrowed_int_arithmetic_no_error ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x != null : bool) : void
+      { : never
+        return x + 1 : int
+      }
+    return 0 : 0
+  }
+}
+block user.f {
+}

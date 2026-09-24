@@ -110,3 +110,19 @@ export function createMemberAnchors(
 
   return anchors;
 }
+
+// Next can supply encoded catch-all segments to the page while metadata gets
+// decoded segments. Normalize both before looking up the immutable record.
+export function packageDocumentPath(
+  segments: readonly string[] | undefined,
+): string | null {
+  if (!segments?.length) return 'baml/packages';
+  try {
+    const decoded = segments.map((segment) => decodeURIComponent(segment));
+    if (decoded.some((segment) => !FQN_SEGMENT_PATTERN.test(segment)))
+      return null;
+    return `baml/packages/${decoded.join('/')}`;
+  } catch {
+    return null;
+  }
+}

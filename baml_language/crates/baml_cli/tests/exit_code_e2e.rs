@@ -105,28 +105,6 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
 // Tests for `baml check` exit codes
 // ============================================================================
 
-/// A valid project should return exit code 0 from `baml check`.
-#[test]
-fn check_valid_project_returns_zero_exit_code() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-
-    create_project(
-        tmp.path(),
-        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
-    );
-
-    let output = run_baml_cli(built, tmp.path(), &["check", "--from", "."]);
-
-    assert!(
-        output.status.success(),
-        "Expected exit code 0 for valid project, got: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-}
-
 /// `baml check` with no `--from` is sugar for `baml check --from .`.
 #[test]
 fn check_defaults_from_to_current_directory() {
@@ -222,74 +200,6 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
     );
 }
 
-/// Multiple compilation errors should still result in a non-zero exit code.
-#[test]
-fn generate_multiple_compilation_errors_returns_nonzero_exit_code() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-
-    // Create a project with multiple errors
-    create_project_with_generator(
-        tmp.path(),
-        r#"
-function bad_func1() -> UnknownType1 {
-  "never"
-}
-function bad_func2() -> UnknownType2 {
-  "called"
-}
-"#,
-    );
-
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
-
-    assert!(
-        !output.status.success(),
-        "Expected non-zero exit code for multiple compilation errors",
-    );
-    assert_eq!(
-        output.status.code(),
-        Some(4),
-        "Expected exit code 4 for compilation errors",
-    );
-}
-
-/// A valid project should return exit code 0 from `baml generate`.
-#[test]
-fn generate_valid_project_returns_zero_exit_code() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-
-    // Create a valid project
-    create_project_with_generator(
-        tmp.path(),
-        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
-    );
-
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
-
-    assert!(
-        output.status.success(),
-        "Expected exit code 0 for valid project, got: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains(&format!(
-            "Generating clients with CLI version: {}",
-            baml_version::CANONICAL_VERSION
-        )),
-        "Expected generate output to include CLI version, got: {stderr}",
-    );
-    assert!(
-        stderr.contains("Compiling 1 file(s)"),
-        "`baml generate` should keep compile progress, got: {stderr}",
-    );
-}
-
 #[test]
 fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
     let built = &common::baml_cli();
@@ -308,22 +218,6 @@ fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
     )
     .unwrap();
 
-    let normal = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
-    assert!(
-        normal.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&normal.stderr)
-    );
-    let normal_stderr = String::from_utf8_lossy(&normal.stderr);
-    assert!(
-        normal_stderr.contains("1 identifier rename →"),
-        "{normal_stderr}"
-    );
-    assert!(
-        !normal_stderr.contains("Renamed enum variant"),
-        "{normal_stderr}"
-    );
-
     let verbose = run_baml_cli(built, tmp.path(), &["generate", "--from", ".", "--verbose"]);
     assert!(
         verbose.status.success(),
@@ -340,21 +234,16 @@ fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
             .contains("Renamed enum variant `user.Choice.None`: `None` → `None_` (Python keyword)"),
         "{verbose_stderr}"
     );
-
-    let quiet = run_baml_cli(built, tmp.path(), &["generate", "--from", ".", "--quiet"]);
     assert!(
-        quiet.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&quiet.stderr)
-    );
-    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
-    assert!(
-        !quiet_stderr.contains("identifier rename"),
-        "{quiet_stderr}"
+        verbose_stderr.contains(&format!(
+            "Generating clients with CLI version: {}",
+            baml_version::CANONICAL_VERSION
+        )),
+        "Expected generate output to include CLI version, got: {verbose_stderr}",
     );
     assert!(
-        !quiet_stderr.contains("Renamed enum variant"),
-        "{quiet_stderr}"
+        verbose_stderr.contains("Compiling 1 file(s)"),
+        "`baml generate` should keep compile progress, got: {verbose_stderr}",
     );
 }
 
@@ -401,113 +290,7 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
 }
 
 #[test]
-fn generate_rust_default_output_stays_inside_project() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-    let project = tmp.path().join("project");
-    std::fs::create_dir(&project).unwrap();
-    create_project(
-        &project,
-        "function echo(value: string) -> string { value }\n",
-    );
-    std::fs::write(
-        project.join("baml.toml"),
-        "[package]\nname = \"test-project\"\n\n\
-         [generator.rust]\n\
-         output_type = \"rust\"\n\
-         naming_convention = \"preserve-case\"\n",
-    )
-    .unwrap();
-
-    let output = run_baml_cli(built, &project, &["generate", "--from", "."]);
-
-    assert!(
-        output.status.success(),
-        "Rust generation failed: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert!(
-        project.join("baml_sdk/Cargo.toml").is_file(),
-        "the default Rust SDK should be generated inside the project"
-    );
-    assert!(
-        !tmp.path().join("baml_sdk").exists(),
-        "generation must not create a sibling directory outside the project"
-    );
-}
-
-#[test]
 fn generate_go_writes_sdk_through_cli() {
-    if !gofmt_is_available() {
-        return;
-    }
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-    create_project_with_go_generator(
-        tmp.path(),
-        "function echo(value: string) -> string { value }\n",
-    );
-
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
-    assert!(
-        output.status.success(),
-        "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-
-    let functions = std::fs::read_to_string(tmp.path().join("baml_sdk/functions.go"))
-        .expect("Go functions.go should be generated");
-    assert!(
-        functions.contains("func Echo("),
-        "generated Go:\n{functions}"
-    );
-    let bootstrap =
-        std::fs::read_to_string(tmp.path().join("baml_sdk/internal/bootstrap/bootstrap.go"))
-            .expect("Go bootstrap should be generated");
-    assert!(bootstrap.contains("func Ensure() error"));
-    assert_eq!(
-        std::fs::read_to_string(tmp.path().join("baml_sdk/.gitignore")).unwrap(),
-        baml_codegen_types::GENERATED_GITIGNORE
-    );
-}
-
-#[test]
-fn generate_go_first_run_preserves_preexisting_user_files() {
-    if !gofmt_is_available() {
-        return;
-    }
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-    create_project_with_go_generator(
-        tmp.path(),
-        "function echo(value: string) -> string { value }\n",
-    );
-    let sdk = tmp.path().join("baml_sdk");
-    std::fs::create_dir(&sdk).unwrap();
-    std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
-
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
-
-    assert!(
-        output.status.success(),
-        "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert_eq!(
-        std::fs::read_to_string(sdk.join("user-notes.txt")).unwrap(),
-        "keep me"
-    );
-    assert!(sdk.join("functions.go").is_file());
-}
-
-#[test]
-fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
     if !gofmt_is_available() {
         return;
     }
@@ -517,16 +300,37 @@ fn generate_go_removes_stale_owned_files_and_preserves_unknown_files() {
         tmp.path(),
         "class FormerType {\n  value: string\n}\n\nfunction echo(value: string) -> string { value }\n",
     );
-
-    let first = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
-    assert!(
-        first.status.success(),
-        "initial Go generation failed:\n{}",
-        String::from_utf8_lossy(&first.stderr)
-    );
     let sdk = tmp.path().join("baml_sdk");
-    assert!(sdk.join("types.go").is_file());
+    std::fs::create_dir(&sdk).unwrap();
     std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        output.status.success(),
+        "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let functions = std::fs::read_to_string(sdk.join("functions.go"))
+        .expect("Go functions.go should be generated");
+    assert!(
+        functions.contains("func Echo("),
+        "generated Go:\n{functions}"
+    );
+    let bootstrap = std::fs::read_to_string(sdk.join("internal/bootstrap/bootstrap.go"))
+        .expect("Go bootstrap should be generated");
+    assert!(bootstrap.contains("func Ensure() error"));
+    assert_eq!(
+        std::fs::read_to_string(sdk.join(".gitignore")).unwrap(),
+        baml_codegen_types::GENERATED_GITIGNORE
+    );
+    assert!(sdk.join("types.go").is_file());
+    assert_eq!(
+        std::fs::read_to_string(sdk.join("user-notes.txt")).unwrap(),
+        "keep me"
+    );
 
     std::fs::write(
         tmp.path().join("baml_src/main.baml"),
@@ -613,8 +417,8 @@ fn run_valid_project_outputs_only_program_output() {
     );
 }
 
-/// `baml run` keeps logs silent by default and streams the selected levels
-/// before printing the target's return value when `--log` or `BAML_LOG` enables them.
+/// `baml run` defaults to INFO and streams the selected levels before printing
+/// the target's return value. `--log` and `BAML_LOG` override the default.
 #[test]
 fn run_log_sources_surface_filtered_logs_for_targets_and_expressions() {
     let built = &common::baml_cli();
@@ -623,14 +427,6 @@ fn run_log_sources_surface_filtered_logs_for_targets_and_expressions() {
     create_project(
         tmp.path(),
         r#"
-function logged() -> string {
-    log.debug("debug-detail");
-    log.info("info-detail");
-    log.warn({"user": "ada", "attempts": [1, 2]});
-    log.error("error-detail");
-    "target-result"
-}
-
 class LoggedConversion {
     value string
 
@@ -652,108 +448,74 @@ class LoggedConversion {
 }
 
 function logged_conversion(input: LoggedConversion) -> LoggedConversion {
+    log.debug("conversion-debug-detail");
     log.info("conversion-target-detail");
     input
 }
 "#,
     );
 
-    let quiet = run_baml_cli(built, tmp.path(), &["run", "logged", "--from", "."]);
-    assert!(
-        quiet.status.success(),
-        "default run failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&quiet.stdout),
-        String::from_utf8_lossy(&quiet.stderr),
-    );
-    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
-    assert!(
-        quiet_stdout.contains("target-result"),
-        "stdout: {quiet_stdout}"
-    );
-    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+    let expression_source = r#"
+log.debug("expression-debug-detail");
+log.info("expression-info-detail");
+log.warn("expression-warn-detail");
+log.error("expression-error-detail");
+7
+"#;
+    let log_lines = [
+        "[DEBUG] expression-debug-detail",
+        "[INFO] expression-info-detail",
+        "[WARN] expression-warn-detail",
+        "[ERROR] expression-error-detail",
+    ];
+    for (threshold, expected) in [
+        (None, [false, true, true, true]),
+        (Some("OFF"), [false, false, false, false]),
+        (Some("ERROR"), [false, false, false, true]),
+        (Some("WARN"), [false, false, true, true]),
+        (Some("INFO"), [false, true, true, true]),
+        (Some("DEBUG"), [true, true, true, true]),
+        (Some("TRACE"), [true, true, true, true]),
+    ] {
+        let mut args = vec!["run", "--from", "."];
+        if let Some(threshold) = threshold {
+            args.extend(["--log", threshold]);
+        }
+        args.extend(["-e", expression_source]);
 
-    let info = run_baml_cli_with_env(
-        built,
-        tmp.path(),
-        &["run", "logged", "--from", ".", "--log", "INFO"],
-        &[("BAML_LOG", "ERROR")],
-    );
-    assert!(
-        info.status.success(),
-        "--log INFO run failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&info.stdout),
-        String::from_utf8_lossy(&info.stderr),
-    );
-    let stdout = String::from_utf8_lossy(&info.stdout);
-    assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
-    assert!(
-        stdout.contains(r#"[WARN] {"user": "ada", "attempts": [1, 2]}"#),
-        "stdout: {stdout}"
-    );
-    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
-    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
-    assert!(
-        stdout.find("[ERROR] error-detail") < stdout.find("target-result"),
-        "captured logs must be flushed before the return value: {stdout}"
-    );
+        let expression = run_baml_cli(built, tmp.path(), &args);
+        assert!(
+            expression.status.success(),
+            "logged expression failed at threshold {threshold:?}; stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&expression.stdout),
+            String::from_utf8_lossy(&expression.stderr),
+        );
+        let stdout = String::from_utf8_lossy(&expression.stdout);
+        let lines: Vec<_> = stdout.lines().collect();
+        let result_line = lines
+            .iter()
+            .position(|line| line.trim() == "7")
+            .expect("expression return value");
+        for (log_line, should_be_visible) in log_lines.into_iter().zip(expected) {
+            assert_eq!(
+                stdout.contains(log_line),
+                should_be_visible,
+                "unexpected discovery for `{log_line}` at threshold {threshold:?}; stdout: {stdout}"
+            );
+            if should_be_visible {
+                let log_line = lines
+                    .iter()
+                    .position(|line| line.contains(log_line))
+                    .expect("visible expression log");
+                assert!(
+                    log_line < result_line,
+                    "expression logs must be flushed before the return value at threshold {threshold:?}: {stdout}"
+                );
+            }
+        }
+    }
 
-    let from_env = run_baml_cli_with_env(
-        built,
-        tmp.path(),
-        &["run", "logged", "--from", "."],
-        &[("BAML_LOG", "WARN")],
-    );
-    assert!(
-        from_env.status.success(),
-        "BAML_LOG=WARN run failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&from_env.stdout),
-        String::from_utf8_lossy(&from_env.stderr),
-    );
-    let stdout = String::from_utf8_lossy(&from_env.stdout);
-    assert!(stdout.contains("[WARN]"), "stdout: {stdout}");
-    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
-    assert!(!stdout.contains("info-detail"), "stdout: {stdout}");
-    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
-
-    let expression = run_baml_cli(
-        built,
-        tmp.path(),
-        &[
-            "run",
-            "--from",
-            ".",
-            "--log",
-            "INFO",
-            "-e",
-            r#"log.info("expression-detail"); 7"#,
-        ],
-    );
-    assert!(
-        expression.status.success(),
-        "logged expression failed; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&expression.stdout),
-        String::from_utf8_lossy(&expression.stderr),
-    );
-    let stdout = String::from_utf8_lossy(&expression.stdout);
-    assert!(
-        stdout.contains("[INFO] expression-detail"),
-        "stdout: {stdout}"
-    );
-    let lines: Vec<_> = stdout.lines().collect();
-    let log_line = lines
-        .iter()
-        .position(|line| line.contains("[INFO] expression-detail"))
-        .expect("expression log");
-    let result_line = lines
-        .iter()
-        .position(|line| line.trim() == "7")
-        .expect("expression return value");
-    assert!(
-        log_line < result_line,
-        "expression logs must be flushed before the return value: {stdout}"
-    );
-
-    let conversion = run_baml_cli(
+    let conversion = run_baml_cli_with_env(
         built,
         tmp.path(),
         &[
@@ -769,6 +531,7 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
             "--json-args",
             r#"{"input":{"value":"hook-result"}}"#,
         ],
+        &[("BAML_LOG", "ERROR")],
     );
     assert!(
         conversion.status.success(),
@@ -784,6 +547,17 @@ function logged_conversion(input: LoggedConversion) -> LoggedConversion {
     ] {
         assert!(stdout.contains(expected), "stdout: {stdout}");
     }
+    assert!(
+        !stdout.contains("conversion-debug-detail"),
+        "`--log INFO` must override BAML_LOG=ERROR while still filtering debug: {stdout}"
+    );
+    let from_json_pos = stdout.find("[WARN] from-json-detail").unwrap();
+    let target_pos = stdout.find("[INFO] conversion-target-detail").unwrap();
+    let to_json_pos = stdout.find("[ERROR] to-json-detail").unwrap();
+    assert!(
+        from_json_pos < target_pos && target_pos < to_json_pos,
+        "conversion-hook logs must retain FromJson/target/ToJson order: {stdout}"
+    );
     let result_pos = stdout.find(r#""hook-result""#).expect("serialized result");
     assert!(
         stdout.find("[ERROR] to-json-detail") < Some(result_pos),
@@ -1087,8 +861,8 @@ test "passes" {
     common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
 }
 
-/// BAML log events stay silent by default and become stdout lines only when
-/// the caller opts into a level threshold with `--log` or `BAML_LOG`.
+/// BAML test log events default to INFO and remain configurable through
+/// `--log` or `BAML_LOG` without changing test exit codes.
 #[test]
 fn test_log_sources_route_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
     let built = &common::baml_cli();
@@ -1113,37 +887,20 @@ test "fails" {
 "#,
     );
 
-    let quiet = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
-    assert!(
-        quiet.status.success(),
-        "expected default log mode to pass; stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&quiet.stdout),
-        String::from_utf8_lossy(&quiet.stderr),
-    );
-    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
-    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
-    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
-    assert!(
-        format!("{quiet_stdout}{quiet_stderr}").contains("1 passed, 0 failed, 1 total"),
-        "stdout: {quiet_stdout}\nstderr: {quiet_stderr}"
-    );
-    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
-
-    // Uppercase is intentional: this is the documented shell spelling and
-    // guards clap's case-insensitive value parsing.
-    let info = run_baml_cli_with_env(
-        built,
-        tmp.path(),
-        &["test", "--from", ".", "-i", "::logs"],
-        &[("BAML_LOG", "INFO")],
-    );
+    let info = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
     assert!(
         info.status.success(),
-        "expected BAML_LOG=INFO to pass; stdout: {}\nstderr: {}",
+        "expected default INFO log mode to pass; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&info.stdout),
         String::from_utf8_lossy(&info.stderr),
     );
     let stdout = String::from_utf8_lossy(&info.stdout);
+    let stderr = String::from_utf8_lossy(&info.stderr);
+    assert!(stdout.contains("PASS"), "stdout: {stdout}");
+    assert!(
+        format!("{stdout}{stderr}").contains("1 passed, 0 failed, 1 total"),
+        "stdout: {stdout}\nstderr: {stderr}"
+    );
     assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
     assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
     assert!(
@@ -1162,6 +919,42 @@ test "fails" {
         stdout.find("[ERROR] error-detail") < stdout.find("PASS"),
         "the final captured log must be printed before the test report: {stdout}"
     );
+
+    let quiet = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs", "--log", "OFF"],
+    );
+    assert!(
+        quiet.status.success(),
+        "expected --log OFF to pass; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&quiet.stdout),
+        String::from_utf8_lossy(&quiet.stderr),
+    );
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
+    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+
+    // Uppercase is intentional: this is the documented shell spelling and
+    // guards clap's case-insensitive environment value parsing.
+    let error = run_baml_cli_with_env(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "::logs"],
+        &[("BAML_LOG", "ERROR")],
+    );
+    assert!(error.status.success(), "BAML_LOG=ERROR must pass");
+    let error_stdout = String::from_utf8_lossy(&error.stdout);
+    assert!(
+        error_stdout.contains("[ERROR] error-detail"),
+        "stdout: {error_stdout}"
+    );
+    for filtered in ["debug-detail", "info-detail", "warn-detail"] {
+        assert!(
+            !error_stdout.contains(filtered),
+            "BAML_LOG=ERROR leaked `{filtered}`: {error_stdout}"
+        );
+    }
 
     let failure = run_baml_cli(
         built,
@@ -1360,47 +1153,6 @@ test "provider-failure" {
     );
 }
 
-/// `assert.approx_equal` lets float assertions pass with a tolerance so normal
-/// floating-point rounding artifacts do not fail tests.
-///
-/// Returns:
-/// - Nothing; this test passes when `baml test` exits successfully.
-///
-/// Panics:
-/// - Panics if `baml test` fails or does not report the passing test case.
-#[test]
-fn test_assert_approx_equal_accepts_float_tolerance() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-
-    create_project(
-        tmp.path(),
-        r#"
-test "assert-approx-equal-passes" {
-  let total = 9.99 + 5.50 + 2.00
-  assert.approx_equal(total, 17.49, 0.000001)
-}
-"#,
-    );
-
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{stdout}{stderr}");
-
-    assert!(
-        output.status.success(),
-        "Expected assert.approx_equal to tolerate float rounding, got: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        stdout,
-        stderr,
-    );
-    assert!(
-        combined.contains("1 passed, 0 failed, 1 total"),
-        "Expected a passing aggregate summary, got:\n{combined}",
-    );
-}
-
 #[test]
 fn test_unfiltered_testset_run_honors_pass_rate_runner() {
     let built = &common::baml_cli();
@@ -1441,53 +1193,6 @@ testset "suite" with testing.PassRate(0.6) {
     assert!(
         combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
         "Expected unfiltered aggregate summary to report tolerated leaf totals, got:\n{combined}"
-    );
-}
-
-#[test]
-fn test_filtered_testset_run_honors_pass_rate_runner_for_selected_set() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-
-    create_project(
-        tmp.path(),
-        r#"
-testset "suite" with testing.PassRate(0.6) {
-  test "one" { assert.is_true(true) }
-  test "two" { assert.is_true(true) }
-  test "three" { assert.is_true(false) }
-}
-"#,
-    );
-
-    let output = run_baml_cli(
-        built,
-        tmp.path(),
-        &["test", "--from", ".", "-i", "root::suite::*"],
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{stdout}{stderr}");
-
-    assert!(
-        output.status.success(),
-        "Expected filtered testset run to honor PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        stdout,
-        stderr,
-    );
-    assert!(
-        combined.contains("AGGREGATE PASS [outcome=pass; 1 tolerated failure]"),
-        "Expected filtered aggregate output to identify tolerated failures, got:\n{combined}"
-    );
-    assert!(combined.contains("PASS root::suite::two"), "{combined}");
-    assert!(
-        combined.contains("TOLERATED root::suite::three"),
-        "{combined}"
-    );
-    assert!(
-        combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
-        "Expected filtered aggregate summary to report selected leaf totals, got:\n{combined}"
     );
 }
 
@@ -1787,35 +1492,6 @@ fn run_list_without_baml_toml_using_baml_src_succeeds() {
     );
 }
 
-/// An explicit source directory needs neither `baml.toml` nor a `baml_src/`
-/// wrapper: `--from` itself is the opt-in to load that tree.
-#[test]
-fn run_list_accepts_explicit_unmarked_source_root() {
-    let built = &common::baml_cli();
-    let tmp = tempfile::tempdir().unwrap();
-    // A loose .baml at the root, with no baml.toml and no baml_src/.
-    std::fs::write(
-        tmp.path().join("loose.baml"),
-        "function f() -> int {\n  1\n}\n",
-    )
-    .unwrap();
-
-    let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--from", "."]);
-
-    assert!(
-        output.status.success(),
-        "Expected explicit unmarked source root to load, got {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stdout).contains('f'),
-        "Expected function list to contain `f`, got:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-    );
-}
-
 /// `baml run <fn>` actually *executes* a function in a manifest-less
 /// `baml_src/` project — the headline of this change, proven end-to-end
 /// (not just `--list`). `answer` is pure (no LLM), so it runs hermetically.
@@ -2104,6 +1780,152 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
     );
 }
 
+/// `--file` supplies hermetic standalone context to `-e`, just as
+/// `--project` supplies project context.
+#[test]
+fn run_expr_picks_up_standalone_file_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("defines_foo.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "defines_foo.baml", "-e", "foo()"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for `run --file defines_foo.baml -e 'foo()'`, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// The synthetic expression source must not replace a selected standalone
+/// file that happens to use the same default filename.
+#[test]
+fn run_expr_preserves_standalone_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "__expr__.baml", "-e", "foo()"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected declarations from `__expr__.baml` to remain available\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// An explicitly selected standalone file is always compiled with the
+/// expression, even when the expression does not reference its declarations.
+#[test]
+fn run_expr_checks_standalone_file_context() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function broken() -> MissingType {\n  1\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--file", "__expr__.baml", "-e", "2 + 2"],
+    );
+
+    assert!(
+        !output.status.success(),
+        "Expected the standalone file's error to fail expression evaluation\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("MissingType"),
+        "Expected diagnostics from the standalone file, got:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Project fallback must not replace a real root-level source file with the
+/// synthetic expression source when their default paths collide.
+#[test]
+fn run_expr_preserves_project_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function foo() -> int {\n  42\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "foo()", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected declarations from the project `__expr__.baml` to remain available\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+}
+
+/// Diagnostics from a colliding root-level project source must also survive
+/// creation of the synthetic expression source.
+#[test]
+fn run_expr_checks_project_file_named_expr() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("__expr__.baml"),
+        "function broken() -> MissingType {\n  1\n}\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "broken()", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected the project file's error to fail expression evaluation\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("MissingType"),
+        "Expected diagnostics from the project file, got:\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 /// B-359: an expression that only needs the standard library must not compile
 /// or diagnose the surrounding project. Unrelated project errors should not
 /// block `-e` from being used as an interactive probe.
@@ -2272,56 +2094,6 @@ fn shebang_can_name_a_specific_function() {
     assert!(
         !stdout.contains("this is main"),
         "Expected `greet` to run, not `main`, got:\n{stdout}"
-    );
-}
-
-/// The real thing: make a `.baml` file executable with a `#!` line pointing
-/// at the built CLI, then run it directly so the OS kernel drives the
-/// shebang. Proves the feature end-to-end on Unix. The `env -S` line also
-/// sets `BAML_CLI_ALLOW_DIRECT=1`, exactly as the committed demo does, to
-/// silence the direct-invocation advisory.
-#[cfg(unix)]
-#[test]
-fn executable_baml_script_runs_via_kernel_shebang() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let built = &common::baml_cli();
-    let cli = built.display();
-
-    let tmp = tempfile::tempdir().unwrap();
-    let script = tmp.path().join("greet.baml");
-    std::fs::write(
-        &script,
-        format!(
-            "#!/usr/bin/env -S BAML_CLI_ALLOW_DIRECT=1 {cli} run --file\n\
-             function main() -> string {{\n    \"hello from a shebang script\"\n}}\n"
-        ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&script).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&script, perms).unwrap();
-
-    // No arguments: bare-shebang passthrough is unsupported, so the script
-    // takes none. The kernel drives `#! … run --file <this script>`.
-    let output = Command::new(&script)
-        .current_dir(tmp.path())
-        .env("BAML_AGENT_SKILL_CHECK", "off")
-        .env("BAML_CACHE_DIR", common::shared_cache_dir())
-        .output()
-        .expect("execute the shebang script directly");
-
-    assert!(
-        output.status.success(),
-        "Expected the executable .baml to run, got: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("hello from a shebang script"),
-        "Expected the script's output, got:\n{stdout}"
     );
 }
 

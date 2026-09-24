@@ -1,4 +1,4 @@
-// Test explicit stream annotations and legacy sugar desugaring.
+// Removed stream annotations beside the surviving `@stream.done` / `@@stream.done`.
 
 // ── Shared Types ────────────────────────────────────────────
 
@@ -16,7 +16,7 @@ class Inner {
     value string
 }
 
-// ── Explicit Annotations ────────────────────────────────────
+// ── Removed field annotations ───────────────────────────────
 
 class ExplicitAnnotations {
     name string @stream.starts_as("Loading...")
@@ -25,7 +25,7 @@ class ExplicitAnnotations {
     internal string @stream.type(never)
 }
 
-// ── Legacy Sugar: @stream.done ──────────────────────────────
+// ── Surviving: @stream.done and @@stream.done ───────────────
 
 class WithDone {
     type "resume" @stream.done
@@ -45,7 +45,7 @@ class AtomicWithOverride {
     y float @stream.starts_as(null)
 }
 
-// ── @@stream.not_null ───────────────────────────────────────
+// ── Removed: @@stream.not_null ──────────────────────────────
 
 class NotNullEducation {
     @@stream.not_null
@@ -67,7 +67,7 @@ class ReferencesNotNull {
     optional_education NotNullEducation?
 }
 
-// ── Annotation-driven Generation ────────────────────────────
+// ── Removed annotations beside surviving ones ───────────────
 
 class AnnotatedResume {
     name string @stream.done
@@ -77,7 +77,7 @@ class AnnotatedResume {
     token string @stream.done @stream.not_null
 }
 
-// ── @stream.starts_as with Enum Value ───────────────────────
+// ── Removed: @stream.starts_as with an enum value ───────────
 
 enum Status {
     Loading
@@ -90,7 +90,7 @@ class StatusResponse {
     message string
 }
 
-// ── Type Category Overrides ─────────────────────────────────
+// ── Removed: @stream.type ───────────────────────────────────
 
 class TypeCategoryOverrides {
     items Person[] @stream.type(string)
@@ -99,7 +99,7 @@ class TypeCategoryOverrides {
     data map<string, int> @stream.type(never)
 }
 
-// ── Desugaring ──────────────────────────────────────────────
+// ── Mixed surviving and removed annotations ─────────────────
 
 class WithDesugaring {
     done_string string @stream.done

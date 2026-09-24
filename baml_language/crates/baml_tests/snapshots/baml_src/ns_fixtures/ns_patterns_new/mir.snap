@@ -13,12 +13,12 @@ fn user.fixtures.patterns_new.or_with_repeated_typed_binding(v: int | string) ->
 
     bb0: {
         _2 = copy _1;
-        _2 = narrow_bind copy _2 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb4, bb1];
+        _2 = narrow_bind copy _2 as Int -> [bb4, bb1];
     }
 
     bb1: {
         _4 = copy _1;
-        _4 = narrow_bind copy _4 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb3, bb2];
+        _4 = narrow_bind copy _4 as Int -> [bb3, bb2];
     }
 
     bb2: {
@@ -52,7 +52,7 @@ fn user.fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool)
 
     bb0: {
         _2 = copy _1;
-        _2 = narrow_bind copy _2 as Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
+        _2 = narrow_bind copy _2 as Int -> [bb2, bb1];
     }
 
     bb1: {

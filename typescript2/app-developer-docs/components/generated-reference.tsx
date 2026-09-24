@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 
 import { GeneratedMemberActions } from '@/components/generated-member-actions';
 import {
@@ -18,6 +18,7 @@ import {
   memberDeclarationText,
   type ReferenceTypeLink,
   referenceHref,
+  referenceSectionId,
   shouldUseMultilineSignature,
   splitMethods,
   type TypeReferenceIndex,
@@ -31,8 +32,21 @@ export interface ReferenceChildLink {
   route_path: string;
 }
 
+const docstringHeadings = {
+  h1: 'h3',
+  h2: 'h4',
+  h3: 'h5',
+  h4: 'h6',
+} satisfies Components;
+const memberDocstringHeadings = {
+  h1: 'h4',
+  h2: 'h5',
+  h3: 'h6',
+  h4: 'h6',
+} satisfies Components;
+
 function Docstring({ value }: { value: string }) {
-  return <ReactMarkdown>{value}</ReactMarkdown>;
+  return <ReactMarkdown components={docstringHeadings}>{value}</ReactMarkdown>;
 }
 
 interface TypeLinkContext {
@@ -119,8 +133,7 @@ function FunctionSignature({
   signature: ExportedSignature;
 }) {
   const Name = headingLevel ?? 'span';
-  const thrownType =
-    signature.throws?.display === 'never' ? null : signature.throws?.display;
+  const thrownType = signature.throws?.display;
   const multiline = shouldUseMultilineSignature(name, signature);
   const nameElement = (
     <Name className="inline font-mono text-[0.82rem] leading-5 font-semibold text-foreground">
@@ -209,7 +222,9 @@ function SourceLocation({ source }: { source: ExportedSource }) {
 function CompactDocstring({ value }: { value: string }) {
   return (
     <div className="mt-2 text-sm leading-6 text-muted-foreground [&_a]:underline [&_li]:mt-1 [&_ol]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:m-0 [&_ul]:mt-2 [&_ul]:list-disc [&_ul]:pl-5">
-      <ReactMarkdown>{value}</ReactMarkdown>
+      <ReactMarkdown components={memberDocstringHeadings}>
+        {value}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -411,19 +426,34 @@ export function referencePageTableOfContents(
   const declaration = exportedItemSchema.parse(page.declaration);
   const memberGroups = declarationMemberGroups(declaration);
   return [
-    { href: '#signature', label: 'Signature' },
+    { href: `#${referenceSectionId(page, 'signature')}`, label: 'Signature' },
     ...memberGroups.map((group) => ({
-      href: `#${group.id}`,
+      href: `#${referenceSectionId(page, group.id)}`,
       label: group.title,
     })),
     ...(page.implementations.length > 0
-      ? [{ href: '#implementations', label: 'Implementations' }]
+      ? [
+          {
+            href: `#${referenceSectionId(page, 'implementations')}`,
+            label: 'Implementations',
+          },
+        ]
       : []),
     ...(page.cross_references.length > 0
-      ? [{ href: '#related', label: 'Related definitions' }]
+      ? [
+          {
+            href: `#${referenceSectionId(page, 'related')}`,
+            label: 'Related definitions',
+          },
+        ]
       : []),
     ...(namespacedChildren.length > 0
-      ? [{ href: '#namespaced-definitions', label: 'Namespaced definitions' }]
+      ? [
+          {
+            href: `#${referenceSectionId(page, 'namespaced-definitions')}`,
+            label: 'Namespaced definitions',
+          },
+        ]
       : []),
   ];
 }
@@ -471,7 +501,7 @@ export function GeneratedReferenceContent({
   return (
     <>
       <section>
-        <h2 id="signature">Signature</h2>
+        <h2 id={referenceSectionId(page, 'signature')}>Signature</h2>
         <div
           className="overflow-x-auto rounded-lg bg-muted/40 px-4 py-3"
           data-not-typeset=""
@@ -517,11 +547,11 @@ export function GeneratedReferenceContent({
         ) : null}
       </section>
       {memberGroups.length > 0 ? (
-        <div id="members">
+        <div id={referenceSectionId(page, 'members')}>
           {memberGroups.map((group) => (
             <MemberGroup
               anchors={anchors}
-              id={group.id}
+              id={referenceSectionId(page, group.id)}
               key={group.id}
               kind={group.kind}
               links={links}
@@ -535,7 +565,7 @@ export function GeneratedReferenceContent({
         <section className="mt-8" data-not-typeset="">
           <h2
             className="text-xl leading-7 font-semibold tracking-tight"
-            id="implementations"
+            id={referenceSectionId(page, 'implementations')}
           >
             Implementations
           </h2>
@@ -616,7 +646,7 @@ export function GeneratedReferenceContent({
       ) : null}
       {page.cross_references.length > 0 ? (
         <section>
-          <h2 id="related">Related definitions</h2>
+          <h2 id={referenceSectionId(page, 'related')}>Related definitions</h2>
           <ul>
             {page.cross_references.map((reference) => (
               <li key={reference.exported_id}>
@@ -630,7 +660,9 @@ export function GeneratedReferenceContent({
       ) : null}
       {namespacedChildren.length > 0 ? (
         <section>
-          <h2 id="namespaced-definitions">Namespaced definitions</h2>
+          <h2 id={referenceSectionId(page, 'namespaced-definitions')}>
+            Namespaced definitions
+          </h2>
           <p>
             These definitions use this declaration name as their namespace
             prefix.

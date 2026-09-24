@@ -9,7 +9,10 @@ use std::{
 };
 
 use baml_base::Name;
-use baml_compiler_diagnostics::{DiagnosticId, Severity};
+use baml_compiler_diagnostics::{
+    DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind,
+    DiagnosticPhase, Severity,
+};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
 use baml_compiler2_emit::emit_units_with_stdlib;
@@ -23,7 +26,9 @@ use baml_type::TypeName;
 use bex_engine::RuntimeCompiler;
 use bex_vm_types::{
     InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
-    RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimePackageMount,
+    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
+    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
+    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimePackageMount,
     RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
     RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, SessionVisibleKind,
     SessionVisibleSymbol,
@@ -122,20 +127,20 @@ impl StubViewpoint<'_> {
         use baml_type::Ty;
 
         match ty {
-            Ty::Class(name, generics, _) => {
+            Ty::Class(name, generics) => {
                 !self.spellable_package(name) || generics.iter().any(|ty| self.hides_type(ty))
             }
-            Ty::Interface(name, generics, associated_types, _) => {
+            Ty::Interface(name, generics, associated_types) => {
                 !self.spellable_package(name)
                     || generics.iter().any(|ty| self.hides_type(ty))
                     || associated_types.iter().any(|(_, ty)| self.hides_type(ty))
             }
-            Ty::Enum(name, _) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name, _) => {
+            Ty::Enum(name) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name) => {
                 !self.spellable_package(name)
             }
-            Ty::List(inner, _) => self.hides_type(inner),
+            Ty::List(inner) => self.hides_type(inner),
             Ty::Map { key, value, .. } => self.hides_type(key) || self.hides_type(value),
-            Ty::Union(members, _) => members.iter().any(|ty| self.hides_type(ty)),
+            Ty::Union(members) => members.iter().any(|ty| self.hides_type(ty)),
             Ty::Function {
                 params,
                 ret,
@@ -146,28 +151,28 @@ impl StubViewpoint<'_> {
                     || self.hides_type(ret)
                     || self.hides_type(throws)
             }
-            Ty::Future(value, throws, _) => self.hides_type(value) || self.hides_type(throws),
+            Ty::Future(value, throws) => self.hides_type(value) || self.hides_type(throws),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => self.hides_type(base) || self.hides_interface(interface),
-            Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::String { .. }
-            | Ty::Bool { .. }
-            | Ty::Null { .. }
-            | Ty::Uint8Array { .. }
+            Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::String
+            | Ty::Bool
+            | Ty::Null
+            | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Literal(..)
-            | Ty::RustType { .. }
-            | Ty::Type { .. }
-            | Ty::Resource { .. }
-            | Ty::PromptAst { .. }
-            | Ty::Void { .. }
+            | Ty::RustType
+            | Ty::Type
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::Void
             | Ty::TypeVar(..)
-            | Ty::Unknown { .. }
-            | Ty::Never { .. }
-            | Ty::Error { .. } => false,
+            | Ty::Unknown
+            | Ty::Never
+            | Ty::Error => false,
         }
     }
 }
@@ -267,6 +272,15 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
+    /// Whether a consumer can WRITE this row's name. It is the condition
+    /// under which emit is asked for the declaration's object, and so the
+    /// condition under which a link stub is mandatory rather than optional:
+    /// a row nothing can name is dead weight, a row source can name and the
+    /// stub lane cannot spell is a reference with nothing behind it.
+    fn nameable_from_source(namespace: &[Name], name: &Name) -> bool {
+        source_identifier(name) && namespace.iter().all(source_identifier)
+    }
+
     fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
         let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
             return;
@@ -301,40 +315,42 @@ fn enrich_runtime_mount(
         }
     }
 
-    /// `<T extends A & B, U>` for the function's own generic parameters, or
-    /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
-    /// this world cannot name is dropped rather than widened).
-    fn stub_generics(
-        function: &ExportedFunction<TypeName>,
+    fn stub_interface(
+        interface: &baml_type::Interface<TypeName>,
+        viewpoint: &StubViewpoint<'_>,
+    ) -> Option<String> {
+        (!viewpoint.hides_interface(interface)).then(|| {
+            baml_type::Ty::Interface(
+                interface.name.clone(),
+                interface.generics.clone(),
+                interface.associated_types.clone(),
+            )
+            .to_string()
+        })
+    }
+
+    /// Render a declaration's generic frame, retaining every source-spellable
+    /// bound. Link-only stubs are the source declarations the conformance
+    /// checker sees, so dropping interface generic bounds here would make a
+    /// mounted declaration weaker than the package interface that owns it.
+    fn stub_generic_params(
+        generic_params: &[baml_type::ParamTy],
+        generic_param_bounds: &[Vec<baml_type::Interface<TypeName>>],
         viewpoint: &StubViewpoint<'_>,
         spell_bounds: bool,
     ) -> String {
-        let generics = function
-            .generic_params
+        let generics = generic_params
             .iter()
             .enumerate()
             .filter(|(_, param)| !baml_type::is_synthetic_effect_param(param.name()))
             .map(|(index, param)| {
                 let bounds = if spell_bounds {
-                    function
-                        .generic_param_bounds
+                    generic_param_bounds
                         .get(index)
-                        .map(|bounds| {
-                            bounds
-                                .iter()
-                                .filter(|bound| !viewpoint.hides_interface(bound))
-                                .map(|bound| {
-                                    baml_type::Ty::Interface(
-                                        bound.name.clone(),
-                                        bound.generics.clone(),
-                                        bound.associated_types.clone(),
-                                        baml_type::TyAttr::default(),
-                                    )
-                                    .to_string()
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|bound| stub_interface(bound, viewpoint))
+                        .collect::<Vec<_>>()
                 } else {
                     Vec::new()
                 };
@@ -350,6 +366,22 @@ fn enrich_runtime_mount(
         } else {
             format!("<{}>", generics.join(", "))
         }
+    }
+
+    /// `<T extends A & B, U>` for the function's own generic parameters, or
+    /// the empty string. Bounds are spelled only when `spell_bounds` (a bound
+    /// this world cannot name is dropped rather than widened).
+    fn stub_generics(
+        function: &ExportedFunction<TypeName>,
+        viewpoint: &StubViewpoint<'_>,
+        spell_bounds: bool,
+    ) -> String {
+        stub_generic_params(
+            &function.generic_params,
+            &function.generic_param_bounds,
+            viewpoint,
+            spell_bounds,
+        )
     }
 
     /// The link stub for a free function (or, when its owner has no source
@@ -398,7 +430,7 @@ fn enrich_runtime_mount(
             .join(", ");
         let throws = if matches!(
             function.callable_throws,
-            baml_type::Ty::Never { .. } | baml_type::Ty::Void { .. }
+            baml_type::Ty::Never | baml_type::Ty::Void
         ) {
             String::new()
         } else {
@@ -498,6 +530,7 @@ fn enrich_runtime_mount(
         message: error.to_string(),
         severity: RuntimeDiagnosticSeverity::Error,
         span: None,
+        details: None,
     })?;
     let alias = own_aliases
         .first()
@@ -505,6 +538,31 @@ fn enrich_runtime_mount(
         .unwrap_or_else(|| unreachable!("a mounted package is reached under at least one alias"));
     let viewpoint = StubViewpoint {
         aliases: all_aliases,
+    };
+    // A stub is what gives emit an object for a mounted declaration, and a
+    // consumer can write `app.Color.Red` whenever the enum's own name is
+    // spellable. There is no honest partial stub — the variant list is the
+    // enum's ABI — so a nameable enum carrying a variant that is not a BAML
+    // identifier cannot be served at all. Refuse the mount here, where the
+    // host can catch it and see which row is at fault, instead of letting
+    // the reference type-check against the interface (the served package's
+    // semantic authority) and find no object at emit.
+    let unservable_enum_variant = |namespace: &[Name], name: &Name, variant: &Name| {
+        let mut path = alias.to_string();
+        for segment in namespace.iter().chain(std::iter::once(name)) {
+            path.push('.');
+            path.push_str(segment.as_str());
+        }
+        RuntimeCompileDiagnostic {
+            code: "E_RUNTIME_INTERFACE".to_string(),
+            message: format!(
+                "enum `{path}` cannot be served: variant `{variant}` is not a BAML identifier, \
+                 and an enum a consumer can name must be stubbed in full — rename the variant"
+            ),
+            severity: RuntimeDiagnosticSeverity::Error,
+            span: None,
+            details: None,
+        }
     };
     let mut stubs = Vec::new();
     for function in interface
@@ -521,6 +579,7 @@ fn enrich_runtime_mount(
                     fields,
                     methods,
                     generic_params,
+                    generic_param_bounds,
                     ..
                 } => {
                     // The emitter needs a concrete class object in the mounted
@@ -533,23 +592,20 @@ fn enrich_runtime_mount(
                         && export_namespace.iter().all(source_identifier)
                         && fields.iter().all(|(name, ..)| source_identifier(name));
                     if class_stub {
-                        let generics = generic_params
-                            .iter()
-                            .filter(|param| !baml_type::is_synthetic_effect_param(param.name()))
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>();
-                        let generic_suffix = if generics.is_empty() {
-                            String::new()
-                        } else {
-                            format!("<{}>", generics.join(", "))
-                        };
+                        let generic_suffix = stub_generic_params(
+                            generic_params,
+                            generic_param_bounds,
+                            &viewpoint,
+                            true,
+                        );
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
                         for (field, ty, attrs) in fields.iter() {
-                            // Source-backed lookup wins before the mounted
-                            // interface in HIR. Preserve every spellable field
-                            // type here so nested projections see the same ABI;
-                            // only genuinely hidden package names degrade to
-                            // `unknown` in the link-only source.
+                            // A served root resolves through its interface,
+                            // never through this stub; the stub exists for
+                            // LINK, whose emit reads these field types.
+                            // Preserve every spellable one so nested
+                            // projections see the same ABI; only genuinely
+                            // hidden package names degrade to `unknown`.
                             let ty = if viewpoint.hides_type(ty) {
                                 "unknown".to_string()
                             } else {
@@ -586,6 +642,8 @@ fn enrich_runtime_mount(
                 ExportedType::Interface {
                     qtn,
                     generic_params,
+                    param_bounds,
+                    requires,
                     associated_types,
                     fields,
                     required_methods,
@@ -594,18 +652,33 @@ fn enrich_runtime_mount(
                 } => {
                     let namespace = qtn.namespace().clone();
                     let name = qtn.name().clone();
-                    let generics = generic_params
+                    let generic_suffix =
+                        stub_generic_params(generic_params, param_bounds, &viewpoint, true);
+                    let requires = requires
                         .iter()
-                        .map(ToString::to_string)
+                        .filter_map(|required| stub_interface(required, &viewpoint))
                         .collect::<Vec<_>>();
-                    let generic_suffix = if generics.is_empty() {
+                    let requires_suffix = if requires.is_empty() {
                         String::new()
                     } else {
-                        format!("<{}>", generics.join(", "))
+                        format!(" requires {}", requires.join(", "))
                     };
-                    let mut source = format!("interface {name}{generic_suffix} {{\n");
+                    let mut source =
+                        format!("interface {name}{generic_suffix}{requires_suffix} {{\n");
                     for associated in associated_types {
-                        writeln!(&mut source, "  type {}", associated.name)
+                        let bound = associated
+                            .bound
+                            .as_ref()
+                            .and_then(|bound| stub_interface(bound, &viewpoint))
+                            .map_or_else(String::new, |bound| format!(" extends {bound}"));
+                        // An unspellable default still means the binding is
+                        // optional. Widen only that value to `unknown`, just as
+                        // field/method slots do, rather than turning a valid
+                        // mounted impl into a false "missing binding" error.
+                        let default = associated.default.as_ref().map_or_else(String::new, |ty| {
+                            format!(" = {}", stub_type(ty, &viewpoint))
+                        });
+                        writeln!(&mut source, "  type {}{bound}{default}", associated.name)
                             .expect("writing to String is infallible");
                     }
                     for (field, ty, attrs) in fields {
@@ -644,10 +717,16 @@ fn enrich_runtime_mount(
                     stubs.push((namespace, name, source));
                 }
                 ExportedType::Enum { variants, .. } => {
-                    if source_identifier(export_name)
-                        && export_namespace.iter().all(source_identifier)
-                        && variants.iter().all(source_identifier)
-                    {
+                    if nameable_from_source(export_namespace, export_name) {
+                        if let Some(variant) =
+                            variants.iter().find(|variant| !source_identifier(variant))
+                        {
+                            return Err(unservable_enum_variant(
+                                export_namespace,
+                                export_name,
+                                variant,
+                            ));
+                        }
                         let mut source = format!("enum {export_name} {{\n");
                         for variant in variants {
                             writeln!(&mut source, "  {variant}")
@@ -678,6 +757,7 @@ fn enrich_runtime_mount(
         ),
         severity: RuntimeDiagnosticSeverity::Error,
         span: None,
+        details: None,
     };
     for mount in &package.types {
         for class in &mount.classes {
@@ -765,6 +845,14 @@ fn enrich_runtime_mount(
     // decompose to an external object reference; runtime linking resolves it
     // to the live declaration. Source-backed lookup wins before the mounted
     // interface in HIR, so preserve spellable field types here as well.
+    // BUG: a class row this arm skips is still NAMEABLE by a consumer — under
+    // a spellable export alias (the alias row inserted below), or by its own
+    // name when only a field is unspellable and that field is optional — and
+    // a literal through that name emits a silent `null` (emit's
+    // `alloc_class_instance` fall-open). The enum arm refuses such a row at
+    // the mount; the class refusal was withheld on the premise that naming
+    // the class requires spelling the unspellable thing, which the two
+    // shapes above disprove. Dies with stub generation.
     for (name, row) in &minted_rows {
         match row {
             ExportedType::Class { fields, .. }
@@ -793,9 +881,10 @@ fn enrich_runtime_mount(
                 source.push_str("}\n");
                 stubs.push((Vec::new(), name.clone(), source));
             }
-            ExportedType::Enum { variants, .. }
-                if source_identifier(name) && variants.iter().all(source_identifier) =>
-            {
+            ExportedType::Enum { variants, .. } if source_identifier(name) => {
+                if let Some(variant) = variants.iter().find(|variant| !source_identifier(variant)) {
+                    return Err(unservable_enum_variant(&[], name, variant));
+                }
                 let mut source = String::new();
                 let docs = minted_docs.get(name);
                 write_docstring(
@@ -822,123 +911,109 @@ fn enrich_runtime_mount(
             | ExportedType::TypeAlias { .. } => {}
         }
     }
+    // The witness rows each nominal root has contributed, by its item name:
+    // a declaration reached under two export names is witnessed ONCE.
+    let mut witnessed: IndexMap<Name, Vec<ExportedImpl<TypeName>>> = IndexMap::new();
     for mount in package.types.drain(..) {
         let root_ty = baml_type::Ty::from(&mount.ty);
-        // The export-name row: an additional spelling of the root declaration
-        // (or, for a structural type, an alias row of its own). It carries the
-        // same qtn as the item row, so both spellings lower to one identity.
-        let exported = match &mount.ty {
-            baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _) => {
-                minted_rows.get(qtn.name()).cloned()
+        // The export name is one more spelling of the mounted type, never a
+        // second identity. A nominal root's identity is its item row (the row
+        // the consumer's stub declares), so an export name of its own is a
+        // transparent alias of that row — the same alias row a structural
+        // root gets — and an export name equal to the item name is the item
+        // row itself.
+        let root_item = match &mount.ty {
+            baml_type::RealizedTy::Class(qtn, _) | baml_type::RealizedTy::Enum(qtn) => {
+                if !minted_rows.contains_key(qtn.name()) {
+                    return Err(RuntimeCompileDiagnostic {
+                        code: "E_RUNTIME_INTERFACE".to_string(),
+                        message: format!(
+                            "runtime type `{}` has no structural definition",
+                            mount.export_name
+                        ),
+                        severity: RuntimeDiagnosticSeverity::Error,
+                        span: None,
+                        details: None,
+                    });
+                }
+                Some(qtn.name().clone())
             }
-            _ => Some(ExportedType::TypeAlias {
-                qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
-                resolved: root_ty.clone(),
-            }),
-        }
-        .ok_or_else(|| RuntimeCompileDiagnostic {
-            code: "E_RUNTIME_INTERFACE".to_string(),
-            message: format!(
-                "runtime type `{}` has no structural definition",
-                mount.export_name
-            ),
-            severity: RuntimeDiagnosticSeverity::Error,
-            span: None,
-        })?;
-        // When the export name is the root declaration's own item name, the
-        // item row already spells it with the same identity.
-        let export_is_root_item = matches!(
-            &mount.ty,
-            baml_type::RealizedTy::Class(qtn, _, _) | baml_type::RealizedTy::Enum(qtn, _)
-                if qtn.name() == &mount.export_name
-        );
-        let root_types = interface.types.entry(Vec::new()).or_default();
-        match root_types.get(&mount.export_name) {
-            Some(_) if export_is_root_item => {}
-            Some(_) => {
+            _ => None,
+        };
+        if root_item.as_ref() != Some(&mount.export_name) {
+            let root_types = interface.types.entry(Vec::new()).or_default();
+            if root_types.contains_key(&mount.export_name) {
                 return Err(RuntimeCompileDiagnostic {
                     code: "E0011".to_string(),
                     message: format!("duplicate exported type name `{}`", mount.export_name),
                     severity: RuntimeDiagnosticSeverity::Error,
                     span: None,
+                    details: None,
                 });
             }
-            None => {
-                match &exported {
-                    ExportedType::Class { qtn, fields, .. }
-                        if source_identifier(&mount.export_name)
-                            && fields.iter().all(|(name, ..)| source_identifier(name)) =>
-                    {
-                        let mut source = String::new();
-                        write_docstring(
-                            &mut source,
-                            minted_docs
-                                .get(qtn.name())
-                                .and_then(|docs| docs.declaration.as_deref()),
-                            "",
-                        );
-                        writeln!(&mut source, "class {} {{", mount.export_name)
-                            .expect("writing to String is infallible");
-                        for (field, ty, attrs) in fields {
-                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
-                            let ty = if viewpoint.hides_type(ty) {
-                                "unknown".to_string()
-                            } else {
-                                ty.to_string()
-                            };
-                            writeln!(&mut source, "  {field} {ty}")
-                                .expect("writing to String is infallible");
-                        }
-                        source.push_str("}\n");
-                        stubs.push((Vec::new(), mount.export_name.clone(), source));
-                    }
-                    ExportedType::Enum { qtn, variants }
-                        if source_identifier(&mount.export_name)
-                            && variants.iter().all(source_identifier) =>
-                    {
-                        let mut source = String::new();
-                        let docs = minted_docs.get(qtn.name());
-                        write_docstring(
-                            &mut source,
-                            docs.and_then(|docs| docs.declaration.as_deref()),
-                            "",
-                        );
-                        writeln!(&mut source, "enum {} {{", mount.export_name)
-                            .expect("writing to String is infallible");
-                        for variant in variants {
-                            write_docstring(
-                                &mut source,
-                                docs.and_then(|docs| docs.members.get(variant))
-                                    .and_then(|docs| docs.as_deref()),
-                                "  ",
-                            );
-                            writeln!(&mut source, "  {variant}")
-                                .expect("writing to String is infallible");
-                        }
-                        source.push_str("}\n");
-                        stubs.push((Vec::new(), mount.export_name.clone(), source));
-                    }
-                    ExportedType::Class { .. }
-                    | ExportedType::Enum { .. }
-                    | ExportedType::Interface { .. }
-                    | ExportedType::TypeAlias { .. } => {}
-                }
-                interface.namespaces.insert(Vec::new());
-                root_types.insert(mount.export_name.clone(), exported);
-            }
+            interface.namespaces.insert(Vec::new());
+            root_types.insert(
+                mount.export_name.clone(),
+                ExportedType::TypeAlias {
+                    qtn: baml_type::QualifiedTypeName::local(mount.export_name.clone()),
+                    resolved: root_ty.clone(),
+                },
+            );
         }
 
-        for (witness, field_links) in mount.witnesses {
-            interface.impls.push(ExportedImpl {
-                interface: witness.clone(),
+        // A witness is exported only against an interface this mount can
+        // serve: one its own interface declares, or one of a package the
+        // consumer's world can spell. A runtime class may also witness an
+        // interface of the HOST program that created it; that declaration
+        // does not exist in the consumer's world, so the fact has no row to
+        // be exported against — the same law that degrades a field type the
+        // world cannot spell.
+        let serves = |witness: &baml_type::Interface<TypeName>| {
+            !viewpoint.hides_interface(witness)
+                && (!witness.name.is_local()
+                    || matches!(
+                        interface.lookup_type(witness.name.namespace(), witness.name.name()),
+                        Some(ExportedType::Interface { .. })
+                    ))
+        };
+        let rows: Vec<ExportedImpl<TypeName>> = mount
+            .witnesses
+            .into_iter()
+            .filter(|(witness, _)| serves(witness))
+            .map(|(witness, field_links)| ExportedImpl {
+                // The bindings are the row's `associated_types`; the header
+                // names the interface and its arguments only, exactly as a
+                // source impl's does.
+                associated_types: witness.associated_types.to_vec(),
+                interface: baml_type::Interface::new(witness.name, witness.generics, Box::new([])),
                 for_ty_pattern: root_ty.clone(),
                 generic_params: Vec::new(),
                 param_bounds: Vec::new(),
-                associated_types: witness.associated_types.to_vec(),
                 field_links,
                 origin: ExportedImplOrigin::OutOfBody,
                 methods: Vec::new(),
-            });
+            })
+            .collect();
+        // A witness is a fact about the DECLARATION, and the export name is
+        // not part of a row, so a declaration reached under two names (`{
+        // "Alias": t, "Twin": t }`) contributes its rows once; a second copy
+        // would be the same identity twice, which the import refuses as a
+        // duplicate impl. Every mount of one declaration reads the same
+        // witnesses off the class's own impl rules, which the assertion pins.
+        match root_item {
+            Some(root) => match witnessed.entry(root) {
+                indexmap::map::Entry::Occupied(seen) => debug_assert_eq!(
+                    seen.get(),
+                    &rows,
+                    "two mounts of one declaration carry one witness list"
+                ),
+                indexmap::map::Entry::Vacant(slot) => {
+                    interface.impls.extend(rows.iter().cloned());
+                    slot.insert(rows);
+                }
+            },
+            // Witnesses are read off a class; a structural root has none.
+            None => debug_assert!(rows.is_empty(), "a structural root carries no witnesses"),
         }
     }
     stubs.sort();
@@ -950,6 +1025,7 @@ fn enrich_runtime_mount(
             message: error.to_string(),
             severity: RuntimeDiagnosticSeverity::Error,
             span: None,
+            details: None,
         })
 }
 
@@ -971,14 +1047,133 @@ fn owned_diagnostic(
     diagnostic: &baml_compiler_diagnostics::Diagnostic,
     session: bool,
 ) -> RuntimeCompileDiagnostic {
-    let span = diagnostic.primary_span().and_then(|span| {
+    fn owned_span(db: &ProjectDatabase, span: baml_base::Span) -> Option<RuntimeSourceSpan> {
         db.file_id_to_path(span.file_id)
             .map(|path| RuntimeSourceSpan {
                 file: runtime_relative_virtual_path(path),
                 start: usize::from(span.range.start()),
                 end: usize::from(span.range.end()),
             })
-    });
+    }
+
+    fn highlight_kind(kind: DiagnosticMessageKind) -> RuntimeDiagnosticHighlightKind {
+        match kind {
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Type) => {
+                RuntimeDiagnosticHighlightKind::IdentifierType
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Function) => {
+                RuntimeDiagnosticHighlightKind::IdentifierFunction
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Field) => {
+                RuntimeDiagnosticHighlightKind::IdentifierField
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Variable) => {
+                RuntimeDiagnosticHighlightKind::IdentifierVariable
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::EnumVariant) => {
+                RuntimeDiagnosticHighlightKind::IdentifierEnumVariant
+            }
+            DiagnosticMessageKind::Identifier(DiagnosticIdentifierKind::Attribute) => {
+                RuntimeDiagnosticHighlightKind::IdentifierAttribute
+            }
+            DiagnosticMessageKind::TypeExpression => RuntimeDiagnosticHighlightKind::TypeExpression,
+            DiagnosticMessageKind::Code => RuntimeDiagnosticHighlightKind::Code,
+        }
+    }
+
+    fn owned_text(
+        text: &str,
+        highlights: &[DiagnosticMessageHighlight],
+        session: bool,
+    ) -> (String, Vec<RuntimeDiagnosticHighlight>) {
+        let rendered = if session {
+            demangle_session_names(text)
+        } else {
+            text.to_string()
+        };
+        let highlights = highlights
+            .iter()
+            .filter_map(|highlight| {
+                let start = usize::try_from(highlight.start).ok()?;
+                let end = usize::try_from(highlight.end).ok()?;
+                if start > end
+                    || end > text.len()
+                    || !text.is_char_boundary(start)
+                    || !text.is_char_boundary(end)
+                {
+                    return None;
+                }
+                let (start, end) = if session {
+                    (
+                        demangle_session_names(&text[..start]).len(),
+                        demangle_session_names(&text[..end]).len(),
+                    )
+                } else {
+                    (start, end)
+                };
+                Some(RuntimeDiagnosticHighlight {
+                    start: u32::try_from(start).ok()?,
+                    end: u32::try_from(end).ok()?,
+                    kind: highlight_kind(highlight.kind),
+                })
+            })
+            .collect();
+        (rendered, highlights)
+    }
+
+    let span = diagnostic
+        .primary_span()
+        .and_then(|span| owned_span(db, span));
+    let (headline, message_highlights) =
+        owned_text(&diagnostic.message, &diagnostic.message_highlights, session);
+    let primary_label = diagnostic
+        .annotations
+        .iter()
+        .find(|annotation| annotation.is_primary)
+        .and_then(|annotation| annotation.message.as_deref())
+        .map(|label| owned_text(label, &[], session).0);
+    let annotations = diagnostic
+        .annotations
+        .iter()
+        .filter_map(|annotation| {
+            let span = owned_span(db, annotation.span)?;
+            let (message, message_highlights) = annotation.message.as_deref().map_or_else(
+                || (None, Vec::new()),
+                |message| {
+                    let (message, highlights) =
+                        owned_text(message, &annotation.message_highlights, session);
+                    (Some(message), highlights)
+                },
+            );
+            Some(RuntimeDiagnosticAnnotation {
+                span,
+                message,
+                message_highlights,
+                is_primary: annotation.is_primary,
+            })
+        })
+        .collect();
+    let related_info = diagnostic
+        .related_info
+        .iter()
+        .filter_map(|related| {
+            let span = owned_span(db, related.span).or_else(|| {
+                related.file_path.as_ref().map(|file| RuntimeSourceSpan {
+                    file: file.clone(),
+                    start: usize::from(related.span.range.start()),
+                    end: usize::from(related.span.range.end()),
+                })
+            })?;
+            let (message, message_highlights) =
+                owned_text(&related.message, &related.message_highlights, session);
+            Some(RuntimeDiagnosticRelatedInfo {
+                span,
+                message,
+                message_highlights,
+                file_path: related.file_path.clone(),
+            })
+        })
+        .collect();
     RuntimeCompileDiagnostic {
         code: diagnostic.code().to_string(),
         message: if session {
@@ -992,6 +1187,19 @@ fn owned_diagnostic(
             Severity::Info => RuntimeDiagnosticSeverity::Info,
         },
         span,
+        details: Some(Box::new(RuntimeDiagnosticDetails {
+            headline,
+            primary_label,
+            phase: match diagnostic.phase {
+                DiagnosticPhase::Parse => RuntimeDiagnosticPhase::Parse,
+                DiagnosticPhase::Hir => RuntimeDiagnosticPhase::Hir,
+                DiagnosticPhase::Validation => RuntimeDiagnosticPhase::Validation,
+                DiagnosticPhase::Type => RuntimeDiagnosticPhase::Type,
+            },
+            message_highlights,
+            annotations,
+            related_info,
+        })),
     }
 }
 
@@ -1037,6 +1245,7 @@ fn runtime_diagnostic(
             start,
             end,
         }),
+        details: None,
     }
 }
 
@@ -2134,6 +2343,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 message,
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
+                details: None,
             }]
         })?;
         // This local is the transience guarantee: no handle to `db` occurs in
@@ -2187,6 +2397,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 message: format!("cannot mount package `{alias}`: {error}"),
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
+                details: None,
             }]
         };
         // A mount reaches the sibling mounts its interface names (the edges its
@@ -2211,6 +2422,15 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             for name in
                 mount_references(own_aliases, blob).map_err(|error| mount_error(alias, &error))?
             {
+                // BUG: a sibling mount is matched by the NAME the producer
+                // spelled its dependency by, not by identity. A producer that
+                // reached package `c` as `geometry`, mounted beside `c` under
+                // the name `c`, gets an empty foreign `geometry` root instead
+                // of `c`'s mount — one package, two roots — so its impl rows
+                // of `geometry.Shape` never meet a consumer's `c.Shape` (E0001
+                // at the use site). Names live on edges; the blob must record
+                // its dependencies' identities for this match to be by
+                // identity.
                 let root = match mount_roots.get(name.as_str()) {
                     Some(&root) => root,
                     None => match foreign_roots.get(&name) {
@@ -2331,7 +2551,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         if let Some(session) = &session
             && !matches!(
                 session.expected,
-                bex_vm_types::SessionContract::Checkable(baml_type::RuntimeTy::Unknown { .. })
+                bex_vm_types::SessionContract::Checkable(baml_type::RuntimeTy::Unknown)
             )
         {
             let file = session.artifact.submission_name.as_str();
@@ -2348,6 +2568,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         start: 0,
                         end: 0,
                     }),
+                    details: None,
                 }]);
             };
             // The check runs in the compiler's context, which names declarations
@@ -2419,6 +2640,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         message: error.to_string(),
                         severity: RuntimeDiagnosticSeverity::Error,
                         span: None,
+                        details: None,
                     }]
                 })?;
         let emitted = emit_units_with_stdlib(
@@ -2433,6 +2655,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 message: error.to_string(),
                 severity: RuntimeDiagnosticSeverity::Error,
                 span: None,
+                details: None,
             }]
         })?;
         let mut units: Vec<_> = emitted
@@ -2456,6 +2679,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                                     message,
                                     severity: RuntimeDiagnosticSeverity::Error,
                                     span: None,
+                                    details: None,
                                 }]
                             },
                         )?;
@@ -2482,24 +2706,99 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
 
 #[cfg(test)]
 mod tests {
+    use baml_compiler_diagnostics::{Diagnostic, DiagnosticText};
     use baml_compiler2_hir::file_package::file_package;
     use baml_compiler2_hir_ty::package_interface::{FunctionThrowSets, PackageInterface};
 
     use super::*;
 
     #[test]
+    fn runtime_diagnostic_retains_structured_compiler_metadata() {
+        let mut db = ProjectDatabase::new();
+        let workspace = db
+            .add_source_root(SourceRootSpec::new(
+                RUNTIME_VIRTUAL_ROOT,
+                baml_base::SourceRootKind::Workspace,
+            ))
+            .unwrap();
+        let primary_file = db.add_or_update_file_in(
+            workspace,
+            &runtime_source_virtual_path("primary.baml"),
+            "0123456789",
+        );
+        let related_file = db.add_or_update_file_in(
+            workspace,
+            &runtime_source_virtual_path("related.baml"),
+            "abcdefghij",
+        );
+        let primary = baml_base::Span::new(
+            primary_file.file_id(&db),
+            rowan::TextRange::new(1.into(), 4.into()),
+        );
+        let secondary = baml_base::Span::new(
+            related_file.file_id(&db),
+            rowan::TextRange::new(2.into(), 5.into()),
+        );
+        let diagnostic = Diagnostic::warning(
+            DiagnosticId::TypeMismatch,
+            DiagnosticText::new()
+                .text("cannot use ")
+                .type_expr("string")
+                .text(" here"),
+        )
+        .with_primary(
+            primary,
+            DiagnosticText::new().text("expected ").type_expr("int"),
+        )
+        .with_secondary(
+            secondary,
+            DiagnosticText::new()
+                .text("value declared as ")
+                .type_expr("string"),
+        )
+        .with_related(
+            secondary,
+            DiagnosticText::new().text("declaration of ").code("value"),
+        )
+        .with_phase(DiagnosticPhase::Type);
+
+        let owned = owned_diagnostic(&db, &diagnostic, false);
+        assert_eq!(owned.severity, RuntimeDiagnosticSeverity::Warning);
+        assert_eq!(owned.message, "cannot use `string` here: expected `int`");
+        assert_eq!(
+            owned.span,
+            Some(RuntimeSourceSpan {
+                file: "primary.baml".to_string(),
+                start: 1,
+                end: 4,
+            })
+        );
+        let details = owned.details.expect("source diagnostics retain detail");
+        assert_eq!(details.phase, RuntimeDiagnosticPhase::Type);
+        assert_eq!(details.headline, "cannot use `string` here");
+        assert_eq!(details.primary_label.as_deref(), Some("expected `int`"));
+        assert_eq!(details.message_highlights.len(), 1);
+        assert_eq!(
+            details.message_highlights[0].kind,
+            RuntimeDiagnosticHighlightKind::TypeExpression
+        );
+        assert_eq!(details.annotations.len(), 2);
+        assert!(details.annotations[0].is_primary);
+        assert_eq!(details.annotations[0].message_highlights.len(), 1);
+        assert!(!details.annotations[1].is_primary);
+        assert_eq!(details.annotations[1].span.file, "related.baml");
+        assert_eq!(details.related_info.len(), 1);
+        assert_eq!(details.related_info[0].message, "declaration of `value`");
+        assert_eq!(details.related_info[0].message_highlights.len(), 1);
+        assert_eq!(details.related_info[0].span.file, "related.baml");
+    }
+
+    #[test]
     fn unspellable_package_detection_is_recursive() {
         let aliases = vec![Name::new("app")];
         let viewpoint = StubViewpoint { aliases: &aliases };
         let class_list = |qtn: baml_type::QualifiedTypeName| {
-            baml_type::Ty::List(
-                Box::new(baml_type::Ty::Class(
-                    qtn,
-                    Box::new([]),
-                    baml_type::TyAttr::default(),
-                )),
-                baml_type::TyAttr::default(),
-            )
+            baml_type::Ty::List(Box::new(baml_type::Ty::Class(qtn, Box::new([]))))
         };
         // Local, stdlib, and mount-alias packages are spellable — even nested.
         assert!(
@@ -2636,7 +2935,7 @@ mod tests {
             callable::{ExternalCallTarget, ExternalLinkability},
             package_interface::{ExportedFunction, ExportedType},
         };
-        use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr};
+        use baml_type::{FunctionParamTy, ParamTy, Ty};
 
         let app = Name::new("app");
         let class_qtn =
@@ -2644,7 +2943,7 @@ mod tests {
         let iface_qtn =
             baml_type::QualifiedTypeName::new(app.clone(), Vec::new(), Name::new("Describable"));
         let self_param = ParamTy::new(0, Name::new("Self"));
-        let self_ty = Ty::TypeVar(self_param.clone(), TyAttr::default());
+        let self_ty = Ty::TypeVar(self_param.clone());
         let function = |name: &str,
                         params: Vec<FunctionParamTy<TypeName>>,
                         target: ExternalCallTarget<TypeName>| {
@@ -2652,9 +2951,7 @@ mod tests {
                 name: Name::new(name),
                 params,
                 return_type: Ty::string(),
-                callable_throws: Ty::Never {
-                    attr: TyAttr::default(),
-                },
+                callable_throws: Ty::Never,
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
                 builtin_kind: None,
@@ -2664,7 +2961,7 @@ mod tests {
         };
         let class_self = FunctionParamTy::required(
             Some(Name::new("self")),
-            Ty::Class(class_qtn.clone(), Box::new([]), TyAttr::default()),
+            Ty::Class(class_qtn.clone(), Box::new([])),
         );
         let interface_self = FunctionParamTy::required(Some(Name::new("self")), self_ty);
         let mut types = IndexMap::new();
@@ -2851,11 +3148,7 @@ mod tests {
             types: vec![
                 bex_vm_types::RuntimeTypeMount {
                     export_name: Name::new("ClassAlias"),
-                    ty: baml_type::RealizedTy::Class(
-                        class_qtn,
-                        Box::new([]),
-                        baml_type::TyAttr::default(),
-                    ),
+                    ty: baml_type::RealizedTy::Class(class_qtn, Box::new([])),
                     classes: vec![bex_vm_types::RuntimeMountedClass {
                         name: class_name,
                         tag: baml_type::typetag::TypeTag::of_head("runtime.RuntimeClass"),
@@ -2874,7 +3167,7 @@ mod tests {
                 },
                 bex_vm_types::RuntimeTypeMount {
                     export_name: Name::new("StateAlias"),
-                    ty: baml_type::RealizedTy::Enum(enum_qtn, baml_type::TyAttr::default()),
+                    ty: baml_type::RealizedTy::Enum(enum_qtn),
                     classes: Vec::new(),
                     enums: vec![bex_vm_types::RuntimeMountedEnum {
                         name: enum_name,
@@ -2892,8 +3185,9 @@ mod tests {
             ],
         };
 
-        let (_, stubs) = enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
-            .expect("runtime mount enriches");
+        let (interface_blob, stubs) =
+            enrich_runtime_mount(&[Name::new("app")], &[Name::new("app")], package)
+                .expect("runtime mount enriches");
         let sources = stubs
             .into_iter()
             .map(|(_, _, source)| source)
@@ -2904,16 +3198,41 @@ mod tests {
                 && source.contains("  /// Runtime field docs\n  value string")
         }));
         assert!(sources.iter().any(|source| {
-            source.starts_with("/// Runtime class docs\nclass ClassAlias {")
-                && source.contains("  /// Runtime field docs\n  value string")
-        }));
-        assert!(sources.iter().any(|source| {
             source.starts_with("/// Runtime enum docs\nenum RuntimeState {")
                 && source.contains("  /// Runtime variant docs\n  READY")
         }));
-        assert!(sources.iter().any(|source| {
-            source.starts_with("/// Runtime enum docs\nenum StateAlias {")
-                && source.contains("  /// Runtime variant docs\n  READY")
+        // An export name is a spelling of the item row, not a second
+        // declaration: it gets an alias row and no stub of its own.
+        assert!(!sources.iter().any(|source| {
+            source.contains("class ClassAlias") || source.contains("enum StateAlias")
         }));
+        let enriched = baml_artifact::decode::<PackageInterface<TypeName>>(
+            baml_artifact::ArtifactKind::PackageInterface,
+            &interface_blob,
+        )
+        .expect("enriched interface decodes");
+        let root_types = &enriched.types[&Vec::new()];
+        assert!(matches!(
+            &root_types[&Name::new("ClassAlias")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                resolved: baml_type::Ty::Class(qtn, ..),
+                ..
+            } if qtn.name().as_str() == "RuntimeClass"
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("StateAlias")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                resolved: baml_type::Ty::Enum(qtn, ..),
+                ..
+            } if qtn.name().as_str() == "RuntimeState"
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("RuntimeClass")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::Class { .. }
+        ));
+        assert!(matches!(
+            &root_types[&Name::new("RuntimeState")],
+            baml_compiler2_hir_ty::package_interface::ExportedType::Enum { .. }
+        ));
     }
 }

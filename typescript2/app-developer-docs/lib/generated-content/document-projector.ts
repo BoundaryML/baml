@@ -13,7 +13,10 @@ import {
 } from '@/lib/generated-content/document-ir';
 import { canonicalJson, jsonValueSchema } from '@/lib/generated-content/json';
 import { exportedItemSchema } from '@/lib/generated-content/package-export';
-import { declarationMemberGroups } from '@/lib/generated-content/reference-rendering';
+import {
+  declarationMemberGroups,
+  referenceSectionId,
+} from '@/lib/generated-content/reference-rendering';
 import type { CompleteReleasePublicationInput } from '@/lib/generated-content/release-generator';
 import type {
   CliCommandNodeInput,
@@ -61,23 +64,39 @@ function referenceHeadings(
 
   const declaration = exportedItemSchema.parse(page.declaration);
   return [
-    { depth: 2 as const, id: 'signature', label: 'Signature' },
+    {
+      depth: 2 as const,
+      id: referenceSectionId(page, 'signature'),
+      label: 'Signature',
+    },
     ...declarationMemberGroups(declaration).map((group) => ({
       depth: 2 as const,
-      id: group.id,
+      id: referenceSectionId(page, group.id),
       label: group.title,
     })),
     ...(page.implementations.length > 0
-      ? [{ depth: 2 as const, id: 'implementations', label: 'Implementations' }]
+      ? [
+          {
+            depth: 2 as const,
+            id: referenceSectionId(page, 'implementations'),
+            label: 'Implementations',
+          },
+        ]
       : []),
     ...(page.cross_references.length > 0
-      ? [{ depth: 2 as const, id: 'related', label: 'Related definitions' }]
+      ? [
+          {
+            depth: 2 as const,
+            id: referenceSectionId(page, 'related'),
+            label: 'Related definitions',
+          },
+        ]
       : []),
     ...(namespacedChildrenCount > 0
       ? [
           {
             depth: 2 as const,
-            id: 'namespaced-definitions',
+            id: referenceSectionId(page, 'namespaced-definitions'),
             label: 'Namespaced definitions',
           },
         ]

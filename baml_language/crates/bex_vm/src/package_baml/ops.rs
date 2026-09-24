@@ -26,7 +26,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{Name, TyAttr, TypeName, normalize::TypeContext};
+use baml_type::{Name, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, ValueKind,
@@ -632,16 +632,14 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
                 Object::Class(class) => Some(RealizedTy::Class(
                     bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
                     type_args.into(),
-                    TyAttr::default(),
                 )),
                 _ => None,
             }
         }
         Object::Variant(v) => match vm.get_object(v.enm) {
-            Object::Enum(e) => Some(RealizedTy::Enum(
-                bex_vm_types::TypeHead::new(v.enm, e.type_tag),
-                TyAttr::default(),
-            )),
+            Object::Enum(e) => Some(RealizedTy::Enum(bex_vm_types::TypeHead::new(
+                v.enm, e.type_tag,
+            ))),
             _ => None,
         },
         _ => None,

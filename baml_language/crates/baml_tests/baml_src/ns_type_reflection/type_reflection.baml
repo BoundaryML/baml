@@ -14,8 +14,13 @@ client TestClient = openai.ResponsesClient.new(
     base_url = "http://localhost:1234",
 );
 
-class Foo { x int }
-class Bar { y string }
+class Foo {
+    x: int,
+}
+
+class Bar {
+    y: string,
+}
 
 function GetFoo() -> Foo {
     client: TestClient
@@ -83,4 +88,26 @@ test "union_order_eq_canonical_in_test_block" {
     let a = reflect.Type.of<int | string>();
     let b = reflect.Type.of<string | int>();
     assert.is_true(a == b)
+}
+
+test "permuted union equality operators agree" {
+    let a = reflect.Type.of<int | string>();
+    let b = reflect.Type.of<string | int>();
+    assert.is_true(a == b && !(a != b))
+}
+
+function foo_type() -> reflect.Type {
+    reflect.Type.of<Foo>()
+}
+
+test "static declaration identity survives evaluation and a helper boundary" {
+    assert.is_true(
+        reflect.Type.of<Foo>() == reflect.Type.of<Foo>()
+            && reflect.Type.of<Foo>() == foo_type()
+            && foo_type() == foo_type(),
+    )
+}
+
+test "optional and explicit null union share a static identity" {
+    assert.is_true(reflect.Type.of<string?>() == reflect.Type.of<string | null>())
 }

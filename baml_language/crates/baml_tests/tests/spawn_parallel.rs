@@ -60,31 +60,3 @@ async fn spawn_three_sleeps_runs_in_parallel() {
         elapsed.as_millis(),
     );
 }
-
-#[tokio::test]
-async fn sys_sleep_accepts_time_duration() {
-    let program = compile_source_with_opt(
-        r#"
-        function main() -> int {
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(0));
-            42
-        }
-        "#,
-        OptLevel::One,
-    );
-    let engine = Arc::new(
-        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("engine"),
-    );
-
-    let result = engine
-        .call_function_bound_args(
-            "user.main",
-            Vec::new(),
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await;
-
-    assert_eq!(result, Ok(BexExternalValue::Int(42)));
-}

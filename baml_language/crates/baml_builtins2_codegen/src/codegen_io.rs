@@ -547,10 +547,10 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
         }
         BamlType::Media(kind) => {
             let kind = media_kind_tokens(kind);
-            quote! { baml_type::RuntimeTy::Media(#kind, baml_type::TyAttr::default()) }
+            quote! { baml_type::RuntimeTy::Media(#kind) }
         }
         BamlType::RustType => {
-            quote! { baml_type::RuntimeTy::RustType { attr: baml_type::TyAttr::default() } }
+            quote! { baml_type::RuntimeTy::RustType }
         }
         // `Named` is a lossy catch-all: the type parser discards a class's
         // generic arguments (`Box<int>` → `Named("Box")`) and also funnels

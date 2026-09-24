@@ -92,49 +92,28 @@ jobs:
             echo "Local time is $local_now, not the midnight hour; the other cron entry owns tonight."
           fi
 
-      - name: Check out the nightly selection script
+      - name: Check out the nightly selection tool
         if: ${{ steps.clock.outputs.proceed == 'true' }}
         uses: actions/checkout@v7.0.1
         with:
+          ref: canary
           path: nightly-dispatch-tools
-          sparse-checkout: scripts/baml_nightly_select.py
+          fetch-depth: 10
+          sparse-checkout: tools/baml_nightly_select.py
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: Validate CI run freshness and select the newest green canary commit
+      - name: Select the newest green canary commit
         id: select
         if: ${{ steps.clock.outputs.proceed == 'true' }}
         run: |
           set -euo pipefail
-          runs="$RUNNER_TEMP/canary-ci-runs.json"
-          commits="$RUNNER_TEMP/canary-commits.json"
-          # Snapshot ancestry first so a push between requests cannot make the
-          # commits query demand a run newer than the runs query could see.
-          gh api "repos/$GH_REPO/commits?sha=canary&per_page=100" > "$commits"
-          echo "::group::100 most recent canary commits"
-          jq . "$commits"
-          echo "::endgroup::"
-          # Fetch the latest GitHub workflow runs, but cross-check the results
-          # against the 100 most recent commits on canary before selecting a
-          # release source. The output of `gh run list` is highly unreliable,
-          # especially with server-side success filtering: requests can succeed
-          # while returning stale or incomplete runs, even without that filter.
-          # See https://github.com/orgs/community/discussions/24626
-          # Fetch all states and filter for success locally. The Python selector
-          # below hard-fails if any commit older than 10 minutes lacks a run.
-          # Allow 1,000 runs so duplicates do not crowd out the 100 commits.
-          gh run list --workflow ci.yaml --branch canary --event push \
-            --limit 1000 \
-            --json headSha,databaseId,conclusion,createdAt > "$runs"
-          # Check age when the snapshot is complete; slow API requests must
-          # not extend the ten-minute visibility grace period.
           observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "::group::Unfiltered canary push CI runs"
-          jq . "$runs"
-          echo "::endgroup::"
-          python3 nightly-dispatch-tools/scripts/baml_nightly_select.py \
-            --commits "$commits" --runs "$runs" \
-            --observed-at "$observed_at" --output "$GITHUB_OUTPUT"
+          python3 nightly-dispatch-tools/tools/baml_nightly_select.py \
+            --repo "$GH_REPO" \
+            --checkout nightly-dispatch-tools \
+            --observed-at "$observed_at" \
+            --output "$GITHUB_OUTPUT"
 
       - name: Decide whether canary moved since the last nightly
         id: decide
