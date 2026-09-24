@@ -7,7 +7,11 @@ mod tests {
         sync::OnceLock,
     };
 
-    use sdk_test_harness_runner::csharp::{assert_marker, manifest_dir, run_command, run_project};
+    use sdk_test_harness_runner::{
+        assert_stdout_contains,
+        csharp::{manifest_dir, run_project},
+        run_command,
+    };
 
     // SDK_PARITY_LINT(skip): validates C#-specific generated union runtime source
     #[test]
@@ -59,7 +63,7 @@ mod tests {
         let manifest = manifest_dir();
         let project = manifest.join("basic_calls").join("BasicCalls.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_basic_calls=ok");
+        assert_stdout_contains(&output, "csharp_basic_calls=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -70,7 +74,7 @@ mod tests {
             .join("type_roundtrips")
             .join("TypeRoundtrips.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_type_roundtrips=ok");
+        assert_stdout_contains(&output, "csharp_type_roundtrips=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -79,7 +83,7 @@ mod tests {
         let manifest = manifest_dir();
         let project = manifest.join("generics").join("Generics.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_generics=ok");
+        assert_stdout_contains(&output, "csharp_generics=ok");
     }
 
     #[cfg(unix)]
@@ -92,7 +96,7 @@ mod tests {
             &mut Command::new(&script),
             "C# generics generated compile matrix",
         );
-        assert_marker(&output, "csharp_generics_generated_compile_matrix=ok");
+        assert_stdout_contains(&output, "csharp_generics_generated_compile_matrix=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -103,7 +107,7 @@ mod tests {
             .join("failures_and_cancellation")
             .join("FailuresAndCancellation.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_failures_and_cancellation=ok");
+        assert_stdout_contains(&output, "csharp_failures_and_cancellation=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -112,7 +116,7 @@ mod tests {
         let manifest = manifest_dir();
         let project = manifest.join("media").join("Media.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_media=ok");
+        assert_stdout_contains(&output, "csharp_media=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -121,7 +125,7 @@ mod tests {
         let manifest = manifest_dir();
         let project = manifest.join("streaming").join("Streaming.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_streaming_request=ok");
+        assert_stdout_contains(&output, "csharp_streaming_request=ok");
     }
 
     fn host_callables_output() -> &'static Output {
@@ -134,7 +138,7 @@ mod tests {
 
     fn assert_host_callables_marker(marker: &str) {
         let output = host_callables_output();
-        assert_marker(output, marker);
+        assert_stdout_contains(output, marker);
     }
 
     // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
@@ -171,7 +175,7 @@ mod tests {
     #[test]
     fn test_stdlib_resources_executes_native_typed_resource_apis_lifetimes_and_state() {
         let output = stdlib_resources_output(&[]);
-        assert_marker(&output, "csharp_stdlib_resources=ok");
+        assert_stdout_contains(&output, "csharp_stdlib_resources=ok");
     }
 
     // SDK_PARITY_LINT(skip): isolates the flaky native cancellation propagation check
@@ -179,7 +183,7 @@ mod tests {
     #[ignore = "flaky: B-1059 - CancelToken.any intermittently fails to preserve native state"]
     fn test_cancel_token_any_propagates_native_cancellation() {
         let output = stdlib_resources_output(&["--", "cancel-token-any"]);
-        assert_marker(&output, "csharp_cancel_token_any=ok");
+        assert_stdout_contains(&output, "csharp_cancel_token_any=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -190,7 +194,7 @@ mod tests {
             .join("primitive_edges")
             .join("PrimitiveEdges.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_primitive_edges=ok");
+        assert_stdout_contains(&output, "csharp_primitive_edges=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -201,7 +205,7 @@ mod tests {
             .join("stdlib_structurals")
             .join("StdlibStructurals.csproj");
         let output = run_project(&project, &[]);
-        assert_marker(&output, "csharp_stdlib_structurals=ok");
+        assert_stdout_contains(&output, "csharp_stdlib_structurals=ok");
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
@@ -218,7 +222,7 @@ mod tests {
                 "publish",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
-                "Release",
+                "Debug",
                 "--property:PublishTrimmed=true",
                 "--output",
                 publish_dir
@@ -232,7 +236,7 @@ mod tests {
             Command::new("dotnet").arg(&assembly),
             "trimmed C# dynamic-value consumer",
         );
-        assert_marker(&output, "csharp_dynamic_values=ok");
+        assert_stdout_contains(&output, "csharp_dynamic_values=ok");
     }
 
     // SDK_PARITY_LINT(skip): validates the C#-specific documentation consumer
@@ -258,6 +262,6 @@ mod tests {
                 ),
             ],
         );
-        assert_marker(&output, "csharp_documentation_consumer=ok");
+        assert_stdout_contains(&output, "csharp_documentation_consumer=ok");
     }
 }
