@@ -115,6 +115,16 @@ test "test_bigint_subtraction_assigned_directly_to_field" {
     assert.equal(bigint_direct_field_subtraction(), 0n)
 }
 
+function bigint_compound_field_subtraction() -> bigint {
+    let timer = BigintTimer { elapsed: 15n };
+    timer.elapsed -= 6n;
+    timer.elapsed
+}
+
+test "test_bigint_compound_subtraction_on_field" {
+    assert.equal(bigint_compound_field_subtraction(), 9n)
+}
+
 // ─── generic-path bigint comparison (union operand → generic CmpOp) ──────────
 
 function bigint_pick() -> int | bigint { 2n }

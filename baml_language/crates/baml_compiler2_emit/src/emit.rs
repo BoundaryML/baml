@@ -3264,11 +3264,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                 // MakeClosure, MakeBoundMethod, MakeVirtualBoundMethod, and
                 // VirtualFieldAccess are materialized only by `emit_rvalue_pull`
                 // (`walk_rvalue_pull` panics on them), so route through it.
-                // BinaryOp must be routed through `emit_rvalue_pull` so that the
-                // type-aware specialization in `try_specialize_binary_op` can fire
-                // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
                 // Class aggregates may use emitter-only spread helpers, so they
                 // also need to flow through `emit_rvalue_pull` when inlined.
+                // BinaryOp needs no detour: `walk_rvalue_pull` hands the operands
+                // to `PullSink::binary_op`, which is where the type-aware opcode
+                // specialization lives.
                 if matches!(
                     rvalue,
                     Rvalue::MakeClosure { .. }
@@ -3276,7 +3276,6 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                         | Rvalue::MakeVirtualBoundMethod { .. }
                         | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
-                        | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },
                             ..
