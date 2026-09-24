@@ -3,6 +3,11 @@
 //! [`dedent_backtick`] is the whole surface: multi-line auto-dedent for BEP-049
 //! backtick string literals.
 
+/// Whitespace that represents source layout rather than authored Unicode text.
+fn is_layout_whitespace(character: char) -> bool {
+    matches!(character, ' ' | '\t' | '\n')
+}
+
 /// Leading whitespace, ending on a character boundary.
 fn leading_whitespace(line: &str) -> &str {
     let end = line
@@ -29,9 +34,9 @@ fn common_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 /// 1. Normalize `\r\n` and lone `\r` to `\n` (§AA, TypeScript parity).
 /// 2. Return single-line literals unchanged.
 /// 3. For multiline literals, remove every leading line break and all
-///    body-final whitespace.
+///    body-final ASCII layout whitespace.
 /// 4. Strip the longest exact leading-whitespace prefix shared by nonblank
-///    lines, empty whitespace-only lines, and discard leading empty lines.
+///    lines, empty ASCII-layout-only lines, and discard leading empty lines.
 ///
 /// Dedenting runs on raw literal text before escapes are decoded. An authored
 /// `\n` is therefore two non-whitespace characters here and survives the trim.
@@ -40,13 +45,18 @@ pub fn dedent_backtick(text: &str) -> String {
     if !normalized.contains('\n') {
         return normalized.into_owned();
     }
-    let body = normalized.trim_start_matches('\n').trim_end();
+    let body = normalized
+        .trim_start_matches('\n')
+        .trim_end_matches(is_layout_whitespace);
     let lines: Vec<&str> = body.lines().collect();
     let strip = common_indent(&lines);
     lines
         .iter()
         .map(|line| {
-            if line.chars().any(|character| !character.is_whitespace()) {
+            if line
+                .chars()
+                .any(|character| !is_layout_whitespace(character))
+            {
                 line.strip_prefix(strip)
                     .expect("common indent must prefix every nonblank line")
             } else {
@@ -82,7 +92,10 @@ fn normalize_newlines(text: &str) -> std::borrow::Cow<'_, str> {
 /// Longest exact leading-whitespace prefix across the nonblank lines.
 fn common_indent<'a>(lines: &[&'a str]) -> &'a str {
     let mut common: Option<&'a str> = None;
-    for line in lines.iter().filter(|line| !line.trim().is_empty()) {
+    for line in lines
+        .iter()
+        .filter(|line| !line.chars().all(is_layout_whitespace))
+    {
         let ws = leading_whitespace(line);
         common = Some(match common {
             None => ws,
@@ -156,6 +169,27 @@ mod tests {
         // Mixing with ASCII space exposes the same byte-vs-char bug, and the
         // same Rule 2 outcome: nothing common, so nothing stripped.
         assert_eq!(dedent_backtick(" xy\n\u{2028}xy"), " xy\n\u{2028}xy");
+    }
+
+    #[test]
+    fn shared_unicode_whitespace_is_still_indentation() {
+        assert_eq!(
+            dedent_backtick("\n\u{00A0}hello\n\u{00A0}world\n"),
+            "hello\nworld"
+        );
+    }
+
+    #[test]
+    fn trailing_nbsp_is_content() {
+        assert_eq!(dedent_backtick("\n    hello\u{00A0}\n"), "hello\u{00A0}");
+    }
+
+    #[test]
+    fn unshared_nbsp_only_line_is_content() {
+        assert_eq!(
+            dedent_backtick("\n    hello\n    \u{00A0}\n    world\n"),
+            "hello\n\u{00A0}\nworld"
+        );
     }
 
     #[test]
