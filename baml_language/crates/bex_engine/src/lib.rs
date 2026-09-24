@@ -1533,15 +1533,9 @@ impl BexEngine {
             &bytecode.globals,
         );
 
-        let compile_time_objects: Vec<Object> = compile_time_objects
-            .into_iter()
-            .map(|mut obj| {
-                if let Object::Function(ref mut func) = obj {
-                    func.bytecode.compact = Some(func.bytecode.lower_to_compact());
-                }
-                obj
-            })
-            .collect();
+        // Boxing changes constant kinds, so rebuild compact code and select
+        // exact calls together. Plain lowering here would erase specialization.
+        bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
 
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
