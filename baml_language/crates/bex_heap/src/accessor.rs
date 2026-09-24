@@ -577,7 +577,6 @@ fn convert_object(
         Object::Enum(..) => unconvertible("enum"),
         Object::TypeAlias(..) => unconvertible("type alias"),
         Object::Future(..) => unconvertible("future"),
-        Object::SpawnPlan(..) => unconvertible("spawn_plan"),
 
         Object::String(s) => Ok(BexExternalValue::String(s.clone())),
         // Deep-copy path for trace payloads: no declared type is available here,

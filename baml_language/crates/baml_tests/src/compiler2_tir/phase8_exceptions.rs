@@ -1097,7 +1097,7 @@ fn spawn_with_type_changing_modifier_carries_its_output() {
 implements<T, E> baml.spawn.Modifier<T, E> for Stringify {
   type Output = string
   function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<string, E> throws never {
-    plan.wrap((execution: baml.spawn.Execution<T, E>) -> string throws E { let _ = execution.run(); "wrapped" })
+    plan.wrap((body: () -> T throws E) -> string throws E { let _ = body(); "wrapped" })
   }
 }
 function f() -> string {

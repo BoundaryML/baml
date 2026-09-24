@@ -1484,9 +1484,8 @@ pub enum VmExecState {
 
     /// VM yields a `spawn` to the engine.
     ///
-    /// - Input: `plan` points at the `Object::SpawnPlan` behind the plan
-    ///   value — the body, wrappers, admission, cancellation, and the
-    ///   `Future<T, E>` types the spawn yields.
+    /// - Input: `plan` points at the `baml.spawn.Plan<T, E>` instance to
+    ///   start; [`crate::package_baml::spawn_launch`] reads what it describes.
     /// - Output: the engine allocates the pending future at the plan's types,
     ///   starts the task on a new `BexThread`, and pushes the future pointer
     ///   onto the VM stack. Terminal transitions (`Ready`/`Error`/`Cancelled`/
@@ -1819,7 +1818,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
-                Object::SpawnPlan(_) => type_tags::UNKNOWN,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 Object::TypeAlias(_) => type_tags::UNKNOWN,
@@ -3425,11 +3423,8 @@ impl BexVm {
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
             ),
-            // Opaque native handles are not BAML data types at all. A spawn
-            // plan is a handle too: the `baml.spawn.Plan` instance holding it
-            // is the value.
+            // Opaque native handles are not BAML data types at all.
             Object::RustData(_) => return None,
-            Object::SpawnPlan(_) => return None,
 
             // A GC-debug sentinel is never a live value.
             #[cfg(feature = "heap_debug")]
@@ -8400,22 +8395,14 @@ impl BexVm {
 
                 // ── Spawn (BEP-034) ────────────────────────────────────────────
                 OpCode::Spawn => {
-                    // The operand is a `baml.spawn.Plan` instance; the engine
-                    // wants the sealed recipe behind its `_handle`. Anything
+                    // The operand is a `baml.spawn.Plan` instance. Anything
                     // else here would turn a local type error into a
                     // VM→engine contract break downstream.
                     let plan_value = self.stack.ensure_pop();
-                    let handle = self.as_instance(&plan_value)?.load_field(0);
-                    let plan = match handle.as_object_ptr() {
-                        Some(ptr) if matches!(self.get_object(ptr), Object::SpawnPlan(_)) => ptr,
-                        _ => {
-                            return Err(VmInternalError::TypeError {
-                                expected: Type::Object(ObjectType::SpawnPlan),
-                                got: self.type_of(&handle),
-                            }
-                            .into());
-                        }
-                    };
+                    self.as_instance(&plan_value)?;
+                    let plan = plan_value
+                        .as_object_ptr()
+                        .unwrap_or_else(|| unreachable!("an instance is an object"));
                     let source_span = self.call_site_source_for_frame(*frame_idx, self.cur_pc);
                     return Ok(Some(VmExecState::Spawn { plan, source_span }));
                 }

@@ -501,7 +501,6 @@ impl<'a> TraceSnapshotBuilder<'a> {
             | Object::GenericFunction(_)
             | Object::Cell(_)
             | Object::Future(_)
-            | Object::SpawnPlan(_)
             | Object::Type(_) => self.omitted(
                 TraceOmissionReason::UnsupportedValue,
                 unsupported_object_message(object),
@@ -715,7 +714,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::HostClosure(_) => "host-owned callable",
         Object::Cell(_) => "cell",
         Object::Future(_) => "future",
-        Object::SpawnPlan(_) => "spawn plan",
         Object::RustData(_) => "host-owned rust data",
         Object::Type(_) => "type descriptor",
         #[cfg(feature = "heap_debug")]

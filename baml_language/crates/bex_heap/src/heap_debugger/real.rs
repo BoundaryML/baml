@@ -344,11 +344,6 @@ impl BexHeap {
                 | FutureRead::Cancelled
                 | FutureRead::InternalError(_) => {}
             },
-            Object::SpawnPlan(plan) => {
-                for ptr in plan.heap_refs() {
-                    self.debug_assert_valid_index(ptr);
-                }
-            }
             Object::Closure(closure) => {
                 self.debug_assert_valid_index(closure.function);
                 for value in &closure.captures {

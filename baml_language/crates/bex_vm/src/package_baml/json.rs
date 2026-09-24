@@ -728,7 +728,6 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             | Object::ImplRule(_)
             | Object::Function(_)
             | Object::Future(_)
-            | Object::SpawnPlan(_)
             | Object::Type(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)

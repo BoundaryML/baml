@@ -896,9 +896,9 @@ pub enum Instruction {
     /// `baml.spawn.__spawn(plan)`, what a `spawn` expression compiles to.
     /// Pops a `baml.spawn.Plan` and yields `VmExecState::Spawn` so the engine
     /// starts it as a task on a fresh `BexThread`; the engine pushes the
-    /// task's `Future<T, E>`. The plan carries the body, the wrappers,
-    /// admission, cancellation, and the future's types, so nothing else
-    /// travels with the request.
+    /// task's `Future<T, E>`. The plan carries the body, its limits and
+    /// cancel tokens, its cancellation parent, and the future's types, so
+    /// nothing else travels with the request.
     Spawn,
 }
 

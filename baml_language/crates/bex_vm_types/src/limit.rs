@@ -41,6 +41,7 @@ use std::{
         Arc, Mutex, MutexGuard,
         atomic::{AtomicU64, Ordering},
     },
+    task::Poll,
 };
 
 use tokio::sync::oneshot;
@@ -376,18 +377,37 @@ impl Waiter {
 }
 
 impl AdmissionTicket {
-    /// Wait for admission. `None` when `cancel` fires first: the launch leaves
-    /// every queue holding nothing, and its body never runs.
-    pub async fn acquire(self, cancel: &CancellationToken) -> Option<Admission> {
+    /// Wait for admission. `None` when any of `cancelled_by` fires first: the
+    /// launch leaves every queue holding nothing, and its body never runs.
+    ///
+    /// Takes every token that cancels the launch, not just its own: a token
+    /// linked into the launch reaches its own token only once a forwarder has
+    /// run, and a slot released by that same token's other launches can be
+    /// granted here first.
+    pub async fn acquire(self, cancelled_by: &[CancellationToken]) -> Option<Admission> {
         match self.state {
             TicketState::Admitted(admission) => Some(admission),
             TicketState::Parked(mut parked) => {
+                let mut waits: Vec<_> = cancelled_by
+                    .iter()
+                    .map(|token| Box::pin(token.cancelled()))
+                    .collect();
+                let any_cancelled = std::future::poll_fn(|cx| {
+                    if waits
+                        .iter_mut()
+                        .any(|wait| wait.as_mut().poll(cx).is_ready())
+                    {
+                        Poll::Ready(())
+                    } else {
+                        Poll::Pending
+                    }
+                });
                 tokio::select! {
                     // Cancel-biased: a launch cancelled while parked must not
                     // run even if a slot was granted in the same instant —
                     // dropping `parked` gives such a grant back.
                     biased;
-                    () = cancel.cancelled() => None,
+                    () = any_cancelled => None,
                     granted = &mut parked.granted => Some(granted.unwrap_or_else(|_| {
                         unreachable!("a queued waiter's grant is sent, never dropped")
                     })),
@@ -440,7 +460,7 @@ mod tests {
 
     fn admitted(ticket: AdmissionTicket) -> Admission {
         let token = CancellationToken::new();
-        let mut future = pin!(ticket.acquire(&token));
+        let mut future = pin!(ticket.acquire(std::slice::from_ref(&token)));
         match poll_once(&mut future) {
             Poll::Ready(Some(admission)) => admission,
             Poll::Ready(None) => panic!("cancelled"),
@@ -458,8 +478,8 @@ mod tests {
         assert_eq!((a.active_count(), a.queued_count()), (2, 2));
 
         let token = CancellationToken::new();
-        let mut third = pin!(third.acquire(&token));
-        let mut fourth = pin!(fourth.acquire(&token));
+        let mut third = pin!(third.acquire(std::slice::from_ref(&token)));
+        let mut fourth = pin!(fourth.acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut third).is_pending());
         assert!(poll_once(&mut fourth).is_pending());
 
@@ -484,7 +504,7 @@ mod tests {
         let a = limit(1);
         let hold = admitted(set(&[&a]).admit());
         let token = CancellationToken::new();
-        let mut older = pin!(set(&[&a]).admit().acquire(&token));
+        let mut older = pin!(set(&[&a]).admit().acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut older).is_pending());
 
         // A release preempted between freeing its slot and promoting: the
@@ -497,7 +517,7 @@ mod tests {
         let Poll::Ready(Some(older_admission)) = poll_once(&mut older) else {
             panic!("the freed slot goes to the waiter queued for it, not the arrival")
         };
-        let mut newer = pin!(newer.acquire(&token));
+        let mut newer = pin!(newer.acquire(std::slice::from_ref(&token)));
         assert!(
             poll_once(&mut newer).is_pending(),
             "the arrival queues behind it"
@@ -519,7 +539,7 @@ mod tests {
         let hold_b = admitted(set(&[&b]).admit());
         let token = CancellationToken::new();
         // Blocked on B, while A has its slot free.
-        let mut both = pin!(set(&[&a, &b]).admit().acquire(&token));
+        let mut both = pin!(set(&[&a, &b]).admit().acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut both).is_pending());
 
         // A slot nobody queued can take is not held back for `both`.
@@ -539,7 +559,7 @@ mod tests {
 
         let both = set(&[&a, &b]).admit();
         let token = CancellationToken::new();
-        let mut both = pin!(both.acquire(&token));
+        let mut both = pin!(both.acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut both).is_pending());
         // Parked on both, holding neither: B is still free for a B-only launch.
         assert_eq!((a.active_count(), a.queued_count()), (1, 1));
@@ -574,8 +594,8 @@ mod tests {
             "one canonical order, whichever the user wrote"
         );
         let token = CancellationToken::new();
-        let mut first = pin!(ab.admit().acquire(&token));
-        let mut second = pin!(ba.admit().acquire(&token));
+        let mut first = pin!(ab.admit().acquire(std::slice::from_ref(&token)));
+        let mut second = pin!(ba.admit().acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut first).is_pending());
         assert!(poll_once(&mut second).is_pending());
 
@@ -607,7 +627,7 @@ mod tests {
         let a = limit(1);
         let hold = admitted(set(&[&a]).admit());
         let token = CancellationToken::new();
-        let mut parked = pin!(set(&[&a]).admit().acquire(&token));
+        let mut parked = pin!(set(&[&a]).admit().acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut parked).is_pending());
         assert_eq!(a.queued_count(), 1);
 
@@ -623,7 +643,7 @@ mod tests {
         let a = limit(1);
         let hold = admitted(set(&[&a]).admit());
         let token = CancellationToken::new();
-        let mut parked = pin!(set(&[&a]).admit().acquire(&token));
+        let mut parked = pin!(set(&[&a]).admit().acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut parked).is_pending());
 
         // The release admits the waiter before it observes its cancellation.
@@ -635,13 +655,36 @@ mod tests {
     }
 
     #[test]
+    fn a_waiter_observes_every_token_that_cancels_it() {
+        let a = limit(1);
+        let hold = admitted(set(&[&a]).admit());
+        let own = CancellationToken::new();
+        let linked = CancellationToken::new();
+        let cancelled_by = [own.clone(), linked.clone()];
+        let mut parked = pin!(set(&[&a]).admit().acquire(&cancelled_by));
+        assert!(poll_once(&mut parked).is_pending());
+
+        // The linked token fires and, through its other launch, frees the
+        // slot before anything has forwarded it into the waiter's own token.
+        linked.cancel();
+        drop(hold);
+        assert!(!own.is_cancelled());
+        assert!(matches!(poll_once(&mut parked), Poll::Ready(None)));
+        assert_eq!(
+            (a.active_count(), a.queued_count()),
+            (0, 0),
+            "the grant was given back"
+        );
+    }
+
+    #[test]
     fn overlapping_multi_limit_waiters_keep_their_own_wakeups() {
         let a = limit(1);
         let b = limit(1);
         let hold = admitted(set(&[&a, &b]).admit());
         let token = CancellationToken::new();
-        let mut first = pin!(set(&[&a, &b]).admit().acquire(&token));
-        let mut second = pin!(set(&[&a, &b]).admit().acquire(&token));
+        let mut first = pin!(set(&[&a, &b]).admit().acquire(std::slice::from_ref(&token)));
+        let mut second = pin!(set(&[&a, &b]).admit().acquire(std::slice::from_ref(&token)));
         assert!(poll_once(&mut first).is_pending());
         assert!(poll_once(&mut second).is_pending());
         assert_eq!((a.queued_count(), b.queued_count()), (2, 2));

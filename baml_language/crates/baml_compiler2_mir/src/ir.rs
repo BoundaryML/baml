@@ -584,8 +584,9 @@ pub enum Terminator<'db> {
 
     /// Launch a `baml.spawn.Plan<T, E>` as a new task and bind its
     /// `Future<T, E>` into `future`. The plan carries everything the engine
-    /// needs — body, wrappers, admission, cancellation, and the future's
-    /// types — so the plan is the only operand. Launching never throws.
+    /// needs — the body, its limits and cancel tokens, its cancellation
+    /// parent, and the future's types — so it is the only operand. Launching
+    /// never throws.
     Spawn {
         /// The `baml.spawn.Plan` value.
         plan: Operand<'db>,

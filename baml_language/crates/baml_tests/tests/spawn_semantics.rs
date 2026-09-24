@@ -120,7 +120,7 @@ async fn racing_never_awaited_spawn_error_does_not_replace_call_result() {
     assert_eq!(value, BexExternalValue::String("done".into()));
 }
 
-/// B-650 SDK-hang regression: a `detach = true` spawn that NEVER settles (an
+/// B-650 SDK-hang regression: a `Root` spawn that NEVER settles (an
 /// infinite sleep, standing in for the SDK's detached `server.serve(...)`) must
 /// NOT block the root's completion. A detached spawn is decoupled from its
 /// spawner and outlives the run, so root completion does not join it. Before

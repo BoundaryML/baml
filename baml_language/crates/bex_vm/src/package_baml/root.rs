@@ -880,9 +880,6 @@ fn deep_copy_value_recursive(
                 // `Object::Future(_)` is short-circuited above; it can't
                 // reach this match arm.
                 Object::Future(_) => unreachable!("Future short-circuited above"),
-                // A spawn plan is an immutable recipe: the copy is the same
-                // plan (it keeps the id an execution is pinned to).
-                Object::SpawnPlan(plan) => vm.tlab.alloc(Object::SpawnPlan(plan)),
                 // A deep copy denotes the same type: clone the `TypeValue`
                 // whole, definition overlay and owner edge included.
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),

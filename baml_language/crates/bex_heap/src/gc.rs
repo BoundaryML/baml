@@ -662,7 +662,6 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
-            Object::SpawnPlan(plan) => worklist.extend(plan.heap_refs()),
             Object::Package(package) => {
                 worklist.extend(package.classes.values().copied());
                 worklist.extend(package.enums.values().copied());
@@ -892,11 +891,6 @@ impl BexHeap {
                     self.fixup_value(value, forwarding);
                 }
             }
-            Object::SpawnPlan(plan) => plan.forward_heap_refs(|ptr| {
-                if let Some(&new_ptr) = forwarding.get(ptr) {
-                    *ptr = new_ptr;
-                }
-            }),
             Object::Package(package) => {
                 for ptr in package
                     .classes
@@ -1288,10 +1282,6 @@ impl BexHeap {
                     worklist.push(ptr);
                 }
             }
-            Object::SpawnPlan(plan) => worklist.extend(
-                plan.heap_refs()
-                    .filter(|&ptr| self.generation_of(ptr).is_young()),
-            ),
             Object::Package(package) => {
                 let refs = package
                     .classes
@@ -2606,35 +2596,6 @@ mod tests {
     }
 
     #[test]
-    fn test_gc_traces_spawn_plan_closures() {
-        use bex_vm_types::SpawnPlanData;
-
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-
-        // The body and wrapper pointers are dummy Strings for tracing
-        // purposes — the GC only needs a valid HeapPtr to walk. The plan's
-        // name is owned, not a heap object, so it is not traced.
-        let body = tlab.alloc_string("body-stand-in".to_string());
-        let wrapper = tlab.alloc_string("wrapper-stand-in".to_string());
-        let plan_ptr = tlab.alloc(Object::SpawnPlan(Box::new(
-            SpawnPlanData::new(
-                Some("spawn-name".into()),
-                body,
-                RealizedTy::int(),
-                RealizedTy::never(),
-            )
-            .wrapped(wrapper, RealizedTy::int(), RealizedTy::never()),
-        )));
-
-        let roots = vec![plan_ptr];
-        let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
-
-        // plan + body + wrapper
-        assert_eq!(stats.live_count, 3);
-    }
-
-    #[test]
     fn test_gc_traces_future_ready_object() {
         use bex_vm_types::{Future, FutureRead, types::FutureId};
 
@@ -3262,7 +3223,7 @@ mod tests {
     fn test_tracing_and_fixup_consistency_all_variants() {
         use baml_type::{Name, TypeName};
         use bex_vm_types::{
-            Class, Enum, SpawnPlanData,
+            Class, Enum,
             types::{Cell, Closure, Instance, Variant},
         };
 
@@ -3341,20 +3302,6 @@ mod tests {
             index: 0,
         }));
 
-        // --- Container: Object::SpawnPlan ---
-        // Leaf strings stand in for the body closure and a layer.
-        let leaf_for_plan_body = tlab.alloc_string("plan_body".to_string());
-        let leaf_for_plan_layer = tlab.alloc_string("plan_layer".to_string());
-        let plan_container = tlab.alloc(Object::SpawnPlan(Box::new(
-            SpawnPlanData::new(
-                Some("plan_name".into()),
-                leaf_for_plan_body,
-                RealizedTy::int(),
-                RealizedTy::never(),
-            )
-            .wrapped(leaf_for_plan_layer, RealizedTy::int(), RealizedTy::never()),
-        )));
-
         // Roots are the containers only (plus the class and enum which are
         // referenced by containers but we root them independently for clarity).
         let roots = vec![
@@ -3364,22 +3311,19 @@ mod tests {
             cell_container,
             instance_container,
             variant_container,
-            plan_container,
         ];
 
         let (stats, new_roots, _fwd) = unsafe { heap.collect_garbage(&roots) };
 
         // All transitively reachable objects must survive.
-        // Containers: Array, Map, Closure, Cell, Instance, Variant,
-        //   SpawnPlan = 7
+        // Containers: Array, Map, Closure, Cell, Instance, Variant = 6
         // Leaves referenced by containers (some shared):
         //   leaf_for_array, leaf_for_map, leaf_for_closure_cap, leaf_func,
-        //   leaf_for_cell, leaf_string, class_ptr, enum_ptr,
-        //   leaf_for_plan_body, leaf_for_plan_layer = 10
-        // Total = 7 + 10 = 17, but >= 13 is the conservative bound.
+        //   leaf_for_cell, leaf_string, class_ptr, enum_ptr = 8
+        // Total = 6 + 8 = 14, but >= 11 is the conservative bound.
         assert!(
-            stats.live_count >= 13,
-            "expected at least 13 live objects; got {}",
+            stats.live_count >= 11,
+            "expected at least 11 live objects; got {}",
             stats.live_count
         );
 
@@ -3453,20 +3397,5 @@ mod tests {
             panic!("variant.enm not Enum")
         };
         assert_eq!(e.name.item_name().as_str(), "E");
-
-        // SpawnPlan: body and layer should be the (forwarded) leaf strings.
-        let Object::SpawnPlan(plan) = (unsafe { new_roots[6].get() }) else {
-            panic!("new_roots[6] not SpawnPlan")
-        };
-        let forwarded_leaves: Vec<String> = plan
-            .heap_refs()
-            .map(|ptr| {
-                let Object::String(s) = (unsafe { ptr.get() }) else {
-                    panic!("plan leaf not String")
-                };
-                s.to_string()
-            })
-            .collect();
-        assert_eq!(forwarded_leaves, ["plan_body", "plan_layer"]);
     }
 }

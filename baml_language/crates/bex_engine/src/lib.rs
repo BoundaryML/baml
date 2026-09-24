@@ -116,9 +116,8 @@ use bex_vm::{
     VmExecState,
 };
 use bex_vm_types::{
-    Admission, AdmissionTicket, ExecutionExtent, FunctionMeta, FunctionOrigin, GlobalIndex,
-    GlobalPool, HeapPtr, LimitSet, Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind,
-    VmGlobals,
+    Admission, AdmissionTicket, FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr,
+    LimitSet, Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind, VmGlobals,
 };
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
@@ -1459,8 +1458,7 @@ enum CancelSite {
     Await,
 }
 
-/// A spawn edge, however it was written: the operands of a `spawn { body }`
-/// or a launched `baml.spawn.Plan`.
+/// A spawn edge: what the `baml.spawn.Plan` a `spawn` built describes.
 struct SpawnRequest {
     body: SpawnedBody,
     name: Option<String>,
@@ -1475,17 +1473,11 @@ struct SpawnRequest {
 
 /// What a spawned task runs, and what stands between it and running.
 struct SpawnedBody {
-    /// The callable the task enters: the spawn body, or a plan's outermost
-    /// wrapper.
+    /// The callable the task enters: the plan's body, `() -> T throws E`.
     entry: HeapPtr,
-    /// Its arguments: none for a body, the outermost `Execution` for a
-    /// wrapper. Heap values: consumed before the first await.
-    args: Vec<Value>,
     /// Tokens linked into the task's own: any of them firing cancels it.
     linked_cancel: Vec<CancellationToken>,
     gate: EntryGate,
-    /// The outermost `Execution`'s extent: it ends with the task.
-    extent: Option<ExecutionExtent>,
 }
 
 /// What admits a spawned task before its first instruction.
@@ -1520,12 +1512,15 @@ impl EntryGate {
 
 impl EntryTicket {
     /// Wait for admission — without the heap permit, so a queued task never
-    /// blocks GC. `None` when the task was cancelled while queued: its body
-    /// never runs.
-    async fn acquire(self, cancel: &CancellationToken) -> Option<EntryPermit> {
+    /// blocks GC. `None` when any of `cancelled_by` (the task's own token and
+    /// every token linked into it) fired while it was queued: its body never
+    /// runs.
+    async fn acquire(self, cancelled_by: &[CancellationToken]) -> Option<EntryPermit> {
         match self {
             EntryTicket::Open => Some(EntryPermit::Open),
-            EntryTicket::Limits(ticket) => ticket.acquire(cancel).await.map(EntryPermit::Limits),
+            EntryTicket::Limits(ticket) => {
+                ticket.acquire(cancelled_by).await.map(EntryPermit::Limits)
+            }
         }
     }
 }
@@ -5985,57 +5980,27 @@ impl BexEngine {
         Ok(thread)
     }
 
-    /// The spawn edge a plan describes. A plan with wrappers enters its
-    /// outermost one, handing it the `Execution` for everything beneath; a
-    /// bare plan enters its body.
+    /// The spawn edge the `baml.spawn.Plan` instance `plan` describes.
     fn spawn_request(
-        thread: &mut ActiveHeapPermit<BexThread>,
+        thread: &ActiveHeapPermit<BexThread>,
         plan: HeapPtr,
     ) -> Result<SpawnRequest, EngineError> {
-        let Object::SpawnPlan(data) = thread.vm.get_object(plan) else {
-            return Err(EngineError::VmInternalError(
-                bex_vm::errors::VmInternalError::TypeError {
-                    expected: bex_vm_types::ObjectType::SpawnPlan.into(),
-                    got: bex_vm_types::ObjectType::of(thread.vm.get_object(plan)).into(),
-                },
-            ));
-        };
-        // Owned: minting the outermost `Execution` allocates on this VM.
-        let data = (**data).clone();
-        let (returns, throws) = data.future_types();
-        let (returns, throws) = (returns.clone(), throws.clone());
-        let (entry, args, extent) = match data.layers.len().checked_sub(1) {
-            None => (data.body, Vec::new(), None),
-            Some(outermost) => {
-                let (execution, state) = bex_vm::package_baml::alloc_execution(
-                    &mut thread.vm,
-                    Value::object(plan),
-                    outermost,
-                )
-                .map_err(EngineError::VmInternalError)?;
-                (
-                    data.layers[outermost].wrapper,
-                    vec![execution],
-                    Some(ExecutionExtent::new(state)),
-                )
-            }
-        };
+        let launch = bex_vm::package_baml::spawn_launch(&thread.vm, Value::object(plan))
+            .map_err(EngineError::VmInternalError)?;
         Ok(SpawnRequest {
             body: SpawnedBody {
-                entry,
-                args,
-                linked_cancel: data.cancel.to_vec(),
-                gate: if data.limits.is_empty() {
+                entry: launch.body,
+                linked_cancel: launch.cancel,
+                gate: if launch.limits.is_empty() {
                     EntryGate::Open
                 } else {
-                    EntryGate::Limits(data.limits)
+                    EntryGate::Limits(launch.limits)
                 },
-                extent,
             },
-            name: data.name.as_ref().map(ToString::to_string),
-            returns,
-            throws,
-            root: data.root,
+            name: launch.name,
+            returns: launch.returns,
+            throws: launch.throws,
+            root: launch.root,
         })
     }
 
@@ -6117,11 +6082,21 @@ impl BexEngine {
         let work_guard = self.bex_work.register_work();
         let SpawnedBody {
             entry,
-            args,
             linked_cancel,
             gate,
-            extent,
         } = body;
+        // A queued task waits on every token that cancels it, not only on its
+        // own: the forwarders below are tasks, and until one has run, a slot
+        // released by its token's other launches could admit this one.
+        let cancelled_by: Vec<CancellationToken> = std::iter::once(child_cancel.clone())
+            .chain(linked_cancel.iter().cloned())
+            .collect();
+        // A token that has already fired cancels the task before it starts,
+        // not whenever its forwarder happens to run.
+        if linked_cancel.iter().any(CancellationToken::is_cancelled) {
+            child_cancel.cancel();
+        }
+
         // Link each user-provided `CancelToken` into this spawn's effective
         // token: firing one cancels the child. (The token itself — fresh for a
         // root task, a child of the parent's otherwise — is derived at the
@@ -6202,7 +6177,7 @@ impl BexEngine {
         // BexThreadStart (with the spawn edge) was already emitted into the
         // ring at the Spawn arm.
         self.prof_refresh_vm_ring(&mut child_vm);
-        child_vm.set_entry_point(entry, &args);
+        child_vm.set_entry_point(entry, &[]);
         let child_entry_call_id = BexCallId(child_vm.current_call_id());
         let child_profile_enabled = child_vm.prof_ring.is_some();
 
@@ -6231,16 +6206,13 @@ impl BexEngine {
                 armed: child_profile_enabled,
                 boundary_lease,
             };
-            // The outermost `Execution` expires with the task, whichever way
-            // the task ends.
-            let _extent = extent;
             // If this spawn is gated, park here — WITHOUT the heap permit, so a
             // queued task doesn't block GC — until it is admitted. A task
             // cancelled while queued settles its future `Cancelled` and never
             // runs its body. The permit is held for the body's lifetime and
             // releases its slots (admitting the next waiter) on drop.
             let entry_wait_start = child_profile_enabled.then(bex_events::prof::clock::now_ticks);
-            let Some(_entry_permit) = entry_ticket.acquire(&child_cancel).await else {
+            let Some(_entry_permit) = entry_ticket.acquire(&cancelled_by).await else {
                 {
                     let mut permit = inactive.acquire().await;
                     if let Some(start_ticks) = entry_wait_start {
@@ -6915,7 +6887,7 @@ impl BexEngine {
                 }
 
                 VmExecState::Spawn { plan, source_span } => {
-                    let request = Self::spawn_request(&mut thread, plan)?;
+                    let request = Self::spawn_request(&thread, plan)?;
                     thread = self
                         .spawn_edge(
                             thread,

@@ -1,6 +1,5 @@
-//! Spawning green threads: the `Plan` a `spawn` builds, the `Modifier`
-//! values its `with` clause applies, and the `Execution` capability a
-//! modifier's wrapper receives once the task runs.
+//! Spawning green threads: the `Plan` a `spawn` builds, and the `Modifier`
+//! values its `with` clause applies to it.
 
 /// A one-shot cancellation handle backed by a runtime cancellation token.
 ///
@@ -54,8 +53,8 @@ class CancelToken {
 /// [`Plan`] before the task starts.
 ///
 /// `T` and `E` are the value and error types of the plan it is applied to.
-/// Modifiers apply left to right, and one that wraps execution ends up outside
-/// the ones before it.
+/// Modifiers apply left to right, each to the plan the one before it returned,
+/// so a body wrapped later runs outside the wrappers before it.
 interface Modifier<T, E> {
     /// The value type of the plan after this modifier. Unchanged by default.
     type Output = T;
@@ -66,44 +65,51 @@ interface Modifier<T, E> {
     type ApplyError = never;
 
     /// Returns `plan` transformed by this modifier.
-    ///
-    /// `apply` describes the task; it cannot start it. Work that can only fail
-    /// once the task runs belongs in a [`Plan.wrap`] wrapper, with its failure
-    /// in `Error`.
     function apply(self, plan: Plan<T, E>) -> Plan<Self.Output, Self.Error> throws Self.ApplyError;
 }
 
-/// A reusable recipe for a spawned task: a body, and the modifiers applied to
-/// it.
+/// What a `spawn` starts: the task's body, and what its modifiers have added
+/// to it.
 ///
-/// A plan is immutable. `wrap` and `with` return a new plan and leave the
-/// receiver as it was. The body cannot be read back or called; a `spawn`
-/// expression builds a plan and starts it in one step.
-///
-/// Plans compare by identity and cannot be converted to JSON.
+/// A `spawn` builds a plan from its body and name, passes it through each
+/// `with` modifier in turn, and starts the plan the last one returns.
 class Plan<T, E> {
-    _handle: $rust_type,
+    /// What the task runs.
+    body: () -> T throws E,
+    /// The task's name in traces and error reports.
+    name: string?,
+    /// The limits the task waits on. It starts once every one of them has
+    /// room, and holds none of them while it waits.
+    limits: Limit[],
+    /// Cancelling any of these tokens cancels the task.
+    cancel_tokens: CancelToken[],
+    /// Whether the task keeps running when its spawner is cancelled.
+    root: bool,
 
-    /// Creates a plan that runs `body`. `name` labels the task in traces and
-    /// error reports.
-    //baml:mut_vm
-    //baml:fallible
+    /// A plan that runs `body`, with nothing added to it.
     function new(body: () -> T throws E, name: string? = null) -> Plan<T, E> throws never {
-        $rust_function
+        Plan { body: body, name: name, limits: [], cancel_tokens: [], root: false }
     }
 
-    /// Returns a plan whose execution is `wrapper`.
+    /// Returns this plan with a new body: `wrapper`, called with the old one.
     ///
-    /// When the task runs, `wrapper` receives an [`Execution`] for the plan as
-    /// it was before this call, and what it returns or throws is the task's
-    /// outcome. A later `wrap` goes outside an earlier one.
-    //baml:mut_vm
-    //baml:fallible
+    /// # Examples
+    ///
+    /// ```baml
+    /// plan.wrap((body: () -> int throws E) -> int throws E { body() * 2 })
+    /// ```
     function wrap<Output, Error>(
         self,
-        wrapper: (Execution<T, E>) -> Output throws Error,
+        wrapper: (body: () -> T throws E) -> Output throws Error,
     ) -> Plan<Output, Error> throws never {
-        $rust_function
+        let body = self.body;
+        Plan<Output, Error> {
+            body: () -> Output throws Error { wrapper(body) },
+            name: self.name,
+            limits: self.limits,
+            cancel_tokens: self.cancel_tokens,
+            root: self.root,
+        }
     }
 
     /// Returns this plan transformed by `modifier`.
@@ -116,41 +122,6 @@ class Plan<T, E> {
         modifier: Modifier<T, E, Output = Output, Error = Error, ApplyError = ApplyError>,
     ) -> Plan<Output, Error> throws ApplyError {
         modifier.apply(self)
-    }
-
-    /// The name given to `new`.
-    //baml:vm
-    //baml:fallible
-    function name(self) -> string? throws never {
-        $rust_function
-    }
-}
-
-/// The rest of a running task, handed to a [`Plan.wrap`] wrapper.
-///
-/// An `Execution` is good for one `run`, and only while the wrapper that
-/// received it is running. Copies are the same `Execution`, not new ones.
-class Execution<T, E> {
-    _plan: $rust_type,
-    _handle: $rust_type,
-
-    /// Runs the rest of the task and returns or throws its outcome.
-    ///
-    /// # Panics
-    ///
-    /// If `run` was already called, or the wrapper that received this
-    /// `Execution` has returned.
-    //baml:mut_vm
-    //baml:may_yield
-    function run(self) -> T throws E {
-        $rust_function
-    }
-
-    /// The task's name, as given to [`Plan.new`].
-    //baml:vm
-    //baml:fallible
-    function name(self) -> string? throws never {
-        $rust_function
     }
 }
 
@@ -213,26 +184,20 @@ class Root {
 }
 
 implements<T, E> Modifier<T, E> for Limit {
-    //baml:mut_vm
-    //baml:fallible
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        $rust_function
+        Plan { ...plan, limits: plan.limits.concat([self]) }
     }
 }
 
 implements<T, E> Modifier<T, E> for Root {
-    //baml:mut_vm
-    //baml:fallible
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        $rust_function
+        Plan { ...plan, root: true }
     }
 }
 
 implements<T, E> Modifier<T, E> for CancelToken {
-    //baml:mut_vm
-    //baml:fallible
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        $rust_function
+        Plan { ...plan, cancel_tokens: plan.cancel_tokens.concat([self]) }
     }
 }
 
@@ -240,8 +205,7 @@ implements<T, E> Modifier<T, E> for CancelToken {
 /// modifiers have been applied. Not a way to start a task: write
 /// `spawn ... { }`.
 ///
-/// Starts `plan` and returns the new task's future. Never throws, and each
-/// call is an independent task.
+/// Starts `plan` and returns the new task's future. Never throws.
 function __spawn<T, E>(plan: Plan<T, E>) -> baml.future.Future<T, E> throws never {
     $spawn
 }

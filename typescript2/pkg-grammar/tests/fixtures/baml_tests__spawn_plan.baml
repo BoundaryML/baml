@@ -1,10 +1,9 @@
 // Spawn plans and modifiers (BEP-040). `spawn name with m1, m2 { body }` builds
 // a `baml.spawn.Plan` from the body and the name, hands it to each modifier in
-// turn, and starts the result as a task. A plan is a sealed, reusable recipe; a
-// modifier returns a transformed plan; a wrapper a modifier installs receives
-// an `Execution`, good for one `run` and only while that wrapper is running.
-// Modifiers apply left to right, so a wrapper added later runs outside the ones
-// before it.
+// turn, and starts the plan the last one returns. A plan is plain data and a
+// modifier returns a transformed one; `Plan.wrap` is the helper for a modifier
+// that only replaces the body. Modifiers apply left to right, so a body wrapped
+// later runs outside the wrappers before it.
 //
 // Every value under test is produced by a helper function and asserted on
 // directly. A modifier built with an object literal is bound to a variable
@@ -37,7 +36,7 @@ test "a spawn runs its body and settles its future" {
 function plan_names() -> string[] {
     let named = baml.spawn.Plan.new(body = () -> int { 1 }, name = "fetch");
     let bare = baml.spawn.Plan.new(body = () -> int { 1 });
-    let names = [named.name() ?? "<none>", bare.name() ?? "<none>"];
+    let names = [named.name ?? "<none>", bare.name ?? "<none>"];
     names
 }
 
@@ -45,16 +44,16 @@ test "a plan keeps the name it was given" {
     assert.equal(plan_names(), ["fetch", "<none>"])
 }
 
-// ─── execution wrappers ──────────────────────────────────────────────────────
+// ─── wrapped bodies ──────────────────────────────────────────────────────────
 
 class Tag { log: Log, name: string }
 
 implements<T, E> baml.spawn.Modifier<T, E> for Tag {
     function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
-        plan.wrap((execution: baml.spawn.Execution<T, E>) -> T throws E {
+        plan.wrap((body: () -> T throws E) -> T throws E {
             self.log.entries.push(`${self.name}:before`);
             defer { self.log.entries.push(`${self.name}:after`) }
-            execution.run()
+            body()
         })
     }
 }
@@ -79,7 +78,7 @@ class Double {}
 
 implements<E> baml.spawn.Modifier<int, E> for Double {
     function apply(self, plan: baml.spawn.Plan<int, E>) -> baml.spawn.Plan<int, E> throws never {
-        plan.wrap((execution: baml.spawn.Execution<int, E>) -> int throws E { execution.run() * 2 })
+        plan.wrap((body: () -> int throws E) -> int throws E { body() * 2 })
     }
 }
 
@@ -87,7 +86,7 @@ class AddOne {}
 
 implements<E> baml.spawn.Modifier<int, E> for AddOne {
     function apply(self, plan: baml.spawn.Plan<int, E>) -> baml.spawn.Plan<int, E> throws never {
-        plan.wrap((execution: baml.spawn.Execution<int, E>) -> int throws E { execution.run() + 1 })
+        plan.wrap((body: () -> int throws E) -> int throws E { body() + 1 })
     }
 }
 
@@ -114,13 +113,12 @@ test "a modifier bound to a variable still applies" {
     assert.equal(variable_bound_modifier_still_applies(), 42)
 }
 
-// A wrapper is any `(Execution<T, E>) -> O` value, a bound method included: it
-// enters the task as its function with the receiver as `self`.
+// A wrapper is any `(() -> T throws E) -> O` value, a bound method included.
 class Offset {
     by: int,
 
-    function around(self, execution: baml.spawn.Execution<int, never>) -> int throws never {
-        execution.run() + self.by
+    function around(self, body: () -> int throws never) -> int throws never {
+        body() + self.by
     }
 
     function produce(self) -> int throws never {
@@ -171,8 +169,8 @@ class Fallback<T> { value: T }
 implements<T, E> baml.spawn.Modifier<T, E> for Fallback<T> {
     type Error = never
     function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, never> throws never {
-        plan.wrap((execution: baml.spawn.Execution<T, E>) -> T throws never {
-            execution.run() catch (e) {
+        plan.wrap((body: () -> T throws E) -> T throws never {
+            body() catch (e) {
                 let e => self.value,
             }
         })
@@ -202,8 +200,8 @@ class Stringify {}
 implements<T, E> baml.spawn.Modifier<T, E> for Stringify {
     type Output = string
     function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<string, E> throws never {
-        plan.wrap((execution: baml.spawn.Execution<T, E>) -> string throws E {
-            let _ = execution.run();
+        plan.wrap((body: () -> T throws E) -> string throws E {
+            let _ = body();
             "wrapped"
         })
     }
@@ -217,6 +215,24 @@ function output_type_changes() -> string {
 
 test "a modifier may change the output type" {
     assert.equal(output_type_changes(), "wrapped")
+}
+
+// The future's runtime type is the last plan's, generic arguments realized.
+function future_type_after(v: bool) -> string {
+    let stringify = Stringify {};
+    let f = spawn with stringify { v };
+    reflect.Type.of_value(f).to_string()
+}
+
+function generic_future_type_after<T>(v: T) -> string {
+    let stringify = Stringify {};
+    let f = spawn with stringify { v };
+    reflect.Type.of_value(f).to_string()
+}
+
+test "a modifier's types are the future's at runtime" {
+    assert.equal(future_type_after(true), "baml.future.Future<string, never>");
+    assert.equal(generic_future_type_after<int>(1), "baml.future.Future<string, never>")
 }
 
 // ─── apply errors ────────────────────────────────────────────────────────────
@@ -255,124 +271,126 @@ test "an apply error throws at the spawn and stops the modifier chain" {
     assert.equal(apply_error_throws_at_the_spawn(), ["refuses.apply", "refused"])
 }
 
-// ─── the execution capability ────────────────────────────────────────────────
+// ─── transforming the plan ───────────────────────────────────────────────────
 
-class RunsTwice {}
+// A wrapper calls the old body as often as it likes: here, until it succeeds
+// or the last attempt's error propagates.
+class Retry { attempts: int }
 
-implements<T, E> baml.spawn.Modifier<T, E> for RunsTwice {
+implements<T, E> baml.spawn.Modifier<T, E> for Retry {
     function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
-        plan.wrap((execution: baml.spawn.Execution<T, E>) -> T throws E {
-            let _ = execution.run();
-            execution.run()
+        plan.wrap((body: () -> T throws E) -> T throws E {
+            for (let tries = 1; tries < self.attempts; tries += 1) {
+                let value = body() catch (e) {
+                    _ => { continue; },
+                };
+                return value;
+            }
+            body()
         })
     }
 }
 
-function second_run_panics() -> string {
-    let runs_twice = RunsTwice {};
-    let f = spawn with runs_twice { 1 };
-    let outcome = {
-        let _ = await f;
-        "ran twice"
-    } catch (e) {
-        baml.panics.UserPanic => e.message,
+function fails_until(log: Log, successes_after: int) -> int throws string {
+    log.entries.push("try");
+    if (log.entries.length() <= successes_after) {
+        throw "not yet"
+    }
+    log.entries.length()
+}
+
+function retry_calls_the_body_again() -> string {
+    let log = Log { entries: [] };
+    let retry = Retry { attempts: 3 };
+    let value = await spawn with retry { fails_until(log, 2) };
+    `${value}:${log.entries.length()}`
+}
+
+test "a wrapper may call the old body more than once" {
+    assert.equal(retry_calls_the_body_again(), "3:3")
+}
+
+function retry_gives_up() -> string {
+    let log = Log { entries: [] };
+    let retry = Retry { attempts: 2 };
+    let outcome = (await spawn with retry { fails_until(log, 5) }) catch (e) {
+        string => e,
     };
-    outcome
+    `${outcome}:${log.entries.length()}`
 }
 
-test "an execution runs at most once" {
-    assert.equal(second_run_panics(), "baml.spawn.Execution.run: already called")
+test "a wrapper's own throw is the task's error" {
+    assert.equal(retry_gives_up(), "not yet:2")
 }
 
-class Stash { held: baml.spawn.Execution<int, never>[] }
+// A wrapper may return without calling the old body at all.
+class Skip {}
 
-class Stasher { stash: Stash }
-
-implements baml.spawn.Modifier<int, never> for Stasher {
+implements baml.spawn.Modifier<int, never> for Skip {
     function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
-        plan.wrap((execution: baml.spawn.Execution<int, never>) -> int throws never {
-            self.stash.held.push(execution);
-            7
-        })
+        plan.wrap((body: () -> int throws never) -> int throws never { 7 })
     }
 }
 
-// A wrapper may decline to run the rest; keeping the execution for later does
-// not keep it alive.
-function stashed_execution_cannot_run_later() -> string {
-    let stash = Stash { held: [] };
-    let stasher = Stasher { stash: stash };
-    let v = await spawn with stasher { 1 };
-    let outcome = {
-        let _ = stash.held[0].run();
-        "ran"
-    } catch (e) {
-        baml.panics.UserPanic => e.message,
-    };
-    `${v}:${outcome}`
+function skipped_body_never_runs() -> string {
+    let log = Log { entries: [] };
+    let skip = Skip {};
+    let value = await spawn with skip { log.entries.push("body"); 1 };
+    `${value}:${log.entries.length()}`
 }
 
-test "an execution cannot run after its wrapper returned" {
-    assert.equal(
-        stashed_execution_cannot_run_later(),
-        "7:baml.spawn.Execution.run: the wrapper that received this execution has returned",
-    )
+test "a wrapper may skip the body" {
+    assert.equal(skipped_body_never_runs(), "7:0")
 }
 
-class ThrowsAfterStash { stash: Stash }
+// A modifier may set the plan's fields directly; a later one sees the result.
+class Rename { to: string }
 
-implements baml.spawn.Modifier<int, never> for ThrowsAfterStash {
-    type Error = string
-    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, string> throws never {
-        plan.wrap((execution: baml.spawn.Execution<int, never>) -> int throws string {
-            self.stash.held.push(execution);
-            throw "wrapper failed"
-        })
+implements<T, E> baml.spawn.Modifier<T, E> for Rename {
+    function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
+        baml.spawn.Plan { ...plan, name: self.to }
     }
 }
 
-// The outer half of the test below: it runs the throwing wrapper, then tries the
-// execution that wrapper stashed before it threw.
-class ChecksExpiry { stash: Stash }
+class ReadName { log: Log }
 
-implements baml.spawn.Modifier<int, string> for ChecksExpiry {
-    type Output = string
-    type Error = never
-    function apply(self, plan: baml.spawn.Plan<int, string>) -> baml.spawn.Plan<string, never> throws never {
-        plan.wrap((execution: baml.spawn.Execution<int, string>) -> string throws never {
-            let first = {
-                let _ = execution.run();
-                "ok"
-            } catch (e) {
-                string => e,
-            };
-            let second = {
-                let _ = self.stash.held[0].run();
-                "ran"
-            } catch (e) {
-                baml.panics.UserPanic => "expired",
-            };
-            `${first}:${second}`
-        })
+implements<T, E> baml.spawn.Modifier<T, E> for ReadName {
+    function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
+        self.log.entries.push(plan.name ?? "<none>");
+        plan
     }
 }
 
-// Leaving a wrapper by a throw ends its execution's extent just as returning does.
-function a_throw_closes_the_extent() -> string {
-    let stash = Stash { held: [] };
-    let throwing = ThrowsAfterStash { stash: stash };
-    let checking = ChecksExpiry { stash: stash };
-    await spawn with throwing, checking { 1 }
+function renamed_plan() -> string[] {
+    let log = Log { entries: [] };
+    let rename = Rename { to: "renamed" };
+    let read = ReadName { log: log };
+    let _ = await spawn "original" with read, rename, read { 1 };
+    log.entries
 }
 
-test "a throw out of a wrapper ends its execution's extent" {
-    assert.equal(a_throw_closes_the_extent(), "wrapper failed:expired")
+test "a modifier may set a plan's fields" {
+    assert.equal(renamed_plan(), ["original", "renamed"])
 }
 
-// An `Execution` cannot be pointed at another plan, nor a `Plan` relabelled
-// at other types: both hold native state, and a class holding native state
-// cannot be built with a class literal (pinned as a compile error by
-// `projects/diagnostic_errors/opaque_class_literals`).
+// A plan's body is any `() -> T` value, a bound method included: the task
+// enters it with the receiver as `self`.
+class UseProduce { offset: Offset }
+
+implements baml.spawn.Modifier<int, never> for UseProduce {
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
+        baml.spawn.Plan { ...plan, body: self.offset.produce }
+    }
+}
+
+function bound_method_body() -> int {
+    let use_produce = UseProduce { offset: Offset { by: 21 } };
+    await spawn with use_produce { 0 }
+}
+
+test "a bound method is a task's body" {
+    assert.equal(bound_method_body(), 42)
+}
 
 // ─── Limit ───────────────────────────────────────────────────────────────────
 
@@ -482,6 +500,24 @@ test "a task cancelled while queued never runs" {
     assert.equal(cancelled_while_queued_never_runs(), "1:-1:1")
 }
 
+// The limit holds back the WORK, not just its counts: under a capacity of one,
+// no body starts until the previous one has finished its IO, so the log
+// alternates strictly whatever the timing. (Capacity one also keeps the shared
+// log free of racing writes: only one body ever runs at a time.)
+function a_limit_serializes_real_io() -> string {
+    let limit = limit_of(1);
+    let log = Log { entries: [] };
+    let a = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let b = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let c = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let total = (await a) + (await b) + (await c);
+    `${total}:${log.entries.join(",")}`
+}
+
+test "a limit holds back the work, not just the counts" {
+    assert.equal(a_limit_serializes_real_io(), "3:start,end,start,end,start,end")
+}
+
 // ─── Root and CancelToken ────────────────────────────────────────────────────
 
 function linked_token_cancels() -> int {
@@ -497,6 +533,28 @@ function linked_token_cancels() -> int {
 
 test "a token modifier cancels the task when it fires" {
     assert.equal(linked_token_cancels(), -1)
+}
+
+// Cancelling a token frees the slot its running task held; the task queued
+// behind it under the same token must not take that slot and run.
+function token_cancels_its_queued_task() -> string {
+    let limit = limit_of(1);
+    let token = baml.spawn.CancelToken.new();
+    let log = Log { entries: [] };
+    let running = spawn with limit, token { sleep_ms(5000n); 1 };
+    let queued = spawn with limit, token { log.entries.push("ran"); 2 };
+    let _ = token.cancel();
+    let first = (await running) catch (e) {
+        baml.panics.Cancelled => -1,
+    };
+    let second = (await queued) catch (e) {
+        baml.panics.Cancelled => -1,
+    };
+    `${first}:${second}:${log.entries.length()}`
+}
+
+test "a token's queued task is cancelled, not admitted" {
+    assert.equal(token_cancels_its_queued_task(), "-1:-1:0")
 }
 
 // Cancelling the spawner cancels its ordinary child; a `Root` child runs on.
@@ -519,59 +577,4 @@ function root_survives_its_spawner() -> string {
 
 test "a root task is not cancelled with its spawner" {
     assert.equal(root_survives_its_spawner(), "rooted done")
-}
-
-// ─── plan reuse ──────────────────────────────────────────────────────────────
-//
-// A plan is a reusable recipe, but the syntax for starting one that already
-// exists is not built: BEP-040 leaves the spelling open (`spawn from plan` or
-// `baml.spawn.launch(plan)`). The two tests below are the only ones here that
-// reach the compiler's internal terminal, because reuse is the one thing the
-// `spawn` sugar cannot express -- it builds a fresh plan every time. The
-// terminal is internal: user code writes `spawn ... { }`.
-
-function one_plan_two_tasks() -> int[] {
-    let counter = Log { entries: [] };
-    let plan = baml.spawn.Plan.new(body = () -> int {
-        counter.entries.push("x");
-        counter.entries.length()
-    });
-    let first = await baml.spawn.__spawn(plan);
-    let second = await baml.spawn.__spawn(plan);
-    let results = [first, second];
-    results
-}
-
-test "a plan started twice yields two independent tasks" {
-    assert.equal(one_plan_two_tasks(), [1, 2])
-}
-
-// A plan's body is any `() -> T` value, a bound method included.
-function bound_method_body() -> int {
-    let offset = Offset { by: 21 };
-    let plan = baml.spawn.Plan.new(body = offset.produce);
-    await baml.spawn.__spawn(plan)
-}
-
-test "a bound method is a plan body" {
-    assert.equal(bound_method_body(), 42)
-}
-
-function one_limited_plan_started_twice() -> string {
-    let limit = limit_of(1);
-    let log = Log { entries: [] };
-    let plan = baml.spawn.Plan.new(body = () -> int {
-        log.entries.push(`active:${limit.active_count()}`);
-        sleep_ms(40n);
-        1
-    }).with(limit);
-    let a = baml.spawn.__spawn(plan);
-    let b = baml.spawn.__spawn(plan);
-    let total = (await a) + (await b);
-    // Each body saw exactly one task holding the slot: they did not overlap.
-    `${total}|${log.entries.join(",")}`
-}
-
-test "two tasks from one limited plan share its limit" {
-    assert.equal(one_limited_plan_started_twice(), "2|active:1,active:1")
 }

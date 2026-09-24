@@ -1448,11 +1448,59 @@ mod tests {
     /// A native method in an `implements ... for <Class>` block is extracted
     /// under the `{iface}$for${Class}` key MIR mints for it, with the class as
     /// its receiver — instance-backed exactly when the class's own methods are.
+    /// (No stdlib file has one today, so the block is written here.)
     #[test]
     fn impl_block_natives_extract_for_a_class_target() {
-        let (vm_builtins, _io, _class_defs) = extract_native_builtins().unwrap();
+        let source = r#"
+interface Modifier<T, E> {
+    function apply(self, value: T) -> T throws E;
+}
+
+class Limit {
+    _handle: $rust_type,
+}
+
+class Root {}
+
+implements<T, E> Modifier<T, E> for Limit {
+    //baml:mut_vm
+    //baml:fallible
+    function apply(self, value: T) -> T throws E {
+        $rust_function
+    }
+}
+
+implements<T, E> Modifier<T, E> for Root {
+    function apply(self, value: T) -> T throws E {
+        $rust_function
+    }
+}
+"#;
+        let tokens = baml_compiler_lexer::lex_lossless(source, FileId::new(0));
+        let (green, errors) = baml_compiler_parser::parse_file(&tokens);
+        assert!(errors.is_empty(), "the source parses");
+        let cst_root = SyntaxNode::new_root(green);
+        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
+        assert!(diags.is_empty(), "the source lowers");
+
+        let mut vm_builtins = Vec::new();
+        let mut io_builtins = Vec::new();
+        for item in &items {
+            if let Item::ImplementsFor(impl_def) = item {
+                extract_from_implements_for(
+                    impl_def,
+                    &items,
+                    "test",
+                    &cst_root,
+                    "test.baml",
+                    &mut vm_builtins,
+                    &mut io_builtins,
+                );
+            }
+        }
+        assert!(io_builtins.is_empty());
         let apply_for = |class: &str| {
-            let path = format!("baml.spawn.Modifier<T, E>$for${class}.apply");
+            let path = format!("test.Modifier<T, E>$for${class}.apply");
             vm_builtins
                 .iter()
                 .find(|b| b.path == path)

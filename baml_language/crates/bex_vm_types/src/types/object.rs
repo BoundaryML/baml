@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 
 use crate::{
     ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
-    MapContainer, SpawnPlanData, Uint8ArrayContainer, Value, Variant,
+    MapContainer, Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
         RuntimeImplRule, TypeAliasDef,
@@ -124,12 +124,6 @@ pub enum Object {
     /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
     /// type by construction.
     Type(Box<crate::types::TypeValue>),
-
-    /// The sealed recipe behind a `baml.spawn.Plan<T, E>` value (BEP-040):
-    /// the body and wrapper closures it keeps alive, and how a launch is
-    /// admitted, parented, and cancelled. Never serialized: it is runtime
-    /// state, like a future.
-    SpawnPlan(Box<SpawnPlanData>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -259,12 +253,6 @@ impl BorshSerialize for Object {
                     "HostClosure cannot be serialized",
                 ));
             }
-            Self::SpawnPlan(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "SpawnPlan cannot be serialized",
-                ));
-            }
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
                 return Err(std::io::Error::new(
@@ -359,7 +347,6 @@ impl std::fmt::Display for Object {
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
-            Object::SpawnPlan(plan) => write!(f, "<spawn_plan layers={}>", plan.layers.len()),
             Object::Float(v) => write!(f, "{v}"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
@@ -393,7 +380,6 @@ pub enum ObjectType {
     Type,
     RustData,
     Float,
-    SpawnPlan,
 }
 
 impl ObjectType {
@@ -422,7 +408,6 @@ impl ObjectType {
             Object::RustData(_) => Self::RustData,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
-            Object::SpawnPlan(_) => Self::SpawnPlan,
             Object::Float(_) => Self::Float,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -467,7 +452,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),
-            ObjectType::SpawnPlan => write!(f, "spawn_plan"),
         }
     }
 }

@@ -4,40 +4,16 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.spawn.Plan` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-   ╭─[opaque_class_literals.baml:8:5]
- 8 │     baml.spawn.Plan<string, never> { _handle: int_plan._handle }
-   ·     ────────────────────────────────────────────────────────────
+  × class `baml.spawn.Limit` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
+   ╭─[opaque_class_literals.baml:8:16]
+ 8 │     let fake = baml.spawn.Limit { _handle: token._handle };
+   ·                ───────────────────────────────────────────
    ╰────
 
   [type] E0173
 
-  × class `baml.spawn.Plan` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-    ╭─[opaque_class_literals.baml:17:9]
- 17 │         baml.spawn.Plan<string, never> { _handle: plan._handle }
-    ·         ────────────────────────────────────────────────────────
-    ╰────
-
-  [type] E0173
-
-  × class `baml.spawn.Execution` cannot be built with a class literal: its field `_plan` holds state that only the class's own functions create
-    ╭─[opaque_class_literals.baml:28:26]
- 28 │             let forged = baml.spawn.Execution<int, never> { _plan: self.other._handle, _handle: execution._handle };
-    ·                          ──────────────────────────────────────────────────────────────────────────────────────────
-    ╰────
-
-  [type] E0173
-
   × class `baml.spawn.Limit` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-    ╭─[opaque_class_literals.baml:37:16]
- 37 │     let fake = baml.spawn.Limit { _handle: token._handle };
-    ·                ───────────────────────────────────────────
-    ╰────
-
-  [type] E0173
-
-  × class `baml.spawn.Limit` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-    ╭─[opaque_class_literals.baml:43:5]
- 43 │     baml.spawn.Limit { ...limit }
+    ╭─[opaque_class_literals.baml:14:5]
+ 14 │     baml.spawn.Limit { ...limit }
     ·     ─────────────────────────────
     ╰────
