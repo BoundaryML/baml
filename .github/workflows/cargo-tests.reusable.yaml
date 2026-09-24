@@ -144,6 +144,14 @@ jobs:
           test-outcome: ${{ steps.cargo-test.outcome }}
           token: ${{ secrets.TRUNK_ORG_TOKEN }}
 
+      # Release leg: structured-log value copying carries `debug_assert`-adjacent
+      # logic whose behavior must not change when debug assertions are
+      # compiled out (PR #4548 review A.1). Narrow on purpose — this module,
+      # not the workspace.
+      - name: "Run structured-log value-copy tests in release mode"
+        run: cargo test --release -p bex_engine --lib trace_heap
+        working-directory: baml_language
+
       - name: "Upload test results on failure"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -467,18 +475,12 @@ jobs:
         run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # Profiling-specific test binaries opt in explicitly; keeping
-      # BAML_PROFILE off for the general suite avoids filling the Windows
-      # runner with incidental `.bamlprof` files. Run the two binaries that
-      # drive CLI binary e2e separately after the disk cleanup below. The
-      # runtime corpus remains in its existing Linux snapshot job.
+      # CLI binary e2e tests run separately after disk cleanup below.
       - name: "Run tests"
         id: cargo-test
         continue-on-error: true
         run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus)'
         working-directory: baml_language
-        env:
-          BAML_PROFILE: "0"
 
       # Must precede the `cargo clean` below, which takes target/nextest/ too.
       - name: "Analyze test results in Trunk"
@@ -513,7 +515,6 @@ jobs:
         run: cargo nextest run --profile ci-cli-e2e -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
         working-directory: baml_language
         env:
-          BAML_PROFILE: "0"
           BAML_PACK_HOST_PREBUILT: "1"
 
       - name: "Analyze CLI e2e test results in Trunk"

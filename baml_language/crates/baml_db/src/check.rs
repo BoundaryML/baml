@@ -1839,10 +1839,6 @@ fn source_aware_tir_type_error_message(
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
             format!("expected an interface qualifier, got {}", ty(target))
         }
-        TirTypeError::RuntimeIdArgumentTypeMismatch { got } => format!(
-            "`$id` at a call site expects `boundary.LocalId`, got {}",
-            ty(got)
-        ),
         _ => error.render(&baml_compiler2_hir_ty::render::Viewpoint::user_facing(
             db,
             baml_compiler2_hir::file_package::file_package(db, file).root,
@@ -1971,13 +1967,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::BareDefaultKeyword => DiagnosticId::BareDefaultKeyword,
         TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::BlanketBoundNotSatisfied { .. } => DiagnosticId::TypeMismatch,
-        // `$id` special-form misuse: an invalid assignment/access shape, not
-        // a name-resolution failure.
-        TirTypeError::RuntimeIdCompoundAssignment
-        | TirTypeError::RuntimeIdMemberAccess { .. }
-        | TirTypeError::DuplicateRuntimeIdArgument
-        | TirTypeError::RuntimeIdArgumentMustBeLast
-        | TirTypeError::RuntimeIdArgumentTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
         // Builtin interfaces (BEP-062, E0153/E0154).
@@ -2157,6 +2146,28 @@ mod tests {
         let db = setup_test_db(source);
         let file = db.workspace_files()[0];
         (db, file)
+    }
+
+    #[test]
+    fn retired_runtime_identity_forms_are_rejected() {
+        for source in [
+            "function main() -> string { $id }",
+            "function main() -> string { baml.id.current() }",
+            "function main() -> string { baml.id.new() }",
+            "function main() -> string { baml.id.set(\"x\") }",
+            "function main() -> string { boundary.id.current() }",
+            "function main() -> unknown { boundary.id() }",
+            "function leaf(x: int) -> int { x } function main() -> int { leaf(1, $id = 2) }",
+        ] {
+            let (db, file) = single_file(source);
+            let diagnostics = check_file(&db, file);
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|diag| diag.severity == Severity::Error),
+                "removed identity form unexpectedly accepted: {source}"
+            );
+        }
     }
 
     fn dummy_file_id() -> FileId {
@@ -2561,48 +2572,6 @@ interface Pair<A, B> {
                 .iter()
                 .any(|message| message == "`self` cannot have a default value"),
             "missing self-default diagnostic; got {messages:#?}"
-        );
-    }
-
-    #[test]
-    fn check_file_renders_runtime_id_mismatch_type_in_file_namespace() {
-        let mut db = ProjectDatabase::new();
-        db.ensure_stdlib_sources();
-        let root = db
-            .add_source_root(crate::SourceRootSpec::new(
-                ".",
-                baml_base::SourceRootKind::Workspace,
-            ))
-            .expect("fresh workspace root");
-        let file = db.add_or_update_file_in(
-            root,
-            Path::new("billing/test.baml"),
-            r#"class WrongId {
-  value int
-}
-
-function target(value: int) -> int {
-  value
-}
-
-function main(value: WrongId) -> int {
-  target(1, $id = value)
-}
-"#,
-        );
-
-        let diagnostics = check_file(&db, file);
-        let diag = diagnostics
-            .iter()
-            .find(|diag| {
-                diag.id == DiagnosticId::TypeMismatch
-                    && diag.message.contains("expects `boundary.LocalId`")
-            })
-            .expect("runtime-id type mismatch diagnostic");
-
-        assert_eq!(
-            diag.message,
-            "`$id` at a call site expects `boundary.LocalId`, got WrongId"
         );
     }
 

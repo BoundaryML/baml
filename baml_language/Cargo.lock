@@ -671,7 +671,6 @@ dependencies = [
  "baml_ide",
  "baml_lsp_server",
  "baml_query",
- "baml_query_profiles",
  "baml_release",
  "baml_tests",
  "baml_type",
@@ -683,10 +682,11 @@ dependencies = [
  "bex_project",
  "bex_vm_types",
  "borsh",
+ "btel_file",
+ "btel_settings",
  "clap",
  "console",
  "ctrlc",
- "datafusion",
  "hex",
  "indexmap",
  "indicatif",
@@ -779,7 +779,6 @@ name = "baml_compiler2_hir"
 version = "0.1.0"
 dependencies = [
  "baml_base",
- "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
@@ -1020,22 +1019,17 @@ dependencies = [
  "baml_db",
  "baml_ide",
  "baml_lsp",
- "baml_query",
- "baml_query_profiles",
  "baml_type",
  "baml_version",
  "base64",
  "bex_engine",
  "bex_events",
  "bex_heap",
- "bex_prof_store",
  "bex_project",
  "bex_vm_types",
  "bridge_ctypes",
  "crossbeam-channel",
- "datafusion",
  "futures",
- "hex",
  "indexmap",
  "lsp-server",
  "lsp-types",
@@ -1068,6 +1062,7 @@ dependencies = [
  "bex_engine",
  "bex_events",
  "bex_project",
+ "btel_settings",
  "libsui",
  "sys_native",
  "tokio",
@@ -1092,23 +1087,6 @@ dependencies = [
  "serde_json",
  "strsim",
  "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
-name = "baml_query_profiles"
-version = "0.0.0-beta"
-dependencies = [
- "async-trait",
- "baml_query",
- "base64",
- "bex_prof_store",
- "datafusion",
- "hex",
- "num-bigint",
- "prost",
- "sha2",
- "tempfile",
  "tokio",
 ]
 
@@ -1257,6 +1235,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_chunkedringbuffer"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "loom",
+ "web-time",
+]
+
+[[package]]
 name = "bex_engine"
 version = "0.0.0-beta"
 dependencies = [
@@ -1273,7 +1260,16 @@ dependencies = [
  "bex_str",
  "bex_vm",
  "bex_vm_types",
+ "borsh",
  "bridge_ctypes",
+ "btel_bcs",
+ "btel_clock",
+ "btel_file",
+ "btel_processor",
+ "btel_recorder",
+ "btel_settings",
+ "btel_types",
+ "clap",
  "futures",
  "indexmap",
  "libc",
@@ -1299,22 +1295,15 @@ name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
  "base64",
- "bex_prof_store",
  "bex_vm_types",
- "crossbeam-channel",
- "crossbeam-utils",
- "fs2",
- "hex",
+ "btel_types",
  "loom",
  "prost",
  "prost-build",
  "protoc-bin-vendored",
- "rustc-hash 2.1.2",
  "serde_json",
  "sha2",
- "smallvec",
  "sys_types",
- "tempfile",
  "uuid",
  "web-time",
 ]
@@ -1340,30 +1329,13 @@ dependencies = [
  "bex_external_types",
  "bex_str",
  "bex_vm_types",
+ "btel_types",
  "indexmap",
  "num-bigint",
  "parking_lot",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "web-time",
-]
-
-[[package]]
-name = "bex_prof_store"
-version = "0.0.0-beta"
-dependencies = [
- "baml_version",
- "base64",
- "crossbeam-channel",
- "fs2",
- "hex",
- "libc",
- "rustc-hash 2.1.2",
- "sha2",
- "smallvec",
- "tempfile",
- "uuid",
  "web-time",
 ]
 
@@ -1451,6 +1423,7 @@ dependencies = [
  "bytecount",
  "codspeed-divan-compat",
  "indexmap",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1464,10 +1437,15 @@ dependencies = [
  "baml_db",
  "baml_type",
  "base64",
- "bex_events",
  "bex_heap",
  "bex_str",
  "bex_vm_types",
+ "btel_clock",
+ "btel_processor",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
  "chacha20poly1305",
  "console",
  "getrandom 0.2.17",
@@ -1477,6 +1455,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rand_xoshiro",
+ "rustc-hash 2.1.2",
  "serde",
  "serde_json",
  "sha2",
@@ -1502,6 +1481,7 @@ dependencies = [
  "bex_resource_types",
  "bex_str",
  "borsh",
+ "btel_types",
  "hex",
  "indexmap",
  "num-bigint",
@@ -1619,7 +1599,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
- "find-msvc-tools",
+ "cc",
  "futures",
  "indexmap",
  "libc",
@@ -1780,6 +1760,133 @@ checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "btel_bcs"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "bytes",
+ "futures",
+ "hex",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
+name = "btel_clock"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "btel_types",
+ "quanta",
+ "web-time",
+]
+
+[[package]]
+name = "btel_file"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "prost",
+ "tempfile",
+]
+
+[[package]]
+name = "btel_processor"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "rustc-hash 2.1.2",
+ "web-time",
+]
+
+[[package]]
+name = "btel_recorder"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_chunkedringbuffer",
+ "btel_clock",
+ "btel_processor",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "rustc-hash 2.1.2",
+ "uuid",
+ "web-time",
+]
+
+[[package]]
+name = "btel_records"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+]
+
+[[package]]
+name = "btel_ringbuffer"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "btel_types",
+ "loom",
+]
+
+[[package]]
+name = "btel_settings"
+version = "0.0.0-beta"
+
+[[package]]
+name = "btel_snapshot"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "bex_str",
+ "borsh",
+ "btel_settings",
+ "num-bigint",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "btel_types"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_settings",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -5778,6 +5885,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.6"
+dependencies = [
+ "libc",
+ "portable-atomic",
+ "raw-cpuid",
+ "wasip1",
+ "wasip2",
+ "web-sys",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5920,6 +6040,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -7977,6 +8106,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
+name = "wasip1"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5e26842486624357dbeb8f0381cf1fb42f022291fd787d4a816768fec8cc760"
+
+[[package]]
 name = "wasip2"
 version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8640,6 +8775,9 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+dependencies = [
+ "bitflags 2.11.1",
+]
 
 [[package]]
 name = "wit-bindgen-core"
@@ -8735,6 +8873,12 @@ dependencies = [
  "libc",
  "rustix",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yaml_serde"

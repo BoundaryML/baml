@@ -17,7 +17,7 @@ use bex_engine::{
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
-use sys_native::{CallId, SysOpsExt};
+use sys_native::CallId;
 
 use crate::{
     log_output::{LogLevel as RunLogLevel, LogOutput},
@@ -366,34 +366,17 @@ impl RunArgs {
         db: &ProjectDatabase,
         package: SourceRoot,
         argv: Vec<String>,
+        recording_root: &Path,
     ) -> Result<BexEngine> {
         let bytecode = baml_compiler2_emit::generate_project_bytecode(db, package)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        BexEngine::new_with_runtime_compiler(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            argv,
-            bex_project::runtime_compiler(),
-        )
-        .map_err(|e| anyhow!("failed to create engine: {e:?}"))
+        crate::runtime_telemetry::create_engine(bytecode, argv, recording_root)
+            .map_err(|e| anyhow!("failed to create engine: {e:?}"))
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let outcome = self.run_with_reporter(&reporter);
-        emit_profiling_status();
-        outcome
-    }
-}
-
-/// A profiling failure never breaks the run, so by default it is invisible;
-/// verbose is the window into why a store is absent — or where an active one
-/// actually wrote. Must run on EVERY exit path, including the
-/// `std::process::exit` branches for program-controlled exit codes.
-fn emit_profiling_status() {
-    if crate::reporter::verbose() {
-        let status = bex_events::prof::backend::ProfilerSession::global().status_line();
-        crate::reporter::print_verbose(format_args!("profiling: {status}"));
+        self.run_with_reporter(&reporter)
     }
 }
 
@@ -750,15 +733,6 @@ impl RunArgs {
             Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
-                // Streams spec §7.5: the profiler's durability window ends
-                // here — flush before the process exits.
-                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
-                if !flushed {
-                    crate::reporter::print_verbose(format_args!(
-                        "profiling: final flush did not complete; this run's profile may be incomplete"
-                    ));
-                }
-                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -848,12 +822,7 @@ impl RunArgs {
 
         if let Some(program) = session.try_cached_program() {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
-            match BexEngine::new_with_runtime_compiler(
-                program,
-                Arc::new(sys_native::SysOps::native()),
-                argv.clone(),
-                bex_project::runtime_compiler(),
-            ) {
+            match crate::runtime_telemetry::create_engine(program, argv.clone(), session.root()) {
                 Ok(engine) => {
                     return Ok(Compiled {
                         db: session.db,
@@ -939,13 +908,8 @@ impl RunArgs {
             baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
         ));
         let program = compiled.program;
-        let engine = BexEngine::new_with_runtime_compiler(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            argv,
-            bex_project::runtime_compiler(),
-        )
-        .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
+        let engine = crate::runtime_telemetry::create_engine(program, argv, session.root())
+            .map_err(|e| anyhow!("failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
@@ -972,6 +936,7 @@ impl RunArgs {
         let StandaloneSource {
             db,
             package,
+            root,
             needs_format_hint,
             ..
         } = self.load_standalone_source(file_path)?;
@@ -983,7 +948,7 @@ impl RunArgs {
             &format!("cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        let engine = self.compile_to_engine(&db, package, argv)?;
+        let engine = self.compile_to_engine(&db, package, argv, &root)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
@@ -1130,8 +1095,14 @@ impl RunArgs {
         // source" — the loaded body text, not the `@path` reference. This
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
         // `file` containing `2 + 2`) produce the same argv.
-        let engine =
-            self.compile_to_engine(&db, package, self.build_argv_for_expression(expr_body))?;
+        // Never use the synthetic temporary compilation root as the recording root.
+        let recording_root = discovered_root.map_or_else(std::env::current_dir, Ok)?;
+        let engine = self.compile_to_engine(
+            &db,
+            package,
+            self.build_argv_for_expression(expr_body),
+            &recording_root,
+        )?;
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -1183,15 +1154,6 @@ impl RunArgs {
             Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
             Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
-                // Streams spec §7.5: the profiler's durability window ends
-                // here — flush before the process exits.
-                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
-                if !flushed {
-                    crate::reporter::print_verbose(format_args!(
-                        "profiling: final flush did not complete; this run's profile may be incomplete"
-                    ));
-                }
-                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -1853,6 +1815,7 @@ fn synthetic_expression_path(root: &Path, occupied: &[PathBuf]) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use bex_engine::RuntimeTy;
+    use sys_native::SysOpsExt;
 
     use super::*;
 

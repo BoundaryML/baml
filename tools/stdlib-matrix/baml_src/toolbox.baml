@@ -420,7 +420,7 @@ function check_snippet(box: Toolbox, code: string) -> string? {
     }
     // A directory per check, because sessions run concurrently and would
     // otherwise overwrite each other's snippet mid-compile.
-    let directory = `${box.scratch_root}/${baml.id.new()}`;
+    let directory = `${box.scratch_root}/${baml.random.SystemRandom.get().random(16).to_hex()}`;
     let outcome = check_snippet_in(box, directory, code) catch_all (error) {
         _ => `could not check the snippet: ${error}`,
     };

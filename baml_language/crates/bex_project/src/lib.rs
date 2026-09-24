@@ -10,7 +10,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-pub use bex::{Bex, BexCallTraceResult};
+pub use bex::{Bex, BexRunResult};
 // The engine type itself, and the compiled program it is built from, for
 // hosts that manage engine lifecycles (the LSP server's and the browser's
 // playground runtimes): the blessed seam stays this crate rather than a
@@ -168,11 +168,11 @@ pub fn new(
             message: e.to_string(),
         })?;
 
-    let engine = bex_engine::BexEngine::new_with_deferred_profiling_and_runtime_compiler(
+    let engine = bex_engine::BexEngine::new_with_runtime_compiler(
         program,
         Arc::new(sys_ops),
         Vec::new(),
-        Some(runtime_compiler()),
+        runtime_compiler(),
     )?;
     engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
         let cancelled = error.cancelled;
@@ -183,11 +183,7 @@ pub fn new(
             log::error!("unhandled spawned task failed: {error}");
         }
     })));
-    // Deferred construction exists so the handler above lands before any
-    // profiling event fires; the engine is live from here, so activate now —
-    // without this, `BAML_PROFILE` runs record nothing and the drop-time
-    // unhandled-spawn drain warning is never armed.
-    engine.activate_profiling();
+
     Ok(Arc::new(engine))
 }
 

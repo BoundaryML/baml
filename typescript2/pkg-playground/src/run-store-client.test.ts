@@ -9,6 +9,35 @@ import type { RuntimePort } from './runtime-port';
 import type { Run, WorkerInMessage, WorkerOutMessage } from './worker-protocol';
 
 describe('run-store-client', () => {
+  it('rejects disabled profiling requests with their correlated error', async () => {
+    const port = new FakeRuntimePort();
+    const client = createRunStoreClient(port);
+    const pending = [
+      client.listExecutions('project'),
+      client.openExecution('project', 'execution'),
+      client.readTelemetryMedia('project', 'cid'),
+    ];
+    const message = 'Profiling is currently unavailable.';
+    const rejected = pending.map((request) =>
+      expect(request).rejects.toMatchObject({
+        code: 'profilingUnavailable',
+        message: `profilingUnavailable: ${message}`,
+      }),
+    );
+
+    // Replies may arrive out of order on the shared runtime connection.
+    for (const requestId of [3, 1, 2]) {
+      port.emit({
+        code: 'profilingUnavailable',
+        message,
+        requestId,
+        type: 'commandError',
+      });
+    }
+    await Promise.all(rejected);
+    client.dispose();
+  });
+
   it('starts preview runs with request correlation and resolves from runStarted', async () => {
     const port = new FakeRuntimePort();
     const client = createRunStoreClient(port);

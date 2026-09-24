@@ -1,12 +1,5 @@
-//! MIR's view of inference: the `hir_ty` [`InferenceResult`] of the body
-//! being lowered and, for a function, of its parameter defaults (their own
-//! inference root), borrowed from the tracked queries. MIR reads `hir_ty`'s
-//! vocabulary directly — [`MemberResolution`], [`CallPlan`],
-//! [`ScopedTypeBinding`], … — through the `tir_*` accessors on
-//! `LoweringContext`; nothing is re-encoded at the seam. Keying is shared
-//! by construction: `hir_ty` types lambdas in their owner's arena and
-//! parameter defaults as their own body owner, so the per-scope dispatch
-//! reduces to body-vs-defaults.
+//! MIR borrows the body's and parameter defaults' `hir_ty` inference results
+//! directly. Both roots share the metadata keys used by lowering.
 
 use baml_compiler2_hir::{
     body::BodyOwnerId,
@@ -19,8 +12,7 @@ pub(crate) use baml_compiler2_hir_ty::infer::{
     ResolvedPath, ScopedTypeBinding, ScopedTypeSource,
 };
 
-/// The inference results behind the `tir_*` accessors, one per metadata
-/// scope.
+/// The inference results behind the `tir_*` accessors, one per metadata scope.
 pub(crate) struct InferenceTables<'db> {
     body: &'db InferenceResult<'db>,
     /// A function's parameter defaults; a `let` has no parameters.

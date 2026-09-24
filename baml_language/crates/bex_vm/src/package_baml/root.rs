@@ -20,13 +20,13 @@ use super::{
 };
 use crate::{
     BexVm, VmPanic,
-    errors::{VmBamlError, VmRustFnError},
+    errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
 impl BamlPackageBaml for PackageBamlImpl {
-    fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
+    fn deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
         let mut copied_objects = HashMap::new();
-        deep_copy_value_recursive(vm, *value, &mut copied_objects)
+        Ok(deep_copy_value_recursive(vm, *value, &mut copied_objects)?)
     }
 
     /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
@@ -769,13 +769,13 @@ fn deep_copy_value_recursive(
     vm: &mut BexVm,
     value: Value,
     copied_objects: &mut HashMap<HeapPtr, HeapPtr>,
-) -> Value {
-    match value.kind() {
+) -> Result<Value, VmInternalError> {
+    Ok(match value.kind() {
         ValueKind::OmittedArg | ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) => value,
 
         ValueKind::Object(ptr) => {
             if let Some(&new_ptr) = copied_objects.get(&ptr) {
-                return Value::object(new_ptr);
+                return Ok(Value::object(new_ptr));
             }
 
             // Futures are *handles*, not values: a `Future` is the user-
@@ -787,7 +787,7 @@ fn deep_copy_value_recursive(
             // (which would otherwise clone the `Future` struct uselessly).
             if matches!(vm.get_object(ptr), Object::Future(_)) {
                 copied_objects.insert(ptr, ptr);
-                return Value::object(ptr);
+                return Ok(Value::object(ptr));
             }
 
             let object = vm.get_object(ptr).clone();
@@ -810,7 +810,7 @@ fn deep_copy_value_recursive(
                     let snapshot = values.to_vec();
                     let mut new_values = Vec::with_capacity(snapshot.len());
                     for value in snapshot {
-                        new_values.push(deep_copy_value_recursive(vm, value, copied_objects));
+                        new_values.push(deep_copy_value_recursive(vm, value, copied_objects)?);
                     }
 
                     // no GC write barrier because it is all in gen0
@@ -833,7 +833,7 @@ fn deep_copy_value_recursive(
                     let snapshot = map.to_index_map();
                     let mut new_map = IndexMap::new();
                     for (key, value) in &snapshot {
-                        let new_value = deep_copy_value_recursive(vm, *value, copied_objects);
+                        let new_value = deep_copy_value_recursive(vm, *value, copied_objects)?;
                         new_map.insert(key.clone(), new_value);
                     }
 
@@ -853,7 +853,7 @@ fn deep_copy_value_recursive(
 
                     let mut new_fields = Vec::with_capacity(instance.fields.len());
                     for field in instance.field_values() {
-                        new_fields.push(deep_copy_value_recursive(vm, field, copied_objects));
+                        new_fields.push(deep_copy_value_recursive(vm, field, copied_objects)?);
                     }
 
                     let new_instance = Instance::new(
@@ -868,6 +868,9 @@ fn deep_copy_value_recursive(
 
                 // Bigint is behind Arc — clone() is cheap (increments refcount).
                 Object::Bigint(arc) => vm.tlab.alloc(Object::Bigint(std::sync::Arc::clone(&arc))),
+                Object::Function(f) if f.telemetry_function_id.is_some() => {
+                    vm.tlab.alloc_function(f)?
+                }
                 Object::Function(f) => vm.tlab.alloc(Object::Function(f)),
                 Object::Interface(i) => vm.tlab.alloc(Object::Interface(i)),
                 Object::Package(p) => vm.tlab.alloc(Object::Package(p)),
@@ -902,7 +905,7 @@ fn deep_copy_value_recursive(
 
             Value::object(new_ptr)
         }
-    }
+    })
 }
 
 // ── Helpers for the numeric-array reductions ──────────────────────────────────

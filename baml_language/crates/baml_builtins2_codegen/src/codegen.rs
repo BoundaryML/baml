@@ -2445,7 +2445,9 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
+            output.contains(
+                "fn deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError>;"
+            ),
             "BamlPackageBaml should have deep_copy:\n{output}"
         );
     }
@@ -2488,8 +2490,7 @@ mod tests {
             // with the same name but different VmUsage (e.g.
             // uint8array.to_string vs errors.StackTrace.to_string). The
             // return type matters for zero-param methods, where the params
-            // alone cannot disambiguate (e.g. spawn.CancelToken.new(vm,) vs
-            // baml.id.new()).
+            // alone cannot disambiguate overloaded constructors.
             let params = clean_param_list(b);
             let ret = if b.may_yield {
                 "NativeCallResult".to_string()

@@ -219,7 +219,6 @@ pub(crate) fn load_project_or_default(from: Option<&Path>) -> Result<LoadedProje
             let canonical = resolve_search_start(from)?;
             let root = project_search_dir(&canonical);
             let (db, package) = workspace_db(&root);
-            configure_profiler_store_root(&root);
             Ok(LoadedProject {
                 db,
                 package,
@@ -227,16 +226,6 @@ pub(crate) fn load_project_or_default(from: Option<&Path>) -> Result<LoadedProje
             })
         }
     }
-}
-
-/// Points the global profiler session's store at the discovered project root
-/// (streams spec §7.5) so `baml run` from a subdirectory writes where
-/// `baml query` will look. First resolution wins; `BAML_PROFILE_DIR` still
-/// overrides.
-pub(crate) fn configure_profiler_store_root(project_root: &Path) {
-    let _ = bex_events::prof::backend::ProfilerSession::configure_global_store_root(
-        project_root.join(".baml/profiles-v1"),
-    );
 }
 
 /// Resolve a path suitable for project discovery. When `from` is omitted,
@@ -269,12 +258,6 @@ fn paths_overlap(left: &Path, right: &Path) -> bool {
 /// explicit source root; an ancestor manifest still supplies settings.
 pub(crate) fn resolve_project_layout(from: Option<&Path>) -> Result<Option<ProjectLayout>> {
     let layout = resolve_project_layout_inner(from)?;
-    if let Some(layout) = &layout {
-        // The one root-resolution choke point every CLI verb passes through:
-        // point the global profiler session's store at the project root
-        // (streams spec §7.5) before any engine can initialize it.
-        configure_profiler_store_root(&layout.root);
-    }
     Ok(layout)
 }
 

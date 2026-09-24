@@ -49,9 +49,6 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
-/// Package name for boundary identity and capture helpers.
-pub const PACKAGE_BOUNDARY: &str = "boundary";
-
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
 /// file paths in build-script diagnostic messages (stderr only, never in
@@ -112,7 +109,6 @@ macro_rules! manifest {
 pub const MANIFESTS: &[BuiltinManifest] = &[
     manifest!("baml"),
     manifest!("log"),
-    manifest!("boundary"),
     manifest!("reflect"),
     manifest!("testing"),
     manifest!("assert"),
@@ -154,7 +150,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_http/http.baml"),
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
-    builtin!("baml", "ns_id/id.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
     builtin!("baml", "ns_glob/glob.baml"),
@@ -202,8 +197,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("reflect", "ns_function/function.baml"),
     builtin!("reflect", "ns_errors/errors.baml"),
     // --- boundary package ---
-    builtin!("boundary", "core.baml"),
-    builtin!("boundary", "ns_id/id.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),

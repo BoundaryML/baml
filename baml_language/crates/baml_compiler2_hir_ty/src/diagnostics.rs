@@ -687,19 +687,7 @@ pub enum TirTypeError {
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
     BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
-    /// `$id` cannot be the target of a compound assignment (`$id += ...`):
-    /// the runtime ID can only be replaced wholesale with an override from
-    /// `baml.id.new()` via `$id = ...`.
-    RuntimeIdCompoundAssignment,
-    /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
-    /// string value but is not a binding; bind it to a local first.
-    RuntimeIdMemberAccess { member: Name },
-    /// A second `$id` side channel was supplied to one call.
-    DuplicateRuntimeIdArgument,
-    /// `$id` is trailing call metadata and an ordinary argument followed it.
-    RuntimeIdArgumentMustBeLast,
-    /// The `$id` side channel accepts only a `boundary.LocalId`.
-    RuntimeIdArgumentTypeMismatch { got: Ty },
+
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
@@ -1969,28 +1957,7 @@ impl TirTypeError {
                     value_type.spell(vp),
                     bound.spell(vp)
                 ),
-                TirTypeError::RuntimeIdCompoundAssignment => write!(
-                    f,
-                    "`$id` cannot be the target of a compound assignment; use `$id = ...` with an \
-                 override from `baml.id.new()`"
-                ),
-                TirTypeError::RuntimeIdMemberAccess { member } => write!(
-                    f,
-                    "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
-                 (e.g. `let id = $id; id.{member}`)"
-                ),
-                TirTypeError::DuplicateRuntimeIdArgument => {
-                    write!(f, "duplicate `$id` call argument")
-                }
-                TirTypeError::RuntimeIdArgumentMustBeLast => write!(
-                    f,
-                    "`$id` must be the final call argument because it is trailing call metadata"
-                ),
-                TirTypeError::RuntimeIdArgumentTypeMismatch { got } => write!(
-                    f,
-                    "`$id` at a call site expects `boundary.LocalId`, got {}",
-                    got.spell(vp)
-                ),
+
                 TirTypeError::IntegerLiteralOutOfRange { value } => write!(
                     f,
                     "integer literal `{value}` is out of range for `int` \

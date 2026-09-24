@@ -20,6 +20,29 @@ fn size_assertion() {
 }
 
 #[test]
+fn retained_heap_counts_complete_slice_parent() {
+    assert_eq!(BexStr::from("inline").retained_heap_bytes(), Some(0));
+    let parent = BexStr::from("x".repeat(100_000));
+    let slice = parent.substring(1, 101);
+    let bytes = parent.retained_heap_bytes().unwrap();
+    assert!(bytes > parent.len());
+    assert_eq!(slice.retained_heap_bytes(), Some(bytes));
+    assert_eq!(slice.clone().retained_heap_bytes(), Some(bytes));
+}
+
+#[test]
+fn retained_heap_flattens_ropes_to_stable_backing() {
+    let parent = BexStr::from("x".repeat(100_000));
+    let rope = BexStr::concat(parent.substring(0, 100), BexStr::from("y".repeat(100)));
+    assert!(matches!(rope, BexStr::Concat(_)));
+    let bytes = rope.retained_heap_bytes().unwrap();
+    assert!(bytes > rope.len());
+    assert!(bytes < parent.len());
+    assert_eq!(rope.as_str().len(), 200);
+    assert_eq!(rope.retained_heap_bytes(), Some(bytes));
+}
+
+#[test]
 fn inline_boundary() {
     // 54 bytes → Inline
     let s54 = "a".repeat(54);
@@ -419,4 +442,65 @@ fn occurrence_index_ops_match_std_oracle() {
             );
         }
     }
+}
+
+#[test]
+fn content_hash_is_independent_of_representation_and_reused_by_clones() {
+    use crate::bex_str::ConcatState;
+    let text = "a string longer than the inline capacity, with some unicode: λ🦀";
+    let flat = BexStr::from(text);
+    let rope = BexStr::concat(BexStr::from(&text[..20]), BexStr::from(&text[20..]));
+    let BexStr::Concat(node) = &rope else {
+        panic!("expected rope")
+    };
+    assert!(matches!(
+        *node.state.lock().unwrap(),
+        ConcatState::Deferred { .. }
+    ));
+    let expected = xxhash_rust::xxh3::xxh3_128(text.as_bytes());
+    assert_eq!(rope.content_hash(), expected);
+    assert!(matches!(
+        *node.state.lock().unwrap(),
+        ConcatState::Flattened(_)
+    ));
+    assert_eq!(flat.content_hash(), expected);
+    let clone = flat.clone();
+    let (BexStr::Flat(a), BexStr::Flat(b)) = (&flat, &clone) else {
+        unreachable!()
+    };
+    assert!(std::sync::Arc::ptr_eq(a, b));
+    assert_eq!(
+        a.hash[1].load(std::sync::atomic::Ordering::Acquire),
+        (expected >> 64) as u64
+    );
+    let padded = BexStr::from(format!("xx{text}yy"));
+    let slice = padded.substring(2, 2 + text.len());
+    assert_eq!(slice.content_hash(), expected);
+    assert_eq!(slice.clone().content_hash(), expected);
+    for s in ["", "short", "🦀"] {
+        assert_eq!(
+            BexStr::from(s).content_hash(),
+            xxhash_rust::xxh3::xxh3_128(s.as_bytes())
+        );
+    }
+}
+
+#[test]
+fn content_hash_can_be_published_concurrently() {
+    let rope = BexStr::concat(
+        BexStr::from("ab".repeat(256)),
+        BexStr::from("cd".repeat(256)),
+    );
+    let expected =
+        xxhash_rust::xxh3::xxh3_128(format!("{}{}", "ab".repeat(256), "cd".repeat(256)).as_bytes());
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            let rope = &rope;
+            scope.spawn(move || {
+                for _ in 0..100 {
+                    assert_eq!(rope.content_hash(), expected);
+                }
+            });
+        }
+    });
 }

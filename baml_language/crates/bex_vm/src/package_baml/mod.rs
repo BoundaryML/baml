@@ -31,7 +31,6 @@ mod csv;
 mod error_context;
 mod float;
 mod future;
-pub(crate) mod id;
 mod int;
 pub mod json;
 mod map;
@@ -345,10 +344,6 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
         <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
     ),
     (
-        "boundary.",
-        <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
-    ),
-    (
         "reflect.",
         <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
@@ -419,6 +414,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 real_local_count: function.real_local_count,
                 bytecode: function.bytecode,
                 kind,
+                telemetry_function_id: None,
+                telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+                telemetry_policy_id: function.telemetry_policy_id,
                 local_names: function.local_names,
                 debug_locals: function.debug_locals,
                 span: function.span,
@@ -435,8 +433,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 is_interface_body: function.is_interface_body,
                 native_key: function.native_key,
                 body_meta: function.body_meta,
-                capture: function.capture,
-                function_id: 0, // synthetic; not in the profiling function table
+
                 runtime_package: function.runtime_package,
             }))
         }

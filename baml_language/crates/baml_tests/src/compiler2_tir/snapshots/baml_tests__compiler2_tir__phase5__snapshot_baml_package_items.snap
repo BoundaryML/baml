@@ -160,10 +160,6 @@ namespace baml.http:
   function fetch_sse
   function reject_websocket
   function send
-namespace baml.id:
-  function current
-  function new
-  function set
 namespace baml.io:
   type Read
   type Write

@@ -43,7 +43,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 8: every type dropped its `TyAttr` payload and the runtime `Class`
 /// and `Enum` their `ty_attr` field (BEP-075 removed type attributes), so the
 /// serialized shape of every type-bearing record changed.
-pub const FORMAT_VERSION: u32 = 8;
+///
+/// Version 10 combines that layout with the runtime-ID instruction and serialized
+/// function capture-policy removals from the runtime foundation branch (versions
+/// 8 and 9 there). Artifacts from either pre-merge layout must be rejected.
+pub const FORMAT_VERSION: u32 = 10;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

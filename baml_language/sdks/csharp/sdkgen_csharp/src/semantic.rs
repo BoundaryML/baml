@@ -239,7 +239,6 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.TlsConfig"
         | "baml.glob.Glob"
         | "baml.fs.File"
-        | "boundary.LocalId"
         | "baml.csv.Record"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
@@ -300,14 +299,13 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
         return false;
     }
 
-    (name.package().as_str() == "baml"
+    name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
             matches!(
                 namespace.as_str(),
                 "csv" | "fs" | "glob" | "http" | "net" | "spawn"
             )
-        }))
-        || name.to_string() == "boundary.id"
+        })
 }
 
 fn is_runtime_class_projection(name: &Name) -> bool {
@@ -4468,12 +4466,6 @@ fn namespace_requests(name: &Name, origin: CSharpNameOrigin) -> Vec<CSharpNameRe
             || is_public_resource_stdlib_function(name))
     {
         std::iter::once(BaseName::new("Baml"))
-            .chain(name.namespace().iter().cloned())
-            .collect::<Vec<_>>()
-    } else if name.package().as_str() == "boundary"
-        && (is_resource_projection(name) || is_public_resource_stdlib_function(name))
-    {
-        std::iter::once(BaseName::new("Boundary"))
             .chain(name.namespace().iter().cloned())
             .collect::<Vec<_>>()
     } else {

@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 bytecount = { workspace = true }
+xxhash-rust = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
