@@ -1443,6 +1443,7 @@ pub fn resolve_impl<'db>(
     {
         return None;
     }
+    let concrete = &expand_alias_head(concrete, &AliasOnlyFacts::new(db));
     // A literal-typed value implements what its base primitive does
     // (the receiver-class rule applied to impl goals): `1` proves
     // `GrptChild<int>` through `implements GrptChild<int> for int`.
@@ -1457,6 +1458,66 @@ pub fn resolve_impl<'db>(
         BLANKET_IMPL_BOUND_DEPTH,
         &mut Vec::new(),
     )
+}
+
+/// `ty` with its alias head unfolded to the type it denotes. An alias is a
+/// spelling device, so an impl goal is decided for what the alias names;
+/// the nested ones unfold where a pattern needs them (`match_pattern`
+/// itself, and [`unfold_aliases_against`] ahead of selection's unifier).
+pub(crate) fn expand_alias_head(ty: &Ty, aliases: &impl TypeContext) -> Ty {
+    let mut head = ty.clone();
+    // Bounded: an alias chain leading back to itself is rejected at its
+    // declaration (E0068).
+    for _ in 0..64 {
+        let InferTy::TypeAlias(name) = head.kind() else {
+            break;
+        };
+        match aliases.alias_def(name) {
+            Some(expanded) => head = Ty::from_plain(&expanded),
+            None => break,
+        }
+    }
+    head
+}
+
+/// `target` with an alias unfolded wherever `pattern` has structure at the
+/// same position, so selection's header unification, which knows no
+/// aliases, meets the type the alias denotes (the ground road's
+/// `match_pattern` unfolds as it descends). A position under a pattern
+/// variable keeps its spelling: the variable binds it as written, and a
+/// goal over the binding unfolds for itself.
+///
+/// Unfolding never changes what a type denotes, so a position unfolded
+/// needlessly costs nothing; one left folded fails a match that holds. The
+/// walk terminates because each step consumes a level of the finite pattern,
+/// even through a recursive alias.
+pub(crate) fn unfold_aliases_against(pattern: &Ty, target: &Ty, aliases: &impl TypeContext) -> Ty {
+    if matches!(
+        pattern.kind(),
+        InferTy::TypeVar(..) | InferTy::InferVar { .. }
+    ) {
+        return target.clone();
+    }
+    let target = expand_alias_head(target, aliases);
+    let mut pattern_children = Vec::new();
+    baml_type::interned::for_each_child(pattern.kind(), |child| {
+        pattern_children.push(child.clone());
+    });
+    let mut target_arity = 0;
+    baml_type::interned::for_each_child(target.kind(), |_| target_arity += 1);
+    if pattern_children.is_empty()
+        || target_arity != pattern_children.len()
+        || std::mem::discriminant(pattern.kind()) != std::mem::discriminant(target.kind())
+    {
+        return target;
+    }
+    let mut pattern_children = pattern_children.iter();
+    Ty::intern(target.kind().map_children(|child| {
+        let pattern = pattern_children
+            .next()
+            .unwrap_or_else(|| unreachable!("the target was counted to the pattern's arity"));
+        unfold_aliases_against(pattern, child, aliases)
+    }))
 }
 
 fn is_realized(ty: &Ty) -> bool {
@@ -1476,6 +1537,10 @@ fn resolve_within_depth<'db>(
     // GROWING chains (`Wrap<Wrap<...>>` bounds that never repeat a
     // goal), exactly the split rustc makes between cycle detection and
     // `recursion_limit`.
+    let eq = AliasOnlyFacts::memoized(db);
+    // A bound discharged below binds an impl variable to whatever the
+    // subject spelled there, an alias included.
+    let concrete = &expand_alias_head(concrete, &eq);
     if in_progress
         .iter()
         .any(|(ty, target)| ty == concrete && target == interface)
@@ -1488,7 +1553,6 @@ fn resolve_within_depth<'db>(
         return None;
     }
     in_progress.push((concrete.clone(), interface.clone()));
-    let eq = AliasOnlyFacts::memoized(db);
     let mut resolved = None;
     'search: for package in search_roots(db, concrete, interface) {
         for facts in package_impl_candidates(db, package) {
@@ -1738,6 +1802,9 @@ fn match_pattern(
             return true;
         }
     }
+    // The pattern has structure here, so the target is matched for what an
+    // alias spelling it denotes.
+    let target = &expand_alias_head(target, eq);
     match (pattern.kind(), target.kind()) {
         (InferTy::Class(a, a_args), InferTy::Class(b, b_args)) => {
             a == b

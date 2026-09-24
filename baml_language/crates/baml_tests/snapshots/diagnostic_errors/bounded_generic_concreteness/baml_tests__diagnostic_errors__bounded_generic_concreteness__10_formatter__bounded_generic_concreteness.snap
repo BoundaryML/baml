@@ -120,3 +120,24 @@ function accepted_through_impl_header(h: Holder<A>) -> void {
     holds(h);
     let ground: Holds<string> = h;
 }
+
+// An alias is its target, so an alias of an existential or of a union is just
+// as abstract - a recursive one included - while an alias of a concrete type is
+// that type.
+type CombinableAlias = Combinable;
+
+type Either = A | B;
+
+type Tree = A | Tree[];
+
+type Concrete = A;
+
+function rejected_through_aliases(c: CombinableAlias, e: Either, t: Tree) -> void {
+    pair(c, c);
+    pair(e, e);
+    pair(t, t);
+}
+
+function accepted_through_alias(a: Concrete) -> void {
+    pair(a, a);
+}

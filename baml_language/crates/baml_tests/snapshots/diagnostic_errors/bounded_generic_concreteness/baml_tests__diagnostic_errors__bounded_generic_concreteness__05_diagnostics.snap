@@ -91,3 +91,30 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                 ┬
      ·                                 ╰── expected `Holds<string>`, found `Holder<Combinable>`
      ╰────
+
+  [type] E0001
+
+  × type argument `Combinable` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime
+  │ type to dispatch on)
+     ╭─[bounded_generic_concreteness.baml:126:5]
+ 126 │     pair(c, c);
+     ·     ──────────
+     ╰────
+
+  [type] E0001
+
+  × type argument `A | B` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime type
+  │ to dispatch on)
+     ╭─[bounded_generic_concreteness.baml:127:5]
+ 127 │     pair(e, e);
+     ·     ──────────
+     ╰────
+
+  [type] E0001
+
+  × type argument `Tree` is not concrete; a type parameter bounded by `Combinable` requires a concrete type that implements it (an abstract type like a union or interface has no single runtime type
+  │ to dispatch on)
+     ╭─[bounded_generic_concreteness.baml:128:5]
+ 128 │     pair(t, t);
+     ·     ──────────
+     ╰────

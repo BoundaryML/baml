@@ -9669,23 +9669,10 @@ impl<'db> InferenceContext<'db> {
         Some(self.structurally_resolve(&ty))
     }
 
-    /// Nominal aliases expanded through the oracle (fuel-bounded), for
-    /// the tiers that need a type's SHAPE - the recursive
-    /// `baml.json.json` union answers structurally.
-    fn expand_alias_ty(&mut self, ty: &Ty) -> Ty {
-        let mut resolved = ty.clone();
-        let mut fuel = 8u32;
-        while let InferTy::TypeAlias(qtn) = resolved.kind() {
-            if fuel == 0 {
-                break;
-            }
-            fuel -= 1;
-            match baml_type::normalize::TypeContext::alias_def(&self.facts, qtn) {
-                Some(expanded) => resolved = Ty::from_plain(&expanded),
-                None => break,
-            }
-        }
-        resolved
+    /// The type an alias head denotes, for the tiers that need a type's
+    /// SHAPE - the recursive `baml.json.json` union answers structurally.
+    fn expand_alias_ty(&self, ty: &Ty) -> Ty {
+        crate::impls::expand_alias_head(ty, &self.facts)
     }
 
     /// The sole concrete function type at a callback root: `ty` itself, or

@@ -402,17 +402,19 @@ diagnostic (S17).
   function annotation gives params `!error`. Fix: structurally_resolve
   the expectation.
 - A3 `dispatch_operator`/`operand_members` never expand aliases; also
-  await (false mismatch on aliased Future), obligation subjects
-  (alias -> permanent stall), `sub()` decomposition arms (alias skips
-  invariant arms),
-  upcast targets, `expectation_shape` (bounded vars don't adopt).
+  await (false mismatch on aliased Future), `sub()` decomposition arms
+  (alias skips invariant arms), upcast targets, `expectation_shape`
+  (bounded vars don't adopt). Obligation subjects are judged for what an
+  alias denotes: its head is expanded in `attempt` and in the ground
+  resolver, and a nested one unfolds where an impl header needs structure
+  (the ground road's `match_pattern` as it descends, and
+  `impls::unfold_aliases_against` ahead of selection's unifier).
 - A4 scrutinee forcing: `infer_match` forces occurring vars; `if let`,
   `while let`, `is`, let-destructure, and `Is`-facts do not (latent -
   probed, no observable divergence yet; fix for consistency).
 - A5 (downgraded to B after probing): plain-union operands dispatch
   fine; the poison-to-top in `dispatch_operator`/`field_access` union
-  arms stays theoretical. Alias-typed obligation subjects stall
-  UNOBSERVABLY today (bounds silently unchecked - surfaces at S17).
+  arms stays theoretical.
 
 ### B - inconsistencies (one pass over the union/freshness layer)
 - `union_of` syntactic fallback does not collapse singletons

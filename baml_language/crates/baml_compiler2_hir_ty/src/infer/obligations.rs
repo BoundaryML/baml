@@ -179,10 +179,12 @@ impl<'db> InferenceContext<'db> {
                 if ty.has_error() {
                     return Attempt::Done;
                 }
-                // A literal implements what its base primitive does, so it
-                // is JUDGED as the base; a report names the type as written.
+                // An alias is a spelling device and a literal implements
+                // what its base primitive does, so the goal is JUDGED for
+                // the type the alias denotes, widened; a report names the
+                // type as written.
                 let subject = ty;
-                let mut ty = widen_literal(&subject);
+                let mut ty = widen_literal(&self.expand_alias_ty(&subject));
                 // One spelling, one verdict (B-1576): resolution can ground a
                 // syntactic union after this obligation registered, and the
                 // canonical form may be a single member. An OPEN union may
@@ -190,7 +192,12 @@ impl<'db> InferenceContext<'db> {
                 // member either way) acts on it before it closes.
                 if let InferTy::Union(..) = ty.kind() {
                     match baml_type::interned::ClosedTy::try_from(&ty) {
-                        Ok(closed) => ty = self.canonicalize_unions(&closed).into_ty(),
+                        // The canonical form of a recursive alias's
+                        // unfolding is the alias again.
+                        Ok(closed) => {
+                            ty = self.canonicalize_unions(&closed).into_ty();
+                            ty = self.expand_alias_ty(&ty);
+                        }
                         Err(_) if purpose != GoalPurpose::Coercion => {
                             return Attempt::Stalled(Stall::Unresolved);
                         }
@@ -621,7 +628,8 @@ impl<'db> InferenceContext<'db> {
             .zip(interface.generics.iter())
         {
             let pattern = pattern.substitute_bindings(&instantiation);
-            self.table.unify(requested, &pattern).ok()?;
+            let requested = crate::impls::unfold_aliases_against(&pattern, requested, &self.facts);
+            self.table.unify(&requested, &pattern).ok()?;
         }
         for (name, requested) in &interface.associated_types {
             let supplied = facts
@@ -703,7 +711,10 @@ impl<'db> InferenceContext<'db> {
             .for_ty_pattern
             .as_ty()
             .substitute_bindings(&instantiation);
-        self.table.unify(goal, &for_ty).ok()?;
+        // Unification is structural: an alias nested where the header has
+        // structure meets it unfolded.
+        let goal = crate::impls::unfold_aliases_against(&for_ty, goal, &self.facts);
+        self.table.unify(&goal, &for_ty).ok()?;
         Some(instantiation)
     }
 
