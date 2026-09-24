@@ -1,0 +1,6 @@
+[
+  {"producer_session_id":"00000000-0000-4000-8000-000000000001","liveness_sequence":1,"state":"RUNNING"},
+  {"producer_session_id":"00000000-0000-4000-8000-000000000001","liveness_sequence":3,"state":"DRAINING"},
+  {"producer_session_id":"00000000-0000-4000-8000-000000000001","liveness_sequence":3,"state":"DRAINING"},
+  {"producer_session_id":"00000000-0000-4000-8000-000000000001","liveness_sequence":2,"state":"RUNNING"}
+]

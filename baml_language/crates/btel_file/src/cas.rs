@@ -8,7 +8,7 @@ use std::{
 
 use btel_snapshot::{Snapshot, SnapshotId};
 
-use crate::{FileSinkError, io_error};
+use crate::{LocalDeliveryError, io_error};
 
 /// Resolve beneath the unversioned CAS root, isolating each blob format version.
 pub fn cas_path(root: &Path, id: SnapshotId) -> PathBuf {
@@ -24,7 +24,7 @@ pub fn cas_path(root: &Path, id: SnapshotId) -> PathBuf {
         .join(name)
 }
 
-pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), FileSinkError> {
+pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), LocalDeliveryError> {
     let destination = cas_path(root, snapshot.id());
     match fs::File::open(&destination) {
         Ok(mut existing) => {
@@ -38,7 +38,7 @@ pub(super) fn write_snapshot(root: &Path, snapshot: &Snapshot) -> Result<(), Fil
                 || header[8..12] != btel_snapshot::BLOB_VERSION.to_le_bytes()
                 || header[12..] != *snapshot.id().as_bytes()
             {
-                return Err(FileSinkError(format!(
+                return Err(LocalDeliveryError(format!(
                     "invalid CAS header: {}",
                     destination.display()
                 )));

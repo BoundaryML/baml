@@ -1,7 +1,7 @@
 use std::{cell::RefCell, num::NonZeroUsize, time::Duration};
 
 use btel_processor::{AggregateDelta, Publisher};
-use btel_publisher::{RecordingConfig, RecordingPublisher, proto};
+use btel_recorder::{RecordingConfig, RecordingPublisher, proto};
 use btel_types::{AwaitDuration, CallPathId, CallPathNodeId, ClockDuration};
 use prost::Message;
 
@@ -27,11 +27,49 @@ fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
 }
 
 #[test]
+fn local_publisher_finishes_encoding_before_disk_drain() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let expected = files(id, 1).pop().unwrap();
+    let expected_bytes = expected.bytes().to_vec();
+    let sink = LocalDelivery::start(
+        root.path().to_owned(),
+        LocalDeliveryConfig::default(),
+        move |file| {
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(file.bytes(), expected_bytes);
+            Ok(())
+        },
+        |_| {},
+    )
+    .unwrap();
+    let builder = btel_recorder::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
+    let mut publisher = LocalPublisher::new(builder, sink);
+    let sink = publisher.delivery().unwrap().clone();
+    publisher.aggregate(AggregateDelta {
+        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
+        count: 1,
+        total_duration: ClockDuration::from_ticks(3),
+        total_io_duration: AwaitDuration::ZERO,
+    });
+    publisher.finish();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(sink.result(), None);
+    drop(publisher);
+    release.send(()).unwrap();
+    sink.finish().unwrap();
+    assert_eq!(sink.result(), Some(Ok(())));
+}
+
+#[test]
 fn writes_exact_publisher_bytes_and_finish_is_idempotent() {
     let root = tempfile::tempdir().unwrap();
     let id = RecordingId::generate();
-    let mut sink = FileSink::create(root.path(), id, FileSinkConfig::default()).unwrap();
-    let sender = sink.take_sender();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
     let produced = files(id, 3);
     let expected: Vec<_> = produced
         .iter()
@@ -51,7 +89,7 @@ fn writes_exact_publisher_bytes_and_finish_is_idempotent() {
         assert_eq!(&fs::read(path).unwrap(), bytes);
     }
     assert!(sender.send(files(id, 1).pop().unwrap()).is_err());
-    assert!(FileSink::create(root.path(), id, FileSinkConfig::default()).is_err());
+    assert!(LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).is_err());
     let read = read_directory(sink.directory()).unwrap();
     assert_eq!(read.files.len(), 3);
     assert!(!read.has_recording_end);
@@ -73,9 +111,9 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let written = Arc::clone(&seen);
         let mut first = true;
-        let mut sink = FileSink::start(
+        let mut sink = LocalDelivery::start(
             root.path().to_owned(),
-            FileSinkConfig {
+            LocalDeliveryConfig {
                 queue_files: NonZeroUsize::new(1).unwrap(),
             },
             move |file| {
@@ -84,7 +122,7 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
                     entered.send(()).unwrap();
                     released.recv_timeout(Duration::from_secs(5)).unwrap();
                     if fail {
-                        return Err(FileSinkError("injected disk failure".into()));
+                        return Err(LocalDeliveryError("injected disk failure".into()));
                     }
                 }
                 written.lock().unwrap().push(file.sequence().get());
@@ -93,7 +131,7 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
             |_| {},
         )
         .unwrap();
-        let sender = sink.take_sender();
+        let sender = sink.take_handle();
         let mut files = files(RecordingId::generate(), 3).into_iter();
         sender.send(files.next().unwrap()).unwrap();
         started.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -114,7 +152,7 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
         pending.join().unwrap();
         let finished = sink.finish();
         if fail {
-            let expected = Err(FileSinkError("injected disk failure".into()));
+            let expected = Err(LocalDeliveryError("injected disk failure".into()));
             assert_eq!(admission, expected);
             assert_eq!(finished, expected);
         } else {
@@ -129,8 +167,8 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
 fn disk_failure_and_duplicate_sequence_are_observable() {
     let root = tempfile::tempdir().unwrap();
     let id = RecordingId::generate();
-    let mut sink = FileSink::create(root.path(), id, FileSinkConfig::default()).unwrap();
-    let sender = sink.take_sender();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
     let original = files(id, 1).pop().unwrap();
     // Interfere after successful setup, so failure occurs asynchronously.
     fs::remove_dir(sink.directory()).unwrap();
@@ -141,8 +179,8 @@ fn disk_failure_and_duplicate_sequence_are_observable() {
     assert_eq!(sink.finish(), Err(error));
 
     let id = RecordingId::generate();
-    let mut sink = FileSink::create(root.path(), id, FileSinkConfig::default()).unwrap();
-    let sender = sink.take_sender();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
     let original = files(id, 1).pop().unwrap();
     let expected = original.bytes().to_vec();
     sender.send(original).unwrap();
@@ -158,8 +196,8 @@ fn disk_failure_and_duplicate_sequence_are_observable() {
 fn recovery_keeps_later_files_when_a_middle_file_is_missing_or_corrupt() {
     let root = tempfile::tempdir().unwrap();
     let id = RecordingId::generate();
-    let mut sink = FileSink::create(root.path(), id, FileSinkConfig::default()).unwrap();
-    let sender = sink.take_sender();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
     for file in files(id, 4) {
         sender.send(file).unwrap();
     }
@@ -197,8 +235,8 @@ fn recovery_keeps_later_files_when_a_middle_file_is_missing_or_corrupt() {
 fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     let root = tempfile::tempdir().unwrap();
     let id = RecordingId::generate();
-    let mut sink = FileSink::create(root.path(), id, FileSinkConfig::default()).unwrap();
-    let sender = sink.take_sender();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
     let original = files(id, 1).pop().unwrap();
     let original_bytes = original.bytes().to_vec();
     sender.send(original).unwrap();
@@ -262,24 +300,24 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let mut expected = Vec::new();
     value.write_blob(&mut expected).unwrap();
     drop(value);
-    let mut a = FileSink::create_with_cas(
+    let mut a = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
         RecordingId::generate(),
-        FileSinkConfig::default(),
+        LocalDeliveryConfig::default(),
         |_| {},
     )
     .unwrap();
-    let mut b = FileSink::create_with_cas(
+    let mut b = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
         RecordingId::generate(),
-        FileSinkConfig::default(),
+        LocalDeliveryConfig::default(),
         |_| {},
     )
     .unwrap();
-    a.take_sender().send_snapshot(snapshot(&pool, 42)).unwrap();
-    b.take_sender().send_snapshot(snapshot(&pool, 42)).unwrap();
+    a.take_handle().send_snapshot(snapshot(&pool, 42)).unwrap();
+    b.take_handle().send_snapshot(snapshot(&pool, 42)).unwrap();
     a.finish().unwrap();
     b.finish().unwrap();
     assert_eq!(pool.stats().in_use, 0);
@@ -301,15 +339,15 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
         "no partials left behind"
     );
     let modified = fs::metadata(&path).unwrap().modified().unwrap();
-    let mut c = FileSink::create_with_cas(
+    let mut c = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
         RecordingId::generate(),
-        FileSinkConfig::default(),
+        LocalDeliveryConfig::default(),
         |_| {},
     )
     .unwrap();
-    c.take_sender().send_snapshot(snapshot(&pool, 42)).unwrap();
+    c.take_handle().send_snapshot(snapshot(&pool, 42)).unwrap();
     c.finish().unwrap();
     assert_eq!(
         fs::metadata(path).unwrap().modified().unwrap(),
@@ -343,21 +381,21 @@ fn cas_failure_releases_full_queue_and_retained_snapshot_owners() {
     let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
     let (entered, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
-    let mut sink = FileSink::start_with_snapshots(
+    let mut sink = LocalDelivery::start_with_snapshots(
         root.path().to_owned(),
-        FileSinkConfig {
+        LocalDeliveryConfig {
             queue_files: NonZeroUsize::new(1).unwrap(),
         },
         |_| Ok(()),
         move |_| {
             entered.send(()).unwrap();
             released.recv_timeout(Duration::from_secs(5)).unwrap();
-            Err(FileSinkError("injected ENOSPC".into()))
+            Err(LocalDeliveryError("injected ENOSPC".into()))
         },
         |_| {},
     )
     .unwrap();
-    let sender = sink.take_sender();
+    let sender = sink.take_handle();
     sender.send_snapshot(snapshot(&pool, 1)).unwrap();
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     sender.send_snapshot(snapshot(&pool, 2)).unwrap();

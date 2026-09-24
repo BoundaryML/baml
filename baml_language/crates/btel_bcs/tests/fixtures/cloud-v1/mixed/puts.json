@@ -1,0 +1,37 @@
+{
+  "prepare_path": "/v1/recordings/07070707070707070707070707070707/uploads:prepare",
+  "prepare_headers": {
+    "authorization": "Bearer golden-prepare-token",
+    "content-type": "application/json",
+    "idempotency-key": "07070707070707070707070707070707:1"
+  },
+  "uploads": [
+    {
+      "upload_id": "recording",
+      "path": "/cloud-v1/mixed/recording",
+      "query": "capability=fixed-v1",
+      "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
+      "body_file": "recording.hex",
+      "length": 431,
+      "sha256": "74d141afe26ca4bd31f430cb04931f91b6c1af17be178766c5eea554d6ce1473"
+    },
+    {
+      "upload_id": "batch",
+      "path": "/cloud-v1/mixed/batch",
+      "query": "capability=fixed-v1",
+      "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "batch"},
+      "body_file": "batch.hex",
+      "length": 126,
+      "sha256": "330f17544ecf2de1f31459ede9047b7f225000a248c99d0e4d58633df130caa4"
+    },
+    {
+      "upload_id": "object",
+      "path": "/cloud-v1/mixed/object",
+      "query": "capability=fixed-v1",
+      "headers": {"content-type": "application/x-protobuf", "x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "object"},
+      "body_file": "object.hex",
+      "length": 127,
+      "sha256": "2eb7ba19b4335d3eebcb89c77c9951589d0d4a35f24c51c2b88ba3472e8224df"
+    }
+  ]
+}

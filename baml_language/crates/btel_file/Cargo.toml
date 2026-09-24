@@ -15,15 +15,14 @@ test-support = [  ]
 workspace = true
 
 [dependencies]
-btel_publisher = { workspace = true }
+btel_processor = { workspace = true }
+btel_recorder = { workspace = true }
+btel_records = { workspace = true }
 btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
+btel_types = { workspace = true }
 prost = { workspace = true }
 tempfile = { workspace = true }
-
-[dev-dependencies]
-btel_processor = { workspace = true }
-btel_types = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

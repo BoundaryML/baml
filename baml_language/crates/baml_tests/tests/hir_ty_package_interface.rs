@@ -1072,10 +1072,10 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         "<builtin>/assert/reflect_probe.baml",
         "type DeclaredReflect = reflect.Signature\n",
     );
-    // `boundary` declares no such edge: a package reaches only what its
+    // `baml` declares no such edge: a package reaches only what its
     // manifest lists, and no leak across undeclared packages exists.
-    let boundary_file = db.file(
-        "<builtin>/boundary/reflect_probe.baml",
+    let baml_file = db.file(
+        "<builtin>/baml/reflect_probe.baml",
         "type UndeclaredReflect = reflect.Signature\n",
     );
     let user_file = db.file(
@@ -1090,16 +1090,16 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, assert_alias);
     assert!(assert_errors.is_empty(), "{assert_errors:?}");
 
-    let boundary_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, boundary_file)
+    let baml_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, baml_file)
         .first()
-        .expect("boundary alias");
-    let boundary_errors =
-        baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, boundary_alias);
+        .expect("baml alias");
+    let baml_errors =
+        baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, baml_alias);
     assert!(
-        boundary_errors
+        baml_errors
             .iter()
             .any(|(_, error)| format!("{error:?}").contains("reflect.Signature")),
-        "an undeclared package must not resolve: {boundary_errors:?}"
+        "an undeclared package must not resolve: {baml_errors:?}"
     );
 
     let user_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, user_file)

@@ -312,7 +312,7 @@ impl TelemetryRuntime {
     }
     #[cold]
     fn acquire_snapshot_slow(&self) -> Option<btel_snapshot::Builder> {
-        let start = std::time::Instant::now();
+        let start = web_time::Instant::now();
         BINDINGS.with_borrow_mut(|bindings| {
             if let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) {
                 if let Some(producer) = &mut binding.producer {
@@ -535,7 +535,7 @@ mod tests {
         std::thread::scope(|scope| {
             let consumer = scope.spawn(|| {
                 let mut consumer = pool.bind_consumer().unwrap();
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let deadline = web_time::Instant::now() + std::time::Duration::from_secs(5);
                 loop {
                     if pool.stats().sealed_records != 0 {
                         consumer.drain_chunks(
@@ -557,7 +557,7 @@ mod tests {
                         );
                         break;
                     }
-                    if std::time::Instant::now() > deadline {
+                    if web_time::Instant::now() > deadline {
                         pool.disable();
                         panic!("waiting capture failed to publish private records");
                     }

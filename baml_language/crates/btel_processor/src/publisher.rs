@@ -8,7 +8,7 @@ use rustc_hash::FxHashMap;
 use crate::AggregateDelta;
 
 /// Statically dispatched, worker-local receiver. The processor owns the chunk
-/// throughout each callback and recycles it immediately afterward. A publisher
+/// throughout each callback unless `DETACH_RECORDS` opts into recycling first. A publisher
 /// must finish reading a record synchronously; only independently owned output
 /// may survive the callback. Selectors are consumed by the processor, so `thread`
 /// is explicit on every callback and survives chunk boundaries and slot reuse.
@@ -18,9 +18,23 @@ use crate::AggregateDelta;
 /// never replayed. Aggregate deltas may precede supporting definitions. Flush
 /// covers consumed input only, not private chunks or asynchronous delivery.
 pub trait Publisher<I, V> {
+    /// Opt in to reusable span and timing buffers, each sized to chunk capacity.
+    /// Only one chunk is detached at a time. The processor recycles its input
+    /// allocation before visiting records or publishing aggregate deltas.
+    /// Unvisited captures remain owned by the span buffer, not by delivery.
+    const DETACH_RECORDS: bool = false;
+
     fn aggregate(&mut self, delta: AggregateDelta);
+    /// Called after each aggregate only on the detached path, without input
+    /// allocations held, including cache evictions and final cache flushing.
+    fn after_detached_aggregate(&mut self) {}
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<I, V>);
     fn flush(&mut self);
+    /// Runs before a detached record with its original allocation recycled.
+    fn before_detached_span(&mut self, _record: &SpanRecord<I, V>) {}
+    /// Runs after each detached record, with no input chunk held. May apply
+    /// delivery backpressure; never wait for captures in the remaining suffix.
+    fn after_detached_span(&mut self) {}
     /// Admission and delivery hooks run with no input chunk held.
     fn before_batch(&mut self, _max_records: usize) {}
     /// Actual span chunk length, including selectors, before visiting its records.
@@ -30,7 +44,7 @@ pub trait Publisher<I, V> {
     fn manages_flush_deadline(&self) -> bool {
         false
     }
-    fn deadline(&self) -> Option<std::time::Instant> {
+    fn deadline(&self) -> Option<web_time::Instant> {
         None
     }
     fn max_chunks_per_batch(&self) -> usize {
@@ -38,6 +52,16 @@ pub trait Publisher<I, V> {
     }
     fn finish(&mut self) {
         self.flush();
+    }
+}
+
+pub(crate) fn publish_aggregate<I, V, P: Publisher<I, V>>(
+    publisher: &mut P,
+    delta: AggregateDelta,
+) {
+    publisher.aggregate(delta);
+    if P::DETACH_RECORDS {
+        publisher.after_detached_aggregate();
     }
 }
 

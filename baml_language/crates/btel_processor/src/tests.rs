@@ -77,6 +77,85 @@ fn checked(test: impl FnOnce() + Send + 'static) {
 }
 
 #[test]
+fn detached_and_borrowed_paths_preserve_order_and_ownership() {
+    struct Inspect<const DETACHED: bool> {
+        pool: ChunkPool<TimingRecord, SpanRecord<Box<[Capture]>, Box<Capture>>>,
+        seen: Vec<(TelemetryId, TelemetryId)>,
+        hints: Vec<usize>,
+        services: usize,
+    }
+    impl<const DETACHED: bool> Publisher<Box<[Capture]>, Box<Capture>> for Inspect<DETACHED> {
+        const DETACH_RECORDS: bool = DETACHED;
+
+        fn aggregate(&mut self, _: AggregateDelta) {}
+        fn after_detached_aggregate(&mut self) {
+            assert!(DETACHED);
+            assert_eq!(self.pool.stats().free_chunks, 2);
+        }
+        fn flush(&mut self) {}
+        fn before_span_chunk(&mut self, records: usize) {
+            self.hints.push(records);
+        }
+        fn span(
+            &mut self,
+            thread: TelemetryId,
+            record: &mut SpanRecord<Box<[Capture]>, Box<Capture>>,
+        ) {
+            assert_eq!(self.pool.stats().free_chunks, if DETACHED { 2 } else { 1 });
+            self.seen.push((thread, record.completion().unwrap().id));
+        }
+        fn after_detached_span(&mut self) {
+            self.services += 1;
+        }
+    }
+    fn run<const DETACHED: bool>() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let pool = ChunkPool::new(config(3, 1)).unwrap();
+        let mut processor = Processor::with_publisher(
+            pool.bind_consumer().unwrap(),
+            nz(1),
+            Inspect::<DETACHED> {
+                pool: pool.clone(),
+                seen: Vec::new(),
+                hints: Vec::new(),
+                services: 0,
+            },
+        );
+        let mut producer = pool.register_producer().unwrap();
+        let thread = allocate_telemetry_id();
+        let mut expected = Vec::new();
+        producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+        for count in [2, 3] {
+            for _ in 0..count {
+                let record = span(Capture(drops.clone()));
+                expected.push((thread, record.completion().unwrap().id));
+                producer.write_span(record);
+            }
+            producer.seal();
+            processor.process_available();
+        }
+        assert_eq!(processor.publisher().seen, expected);
+        assert_eq!(processor.publisher().hints, [3, 3]);
+        assert_eq!(processor.publisher().services, if DETACHED { 6 } else { 0 });
+        assert_eq!(drops.load(Ordering::Relaxed), 5);
+        assert!(processor.detached.is_empty());
+        assert_eq!(processor.detached.capacity(), if DETACHED { 3 } else { 0 });
+        producer.write_timing(TimingRecord::ThreadSelected { thread_id: thread });
+        producer.write_timing(timing());
+        producer.seal();
+        processor.process_available();
+        processor.flush();
+        assert!(processor.detached_timing.is_empty());
+        assert_eq!(
+            processor.detached_timing.capacity(),
+            if DETACHED { 3 } else { 0 }
+        );
+    }
+    run::<false>();
+    run::<true>();
+}
+
+#[test]
 fn bounded_processing_releases_captures_and_clock_ownership() {
     let drops = Arc::new(AtomicUsize::new(0));
     let clock = btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
@@ -639,8 +718,19 @@ fn publisher_flush_failure_is_terminal_even_after_the_last_chunk() {
 
 #[test]
 fn borrowed_callback_panic_recycles_input_and_never_replays() {
-    struct BrokenPublisher;
-    impl Publisher<Box<[Capture]>, Box<Capture>> for BrokenPublisher {
+    callback_panic_recycles_input_and_never_replays::<false>();
+}
+
+#[test]
+fn detached_callback_panic_recycles_input_and_never_replays() {
+    callback_panic_recycles_input_and_never_replays::<true>();
+}
+
+fn callback_panic_recycles_input_and_never_replays<const DETACHED: bool>() {
+    struct BrokenPublisher<const DETACHED: bool>;
+    impl<const DETACHED: bool> Publisher<Box<[Capture]>, Box<Capture>> for BrokenPublisher<DETACHED> {
+        const DETACH_RECORDS: bool = DETACHED;
+
         fn aggregate(&mut self, _: AggregateDelta) {}
         fn span(&mut self, _: TelemetryId, _: &mut SpanRecord<Box<[Capture]>, Box<Capture>>) {
             std::panic::panic_any(44_u32);
@@ -648,8 +738,11 @@ fn borrowed_callback_panic_recycles_input_and_never_replays() {
         fn flush(&mut self) {}
     }
     let pool = ChunkPool::new(config(4, 1)).unwrap();
-    let mut processor =
-        Processor::with_publisher(pool.bind_consumer().unwrap(), nz(8), BrokenPublisher);
+    let mut processor = Processor::with_publisher(
+        pool.bind_consumer().unwrap(),
+        nz(8),
+        BrokenPublisher::<DETACHED>,
+    );
     let drops = Arc::new(AtomicUsize::new(0));
     let mut producer = pool.register_producer().unwrap();
     producer.write_span(SpanRecord::ThreadSelected {

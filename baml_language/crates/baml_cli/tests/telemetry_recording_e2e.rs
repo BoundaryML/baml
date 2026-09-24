@@ -16,7 +16,7 @@ fn cli(cwd: &Path, home: &Path) -> Command {
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_AGENT_SKILL_CHECK", "off")
         .env("BAML_CACHE_DIR", home.join("cache"))
-        .env("BAML_TELEMETRY", "auto");
+        .env("BAML_TELEMETRY", "medium");
     command
 }
 
@@ -155,7 +155,7 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
             .current_dir(&launch)
             .env("HOME", &home)
             .env("USERPROFILE", &home)
-            .env("BAML_TELEMETRY", "auto");
+            .env("BAML_TELEMETRY", "medium");
         if index == 1 {
             command.arg("main");
         }

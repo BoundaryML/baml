@@ -1239,6 +1239,7 @@ version = "0.0.0-beta"
 dependencies = [
  "btel_settings",
  "loom",
+ "web-time",
 ]
 
 [[package]]
@@ -1258,13 +1259,16 @@ dependencies = [
  "bex_str",
  "bex_vm",
  "bex_vm_types",
+ "borsh",
  "bridge_ctypes",
+ "btel_bcs",
  "btel_clock",
  "btel_file",
  "btel_processor",
- "btel_publisher",
+ "btel_recorder",
  "btel_settings",
  "btel_types",
+ "clap",
  "futures",
  "indexmap",
  "libc",
@@ -1578,7 +1582,7 @@ dependencies = [
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
- "find-msvc-tools",
+ "cc",
  "futures",
  "indexmap",
  "libc",
@@ -1742,6 +1746,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel_bcs"
+version = "0.0.0-beta"
+dependencies = [
+ "btel_clock",
+ "btel_processor",
+ "btel_recorder",
+ "btel_records",
+ "btel_settings",
+ "btel_snapshot",
+ "btel_types",
+ "bytes",
+ "futures",
+ "hex",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
 name = "btel_clock"
 version = "0.0.0-beta"
 dependencies = [
@@ -1756,7 +1787,8 @@ name = "btel_file"
 version = "0.0.0-beta"
 dependencies = [
  "btel_processor",
- "btel_publisher",
+ "btel_recorder",
+ "btel_records",
  "btel_settings",
  "btel_snapshot",
  "btel_types",
@@ -1775,10 +1807,11 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "rustc-hash 2.1.2",
+ "web-time",
 ]
 
 [[package]]
-name = "btel_publisher"
+name = "btel_recorder"
 version = "0.0.0-beta"
 dependencies = [
  "bex_chunkedringbuffer",
@@ -1793,6 +1826,7 @@ dependencies = [
  "protoc-bin-vendored",
  "rustc-hash 2.1.2",
  "uuid",
+ "web-time",
 ]
 
 [[package]]

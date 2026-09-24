@@ -20,6 +20,29 @@ fn size_assertion() {
 }
 
 #[test]
+fn retained_heap_counts_complete_slice_parent() {
+    assert_eq!(BexStr::from("inline").retained_heap_bytes(), Some(0));
+    let parent = BexStr::from("x".repeat(100_000));
+    let slice = parent.substring(1, 101);
+    let bytes = parent.retained_heap_bytes().unwrap();
+    assert!(bytes > parent.len());
+    assert_eq!(slice.retained_heap_bytes(), Some(bytes));
+    assert_eq!(slice.clone().retained_heap_bytes(), Some(bytes));
+}
+
+#[test]
+fn retained_heap_flattens_ropes_to_stable_backing() {
+    let parent = BexStr::from("x".repeat(100_000));
+    let rope = BexStr::concat(parent.substring(0, 100), BexStr::from("y".repeat(100)));
+    assert!(matches!(rope, BexStr::Concat(_)));
+    let bytes = rope.retained_heap_bytes().unwrap();
+    assert!(bytes > rope.len());
+    assert!(bytes < parent.len());
+    assert_eq!(rope.as_str().len(), 200);
+    assert_eq!(rope.retained_heap_bytes(), Some(bytes));
+}
+
+#[test]
 fn inline_boundary() {
     // 54 bytes → Inline
     let s54 = "a".repeat(54);

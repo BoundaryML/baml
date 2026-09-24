@@ -28,7 +28,7 @@ type Page = [OnceLock<TelemetryPolicy>; PAGE_SIZE];
 /// to this table. Published slots never move, change, or get reused, so readers
 /// can safely finish using an old ID while a function's policy is updated.
 pub struct TelemetryPolicies {
-    mode: btel_settings::mode::TelemetryMode,
+    auto_level: btel_settings::mode::AutoTelemetryLevel,
     pages: [OnceLock<Box<Page>>; PAGE_COUNT],
     interned: Mutex<FxHashMap<TelemetryPolicy, u16>>,
 }
@@ -41,19 +41,19 @@ impl Default for TelemetryPolicies {
 
 impl TelemetryPolicies {
     pub fn new() -> Self {
-        Self::with_mode(btel_settings::mode::DEFAULT_MODE)
+        Self::with_auto_level(btel_settings::mode::AutoTelemetryLevel::default())
     }
 
-    pub fn with_mode(mode: btel_settings::mode::TelemetryMode) -> Self {
+    pub fn with_auto_level(auto_level: btel_settings::mode::AutoTelemetryLevel) -> Self {
         Self {
-            mode,
+            auto_level,
             pages: [const { OnceLock::new() }; PAGE_COUNT],
             interned: Mutex::new(FxHashMap::default()),
         }
     }
 
-    pub fn mode(&self) -> btel_settings::mode::TelemetryMode {
-        self.mode
+    pub fn auto_level(&self) -> btel_settings::mode::AutoTelemetryLevel {
+        self.auto_level
     }
 
     #[inline(always)]

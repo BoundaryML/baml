@@ -54,11 +54,7 @@ const _: () = assert!(MAP_RETAINED_CAPACITY <= MAP_SHRINK_THRESHOLD);
 
 impl RecordingConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.flush_interval_duration.is_zero()
-            || std::time::Instant::now()
-                .checked_add(self.flush_interval_duration)
-                .is_none()
-            || self.target_bytes.get() > encoding::MAX_BUFFER_BYTES
+        if self.flush_interval_duration.is_zero() || u32::try_from(self.target_bytes.get()).is_err()
         {
             return Err("invalid telemetry recording limits");
         }
@@ -80,9 +76,10 @@ impl RecordingConfig {
                     .min(MAX_BATCH_CHUNKS),
             )
             .ok_or("telemetry batch size overflow")?;
-        if records.saturating_mul(encoding::MAX_EVENT_BYTES) > encoding::MAX_BUFFER_BYTES {
-            return Err("telemetry batch exceeds encoder capacity");
-        }
+        records
+            .checked_mul(encoding::MAX_EVENT_BYTES)
+            .and_then(|bytes| u32::try_from(bytes).ok())
+            .ok_or("telemetry batch exceeds encoder capacity")?;
         Ok(())
     }
 }
@@ -98,10 +95,39 @@ mod tests {
         assert!(recording.validate_transport(&transport).is_ok());
         recording.flush_interval_duration = Duration::ZERO;
         assert!(recording.validate().is_err());
-        recording.flush_interval_duration = Duration::MAX;
-        assert!(recording.validate().is_err());
         recording = RecordingConfig::default();
         transport.chunk_capacity = NonZeroUsize::new(usize::MAX).unwrap();
         assert!(recording.validate_transport(&transport).is_err());
+    }
+
+    #[test]
+    fn recording_target_accepts_u32_limit() {
+        let mut recording = RecordingConfig {
+            target_bytes: NonZeroUsize::new(encoding::MAX_BUFFER_BYTES).unwrap(),
+            ..RecordingConfig::default()
+        };
+        assert!(recording.validate().is_ok());
+        if let Some(above_limit) = encoding::MAX_BUFFER_BYTES.checked_add(1) {
+            recording.target_bytes = NonZeroUsize::new(above_limit).unwrap();
+            assert!(recording.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn transport_checks_encoding_multiplication_and_u32_limit() {
+        let recording = RecordingConfig::default();
+        let mut transport =
+            crate::transport::ChunkConfig::for_producers(NonZeroUsize::new(1).unwrap());
+        let max_records = encoding::MAX_BUFFER_BYTES / encoding::MAX_EVENT_BYTES;
+        transport.chunk_capacity = NonZeroUsize::new(max_records).unwrap();
+        assert!(recording.validate_transport(&transport).is_ok());
+        for records in [
+            max_records + 1,
+            usize::MAX / encoding::MAX_EVENT_BYTES + 1,
+            usize::MAX,
+        ] {
+            transport.chunk_capacity = NonZeroUsize::new(records).unwrap();
+            assert!(recording.validate_transport(&transport).is_err());
+        }
     }
 }

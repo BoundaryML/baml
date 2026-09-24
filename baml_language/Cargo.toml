@@ -71,6 +71,7 @@ version = "0.0.0-beta"
 
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
+btel_bcs = { path = "crates/btel_bcs", default-features = false }
 btel_snapshot = { path = "crates/btel_snapshot" }
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
@@ -124,7 +125,7 @@ btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }
 btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
-btel_publisher = { path = "crates/btel_publisher" }
+btel_recorder = { path = "crates/btel_recorder" }
 btel_file = { path = "crates/btel_file" }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
@@ -170,6 +171,7 @@ bytes = "1"
 bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "=0.29.0"
+cc = "1.2"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
@@ -183,7 +185,6 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
 ena = "0.14"
-find-msvc-tools = "0.1"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
