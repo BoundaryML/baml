@@ -279,8 +279,28 @@ impl BexStr {
 
     /// Finds `needle` and returns its codepoint index, or `None`.
     pub fn char_index_of(&self, needle: &str) -> Option<usize> {
-        let byte_idx = self.as_str().find(needle)?;
-        Some(bytecount::num_chars(&self.as_bytes()[..byte_idx]))
+        self.char_index_of_from(needle, 0)
+    }
+
+    /// Finds `needle` starting at codepoint `start`, returning an absolute
+    /// codepoint index. A start past the end returns `None`, even for an empty
+    /// needle. Searches the borrowed suffix without allocating a substring or
+    /// recounting the entire suffix's character metadata.
+    pub fn char_index_of_from(&self, needle: &str, start: usize) -> Option<usize> {
+        let text = self.as_str();
+        let char_len = self.char_count();
+        if start > char_len {
+            return None;
+        }
+        let byte_start = if char_len == text.len() {
+            // Every character is ASCII, so codepoint and byte offsets coincide.
+            start
+        } else {
+            byte_offset_of_nth_codepoint(text.as_bytes(), start)
+        };
+        let suffix = &text[byte_start..];
+        let relative = suffix.find(needle)?;
+        Some(start + bytecount::num_chars(&suffix.as_bytes()[..relative]))
     }
 
     /// Finds the *last* occurrence of `needle` and returns the codepoint index

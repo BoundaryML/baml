@@ -4160,6 +4160,20 @@ impl BexVm {
         }
     }
 
+    /// Checked counterpart of [`Self::pop_bigint_operand`] for the generic
+    /// `BinOp` path, where no static type vouches for the operand: `None`
+    /// unless `v` is an `int` or an `Object::Bigint`. Classifies without
+    /// widening an `int` to a `BigInt`.
+    fn bigint_operand_of(&self, v: Value) -> Option<BigintOperand> {
+        if let Some(n) = v.as_int() {
+            Some(BigintOperand::Int(n))
+        } else if let Some(ptr) = v.as_object_ptr() {
+            matches!(self.get_object(ptr), Object::Bigint(_)).then_some(BigintOperand::Heap(ptr))
+        } else {
+            None
+        }
+    }
+
     /// Resolve a [`BigintOperand`] to a borrowable `BigInt`.
     ///
     /// A heap operand borrows the heap-resident `BigInt` directly; an `int`
@@ -4209,7 +4223,8 @@ impl BexVm {
         }
     }
 
-    /// Evaluate a specialized bigint arithmetic / bitwise / shift op.
+    /// Evaluate a bigint arithmetic / bitwise / shift op for the specialized
+    /// `*Bigint` opcodes and the generic `BinOp` path.
     ///
     /// Concentrates all the caps and panics that the per-opcode handlers used
     /// to copy-paste. The borrows of the two operands are scoped to a block so
@@ -6803,6 +6818,14 @@ impl BexVm {
                 }
             };
             Value::object(self.alloc_float(f))
+        } else if let Some(l) = self.bigint_operand_of(left)
+            && let Some(r) = self.bigint_operand_of(right)
+        {
+            // Spawn-shared operands intentionally use generic opcodes because
+            // another task may update the cell between evaluations. Preserve
+            // bigint semantics on that path instead of falling through to the
+            // object/object string-concatenation case.
+            self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
             let ls = self.as_string(&left)?;
             let rs = self.as_string(&right)?;

@@ -942,6 +942,13 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
     },
+    /// A constant pattern argument that does not compile.
+    InvalidRegexPattern {
+        expr: ExprId,
+        kind: sys_regex::ErrorKind,
+        message: String,
+        offset: Option<usize>,
+    },
     MountedPackageCallUnsupported {
         expr: ExprId,
         path: baml_type::Name,
@@ -5214,8 +5221,121 @@ impl<'db> InferenceContext<'db> {
         self.report_mounted_reserved_call(call, callee);
         self.seed_implicit_llm_schema(body, call, callee, args);
         let ret = self.check_call_args(body, call, callee, &callee_fn_ty, bound_receiver, args);
+        self.report_constant_regex_pattern(body, call, callee);
         self.default_uncontracted_session_eval(body, call, callee);
         ret
+    }
+
+    /// Whether `callee` names `baml.regex.new`.
+    ///
+    /// Both resolution roads are checked. Compiled from source (the usual case
+    /// — the stdlib type-checks alongside user files) the callee is a
+    /// `Free { func }` whose source `FunctionLoc` equals the one
+    /// `baml.regex.new` resolves to. From a source-less package, its
+    /// external declaration address identifies the trusted builtin slot.
+    ///
+    fn is_regex_new(&mut self, callee: ExprId) -> bool {
+        let resolution = self
+            .result
+            .member_resolutions
+            .get(&callee)
+            .or_else(|| {
+                self.result
+                    .path_resolutions
+                    .get(&callee)
+                    .and_then(|path| path.segments.last())
+                    .and_then(|segment| segment.resolution.as_ref())
+            })
+            .cloned();
+        match resolution {
+            Some(MemberResolution::Free {
+                func: DeclRef::Source(func),
+            }) => {
+                let segments = [
+                    baml_type::Name::new("baml"),
+                    baml_type::Name::new("regex"),
+                    baml_type::Name::new("new"),
+                ];
+                matches!(
+                    self.lower.resolve_value(&segments),
+                    Some(ResolvedValue::Source(Definition::Function(target)))
+                        if target == func
+                )
+            }
+            Some(MemberResolution::Free {
+                func: DeclRef::External(external),
+            }) => matches!(
+                external.slot(self.db),
+                crate::callable::ExternalCallTarget::Free { function }
+                    if self.lang().is(baml_base::LangPackage::Baml, function.root())
+                        && function.namespace().len() == 1
+                        && function.namespace()[0].as_str() == "regex"
+                        && function.name().as_str() == "new"
+            ),
+            _ => false,
+        }
+    }
+
+    /// Compile a constant `baml.regex.new` pattern now, so a typo in a
+    /// literal is a source diagnostic instead of a throw the program has to
+    /// reach to discover.
+    ///
+    /// The check goes through the same `sys_regex::Program::compile` the
+    /// runtime uses, so it cannot drift: a pattern accepted here is accepted
+    /// there, with the same classification and message. A dynamically built
+    /// pattern is left alone — `baml.regex.Error` and its span are what that
+    /// case has.
+    fn report_constant_regex_pattern(&mut self, body: &ExprBody, call: ExprId, callee: ExprId) {
+        // Use the same parameter bindings as lowering, including reordered
+        // named arguments. An unbound duplicate must not replace the pattern
+        // or dialect that the call will actually use.
+        let Some(plan) = self.result.call_plans.get(&call) else {
+            return;
+        };
+        let provided = |index| {
+            plan.bindings.iter().find_map(|binding| match binding {
+                ParamBinding::Provided { param_index, arg } if *param_index == index => Some(*arg),
+                _ => None,
+            })
+        };
+        let (Some(expr), backtracking_arg) = (provided(0), provided(1)) else {
+            return;
+        };
+        let Expr::Literal(Literal::String(pattern)) = &body.exprs[expr] else {
+            return;
+        };
+        if !self.is_regex_new(callee) {
+            return;
+        }
+
+        // The dialect follows the `backtracking` argument when it is itself
+        // constant. When it is computed, only a pattern *both* dialects reject
+        // is reported — flagging one that a `backtracking = true` call would
+        // have accepted would be a false positive.
+        let backtracking = backtracking_arg.map_or(Some(false), |arg| match &body.exprs[arg] {
+            Expr::Literal(Literal::Bool(value)) => Some(*value),
+            _ => None,
+        });
+        let error = match backtracking {
+            Some(backtracking) => sys_regex::Program::compile(pattern, backtracking).err(),
+            None => sys_regex::Program::compile(pattern, false)
+                .err()
+                .and_then(|_| sys_regex::Program::compile(pattern, true).err()),
+        };
+        let Some(error) = error else {
+            return;
+        };
+        // The engine reports a byte offset into the pattern; the user reads
+        // characters, and `baml.regex.Error` reports codepoints too.
+        let offset = error
+            .span
+            .map(|(start, _)| sys_regex::char_offsets(pattern, &[start])[0]);
+        self.pending_diags.push(PendingDiag::InvalidRegexPattern {
+            expr,
+            kind: error.kind,
+            message: error.message,
+            offset,
+        });
     }
 
     fn report_mounted_reserved_call(&mut self, call: ExprId, callee: ExprId) {
@@ -5642,7 +5762,14 @@ impl<'db> InferenceContext<'db> {
             for (index, arg) in args.iter().enumerate() {
                 match &arg.label {
                     Some(label) => {
-                        if seen_labels.contains(&label) {
+                        // A named argument can also duplicate a parameter
+                        // already supplied positionally. Report it once,
+                        // including when the label itself was repeated.
+                        let duplicates_binding = !label_fallback[index]
+                            && matched[index].is_some_and(|param_index| {
+                                slots[param_index].is_some_and(|first| first != arg.expr)
+                            });
+                        if seen_labels.contains(&label) || duplicates_binding {
                             self.pending_diags.push(PendingDiag::DuplicateNamedArg {
                                 expr: arg.expr,
                                 name: label.clone(),
@@ -11126,6 +11253,19 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
+                    PendingDiag::InvalidRegexPattern {
+                        expr,
+                        kind,
+                        message,
+                        offset,
+                    } => (
+                        TirTypeError::InvalidRegexPattern {
+                            kind,
+                            message,
+                            offset,
+                        },
+                        expr,
+                    ),
                     PendingDiag::ScopedTypeEscapesBlock {
                         at,
                         name,
