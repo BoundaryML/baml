@@ -411,6 +411,8 @@ pub enum DiagnosticId {
     /// name, as in source. Returns once the interface carries the names of
     /// its unexported declarations.
     ServedInterfaceExportsFunctionsOnly,
+    /// A constant pattern passed to `baml.regex.new` does not compile (E0174).
+    InvalidRegexPattern,
 }
 
 impl DiagnosticId {
@@ -618,6 +620,7 @@ impl DiagnosticId {
             DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
             DiagnosticId::ReflectSpecializationFailed => "E0169",
             DiagnosticId::InterfaceMethodMissingThrows => "E0170",
+            DiagnosticId::InvalidRegexPattern => "E0174",
             DiagnosticId::TypeMustBeKnown => "E0155",
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",

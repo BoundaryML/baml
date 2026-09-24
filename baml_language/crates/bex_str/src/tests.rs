@@ -392,6 +392,26 @@ fn occurrence_index_ops_match_std_oracle() {
                 want_first,
                 "char_index_of({needle:?}) for {s:?}"
             );
+            for start in 0..=s.chars().count() + 1 {
+                let suffix: String = s.chars().skip(start).collect();
+                let expected = if start > s.chars().count() {
+                    None
+                } else {
+                    suffix
+                        .find(needle)
+                        .map(|b| start + suffix[..b].chars().count())
+                };
+                assert_eq!(
+                    bex.char_index_of_from(needle, start),
+                    expected,
+                    "char_index_of_from({needle:?}, {start}) for {s:?}"
+                );
+            }
+            assert_eq!(
+                bex.char_index_of_from(needle, usize::MAX),
+                None,
+                "out-of-bounds search for {s:?}"
+            );
             assert_eq!(
                 bex.char_last_index_of(needle),
                 want_last,
