@@ -568,14 +568,21 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
     set
 }
 
-/// Count definition sites (assignments) for each local across all blocks.
+/// Count definition sites for each local across all blocks: assignments,
+/// terminator destinations, and the runtime's write of a handler's error and
+/// context locals when it lands there.
 ///
-/// A local is "single-definition" if it appears as an assignment destination
-/// in exactly one statement. Locals defined in multiple branches (e.g., a temp
-/// that is assigned in both arms of an if-else) have a count > 1 and must not
-/// be constant-propagated.
+/// A local is "single-definition" if it has exactly one of these. Locals
+/// defined in multiple branches (e.g., a temp that is assigned in both arms of
+/// an if-else) have a count > 1 and must not be constant-propagated; neither
+/// may a catch binding the handler body reassigns.
 fn count_local_defs(body: &MirFunctionBody<'_>) -> Vec<usize> {
     let mut defs = vec![0usize; body.locals.len()];
+    for (_, landing) in body.handlers() {
+        for local in std::iter::once(landing.error_local).chain(landing.context_local) {
+            defs[local.0] += 1;
+        }
+    }
 
     for block in &body.blocks {
         for stmt in &block.statements {

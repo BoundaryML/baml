@@ -703,35 +703,6 @@ fn collect_def_use<'db>(body: &MirFunctionBody<'db>) -> HashMap<Local, LocalDefU
         }
     }
 
-    // Unwind error locals are implicitly used by the exception table —
-    // the VM writes into these slots when an exception is caught. Without
-    // this, the locals may have zero recorded uses and get classified Dead,
-    // causing a panic when the emitter tries to allocate a slot for them.
-    for (block_id, local) in body.unwind_error_locals() {
-        if let Some(du) = def_use.get_mut(&local) {
-            du.uses.push(UseLocation {
-                block: block_id,
-                statement_ref: StatementRef::Terminator,
-            });
-        }
-    }
-
-    // The VM also materializes the caught error's `baml.errors.Context` into the
-    // context (second-binding) slot, and the BEP-042 cause-chain pre-walk reads
-    // it from an *enclosing* handler — uses the static walk can't see. Mark it
-    // used so it isn't classified Dead and always gets a slot, even when the
-    // `ctx` binding looks statically dead.
-    for (handler, landing) in body.handlers() {
-        if let Some(ctx_local) = landing.context_local
-            && let Some(du) = def_use.get_mut(&ctx_local)
-        {
-            du.uses.push(UseLocation {
-                block: handler,
-                statement_ref: StatementRef::Terminator,
-            });
-        }
-    }
-
     def_use
 }
 
@@ -1442,6 +1413,14 @@ fn classify_locals(
             _ => None,
         })
         .collect();
+    // The runtime writes a handler's error and context locals when it lands
+    // there, a definition no statement records, and the exception table names
+    // their slots; the BEP-042 cause walk also reads an enclosing handler's
+    // context slot. Like parameters, they always have a slot of their own.
+    let landing_locals: HashSet<Local> = body
+        .handlers()
+        .flat_map(|(_, landing)| std::iter::once(landing.error_local).chain(landing.context_local))
+        .collect();
 
     for (idx, _local_decl) in body.locals.iter().enumerate() {
         let local = Local(idx);
@@ -1469,7 +1448,7 @@ fn classify_locals(
             // parameter) that `LoadDeref`/`StoreDeref` go through.
             // Virtual/CopyOf/PhiLike classification would inline away the slot.
             LocalClassification::Real
-        } else if narrow_bind_destinations.contains(&local) {
+        } else if narrow_bind_destinations.contains(&local) || landing_locals.contains(&local) {
             LocalClassification::Real
         } else if idx != 0
             && du.uses.is_empty()

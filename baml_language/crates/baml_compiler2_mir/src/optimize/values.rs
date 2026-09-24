@@ -19,15 +19,7 @@ fn scalar(constant: &Constant<'_>) -> bool {
 /// Propagate immutable scalar definitions, including named bindings. Keeping the
 /// definitions until ordinary DCE preserves locals used in projection positions.
 pub(super) fn fold_constants(body: &mut MirFunctionBody<'_>, arity: usize) {
-    let mut defs = super::count_local_defs(body);
-    for (_, local) in body.unwind_error_locals() {
-        defs[local.0] += 1;
-    }
-    for (_, landing) in body.handlers() {
-        if let Some(local) = landing.context_local {
-            defs[local.0] += 1;
-        }
-    }
+    let defs = super::count_local_defs(body);
     let mut constants = HashMap::new();
     loop {
         let previous = constants.len();

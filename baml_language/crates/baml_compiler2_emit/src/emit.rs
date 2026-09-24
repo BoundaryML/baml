@@ -2752,10 +2752,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
         }
         for (start_pc, end_pc, handler) in coalesced {
-            let Some((handler_pc, error_slot, stack_trace_slot)) = self.landing_slots(mir, handler)
-            else {
-                continue;
-            };
+            let (handler_pc, error_slot, stack_trace_slot) = self.landing_slots(mir, handler);
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc,
@@ -2765,9 +2762,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             });
         }
         for (start_pc, end_pc, handler) in handling {
-            let Some((handler_pc, _, stack_trace_slot)) = self.landing_slots(mir, handler) else {
-                continue;
-            };
+            let (handler_pc, _, stack_trace_slot) = self.landing_slots(mir, handler);
             self.bytecode
                 .handler_context_table
                 .push(HandlerContextEntry {
@@ -2809,14 +2804,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Where the VM lands for `handler`: its PC and the slots of its error
-    /// and context locals. `None` when the error local was optimized away
-    /// (an inline `throw X catch …` the MIR lowers as a direct jump needs no
-    /// VM-level entry).
+    /// and context locals (landing locals are always `Real`).
     fn landing_slots(
         &self,
         mir: &MirFunctionBody<'ctx>,
         handler: BlockId,
-    ) -> Option<(usize, usize, usize)> {
+    ) -> (usize, usize, usize) {
         use bex_vm_types::bytecode::ExceptionTableEntry;
 
         let landing = mir
@@ -2830,18 +2823,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                  a block unwinds to it but it was dropped"
             )
         });
-        let Some(&error_slot) = self.local_slots.get(&landing.error_local) else {
-            log::debug!(
-                "exception table: error local {:?} has no slot (optimized away)",
-                landing.error_local,
-            );
-            return None;
+        let slot_of = |local: Local| {
+            *self.local_slots.get(&local).unwrap_or_else(|| {
+                unreachable!("landing local {local:?} of handler {handler:?} has no slot")
+            })
         };
+        let error_slot = slot_of(landing.error_local);
         let stack_trace_slot = landing
             .context_local
-            .and_then(|local| self.local_slots.get(&local).copied())
-            .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
-        Some((handler_pc, error_slot, stack_trace_slot))
+            .map_or(ExceptionTableEntry::NO_STACK_TRACE, slot_of);
+        (handler_pc, error_slot, stack_trace_slot)
     }
 
     // ========================================================================
