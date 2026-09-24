@@ -15,13 +15,19 @@
 # `runs-on`.
 #
 # Each job runs the same cargo and test commands as its upstream job, so the two
-# timings compare. When you change one of these upstream jobs, change its copy here too:
+# timings compare. Each job also has the same key and the same name as its upstream
+# job, so a check here reads as "Trunk Kiln shadow / <upstream check name>". When you
+# change one of these upstream jobs, change its copy here too:
 #
-#   real-cargo-test-linux  <- cargo-tests.reusable.yaml     cargo-test-linux
-#   uncovered-musl         <- cargo-tests.reusable.yaml     cargo-test-linux-musl
-#   rest-sdk-tests         <- cargo-tests.reusable.yaml     sdk-tests (the linux legs only)
-#   rest-snapshot-tests    <- compiler-tests.reusable.yaml  snapshot-tests
-#   rest-sdk-parity-check  <- ci.yaml                       sdk_parity_check
+#   cargo-test-linux       <- cargo-tests.reusable.yaml
+#   cargo-test-linux-musl  <- cargo-tests.reusable.yaml
+#   sdk-tests              <- cargo-tests.reusable.yaml (the typescript and csharp linux legs only)
+#   snapshot-tests         <- compiler-tests.reusable.yaml
+#   sdk_parity_check       <- ci.yaml
+#
+# The names are safe only while no upstream check with the same name is a required
+# status check: a required check matches by name, and these jobs always pass because
+# of `continue-on-error`. Rename a job here before you make its upstream check required.
 #
 # These are the only differences, and each one is specific to Kiln:
 #   - The checkout keeps `clean: false`, and the backdate step follows it. The runner
@@ -58,8 +64,8 @@ permissions:
   contents: read
 
 jobs:
-  real-cargo-test-linux:
-    name: "real job (cargo test linux-gnu)"
+  cargo-test-linux:
+    name: "cargo test (x86_64-unknown-linux-gnu)"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -178,8 +184,8 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-linux.html
           if-no-files-found: ignore
 
-  uncovered-musl:
-    name: "uncovered (musl)"
+  cargo-test-linux-musl:
+    name: "cargo test (x86_64-unknown-linux-musl)"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -295,8 +301,8 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-linux-musl.html
           if-no-files-found: ignore
 
-  rest-sdk-tests:
-    name: "rest: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
+  sdk-tests:
+    name: "sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -599,8 +605,8 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-sdk-tests-${{ matrix.sdk-label }}-${{ matrix.os-label }}.html
           if-no-files-found: ignore
 
-  rest-snapshot-tests:
-    name: "rest: compiler and documentation tests"
+  snapshot-tests:
+    name: "Compiler and documentation tests"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
@@ -744,8 +750,8 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-snapshot.html
           if-no-files-found: ignore
 
-  rest-sdk-parity-check:
-    name: "rest: SDK parity lint"
+  sdk_parity_check:
+    name: "SDK parity lint"
     # The runner boots from the organization's default CI template, which carries a
     # warm `target/`. An administrator must approve that template for pull requests
     # from forks, or these jobs get the plain base image and compile from scratch.
