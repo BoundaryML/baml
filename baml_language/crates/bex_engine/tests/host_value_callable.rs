@@ -591,8 +591,8 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
             f(value)
         }
     "#;
-    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default());
-    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()), baml_type::TyAttr::default());
+    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()));
+    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()));
     let arc = register_host_callable({
         let int_list = int_list.clone();
         let string_list = string_list.clone();
@@ -1442,7 +1442,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                 assert!(
                     matches!(
                         &metadata.selected_option,
-                        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+                        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
                     ),
                     "expected the Failure interface arm, got {:?}",
                     metadata.selected_option,
@@ -1497,7 +1497,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
     };
     assert!(matches!(
         &metadata.selected_option,
-        RuntimeTy::Interface(name, _, _, _) if name.to_string() == "user.Failure"
+        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
     ));
     assert!(matches!(
         value.as_ref(),

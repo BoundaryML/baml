@@ -45,20 +45,23 @@ use self::{
 /// index, inference, member enumeration) are Salsa-cached underneath, and the
 /// speculative parse is one lex+parse of one file.
 pub fn completions(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Vec<Completion> {
     let Some(context) = CompletionContext::new(db, file, offset) else {
         return Vec::new();
     };
-    let mut out = Completions::new(context.source_range);
+    // The fragment already typed. The accumulator reads it to decide whether
+    // the reader is reaching for a package's internals on purpose.
+    let typed = &file.text(db)[context.source_range];
+    let mut out = Completions::new(db, file, context.source_range, typed);
     match &context.analysis {
         CompletionAnalysis::Path {
             kind,
             qualifier: Some(target),
         } => {
-            members::complete(db, file, target, *kind, &mut out);
+            members::complete(db, target, *kind, &mut out);
         }
         CompletionAnalysis::Path {
             kind: PathKind::Expr,
@@ -75,17 +78,17 @@ pub fn completions(
         CompletionAnalysis::CallArgument { call } => {
             // A slot takes a named argument OR an expression, so it offers
             // both; relevance is what puts the callee's own labels first.
-            args::complete(db, file, call, &mut out);
+            args::complete(call, &mut out);
             values::complete(db, file, offset, &mut out);
         }
         CompletionAnalysis::RecordField { literal } => {
-            record::complete(db, file, literal, &mut out);
+            record::complete(db, literal, &mut out);
         }
         CompletionAnalysis::Item { container } => {
             declarations::complete_items(*container, &mut out);
         }
-        CompletionAnalysis::Attribute => {
-            declarations::complete_attributes(&mut out);
+        CompletionAnalysis::Attribute { position } => {
+            declarations::complete_attributes(*position, &mut out);
         }
         CompletionAnalysis::Unsupported => {}
     }
@@ -294,8 +297,8 @@ function f(seed: int) -> int throws never {
 
     #[test]
     fn a_synthesized_companion_is_never_offered() {
-        // `Summarize$stream` and friends resolve, but no reader can write a
-        // `$` in a name, so an enumeration of what to WRITE drops them.
+        // `summarize@stream` and friends resolve, but no reader can write an
+        // `@` in a name, so an enumeration of what to WRITE drops them.
         let test = CursorTest::new(
             r#"function summarize(input: string) -> string {
     client: "openai/gpt-4o"
@@ -317,11 +320,11 @@ function f() -> int throws never {
             "the function itself completes: {labels:?}"
         );
         assert!(
-            !labels.iter().any(|label| label.contains('$')),
+            !labels.iter().any(|label| label.contains('@')),
             "no companion spelling is offerable: {:?}",
             labels
                 .iter()
-                .filter(|label| label.contains('$'))
+                .filter(|label| label.contains('@'))
                 .collect::<Vec<_>>()
         );
     }
@@ -872,7 +875,7 @@ function f() -> int {
     }
 
     #[test]
-    fn a_package_qualifier_hides_the_companion_carriers() {
+    fn a_package_qualifier_hides_only_the_carriers_with_another_spelling() {
         let test = CursorTest::new(
             r#"function f() -> int {
     let a = baml.<[CURSOR]
@@ -883,18 +886,100 @@ function f() -> int {
         let items = complete(&test);
         let labels = labels(&items);
         // `baml.Int` is where `int`'s methods live, and `int` is how it is
-        // written; the same for `baml.Array` (`T[]`) and `baml.Map`
-        // (`map<K, V>`). Listing the carrier teaches a spelling nobody uses.
-        for carrier in ["Int", "String", "Array", "Map", "Bool", "TypeValue"] {
+        // written. Listing the carrier teaches a spelling nobody uses.
+        for carrier in [
+            "Int",
+            "Bigint",
+            "Float",
+            "String",
+            "Bool",
+            "Null",
+            "Uint8Array",
+        ] {
             assert!(
                 !labels.contains(&carrier),
-                "`baml.{carrier}` is a companion carrier, not a name to write: {labels:?}"
+                "`{carrier}` is reached as its alias, not by its carrier path: {labels:?}"
+            );
+        }
+        // The containers have no such alias: neither `int[].filled` nor
+        // `map<string, int>.of` parses, so hiding the carrier would leave
+        // their statics with no spelling at all.
+        for carrier in ["Array", "Map"] {
+            assert!(
+                labels.contains(&carrier),
+                "`baml.{carrier}` is the only handle on its statics: {labels:?}"
             );
         }
         assert!(
             labels.contains(&"iter") && labels.contains(&"Sortable"),
             "the namespace's own items and children still come back: {labels:?}"
         );
+    }
+
+    /// `reflect.Type`'s class name IS the builtin's canonical spelling
+    /// (`TYPE_SYSTEM.md`), not a stand-in for one, so the carrier rule must
+    /// not reach it — there is nothing else to write.
+    /// `baml.media` declares nothing BUT carriers — `Image`, `Audio`,
+    /// `Video`, `Pdf` are the classes `image`, `audio`, `video`, `pdf`
+    /// denote — so hiding carriers empties that qualifier entirely. That is
+    /// the rule working, not failing: the alias is what source writes, and
+    /// it is offered in every position where a reader can write one, so
+    /// nothing is stranded behind the empty list.
+    #[test]
+    fn a_namespace_of_nothing_but_carriers_offers_nothing() {
+        const ALIASES: [&str; 4] = ["image", "audio", "video", "pdf"];
+
+        let carrier_path =
+            CursorTest::new("function f() -> int {\n    let a = baml.media.<[CURSOR]\n    0\n}\n");
+        let under_media = complete(&carrier_path);
+        assert!(
+            labels(&under_media).is_empty(),
+            "every name under `baml.media` is reached by its alias instead"
+        );
+
+        for source in [
+            // A type position...
+            "function f(a: <[CURSOR]) -> int throws never { 0 }\n",
+            // ...and a value position, where the alias roots
+            // `image.from_base64(..)`.
+            "function f() -> int {\n    let a = <[CURSOR]\n    0\n}\n",
+        ] {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            let offered = labels(&items);
+            for alias in ALIASES {
+                assert!(
+                    offered.contains(&alias),
+                    "`{alias}` is the spelling the reader needs: {offered:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_self_spelled_builtin_is_offered_under_its_own_path() {
+        for (source, expected) in [
+            (
+                "function f() -> int {\n    let a = reflect.<[CURSOR]\n    0\n}\n",
+                "Type",
+            ),
+            (
+                "function f(a: reflect.<[CURSOR]) -> int throws never { 0 }\n",
+                "Type",
+            ),
+            (
+                "function f() -> int {\n    let a = baml.future.<[CURSOR]\n    0\n}\n",
+                "Future",
+            ),
+        ] {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            let labels = labels(&items);
+            assert!(
+                labels.contains(&expected),
+                "`{expected}` has no spelling but its own path: {labels:?}"
+            );
+        }
     }
 
     #[test]
@@ -1157,7 +1242,7 @@ function f() -> int throws <[CURSOR]
             "description",
             "skip",
             "stream.done",
-            "stream.with_state",
+            "stream.must_exist",
         ] {
             assert!(labels.contains(&name), "missing `{name}`: {labels:?}");
         }
@@ -1166,6 +1251,37 @@ function f() -> int throws <[CURSOR]
                 .iter()
                 .all(|item| item.kind == CompletionKind::Attribute)
         );
+    }
+
+    #[test]
+    fn an_attribute_position_offers_only_what_has_meaning_there() {
+        // The menu is the schema table filtered to the position: the
+        // streaming attributes belong to class fields and classes, `skip` to
+        // members, and an interface, its fields, and a function take none.
+        let cases: [(&str, &[&str]); 6] = [
+            (
+                "enum E {\n    A @<[CURSOR]\n}\n",
+                &["alias", "description", "skip"],
+            ),
+            (
+                "class C {\n    x: int\n    @@<[CURSOR]\n}\n",
+                &["alias", "description", "stream.done"],
+            ),
+            (
+                "enum E {\n    A\n    @@<[CURSOR]\n}\n",
+                &["alias", "description"],
+            ),
+            ("interface I {\n    x: int @<[CURSOR]\n}\n", &[]),
+            ("interface I {\n    @@<[CURSOR]\n}\n", &[]),
+            ("@@<[CURSOR]\nfunction f() -> int {\n    1\n}\n", &[]),
+        ];
+        for (source, expected) in cases {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            let mut labels = labels(&items);
+            labels.sort_unstable();
+            assert_eq!(labels, expected, "in {source:?}");
+        }
     }
 
     #[test]
@@ -1187,5 +1303,152 @@ function f() -> int throws <[CURSOR]
         // Variant names are the reader's own; there is nothing to offer.
         let test = CursorTest::new("enum E {\n    A\n    <[CURSOR]\n}\n");
         assert!(complete(&test).is_empty());
+    }
+
+    /// Until BAML has `public`/`private`, a leading `_` is how the stdlib
+    /// marks a helper as its own business. The tests below are the rule's
+    /// two halves: the stdlib's internals stay out of the list, and
+    /// everything in the reader's own source — or asked for by name —
+    /// stays in.
+    #[test]
+    fn the_stdlibs_internal_members_are_not_offered() {
+        let test = CursorTest::new(
+            r#"function f() -> int throws never {
+    let t = reflect.Type.of<int>();
+    t.<[CURSOR]
+    0
+}
+"#,
+        );
+        let labels = labels(&complete(&test))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert!(!labels.is_empty(), "the receiver still offers its surface");
+        assert!(
+            !labels.iter().any(|label| label.starts_with('_')),
+            "`reflect.Type`'s internals are the stdlib's business, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn a_typed_underscore_asks_for_the_internals() {
+        let test = CursorTest::new(
+            r#"function f() -> int throws never {
+    let t = reflect.Type.of<int>();
+    t._<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        let internal = items
+            .iter()
+            .find(|item| item.label == "_to_string_impl")
+            .unwrap_or_else(|| {
+                unreachable!(
+                    "a typed `_` brings the internals back, got {:?}",
+                    labels(&items)
+                )
+            });
+        // The `_` the reader typed is part of what an accepted item
+        // replaces, or the insert would read `t.__to_string_impl`.
+        assert_eq!(
+            &test.cursor.file.text(&test.db)[internal.source_range],
+            "_",
+            "the accepted item replaces the typed fragment"
+        );
+    }
+
+    #[test]
+    fn the_stdlibs_internal_items_are_not_offered_under_its_qualifier() {
+        let hidden = CursorTest::new(
+            r#"function f() -> int throws never {
+    baml.time.<[CURSOR]
+    0
+}
+"#,
+        );
+        let hidden_labels = labels(&complete(&hidden))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert!(hidden_labels.iter().any(|label| label == "Instant"));
+        assert!(
+            !hidden_labels.iter().any(|label| label.starts_with('_')),
+            "`baml.time`'s helpers are the stdlib's own, got {hidden_labels:?}"
+        );
+
+        let asked = CursorTest::new(
+            r#"function f() -> int throws never {
+    baml.time._<[CURSOR]
+    0
+}
+"#,
+        );
+        let asked_items = complete(&asked);
+        let asked_labels = labels(&asked_items);
+        assert!(
+            asked_labels.contains(&"_tz_offset_at"),
+            "a typed `_` reaches them, got {asked_labels:?}"
+        );
+    }
+
+    #[test]
+    fn a_type_qualifier_hides_the_stdlibs_internal_statics() {
+        let test = CursorTest::new(
+            r#"function f() -> int throws never {
+    int.<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        assert!(labels.contains(&"max_value"), "got {labels:?}");
+        assert!(
+            !labels.iter().any(|label| label.starts_with('_')),
+            "the UFCS rung reads the same convention, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn the_readers_own_internals_are_always_offered() {
+        // The reader's own source, so the convention has nothing to hide:
+        // a member through a dot, a top-level item, and a local.
+        let test = CursorTest::new(
+            r#"class Point {
+    x: int
+
+    function _norm(self) -> int throws never { self.x }
+}
+
+function f(p: Point) -> int throws never {
+    p.<[CURSOR]
+    0
+}
+"#,
+        );
+        let dotted = complete(&test);
+        let dotted_labels = labels(&dotted);
+        assert!(dotted_labels.contains(&"_norm"), "got {dotted_labels:?}");
+
+        let bare = CursorTest::new(
+            r#"function _helper() -> int throws never { 1 }
+
+function f() -> int throws never {
+    let _seen = 1;
+    <[CURSOR]
+    0
+}
+"#,
+        );
+        let bare_items = complete(&bare);
+        let bare_labels = labels(&bare_items);
+        assert!(
+            bare_labels.contains(&"_helper"),
+            "own item: {bare_labels:?}"
+        );
+        assert!(bare_labels.contains(&"_seen"), "own local: {bare_labels:?}");
     }
 }

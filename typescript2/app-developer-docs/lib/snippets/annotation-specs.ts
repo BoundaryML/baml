@@ -45,6 +45,28 @@ export const annotationSpecs = {
       text: 'catch (e) {\n        BadToolInput => e.message,\n    }',
     },
   ],
+  'basics-function': [
+    {
+      kind: 'syntax',
+      label: 'Default; override by name',
+      mark: 'underbrace',
+      text: 'chars_per_token: int = 4',
+    },
+    {
+      kind: 'success',
+      label: 'Returned to the caller',
+      mark: 'underbrace',
+      text: 'text.trim().length() / chars_per_token',
+    },
+  ],
+  'basics-if': [
+    {
+      kind: 'success',
+      label: 'The selected branch supplies model',
+      mark: 'bracket',
+      text: 'if (tokens <= 8_000) {\n        "mini"\n    } else if (tokens <= 100_000) {\n        "standard"\n    } else {\n        "long-context"\n    }',
+    },
+  ],
   'effect-define': [
     {
       kind: 'syntax',
@@ -200,6 +222,44 @@ export const annotationSpecs = {
       label: 'Check the error in catch',
       mark: 'bracket',
       text: '} catch (error: unknown) {\n    if (error instanceof BadToolInput) {\n      return error.message\n    }\n    throw error\n  }',
+    },
+  ],
+  'vision-ask': [
+    {
+      kind: 'recovery',
+      label: 'System: everything until the next role',
+      mark: 'left-bar',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${role("system")}\n        Answer the user\'s question about the image.',
+    },
+    {
+      kind: 'success',
+      label: 'User: text and image until the prompt ends',
+      mark: 'left-bar',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${role("user")}\n        ${question}\n        ${photo}',
+    },
+    {
+      kind: 'syntax',
+      label: 'BAML inserts the image here',
+      mark: 'underbrace',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${photo}',
+    },
+  ],
+  'vision-extract': [
+    {
+      kind: 'recovery',
+      label: 'Defines the output schema',
+      mark: 'underbrace',
+      text: 'Receipt',
+    },
+    {
+      kind: 'recovery',
+      label: 'Inserts that schema into the system message',
+      mark: 'underbrace',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Match literal BAML source.
+      text: '${ctx.output_format()}',
     },
   ],
 } satisfies Record<string, CodeAnnotation[]>;

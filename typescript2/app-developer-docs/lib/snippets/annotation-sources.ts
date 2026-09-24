@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { annotationSpecs, type CodeAnnotationId } from './annotation-specs';
 import { loadProjectSnippet } from './discovery';
@@ -11,10 +11,14 @@ export interface AnnotationSource {
 }
 
 export async function loadAnnotationSources(): Promise<AnnotationSource[]> {
-  const chapter = await readFile(
-    resolve('content/baml/book/errors.mdx'),
-    'utf8',
-  );
+  const paths = (await readdir(resolve('content'), { recursive: true }))
+    .filter((path) => path.endsWith('.mdx'))
+    .sort();
+  const chapter = (
+    await Promise.all(
+      paths.map((path) => readFile(resolve('content', path), 'utf8')),
+    )
+  ).join('\n');
   const examples = [
     ...chapter.matchAll(
       /<CodeExample language="(typescript|rust)" annotation="([^"]+)">\s*```(?:typescript|rust)\n([\s\S]*?)\n```\s*<\/CodeExample>/g,

@@ -8,4 +8,3 @@ function user.f(xs: user.MaybeInts) -> int | null throws never {
     xs?.[0] : int | null
   }
 }
-type user.MaybeInts$stream = int[] | null

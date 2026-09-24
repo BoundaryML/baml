@@ -18,10 +18,10 @@ mod tests {
         file: baml_base::SourceFile,
         name: &str,
     ) -> FunctionSignature {
-        let function = *baml_compiler2_ppir::item_data::file_functions(db, file)
+        let function = *baml_compiler2_hir::item_data::file_functions(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .name
                     .as_str()
                     == name
@@ -194,11 +194,11 @@ class Pair<L, R> {
 type Loop = Loop[]
 "#,
         );
-        let class = baml_compiler2_ppir::item_data::file_classes(&db, file)
+        let class = baml_compiler2_hir::item_data::file_classes(&db, file)
             .iter()
             .copied()
             .find(|&loc| {
-                baml_compiler2_ppir::item_data::class_data(&db, loc)
+                baml_compiler2_hir::item_data::class_data(&db, loc)
                     .name
                     .as_str()
                     == "Pair"
@@ -217,13 +217,12 @@ type Loop = Loop[]
         );
 
         // A recursive alias stays nominal in its own value - no expansion at
-        // lowering time. (Synthetic `$stream` companions sort first in the
-        // enumeration, so select by name.)
-        let alias = baml_compiler2_ppir::item_data::file_type_aliases(&db, file)
+        // lowering time.
+        let alias = baml_compiler2_hir::item_data::file_type_aliases(&db, file)
             .iter()
             .copied()
             .find(|&loc| {
-                baml_compiler2_ppir::item_data::type_alias_data(&db, loc)
+                baml_compiler2_hir::item_data::type_alias_data(&db, loc)
                     .name
                     .as_str()
                     == "Loop"

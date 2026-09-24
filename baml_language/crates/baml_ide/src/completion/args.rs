@@ -7,17 +7,10 @@
 //! declaration looked up by name — a callee that is a local holding a
 //! function value works the same way.
 
-use baml_base::SourceFile;
-
 use super::completions::Completions;
 use crate::resolve::CallPosition;
 
-pub(crate) fn complete(
-    db: &dyn baml_compiler2_ppir::Db,
-    file: SourceFile,
-    call: &CallPosition,
-    out: &mut Completions,
-) {
+pub(crate) fn complete(call: &CallPosition, out: &mut Completions<'_>) {
     let baml_type::Ty::Function { params, .. } = &call.callee else {
         return;
     };
@@ -31,6 +24,6 @@ pub(crate) fn complete(
         if call.written.iter().any(|written| written == name) {
             continue;
         }
-        out.add_argument_label(db, file, name, &param.ty);
+        out.add_argument_label(name, &param.ty);
     }
 }

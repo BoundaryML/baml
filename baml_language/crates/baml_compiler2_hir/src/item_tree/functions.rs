@@ -65,7 +65,11 @@ pub struct FunctionParam {
     pub name: Name,
     pub type_expr: Option<ast::TypeExpr>,
     pub default: Option<DefaultExprRef>,
+    /// The whole `name: Type`, which is what a diagnostic underlines.
     pub span: TextRange,
+    /// The NAME token alone — what go-to-definition lands on and what a
+    /// rename replaces.
+    pub name_span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

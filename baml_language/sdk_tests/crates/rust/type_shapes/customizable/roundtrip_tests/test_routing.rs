@@ -1,9 +1,9 @@
 //! Roundtrip coverage for the cross-namespace routing-rules suite:
 //! root (`baml_sdk`), `a`, `a::b`, `lorem`, and `ipsum` leaves.
 //!
-//! The `baml.http.Response`-typed round trips in `lorem` are covered in
-//! `test_streams.rs` (they need an engine-minted handle and can't be built
-//! host-side).
+//! The `baml.http.Response`-typed round trips in `lorem` need an
+//! engine-minted handle and can't be built host-side; the handle round trip
+//! is covered by `test_handles.rs`.
 
 use baml_sdk::a::b::{Thing, round_trip_root_foo_from_ab, round_trip_thing_from_ab};
 use baml_sdk::a::round_trip_deep_thing_from_a;

@@ -1,12 +1,12 @@
 //! Expression position: the names and keywords that can start a value.
 //!
-//! The names come from [`baml_compiler2_ppir::resolve::names_in_scope_at`],
+//! The names come from [`baml_compiler2_hir::resolve::names_in_scope_at`],
 //! the enumeration counterpart of the resolver — so what is offered is what
 //! would resolve, shadowing included, and nothing here re-walks a scope
 //! chain.
 
 use baml_base::SourceFile;
-use baml_compiler2_ppir::resolve::{ScopeNameKind, names_in_scope_at};
+use baml_compiler2_hir::resolve::{ScopeNameKind, names_in_scope_at};
 use text_size::TextSize;
 
 use super::completions::Completions;
@@ -23,21 +23,21 @@ const EXPRESSION_KEYWORDS: &[&str] = &[
 ];
 
 pub(crate) fn complete(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
-    out: &mut Completions,
+    out: &mut Completions<'_>,
 ) {
     for entry in names_in_scope_at(db, file, offset) {
         // The resolver would resolve a `$`-companion if a reader could write
         // one; none can, so the enumeration of what to WRITE drops them —
         // the same rule search enumerates by.
         if let ScopeNameKind::Item(def) = &entry.kind
-            && symbols::is_synthesized(db, &entry.name, *def)
+            && !symbols::offered_in_completion(db, &entry.name, *def)
         {
             continue;
         }
-        out.add_scope_name(db, file, &entry);
+        out.add_scope_name(&entry);
     }
 
     for keyword in EXPRESSION_KEYWORDS {

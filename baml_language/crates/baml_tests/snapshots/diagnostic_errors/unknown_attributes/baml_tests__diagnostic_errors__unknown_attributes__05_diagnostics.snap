@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0015
+
+  × unknown attribute `@custom`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`
+   ╭─[unknown_attributes.baml:5:15]
+ 5 │   name string @custom("field-extra")
+   ·               ───────────┬──────────
+   ·                          ╰── unknown attribute
+   ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@vendor.tag`; valid on a class: `@@description`, `@@alias`, `@@stream.done`
+   ╭─[unknown_attributes.baml:6:3]
+ 6 │   @@vendor.tag
+   ·   ──────┬─────
+   ·         ╰── unknown attribute
+   ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@custom`; valid on an enum variant: `@description`, `@alias`, `@skip`
+    ╭─[unknown_attributes.baml:10:7]
+ 10 │   Red @custom("variant-extra")
+    ·       ────────────┬───────────
+    ·                   ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@custom`; valid on an enum: `@@description`, `@@alias`
+    ╭─[unknown_attributes.baml:11:3]
+ 11 │   @@custom("enum-extra")
+    ·   ───────────┬──────────
+    ·              ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@custom`; no attribute is valid on an interface field
+    ╭─[unknown_attributes.baml:16:17]
+ 16 │   label: string @custom
+    ·                 ───┬───
+    ·                    ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@custom`; no attribute is valid on an interface
+    ╭─[unknown_attributes.baml:17:3]
+ 17 │   @@custom
+    ·   ────┬───
+    ·       ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@internal.uses`; no attribute is valid on a function
+    ╭─[unknown_attributes.baml:20:1]
+ 20 │ @@internal.uses(vm)
+    · ─────────┬─────────
+    ·          ╰── unknown attribute
+    ╰────
+
+  [hir] E0037
+
+  × `@description` expects exactly one string argument
+    ╭─[unknown_attributes.baml:27:12]
+ 27 │   a string @description
+    ·            ──────┬─────
+    ·                  ╰── invalid builtin declaration
+    ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `unquoted`
+    ╭─[unknown_attributes.baml:28:25]
+ 28 │   b string @description(unquoted)
+    ·                         ────┬───
+    ·                             ╰── invalid builtin declaration
+    ╰────
+
+  [hir] E0038
+
+  × `@skip` does not take any arguments
+    ╭─[unknown_attributes.baml:29:12]
+ 29 │   c string @skip("why")
+    ·            ──────┬─────
+    ·                  ╰── invalid builtin declaration
+    ╰────

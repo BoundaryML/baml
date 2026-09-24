@@ -1,5 +1,5 @@
 // docs:start example
-function Summarize(title: string, body: string, limit: int) -> string {
+function format_summary(title: string, body: string) -> string {
   title + ": " + body
 }
 // docs:end example

@@ -66,3 +66,25 @@ function mixed_join(a: bool, b: bool, cond: bool) -> bool {
     };
     x
 }
+
+// Two `??` results, each consumed only through a single-use comparison that the
+// emitter re-evaluates at the final `&&`. The comparisons move to the end; the
+// coalesced values must not ride the stack there, since the second would sit
+// on top of the first. Each gets a slot, and the result stays right.
+class ShortCircuitBox {
+    items int[]?
+    tags map<string, int>?
+}
+
+function coalesced_lengths_compared_apart() -> bool {
+    let box = ShortCircuitBox { items: [], tags: { "a": 1 } };
+    let items: int[]? = box.items;
+    let tags: map<string, int>? = box.tags;
+    let items_ok = (items?.length() ?? -1) == 0;
+    let tags_ok = (tags?.length() ?? 0) == 1;
+    items_ok && tags_ok
+}
+
+test "coalesced_lengths_compared_apart" {
+    assert.is_true(coalesced_lengths_compared_apart())
+}

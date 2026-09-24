@@ -113,16 +113,8 @@ impl PythonNames {
         &self.renames
     }
 
-    pub(crate) fn route(&self, name: &Name, symbol: &Symbol) -> LeafPath {
-        self.route_inner(name, !matches!(symbol, Symbol::Function(_)))
-    }
-
-    pub(crate) fn route_class_ref(&self, name: &Name) -> LeafPath {
-        self.route_inner(name, true)
-    }
-
-    fn route_inner(&self, name: &Name, honor_stream_suffix: bool) -> LeafPath {
-        let raw = raw_route_segments(name, honor_stream_suffix);
+    pub(crate) fn route(&self, name: &Name) -> LeafPath {
+        let raw = raw_route_segments(name);
         let mut prefix = Vec::new();
         let mut projected = Vec::with_capacity(raw.len());
         for segment in raw {
@@ -143,7 +135,7 @@ impl PythonNames {
         self.symbol_names
             .get(name)
             .map(|value| std::borrow::Cow::Borrowed(value.as_str()))
-            .unwrap_or_else(|| std::borrow::Cow::Owned(project_identifier(name.bare_name()).0))
+            .unwrap_or_else(|| std::borrow::Cow::Owned(project_identifier(name.name().as_str()).0))
     }
 
     pub(crate) fn callable<'a>(
@@ -192,18 +184,14 @@ impl PythonNames {
     fn allocate_modules(&mut self, pool: &SymbolPool) {
         let mut paths = BTreeSet::new();
         let mut reportable_paths = BTreeSet::new();
-        for (name, symbol) in pool {
-            let symbol_path = raw_route_segments(name, !matches!(symbol, Symbol::Function(_)));
-            let type_path = raw_route_segments(name, true);
+        for name in pool.keys() {
+            let path = raw_route_segments(name);
             if is_reportable_user_name(name) {
-                for path in [&symbol_path, &type_path] {
-                    for len in 1..=path.len() {
-                        reportable_paths.insert(path[..len].to_vec());
-                    }
+                for len in 1..=path.len() {
+                    reportable_paths.insert(path[..len].to_vec());
                 }
             }
-            paths.insert(symbol_path);
-            paths.insert(type_path);
+            paths.insert(path);
         }
 
         let mut children: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
@@ -249,7 +237,7 @@ impl PythonNames {
         let mut by_leaf: BTreeMap<LeafPath, Vec<(&Name, &Symbol)>> = BTreeMap::new();
         for (name, symbol) in pool {
             by_leaf
-                .entry(self.route(name, symbol))
+                .entry(self.route(name))
                 .or_default()
                 .push((name, symbol));
         }
@@ -260,10 +248,12 @@ impl PythonNames {
                 .iter()
                 .map(|(name, symbol)| {
                     let (raw, kind, fqn) = match symbol {
-                        Symbol::Class(_) => (name.bare_name(), "class", name.to_string()),
-                        Symbol::Enum(_) => (name.bare_name(), "enum", name.to_string()),
-                        Symbol::TypeAlias(_) => (name.bare_name(), "type alias", name.to_string()),
-                        Symbol::Function(_) => (name.bare_name(), "function", name.to_string()),
+                        Symbol::Class(_) => (name.name().as_str(), "class", name.to_string()),
+                        Symbol::Enum(_) => (name.name().as_str(), "enum", name.to_string()),
+                        Symbol::TypeAlias(_) => {
+                            (name.name().as_str(), "type alias", name.to_string())
+                        }
+                        Symbol::Function(_) => (name.name().as_str(), "function", name.to_string()),
                     };
                     Entry {
                         id: fqn.clone(),
@@ -527,7 +517,7 @@ impl PythonNames {
         if entry.report && generated != entry.raw {
             self.renames.push(IdentifierRename {
                 kind: entry.kind,
-                fqn: canonical_report_fqn(&entry.fqn),
+                fqn: entry.fqn,
                 original: entry.raw,
                 generated,
                 reason: reason.unwrap_or(IdentifierRenameReason::Collision),
@@ -660,17 +650,11 @@ fn is_pydantic_protected(value: &str) -> bool {
 }
 
 fn is_reportable_user_name(name: &Name) -> bool {
-    name.package().as_str() == "user" && !name.bare_name().contains('$')
+    name.package().as_str() == "user" && !name.name().as_str().contains('$')
 }
 
 fn is_reportable_user_fqn(fqn: &str) -> bool {
     fqn.starts_with("user.") && !fqn.contains('$')
-}
-
-fn canonical_report_fqn(fqn: &str) -> String {
-    fqn.strip_prefix("stream_types.")
-        .unwrap_or(fqn)
-        .replace("$stream", "")
 }
 
 #[cfg(test)]
