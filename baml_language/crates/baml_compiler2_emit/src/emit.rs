@@ -3266,9 +3266,6 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                 // (`walk_rvalue_pull` panics on them), so route through it.
                 // Class aggregates may use emitter-only spread helpers, so they
                 // also need to flow through `emit_rvalue_pull` when inlined.
-                // BinaryOp needs no detour: `walk_rvalue_pull` hands the operands
-                // to `PullSink::binary_op`, which is where the type-aware opcode
-                // specialization lives.
                 if matches!(
                     rvalue,
                     Rvalue::MakeClosure { .. }
