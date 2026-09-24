@@ -2991,7 +2991,7 @@ impl<'a> Parser<'a> {
     /// to `UNION_PATTERN`).
     pub(crate) fn parse_type_with(&mut self, consume_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
-            p.parse_type_primary(consume_union);
+            p.parse_type_primary();
 
             if p.pending_greaters > 0 {
                 // Don't parse modifiers until we've used all
@@ -3010,7 +3010,7 @@ impl<'a> Parser<'a> {
                 } else if consume_union && p.at(TokenKind::Pipe) {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
-                    p.parse_type_primary(consume_union);
+                    p.parse_type_primary();
                 } else {
                     break;
                 }
@@ -3018,7 +3018,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn parse_type_primary(&mut self, consume_union: bool) {
+    fn parse_type_primary(&mut self) {
         // `unreflect(expr)` parses as a type atom everywhere so the removed
         // inline spelling still recovers cleanly. Its legality is decided at
         // CST→AST lowering: only the whole right-hand side of a body-level
@@ -3049,7 +3049,7 @@ impl<'a> Parser<'a> {
             self.error_here("a function type cannot declare generic parameters".to_string());
             self.parse_generic_param_list();
             if self.at(TokenKind::LParen) {
-                self.parse_paren_or_function_type(consume_union);
+                self.parse_paren_or_function_type();
             } else {
                 self.error_unexpected_token("function type parameter list".to_string());
             }
@@ -3157,7 +3157,7 @@ impl<'a> Parser<'a> {
             } else {
                 // We parse the contents as function type parameters (which can be either
                 // `name: type` or just `type`), then check for `->` to determine which case.
-                self.parse_paren_or_function_type(consume_union);
+                self.parse_paren_or_function_type();
             }
         } else {
             self.error_unexpected_token("type".to_string());
@@ -3222,7 +3222,7 @@ impl<'a> Parser<'a> {
     /// - Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`
     ///
     /// The key distinguisher is the presence of `->` after the closing `)`.
-    fn parse_paren_or_function_type(&mut self, consume_union: bool) {
+    fn parse_paren_or_function_type(&mut self) {
         // We'll parse the content first, then decide based on whether `->` follows.
         // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
 
@@ -3259,10 +3259,10 @@ impl<'a> Parser<'a> {
             // This is a function type: wrap everything in FUNCTION_TYPE node
             // Note: The tokens are already emitted, we just need to parse the return type
             self.bump(); // ->
-            // Forward `consume_union` so that pattern-atom callers (which
-            // pass `false`) leave a trailing `|` to the surrounding
-            // `UNION_PATTERN` instead of swallowing it into the return type.
-            self.parse_type_with(consume_union); // return type
+            // A function type owns a complete return type, including unions,
+            // even when it appears in a pattern. Parenthesize the whole
+            // function to place it in an outer pattern union.
+            self.parse_type(); // return type
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
                     p.bump(); // throws
@@ -5087,8 +5087,8 @@ impl<'a> Parser<'a> {
             // followed by `->` (function type) or `[` / `?` (array / optional
             // suffix on a paren'd type, e.g. `(int | string)[]`).
             //
-            // Function-type paren keeps `|` for the surrounding `UNION_PATTERN`
-            // (so `(int) -> int | string` parses as `Or([fn, string])`).
+            // Function types consume return unions; parenthesize the whole
+            // function to put it in an outer `UNION_PATTERN`.
             // Paren-type-suffix paren consumes `|` because the whole
             // expression is unambiguously one type — `(int | string)[] | float`
             // parses as the union type `(int | string)[] | float`.
@@ -5160,7 +5160,8 @@ impl<'a> Parser<'a> {
         // Anything else is a bare type-expression pattern: literals (`1`,
         // `"user"`, `true`), paths (`Status.Active`), generics (`Foo<T>`),
         // arrays (`int[]`), etc. `consume_union = false` leaves top-level `|`
-        // for the surrounding `UNION_PATTERN`.
+        // for the surrounding `UNION_PATTERN` unless the atom is a function
+        // type, whose return always consumes a complete type.
         if !self.is_at_pattern_atom_start() {
             self.error_unexpected_token("pattern".to_string());
             if !self.at_end() {
@@ -10628,6 +10629,301 @@ type Callback = (value: int) -> string throws Foo
             "expected function type throws clause text, got {:?}",
             throws.text().to_string()
         );
+    }
+
+    fn function_type_in(node: &SyntaxNode) -> SyntaxNode {
+        node.descendants()
+            .find(|candidate| {
+                candidate.kind() == SyntaxKind::TYPE_EXPR
+                    && candidate.children_with_tokens().any(|child| {
+                        matches!(
+                            child,
+                            rowan::NodeOrToken::Token(token)
+                                if token.kind() == SyntaxKind::ARROW
+                        )
+                    })
+            })
+            .expect("expected function type")
+    }
+
+    fn compact_syntax(node: &SyntaxNode) -> String {
+        node.text()
+            .to_string()
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .collect()
+    }
+
+    #[test]
+    fn function_pattern_greedily_owns_return_and_throws_unions() {
+        for (spelling, expected_return, expected_throws) in [
+            (
+                "(ScratchStep, image) -> MouseClickAction | ScratchNoAction throws Error | Timeout",
+                "MouseClickAction|ScratchNoAction",
+                "throwsError|Timeout",
+            ),
+            (
+                "(ScratchStep, image) -> (MouseClickAction | ScratchNoAction) throws (Error | Timeout)",
+                "(MouseClickAction|ScratchNoAction)",
+                "throws(Error|Timeout)",
+            ),
+        ] {
+            let source = format!(
+                "function Demo(value: unknown) -> int {{ if let f: {spelling} = value {{ 1 }} else {{ 0 }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+
+            let binding = root
+                .descendants()
+                .find(|node| node.kind() == SyntaxKind::BINDING_PATTERN)
+                .expect("expected if-let binding");
+            assert!(
+                binding
+                    .descendants()
+                    .all(|node| node.kind() != SyntaxKind::UNION_PATTERN),
+                "return and throws unions must stay inside the function: {spelling}"
+            );
+
+            let function = function_type_in(&binding);
+            let return_type = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected function return type");
+            assert_eq!(compact_syntax(&return_type), expected_return);
+            let throws = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::THROWS_CLAUSE)
+                .expect("expected throws clause");
+            assert_eq!(compact_syntax(&throws), expected_throws);
+        }
+    }
+
+    #[test]
+    fn function_union_precedence_is_consistent_across_type_and_pattern_entries() {
+        let sources = [
+            "type Callback = (A) -> B | C throws E | F",
+            "function Demo(value: unknown) -> int { if (value is (A) -> B | C throws E | F) { 1 } else { 0 } }",
+            "function Demo(value: unknown) -> int { while let f: (A) -> B | C throws E | F = value { break; } 0 }",
+            "function Demo(value: unknown) -> int { match (value) { [(A) -> B | C throws E | F] => 1, _ => 0 } }",
+            "function Demo(value: unknown) -> int { match (value) { Box { callback: (A) -> B | C throws E | F } => 1, _ => 0 } }",
+        ];
+        for source in sources {
+            let (root, errors) = parse_source(source);
+            assert_no_errors(&errors);
+            let function = function_type_in(&root);
+            let return_type = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected function return type");
+            let throws = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::THROWS_CLAUSE)
+                .expect("expected throws clause");
+            assert_eq!(compact_syntax(&return_type), "B|C", "{source}");
+            assert_eq!(compact_syntax(&throws), "throwsE|F", "{source}");
+            assert!(
+                root.descendants()
+                    .all(|node| node.kind() != SyntaxKind::UNION_PATTERN),
+                "function unions must not become pattern alternatives: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn function_return_union_handles_modifiers_generics_and_trivia() {
+        let cases = [
+            ("(A) -> B? | C[]", "B?|C[]"),
+            ("(A) -> Result<B | C> | D", "Result<B|C>|D"),
+            (
+                "(A) -> B /* return */ | C throws E /* error */ | F",
+                "B/*return*/|C",
+            ),
+        ];
+        for (spelling, expected_return) in cases {
+            let source = format!(
+                "function Demo(value: unknown) -> int {{ if (value is {spelling}) {{ 1 }} else {{ 0 }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            let function = function_type_in(&root);
+            let return_type = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected function return type");
+            assert_eq!(compact_syntax(&return_type), expected_return);
+            assert!(
+                root.descendants()
+                    .all(|node| node.kind() != SyntaxKind::UNION_PATTERN),
+                "return union must stay inside the function: {spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn greedy_function_return_does_not_consume_outer_pattern_union() {
+        let cases = [
+            ("(A) -> B | C", false, "B|C"),
+            ("(A) -> B | (C) -> D", false, "B|(C)->D"),
+            ("((A) -> B) | C", true, "B"),
+            ("((A) -> B) | ((C) -> D)", true, "B"),
+        ];
+        for (spelling, has_pattern_union, expected_return) in cases {
+            let source = format!(
+                "function Demo(value: unknown) -> int {{ match (value) {{ {spelling} => 1, _ => 0 }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+
+            let pattern = root
+                .descendants()
+                .find(|node| node.kind() == SyntaxKind::MATCH_ARM)
+                .and_then(|arm| {
+                    arm.children()
+                        .find(|node| node.kind() == SyntaxKind::PATTERN)
+                })
+                .expect("expected match-arm pattern");
+            assert_eq!(
+                pattern
+                    .descendants()
+                    .any(|node| node.kind() == SyntaxKind::UNION_PATTERN),
+                has_pattern_union,
+                "incorrect pipe ownership for {spelling}"
+            );
+            let function = function_type_in(&pattern);
+            let return_type = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected function return type");
+            assert_eq!(compact_syntax(&return_type), expected_return);
+            if spelling == "((A) -> B) | ((C) -> D)" {
+                assert_eq!(
+                    pattern
+                        .descendants()
+                        .filter(|node| {
+                            node.kind() == SyntaxKind::TYPE_EXPR
+                                && node.children_with_tokens().any(|child| {
+                                    matches!(
+                                        child,
+                                        rowan::NodeOrToken::Token(token)
+                                            if token.kind() == SyntaxKind::ARROW
+                                    )
+                                })
+                        })
+                        .count(),
+                    2,
+                    "the outer union must contain two complete functions"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_pattern_union_still_uses_pattern_precedence() {
+        let source =
+            "function Demo(value: unknown) -> int { match (value) { A | B => 1, _ => 0 } }";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let union = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected ordinary pattern union");
+        assert_eq!(
+            union
+                .children()
+                .filter(|node| node.kind() == SyntaxKind::TYPE_PATTERN)
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn union_of_complete_function_patterns_requires_parentheses() {
+        let source = r#"
+function Demo(value: unknown) -> int {
+    match (value) {
+        ((A) -> B | C throws E | F) | ((D) -> G | H throws I | J) => 1,
+        _ => 0,
+    }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let union = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::UNION_PATTERN)
+            .expect("expected outer pattern union");
+        let functions: Vec<_> = union
+            .descendants()
+            .filter(|node| {
+                node.kind() == SyntaxKind::TYPE_EXPR
+                    && node.children_with_tokens().any(|child| {
+                        matches!(
+                            child,
+                            rowan::NodeOrToken::Token(token)
+                                if token.kind() == SyntaxKind::ARROW
+                        )
+                    })
+            })
+            .collect();
+        assert_eq!(functions.len(), 2);
+        for (function, (expected_return, expected_throws)) in functions
+            .iter()
+            .zip([("B|C", "throwsE|F"), ("G|H", "throwsI|J")])
+        {
+            let return_type = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected return type");
+            let throws = function
+                .children()
+                .find(|node| node.kind() == SyntaxKind::THROWS_CLAUSE)
+                .expect("expected throws type");
+            assert_eq!(compact_syntax(&return_type), expected_return);
+            assert_eq!(compact_syntax(&throws), expected_throws);
+        }
+    }
+
+    #[test]
+    fn nested_function_throws_belongs_to_the_parenthesized_level() {
+        for (spelling, outer_throws, inner_throws, expected_inner_return) in [
+            ("(A) -> (B) -> C | D throws E", false, true, "C|D"),
+            ("(A) -> ((B) -> C) throws E", true, false, "C"),
+        ] {
+            let source = format!(
+                "function Demo(value: unknown) -> int {{ if (value is {spelling}) {{ 1 }} else {{ 0 }} }}"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            let pattern = root
+                .descendants()
+                .find(|node| node.kind() == SyntaxKind::PATTERN)
+                .expect("expected is pattern");
+            let outer = function_type_in(&pattern);
+            let outer_return = outer
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected outer return type");
+            let inner = function_type_in(&outer_return);
+            let inner_return = inner
+                .children()
+                .find(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .expect("expected inner return type");
+            assert_eq!(compact_syntax(&inner_return), expected_inner_return);
+            assert_eq!(
+                outer
+                    .children()
+                    .any(|node| node.kind() == SyntaxKind::THROWS_CLAUSE),
+                outer_throws
+            );
+            assert_eq!(
+                inner
+                    .children()
+                    .any(|node| node.kind() == SyntaxKind::THROWS_CLAUSE),
+                inner_throws
+            );
+        }
     }
 
     // ============ Pattern parsing ============
