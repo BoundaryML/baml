@@ -4,6 +4,18 @@ The book uses this app's authored MDX pipeline. There is no separate mdBook buil
 
 ## Add a chapter
 
+Use direct, concise prose. Avoid em dashes; use a sentence, colon, or parentheses
+where appropriate.
+
+Descriptions and introductions must name a concrete task or state a language
+rule. Cut narration about the document itself, such as "what carries over and
+what changes," "this page explains," or "a focused example." Don't advertise
+validation machinery to readers ("canonical checked source," "checked stages").
+Keep useful setup and replacement instructions, but express them as reader
+actions. Replace vague advice such as "harden the boundary" with the specific
+test, error handler, or validation the reader should add. Apply this to cards
+and metadata as well as body text.
+
 1. Add `content/baml/book/<slug>.mdx` with a title, a description beginning with
    its intended chapter number, and breadcrumbs. Use the outline's numbers even
    while earlier chapters are unpublished.
@@ -20,6 +32,173 @@ The book uses this app's authored MDX pipeline. There is no separate mdBook buil
    Use `BamlSnippet` or `BamlProject`; do not duplicate executable BAML in MDX
    fences. Keep each incremental stage's dependency/replacement relationship
    explicit in the prose.
+
+## Book perspectives
+
+Every book page shows a global **Perspective** selector. The initial choices are
+**Start with the basics** and **Coming from TypeScript**. Both choices are
+always visible beneath the **Reading perspective** label. The selected preference persists
+in a cookie scoped to `/baml/book`; book routes render it on the server to avoid
+flashing the wrong chapter text. Non-book routes keep their existing rendering.
+
+A chapter is either one shared MDX file or a directory of perspective files:
+
+```text
+content/baml/book/
+├── index.mdx
+├── errors.mdx
+├── interfaces.mdx
+└── common-programming-concepts/
+    ├── default.mdx
+    └── typescript.mdx
+```
+
+- `<chapter>.mdx` is shared by every reader.
+- `<chapter>/default.mdx` is required for chapters with perspectives.
+- `<chapter>/<perspective>.mdx` supplies an alternate version. Its filename must
+  match a registered perspective ID.
+- A chapter cannot have both a shared file and a perspective directory.
+- Nested perspective directories and `index.mdx` inside chapter directories are
+  invalid. The book landing page stays at `content/baml/book/index.mdx`.
+
+If the selected perspective is unavailable, the chapter uses the shared or
+`default.mdx` version silently. The reader's preference is preserved.
+An explicit `?perspective=typescript` (or `default`) overrides the preference for
+that page without overwriting it. Selecting an option explicitly saves it.
+
+### Add a perspective to a chapter
+
+Move `<chapter>.mdx` to `<chapter>/default.mdx`, keeping its existing frontmatter.
+Add `<chapter>/typescript.mdx` alongside it:
+
+```mdx
+---
+title: Common programming concepts
+description: Chapter 3 · BAML for TypeScript developers.
+sectionKeys:
+  variables: familiar-let
+---
+
+## Familiar let
+
+Explain which TypeScript habits transfer and which rules differ.
+```
+
+The directory determines the chapter and the filename determines the perspective.
+Do not add `chapter` or `perspective` frontmatter; those fields are rejected.
+The default file requires the usual title, description, and breadcrumbs. Alternate
+versions require a title and can omit the description to inherit the default's.
+Breadcrumbs, navigation, and canonical metadata use the default version.
+All versions share `/baml/book/<chapter>`; perspective files have no separate public
+routes or navigation entries. Moving a shared chapter into a directory does not
+require changing its route component or navigation entry.
+
+Each version supplies its own body and generated TOC. Authors can rename,
+reorder, add, or omit headings. Only the active version is mounted in the page,
+so copy-page, keyboard navigation, and assistive technology see that version.
+Use the usual `BamlProject`, `CodeExample`, and `LanguageTabs` components. Reuse
+canonical snippet IDs instead of copying executable BAML into the prose.
+Example-language tabs do not change the reader's book perspective.
+
+### Preserve the reader's place
+
+Matching heading IDs work automatically. When related sections have different
+headings, optionally add a `sectionKeys` mapping to **both** files. Keys identify
+concepts; values are that version's generated heading IDs:
+
+```yaml
+# Default chapter
+sectionKeys:
+  variables: variables-and-mutability
+
+# TypeScript version
+sectionKeys:
+  variables: familiar-let
+```
+
+Switching perspectives maps the section currently being read to its counterpart.
+If no counterpart exists, it moves to the chapter's beginning. Changing the
+preference on a chapter that still shows the same body does not move the reader.
+Section links preserve the current perspective query parameter.
+
+### Validate changes
+
+`pnpm docs:authored:validate` includes the perspective resolver/schema tests and
+checks snippet references and links in alternate MDX. `pnpm build` also rejects
+invalid directory layouts, unknown perspective filenames, missing defaults, and section keys
+that point at absent TOC headings. Headings are not required to match across
+perspectives. Test the chapter in both modes, including its TOC, deep links,
+copy-page, narrow layouts, and fallback to a chapter without an alternate body.
+
+To introduce another perspective, add an entry in `bookPerspectiveDefinitions` in
+`lib/content/book-perspectives.ts` with a label, compact `shortLabel`, and local
+logo. The parser, filename validation, and selector all use that registry. Then
+add `<chapter>/<new-perspective>.mdx` wherever that perspective is useful.
+
+### Keep experienced-reader perspectives brief
+
+Write perspectives for what the reader already knows. Classify individual
+concepts; don't group the whole chapter into three buckets:
+
+- `kind="same"`: a narrowly stated behavior that transfers unchanged. The summary
+  stays visible; the explanation and example are collapsed by default.
+- `kind="added"`: a capability BAML adds, such as a block producing a value.
+- `kind="removed"`: source-language syntax BAML doesn't support; show its replacement.
+- `kind="modified"`: a familiar concept with changed syntax or behavior.
+
+The reading-perspective selector automatically shows a shared key whenever the
+reader selects a non-basics perspective. Don't add a key to chapter content.
+Added is green, removed is rose, modified is amber, and same is muted. The words
+and symbols make the distinction without relying on color alone.
+
+When a section explains one kind of change, wrap its normal Markdown heading and
+content in `PerspectiveSection kind="added|removed|modified"`. The heading must be
+the first child. Its badge appears beside the title, without another label row.
+A matching vertical bar spans the heading, explanation, and examples. The Markdown
+heading still supplies the section anchor and TOC text.
+For sections with several kinds of changes, use `PerspectiveNote` around each
+changed portion; its colored bar identifies the relevant text and examples.
+Use `PerspectiveNote kind="same"` for a collapsed disclosure row without a bar.
+
+```mdx
+<PerspectiveSection kind="added">
+
+## Blocks
+
+Comparison and a short explanation.
+
+</PerspectiveSection>
+```
+
+Anchor differences in an idiom the reader already uses. Show the TypeScript
+IIFE next to the BAML block expression, or the ternary next to the BAML `if`.
+Use `CodeComparison from="TypeScript"` with two `<div>` children: familiar code
+first, then a canonical BAML excerpt. Both panes stay visible, carry language
+logos, and stack on narrow screens. Use inline pairs or small mapping tables for
+one-token changes. Don't make the reader reconstruct the comparison from prose.
+
+Give each note a short `summary`. These labels describe similarity, not quality.
+Use short topic headings such as "Variables," "Functions," and "Blocks."
+Start each modified or removed concept with one short sentence naming the exact
+change from the reader's language, before the code or table. For example:
+"BAML's `for...in` visits values, like TypeScript's `for...of`." State the rule
+directly; avoid slogans, and don't repeat the same sentence after the example.
+Keep each comparison to one difference and the smallest useful examples, usually
+two to six lines. Match names and values across languages. Put scope notes,
+results, and other local explanations in code comments beside the relevant line.
+Use a sentence for rules the code cannot show; don't repeat what the examples
+already demonstrate. Keep extended explanations in the basics perspective.
+Put exceptions outside collapsed notes. Prefer short canonical snippet regions over
+repeating a complete beginner walkthrough. Avoid restating the same difference in
+an introduction, example explanation, and closing checklist.
+
+```mdx
+<PerspectiveNote kind="same" summary="Early return exits the function">
+
+Optional explanation and example.
+
+</PerspectiveNote>
+```
 
 ## Language comparisons
 
@@ -86,6 +265,14 @@ Effect's logomark comes from the official Effect website repository:
 `Effect-TS/website`, commit `bf4625446a02894046b6937a317dde2cde115fe7`,
 `apps/web/public/assets/effect-logo/logo-symbol/effect-logomark-black.svg`.
 
+## LLM prompts
+
+Use concrete client values, such as `openai.ResponsesClient.new(...)`, instead of provider/model string shorthand. Declare a named client when examples share the same configuration.
+
+Use `snake_case` for BAML function names, including LLM functions. To override the provider for one LLM call, pass `client = model` directly to the function.
+
+Put task instructions and `${ctx.output_format()}` in the system message. Keep user-supplied text, questions, and images in user messages.
+
 ## Canonical code excerpts
 
 A project excerpt uses the complete project as its compilation unit:
@@ -136,13 +323,31 @@ the four inferred signatures displayed in Chapter 8. The cross-package fixture
 uses distinct compiler source roots and runs separately from `baml_language`:
 
 ```sh
-cargo test -p baml_tests --test book_interfaces
+target/debug/baml-cli test --from crates/baml_tests/baml_src -i root.compiler.mounted_interface_diagnostics
 ```
 
 The Developer Docs workflow already matches authored content, example files,
 and compiler changes. Its snippets job now runs the behavioral/signature checks
 and the cross-package tests after compilation. The existing Vercel build
 includes these ordinary static routes. No separate publishing step is needed.
+
+## Chapter 3
+
+Chapter 3 is the first chapter with separate `default.mdx` and `typescript.mdx`
+versions, under `content/baml/book/common-programming-concepts/`. The default
+introduces programming terms as they appear. The TypeScript version assumes those
+terms and focuses on changed behavior. Semantic section keys connect their headings.
+
+Both versions share the canonical `listing-03-*` projects and their behavior tests.
+The `no-listing-03-*` projects check intentional compiler failures. Run the examples
+on Canary; they need no model credentials. The AI example tests `@parse` offline.
+The token estimator and prices are teaching examples, not exact usage or billing.
+
+The starting material was the `ch03-*` human drafts and listings in `baml-book`.
+The integrated prose removes browser-runtime claims, updates generated operations
+to `@parse`/`@render_prompt`, uses snake_case and explicit prompt roles, and keeps
+implementation caveats out of beginner explanations. New function and conditional
+annotations use the same renderer and stale-image checks as the other chapters.
 
 ## Accepted sources and focused repairs
 

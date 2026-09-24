@@ -5,7 +5,8 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0063
 
   ⚠ unreachable arm
-     ╭─[errorcontext.baml:110:38]
- 110 │       baml.errors.InvalidArgument => { "unreachable" }
-     ·                                      ─────────────────
+     ╭─[errorcontext.baml:124:44]
+ 124 │ ╭─▶             baml.errors.InvalidArgument => {
+ 125 │ │                   "unreachable"
+ 126 │ ╰─▶             }
      ╰────

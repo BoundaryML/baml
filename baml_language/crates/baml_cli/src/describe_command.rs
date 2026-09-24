@@ -126,9 +126,14 @@ pub fn suggest_similar_kinded(
     type Kind = Option<baml_ide::DefinitionKind>;
     let mut all_paths: Vec<(String, Kind)> = Vec::new();
 
+    // A suggestion is a suggestion, so the stdlib's internal helpers stay
+    // out of it — unless the name that failed to resolve reached for one,
+    // which is exactly when suggesting its neighbours helps.
+    let internals = baml_ide::Internals::for_query(name);
+
     // The viewer's own package: items (kinded) + namespace dotted paths (no
     // kind).
-    for entry in baml_ide::list_package_items(db, viewer) {
+    for entry in baml_ide::list_package_items(db, viewer, internals) {
         all_paths.push((entry.fqn(), Some(entry.kind)));
     }
     let own_items = package_items(db, viewer);
@@ -150,7 +155,7 @@ pub fn suggest_similar_kinded(
     for dependency in viewer.dependencies(db) {
         let (pkg_name, pkg) = (&dependency.name, dependency.root);
         all_paths.push((pkg_name.as_str().to_string(), None));
-        for entry in baml_ide::list_package_items(db, pkg) {
+        for entry in baml_ide::list_package_items(db, pkg, internals) {
             all_paths.push((entry.fqn(), Some(entry.kind)));
         }
         let pkg_info = package_items(db, pkg);
@@ -324,6 +329,10 @@ impl DescribeArgs {
         }
 
         let name = self.name.as_deref().unwrap_or("");
+        // A listing is a menu of a package or namespace, so the stdlib's
+        // internal helpers stay out of it — by the same rule every other
+        // surface uses: what the reader wrote decides.
+        let listed_internals = baml_ide::Internals::for_query(name);
 
         // ── --search: names and docstrings, rather than name resolution ─────
         if self.search {
@@ -401,7 +410,7 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Package(pkg)) => {
-                let entries = baml_ide::list_package_items(&db, pkg);
+                let entries = baml_ide::list_package_items(&db, pkg, listed_internals);
                 if entries.is_empty() {
                     eprintln!("no symbols found");
                     return Ok(crate::ExitCode::Other);
@@ -436,7 +445,8 @@ impl DescribeArgs {
             }
             Some(ResolvedTarget::Namespace { package, ns_path }) => {
                 let entries =
-                    baml_ide::list_namespace_items(&db, package, &ns_path).unwrap_or_default();
+                    baml_ide::list_namespace_items(&db, package, &ns_path, listed_internals)
+                        .unwrap_or_default();
                 if entries.is_empty() {
                     eprintln!("no symbols found in namespace");
                     return Ok(crate::ExitCode::Other);

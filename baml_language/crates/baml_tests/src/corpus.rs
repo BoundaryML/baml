@@ -9,7 +9,7 @@
 //!
 //! - per-namespace diagnostics snapshots plus the corpus-wide zero-error
 //!   invariant,
-//! - opt-in representative PPIR, MIR and bytecode snapshots,
+//! - opt-in representative HIR, MIR and bytecode snapshots,
 //! - opt-in formatter goldens, plus formatting/idempotency of every file.
 //!
 //! `corpus_snapshot_policy.rs` documents each selected example. No blanket
@@ -17,7 +17,7 @@
 //!
 //! The snapshot tree mirrors the corpus source tree: a namespace's snapshots
 //! live in `snapshots/baml_src/<same ns_ path>/`, named for their phase
-//! (`ppir.snap`, `mir.snap`, `bytecode.snap`), with per-file formatter output
+//! (`hir.snap`, `mir.snap`, `bytecode.snap`), with per-file formatter output
 //! as `<file stem>.fmt.snap` beside them. Every namespace occupies exactly one
 //! directory, so grouping per namespace and mirroring the directory tree are
 //! the same partition.
@@ -36,8 +36,8 @@ use std::{
 };
 
 use baml_base::SourceFile;
+use baml_compiler2_hir::item_data::{file_functions, function_source_map};
 use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
-use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
 use baml_db::ProjectDatabase;
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::Function;
@@ -127,7 +127,7 @@ fn snap(dir: &str, name: &str, content: &str) {
 /// example must fail loudly instead of silently losing golden coverage.
 fn validate_snapshot_policy(files: &[(String, String)]) {
     for (phase, examples) in [
-        ("ppir", snapshot_policy::PPIR),
+        ("hir", snapshot_policy::HIR),
         ("mir", snapshot_policy::MIR),
         ("bytecode", snapshot_policy::BYTECODE),
         ("formatter", snapshot_policy::FORMATTER),
@@ -180,8 +180,10 @@ fn render_selected_mir(db: &ProjectDatabase, file: SourceFile, names: &[&str], o
         let name = &file.text(db)[name_span];
         if names.contains(&name) {
             found.insert(name.to_owned());
-            let mir = lower_function(db, func_loc, OptLevel::Two);
-            writeln!(out, "{}", display_function(mir)).unwrap();
+            let mir = lower_function(db, func_loc, OptLevel::Two)
+                .as_ref()
+                .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
+            writeln!(out, "{}", display_function(db, mir)).unwrap();
         }
     }
     for name in names {
@@ -215,7 +217,7 @@ fn snapshot_inventory_matches_policy() {
     let root = Path::new(SNAPSHOT_BASE);
     let mut expected = std::collections::BTreeSet::new();
     for (phase, examples) in [
-        ("ppir", snapshot_policy::PPIR),
+        ("hir", snapshot_policy::HIR),
         ("mir", snapshot_policy::MIR),
         ("bytecode", snapshot_policy::BYTECODE),
         ("fmt", snapshot_policy::FORMATTER),
@@ -359,7 +361,7 @@ fn corpus_snapshots() {
         snap(&dir, &name, &output);
     }
 
-    // ---- Representative PPIR and MIR only; still use the shared database ----
+    // ---- Representative HIR and MIR only; still use the shared database ----
     let selected_file = |path: &str| {
         source_files
             .iter()
@@ -367,12 +369,12 @@ fn corpus_snapshots() {
             .unwrap_or_else(|| panic!("selected source missing: {path}"))
             .1
     };
-    for example in snapshot_policy::PPIR {
+    for example in snapshot_policy::HIR {
         let out = format!(
-            "=== PPIR ===\n{}",
-            crate::compiler2_tir::support::render_ppir(&db, selected_file(example.path))
+            "=== HIR ===\n{}",
+            crate::compiler2_tir::support::render_hir(&db, selected_file(example.path))
         );
-        snap(&source_dir(example.path), "ppir", &out);
+        snap(&source_dir(example.path), "hir", &out);
     }
     for example in snapshot_policy::MIR {
         let mut out = String::from("=== MIR2 ===\n");
@@ -436,15 +438,10 @@ fn corpus_snapshots() {
 // BUG: the formatter's strong-AST builder rejects array rest-binding patterns
 // (`if let [let a, ..let r] = xs`): "An element ... was a node when it should
 // have been a token".
-// BUG: the formatter's strong-AST builder rejects BIGINT_LITERAL in match-arm
-// literal positions ("Expected ... INTEGER_LITERAL, or FLOAT_LITERAL, but
-// found BIGINT_LITERAL").
 // BUG: the formatter's strong-AST builder rejects the `~` bitwise-not operator
 // ("Expected token/node unary operator, but found TILDE").
 const KNOWN_FORMATTER_REJECTS: &[&str] = &[
     "ns_array_rest_binding/array_rest_binding.baml",
-    "ns_bigints/bigints.baml",
-    "ns_literal_pattern_membership/literal_pattern_membership.baml",
     "ns_operators/operators.baml",
     "ns_truthiness/truthiness.baml",
 ];

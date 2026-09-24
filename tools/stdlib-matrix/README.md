@@ -121,11 +121,29 @@ It never calls a model, so `--llm` alongside it is refused rather than ignored.
 
 ## Publishing
 
-`.github/workflows/stdlib-matrix.yml` runs after a successful **BAML Language
-Release** (or on demand) and deploys the JSON and the site to GitHub Pages. It
-fetches the currently-deployed report, uses `--check` to stop when the stdlib has
-not moved, and passes the report as `--previous` when it has — so the deployed
-site is its own cache and a typical release costs a handful of sessions.
+`.github/workflows/pages.yml` publishes this site. That one workflow owns the
+whole of the repository's GitHub Pages site, because a Pages deploy uploads a
+complete site and replaces what was there: two workflows deploying
+independently would each erase the other. This tool is published at the root
+and the type-system quiz under `type-quiz/`, built together and deployed once.
+
+It runs on the canary commits that can change what the matrix says — the
+stdlib surface, this tool, the page, and the pinned TypeScript — or on demand.
+It reads the report already published, uses `--check` to stop when the stdlib
+has not moved, and passes the report as `--previous` when it has, so the
+published report is its own cache and a typical commit costs a handful of
+sessions. The site is rebuilt and handed over on every run either way, judged
+or not: the deploy replaces everything, so a run that judged nothing still has
+to publish the matrix as it stands.
+
+It was built from the last release rather than from canary, which meant the
+page described the stdlib as it was at the last cut rather than as it is.
+
+A fetch of the published report that fails is now an error rather than a cold
+run. After one publish the report is always there, so a failure means the site
+is down, and treating that as "nothing to carry forward" would let an
+unrelated commit spend a full judging pass. Ask for a cold run deliberately,
+by dispatching the workflow with `force`.
 
 The deploy gate is **coverage, not perfection**. At two hundred sessions some
 transient failure is close to certain, and a run judging 2557 symbols with six
@@ -136,13 +154,13 @@ only when it leaves *more* symbols unjudged than the report it would replace.
 Three things it needs, none of which live in this repo:
 
 1. **GitHub Pages enabled** for the repository, with the source set to *GitHub
-   Actions*. Until then the deploy step fails.
+   Actions*. That is how it is set today; nothing needs changing.
 2. **`OPENAI_API_KEY`** in the `boundary-tools-prod` environment.
 3. Optionally **`STDLIB_MATRIX_URL`** as a repository variable, if the site is
-   served anywhere other than `https://boundaryml.github.io/baml`. It is what the
-   workflow fetches the previous report from; get it wrong and every run is a
-   cold one.
+   served anywhere other than `https://boundaryml.github.io/baml`. It is what
+   the workflow fetches the previous report from; get it wrong and every run
+   fails asking for a deliberate cold one.
 
-A deployed report written in an older format is treated as no report at all: it
+A published report written in an older format is treated as no report at all: it
 cannot be read, and passing it to `--previous` would fail the job rather than
 degrade to a cold run.

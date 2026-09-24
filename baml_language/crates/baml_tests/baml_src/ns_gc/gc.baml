@@ -62,3 +62,26 @@ function gc_map_survives_pressure() -> int {
 test "test_map_survives_gc_during_operations" {
     assert.equal(gc_map_survives_pressure(), 5)
 }
+
+// ── test_captured_binding_per_iteration ───────────────────────────────────────
+//
+// A captured `let` inside a loop allocates a fresh cell and a closure on every
+// iteration; 100,000 iterations must complete, with the dead cells collected.
+//
+// Expected: sum = 0 + 1 + ... + 99999 = 4999950000
+
+function gc_captured_binding_per_iteration() -> int {
+    let sum = 0;
+    let i = 0;
+    while (i < 100000) {
+        let j = i;
+        let f = () -> int { j };
+        sum = sum + f();
+        i = i + 1;
+    }
+    sum
+}
+
+test "test_captured_binding_per_iteration" {
+    assert.equal(gc_captured_binding_per_iteration(), 4999950000)
+}

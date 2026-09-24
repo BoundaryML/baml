@@ -6,36 +6,30 @@
 
 pub mod builder;
 mod classes;
-mod clients;
 mod common;
 mod enums;
 mod functions;
 mod interfaces;
 mod lets;
-mod retry_policies;
 mod source_map;
-mod template_strings;
 mod type_aliases;
 
 use std::ops::Index;
 
 use baml_compiler2_ast as ast;
 pub use classes::*;
-pub use clients::*;
 pub use common::*;
 pub use enums::*;
 pub use functions::*;
 pub use interfaces::*;
 pub use lets::*;
-pub use retry_policies::*;
 use rustc_hash::FxHashMap;
 pub use source_map::*;
-pub use template_strings::*;
 pub use type_aliases::*;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
+    ClassMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker, LocalItemId,
+    TypeAliasMarker,
 };
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -53,9 +47,6 @@ pub struct ItemTree {
     pub enums: FxHashMap<LocalItemId<EnumMarker>, Enum>,
     pub interfaces: FxHashMap<LocalItemId<InterfaceMarker>, Interface>,
     pub type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
-    pub clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
-    pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
-    pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
 
     /// Unified store for every `implements` block (both in-body and
@@ -98,7 +89,7 @@ impl ItemTree {
     ///
     /// The single successor of the `classes.values().find(|c|
     /// c.methods.contains(…))` scans that used to be copied (divergently)
-    /// across HIR, PPIR and TIR.
+    /// across HIR and TIR.
     pub fn enclosing_type_generic_params(
         &self,
         method: LocalItemId<FunctionMarker>,
@@ -145,27 +136,6 @@ impl Index<LocalItemId<TypeAliasMarker>> for ItemTree {
     type Output = TypeAlias;
     fn index(&self, id: LocalItemId<TypeAliasMarker>) -> &TypeAlias {
         &self.type_aliases[&id]
-    }
-}
-
-impl Index<LocalItemId<ClientMarker>> for ItemTree {
-    type Output = Client;
-    fn index(&self, id: LocalItemId<ClientMarker>) -> &Client {
-        &self.clients[&id]
-    }
-}
-
-impl Index<LocalItemId<TemplateStringMarker>> for ItemTree {
-    type Output = TemplateString;
-    fn index(&self, id: LocalItemId<TemplateStringMarker>) -> &TemplateString {
-        &self.template_strings[&id]
-    }
-}
-
-impl Index<LocalItemId<RetryPolicyMarker>> for ItemTree {
-    type Output = RetryPolicy;
-    fn index(&self, id: LocalItemId<RetryPolicyMarker>) -> &RetryPolicy {
-        &self.retry_policies[&id]
     }
 }
 

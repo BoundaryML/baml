@@ -13,7 +13,7 @@ Use an interface when a function should accept new types without knowing every t
 
 The examples return strings and don't contact external services. You should be familiar with classes, unions, `match`, arrays, and lambdas.
 
-For `throws` and error effects, see [Handle errors](/baml/book/errors). Each replacement below is a separate checked stage; the advanced examples are independent unless they explicitly reuse an earlier contract.
+For `throws` and error effects, see [Handle errors](/baml/book/errors). When replacing a definition, remove the old one before adding the new one. Run the advanced examples separately unless they reuse an earlier contract.
 
 ## Send notifications with a closed union
 
@@ -156,7 +156,7 @@ An associated type lets one interface implementation choose a related type once.
 
 ### Interface membership and coherence
 
-**Explicit membership.** Matching fields and methods don't confer interface membership. This checked failure has the right field but never implements `Destination`:
+**Explicit membership.** Matching fields and methods don't confer interface membership. This class has the right field but never implements `Destination`:
 
 <BamlProject id="no-listing-11-04-structural-conformance" file="baml_src/main.baml" regions={["excerpt-41"]} />
 
@@ -172,7 +172,7 @@ Together, explicit membership, local ownership, and overlap checking keep method
 
 ### Diagnostic reference
 
-The main examples describe failures by cause. These are the codes emitted by the checked failure projects:
+The compiler reports these errors for invalid interface declarations and calls:
 
 | Situation | Diagnostic |
 | --- | --- |

@@ -1,7 +1,7 @@
 //! `TypeScriptClass` — shared TypeScript class definition.
 //!
-//! Covers user-code classes, stdlib classes (`baml.http.Response`, …),
-//! and `$stream` companion classes. Emits `export class` (with fields and a
+//! Covers user-code classes and stdlib classes (`baml.http.Response`, …).
+//! Emits `export class` (with fields and a
 //! field-object constructor); the five runtime-owned stdlib types
 //! (media + stream) instead re-export from the configured runtime package.
 
@@ -10,9 +10,7 @@ use baml_codegen_types::{Name, Ty};
 use crate::emit::method::TypeScriptMethodBinding;
 
 pub(crate) struct TypeScriptClass {
-    /// TS identifier (bare name). The `$stream` suffix is preserved verbatim
-    /// (e.g. `Resume$stream`) — `$` is a valid TS identifier char, so the
-    /// stream companion is emitted beside its base type in the same module.
+    /// TS identifier (bare name).
     pub(crate) name: String,
     /// Source pool key. Retained for typemap registration and to detect
     /// the five runtime-owned stdlib types (media + stream).

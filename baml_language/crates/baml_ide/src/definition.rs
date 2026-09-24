@@ -17,7 +17,7 @@ use crate::resolve::{symbol_at, target_definition};
 /// `resolve_name_at`, inference) is internally Salsa-cached. Returns `None`
 /// if the cursor is not on an identifier or the name cannot be resolved.
 pub fn definition_at(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
 ) -> Option<Location> {
@@ -689,5 +689,38 @@ implements Yielding for Widget {
         // The interface's declaration, not the binding's own token.
         let decl_offset = text.find("type Output").expect("declaration") + "type ".len();
         assert_eq!(usize::from(loc.range.start()), decl_offset);
+    }
+    /// A member reached through an interface projection or a
+    /// null-short-circuiting access is still a member: goto lands on the
+    /// interface's declaration. Both spellings resolved to nothing before
+    /// their member-name spans were recorded and claimed.
+    #[test]
+    fn a_projection_and_an_optional_access_reach_the_declaration() {
+        const SRC: &str = r#"interface Shows {
+    function show(self) -> string throws never
+}
+
+class Box { item: int }
+
+implement Shows for Box {
+    function show(self) -> string throws never { "b" }
+}
+
+function projection(b: Box) -> string throws never { (Box as Shows).show(b) }
+
+function optional(s: Shows?) -> string? throws never { s?.show() }
+"#;
+        for spelling in ["(Box as Shows).show(b)", "s?.show()"] {
+            let marked = SRC.replace(spelling, &spelling.replace(".show", ".<[CURSOR]show"));
+            let test = CursorTest::new(&marked);
+            let found = test
+                .goto_definition()
+                .map(|loc| test.format_location_with_name(&loc));
+            assert_eq!(
+                found.as_deref(),
+                Some("test.baml:2:14 -> show"),
+                "`{spelling}` names the interface's declaration"
+            );
+        }
     }
 }

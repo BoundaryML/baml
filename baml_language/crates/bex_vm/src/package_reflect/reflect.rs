@@ -17,7 +17,7 @@ use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticPhase,
     runtime_type::{self, InvalidIdentifierKind},
 };
-use baml_type::{TyAttr, normalize, normalize::TypeContext};
+use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
@@ -289,7 +289,6 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     let ty = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
         Box::new([]),
-        class.ty_attr.clone(),
     );
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
@@ -307,10 +306,7 @@ fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: He
     let Object::Enum(enm) = vm.get_object(enum_ptr) else {
         unreachable!("Package.enums only contains enum pointers")
     };
-    let ty = RealizedTy::Enum(
-        bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
-        enm.ty_attr.clone(),
-    );
+    let ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag));
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
 }
@@ -335,7 +331,6 @@ fn package_interface_type(
         bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
         Box::new([]),
         Box::new([]),
-        TyAttr::default(),
     );
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
@@ -356,7 +351,6 @@ fn allocate_runtime_declaration_types(
                 RealizedTy::Class(
                     bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
                     Box::new([]),
-                    class.ty_attr.clone(),
                 ),
             )),
             _ => None,
@@ -367,10 +361,7 @@ fn allocate_runtime_declaration_types(
         .filter_map(|&enum_ptr| match vm.get_object(enum_ptr) {
             Object::Enum(enm) => Some((
                 enum_ptr,
-                RealizedTy::Enum(
-                    bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
-                    enm.ty_attr.clone(),
-                ),
+                RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag)),
             )),
             _ => None,
         })
@@ -384,7 +375,6 @@ fn allocate_runtime_declaration_types(
                     bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
                     Box::new([]),
                     Box::new([]),
-                    TyAttr::default(),
                 ),
             )),
             _ => None,
@@ -591,22 +581,173 @@ fn mounted_declaration(
     None
 }
 
-fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDiagnostic) -> Value {
-    let span = diagnostic.span.as_ref().map_or(Value::NULL, |span| {
-        let file = Value::object(vm.alloc_string(span.file.as_str()));
-        copy::Span {
-            file,
-            start: i64::try_from(span.start).expect("source offsets fit BAML int"),
-            end: i64::try_from(span.end).expect("source offsets fit BAML int"),
-        }
-        .to_value(vm)
-    });
+fn reflected_class_ty(vm: &BexVm, fqn: &str) -> RealizedTy {
+    let qtn = baml_type::QualifiedTypeName::from_dotted_path(fqn);
+    let head = vm
+        .declaration_head(&qtn)
+        .unwrap_or_else(|| unreachable!("`{fqn}` is declared by the stdlib"));
+    RealizedTy::Class(head, Box::new([]))
+}
+
+fn diagnostic_span_value(vm: &mut BexVm, span: &bex_vm_types::RuntimeSourceSpan) -> Value {
+    let file = Value::object(vm.alloc_string(span.file.as_str()));
+    copy::Span {
+        file,
+        start: i64::try_from(span.start).expect("source offsets fit BAML int"),
+        end: i64::try_from(span.end).expect("source offsets fit BAML int"),
+    }
+    .to_value(vm)
+}
+
+fn diagnostic_highlights_value(
+    vm: &mut BexVm,
+    highlights: &[bex_vm_types::RuntimeDiagnosticHighlight],
+) -> Value {
+    let values = highlights
+        .iter()
+        .map(|highlight| {
+            let kind = match highlight.kind {
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierType => "identifier.type",
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierFunction => {
+                    "identifier.function"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierField => "identifier.field",
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierVariable => {
+                    "identifier.variable"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierEnumVariant => {
+                    "identifier.enum_variant"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::IdentifierAttribute => {
+                    "identifier.attribute"
+                }
+                bex_vm_types::RuntimeDiagnosticHighlightKind::TypeExpression => "type_expression",
+                bex_vm_types::RuntimeDiagnosticHighlightKind::Code => "code",
+            };
+            let kind = Value::object(vm.alloc_string(kind));
+            copy::DiagnosticHighlight {
+                start: i64::from(highlight.start),
+                end: i64::from(highlight.end),
+                kind,
+            }
+            .to_value(vm)
+        })
+        .collect();
+    Value::object(vm.tlab.alloc_array(
+        reflected_class_ty(vm, "reflect.DiagnosticHighlight"),
+        values,
+    ))
+}
+
+pub(super) fn diagnostic_value(
+    vm: &mut BexVm,
+    diagnostic: &bex_vm_types::RuntimeCompileDiagnostic,
+) -> Value {
+    let span = diagnostic
+        .span
+        .as_ref()
+        .map_or(Value::NULL, |span| diagnostic_span_value(vm, span));
     let code = Value::object(vm.alloc_string(diagnostic.code.as_str()));
     let message = Value::object(vm.alloc_string(diagnostic.message.as_str()));
+    let severity = match diagnostic.severity {
+        bex_vm_types::RuntimeDiagnosticSeverity::Error => "error",
+        bex_vm_types::RuntimeDiagnosticSeverity::Warning => "warning",
+        bex_vm_types::RuntimeDiagnosticSeverity::Info => "info",
+    };
+    let severity = Value::object(vm.alloc_string(severity));
+    let (phase, headline, primary_label, message_highlights, annotations, related_info) =
+        match diagnostic.details.as_ref() {
+            None => {
+                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
+                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                (
+                    Value::NULL,
+                    Value::object(vm.alloc_string(diagnostic.message.as_str())),
+                    Value::NULL,
+                    diagnostic_highlights_value(vm, &[]),
+                    Value::object(vm.tlab.alloc_array(annotation_ty, Vec::new())),
+                    Value::object(vm.tlab.alloc_array(related_ty, Vec::new())),
+                )
+            }
+            Some(details) => {
+                let phase = match details.phase {
+                    bex_vm_types::RuntimeDiagnosticPhase::Parse => "parse",
+                    bex_vm_types::RuntimeDiagnosticPhase::Hir => "hir",
+                    bex_vm_types::RuntimeDiagnosticPhase::Validation => "validation",
+                    bex_vm_types::RuntimeDiagnosticPhase::Type => "type",
+                };
+                let phase = Value::object(vm.alloc_string(phase));
+                let headline = Value::object(vm.alloc_string(details.headline.as_str()));
+                let primary_label = details.primary_label.as_ref().map_or(Value::NULL, |label| {
+                    Value::object(vm.alloc_string(label.as_str()))
+                });
+                let message_highlights =
+                    diagnostic_highlights_value(vm, &details.message_highlights);
+                let annotation_values = details
+                    .annotations
+                    .iter()
+                    .map(|annotation| {
+                        let span = diagnostic_span_value(vm, &annotation.span);
+                        let message = annotation.message.as_ref().map_or(Value::NULL, |message| {
+                            Value::object(vm.alloc_string(message.as_str()))
+                        });
+                        let message_highlights =
+                            diagnostic_highlights_value(vm, &annotation.message_highlights);
+                        copy::DiagnosticAnnotation {
+                            span,
+                            message,
+                            message_highlights,
+                            is_primary: annotation.is_primary,
+                        }
+                        .to_value(vm)
+                    })
+                    .collect();
+                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
+                let annotations =
+                    Value::object(vm.tlab.alloc_array(annotation_ty, annotation_values));
+                let related_values = details
+                    .related_info
+                    .iter()
+                    .map(|related| {
+                        let span = diagnostic_span_value(vm, &related.span);
+                        let message = Value::object(vm.alloc_string(related.message.as_str()));
+                        let message_highlights =
+                            diagnostic_highlights_value(vm, &related.message_highlights);
+                        let file_path = related.file_path.as_ref().map_or(Value::NULL, |path| {
+                            Value::object(vm.alloc_string(path.as_str()))
+                        });
+                        copy::DiagnosticRelatedInfo {
+                            span,
+                            message,
+                            message_highlights,
+                            file_path,
+                        }
+                        .to_value(vm)
+                    })
+                    .collect();
+                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                let related_info = Value::object(vm.tlab.alloc_array(related_ty, related_values));
+                (
+                    phase,
+                    headline,
+                    primary_label,
+                    message_highlights,
+                    annotations,
+                    related_info,
+                )
+            }
+        };
     copy::Diagnostic {
         code,
         span,
         message,
+        severity,
+        phase,
+        headline,
+        primary_label,
+        message_highlights,
+        annotations,
+        related_info,
     }
     .to_value(vm)
 }
@@ -647,7 +788,6 @@ fn test_function_ty() -> RealizedTy {
         params: Box::new([]),
         ret: Box::new(RealizedTy::null()),
         throws: Box::new(RealizedTy::unknown()),
-        attr: TyAttr::default(),
     }
 }
 
@@ -1154,9 +1294,6 @@ impl BamlClassPackage for PackageReflectImpl {
             return None;
         };
         let local = local_name(name.as_str())?;
-        if local.name.as_str().ends_with("$stream") {
-            return None;
-        }
         let class_ptr = package.classes.get(&local).copied()?;
         let runtime_type = stored_package_type(package, &local);
         Some(package_class_type(vm, runtime_type, class_ptr))
@@ -1250,13 +1387,13 @@ impl BamlClassPackage for PackageReflectImpl {
             // owner-package scan, and no name that could resolve to a
             // same-named declaration from somewhere else.
             match &type_value.ty {
-                RealizedTy::Class(head, _, _) => {
+                RealizedTy::Class(head, _) => {
                     derived.classes.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Enum(head, _) => {
+                RealizedTy::Enum(head) => {
                     derived.enums.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Interface(head, _, _, _) => {
+                RealizedTy::Interface(head, _, _) => {
                     derived.interfaces.insert(local.clone(), head.ptr());
                 }
                 _ => {}
@@ -1336,7 +1473,6 @@ impl BamlClassPackage for PackageReflectImpl {
         let entries = package
             .classes
             .iter()
-            .filter(|(name, _)| !name.name.as_str().ends_with("$stream"))
             .map(|(name, &class)| (name.clone(), class, stored_package_type(package, name)))
             .collect::<Vec<_>>();
         entries
@@ -1539,10 +1675,10 @@ fn dependency_named_declarations(
             continue;
         };
         let head = match &value.ty {
-            RealizedTy::Class(head, _, _) => head,
-            RealizedTy::Enum(head, _) => head,
-            RealizedTy::Interface(head, _, _, _) => head,
-            RealizedTy::TypeAlias(head, _) => head,
+            RealizedTy::Class(head, _) => head,
+            RealizedTy::Enum(head) => head,
+            RealizedTy::Interface(head, _, _) => head,
+            RealizedTy::TypeAlias(head) => head,
             _ => continue,
         };
         if head.is_resolved() {
@@ -2407,9 +2543,7 @@ impl BamlClassSession for PackageReflectImpl {
 }
 
 fn ty_never() -> RealizedTy {
-    RealizedTy::Never {
-        attr: TyAttr::default(),
-    }
+    RealizedTy::Never
 }
 
 /// The two natives' parameters are statically `reflect.AnyFunction`, so a
@@ -2438,7 +2572,7 @@ fn ty_arg(vm: &BexVm) -> RealizedTy {
     let head = vm
         .declaration_head(&qtn)
         .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
-    RealizedTy::Class(head, Box::new([]), TyAttr::default())
+    RealizedTy::Class(head, Box::new([]))
 }
 
 /// Build one `reflect.Arg`. A nameless positional (a host callable from a
@@ -2539,7 +2673,6 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
         params: sig.params.clone(),
         ret: Box::new(sig.ret.clone()),
         throws: Box::new(sig.throws.clone()),
-        attr: TyAttr::default(),
     }
 }
 
@@ -2581,8 +2714,8 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
 fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy) -> Option<Value> {
     fn is_float_slot(ty: &RealizedTy) -> bool {
         match ty {
-            RealizedTy::Float { .. } => true,
-            RealizedTy::Union(members, _) => {
+            RealizedTy::Float => true,
+            RealizedTy::Union(members) => {
                 members.iter().any(is_float_slot)
                     && members
                         .iter()
@@ -2614,7 +2747,7 @@ struct CallAnyContinuation {
 
 impl Continuation for CallAnyContinuation {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        if matches!(self.expected, RealizedTy::Unknown { .. }) {
+        if matches!(self.expected, RealizedTy::Unknown) {
             return NativeCallResult::Done(value);
         }
 

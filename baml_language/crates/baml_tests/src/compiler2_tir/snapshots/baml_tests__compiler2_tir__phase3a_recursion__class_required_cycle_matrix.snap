@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"class_field_self_reference + class_required_field_self_cycle (duplicate self-cycle)\",\n\"class Node { next Node }\",),\n(\"class_field_mutual_reference + class_required_field_mutual_cycle (duplicate two-node cycle)\",\n\"class Husband { wife Wife }\\nclass Wife { husband Husband }\",),\n(\"class_required_field_three_way_cycle\",\n\"class A { b B }\\nclass B { c C }\\nclass C { a A }\",),])"
+---
+=== class_field_self_reference + class_required_field_self_cycle (duplicate self-cycle) ===
+class user.Node {
+  next: user.Node
+}
+  !! 0..24: class cycle: user.Node
+
+=== class_field_mutual_reference + class_required_field_mutual_cycle (duplicate two-node cycle) ===
+class user.Husband {
+  wife: user.Wife
+}
+  !! 0..27: class cycle: user.Husband -> user.Wife -> user.Husband
+class user.Wife {
+  husband: user.Husband
+}
+  !! 28..58: class cycle: user.Husband -> user.Wife -> user.Husband
+
+=== class_required_field_three_way_cycle ===
+class user.A {
+  b: user.B
+}
+  !! 0..15: class cycle: user.A -> user.B -> user.C -> user.A
+class user.B {
+  c: user.C
+}
+  !! 16..31: class cycle: user.A -> user.B -> user.C -> user.A
+class user.C {
+  a: user.A
+}
+  !! 32..47: class cycle: user.A -> user.B -> user.C -> user.A

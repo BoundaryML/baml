@@ -1,3 +1,4 @@
+import { appendFile } from 'node:fs/promises';
 import { closeDocumentStore } from '@/lib/generated-content/document-store';
 import { verifyGeneratedRelease } from '@/lib/generated-content/verify';
 import {
@@ -9,11 +10,25 @@ async function main(): Promise<void> {
   const parsedArguments = parseOperatorArguments(
     process.argv.slice(2),
     ['version'],
-    [],
+    ['github-output'],
   );
   const version = requireOperatorValue(parsedArguments, 'version');
   try {
-    console.log(JSON.stringify(await verifyGeneratedRelease(version), null, 2));
+    const summary = await verifyGeneratedRelease(version);
+    console.log(JSON.stringify(summary, null, 2));
+    if (parsedArguments.flags.has('github-output')) {
+      const outputPath = process.env.GITHUB_OUTPUT;
+      if (!outputPath) throw new Error('GITHUB_OUTPUT is required.');
+      if (!summary.csv_record_path) {
+        throw new Error(
+          'The HTTP contract requires a published CSV record page.',
+        );
+      }
+      await appendFile(
+        outputPath,
+        `version=${summary.version}\ncsv-record-path=${summary.csv_record_path}\n`,
+      );
+    }
   } finally {
     await closeDocumentStore();
   }

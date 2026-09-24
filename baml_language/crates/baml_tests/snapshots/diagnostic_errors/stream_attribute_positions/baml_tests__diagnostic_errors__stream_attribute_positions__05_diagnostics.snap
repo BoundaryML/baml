@@ -1,0 +1,94 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0016
+
+  × attribute `@stream.done` is not valid on an enum variant; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+   ╭─[stream_attribute_positions.baml:6:10]
+ 6 │   Active @stream.done
+   ·          ──────┬─────
+   ·                ╰── not valid here
+   ╰────
+
+  [hir] E0016
+
+  × attribute `@stream.must_exist` is not valid on an enum variant; allowed: `@stream.must_exist` on a class field
+   ╭─[stream_attribute_positions.baml:7:11]
+ 7 │   Retired @stream.must_exist
+   ·           ─────────┬────────
+   ·                    ╰── not valid here
+   ╰────
+
+  [hir] E0016
+
+  × attribute `@@stream.done` is not valid on an enum; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+   ╭─[stream_attribute_positions.baml:8:3]
+ 8 │   @@stream.done
+   ·   ──────┬──────
+   ·         ╰── not valid here
+   ╰────
+
+  [hir] E0016
+
+  × attribute `@@stream.must_exist` is not valid on a class; allowed: `@stream.must_exist` on a class field
+    ╭─[stream_attribute_positions.baml:13:3]
+ 13 │   @@stream.must_exist
+    ·   ─────────┬─────────
+    ·            ╰── not valid here
+    ╰────
+
+  [hir] E0016
+
+  × attribute `@stream.done` is not valid on an interface field; allowed: `@stream.done` on a class field, `@@stream.done` on a class
+    ╭─[stream_attribute_positions.baml:20:17]
+ 20 │   label: string @stream.done
+    ·                 ──────┬─────
+    ·                       ╰── not valid here
+    ╰────
+
+  [hir] E0016
+
+  × attribute `@alias` is not valid on an interface field; allowed: `@alias` on a class field, `@alias` on an enum variant, `@@alias` on a class, `@@alias` on an enum
+    ╭─[stream_attribute_positions.baml:21:15]
+ 21 │   weight: int @alias("w")
+    ·               ─────┬─────
+    ·                    ╰── not valid here
+    ╰────
+
+  [hir] E0016
+
+  × attribute `@skip` is not valid on an interface field; allowed: `@skip` on a class field, `@skip` on an enum variant
+    ╭─[stream_attribute_positions.baml:22:16]
+ 22 │   hidden: bool @skip
+    ·                ──┬──
+    ·                  ╰── not valid here
+    ╰────
+
+  [hir] E0014
+
+  × duplicate attribute `@stream.done`
+    ╭─[stream_attribute_positions.baml:27:28]
+ 27 │   body string @stream.done @stream.done
+    ·               ──────┬───── ──────┬─────
+    ·                     │            ╰── duplicate `@stream.done` — only the last takes effect
+    ·                     ╰── `@stream.done` first applied here
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@stream.dne`; valid on a class field: `@description`, `@alias`, `@skip`, `@stream.done`, `@stream.must_exist`
+    ╭─[stream_attribute_positions.baml:33:15]
+ 33 │   body string @stream.dne
+    ·               ─────┬─────
+    ·                    ╰── unknown attribute
+    ╰────
+
+  [hir] E0015
+
+  × unknown attribute `@@stream.finished`; valid on a class: `@@description`, `@@alias`, `@@stream.done`
+    ╭─[stream_attribute_positions.baml:34:3]
+ 34 │   @@stream.finished
+    ·   ────────┬────────
+    ·           ╰── unknown attribute
+    ╰────
