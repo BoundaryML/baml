@@ -10,14 +10,16 @@ const requiredSelectors = [
   '.annotated-dark',
   '.new-concepts',
   '.mobile-nav-dialog',
+  '[data-book-perspective]',
+  '.book-reading-options',
+  '.book-reading-option',
 ];
 
 /** Check the CSS linked by the built page, not source files or unused chunks. */
-export async function validateBuiltStyles(buildDirectory: string) {
-  const html = await readFile(
-    join(buildDirectory, 'server/app/baml/book/errors.html'),
-    'utf8',
-  );
+export async function validateBuiltStyles(
+  buildDirectory: string,
+  html: string,
+) {
   const stylesheets = new Set(
     [...html.matchAll(/<link\b[^>]*>/g)]
       .filter(([tag]) => /\brel="stylesheet"/.test(tag))

@@ -74,43 +74,15 @@ async fn http_fetch_and_text() {
     );
 }
 
-#[tokio::test]
-async fn http_response_status() {
-    let (_server, uri) = mock(&[MockEndpoint {
-        path: "/status",
-        status: 201,
-        body: None,
-    }])
-    .await;
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> int {{
-                let response = baml.http.fetch("{uri}/status");
-                response.status_code
-            }}
-        "#
-    ));
-
-    insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
-    function main() -> int {
-        load_const "{URI}/status"
-        load_const <omitted>
-        call baml.http.fetch
-        load_field .status_code
-        return
-    }
-    "#);
-    assert_eq!(output.result, Ok(BexExternalValue::Int(201)));
-}
-
 /// Regression test: field access on a foreign class instance must compile
 /// as `load_field`, NOT `load_map_element`.
 #[tokio::test]
 async fn foreign_class_field_access_compiles_correctly() {
     let (_server, uri) = mock(&[MockEndpoint {
         path: "/test",
-        status: 200,
+        // A non-default success status preserves the old status-code propagation
+        // assertion while this regression pins the stronger bytecode contract.
+        status: 201,
         body: Some("ok"),
     }])
     .await;
@@ -135,7 +107,7 @@ async fn foreign_class_field_access_compiles_correctly() {
         return
     }
     "#);
-    assert_eq!(output.result, Ok(BexExternalValue::Int(200)));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(201)));
 }
 
 #[tokio::test]

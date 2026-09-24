@@ -259,6 +259,8 @@ define_request_tables! {
         "textDocument/hover" => hover,
         "textDocument/definition" => goto_definition,
         "textDocument/references" => references,
+        "textDocument/prepareRename" => prepare_rename,
+        "textDocument/rename" => rename,
         "textDocument/documentSymbol" => document_symbol,
         "workspace/symbol" => workspace_symbol,
         "textDocument/semanticTokens/range" => semantic_tokens_range,

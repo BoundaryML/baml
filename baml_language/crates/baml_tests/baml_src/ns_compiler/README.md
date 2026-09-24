@@ -6,6 +6,13 @@ reject isolated source snippets without linking or initializing them. Diagnostic
 expectations implement `DiagnosticExpectation`, and `AssertMultiRejected`
 checks ordered groups of diagnostics.
 
+Use `CompileSuccessDiagnostics` for warnings/advisories: it deliberately uses
+the public `reflect.Package.compile` path because successful `_compile`
+artifacts do not expose diagnostics. Reflected diagnostics retain severity,
+phase, separate headline/primary label, all source annotations, related
+locations, and message-highlight byte ranges; `message` remains the compatible
+flattened headline-plus-primary-label form.
+
 Organize suites by compiler concept and then behavior:
 
 ```text

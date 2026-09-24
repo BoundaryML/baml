@@ -38,23 +38,23 @@ use crate::{
 
 fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
     match ty {
-        Ty::Interface(name, generics, associated, _) => {
+        Ty::Interface(name, generics, associated) => {
             out.insert(name.clone());
             for ty in generics.iter().chain(associated.iter().map(|(_, ty)| ty)) {
                 collect_interface_tys(ty, out);
             }
         }
-        Ty::Class(_, args, _) => {
+        Ty::Class(_, args) => {
             for ty in args {
                 collect_interface_tys(ty, out);
             }
         }
-        Ty::List(inner, _) => collect_interface_tys(inner, out),
+        Ty::List(inner) => collect_interface_tys(inner, out),
         Ty::Map { key, value, .. } => {
             collect_interface_tys(key, out);
             collect_interface_tys(value, out);
         }
-        Ty::Union(items, _) => {
+        Ty::Union(items) => {
             for ty in items {
                 collect_interface_tys(ty, out);
             }
@@ -71,7 +71,7 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
             collect_interface_tys(ret, out);
             collect_interface_tys(throws, out);
         }
-        Ty::Future(value, error, _) => {
+        Ty::Future(value, error) => {
             collect_interface_tys(value, out);
             collect_interface_tys(error, out);
         }
@@ -79,22 +79,22 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
         | Ty::EnumVariant(..)
         | Ty::TypeAlias(..)
         | Ty::Literal(..)
-        | Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Bool { .. }
-        | Ty::Null { .. }
-        | Ty::Uint8Array { .. }
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
         | Ty::Media(..)
         | Ty::TypeVar(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. }
-        | Ty::Resource { .. }
-        | Ty::PromptAst { .. }
-        | Ty::Void { .. }
-        | Ty::Unknown { .. }
-        | Ty::Never { .. } => {}
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Void
+        | Ty::Unknown
+        | Ty::Never => {}
     }
 }
 
@@ -350,12 +350,12 @@ fn to_source_code_internal(
     // Every symbol in the pool routes to exactly one leaf. Dedup via
     // `BTreeSet` so leaf and directory enumeration below is stable.
     let mut leaves: BTreeSet<LeafPath> = BTreeSet::new();
-    for (key, symbol) in pool {
-        leaves.insert(names.route(key, symbol));
+    for key in pool.keys() {
+        leaves.insert(names.route(key));
     }
     let interface_tokens = public_interface_tokens(pool);
     for name in &interface_tokens {
-        leaves.insert(names.route_class_ref(name));
+        leaves.insert(names.route(name));
     }
 
     // `baml/` always exists — even if no stdlib symbols route there,
@@ -376,10 +376,9 @@ fn to_source_code_internal(
     // Walk every leaf's ancestor chain to discover all directories that
     // need an `__init__.py` and the set of immediate subdirectory
     // children for each directory. A single directory may be both a
-    // routed leaf AND have subdirectory children (e.g. `stream_types/`
-    // when there are no-namespace `root..Foo$stream` symbols alongside
-    // namespaced stream symbols). Those cases merge into a single
-    // `__init__.py` emission below.
+    // routed leaf AND have subdirectory children (e.g. `baml/` holds
+    // `baml` symbols alongside `baml/http/`). Those cases merge into a
+    // single `__init__.py` emission below.
     let mut all_dirs: BTreeSet<Vec<String>> = BTreeSet::new();
     let mut children: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
 
@@ -427,7 +426,7 @@ fn to_source_code_internal(
         content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
-                .filter(|name| names.route_class_ref(name) == leaf_path)
+                .filter(|name| names.route(name) == leaf_path)
                 .cloned(),
             false,
             &names,
@@ -455,7 +454,7 @@ fn to_source_code_internal(
         pyi_content.push_str(&render_interface_tokens(
             interface_tokens
                 .iter()
-                .filter(|name| names.route_class_ref(name) == leaf_path)
+                .filter(|name| names.route(name) == leaf_path)
                 .cloned(),
             true,
             &names,
@@ -536,19 +535,19 @@ fn render_function_registry(pool: &SymbolPool, names: &PythonNames) -> String {
                         baml_base::Name::new(format!("{}@spec", name.name())),
                     )) =>
             {
-                Some((name, symbol, function))
+                Some((name, function))
             }
             _ => None,
         })
         .collect();
-    functions.sort_by_key(|(name, _, _)| *name);
+    functions.sort_by_key(|(name, _)| *name);
 
     let mut out = String::from(
         "from __future__ import annotations\n\nFUNCTIONS: dict[str, dict[str, object]] = {\n",
     );
-    for (name, symbol, function) in functions {
+    for (name, function) in functions {
         let fqn = name.to_string();
-        let leaf = names.route(name, symbol);
+        let leaf = names.route(name);
         let module = if leaf.segments.is_empty() {
             "baml_sdk".to_string()
         } else {
@@ -633,7 +632,7 @@ fn init_pyi_path(dir: &[String]) -> PathBuf {
 ///    partial) `sys.modules` entry synchronously. The dotted walk
 ///    proceeds through each `__getattr__` until it reaches a fully
 ///    loaded leaf, so pydantic's eager eval of private-attribute
-///    annotations like `_sse: stream_types.baml.http.SseStream`
+///    annotations like `_sse: baml.http.SseStream`
 ///    resolves without manual setattr boilerplate.
 ///
 /// The `.pyi` counterpart (`render_package_init_pyi`) emits the
@@ -695,7 +694,7 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
 /// Render the SDK root `__init__.py`. Eagerly imports the two
 /// data-only modules (`_inlinedbaml`, `_typemap`) and wires up the
 /// runtime + typemap. Top-level child packages (`baml`, `lorem`,
-/// `vendor`, `stream_types`, …) are exposed lazily through a PEP 562
+/// `vendor`, …) are exposed lazily through a PEP 562
 /// `__getattr__` — `import baml_sdk` no longer transitively loads any
 /// leaf, restoring the 25b2 lazy-import goal. The chain of attribute
 /// accesses in `<top>.<intermediate>.<bare>` annotations still works
@@ -927,30 +926,27 @@ mod tests {
     }
 
     fn class_ty(name: Name, args: Vec<Ty>) -> Ty {
-        Ty::Class(name, args.into(), baml_base::TyAttr::EMPTY)
+        Ty::Class(name, args.into())
     }
 
     fn enum_ty(name: Name) -> Ty {
-        Ty::Enum(name, baml_base::TyAttr::EMPTY)
+        Ty::Enum(name)
     }
 
     fn alias_ty(name: Name) -> Ty {
-        Ty::TypeAlias(name, baml_base::TyAttr::EMPTY)
+        Ty::TypeAlias(name)
     }
 
     fn type_var(name: BaseName) -> Ty {
-        Ty::TypeVar(
-            baml_codegen_types::ParamTy::new(0, name),
-            baml_base::TyAttr::EMPTY,
-        )
+        Ty::TypeVar(baml_codegen_types::ParamTy::new(0, name))
     }
 
     fn list(inner: Box<Ty>) -> Ty {
-        Ty::List(inner, baml_base::TyAttr::EMPTY)
+        Ty::List(inner)
     }
 
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members.into(), baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into())
     }
 
     fn origin(file: &str, span: u32) -> Origin {
@@ -972,9 +968,7 @@ mod tests {
             properties: vec![ClassProperty {
                 name: BaseName::new("a"),
                 docstring: None,
-                ty: Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                ty: Ty::Int,
             }],
             static_methods: vec![],
             instance_methods: vec![],
@@ -998,9 +992,7 @@ mod tests {
     fn alias(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::TypeAlias(TypeAlias {
             name,
-            resolves_to: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            resolves_to: Ty::Int,
             recursive: false,
             origin: origin(file, span),
         })
@@ -1015,14 +1007,10 @@ mod tests {
                 injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                ty: Ty::Int,
                 default: None,
             }],
-            return_type: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            return_type: Ty::Int,
             throws: None,
             watchers: vec![],
             origin: origin(file, span),
@@ -1226,31 +1214,19 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let stream_name = cg_name("ai", &["stream"], "Stream");
         let done_name = cg_name("ai", &["stream"], "Done");
-        let partial_name = cg_name("boundary", &["id"], "Partial");
-        let final_name = cg_name("boundary", &["id"], "Final");
+        let value_name = cg_name("boundary", &["id"], "Value");
         pool.insert(stream_name.clone(), class(stream_name.clone()));
         pool.insert(done_name.clone(), class(done_name));
-        pool.insert(partial_name.clone(), class(partial_name.clone()));
-        pool.insert(final_name.clone(), class(final_name.clone()));
+        pool.insert(value_name.clone(), class(value_name.clone()));
         pool.insert(
             cg_name("boundary", &[], "id"),
-            zero_arg_func(
-                "id",
-                Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
-                "core.baml",
-                0,
-            ),
+            zero_arg_func("id", Ty::String, "core.baml", 0),
         );
         pool.insert(
             cg_name("boundary", &["id"], "current"),
             zero_arg_func(
                 "current",
-                class_ty(
-                    stream_name,
-                    vec![class_ty(partial_name, vec![]), class_ty(final_name, vec![])],
-                ),
+                class_ty(stream_name, vec![class_ty(value_name, vec![])]),
                 "id.baml",
                 0,
             ),
@@ -1272,7 +1248,7 @@ mod tests {
             "from ...ai.stream import Done as _BamlStreamDone\nfrom baml_bridge import BamlStream as _BamlStream\n"
         ));
         assert!(pyi.contains(
-            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Partial, _BamlStreamDone], vendor.boundary.id.Partial, vendor.boundary.id.Final]: ...\n"
+            "    def current(self) -> _BamlStream[typing.Union[vendor.boundary.id.Value, _BamlStreamDone], vendor.boundary.id.Value, vendor.boundary.id.Value]: ...\n"
         ));
         assert!(pyi.contains("    from ... import vendor\n"));
         assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
@@ -1309,9 +1285,7 @@ mod tests {
                 vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: None,
-                    ty: Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::Int,
                 }],
             ),
         );
@@ -1338,9 +1312,7 @@ mod tests {
                 vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: Some("Identifier".to_string()),
-                    ty: Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::Int,
                 }],
             ),
         );
@@ -1374,21 +1346,12 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("title"),
                         docstring: Some("Title shown in lists.".to_string()),
-                        ty: Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::String,
                     },
                     ClassProperty {
                         name: BaseName::new("body"),
                         docstring: Some("Free-form body text.".to_string()),
-                        ty: union(vec![
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
+                        ty: union(vec![Ty::String, Ty::Null]),
                     },
                 ],
             ),
@@ -1416,9 +1379,7 @@ mod tests {
                 vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: None,
-                    ty: Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::Int,
                 }],
             ),
         );
@@ -1526,16 +1487,12 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("a"),
                         docstring: None,
-                        ty: Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::Int,
                     },
                     ClassProperty {
                         name: BaseName::new("b"),
                         docstring: None,
-                        ty: Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::Int,
                     },
                 ],
             ),
@@ -1565,16 +1522,12 @@ mod tests {
                     ClassProperty {
                         name: BaseName::new("a"),
                         docstring: Some("First.".to_string()),
-                        ty: Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::Int,
                     },
                     ClassProperty {
                         name: BaseName::new("b"),
                         docstring: None,
-                        ty: Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::Int,
                     },
                 ],
             ),
@@ -1661,9 +1614,7 @@ mod tests {
                 properties: vec![ClassProperty {
                     name: BaseName::new("a"),
                     docstring: None,
-                    ty: Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::Int,
                 }],
                 static_methods: vec![],
                 instance_methods: vec![method],
@@ -1710,17 +1661,7 @@ mod tests {
         pool.insert(done_name.clone(), class(done_name));
 
         let mut f = bare_func("extract_resume_stream", "x.baml", 0);
-        f.return_type = class_ty(
-            stream_name,
-            vec![
-                Ty::Int {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
-                Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
-            ],
-        );
+        f.return_type = class_ty(stream_name, vec![Ty::Int]);
         pool.insert(
             cg_name("user", &["lorem"], "extract_resume_stream"),
             Symbol::Function(f),
@@ -1731,65 +1672,9 @@ mod tests {
         assert!(stub.contains("from ..ai.stream import Done as _BamlStreamDone\n"));
         assert!(stub.contains("from baml_bridge import BamlStream as _BamlStream\n"));
         assert!(stub.contains(
-            "def extract_resume_stream(x: int) -> _BamlStream[typing.Union[int, _BamlStreamDone], int, str]:"
+            "def extract_resume_stream(x: int) -> _BamlStream[typing.Union[int, _BamlStreamDone], int, int]:"
         ));
         assert!(!stub.contains("ai.stream.Stream"));
-    }
-
-    #[test]
-    fn stream_state_class_is_not_rewritten_as_host_handle() {
-        let mut pool: SymbolPool = HashMap::new();
-        let stream_state_name = cg_name("ai", &["stream"], "Stream$stream");
-        let holder_name = cg_name("user", &["lorem"], "PartialHolder");
-        pool.insert(stream_state_name.clone(), class(stream_state_name.clone()));
-        pool.insert(
-            holder_name.clone(),
-            class_with_props(
-                holder_name,
-                vec![(
-                    "stream_state",
-                    class_ty(
-                        stream_state_name,
-                        vec![
-                            Ty::Int {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ],
-                    ),
-                )],
-                "x.baml",
-                0,
-            ),
-        );
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        for path in ["lorem/__init__.py", "lorem/__init__.pyi"] {
-            let leaf = &out[&PathBuf::from(path)];
-            assert!(
-                leaf.contains("stream_state: stream_types.ai.stream.Stream[int, str]"),
-                "{path} lowered a partial-state class incorrectly:\n{leaf}"
-            );
-            assert!(!leaf.contains("_BamlStream["));
-        }
-    }
-
-    #[test]
-    fn partial_alias_hoisting_ignores_the_synthetic_stream_types_prefix() {
-        let partial_ai = LeafPath {
-            segments: vec!["stream_types".into(), "ai".into()],
-        };
-
-        assert!(crate::leaf::routes_outside_package(
-            &partial_ai,
-            &cg_name("baml", &["media"], "Image"),
-        ));
-        assert!(!crate::leaf::routes_outside_package(
-            &partial_ai,
-            &cg_name("ai", &["content"], "Media"),
-        ));
     }
 
     #[test]
@@ -1818,26 +1703,6 @@ mod tests {
             "{leaf}"
         );
         assert!(!leaf.contains("user.lorem.extract_resume$spec"), "{leaf}");
-    }
-
-    #[test]
-    fn stream_class_routes_to_stream_types() {
-        let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(n.clone(), class(n));
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
-        // The Python identifier strips `$stream`; the engine FQN keeps
-        // it (stored on the `_baml_type_name` ClassVar) so the engine
-        // and the typemap key agree on the wire name.
-        assert!(!leaf.contains("class Resume$stream"));
-        assert!(!leaf.contains("Resume$stream =")); // no register-as-suffix
-
-        // The non-stream `lorem/` dir isn't emitted — no non-stream
-        // user.lorem symbols routed here.
-        assert!(!out.contains_key(&PathBuf::from("lorem/__init__.py")));
     }
 
     #[test]
@@ -1976,37 +1841,6 @@ mod tests {
             !ipsum.contains("_define_function"),
             "ipsum leaf must not reference _define_function:\n{ipsum}"
         );
-
-        // Stream-types leaves carry only stream-companion classes — no
-        // factories — so they must not pull a function-factory helper.
-        for (path, content) in &out {
-            let s = path.to_string_lossy();
-            if s.starts_with("stream_types/") && s.ends_with("__init__.py") {
-                assert!(
-                    !content.contains("_define_function"),
-                    "stream_types leaf {} must not import factory:\n{}",
-                    path.display(),
-                    content
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn stream_variant_under_stream_types() {
-        let mut pool: SymbolPool = HashMap::new();
-        let n = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(n.clone(), class(n));
-
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-
-        assert!(out.contains_key(&PathBuf::from("stream_types/__init__.py")));
-        assert!(out.contains_key(&PathBuf::from("stream_types/lorem/__init__.py")));
-
-        // 25b2 Phase 4: subpackage cascade is gone — root no longer pulls
-        // in stream_types. The leaf still carries the routed companion.
-        let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        assert!(stream_leaf.contains("class Resume(pydantic.BaseModel):"));
     }
 
     #[test]
@@ -2151,29 +1985,9 @@ mod tests {
             class_with_props(
                 n,
                 vec![
-                    (
-                        "name",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
-                    (
-                        "email",
-                        union(vec![
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
-                    ),
-                    (
-                        "tags",
-                        list(Box::new(Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        })),
-                    ),
+                    ("name", Ty::String),
+                    ("email", union(vec![Ty::String, Ty::Null])),
+                    ("tags", list(Box::new(Ty::String))),
                 ],
                 "x.baml",
                 0,
@@ -2196,14 +2010,7 @@ mod tests {
     #[test]
     fn nullable_fields_default_none_without_changing_function_parameters() {
         let mut pool: SymbolPool = HashMap::new();
-        let nullable_string = union(vec![
-            Ty::String {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            Ty::Null {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-        ]);
+        let nullable_string = union(vec![Ty::String, Ty::Null]);
         let nullable_alias = cg_name("user", &["lorem"], "NullableText");
         pool.insert(
             nullable_alias.clone(),
@@ -2221,27 +2028,9 @@ mod tests {
             class_with_props(
                 model,
                 vec![
-                    (
-                        "required",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
+                    ("required", Ty::String),
                     ("nullable", nullable_string.clone()),
-                    (
-                        "nullable_union",
-                        union(vec![
-                            Ty::Int {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
-                    ),
+                    ("nullable_union", union(vec![Ty::Int, Ty::String, Ty::Null])),
                     ("nullable_alias", alias_ty(nullable_alias)),
                     ("nullable_items", list(Box::new(nullable_string.clone()))),
                 ],
@@ -2363,12 +2152,8 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = union(vec![
-            Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            Ty::String {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            Ty::Int,
+            Ty::String,
             list(Box::new(alias_ty(n.clone()))),
         ]);
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
@@ -2428,12 +2213,7 @@ mod tests {
             json.clone(),
             alias_full(
                 json.clone(),
-                union(vec![
-                    Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                    alias_ty(json.clone()),
-                ]),
+                union(vec![Ty::Int, alias_ty(json.clone())]),
                 true,
                 "tree.baml",
                 0,
@@ -2446,84 +2226,6 @@ mod tests {
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
         assert!(leaf.contains("Bar: typing.TypeAlias = typing.List[JsonValue]\n"));
-    }
-
-    #[test]
-    fn stream_companion_resolves_non_stream_sibling_by_fqn() {
-        // $stream companion with a field typed as the non-stream sibling.
-        let mut pool: SymbolPool = HashMap::new();
-        let non_stream = cg_name("user", &["lorem"], "Resume");
-        let stream = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(
-            non_stream.clone(),
-            class_with_props(
-                non_stream.clone(),
-                vec![(
-                    "name",
-                    Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                )],
-                "x.baml",
-                0,
-            ),
-        );
-        pool.insert(
-            stream.clone(),
-            class_with_props(
-                stream,
-                vec![
-                    (
-                        "summary",
-                        union(vec![
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
-                    ),
-                    // Non-stream FQN -> resolves to baml_sdk.lorem.Resume
-                    ("origin", class_ty(non_stream, vec![])),
-                ],
-                "x.baml",
-                0,
-            ),
-        );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-
-        // Non-stream leaf has the sibling.
-        let non_stream_leaf = &out[&PathBuf::from("lorem/__init__.py")];
-        assert!(non_stream_leaf.contains("class Resume(pydantic.BaseModel):\n"));
-
-        // Stream leaf has the companion; the cross-stream reference to
-        // the non-stream sibling should render as `lorem.Resume` (G3's
-        // cross-leaf FQN form).
-        let stream_leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        let expected = "class Resume(pydantic.BaseModel):\n\
-                        \x20   model_config = pydantic.ConfigDict(\n\
-                        \x20       arbitrary_types_allowed=True,\n\
-                        \x20       extra=\"ignore\",\n\
-                        \x20       populate_by_name=True,\n\
-                        \x20   )\n\
-                        \x20   summary: typing.Optional[str] = None\n\
-                        \x20   origin: lorem.Resume\n";
-        assert!(
-            stream_leaf.contains(expected),
-            "stream leaf missing body:\n{stream_leaf}"
-        );
-        // 25b2 Phase 4: cross-leaf Pydantic field-edge import lifted out
-        // of TYPE_CHECKING. Different first segments so root-anchored
-        // (three dots from depth-2 stream leaf).
-        assert!(
-            stream_leaf.contains("\nfrom ... import lorem\n"),
-            "stream leaf missing unconditional three-dot lorem import:\n{stream_leaf}"
-        );
-        assert!(
-            !stream_leaf.contains("if typing.TYPE_CHECKING:\n    from ... import lorem"),
-            "lorem import should not be under TYPE_CHECKING:\n{stream_leaf}"
-        );
     }
 
     #[test]
@@ -2580,15 +2282,11 @@ mod tests {
                     injected: false,
                     name: BaseName::new(*n),
                     docstring: None,
-                    ty: Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::String,
                     default: None,
                 })
                 .collect(),
-            return_type: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            return_type: Ty::Int,
             throws: None,
             watchers: vec![],
             origin: origin(file, span),
@@ -2656,18 +2354,14 @@ mod tests {
                         injected: false,
                         name: BaseName::new("query"),
                         docstring: None,
-                        ty: Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::String,
                         default: None,
                     },
                     FunctionArgument {
                         injected: false,
                         name: BaseName::new("max_results"),
                         docstring: None,
-                        ty: Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::Int,
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                             baml_base::Literal::Int(10),
                         ))),
@@ -2676,9 +2370,7 @@ mod tests {
                         injected: false,
                         name: BaseName::new("filter"),
                         docstring: None,
-                        ty: Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        ty: Ty::String,
                         default: Some(FunctionArgumentDefault::Expression {
                             source: Some("default_filter()".to_string()),
                         }),
@@ -2687,9 +2379,7 @@ mod tests {
                         injected: false,
                         name: BaseName::new("tags"),
                         docstring: None,
-                        ty: list(Box::new(Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        })),
+                        ty: list(Box::new(Ty::String)),
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
                     },
                     FunctionArgument {
@@ -2697,13 +2387,8 @@ mod tests {
                         name: BaseName::new("metadata"),
                         docstring: None,
                         ty: Ty::Map {
-                            key: Box::new(Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            }),
-                            value: Box::new(Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            }),
-                            attr: baml_base::TyAttr::EMPTY,
+                            key: Box::new(Ty::String),
+                            value: Box::new(Ty::String),
                         },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
                     },
@@ -2711,20 +2396,11 @@ mod tests {
                         injected: false,
                         name: BaseName::new("fallback"),
                         docstring: None,
-                        ty: union(vec![
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
+                        ty: union(vec![Ty::String, Ty::Null]),
                         default: Some(FunctionArgumentDefault::Null),
                     },
                 ],
-                return_type: Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                return_type: Ty::String,
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
@@ -2768,9 +2444,7 @@ mod tests {
                         injected: false,
                         name: BaseName::new("tags"),
                         docstring: None,
-                        ty: list(Box::new(Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        })),
+                        ty: list(Box::new(Ty::String)),
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
                     },
                     FunctionArgument {
@@ -2778,13 +2452,8 @@ mod tests {
                         name: BaseName::new("metadata"),
                         docstring: None,
                         ty: Ty::Map {
-                            key: Box::new(Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            }),
-                            value: Box::new(Ty::Int {
-                                attr: baml_base::TyAttr::EMPTY,
-                            }),
-                            attr: baml_base::TyAttr::EMPTY,
+                            key: Box::new(Ty::String),
+                            value: Box::new(Ty::Int),
                         },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
                     },
@@ -2792,20 +2461,11 @@ mod tests {
                         injected: false,
                         name: BaseName::new("fallback"),
                         docstring: None,
-                        ty: union(vec![
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
+                        ty: union(vec![Ty::String, Ty::Null]),
                         default: Some(FunctionArgumentDefault::Null),
                     },
                 ],
-                return_type: Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                return_type: Ty::String,
                 throws: None,
                 watchers: vec![],
                 origin: origin("x.baml", 0),
@@ -2866,31 +2526,11 @@ mod tests {
         let b = cg_name("user", &["lorem"], "Beta");
         pool.insert(
             a.clone(),
-            class_with_props(
-                a,
-                vec![(
-                    "x",
-                    Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                )],
-                "a.baml",
-                0,
-            ),
+            class_with_props(a, vec![("x", Ty::Int)], "a.baml", 0),
         );
         pool.insert(
             b.clone(),
-            class_with_props(
-                b,
-                vec![(
-                    "y",
-                    Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                )],
-                "b.baml",
-                0,
-            ),
+            class_with_props(b, vec![("y", Ty::String)], "b.baml", 0),
         );
         let out1 = to_source_code(&pool, &[], NamingConvention::PreserveCase);
         let out2 = to_source_code(&pool, &[], NamingConvention::PreserveCase);
@@ -2934,15 +2574,11 @@ mod tests {
                     injected: false,
                     name: BaseName::new(*n),
                     docstring: None,
-                    ty: Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::Int,
                     default: None,
                 })
                 .collect(),
-            return_type: Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            return_type: Ty::Int,
             throws: None,
             watchers: vec![],
             origin: origin(file, span),
@@ -3105,8 +2741,6 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let resume = cg_name("user", &["lorem"], "Resume");
         pool.insert(resume.clone(), class(resume));
-        let stream = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(stream.clone(), class(stream));
         let bucket = cg_name("aws", &["s3"], "Bucket");
         pool.insert(bucket.clone(), class(bucket));
 
@@ -3135,23 +2769,8 @@ mod tests {
             class_with_props(
                 n,
                 vec![
-                    (
-                        "name",
-                        Ty::String {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ),
-                    (
-                        "email",
-                        union(vec![
-                            Ty::String {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                            Ty::Null {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
-                        ]),
-                    ),
+                    ("name", Ty::String),
+                    ("email", union(vec![Ty::String, Ty::Null])),
                 ],
                 "x.baml",
                 0,
@@ -3229,9 +2848,7 @@ mod tests {
                     injected: false,
                     name: BaseName::new("text"),
                     docstring: None,
-                    ty: Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::String,
                     default: None,
                 }],
                 return_type: class_ty(resume, vec![]),
@@ -3276,12 +2893,8 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["tree"], "JsonValue");
         let rhs = union(vec![
-            Ty::Int {
-                attr: baml_base::TyAttr::EMPTY,
-            },
-            Ty::String {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            Ty::Int,
+            Ty::String,
             list(Box::new(alias_ty(n.clone()))),
         ]);
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
@@ -3616,77 +3229,31 @@ mod tests {
     }
 
     #[test]
-    fn cross_leaf_stream_to_nonstream() {
-        // stream_types/lorem leaf references the non-stream Resume —
-        // depth 2, three dots: `from ... import lorem`.
-        let mut pool: SymbolPool = HashMap::new();
-        let non_stream = cg_name("user", &["lorem"], "Resume");
-        let stream = cg_name("user", &["lorem"], "Resume$stream");
-        pool.insert(
-            non_stream.clone(),
-            class_with_props(
-                non_stream.clone(),
-                vec![(
-                    "name",
-                    Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
-                )],
-                "x.baml",
-                0,
-            ),
-        );
-        pool.insert(
-            stream.clone(),
-            class_with_props(
-                stream,
-                vec![("origin", class_ty(non_stream, vec![]))],
-                "x.baml",
-                0,
-            ),
-        );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
-        // 25b2 Phase 4: lifted out of TYPE_CHECKING in `.py`. Different
-        // first segments (stream_types vs lorem) so import stays root-
-        // anchored — three dots from depth-2 stream leaf.
-        assert!(
-            py.contains("\nfrom ... import lorem\n"),
-            "py missing unconditional lorem import from stream leaf:\n{py}"
-        );
-        assert!(
-            !py.contains("if typing.TYPE_CHECKING:\n    from ... import lorem"),
-            "py lorem import should not be under TYPE_CHECKING:\n{py}"
-        );
-    }
-
-    #[test]
-    fn cross_leaf_deep_stream_vendor() {
-        // stream_types/vendor/aws/s3 leaf (depth 4) referencing
-        // baml.http.Response. Always anchor at the SDK root and import
-        // the top-level segment `baml` — five dots escape the depth-4
-        // leaf to the SDK root.
+    fn cross_leaf_deep_vendor() {
+        // vendor/aws/s3 leaf (depth 3) referencing baml.http.Response.
+        // Always anchor at the SDK root and import the top-level segment
+        // `baml` — four dots escape the depth-3 leaf to the SDK root.
         let mut pool: SymbolPool = HashMap::new();
         let response = cg_name("baml", &["http"], "Response");
-        let stream_bucket = cg_name("aws", &["s3"], "Bucket$stream");
+        let bucket = cg_name("aws", &["s3"], "Bucket");
         pool.insert(response.clone(), class(response.clone()));
         pool.insert(
-            stream_bucket.clone(),
+            bucket.clone(),
             class_with_props(
-                stream_bucket,
+                bucket,
                 vec![("resp", class_ty(response, vec![]))],
                 "x.baml",
                 0,
             ),
         );
         let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let py = &out[&PathBuf::from("stream_types/vendor/aws/s3/__init__.py")];
+        let py = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(
-            py.contains("\nfrom ..... import baml\n"),
-            "py missing five-dot import of baml:\n{py}"
+            py.contains("\nfrom .... import baml\n"),
+            "py missing four-dot import of baml:\n{py}"
         );
         assert!(
-            !py.contains("if typing.TYPE_CHECKING:\n    from ..... import baml"),
+            !py.contains("if typing.TYPE_CHECKING:\n    from .... import baml"),
             "baml should not be under TYPE_CHECKING:\n{py}"
         );
         assert!(py.contains("    resp: baml.http.Response\n"));
@@ -3842,9 +3409,7 @@ mod tests {
                     injected: false,
                     name: BaseName::new("text"),
                     docstring: None,
-                    ty: Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::String,
                     default: None,
                 }],
                 return_type: enum_ty(sentiment),
@@ -4007,9 +3572,7 @@ mod tests {
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
                 arguments: vec![],
-                return_type: Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                return_type: Ty::String,
                 throws: None,
                 watchers: vec![],
                 origin: origin("echo.baml", 100),
@@ -4055,9 +3618,7 @@ mod tests {
             injected: false,
             name: BaseName::new("label"),
             docstring: None,
-            ty: Ty::String {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            ty: Ty::String,
             default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                 baml_base::Literal::String("default".to_string()),
             ))),
@@ -4095,12 +3656,7 @@ mod tests {
                     injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
-                    ty: union(vec![
-                        type_var(BaseName::new("T")),
-                        Ty::Null {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
-                    ]),
+                    ty: union(vec![type_var(BaseName::new("T")), Ty::Null]),
                     default: Some(FunctionArgumentDefault::Null),
                 }],
                 return_type: type_var(BaseName::new("T")),
@@ -4126,10 +3682,7 @@ mod tests {
                                 type_var(BaseName::new("T")),
                             )]),
                             ret: Box::new(type_var(BaseName::new("R"))),
-                            throws: Box::new(Ty::Never {
-                                attr: baml_base::TyAttr::EMPTY,
-                            }),
-                            attr: baml_base::TyAttr::EMPTY,
+                            throws: Box::new(Ty::Never),
                         },
                         default: None,
                     },
@@ -4160,15 +3713,11 @@ mod tests {
                     ty: union(vec![
                         type_var(BaseName::new("T")),
                         type_var(BaseName::new("U")),
-                        Ty::Int {
-                            attr: baml_base::TyAttr::EMPTY,
-                        },
+                        Ty::Int,
                     ]),
                     default: None,
                 }],
-                return_type: Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                return_type: Ty::String,
                 throws: None,
                 watchers: vec![],
                 origin: origin("generic.baml", 300),
@@ -4188,9 +3737,7 @@ mod tests {
                         ty: union(vec![
                             type_var(BaseName::new("T")),
                             type_var(BaseName::new("U")),
-                            Ty::Int {
-                                attr: baml_base::TyAttr::EMPTY,
-                            },
+                            Ty::Int,
                         ]),
                         default: None,
                     },
@@ -4209,9 +3756,7 @@ mod tests {
                         default: None,
                     },
                 ],
-                return_type: Ty::String {
-                    attr: baml_base::TyAttr::EMPTY,
-                },
+                return_type: Ty::String,
                 throws: None,
                 watchers: vec![],
                 origin: origin("generic.baml", 400),
@@ -4308,9 +3853,7 @@ mod tests {
                     injected: false,
                     name: BaseName::new("label"),
                     docstring: None,
-                    ty: Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::String,
                     default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                         baml_base::Literal::String("default".to_string()),
                     ))),
@@ -4326,9 +3869,7 @@ mod tests {
             generic_params: vec![BaseName::new("V")],
             docstring: None,
             arguments: vec![],
-            return_type: Ty::String {
-                attr: baml_base::TyAttr::EMPTY,
-            },
+            return_type: Ty::String,
             throws: None,
             watchers: vec![],
             origin: origin("box.baml", 30),
@@ -4349,9 +3890,7 @@ mod tests {
                     injected: false,
                     name: BaseName::new("label"),
                     docstring: None,
-                    ty: Ty::String {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::String,
                     default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                         baml_base::Literal::String("default".to_string()),
                     ))),
@@ -4425,12 +3964,7 @@ mod tests {
     fn public_interface_type_emits_erased_runtime_token() {
         let interface = cg_name("user", &[], "Named");
         let mut function = bare_func("read_name", "main.baml", 0);
-        function.arguments[0].ty = Ty::Interface(
-            interface,
-            Box::new([]),
-            Box::new([]),
-            baml_base::TyAttr::EMPTY,
-        );
+        function.arguments[0].ty = Ty::Interface(interface, Box::new([]), Box::new([]));
         let mut pool = SymbolPool::new();
         pool.insert(
             cg_name("user", &[], "read_name"),
@@ -4493,9 +4027,7 @@ mod tests {
                 .map(|name| ClassProperty {
                     name: BaseName::new(name),
                     docstring: None,
-                    ty: Ty::Int {
-                        attr: baml_base::TyAttr::EMPTY,
-                    },
+                    ty: Ty::Int,
                 })
                 .collect(),
                 static_methods: Vec::new(),

@@ -30,3 +30,8 @@ _plan/
 
 # Per-installation telemetry state, generated at runtime.
 telemetry.toml
+
+# Scratch directories the type-quiz conformance suite makes and removes; one
+# can survive a crashed run. They land here rather than in the package because
+# the suite is run from this directory (`baml-cli test --from tools/type_quiz`).
+.type-quiz-scratch-*/

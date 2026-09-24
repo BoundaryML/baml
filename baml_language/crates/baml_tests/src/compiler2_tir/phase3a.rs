@@ -9,8 +9,8 @@ use crate::engine::TestDbExt;
 
 #[test]
 fn explicit_local_id_is_structural_call_metadata() {
+    use baml_compiler2_hir::item_data::{file_functions, function_data};
     use baml_compiler2_hir_ty::infer::ParamBinding;
-    use baml_compiler2_ppir::item_data::{file_functions, function_data};
 
     let mut db = make_db();
     let file = db.file(
@@ -317,12 +317,14 @@ fn new_mode_failures_have_good_diagnostics() {
             "expected 1 argument(s), got 0",
         ),
     ];
+    let mut db = make_db();
     for (label, client, body, expect_substr) in cases {
-        let mut db = make_db();
         let src = format!(
             "client C = openai.ResponsesClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
-        let file = db.file("test.baml", &src);
+        // Keep every case in its own namespace so one database can share the
+        // stdlib setup without duplicate C/Greet declarations.
+        let file = db.file(format!("ns_new_mode_{label}/test.baml"), &src);
         let tir = render_tir(&db, file);
         let diags: Vec<&str> = tir
             .lines()
@@ -430,7 +432,6 @@ fn union_normalization_alias() {
       }
       !! 58..59: type mismatch: expected string, got A
     }
-    type user.A$stream = int | string
     ");
 }
 
@@ -1168,9 +1169,6 @@ fn calling_class_as_function() {
       }
       !! 55..58: unresolved name: Foo
     }
-    class user.Foo$stream {
-      name: string | null
-    }
     ");
 }
 
@@ -1750,14 +1748,6 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       }
       !! 114..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
-    class user.Cat$stream {
-      name: string | null
-      legs: int | null
-    }
-    class user.Dog$stream {
-      name: string | null
-      legs: int | null
-    }
     ");
 }
 
@@ -1786,14 +1776,6 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
         return x.whiskers : !error
       }
       !! 116..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
-    }
-    class user.Cat$stream {
-      name: string | null
-      whiskers: int | null
-    }
-    class user.Dog$stream {
-      name: string | null
-      tail: bool | null
     }
     ");
 }
@@ -1825,15 +1807,6 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       }
       !! 112..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      name: string | null
-    }
-    class user.C$stream {
-      age: int | null
-    }
     ");
 }
 
@@ -1864,15 +1837,6 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       }
       !! 111..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      age: string | null
-    }
-    class user.C$stream {
-      age: int | null
-    }
     ");
 }
 
@@ -1897,12 +1861,6 @@ function f(x: A | B) -> string { return x.value; }"#,
         return x.value : !error
       }
       !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
-    }
-    class user.A$stream {
-      value: int | null
-    }
-    class user.B$stream {
-      value: string | null
     }
     ");
 }
@@ -1950,12 +1908,6 @@ function f(x: A | B | null) -> string { return x.name; }"#,
         return x.name : !error
       }
       !! 95..101: type `A | B | null` has no member `name`: its members implement no common interface that declares `name`
-    }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      name: string | null
     }
     ");
 }

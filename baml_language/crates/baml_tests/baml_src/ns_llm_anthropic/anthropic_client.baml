@@ -142,7 +142,7 @@ function anth_invoke_label(cl: anthropic.Client, input: ai.ModelTurnInput) -> st
 }
 
 function anth_stream_value(cl: anthropic.Client) -> string {
-    let stream = ai.stream.from_spec<string | null, string>(
+    let stream = ai.stream.from_spec<string>(
         AnthMockAsk@spec("Say pong."),
         client = cl,
     );
@@ -663,25 +663,27 @@ function anthropic_stream_time_to_first_token_timeout_ms() -> string {
             ),
         ],
         (mock: root.llm_mock.MockSseServer) -> {
+            // The mock holds the first event for 10s, so only the 20ms TTFT can
+            // end this call, however slow the machine is.
             let cl = anthropic.Client.new(
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 1000,
+                request_timeout_ms = 15000,
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = anth_stream_value(cl) catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
                 _ => `other:${e.to_string()}`,
             };
             `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
         },
-        first_event_delay_ms = 200,
+        first_event_delay_ms = 10000,
     )
 }
 
 test "anthropic_stream_time_to_first_token_timeout_ms" {
-    assert.equal(anthropic_stream_time_to_first_token_timeout_ms(), "20|Timeout")
+    assert.equal(anthropic_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
 }
 
 // A connection that ends BEFORE `message_stop` is a truncated turn, not a
@@ -1130,7 +1132,7 @@ function anth_live_answers() -> bool {
 }
 
 function anth_live_streams() -> bool {
-    let stream = ai.stream.from_spec<string | null, string>(AnthLiveAsk@spec("Say pong."));
+    let stream = ai.stream.from_spec<string>(AnthLiveAsk@spec("Say pong."));
     stream.final().trim().length() > 0
 }
 

@@ -15,7 +15,6 @@ use baml_codegen_types::{
     EnumVariant, Function, FunctionArgument, FunctionArgumentDefault, Name, NamingConvention,
     Origin, Symbol, SymbolPool, Ty, TypeAlias,
 };
-use baml_type::TyAttr;
 use sdk_test_harness_runner::fixtures;
 
 use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
@@ -23,37 +22,31 @@ use crate::{CodegenCtx, Overlay, load_fixture, write_codegen_output};
 const RUNTIME_GO_SUM: &str = include_str!("../../../sdks/go/baml_go/go.sum");
 
 fn ty_string() -> Ty {
-    Ty::String {
-        attr: TyAttr::default(),
-    }
+    Ty::String
 }
 
 fn ty_int() -> Ty {
-    Ty::Int {
-        attr: TyAttr::default(),
-    }
+    Ty::Int
 }
 
 fn ty_bool() -> Ty {
-    Ty::Bool {
-        attr: TyAttr::default(),
-    }
+    Ty::Bool
 }
 
 fn ty_enum(name: Name) -> Ty {
-    Ty::Enum(name, TyAttr::default())
+    Ty::Enum(name)
 }
 
 fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
-    Ty::Class(name, arguments.into(), TyAttr::default())
+    Ty::Class(name, arguments.into())
 }
 
 fn ty_alias(name: Name) -> Ty {
-    Ty::TypeAlias(name, TyAttr::default())
+    Ty::TypeAlias(name)
 }
 
 fn ty_union(members: Vec<Ty>) -> Ty {
-    Ty::Union(members.into(), TyAttr::default())
+    Ty::Union(members.into())
 }
 
 fn ty_callable(params: Vec<Ty>, ret: Ty) -> Ty {
@@ -67,10 +60,7 @@ fn ty_callable(params: Vec<Ty>, ret: Ty) -> Ty {
             })
             .collect(),
         ret: Box::new(ret),
-        throws: Box::new(Ty::Never {
-            attr: TyAttr::default(),
-        }),
-        attr: TyAttr::default(),
+        throws: Box::new(Ty::Never),
     }
 }
 
@@ -215,12 +205,8 @@ fn stage_package_edges(crate_dir: &std::path::Path) {
         ),
         synthetic_method(
             "unsupported_media",
-            vec![(
-                "value",
-                Ty::Media(baml_base::MediaKind::Generic, TyAttr::default()),
-                false,
-            )],
-            Ty::Media(baml_base::MediaKind::Generic, TyAttr::default()),
+            vec![("value", Ty::Media(baml_base::MediaKind::Generic), false)],
+            Ty::Media(baml_base::MediaKind::Generic),
         ),
     ];
     let pool = SymbolPool::from([
@@ -399,7 +385,7 @@ fn stage_package_edges(crate_dir: &std::path::Path) {
                     vec![BaseName::new("stream")],
                     BaseName::new("Stream"),
                 ),
-                vec![ty_string(), ty_string()],
+                vec![ty_string()],
             ),
             true,
         ),
@@ -443,17 +429,7 @@ fn synthetic_defaulted_extract(
             injected: true,
             name: BaseName::new("on_event"),
             docstring: None,
-            ty: ty_union(vec![
-                ty_callable(
-                    vec![ty_string()],
-                    Ty::Void {
-                        attr: TyAttr::default(),
-                    },
-                ),
-                Ty::Null {
-                    attr: TyAttr::default(),
-                },
-            ]),
+            ty: ty_union(vec![ty_callable(vec![ty_string()], Ty::Void), Ty::Null]),
             default: Some(FunctionArgumentDefault::Null),
         });
     }

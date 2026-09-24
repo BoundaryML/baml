@@ -8,6 +8,7 @@ use std::fmt;
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
+use subenum::subenum;
 
 // ============================================================================
 // Optimization Level
@@ -178,6 +179,26 @@ pub struct RuntimeInterfaceBound {
     pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
 }
 
+/// A point where lowering could not produce code for a CHECKED program: what
+/// the checker recorded and what lowering finds disagree, which is a compiler
+/// bug and never a user error (lowering runs only on a program with no
+/// errors). A function or initializer that hits one has no MIR — lowering
+/// answers with this instead, and the compile fails.
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
+pub struct MirInternalError {
+    pub message: String,
+    /// The source being lowered when the inconsistency was found.
+    pub span: Option<Span>,
+}
+
+impl std::fmt::Display for MirInternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for MirInternalError {}
+
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction<'db> {
@@ -185,8 +206,10 @@ pub struct MirFunction<'db> {
     pub arity: usize,
     /// Source span for error reporting.
     pub span: Option<Span>,
-    /// Fully-qualified identity (e.g., "`user.my_func`", "baml.sys.panic").
-    pub item_ref: ItemRef<'db>,
+    /// The function's identity: its declaration, or — for a lambda or a
+    /// tagged-template body closure — the function it was lowered inside
+    /// plus its ordinal there. Names are rendered from it at emit's boundary.
+    pub identity: MirFunctionId<'db>,
     /// Whether this function has bytecode or is a builtin.
     pub kind: MirFunctionKind<'db>,
     /// Child lambda functions defined inside this function's body.
@@ -263,10 +286,15 @@ pub struct LocalDecl {
     /// This is debugger metadata used to resolve in-scope variables from
     /// source locations.
     pub scope_span: Option<Span>,
-    /// Whether this local is captured by a nested closure.
+    /// Whether a nested closure captures this local.
     ///
     /// When `true`, the local's stack slot holds an `Object::Cell` rather than
-    /// the value directly. Reads/writes go through `LoadDeref`/`StoreDeref`.
+    /// the value directly, and reads/writes go through `LoadDeref`/`StoreDeref`.
+    /// The slot holds a cell from the binding's [`StatementKind::FreshCell`]
+    /// onward — parameters from frame entry, where the emitter wraps them —
+    /// and every access is dominated by that statement (`verify_mir` checks
+    /// this). Set when the local is declared, from HIR's capture analysis;
+    /// nothing flips it afterwards.
     pub is_captured: bool,
 }
 
@@ -362,10 +390,20 @@ pub enum StatementKind<'db> {
     /// Drop a value (run destructor if any).
     Drop(Place),
 
-    /// Replace a captured local's cell with a fresh one.
-    /// Emitted at the top of for-loop iteration bodies so each iteration's
-    /// closures capture a distinct cell.
-    FreshCell(Local),
+    /// Give a captured local a new cell: the slot now points at a cell no
+    /// closure has captured yet.
+    ///
+    /// Emitted where the binding is created, so a declaration that runs once
+    /// per loop iteration hands each iteration's closures their own cell. The
+    /// new cell holds `null`, or — with `carry_value` — the value of the cell
+    /// it replaces, which is how a C-style `for` header binding is copied into
+    /// the next iteration before the step runs (JS/Go semantics).
+    ///
+    /// Only ever targets a local whose `is_captured` is set, and every read,
+    /// write, or closure capture of that local is dominated by one of its
+    /// `FreshCell`s: that is what makes a deref load discardable
+    /// ([`Rvalue::can_discard`]) and per-iteration closures correct.
+    FreshCell { local: Local, carry_value: bool },
 
     /// Compiler intrinsic — a void side effect (log, send event).
     /// Lowered from calls to `$compiler_intrinsic` functions.
@@ -729,9 +767,19 @@ pub enum IndexKind {
 /// A place in memory (lvalue).
 ///
 /// Places represent locations that can be read from or written to.
+///
+/// Cell access is explicit. A local a closure captures
+/// ([`LocalDecl::is_captured`]) holds a cell pointer, and `Local(l)` names
+/// that pointer; `Capture(i)` names the pointer in a closure's capture array.
+/// Those two variants are also [`CellId`], the identity of a cell; the value
+/// behind one is `Deref(cell)`, and every read or write of a captured binding
+/// goes through it. Only a `MakeClosure` capture operand and a `FreshCell`
+/// target name the pointer bare. `verify_mir` checks all of this.
+#[subenum(CellId(derive(Copy)))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Place {
-    /// A local variable: `_1`
+    /// A local variable: `_1`. For a captured local, its cell pointer.
+    #[subenum(CellId)]
     Local(Local),
 
     /// Field access: `_1.field_idx`
@@ -744,12 +792,36 @@ pub enum Place {
         kind: IndexKind,
     },
 
-    /// A captured variable in a closure body, by capture index.
-    ///
-    /// `Capture(idx)` refers to the `idx`-th capture in the enclosing
-    /// `Object::Closure.captures` array.  Reads emit `LoadCapture(idx)` and
-    /// writes emit `StoreCapture(idx)`.  Only valid inside a lambda body.
+    /// The cell pointer in the `idx`-th slot of the enclosing
+    /// `Object::Closure.captures` array. Reading it bare emits `CaptureRef`
+    /// (forwarding the cell to a nested closure); the value behind it is
+    /// `Deref(Capture(idx))`. Only valid inside a lambda body.
+    #[subenum(CellId)]
     Capture(usize),
+
+    /// The value in a cell: `*_1`, `*capture[0]`.
+    ///
+    /// Reads emit `LoadDeref`/`LoadCapture` and writes `StoreDeref`/`StoreCapture`.
+    Deref(CellId),
+}
+
+impl CellId {
+    /// The local whose slot holds this cell's pointer, if it is a local's cell.
+    pub fn local(&self) -> Option<Local> {
+        match self {
+            CellId::Local(local) => Some(*local),
+            CellId::Capture(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for CellId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CellId::Local(l) => write!(f, "{l}"),
+            CellId::Capture(idx) => write!(f, "capture[{idx}]"),
+        }
+    }
 }
 
 impl Place {
@@ -759,10 +831,14 @@ impl Place {
     }
 
     /// Get the base local of this place, if it is rooted in a local.
+    ///
+    /// Transparent through `Deref`: the local whose cell holds the value is
+    /// still the local the place is rooted in.
     pub fn base_local(&self) -> Option<Local> {
         match self {
             Place::Local(l) => Some(*l),
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
+            Place::Deref(cell) => cell.local(),
             Place::Capture(_) => None,
         }
     }
@@ -775,6 +851,7 @@ impl fmt::Display for Place {
             Place::Field { base, field } => write!(f, "{base}.{field}"),
             Place::Index { base, index, .. } => write!(f, "{base}[{index}]"),
             Place::Capture(idx) => write!(f, "capture[{idx}]"),
+            Place::Deref(cell) => write!(f, "*{cell}"),
         }
     }
 }
@@ -883,12 +960,10 @@ pub enum Rvalue<'db> {
         type_arg_templates: Vec<TyTemplate>,
     },
 
-    /// Create a bound method value from a method reference and its receiver.
-    ///
-    /// `item_ref` identifies the method (class + name).
-    /// `receiver` is the instance the method is bound to.
+    /// Create a bound method value from a class-inherent method and its
+    /// receiver: `receiver` is the instance the method is bound to.
     MakeBoundMethod {
-        item_ref: ItemRef<'db>,
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
         receiver: Operand<'db>,
     },
 
@@ -974,7 +1049,7 @@ pub enum Rvalue<'db> {
     /// fully-concrete case uses the pooled, interned `Constant::GenericFunction`
     /// instead.
     MakeGenericFunction {
-        item: ItemRef<'db>,
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
         /// One template per type argument; may contain `TypeArgRef(N)`.
         type_arg_templates: Vec<TyTemplate>,
     },
@@ -985,7 +1060,7 @@ pub enum Rvalue<'db> {
     /// `LoadType` for each template then a `MakeGenericFunctionFromValue`
     /// instruction, which wraps the evaluated `value` in a `Closure` carrying
     /// the types as `captured_type_args`. Used when `lower_generic_apply`'s base
-    /// is not an `ItemRef`; the `ItemRef` cases use `Constant::GenericFunction`
+    /// is not a function ref; the function-ref cases use `Constant::GenericFunction`
     /// (concrete) or `MakeGenericFunction` (param-dependent) instead.
     MakeGenericFunctionFromValue {
         /// The callable value to specialize.
@@ -1022,7 +1097,9 @@ impl Rvalue<'_> {
     pub(crate) fn can_discard_with(&self, in_bounds: impl Fn(&Place) -> bool) -> bool {
         fn read(place: &Place, in_bounds: &impl Fn(&Place) -> bool) -> bool {
             match place {
-                Place::Local(_) | Place::Capture(_) => true,
+                // A deref load cannot fail: every access of a captured local is
+                // dominated by its `FreshCell` (`verify_mir`), so the cell exists.
+                Place::Local(_) | Place::Capture(_) | Place::Deref(_) => true,
                 // A fixed field projection is type-checked, not a user accessor.
                 // An indexing operation in its base still needs its own proof.
                 Place::Field { base, .. } => read(base, in_bounds),
@@ -1157,143 +1234,152 @@ pub enum Constant<'db> {
     /// Carried from TIR resolution through lowering. Converted to a
     /// runtime string only in the emit phase, where it becomes a pooled
     /// function-value wrapper (see `emit_pooled_function_value`). Only for
-    /// items that ARE functions; a non-function global item read (a client,
-    /// a top-level `let`, ...) is [`Constant::GlobalItem`].
-    Function(ItemRef<'db>),
-    /// A non-function global item read (a `client<llm>` declaration, a
-    /// top-level `let`, a template string, ...): the value the program's
-    /// `$init` stored in the item's global slot. Emitted as a plain
-    /// `LoadGlobal`, never wrapped — the slot holds an ordinary value
-    /// (an instance, a closure, ...), not a `Function` object.
-    GlobalItem(ItemRef<'db>),
+    /// items that ARE functions; a top-level `let` read is
+    /// [`Constant::GlobalItem`].
+    Function(baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>),
+    /// A top-level `let` read (a `client` declaration is one): the value
+    /// the program's `$init` stored in the binding's global slot. Emitted as
+    /// a plain `LoadGlobal`, never wrapped — the slot holds an ordinary value
+    /// (an instance, a closure, ...), not a `Function` object. The only
+    /// non-function item that is a value; a type declaration in value
+    /// position is a checker error and never reaches here.
+    GlobalItem(baml_compiler2_hir::loc::LetLoc<'db>),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object
     /// (pointer-stable identity) and calling it seeds `frame.type_args`.
     GenericFunction {
         /// The base generic function.
-        item: ItemRef<'db>,
+        func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
         /// The concrete type arguments — fully realized (no type parameters),
         /// exactly what the runtime `Object::GenericFunction` carries.
         type_args: Vec<RealizedTy>,
     },
     /// An enum variant value.
     EnumVariant {
-        /// Structured reference to the enum type.
-        enum_ref: ItemRef<'db>,
+        /// The enum's declaration, wherever it lives.
+        enum_ref: baml_compiler2_hir_ty::extern_loc::EnumRef<'db>,
         /// The variant name within the enum.
         variant: Name,
     },
 }
 
-/// A structured reference to a named item (function, method, enum type).
-///
-/// Uses explicit fields for package, namespace, class, and name.
-/// No string-path encoding or display-logic special-casing.
+/// A function's identity in MIR: its declaration, or — for a lambda or a
+/// tagged-template body closure — the owner it was lowered inside plus its
+/// ordinal there. Rendered to a name only at emit's boundary
+/// ([`MirFunctionId::link_name`] / [`crate::function_link_name`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ItemRef<'db> {
-    /// A free function or top-level item: `baml.env.get`, `Foo`, `baml.sys.panic`
-    Free {
-        package: Name,
-        namespace: Vec<Name>,
-        name: Name,
+pub enum MirFunctionId<'db> {
+    Declared(baml_compiler2_hir::loc::FunctionLoc<'db>),
+    /// The `ordinal`-th synthetic function of its `kind` lowered inside
+    /// `parent`.
+    Synthetic {
+        parent: Box<FunctionOwner<'db>>,
+        kind: SyntheticKind,
+        ordinal: usize,
     },
-    /// A class method: `baml.Array.length`, `Baz.Greeting`
-    Method {
-        package: Name,
-        namespace: Vec<Name>,
-        class: Name,
-        name: Name,
-    },
-    /// An enum type reference: `HttpMethod`, `Color`
-    EnumType {
-        package: Name,
-        namespace: Vec<Name>,
-        name: Name,
-    },
-    /// An interface-machinery BODY: an impl block's provided method or an
-    /// interface's default body. An interface body is not itself a logical
-    /// item — its one identity is its DECLARATION, carried as the
-    /// [`InterfaceBodyRef::decl`] location; `display_owner` exists only so
-    /// bytecode and trace spellings keep their `<(target as iface)>` /
-    /// `Iface` form, and is never a key.
-    InterfaceBody(Box<InterfaceBodyRef<'db>>),
 }
 
-/// A reference to an interface-machinery body: the declaration — a body's
-/// one identity, carried as the `'db` location itself the way every other
-/// compiler layer carries declarations — plus display-only spelling parts.
-/// The ref itself is never serialized — rule / interface tables reference
-/// bodies by object index — but decompose DOES render the spelling as the
-/// unit export/import key (the U1-sanctioned link-internal string lane), so
-/// the spelling must be unique; coherence and the canonical
-/// `<(target as iface)>` rendering guarantee it, and decompose enforces it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceBodyRef<'db> {
-    pub package: Name,
-    pub namespace: Vec<Name>,
-    /// Display-only owner segment, exactly as the display convention renders
-    /// it: `<(target as iface)>` for an impl body, the interface's bare name
-    /// for a default body. Never an identity, never a key.
-    pub display_owner: Name,
-    /// The body's declaration.
-    pub decl: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    pub method: Name,
+/// What a synthetic function was lowered from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyntheticKind {
+    /// A lambda expression.
+    Lambda,
+    /// A tagged template's body closure.
+    Tagged,
 }
 
-impl fmt::Display for ItemRef<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Always include the package prefix (including "user").
-        // All parts are joined with ".".
+/// Where a function body is lowered: a declared function, a top-level `let`
+/// initializer (lowered as a body, never a `MirFunction` of its own — it
+/// only ever OWNS synthetic functions), or a synthetic function.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FunctionOwner<'db> {
+    Function(baml_compiler2_hir::loc::FunctionLoc<'db>),
+    Let(baml_compiler2_hir::loc::LetLoc<'db>),
+    Synthetic(Box<MirFunctionId<'db>>),
+}
+
+impl MirFunctionId<'_> {
+    /// The name this function links and displays as — the declaration's
+    /// link name, or the synthetic spelling `<lambda(owner, i)>` /
+    /// `<tagged(owner, i)>` under an EMPTY package segment (the historical
+    /// rendering, which the bytecode display pins).
+    pub fn link_name(&self, db: &dyn crate::Db) -> String {
         match self {
-            ItemRef::Free {
-                package,
-                namespace,
-                name,
+            MirFunctionId::Declared(func) => crate::lower::definition_link_name(
+                db,
+                baml_compiler2_hir::contributions::Definition::Function(*func),
+            ),
+            MirFunctionId::Synthetic { .. } => format!(".{}", self.short_name(db)),
+        }
+    }
+
+    /// The spelling a nested synthetic function names its owner by: the
+    /// declaration's link-name tail (`definition_short_name` — `f`,
+    /// `Class.m`, `Interface.m`, `<(target as iface)>.m`), or the owner's
+    /// own synthetic spelling.
+    pub fn short_name(&self, db: &dyn crate::Db) -> String {
+        match self {
+            MirFunctionId::Declared(func) => crate::lower::definition_short_name(
+                db,
+                baml_compiler2_hir::contributions::Definition::Function(*func),
+            ),
+            MirFunctionId::Synthetic {
+                parent,
+                kind,
+                ordinal,
             } => {
-                let mut parts: Vec<&str> = vec![package.as_str()];
-                for ns in namespace {
-                    parts.push(ns.as_str());
-                }
-                parts.push(name.as_str());
-                write!(f, "{}", parts.join("."))
+                let kind = match kind {
+                    SyntheticKind::Lambda => "lambda",
+                    SyntheticKind::Tagged => "tagged",
+                };
+                format!("<{kind}({}, {ordinal})>", parent.short_name(db))
             }
-            ItemRef::Method {
-                package,
-                namespace,
-                class,
-                name,
-            } => {
-                let mut parts: Vec<&str> = vec![package.as_str()];
-                for ns in namespace {
-                    parts.push(ns.as_str());
-                }
-                parts.push(class.as_str());
-                parts.push(name.as_str());
-                write!(f, "{}", parts.join("."))
+        }
+    }
+
+    /// This identity as a [`fmt::Display`] value that renders
+    /// [`Self::link_name`] when formatted, not when created.
+    pub fn display<'a>(&'a self, db: &'a dyn crate::Db) -> impl fmt::Display + 'a {
+        // Assertion messages format their arguments only when they fire, so
+        // a caller that never fails never pays for `definition_link_name`.
+        struct Lazy<'a, 'db> {
+            db: &'a dyn crate::Db,
+            id: &'a MirFunctionId<'db>,
+        }
+        impl fmt::Display for Lazy<'_, '_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&self.id.link_name(self.db))
             }
-            ItemRef::EnumType {
-                package,
-                namespace,
-                name,
-            } => {
-                let mut parts: Vec<&str> = vec![package.as_str()];
-                for ns in namespace {
-                    parts.push(ns.as_str());
-                }
-                parts.push(name.as_str());
-                write!(f, "{}", parts.join("."))
+        }
+        Lazy { db, id: self }
+    }
+}
+
+impl<'db> FunctionOwner<'db> {
+    /// The spelling a synthetic function names this owner by — see
+    /// [`MirFunctionId::short_name`].
+    pub fn short_name(&self, db: &dyn crate::Db) -> String {
+        use baml_compiler2_hir::contributions::Definition;
+        match self {
+            FunctionOwner::Function(func) => {
+                crate::lower::definition_short_name(db, Definition::Function(*func))
             }
-            // Renders exactly as the pre-structural `Method` spelling did:
-            // `{package}.{ns…}.{display_owner}.{method}`.
-            ItemRef::InterfaceBody(body) => {
-                let mut parts: Vec<&str> = vec![body.package.as_str()];
-                for ns in &body.namespace {
-                    parts.push(ns.as_str());
-                }
-                parts.push(body.display_owner.as_str());
-                parts.push(body.method.as_str());
-                write!(f, "{}", parts.join("."))
+            FunctionOwner::Let(binding) => {
+                crate::lower::definition_short_name(db, Definition::Let(*binding))
+            }
+            FunctionOwner::Synthetic(id) => id.short_name(db),
+        }
+    }
+
+    /// The identity of a function built under this owner. A `let`
+    /// initializer is lowered as a body, so it never builds one.
+    pub fn into_identity(self) -> MirFunctionId<'db> {
+        match self {
+            FunctionOwner::Function(func) => MirFunctionId::Declared(func),
+            FunctionOwner::Synthetic(id) => *id,
+            FunctionOwner::Let(_) => {
+                unreachable!("a top-level let initializer is lowered as a body, never built")
             }
         }
     }

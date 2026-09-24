@@ -9,24 +9,24 @@
 /// Arguments:
 /// - `$name`: test function name
 /// - `$raw_string`: raw LLM output string
-/// - `$target_ty`: expression returning a `TyResolved<'_, &str>`
+/// - `$target_ty`: expression returning a `Ty<'_, &str>`
 /// - `$db`: expression returning a `TypeRefDb<'_, &str>`
 /// - `$($json)+`: expected JSON value (passed to `::serde_json::json!`)
 macro_rules! test_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr, $($json:tt)+) => {
         #[test]
         fn $name() {
-            let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
+            let target_ty: $crate::sap_model::Ty<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
             let parsed = $crate::jsonish::parse($raw_string, ::core::default::Default::default(), true)
                 .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
-            let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+            let target_ty = db.resolve(&target_ty).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
             let value = result.unwrap();
-            assert!(value.is_some(), "Coercion returned None (in_progress=never?)");
+            assert!(value.is_some(), "Coercion returned None (no partial parse yet)");
             let value = value.unwrap();
             let json_value = ::serde_json::to_value(&value).unwrap();
             let expected = ::serde_json::json!($($json)+);
@@ -40,14 +40,14 @@ macro_rules! test_failing_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr) => {
         #[test]
         fn $name() {
-            let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
+            let target_ty: $crate::sap_model::Ty<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
             let parsed =
                 $crate::jsonish::parse($raw_string, ::core::default::Default::default(), true)
                     .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
-            let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+            let target_ty = db.resolve(&target_ty).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             match result {
                 Ok(Some(v)) => {
@@ -70,24 +70,24 @@ macro_rules! test_failing_deserializer {
 /// Arguments:
 /// - `$name`: test function name
 /// - `$raw_string`: partial raw LLM output string
-/// - `$target_ty`: expression returning a `TyResolved<'_, &str>`
+/// - `$target_ty`: expression returning a `Ty<'_, &str>`
 /// - `$db`: expression returning a `TypeRefDb<'_, &str>`
 /// - `$($json)+`: expected JSON value
 macro_rules! test_partial_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr, $($json:tt)+) => {
         #[test]
         fn $name() {
-            let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
+            let target_ty: $crate::sap_model::Ty<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
             let parsed = $crate::jsonish::parse($raw_string, ::core::default::Default::default(), false)
                 .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
-            let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+            let target_ty = db.resolve(&target_ty).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
             let value = result.unwrap();
-            assert!(value.is_some(), "Coercion returned None (in_progress=never?)");
+            assert!(value.is_some(), "Coercion returned None (no partial parse yet)");
             let value = value.unwrap();
             let json_value = ::serde_json::to_value(&value).unwrap();
             let expected = ::serde_json::json!($($json)+);
@@ -96,12 +96,13 @@ macro_rules! test_partial_deserializer {
     };
 }
 
-/// Tests partial deserialization that is expected to return [`None`] (due to `@in_progress(never)` somewhere).
+/// Tests partial deserialization that is expected to return [`None`]: the input is incomplete
+/// and the target has no partial parse for it yet.
 macro_rules! test_partial_none_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr) => {
         #[test]
         fn $name() {
-            let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
+            let target_ty: $crate::sap_model::Ty<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
 
             let parsed =
@@ -109,7 +110,7 @@ macro_rules! test_partial_none_deserializer {
                     .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
-            let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+            let target_ty = db.resolve(&target_ty).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             match result {
                 Ok(Some(v)) => {
@@ -117,7 +118,7 @@ macro_rules! test_partial_none_deserializer {
                     panic!("Parsing should have returned None, got: {json}");
                 }
                 Ok(None) => {
-                    // Expected: parsing returned `None` due to being incomplete with `@in_progress(never)`
+                    // Expected: no partial parse yet
                 }
                 Err(err) => {
                     panic!("Parsing should have failed, got: {err:#?}");
@@ -133,7 +134,7 @@ macro_rules! test_partial_failing_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr) => {
         #[test]
         fn $name() {
-            let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
+            let target_ty: $crate::sap_model::Ty<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
 
             let parsed =
@@ -141,7 +142,7 @@ macro_rules! test_partial_failing_deserializer {
                     .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
-            let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
+            let target_ty = db.resolve(&target_ty).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             match result {
                 Ok(Some(v)) => {

@@ -26,7 +26,7 @@ use baml_compiler_syntax::{
         ObjectField, TypeExpr,
     },
 };
-use baml_compiler2_ppir::resolve::{
+use baml_compiler2_hir::resolve::{
     resolve_enum_variant, resolve_field, resolve_name_at, resolve_namespace_prefix, resolve_path_at,
 };
 use rowan::ast::AstNode;
@@ -438,7 +438,7 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 /// result if its inference inputs are unaffected. `returns(ref)` hands
 /// borrowing callers the memoized vec without an O(tokens) clone per request.
 #[salsa::tracked(returns(ref))]
-pub fn semantic_tokens(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<SemanticToken> {
+pub fn semantic_tokens(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
     // Full document: classify every token, so build the merged whole-file index
     // (itself a merge of per-scope salsa-cached indices) and resolve from it.
@@ -462,7 +462,7 @@ pub fn semantic_tokens(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Ve
 /// on the range would blow the cache; the underlying per-scope indices and name
 /// resolution it calls *are* memoized.
 pub fn semantic_tokens_in_range(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     start: u32,
     end: u32,
@@ -493,7 +493,7 @@ pub fn semantic_tokens_in_range(
 /// merged whole-file index; a range walk resolves on demand per scope
 /// (rust-analyzer's `Semantics::resolve` model — only visited scopes pay).
 struct Walk<'db> {
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
     resolve: Box<dyn Fn(TextRange) -> Option<Class> + 'db>,
     /// For a viewport request: subtrees that don't intersect this range are
@@ -1055,7 +1055,7 @@ fn classify_type_decl_word(token: &SyntaxToken) -> Option<Class> {
 /// type (e.g. a type parameter or an as-yet-undefined type) — only an explicit
 /// path *prefix* is a namespace, which the caller handles.
 fn classify_type_token(
-    db: &dyn baml_compiler2_ppir::Db,
+    db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     name: &str,
     offset: TextSize,
@@ -1141,6 +1141,44 @@ mod tests {
     }
 
     // ── End-to-end walks ──────────────────────────────────────────────────────
+
+    /// An interface projection reads a member like any other receiver, so its
+    /// member name carries the member's kind — and ONLY the member name. The
+    /// span comes from the recorded member-name span; the fallback (the whole
+    /// `(B as Shows).show`) would have painted the receiver too.
+    #[test]
+    fn an_interface_projection_colours_only_its_member_name() {
+        let (db, file) = test_db(
+            r#"interface Shows {
+    function show(self) -> string throws never
+}
+
+class B { v: int }
+
+implement Shows for B {
+    function show(self) -> string throws never { "b" }
+}
+
+function projection(b: B) -> string throws never { (B as Shows).show(b) }
+"#,
+        );
+        let text = file.text(&db);
+        let member = text
+            .rfind(".show")
+            .unwrap_or_else(|| unreachable!("the fixture writes the projection last"))
+            + 1;
+        let tokens = semantic_tokens(&db, file);
+        let painted = tokens
+            .iter()
+            .find(|token| usize::from(token.range.start()) == member)
+            .unwrap_or_else(|| unreachable!("the projection's member name is classified"));
+        assert_eq!(
+            &text[usize::from(painted.range.start())..usize::from(painted.range.end())],
+            "show",
+            "only the name, not the receiver"
+        );
+        assert_eq!(painted.token_type, SemanticTokenType::Method);
+    }
 
     fn test_db(source: &str) -> (ProjectDatabase, SourceFile) {
         let mut db = ProjectDatabase::new();

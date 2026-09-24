@@ -15,14 +15,14 @@ breadcrumbs:
 
 | Part | Required | Purpose |
 | --- | --- | --- |
-| Function name | Yes | Names the generated client method. |
+| Function name | Yes | Names the operation that callers invoke. |
 | Parameters | Yes | Declares the named, typed inputs; the list may be empty. |
 | Return type | Yes | Defines the result expected by BAML and generated clients. |
 | Body | Yes | Computes the result or declares a client and prompt. |
 
 ## Parameters
 
-Parameters are named and typed. Separate multiple parameters with commas. Callers pass them in declaration order through generated client methods.
+Parameters are named and typed. Separate multiple parameters with commas. In BAML, pass required arguments in declaration order or by name. Parameters with defaults are passed by name. Generated SDKs map those arguments to the host language’s calling conventions.
 
 <BamlSnippet id="functions/typed-parameters" />
 

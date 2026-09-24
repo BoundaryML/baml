@@ -109,7 +109,8 @@ impl Spell for AssocContainer {
 /// interface-existential receiver — see [`TirTypeError::InvalidSelfCallThroughInterface`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelfCallPosition {
-    /// A non-receiver parameter typed with `Self`.
+    /// `Self` in more than one parameter (the `self` receiver counts), or
+    /// nested inside a parameter's type.
     Parameter,
     /// `Self` nested inside an invariant constructor in the return or throws type
     /// (e.g. `-> Self[]`, `-> Box<Self>`); a bare top-level `-> Self` is allowed.
@@ -196,6 +197,9 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
+    /// A constructor head that is an alias of a type no object literal can
+    /// construct (anything but a class).
+    CannotConstructAlias { name: Name, denotes: baml_type::Ty },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode {
         after: StmtId,
@@ -593,26 +597,41 @@ pub enum TirTypeError {
         member_name: Name,
     },
 
-    /// An interface-existential (or union) receiver cannot call a method that uses
-    /// `Self` outside the receiver position: a non-receiver `Self` parameter (the
-    /// concrete implementor is unknown for those arguments), or `Self` nested inside
-    /// an invariant constructor in the return/throws type (`-> Self[]`, `-> Box<Self>`
-    /// — the impl returns a concretely-tagged container that is NOT a subtype of the
-    /// existential-tagged one; containers are invariant). A bare top-level `-> Self`
-    /// is fine (it collapses covariantly to the receiver). Rust `dyn Trait` parity.
+    /// An erased `Self` (an interface-existential or union) cannot call a
+    /// method that breaks the one-`Self` rule: `Self` in more than one
+    /// parameter or nested in a parameter (the concrete implementor is
+    /// unknown for those arguments), or `Self` nested inside an invariant
+    /// constructor in the return/throws type (`-> Self[]`, `-> Box<Self>` —
+    /// the impl returns a concretely-tagged container that is NOT a subtype
+    /// of the existential-tagged one; containers are invariant). A bare
+    /// top-level `-> Self` is fine (it collapses covariantly). The `self`
+    /// receiver is one `Self`-typed parameter like any other. Rust `dyn
+    /// Trait` parity.
     InvalidSelfCallThroughInterface {
         interface_name: Name,
         method_name: Name,
         position: SelfCallPosition,
     },
 
-    /// A `self`-less interface method referenced with an erased `Self` (an
-    /// interface-existential or union). There is no receiver value to derive
-    /// a concrete implementor from — dispatch is keyed on the `Self` TYPE —
-    /// and an erased type names no single impl.
+    /// An interface method with NO `Self`-typed parameter referenced with an
+    /// erased `Self` (an interface-existential or union). There is no value
+    /// to derive a concrete implementor from — dispatch is keyed on the
+    /// `Self` TYPE — and an erased type names no single impl.
     SelflessMethodNeedsConcreteSelf {
         interface_name: Name,
         method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
+    /// An object-safe method whose one `Self`-typed parameter is not the
+    /// FIRST, referenced with an erased `Self`. Dispatch on an erased `Self`
+    /// reads the first argument's runtime type; a `Self` elsewhere has no
+    /// dispatch road yet, so the call needs a concrete `Self`.
+    SelfDispatchParamNotFirst {
+        interface_name: Name,
+        method_name: Name,
+        /// Zero-based position of the `Self`-typed parameter.
+        index: usize,
         self_ty: baml_type::Ty,
     },
 
@@ -1004,7 +1023,7 @@ impl TirTypeError {
                     )
                 }
                 TirTypeError::UnresolvedMember { base_type, member } => {
-                    if matches!(base_type, Ty::Unknown { .. }) {
+                    if matches!(base_type, Ty::Unknown) {
                         write!(f, "cannot access field `{member}` on `unknown`")
                     } else {
                         write!(f, "type `{}` has no member `{member}`", base_type.spell(vp))
@@ -1108,6 +1127,11 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
+                TirTypeError::CannotConstructAlias { name, denotes } => write!(
+                    f,
+                    "cannot construct `{name}`: it is an alias of `{}`, not a class",
+                    denotes.spell(vp)
+                ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =
                         baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(
@@ -1847,9 +1871,23 @@ impl TirTypeError {
                     self_ty,
                 } => write!(
                     f,
-                    "method `{method_name}` on interface `{interface_name}` has no `self` receiver, \
-                 so `Self` must be a concrete implementor type — `{}` does not name one; \
-                 write `(SomeImplementor as {interface_name}).{method_name}`",
+                    "method `{method_name}` on interface `{interface_name}` has no `Self`-typed \
+                 parameter to dispatch on, so `Self` must be a concrete implementor type — \
+                 `{}` does not name one; write `(SomeImplementor as \
+                 {interface_name}).{method_name}`",
+                    self_ty.spell(vp)
+                ),
+                TirTypeError::SelfDispatchParamNotFirst {
+                    interface_name,
+                    method_name,
+                    index,
+                    self_ty,
+                } => write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` takes `Self` as \
+                 parameter {index} (counting from 0); an erased `Self` — `{}` — is dispatched \
+                 from the first argument only, so name a concrete `Self`: `(SomeImplementor as \
+                 {interface_name}).{method_name}(...)`",
                     self_ty.spell(vp)
                 ),
                 TirTypeError::InvalidSelfCallThroughInterface {
@@ -1858,7 +1896,9 @@ impl TirTypeError {
                     position,
                 } => {
                     let position = match position {
-                        SelfCallPosition::Parameter => "a parameter",
+                        SelfCallPosition::Parameter => {
+                            "more than one parameter, or nested in a parameter"
+                        }
                         SelfCallPosition::NestedInReturn => {
                             "its return/throws type, nested in a container (e.g. `Self[]`)"
                         }
@@ -1866,8 +1906,8 @@ impl TirTypeError {
                     write!(
                         f,
                         "method `{method_name}` on interface `{interface_name}` uses `Self` in \
-                     {position}, so it requires a concrete receiver, not an \
-                     interface-existential one"
+                     {position}, so it requires a concrete `Self`, not an erased one (an \
+                     interface-existential or union)"
                     )
                 }
                 TirTypeError::DefaultOnRequiredMethod {
@@ -2456,7 +2496,7 @@ impl<'db> TirDiagnostic<'db> {
     /// the expressions/statements referenced by `self.primary`.
     pub fn render(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
     ) -> RenderedTirDiagnostic {
@@ -2467,7 +2507,7 @@ impl<'db> TirDiagnostic<'db> {
     /// annotation-anchored diagnostics (`DiagnosticLocation::BodyTypeRef`).
     pub fn render_with_body_type_refs(
         &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
+        db: &'db dyn baml_compiler2_hir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
         type_ref_spans: Option<&baml_compiler2_hir::body_type_refs::BodyTypeRefSourceMap>,
@@ -2531,7 +2571,7 @@ impl<'db> TirDiagnostic<'db> {
 }
 
 fn resolve_related_location<'db>(
-    db: &'db dyn baml_compiler2_ppir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     scope_file: SourceFile,
     source_map: Option<&AstSourceMap>,
     location: &RelatedLocation<'db>,
@@ -2556,12 +2596,12 @@ fn resolve_related_location<'db>(
                 .map(|range| (func_loc.file(db).file_id(db), range))
         }
         RelatedLocation::ClassField(class_loc, field_name) => {
-            let class_data = baml_compiler2_ppir::item_data::class_data(db, *class_loc);
+            let class_data = baml_compiler2_hir::item_data::class_data(db, *class_loc);
             let field_index = class_data
                 .fields
                 .iter()
                 .position(|field| &field.name == field_name)?;
-            let range = baml_compiler2_ppir::item_data::class_source_map(db, *class_loc)
+            let range = baml_compiler2_hir::item_data::class_source_map(db, *class_loc)
                 .field_name_spans
                 .get(field_index)
                 .copied()?;

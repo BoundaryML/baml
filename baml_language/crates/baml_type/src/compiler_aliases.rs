@@ -133,6 +133,41 @@ impl CompilerAlias {
         }
     }
 
+    /// Whether source reaches this entry's members WITHOUT naming its
+    /// carrier class — so the carrier's own path is a spelling nobody
+    /// writes, and a surface that enumerates what a reader can type should
+    /// offer the spelling instead.
+    ///
+    /// Two independent conditions, both read off this entry rather than
+    /// listed per carrier:
+    ///
+    /// 1. The spelling must be able to ROOT A PATH. `int.max_value()`
+    ///    parses; `int[].filled` and `map<string, int>.of` do not, because
+    ///    postfix-array syntax has no bare keyword and a generic
+    ///    application is not a path root. That is what `arity == 0` on a
+    ///    [`Spelling::Named`] entry means here.
+    /// 2. The spelling must be a DIFFERENT name from the carrier's own
+    ///    path. `int` stands in for `baml.Int`, but `reflect.Type`'s
+    ///    spelling IS its declaration — there is no shorter alias to offer,
+    ///    so hiding the class would hide the only handle on its members.
+    ///
+    /// Derived rather than declared so a new carrier cannot be added with
+    /// the answer left wrong, and so the two rules have one home. It
+    /// encodes what the grammar admits, so a grammar change moves it — were
+    /// `map<K, V>.of` to parse, condition 1 would be the line to revisit.
+    /// Getting it wrong fails safe: a carrier stays offered under its path
+    /// rather than disappearing.
+    pub fn members_reachable_without_carrier(&self) -> bool {
+        let Spelling::Named(spelling) = self.spelling else {
+            return false;
+        };
+        if self.arity != 0 {
+            return false;
+        }
+        self.definition
+            .is_none_or(|definition| !definition.source_segments().eq(spelling.split('.')))
+    }
+
     /// The structural type this entry's class declaration denotes when it is
     /// applied to `arity` arguments: `class baml.media.Image` IS `image`,
     /// `class baml.Array<T>` IS `T[]`. Json stays on the alias resolver path,
@@ -150,19 +185,17 @@ impl CompilerAlias {
     /// type the carrier's class spelling denotes, or `None` to stay nominal.
     pub fn lower_class(&self, args: &[crate::interned::Ty]) -> Option<crate::interned::Ty> {
         use crate::interned::{InferTy, Ty};
-        let attr = crate::TyAttr::default();
         let kind = match self.class_carrier(args.len())? {
             AliasTarget::Primitive(primitive) => {
-                return Some(Ty::from_plain(&crate::Ty::from_primitive(primitive, attr)));
+                return Some(Ty::from_plain(&crate::Ty::from_primitive(primitive)));
             }
-            AliasTarget::List => InferTy::List(args[0].clone(), attr),
+            AliasTarget::List => InferTy::List(args[0].clone()),
             AliasTarget::Map => InferTy::Map {
                 key: args[0].clone(),
                 value: args[1].clone(),
-                attr,
             },
-            AliasTarget::Future => InferTy::Future(args[0].clone(), args[1].clone(), attr),
-            AliasTarget::Type => InferTy::Type { attr },
+            AliasTarget::Future => InferTy::Future(args[0].clone(), args[1].clone()),
+            AliasTarget::Type => InferTy::Type,
             AliasTarget::Json | AliasTarget::Void | AliasTarget::Never | AliasTarget::Unknown => {
                 return None;
             }
@@ -338,27 +371,25 @@ pub fn member_owner(
     use crate::{MediaKind, interned::InferTy};
     let scalar = |primitive| (AliasTarget::Primitive(primitive), Vec::new());
     let (target, args) = match receiver.kind() {
-        InferTy::Int { .. } => scalar(PrimitiveType::Int),
-        InferTy::Bigint { .. } => scalar(PrimitiveType::Bigint),
-        InferTy::Float { .. } => scalar(PrimitiveType::Float),
-        InferTy::String { .. } => scalar(PrimitiveType::String),
-        InferTy::Bool { .. } => scalar(PrimitiveType::Bool),
-        InferTy::Null { .. } => scalar(PrimitiveType::Null),
-        InferTy::Uint8Array { .. } => scalar(PrimitiveType::Uint8Array),
-        InferTy::Literal(literal, _, _) => scalar(PrimitiveType::from_literal(literal)),
-        InferTy::Media(kind, _) => scalar(match kind {
+        InferTy::Int => scalar(PrimitiveType::Int),
+        InferTy::Bigint => scalar(PrimitiveType::Bigint),
+        InferTy::Float => scalar(PrimitiveType::Float),
+        InferTy::String => scalar(PrimitiveType::String),
+        InferTy::Bool => scalar(PrimitiveType::Bool),
+        InferTy::Null => scalar(PrimitiveType::Null),
+        InferTy::Uint8Array => scalar(PrimitiveType::Uint8Array),
+        InferTy::Literal(literal, _) => scalar(PrimitiveType::from_literal(literal)),
+        InferTy::Media(kind) => scalar(match kind {
             MediaKind::Image => PrimitiveType::Image,
             MediaKind::Audio => PrimitiveType::Audio,
             MediaKind::Video => PrimitiveType::Video,
             MediaKind::Pdf => PrimitiveType::Pdf,
             MediaKind::Generic => return None,
         }),
-        InferTy::List(element, _) => (AliasTarget::List, vec![element.clone()]),
+        InferTy::List(element) => (AliasTarget::List, vec![element.clone()]),
         InferTy::Map { key, value, .. } => (AliasTarget::Map, vec![key.clone(), value.clone()]),
-        InferTy::Future(value, error, _) => {
-            (AliasTarget::Future, vec![value.clone(), error.clone()])
-        }
-        InferTy::Type { .. } => (AliasTarget::Type, Vec::new()),
+        InferTy::Future(value, error) => (AliasTarget::Future, vec![value.clone(), error.clone()]),
+        InferTy::Type => (AliasTarget::Type, Vec::new()),
         _ => return None,
     };
     Some((by_target(target).definition?, args))
@@ -407,8 +438,55 @@ pub fn by_definition_path(package: LangPackage, path: &[&str]) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every carrier's reachability, stated exhaustively so adding one to
+    /// [`ALL`] fails here until its answer is considered. The two that must
+    /// read `false` for a reason other than arity are the ones whose
+    /// spelling IS their declaration: hiding those classes would leave a
+    /// reader no way to name their members at all.
+    #[test]
+    fn every_carrier_agrees_on_whether_its_members_need_the_carrier() {
+        let mut actual: Vec<(&str, bool)> = ALL
+            .iter()
+            .filter(|alias| matches!(alias.construction, Construction::Builtin { .. }))
+            .map(|alias| {
+                (
+                    alias.display_name(),
+                    alias.members_reachable_without_carrier(),
+                )
+            })
+            .collect();
+        actual.sort();
+        assert_eq!(
+            actual,
+            vec![
+                // `T[]` is postfix syntax with no bare keyword, and
+                // `int[].filled` does not parse.
+                ("array", false),
+                ("audio", true),
+                // `baml.future.Future` is spelled by its own path.
+                ("baml.future.Future", false),
+                ("bigint", true),
+                ("bool", true),
+                ("float", true),
+                ("image", true),
+                ("int", true),
+                // `map<string, int>.of` does not parse.
+                ("map", false),
+                ("null", true),
+                ("pdf", true),
+                // `reflect.Type` is spelled by its own path.
+                ("reflect.Type", false),
+                ("string", true),
+                ("uint8array", true),
+                ("video", true),
+            ],
+            "got {actual:?}"
+        );
+    }
+
     use crate::{
-        MediaKind, TyAttr,
+        MediaKind,
         interned::{InferTy, Ty},
         test_roots,
     };
@@ -447,9 +525,7 @@ mod tests {
     #[test]
     fn lowering_and_member_owners_agree_for_every_carrier() {
         let lang = test_roots::lang();
-        let element = Ty::intern(InferTy::String {
-            attr: TyAttr::default(),
-        });
+        let element = Ty::intern(InferTy::String);
         for alias in ALL {
             if !matches!(alias.construction, Construction::Builtin { .. }) {
                 continue;
@@ -527,11 +603,11 @@ mod tests {
         let image = by_target(AliasTarget::Primitive(PrimitiveType::Image))
             .lower_class(&[])
             .unwrap();
-        assert!(matches!(image.kind(), InferTy::Media(MediaKind::Image, _)));
+        assert!(matches!(image.kind(), InferTy::Media(MediaKind::Image)));
         let list = by_target(AliasTarget::List)
             .lower_class(std::slice::from_ref(&image))
             .unwrap();
-        assert!(matches!(list.kind(), InferTy::List(element, _) if element == &image));
+        assert!(matches!(list.kind(), InferTy::List(element) if element == &image));
         assert!(by_target(AliasTarget::List).lower_class(&[]).is_none());
         assert!(
             by_target(AliasTarget::Primitive(PrimitiveType::Image))
@@ -540,14 +616,10 @@ mod tests {
         );
         // JSON's recursive expansion belongs to ordinary alias lowering.
         assert!(by_target(AliasTarget::Json).lower_class(&[]).is_none());
-        let error = Ty::intern(InferTy::Never {
-            attr: TyAttr::default(),
-        });
-        let result = Ty::intern(InferTy::String {
-            attr: TyAttr::default(),
-        });
+        let error = Ty::intern(InferTy::Never);
+        let result = Ty::intern(InferTy::String);
         assert!(
-            matches!(by_target(AliasTarget::Future).lower_class(&[result.clone(), error.clone()]).unwrap().kind(), InferTy::Future(value, thrown, _) if value == &result && thrown == &error)
+            matches!(by_target(AliasTarget::Future).lower_class(&[result.clone(), error.clone()]).unwrap().kind(), InferTy::Future(value, thrown) if value == &result && thrown == &error)
         );
     }
 }

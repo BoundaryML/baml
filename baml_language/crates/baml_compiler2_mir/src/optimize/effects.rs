@@ -8,7 +8,7 @@ use baml_type::{Int63, Literal, RuntimeTy};
 
 use crate::{
     BinOp, Constant, IndexKind, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator, UnaryOp,
+    Terminator, UnaryOp, memory,
 };
 
 const MIN: i64 = Int63::MIN.get();
@@ -138,9 +138,18 @@ impl Facts {
 
     fn read_key(&self, place: &Place, body: &MirFunctionBody<'_>) -> Option<ReadKey> {
         let key = match place {
-            Place::Local(local) if !body.locals[local.0].is_captured => {
+            Place::Local(local) => {
+                // A bare captured local is its cell pointer, which no value
+                // read names.
+                debug_assert!(
+                    !body.locals[local.0].is_captured,
+                    "bare read of captured {local}"
+                );
                 return Some(ReadKey::Local(self.root(*local)));
             }
+            // The value in a cell may change under any call or closure: no key.
+            // A bare capture is a pointer, never a value read.
+            Place::Deref(_) | Place::Capture(_) => return None,
             Place::Field { base, field } => {
                 ReadKey::Field(Box::new(self.read_key(base, body)?), *field)
             }
@@ -152,7 +161,6 @@ impl Facts {
                 }
                 ReadKey::Index(Box::new(self.read_key(base, body)?), index, *kind)
             }
-            _ => return None,
         };
         Some(
             self.reads
@@ -164,9 +172,11 @@ impl Facts {
     fn number(&self, operand: &Operand<'_>, body: &MirFunctionBody<'_>) -> Option<Number> {
         match operand {
             Operand::Constant(Constant::Int(n)) => Some(Number::Constant(*n)),
-            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
-                if !body.locals[local.0].is_captured =>
-            {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                debug_assert!(
+                    !body.locals[local.0].is_captured,
+                    "bare read of captured {local}"
+                );
                 let local = self.root(*local);
                 if let Some((array, offset)) = self.length_values.get(&local) {
                     return Some(Number::Length(*array, *offset));
@@ -174,7 +184,7 @@ impl Facts {
                 if self.integers.contains_key(&local)
                     || matches!(
                         body.locals[local.0].ty,
-                        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), ..)
+                        RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), ..)
                     )
                 {
                     Some(Number::Local(local))
@@ -316,9 +326,10 @@ impl Facts {
                     _ => None,
                 };
                 self.forget(*local);
-                if body.locals[local.0].is_captured {
-                    return;
-                }
+                debug_assert!(
+                    !body.locals[local.0].is_captured,
+                    "bare store to captured {local}"
+                );
                 if let Some(read) = read
                     && !read.depends_on(*local)
                 {
@@ -346,7 +357,7 @@ impl Facts {
                     self.lengths.insert(*local, range);
                 }
             }
-            StatementKind::FreshCell(local) => self.forget(*local),
+            StatementKind::FreshCell { local, .. } => self.forget(*local),
             // Aliasing writes may invalidate both a container and references
             // obtained through it. Do not try to infer disjointness here.
             StatementKind::Assign { .. }
@@ -466,9 +477,10 @@ impl Facts {
         let Some(ReadKey::Local(array)) = self.read_key(base, body) else {
             return false;
         };
-        if body.locals[array.0].is_captured {
-            return false;
-        }
+        debug_assert!(
+            !body.locals[array.0].is_captured,
+            "read key names captured {array}"
+        );
         let length = self.lengths.get(&array).copied().unwrap_or(Range::LENGTH);
         let Some(index) = self.number(&Operand::copy_local(*index), body) else {
             return false;
@@ -548,6 +560,7 @@ impl Analysis {
             .iter()
             .map(|region| region.handler)
             .collect();
+        let clobber_model = memory::ClobberModel::for_body(body);
         let mut entries = vec![None; body.blocks.len()];
         let mut work = VecDeque::new();
         for entry in std::iter::once(body.entry).chain(handlers.iter().copied()) {
@@ -564,12 +577,11 @@ impl Analysis {
                 continue;
             };
             match term {
-                Terminator::Call { .. }
-                | Terminator::VirtualCall { .. }
-                | Terminator::SysOp { .. }
-                | Terminator::Await { .. }
-                | Terminator::AwaitAny { .. }
-                | Terminator::Spawn { .. } => facts = Facts::default(),
+                // Anything that may run code this frame cannot see writes every
+                // heap location, and every fact here is about one.
+                term if memory::terminator_clobbers(clobber_model, term).heap => {
+                    facts = Facts::default();
+                }
                 Terminator::ShortCircuit { destination, .. } => {
                     if let Place::Local(local) = destination {
                         facts.forget(*local);

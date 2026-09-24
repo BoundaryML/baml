@@ -69,7 +69,7 @@ pub struct FileAction {
 ///
 /// Returns one action per function (Run in Playground) and one per test (Run
 /// Test), in the order they appear in the contributions list.
-pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<FileAction> {
+pub fn file_actions(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<FileAction> {
     let contribs = file_symbol_contributions(db, file);
     let mut actions = Vec::new();
 
@@ -78,7 +78,7 @@ pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<F
     for (name, contrib) in &contribs.values {
         match contrib.definition {
             Definition::Function(loc) => {
-                let func = baml_compiler2_ppir::item_data::function_data(db, loc);
+                let func = baml_compiler2_hir::item_data::function_data(db, loc);
                 match func.metadata.origin {
                     FunctionOrigin::UserDefined => {}
                     FunctionOrigin::Companion
@@ -95,16 +95,13 @@ pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<F
                     kind: FileActionKind::RunInPlayground,
                 });
             }
-            // Other value-namespace items (client, template string,
-            // retry policy, top-level let) don't get code lenses; type
-            // definitions never appear in the value namespace.
+            // Other value-namespace items (top-level lets, client bindings
+            // included) don't get code lenses; type definitions never appear
+            // in the value namespace.
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_)
-            | Definition::TemplateString(_)
-            | Definition::Client(_)
-            | Definition::RetryPolicy(_)
             | Definition::Let(_) => {}
         }
     }

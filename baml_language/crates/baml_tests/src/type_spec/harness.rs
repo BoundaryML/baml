@@ -138,12 +138,12 @@ pub(crate) fn collect_hir_ty_error_channel(
     let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let mut mismatches: BTreeMap<(u32, u32), Vec<String>> = BTreeMap::new();
     let mut non_exhaustive = Vec::new();
-    for owner in baml_compiler2_ppir::file_body_owners(db, file) {
-        let body = baml_compiler2_ppir::body(db, owner);
+    for owner in baml_compiler2_hir::body::file_body_owners(db, file) {
+        let body = baml_compiler2_hir::body::body(db, owner);
         if body.expr_body().is_none() {
             continue;
         }
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(db, owner) else {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(db, owner) else {
             continue;
         };
         let result = infer_body(db, owner);
@@ -499,21 +499,21 @@ pub(crate) fn collect_hir_ty_nodes(
     fixture: &str,
 ) -> Vec<TypedNode> {
     let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
 
     // Inference results per body owner, keyed by the owner's scope so
     // binding lookups (which start from arbitrary child scopes) can find the
     // arena owner's result.
     let mut owners: BTreeMap<u32, OwnerInference<'_>> = BTreeMap::new();
-    for owner in baml_compiler2_ppir::file_body_owners(db, file) {
-        let Some(scope_id) = baml_compiler2_ppir::body_scope(db, owner) else {
+    for owner in baml_compiler2_hir::body::file_body_owners(db, file) {
+        let Some(scope_id) = baml_compiler2_hir::body::body_scope(db, owner) else {
             continue;
         };
-        let body = baml_compiler2_ppir::body(db, owner);
+        let body = baml_compiler2_hir::body::body(db, owner);
         if body.expr_body().is_none() {
             continue;
         }
-        let Some(source_map) = baml_compiler2_ppir::body_source_map(db, owner) else {
+        let Some(source_map) = baml_compiler2_hir::body::body_source_map(db, owner) else {
             continue;
         };
         owners.insert(
@@ -530,17 +530,17 @@ pub(crate) fn collect_hir_ty_nodes(
     // Each function's inferred EFFECT, keyed at the function NAME range -
     // the caret target for `throws` pins (S12); differential against
     // TIR's callable_throws below.
-    for owner_id in baml_compiler2_ppir::file_body_owners(db, file) {
+    for owner_id in baml_compiler2_hir::body::file_body_owners(db, file) {
         let baml_compiler2_hir::body::BodyOwnerId::Function(function) = owner_id else {
             continue;
         };
-        let Some(scope_id) = baml_compiler2_ppir::body_scope(db, owner_id) else {
+        let Some(scope_id) = baml_compiler2_hir::body::body_scope(db, owner_id) else {
             continue;
         };
         let Some(owner) = owners.get(&scope_id.file_scope_id(db).index()) else {
             continue;
         };
-        let name_span = baml_compiler2_ppir::item_data::function_source_map(db, function).name_span;
+        let name_span = baml_compiler2_hir::item_data::function_source_map(db, function).name_span;
         if !name_span.is_empty() {
             nodes.push(TypedNode {
                 range: name_span,

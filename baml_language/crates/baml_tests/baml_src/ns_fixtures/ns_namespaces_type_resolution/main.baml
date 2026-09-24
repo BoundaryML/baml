@@ -106,9 +106,8 @@ function RootMixedConfigs(root_cfg: Config, llm_cfg: root.fixtures.namespaces_ty
     root_cfg.key
 }
 
-// ── Stream companion types ──────────────────────────────────────
+// ── Cross-namespace field types ─────────────────────────────────
 // Classes whose fields reference cross-namespace types.
-// The $stream companions must resolve all field types correctly.
 
 // Root class with fields from other namespaces
 class RootWithCrossNsFields {
