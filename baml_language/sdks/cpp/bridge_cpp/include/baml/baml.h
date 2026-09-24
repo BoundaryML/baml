@@ -5,6 +5,7 @@
 // includes this and refers to everything as ::baml::*.
 
 #include <baml/arg.h>
+#include <baml/bigint.h>
 #include <baml/box.h>
 #include <baml/buffer.h>
 #include <baml/codec.h>

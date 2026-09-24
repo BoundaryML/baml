@@ -18,6 +18,7 @@ export function DocsShell({
   children,
   description,
   headerControls,
+  stickyHeaderControls = false,
   title,
   toc = [],
   wideContent = false,
@@ -26,6 +27,7 @@ export function DocsShell({
   children: React.ReactNode;
   description: string;
   headerControls?: React.ReactNode;
+  stickyHeaderControls?: boolean;
   title: string;
   toc?: TocItem[];
   wideContent?: boolean;
@@ -92,12 +94,20 @@ export function DocsShell({
                   <p className="text-[1.05rem] text-muted-foreground sm:max-w-[80%] sm:text-balance sm:text-base">
                     {description}
                   </p>
-                  {headerControls ? (
+                  {headerControls && !stickyHeaderControls ? (
                     <div className="mt-2 flex items-center">
                       {headerControls}
                     </div>
                   ) : null}
                 </header>
+                {headerControls && stickyHeaderControls ? (
+                  <div
+                    className="book-reading-sticky sticky top-[var(--header-height)] z-20"
+                    data-book-controls=""
+                  >
+                    {headerControls}
+                  </div>
+                ) : null}
                 <div
                   className="typeset w-full flex-1 pb-16 sm:pb-0"
                   data-docs-content=""

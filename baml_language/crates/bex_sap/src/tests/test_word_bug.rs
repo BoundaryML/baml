@@ -18,7 +18,7 @@
 //! }
 //! ```
 
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // The `exampleSentence` value is QUOTED. The user reports this parses.
 test_deserializer!(
@@ -34,7 +34,7 @@ test_deserializer!(
     }
   ],
 }"#,
-    baml_tyannotated!(Word),
+    baml_ty!(Word),
     baml_db! {
         class Definition {
             definition: string @alias("translation"),
@@ -77,7 +77,7 @@ macro_rules! word_unquoted_example {
                 "      exampleSentenceTranslation: I like to eat fruit after lunch,\n",
                 "    }\n  ],\n}"
             ),
-            baml_tyannotated!(Word),
+            baml_ty!(Word),
             baml_db! {
                 class Definition {
                     definition: string @alias("translation"),
@@ -212,7 +212,7 @@ test_deserializer!(
     }
   ],
 }"#,
-    baml_tyannotated!(Word),
+    baml_ty!(Word),
     baml_db! {
         class Definition {
             definition: string @alias("translation"),
@@ -243,7 +243,7 @@ test_deserializer!(
 test_deserializer!(
     test_word_exact_discord_report,
     "{\n  word: фрукт,\n  translations: [\n    {\n      translation: fruit,\n      partOfSpeech: noun,\n      exampleSentence: Я люблю есть фрукт после обеда.,\n      exampleSentenceTranslation: I like to eat fruit after lunch.,\n    }\n  ],\n}",
-    baml_tyannotated!(Word),
+    baml_ty!(Word),
     baml_db! {
         class Definition {
             definition: string @alias("translation"),

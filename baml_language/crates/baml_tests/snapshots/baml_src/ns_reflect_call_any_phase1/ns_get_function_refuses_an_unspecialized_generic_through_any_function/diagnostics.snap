@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[get_function_refuses_an_unspecialized_generic_through_any_function.baml:25:14]
+ 25 │ ╭─▶         _ => {
+ 26 │ │               return "wrong error";
+ 27 │ ╰─▶         },
+    ╰────

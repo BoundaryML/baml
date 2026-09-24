@@ -1,9 +1,7 @@
 //! Filesystem operation tests requiring host-side capabilities.
 //!
-//! Tests here need things BAML cannot express: asserting a compile-time type
-//! mismatch via `#[should_panic]`, and inspecting host state that `baml.fs`
-//! exposes no reader for — a file's mode bits, and whether a path is a link
-//! rather than what it resolves to.
+//! Tests here inspect host state that `baml.fs` exposes no reader for: a file's
+//! mode bits, and whether a path is a link rather than what it resolves to.
 //!
 //! The `chmod` and `symlink` tests are Unix-only by design. Windows has no mode
 //! bits (only a read-only attribute), and creating a symlink there needs
@@ -27,24 +25,6 @@ fn tmp(files: IndexMap<&str, &str>) -> (tempfile::TempDir, String) {
     let root = tmp.path().display().to_string().replace('\\', "/");
     (tmp, root)
 }
-
-#[tokio::test]
-#[should_panic(expected = "mismatched types")]
-async fn fs_file_invalid_mode() {
-    let (_tmp, root) = tmp(indexmap! { "file.txt" => "content" });
-
-    // The mode parameter is a string-literal union, so invalid modes like "x"
-    // are caught at compile time as a type mismatch.
-    let _output = baml_test!(&format!(
-        r#"
-            function main() -> string {{
-                let file = baml.fs.open("{root}/file.txt", "x");
-                file.text()
-            }}
-        "#
-    ));
-}
-
 #[cfg(unix)]
 #[tokio::test]
 async fn fs_remove_on_symlink_to_dir_removes_link() {
@@ -219,31 +199,5 @@ async fn fs_symlink_stores_a_relative_target_verbatim() {
     assert_eq!(
         std::fs::read_link(format!("{root}/link.txt")).unwrap(),
         std::path::Path::new("target.txt")
-    );
-}
-
-/// Creating a link never clobbers what is already there.
-#[cfg(unix)]
-#[tokio::test]
-async fn fs_symlink_onto_an_existing_path_errors() {
-    let (_tmp, root) = tmp(indexmap! { "target.txt" => "target", "taken.txt" => "keep me" });
-
-    let output = baml_test!(&format!(
-        r#"
-            function main() -> bool {{
-                {{
-                    baml.fs.symlink("{root}/target.txt", "{root}/taken.txt");
-                    false
-                }} catch (e) {{
-                    baml.errors.Io => true
-                }}
-            }}
-        "#
-    ));
-
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
-    assert_eq!(
-        std::fs::read_to_string(format!("{root}/taken.txt")).unwrap(),
-        "keep me"
     );
 }

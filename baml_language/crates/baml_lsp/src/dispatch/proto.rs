@@ -79,7 +79,6 @@ pub(super) fn hover_markdown(info: &TypeInfo) -> String {
         | TypeInfo::Function { .. }
         | TypeInfo::Enum { .. }
         | TypeInfo::TypeAlias { .. }
-        | TypeInfo::TemplateString { .. }
         | TypeInfo::LocalVar { .. }
         | TypeInfo::Symbol { .. }
         | TypeInfo::OtherItem { .. } => {}
@@ -87,8 +86,8 @@ pub(super) fn hover_markdown(info: &TypeInfo) -> String {
     out
 }
 
-/// The LSP symbol kind for a definition kind. LSP has no alias/template
-/// notions, so those map to the nearest renderable icon.
+/// The LSP symbol kind for a definition kind. LSP has no alias notion, so it
+/// maps to the nearest renderable icon.
 pub(super) fn symbol_kind(kind: DefinitionKind) -> SymbolKind {
     match kind {
         DefinitionKind::Class => SymbolKind::CLASS,
@@ -96,9 +95,7 @@ pub(super) fn symbol_kind(kind: DefinitionKind) -> SymbolKind {
         DefinitionKind::Interface => SymbolKind::INTERFACE,
         DefinitionKind::TypeAlias => SymbolKind::OBJECT,
         DefinitionKind::Function => SymbolKind::FUNCTION,
-        DefinitionKind::TemplateString => SymbolKind::STRING,
         DefinitionKind::Client => SymbolKind::OBJECT,
-        DefinitionKind::RetryPolicy => SymbolKind::OBJECT,
         DefinitionKind::Let => SymbolKind::CONSTANT,
         DefinitionKind::Field => SymbolKind::FIELD,
         DefinitionKind::AssociatedType => SymbolKind::TYPE_PARAMETER,
@@ -169,9 +166,7 @@ pub(super) fn completion_item(
             baml_ide::CompletionKind::EnumVariant => lsp_types::CompletionItemKind::ENUM_MEMBER,
             baml_ide::CompletionKind::Interface => lsp_types::CompletionItemKind::INTERFACE,
             baml_ide::CompletionKind::TypeAlias => lsp_types::CompletionItemKind::STRUCT,
-            baml_ide::CompletionKind::Client | baml_ide::CompletionKind::RetryPolicy => {
-                lsp_types::CompletionItemKind::CONSTANT
-            }
+            baml_ide::CompletionKind::Client => lsp_types::CompletionItemKind::CONSTANT,
             baml_ide::CompletionKind::Package => lsp_types::CompletionItemKind::MODULE,
             baml_ide::CompletionKind::TypeParam => lsp_types::CompletionItemKind::TYPE_PARAMETER,
             baml_ide::CompletionKind::BuiltinType => lsp_types::CompletionItemKind::STRUCT,

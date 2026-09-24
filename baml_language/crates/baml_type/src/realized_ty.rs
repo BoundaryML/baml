@@ -7,74 +7,64 @@
 //! deeply excludes the `typevar`-axis variants (`TypeVar`,
 //! `AssociatedTypeProjection`) and rejects them by name.
 
-use crate::{RealizedTy, TyAttr};
+use crate::RealizedTy;
 
 // Head-agnostic: none of these mention a nominal head, so they are defined for
 // every head representation rather than only the compiler's. A bare
 // `RealizedTy::int()` still means `RealizedTy<TypeName>` — a type path uses the
 // parameter's default — so the runtime spells its own instantiation explicitly.
 impl<N: Clone> RealizedTy<N> {
-    // --- Primitive constructors (default TyAttr) ---
+    // --- Primitive constructors ---
 
     /// `int` with default attributes.
     pub fn int() -> Self {
-        RealizedTy::Int {
-            attr: TyAttr::default(),
-        }
+        RealizedTy::Int
     }
 
     /// `string` with default attributes.
     pub fn string() -> Self {
-        RealizedTy::String {
-            attr: TyAttr::default(),
-        }
+        RealizedTy::String
     }
 
     /// `null` with default attributes.
     pub fn null() -> Self {
-        RealizedTy::Null {
-            attr: TyAttr::default(),
-        }
+        RealizedTy::Null
     }
 
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
-        RealizedTy::Unknown {
-            attr: TyAttr::default(),
-        }
+        RealizedTy::Unknown
     }
 
     /// `never` (the bottom type) with default attributes. The error type of a
     /// future whose body statically cannot throw.
     pub fn never() -> Self {
-        RealizedTy::Never {
-            attr: TyAttr::default(),
-        }
+        RealizedTy::Never
     }
 
-    // --- Compound constructors (default TyAttr) ---
+    // --- Compound constructors ---
 
     /// `T[]` (list) with default attributes.
     pub fn list(inner: RealizedTy<N>) -> Self {
-        RealizedTy::List(Box::new(inner), TyAttr::default())
+        RealizedTy::List(Box::new(inner))
     }
 
     /// True if this is exactly the `null` type.
     pub fn is_null(&self) -> bool {
-        matches!(self, RealizedTy::Null { .. })
+        matches!(self, RealizedTy::Null)
     }
 
     /// True if this is a union that includes `null` — i.e. an optional type.
     /// Mirrors [`crate::RuntimeTy::is_nullable_union`].
     pub fn is_nullable_union(&self) -> bool {
-        matches!(self, RealizedTy::Union(members, _) if members.iter().any(RealizedTy::is_null))
+        matches!(self, RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null))
     }
 
     /// Remove `null` from a nullable union, collapsing the result. Mirrors
     /// [`crate::RuntimeTy::strip_null`].
     pub fn strip_null(&self) -> RealizedTy<N> {
         match self {
-            RealizedTy::Union(members, attr) => {
+            RealizedTy::Union(members) => {
                 let non_null: Box<[RealizedTy<N>]> =
                     members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
@@ -83,7 +73,7 @@ impl<N: Clone> RealizedTy<N> {
                         .into_iter()
                         .next()
                         .unwrap_or_else(|| unreachable!("len checked")),
-                    _ => RealizedTy::Union(non_null, attr.clone()),
+                    _ => RealizedTy::Union(non_null),
                 }
             }
             _ => self.clone(),
@@ -100,11 +90,7 @@ impl<N: Clone + crate::HeadDisplay> std::fmt::Display for RealizedTy<N> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Interface, LoweringTy, Name, NotRealizedTy, RealizedTy, Ty, TyAttr, TypeName};
-
-    fn def() -> TyAttr {
-        TyAttr::default()
-    }
+    use crate::{Interface, LoweringTy, Name, NotRealizedTy, RealizedTy, Ty, TypeName};
 
     fn qtn(name: &str) -> TypeName {
         TypeName::local(Name::new(name))
@@ -121,40 +107,29 @@ mod tests {
     #[test]
     fn round_trip_nested_list_of_class() {
         // list<Class<int>>
-        let ty: Ty<TypeName> = Ty::<TypeName>::List(
-            Box::new(Ty::<TypeName>::Class(
-                qtn("Box"),
-                Box::new([Ty::<TypeName>::Int { attr: def() }]),
-                def(),
-            )),
-            def(),
-        );
+        let ty: Ty<TypeName> = Ty::<TypeName>::List(Box::new(Ty::<TypeName>::Class(
+            qtn("Box"),
+            Box::new([Ty::<TypeName>::Int {}]),
+        )));
         assert_round_trips(ty);
     }
 
     #[test]
     fn round_trip_map() {
         let ty: Ty<TypeName> = Ty::<TypeName>::Map {
-            key: Box::new(Ty::<TypeName>::String { attr: def() }),
-            value: Box::new(Ty::<TypeName>::List(
-                Box::new(Ty::<TypeName>::Bool { attr: def() }),
-                def(),
-            )),
-            attr: def(),
+            key: Box::new(Ty::<TypeName>::String {}),
+            value: Box::new(Ty::<TypeName>::List(Box::new(Ty::<TypeName>::Bool {}))),
         };
         assert_round_trips(ty);
     }
 
     #[test]
     fn round_trip_union() {
-        let ty: Ty<TypeName> = Ty::<TypeName>::Union(
-            Box::new([
-                Ty::<TypeName>::Int { attr: def() },
-                Ty::<TypeName>::String { attr: def() },
-                Ty::<TypeName>::Null { attr: def() },
-            ]),
-            def(),
-        );
+        let ty: Ty<TypeName> = Ty::<TypeName>::Union(Box::new([
+            Ty::<TypeName>::Int {},
+            Ty::<TypeName>::String {},
+            Ty::<TypeName>::Null {},
+        ]));
         assert_round_trips(ty);
     }
 
@@ -162,18 +137,14 @@ mod tests {
     fn round_trip_function() {
         let ty: Ty<TypeName> = Ty::<TypeName>::Function {
             params: Box::new([
-                crate::FunctionParamTy::required(
-                    Some(Name::new("a")),
-                    Ty::<TypeName>::Int { attr: def() },
-                ),
+                crate::FunctionParamTy::required(Some(Name::new("a")), Ty::<TypeName>::Int {}),
                 crate::FunctionParamTy::optional(
                     Some(Name::new("b")),
-                    Ty::<TypeName>::List(Box::new(Ty::<TypeName>::Float { attr: def() }), def()),
+                    Ty::<TypeName>::List(Box::new(Ty::<TypeName>::Float {})),
                 ),
             ]),
-            ret: Box::new(Ty::<TypeName>::Bool { attr: def() }),
-            throws: Box::new(Ty::<TypeName>::Void { attr: def() }),
-            attr: def(),
+            ret: Box::new(Ty::<TypeName>::Bool {}),
+            throws: Box::new(Ty::<TypeName>::Void {}),
         };
         assert_round_trips(ty);
     }
@@ -182,9 +153,8 @@ mod tests {
     fn round_trip_interface_with_associated_bindings() {
         let ty: Ty<TypeName> = Ty::<TypeName>::Interface(
             qtn("Iterator"),
-            Box::new([Ty::<TypeName>::Int { attr: def() }]),
-            Box::new([(Name::new("Item"), Ty::<TypeName>::String { attr: def() })]),
-            def(),
+            Box::new([Ty::<TypeName>::Int {}]),
+            Box::new([(Name::new("Item"), Ty::<TypeName>::String {})]),
         );
         assert_round_trips(ty);
     }
@@ -201,7 +171,6 @@ mod tests {
                 associated_types: Box::new([]),
             }),
             member: Name::new("Item"),
-            attr: def(),
         };
         assert_eq!(
             RealizedTy::try_from(&ty),
@@ -213,10 +182,8 @@ mod tests {
 
     #[test]
     fn nested_infer_in_list_blocks_conversion() {
-        let ty: LoweringTy<TypeName> = LoweringTy::<TypeName>::List(
-            Box::new(LoweringTy::<TypeName>::Infer { attr: def() }),
-            def(),
-        );
+        let ty: LoweringTy<TypeName> =
+            LoweringTy::<TypeName>::List(Box::new(LoweringTy::<TypeName>::Infer {}));
         assert_eq!(
             RealizedTy::try_from(&ty),
             Err(NotRealizedTy { variant: "Infer" })
@@ -226,9 +193,8 @@ mod tests {
     #[test]
     fn nested_error_in_map_value_blocks_conversion() {
         let ty: Ty<TypeName> = Ty::<TypeName>::Map {
-            key: Box::new(Ty::<TypeName>::String { attr: def() }),
-            value: Box::new(Ty::<TypeName>::Error { attr: def() }),
-            attr: def(),
+            key: Box::new(Ty::<TypeName>::String {}),
+            value: Box::new(Ty::<TypeName>::Error {}),
         };
         assert_eq!(
             RealizedTy::try_from(&ty),
@@ -238,13 +204,8 @@ mod tests {
 
     #[test]
     fn nested_error_in_union_blocks_conversion() {
-        let ty: Ty<TypeName> = Ty::<TypeName>::Union(
-            Box::new([
-                Ty::<TypeName>::Int { attr: def() },
-                Ty::<TypeName>::Error { attr: def() },
-            ]),
-            def(),
-        );
+        let ty: Ty<TypeName> =
+            Ty::<TypeName>::Union(Box::new([Ty::<TypeName>::Int {}, Ty::<TypeName>::Error {}]));
         assert_eq!(
             RealizedTy::try_from(&ty),
             Err(NotRealizedTy { variant: "Error" })
@@ -255,9 +216,8 @@ mod tests {
     fn nested_infer_in_function_ret_blocks_conversion() {
         let ty: LoweringTy<TypeName> = LoweringTy::<TypeName>::Function {
             params: Box::new([]),
-            ret: Box::new(LoweringTy::<TypeName>::Infer { attr: def() }),
-            throws: Box::new(LoweringTy::<TypeName>::Void { attr: def() }),
-            attr: def(),
+            ret: Box::new(LoweringTy::<TypeName>::Infer {}),
+            throws: Box::new(LoweringTy::<TypeName>::Void {}),
         };
         assert_eq!(
             RealizedTy::try_from(&ty),

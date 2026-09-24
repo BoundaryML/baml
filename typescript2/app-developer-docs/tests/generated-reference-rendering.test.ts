@@ -5,6 +5,7 @@ import {
   createTypeReferenceIndex,
   genericParametersText,
   memberDeclarationText,
+  referenceSectionId,
   shouldUseMultilineSignature,
   signatureText,
   typeDisplaySegments,
@@ -201,4 +202,56 @@ test('type reference indexing prefers declaration routes and excludes the curren
 
   assert.equal(index.get('ai.Runner')?.anchor, null);
   assert.equal(index.has('ai.Client'), false);
+});
+
+test('section anchors cannot shadow published member anchors', () => {
+  const page = referencePageDataSchema.parse({
+    cross_references: [],
+    declaration: {
+      fields: [
+        {
+          id: 'F:example.Record.fields',
+          name: 'fields',
+          ty: { display: 'string' },
+        },
+      ],
+      id: 'C:example.Record',
+      kind: 'class',
+      name: 'Record',
+    },
+    display_name: 'Record',
+    exported_id: 'C:example.Record',
+    implementations: [],
+    member_anchors: ['fields', 'signature', 'members'].map((name) => ({
+      anchor: name,
+      exported_id: `F:example.Record.${name}`,
+      label: name.replace('-', '_'),
+      member_kind: 'field',
+    })),
+    namespace_path: [],
+    package_name: 'example',
+    page_kind: 'class',
+    qualified_name: 'example.Record',
+    schema_version: 1,
+    summary: null,
+  });
+  assert.equal(referenceSectionId(page, 'fields'), 'section-fields');
+  assert.equal(referenceSectionId(page, 'signature'), 'section-signature');
+  assert.equal(referenceSectionId(page, 'members'), 'section-members');
+  assert.equal(referenceSectionId(page, 'related'), 'related');
+  assert.deepEqual(referencePageTableOfContents(page), [
+    { href: '#section-signature', label: 'Signature' },
+    { href: '#section-fields', label: 'Fields' },
+  ]);
+});
+
+test('reference signatures retain explicit never error contracts', () => {
+  assert.equal(
+    signatureText('send', {
+      params: [],
+      returns: { display: 'string' },
+      throws: { display: 'never' },
+    }),
+    'send() -> string throws never',
+  );
 });

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: sort_compare_phase1.phase3_error_binding_callsite_throws_it.Boom2
+    ╭─[phase3_error_binding_callsite_throws_it.baml:37:76]
+ 37 │ ╭─▶         function comp(self, other: Self) -> baml.ops.Ordering throws Boom2 {
+ 38 │ │               return baml.ops.Ordering.Equal;
+ 39 │ ╰─▶         }
+    ╰────

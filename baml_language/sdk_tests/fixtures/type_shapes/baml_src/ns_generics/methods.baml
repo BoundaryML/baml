@@ -3,7 +3,7 @@
 // types.baml stays method-free.
 //
 // Minimum repro of the generic-method FFI plumbing bug surfaced by
-// `ai.stream.Stream<T, S>.next() -> S | ai.stream.Done`: an instance
+// `ai.stream.Stream<T>.next() -> T | ai.stream.Done`: an instance
 // method on a generic class whose return type mentions a class-level
 // TypeVar. When Python calls `w.get_value()`, the host-side
 // `tir2_to_template` path can't substitute the class's `T` into the
@@ -34,7 +34,7 @@ class WrapperMethods<T> {
   }
 
   // Union-with-TypeVar return. Mirrors the shape of
-  // `ai.stream.Stream<T, S>.next(self) -> S | ai.stream.Done`:
+  // `ai.stream.Stream<T>.next(self) -> T | ai.stream.Done`:
   // a class-level TypeVar appears as one arm of a union with a concrete
   // class. This is the shape the streaming smoke fails on; whether the
   // user-defined analogue fails the same way isolates whether the bug
@@ -54,7 +54,7 @@ class WrapperMarker {
 
 // Host-side construction of a `WrapperMethods<string>` so Python can
 // call `.get_value()` on it. Mirrors the host-driven path that
-// `test_stream_next_reaches_finished` takes against `Stream<T, S>` —
+// `test_stream_next_reaches_finished` takes against `Stream<T>` —
 // builds the generic instance on one side, calls the generic instance
 // method from the other.
 function make_wrapper_methods(text: string) -> WrapperMethods<string> {

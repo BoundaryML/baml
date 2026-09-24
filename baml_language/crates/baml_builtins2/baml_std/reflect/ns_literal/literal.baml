@@ -1,6 +1,6 @@
-/// Constructs the literal type matching exactly `value`.
+/// Constructs the literal type matching exactly a string, int, bigint, or bool value.
 //baml:mut_vm
-function new(value: string | int | bool) -> Type throws never {
+function new(value: string | int | bigint | bool) -> Type throws never {
     $rust_function
 }
 
@@ -17,5 +17,14 @@ class Type {
         function as_type(self) -> reflect.Type throws never {
             $rust_function
         }
+    }
+
+    /// Returns the string, int, bigint, bool, or enum variant represented by this literal type.
+    /// The return type is unknown because enum variants can belong to any enum.
+    /// This API cannot return class values today.
+    //baml:mut_vm
+    //baml:fallible
+    function value(self) -> unknown throws never {
+        $rust_function
     }
 }

@@ -7,39 +7,36 @@ import (
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
-// Stream is an opaque ai.stream.Stream capability. Next reports done=true for
-// the terminal ai.stream.Done sentinel; Final returns the settled output.
-type Stream[TPartial, TFinal any] struct {
-	key           uint64
-	owner         *resultOwner
-	decodePartial func(Value) (TPartial, error)
-	decodeFinal   func(Value) (TFinal, error)
+// Stream is an opaque ai.stream.Stream[T] capability. A partial and the settled
+// value share the one type: a partial is T parsed from the text received so
+// far. Next reports done=true for the terminal ai.stream.Done sentinel; Final
+// returns the settled value.
+type Stream[T any] struct {
+	key    uint64
+	owner  *resultOwner
+	decode func(Value) (T, error)
 }
 
 // DecodeStream is the generated-code decoder for a flat Stream projection.
-func DecodeStream[TPartial, TFinal any](
-	decodePartial func(Value) (TPartial, error),
-	decodeFinal func(Value) (TFinal, error),
-) func(Value) (Stream[TPartial, TFinal], error) {
-	return func(value Value) (Stream[TPartial, TFinal], error) {
+func DecodeStream[T any](decode func(Value) (T, error)) func(Value) (Stream[T], error) {
+	return func(value Value) (Stream[T], error) {
 		unwrapped, err := value.unwrapUnionVariants()
 		if err != nil {
-			return Stream[TPartial, TFinal]{}, err
+			return Stream[T]{}, err
 		}
 		handle := unwrapped.value.GetHandleValue()
 		if handle == nil || handle.GetKey() == 0 || handle.GetHandleType() != cffi.BamlHandleType_ADT_TAGGED_HEAP_HANDLE {
-			return Stream[TPartial, TFinal]{}, fmt.Errorf("expected BAML Stream handle, got %T", unwrapped.value.GetValue())
+			return Stream[T]{}, fmt.Errorf("expected BAML Stream handle, got %T", unwrapped.value.GetValue())
 		}
-		return Stream[TPartial, TFinal]{
-			key:           handle.GetKey(),
-			owner:         unwrapped.owner,
-			decodePartial: decodePartial,
-			decodeFinal:   decodeFinal,
+		return Stream[T]{
+			key:    handle.GetKey(),
+			owner:  unwrapped.owner,
+			decode: decode,
 		}, nil
 	}
 }
 
-func (stream Stream[TPartial, TFinal]) BAMLInput() Input {
+func (stream Stream[T]) BAMLInput() Input {
 	if stream.key == 0 || stream.owner == nil {
 		return InvalidInput("uninitialized BAML Stream")
 	}
@@ -47,7 +44,7 @@ func (stream Stream[TPartial, TFinal]) BAMLInput() Input {
 }
 
 // Next yields one partial. done is true only for ai.stream.Done.
-func (stream Stream[TPartial, TFinal]) Next(ctx context.Context) (partial TPartial, done bool, err error) {
+func (stream Stream[T]) Next(ctx context.Context) (partial T, done bool, err error) {
 	value, err := Call(ctx, "ai.stream.Stream.next", map[string]Input{"self": stream.BAMLInput()})
 	if err != nil {
 		return partial, false, err
@@ -59,16 +56,16 @@ func (stream Stream[TPartial, TFinal]) Next(ctx context.Context) (partial TParti
 	if class := unwrapped.value.GetClassValue(); class != nil && class.GetName() == "ai.stream.Done" {
 		return partial, true, nil
 	}
-	partial, err = stream.decodePartial(value)
+	partial, err = stream.decode(value)
 	return partial, false, err
 }
 
-// Final returns the settled stream output.
-func (stream Stream[TPartial, TFinal]) Final(ctx context.Context) (TFinal, error) {
+// Final returns the settled stream value.
+func (stream Stream[T]) Final(ctx context.Context) (T, error) {
 	value, err := Call(ctx, "ai.stream.Stream.final", map[string]Input{"self": stream.BAMLInput()})
 	if err != nil {
-		var zero TFinal
+		var zero T
 		return zero, err
 	}
-	return stream.decodeFinal(value)
+	return stream.decode(value)
 }

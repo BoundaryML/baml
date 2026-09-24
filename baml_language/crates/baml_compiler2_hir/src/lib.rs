@@ -12,6 +12,7 @@
 //! - Per-item queries: `function_signature`, `function_body`
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
+mod attrs;
 pub mod body;
 pub mod body_type_refs;
 mod builder;
@@ -20,10 +21,12 @@ pub mod diagnostic;
 pub mod file_package;
 pub mod ids;
 pub mod inputs;
+pub mod item_data;
 pub mod item_tree;
 pub mod loc;
 pub mod namespace;
 pub mod package;
+pub mod resolve;
 pub mod scope;
 pub mod semantic_index;
 pub mod signature;
@@ -32,7 +35,7 @@ pub mod type_ref;
 use std::sync::Arc;
 
 use baml_base::SourceFile;
-pub use builder::{KNOWN_TYPE_ATTRS, SemanticIndexBuilder};
+pub use builder::SemanticIndexBuilder;
 pub use semantic_index::{ExprMetadataKey, ExprMetadataScope, PathResolution};
 
 use crate::{
@@ -172,8 +175,7 @@ unsafe impl salsa::Update for FileAst {
 /// CST → AST lowering for one file, computed once and shared.
 ///
 /// Salsa-tracked because several different consumers need a file's AST items:
-/// both `file_semantic_index` queries (HIR + PPIR), `ppir_expansion_items`,
-/// PPIR's two project-wide expansion-map collectors, and the LSP check pass.
+/// `file_semantic_index` and the LSP check pass.
 /// Before this query existed each of them re-lowered the syntax tree from
 /// scratch; the repeated CST traversal was ~31% of cold-compile CPU on the
 /// test corpus (see `crates/tools_compile_profile/README.md`, July 2026 audit).
@@ -251,12 +253,24 @@ pub fn file_symbol_contributions(
 /// Not tracked — the item tree is cached via `file_semantic_index`.
 ///
 /// `pub(crate)`: the raw `ItemTree` is an implementation detail behind the
-/// PPIR item-data firewall (`baml_compiler2_ppir::item_data`). Consumers use
-/// the enumeration (`file_classes`/`file_functions`/…) and lookup
-/// (`class_data`/`function_data`/…) queries there, never the tree itself.
+/// [`item_data`] firewall. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries there, never the tree itself.
 pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Returns the item-tree source map for a file.
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` queries in
+/// [`item_data`].
+pub(crate) fn file_item_tree_source_map(
+    db: &dyn Db,
+    file: SourceFile,
+) -> Arc<crate::item_tree::ItemTreeSourceMap> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Returns the `ScopeBindings` for a given scope.

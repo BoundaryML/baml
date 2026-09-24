@@ -3,34 +3,26 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_base::{SourceFile, SourceRoot, SourceRootKind};
-use baml_db::{ProjectDatabase, SourceRootSpec};
+use baml_base::{SourceFile, SourceRoot};
+use baml_db::ProjectDatabase;
+/// Root-aware fixture builders for a fresh [`ProjectDatabase`] — the one
+/// definition every test crate shares.
+pub(crate) use baml_db::testing::TestDbExt;
 use text_size::TextSize;
 
-/// Root-aware fixture builders for a fresh [`ProjectDatabase`].
-pub(crate) trait TestDbExt {
-    /// Load the stdlib and add the single `Workspace` root at `root`.
-    fn workspace(&mut self, root: &Path) -> SourceRoot;
-    /// Upsert `path` (which must lie under an existing root) with `text`.
-    fn file(&mut self, path: &Path, text: &str) -> SourceFile;
-}
-
-impl TestDbExt for ProjectDatabase {
-    fn workspace(&mut self, root: &Path) -> SourceRoot {
-        self.ensure_stdlib_sources();
-        self.add_source_root(SourceRootSpec::new(
-            root.to_path_buf(),
-            SourceRootKind::Workspace,
-        ))
-        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"))
-    }
-
-    fn file(&mut self, path: &Path, text: &str) -> SourceFile {
-        let root = self
-            .source_root_for_path(path)
-            .unwrap_or_else(|| unreachable!("test files live under the workspace root"));
-        self.add_or_update_file_in(root, path, text)
-    }
+/// The exported interface of a package whose only source is `source`,
+/// encoded as the blob a consumer mounts — built in a throwaway database so
+/// the consumer's database holds the interface and nothing else.
+pub(crate) fn export_blob(package: &str, source: &str) -> Vec<u8> {
+    let mut db = ProjectDatabase::new();
+    db.workspace(Path::new("/ide-export"));
+    let root = db.dependency(package);
+    db.file(Path::new(&format!("<builtin>/{package}/lib.baml")), source);
+    baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &baml_compiler2_hir_ty::package_interface::export_interface(&db, root),
+    )
+    .unwrap_or_else(|e| unreachable!("a package interface serializes: {e}"))
 }
 
 // ── Cursor fixture machinery ─────────────────────────────────────────────────

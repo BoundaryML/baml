@@ -12,7 +12,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_db::testing::compile_source;
-use baml_type::{Name, RealizedTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{Name, RealizedTy, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, Instruction, Object, ObjectIndex, Value,
@@ -51,9 +51,7 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: baml_type::TyTemplate::Int {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: baml_type::TyTemplate::Int,
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![false; arity],
@@ -61,9 +59,7 @@ fn inject_function(
         generic_param_bounds: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: baml_type::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: baml_type::TyTemplate::Never,
         origin: FunctionOrigin::UserDefined,
         is_interface_body: false,
         native_key: None,
@@ -117,8 +113,8 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         alias: None,
         docstring: None,
         other: indexmap::IndexMap::new(),
+        stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
-        ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
@@ -172,8 +168,8 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         alias: None,
         docstring: None,
         other: indexmap::IndexMap::new(),
+        stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(101),
-        ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
         owner: bex_vm_types::HeapPtr::null(),
@@ -342,7 +338,7 @@ function f() -> string[] {
         .expect("map result should be an array object");
     match vm.get_object(ptr) {
         Object::Array(arr) => assert!(
-            matches!(&*arr.element_ty, RealizedTy::String { .. }),
+            matches!(&*arr.element_ty, RealizedTy::String),
             "map result element_ty should be `string` (closure return `U`), not `{:?}` \
              (the receiver `T`)",
             arr.element_ty

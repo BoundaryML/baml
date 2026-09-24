@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/compiler2_tir/explicit_type_args.rs
+expression: "render_tir(&db, file)"
+---
+function user.identity<T>(x: T) -> T throws never {
+  { : T
+    x : T
+  }
+}
+function user.no_generics(x: int) -> int throws never {
+  { : int
+    x : int
+  }
+}
+function user.pair<A, B>(a: A, b: B) -> string throws never {
+  { : "ok"
+    "ok" : "ok"
+  }
+}
+function user.explicit_type_arg_binds_directly() -> int throws never {
+  { : int
+    identity(42) : int
+  }
+}
+function user.bare_inference_picks_literal_type() -> 42 throws never {
+  { : 42
+    identity(42) : 42
+  }
+}
+function user.wrong_type_arg_arity_nongeneric() -> int throws never {
+  { : int
+    no_generics(42) : int
+  }
+  !! 656..676: function `no_generics` expects 0 type argument(s), got 1
+}
+function user.wrong_type_arg_arity_too_many() -> int throws never {
+  { : int
+    identity(42) : int
+  }
+  !! 767..792: function `identity` expects 1 type argument(s), got 2
+}
+function user.explicit_two_type_args() -> string throws never {
+  { : string
+    pair(1, "hello") : string
+  }
+}

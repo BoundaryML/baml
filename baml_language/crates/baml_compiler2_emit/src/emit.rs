@@ -10,9 +10,12 @@ use std::{
 };
 
 use baml_base::Span;
+use baml_compiler2_hir::loc::DeclRef;
+use baml_compiler2_hir_ty::extern_loc::FunctionRef;
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    memory::{self, CellId},
 };
 use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
@@ -26,7 +29,7 @@ use bex_vm_types::{
 
 /// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
 ///
-/// Collapses `RuntimeTy::Int { .. }` / `RuntimeTy::Literal(Int(_))` (and similar) into a
+/// Collapses `RuntimeTy::Int` / `RuntimeTy::Literal(Int(_))` (and similar) into a
 /// single tag so specialization works regardless of whether TIR preserved a
 /// literal type after constant-folding.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -277,12 +280,6 @@ enum PendingJumpTarget {
     Trap,
 }
 
-#[derive(Default)]
-struct SpawnCaptures {
-    locals: HashSet<Local>,
-    capture_indices: HashSet<usize>,
-}
-
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
     /// MIR body being compiled.
@@ -291,13 +288,12 @@ struct StackifyCodegen<'ctx, 'obj> {
     arity: usize,
     /// Line index for the MIR's source file.
     line_starts: &'ctx [u32],
+    /// The database link names are rendered through at this boundary.
+    db: &'ctx dyn baml_compiler2_mir::Db,
 
-    /// Resolved global names to indices.
-    globals: &'ctx HashMap<String, usize>,
-    /// Pass-1 global slot per interface-machinery body, keyed by declaration.
-    /// An interface body has no runtime name; this map is its only
-    /// resolution channel.
-    interface_body_slots: &'ctx HashMap<baml_compiler2_hir::loc::FunctionLoc<'ctx>, usize>,
+    /// The Pass-1 slot registry every direct callee and top-level `let` read
+    /// resolves through, by declaration identity.
+    slots: &'ctx crate::GlobalSlots<'ctx>,
     /// Resolved class field indices.
     #[allow(dead_code)]
     classes: &'ctx HashMap<String, HashMap<String, usize>>,
@@ -404,11 +400,6 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Capture slots whose cell may be read or written by a spawned thread.
     spawn_captured_captures: HashSet<usize>,
 
-    /// When `true`, the current operand load is for a `MakeClosure` capture operand.
-    /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
-    /// pointer itself) rather than `LoadDeref` (which would dereference the cell).
-    loading_for_closure_capture: bool,
-
     /// Reference record every resolution this codegen performs writes into
     /// (see [`crate::UnitReferences`]): each function/`let` global-slot
     /// resolution and each class/enum object-index resolution records the
@@ -451,8 +442,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             body,
             arity,
             line_starts,
-            globals: ctx.globals,
-            interface_body_slots: ctx.interface_body_slots,
+            db: ctx.db,
+            slots: ctx.slots,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
@@ -490,7 +481,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
             spawn_captured_captures: ctx.spawn_capture_indices.clone(),
-            loading_for_closure_capture: false,
         }
     }
 
@@ -570,12 +560,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Resolve the type of a MIR Place by walking from the root local through projections.
     fn resolve_place_type(&self, place: &Place) -> Option<bex_vm_types::RuntimeTy> {
         match place {
+            // A captured local's declared type is its value's type, so a bare
+            // `Local` reports the value type while naming a pointer; nothing
+            // asks for a bare pointer's type.
             Place::Local(local) => self.local_types.get(local).cloned(),
             Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
+            Place::Deref(CellId::Local(local)) => self.local_types.get(local).cloned(),
+            Place::Deref(CellId::Capture(idx)) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    bex_vm_types::RuntimeTy::Class(head, _, _) => self
+                    bex_vm_types::RuntimeTy::Class(head, _) => self
                         .class_fields_for(head.tag())?
                         .get(*field)
                         .map(|(_, field_type)| field_type.clone()),
@@ -585,7 +580,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    bex_vm_types::RuntimeTy::List(inner, _) => Some(*inner),
+                    bex_vm_types::RuntimeTy::List(inner) => Some(*inner),
                     bex_vm_types::RuntimeTy::Map { value, .. } => Some(*value),
                     _ => None,
                 }
@@ -613,153 +608,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Classify a type for binary-op specialization. Returns `None` if the
     /// type isn't one of the primitive numeric forms we can specialize on.
     ///
-    /// Both `RuntimeTy::Int { .. }` and `RuntimeTy::Literal(Literal::Int(_), _)` map to
+    /// Both `RuntimeTy::Int` and `RuntimeTy::Literal(Literal::Int(_), _)` map to
     /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
     /// expressions like `(-1n) & 255n` where the lhs operand carries a
     /// `RuntimeTy::Literal(Bigint(-1))` after constant-folding in TIR.
     fn classify_arith_ty(ty: &bex_vm_types::RuntimeTy) -> Option<ArithTyClass> {
         use bex_vm_types::RuntimeTy as T;
         match ty {
-            T::Int { .. } => Some(ArithTyClass::Int),
-            T::Float { .. } => Some(ArithTyClass::Float),
-            T::Bigint { .. } => Some(ArithTyClass::Bigint),
-            T::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
-            T::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
-            T::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
+            T::Int => Some(ArithTyClass::Int),
+            T::Float => Some(ArithTyClass::Float),
+            T::Bigint => Some(ArithTyClass::Bigint),
+            T::Literal(baml_type::Literal::Int(_), _) => Some(ArithTyClass::Int),
+            T::Literal(baml_type::Literal::Float(_), _) => Some(ArithTyClass::Float),
+            T::Literal(baml_type::Literal::Bigint(_), _) => Some(ArithTyClass::Bigint),
             _ => None,
         }
-    }
-
-    fn collect_spawn_captures(&self) -> SpawnCaptures {
-        let mut captures = SpawnCaptures::default();
-        let mut seen = HashSet::new();
-
-        for block in &self.body.blocks {
-            let Some(Terminator::Spawn { closure, .. }) = &block.terminator else {
-                continue;
-            };
-
-            self.collect_spawn_closure_captures(closure, &mut captures, &mut seen);
-        }
-
-        captures
-    }
-
-    fn collect_spawn_closure_captures(
-        &self,
-        operand: &Operand<'ctx>,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        if let Some(Rvalue::MakeClosure {
-            captures: closure_captures,
-            ..
-        }) = self.local_def_rvalue_for_operand(operand)
-        {
-            for capture in closure_captures {
-                self.collect_spawn_shared_operand(capture, captures, seen);
-            }
-            return;
-        }
-
-        self.collect_spawn_shared_operand(operand, captures, seen);
-    }
-
-    fn collect_spawn_shared_operand(
-        &self,
-        operand: &Operand<'ctx>,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => {
-                self.collect_spawn_shared_place(place, captures, seen);
-            }
-            Operand::Constant(_) => {}
-        }
-    }
-
-    fn collect_spawn_shared_place(
-        &self,
-        place: &Place,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        match place {
-            Place::Local(local) => self.collect_spawn_shared_local(*local, captures, seen),
-            Place::Capture(idx) => {
-                captures.capture_indices.insert(*idx);
-            }
-            Place::Field { base, .. } => self.collect_spawn_shared_place(base, captures, seen),
-            Place::Index { base, index, .. } => {
-                self.collect_spawn_shared_place(base, captures, seen);
-                self.collect_spawn_shared_local(*index, captures, seen);
-            }
-        }
-    }
-
-    fn collect_spawn_shared_local(
-        &self,
-        local: Local,
-        captures: &mut SpawnCaptures,
-        seen: &mut HashSet<Local>,
-    ) {
-        let local = match self.analysis.classifications.get(&local).copied() {
-            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(local),
-            _ => local,
-        };
-
-        if !seen.insert(local) {
-            return;
-        }
-
-        if self.local_slots.contains_key(&local) {
-            captures.locals.insert(local);
-        }
-
-        match self.local_def_rvalue(local) {
-            Some(Rvalue::MakeClosure {
-                captures: closure_captures,
-                ..
-            }) => {
-                for capture in closure_captures {
-                    self.collect_spawn_shared_operand(capture, captures, seen);
-                }
-            }
-            Some(Rvalue::Use(operand)) => {
-                self.collect_spawn_shared_operand(operand, captures, seen);
-            }
-            Some(Rvalue::MakeBoundMethod { receiver, .. }) => {
-                self.collect_spawn_shared_operand(receiver, captures, seen);
-            }
-            _ => {}
-        }
-    }
-
-    fn local_def_rvalue(&self, local: Local) -> Option<&Rvalue<'ctx>> {
-        self.analysis
-            .def_use
-            .get(&local)
-            .and_then(|du| du.def.as_ref())
-            .map(|def| &def.rvalue)
-    }
-
-    fn local_def_rvalue_for_operand(&self, operand: &Operand<'ctx>) -> Option<&Rvalue<'ctx>> {
-        let place = match operand {
-            Operand::Copy(place) | Operand::Move(place) => place,
-            Operand::Constant(_) => return None,
-        };
-
-        let Place::Local(local) = place else {
-            return None;
-        };
-
-        let local = match self.analysis.classifications.get(local).copied() {
-            Some(LocalClassification::CopyOf) => self.analysis.resolve_copy_source(*local),
-            _ => *local,
-        };
-
-        self.local_def_rvalue(local)
     }
 
     fn local_reads_spawn_captured_local(&self, local: Local, seen: &mut HashSet<Local>) -> bool {
@@ -788,7 +651,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn place_reads_spawn_captured_local(&self, place: &Place, seen: &mut HashSet<Local>) -> bool {
         match place {
             Place::Local(local) => self.local_reads_spawn_captured_local(*local, seen),
-            Place::Capture(idx) => self.spawn_captured_captures.contains(idx),
+            // A bare capture is a pointer, never an arithmetic operand.
+            Place::Capture(_) => false,
+            Place::Deref(CellId::Local(local)) => self.spawn_captured_locals.contains(local),
+            Place::Deref(CellId::Capture(idx)) => self.spawn_captured_captures.contains(idx),
             Place::Field { base, .. } => self.place_reads_spawn_captured_local(base, seen),
             Place::Index { base, index, .. } => {
                 self.place_reads_spawn_captured_local(base, seen)
@@ -979,26 +845,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.local_slots.contains_key(&local).then_some(local)
             })
             .collect();
-        let spawn_captures = self.collect_spawn_captures();
-        self.spawn_captured_locals = spawn_captures.locals;
-        self.spawn_captured_captures
-            .extend(spawn_captures.capture_indices);
-
-        // Emit cell-wrapping preamble: for each captured Real local, wrap the
-        // initial value in a Cell so that lambdas can share and mutate it.
-        // Emit at the start of the entry block before any user instructions.
-        // Note: Parameters that are captured also need cell wrapping.
-        for (i, local_decl) in mir.locals.iter().enumerate() {
-            if local_decl.is_captured {
-                let local = Local(i);
-                if let Some(&slot) = self.local_slots.get(&local) {
-                    // Load the current value (either 0 for uninitialized or param value),
-                    // wrap in a Cell, and store back.
-                    let inst = self.emit(Instruction::LoadVar(slot));
-                    self.set_var_operand(inst, slot);
-                    self.emit(Instruction::MakeCell);
-                    let inst = self.emit(Instruction::StoreVar(slot));
-                    self.set_var_operand(inst, slot);
+        for cell in memory::spawn_shared_cells(mir) {
+            match cell {
+                CellId::Local(local) => {
+                    self.spawn_captured_locals.insert(local);
+                }
+                CellId::Capture(idx) => {
+                    self.spawn_captured_captures.insert(idx);
                 }
             }
         }
@@ -1011,6 +864,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Build slot name mapping for debug metadata.
         self.slot_names = Self::build_local_names(mir, &self.local_slots);
+
+        // Wrap each captured parameter's value in a cell at entry. A parameter
+        // is the one binding created without a `FreshCell` — the caller wrote
+        // its value into the slot — so the frame preamble is where it gets its
+        // cell. Every other captured local's cell comes from its `FreshCell`.
+        // Emitted after the slot names exist so the instructions carry them.
+        for local in (1..=self.arity).map(Local) {
+            if !mir.local(local).is_captured {
+                continue;
+            }
+            let Some(&slot) = self.local_slots.get(&local) else {
+                unreachable!("a captured parameter is always Real");
+            };
+            let inst = self.emit(Instruction::LoadVar(slot));
+            self.set_var_operand(inst, slot);
+            self.emit(Instruction::MakeCell);
+            let inst = self.emit(Instruction::StoreVar(slot));
+            self.set_var_operand(inst, slot);
+        }
 
         // 2. Emit blocks in RPO order.
         //
@@ -1099,9 +971,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::TyTemplate::Null {
-                attr: baml_type::TyAttr::default(),
-            },
+            return_type: baml_type::TyTemplate::Null,
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
@@ -1109,9 +979,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: "null".to_string(),
-            throws_type: baml_type::TyTemplate::Never {
-                attr: baml_type::TyAttr::default(),
-            },
+            throws_type: baml_type::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
             is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
@@ -1495,15 +1363,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 }
 
                 match destination {
-                    Place::Local(_) => {
-                        // Local assignment: emit rvalue then store
+                    Place::Local(_) | Place::Deref(_) => {
+                        // Evaluate the rvalue, then store to the slot or through the cell.
                         self.emit_rvalue_pull(value);
                         self.emit_store_place(destination);
                     }
-                    Place::Capture(idx) => {
-                        // Capture store: evaluate rvalue, then StoreCapture.
-                        self.emit_rvalue_pull(value);
-                        unwrap_infallible(self.store_capture_value(*idx));
+                    Place::Capture(_) => {
+                        unreachable!("a bare capture is a pointer nothing stores to")
                     }
                     Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
@@ -1530,17 +1396,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::Drop(place) => {
                 unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
             }
-            StatementKind::FreshCell(local) => {
-                if self.captured_locals.contains(local) {
-                    if let Some(&slot) = self.local_slots.get(local) {
-                        let null_idx = self.add_constant(ConstValue::Null);
-                        let inst = self.emit(Instruction::LoadConst(null_idx));
-                        self.set_operand(inst, OperandMeta::Const("null".to_string()));
-                        self.emit(Instruction::MakeCell);
-                        let inst = self.emit(Instruction::StoreVar(slot));
-                        self.set_var_operand(inst, slot);
-                    }
+            StatementKind::FreshCell { local, carry_value } => {
+                debug_assert!(
+                    self.captured_locals.contains(local),
+                    "fresh_cell on {local}, which no closure captures"
+                );
+                let Some(&slot) = self.local_slots.get(local) else {
+                    unreachable!("a captured local is always Real");
+                };
+                if *carry_value {
+                    let inst = self.emit(Instruction::LoadDeref(slot));
+                    self.set_var_operand(inst, slot);
+                } else {
+                    let null_idx = self.add_constant(ConstValue::Null);
+                    let inst = self.emit(Instruction::LoadConst(null_idx));
+                    self.set_operand(inst, OperandMeta::Const("null".to_string()));
                 }
+                self.emit(Instruction::MakeCell);
+                let inst = self.emit(Instruction::StoreVar(slot));
+                self.set_var_operand(inst, slot);
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
@@ -1751,7 +1625,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             | LocalClassification::AggregateOperand
                     )
             }
-            Place::Capture(_) => false,
+            Place::Deref(_) | Place::Capture(_) => false,
         }
     }
 
@@ -1873,12 +1747,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             for template in type_arg_templates {
                 unwrap_infallible(self.load_type(template));
             }
-            let prev = self.loading_for_closure_capture;
-            self.loading_for_closure_capture = true;
+            // Each capture operand is a bare cell pointer: a captured local's
+            // slot (`LoadVar`) or one of this closure's captures (`CaptureRef`).
             for capture in captures {
                 self.emit_operand_pull(capture);
             }
-            self.loading_for_closure_capture = prev;
             unwrap_infallible(self.make_closure_with_type_args(
                 *lambda_idx,
                 captures.len(),
@@ -1923,16 +1796,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
         }
-        if let Rvalue::MakeBoundMethod { item_ref, receiver } = rvalue {
+        if let Rvalue::MakeBoundMethod { func, receiver } = rvalue {
             // Emit the receiver onto the stack first.
             self.emit_operand_pull(receiver);
-            // Resolve the item_ref to a GlobalIndex.
-            let global_idx =
-                self.function_global_index(item_ref, "MakeBoundMethod: global not found");
+            // Resolve the method to its GlobalIndex.
+            let global_idx = self.function_global_index(*func, "MakeBoundMethod: global not found");
             let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
                 global_idx,
             )));
-            self.set_operand(inst, OperandMeta::Global(item_ref.to_string()));
+            self.set_operand(
+                inst,
+                OperandMeta::Global(baml_compiler2_mir::function_link_name(self.db, *func)),
+            );
             return;
         }
         if let Rvalue::MakeVirtualBoundMethod {
@@ -2021,48 +1896,56 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
-    /// Pass-1 global slot for a function item.
-    ///
-    /// An interface-machinery body resolves by its DECLARATION
-    /// ([`baml_compiler2_mir::InterfaceBodyRef::decl`]) through [`Self::interface_body_slots`] —
-    /// its rendered spelling is display-only and keys nothing. Every other
-    /// item resolves by its rendered name through [`Self::globals`]; `None`
-    /// there means the callee is not statically addressable (the caller falls
-    /// back to an indirect call). A body missing its slot is an internal
-    /// error: `ItemRef::InterfaceBody` only exists for declarations this database
-    /// sees, and Pass 1 slots every one of them.
-    fn try_function_global_index(
-        &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
-    ) -> Option<usize> {
-        if let baml_compiler2_mir::ItemRef::InterfaceBody(body) = item {
-            let slot = *self
-                .interface_body_slots
-                .get(&body.decl)
-                .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {item}"));
-            // The body's rendered spelling is display-only for resolution, but
-            // its last segment (the method name) is exactly what the declaring
-            // file's `defined_names` produces — the incremental edge grain.
-            self.references.record(&item.to_string());
-            return Some(slot);
+    /// The global slot `func` links as, or `None` when this program slots
+    /// nothing for it — [`Self::slots`] is the one registry, keyed by
+    /// declaration identity on both lanes. A `None` is a callee the program
+    /// cannot direct-call: a required interface method (no body), an
+    /// intrinsic (never a `Call`), or a served row the linked prefix does not
+    /// slot; callers fall back or panic per their own law. An interface body
+    /// reaching codegen unslotted is a loud panic, never a fallback.
+    fn try_function_global_index(&mut self, func: FunctionRef<'ctx>) -> Option<usize> {
+        let slot = self.slots.functions.get(&func).copied();
+        if slot.is_none()
+            && let DeclRef::Source(decl) = func
+            && baml_compiler2_mir::function_is_interface_body(self.db, decl)
+        {
+            panic!(
+                "interface body has no Pass-1 slot: {}",
+                baml_compiler2_mir::function_link_name(self.db, func)
+            );
         }
-        let rendered = item.to_string();
-        let slot = self.globals.get(&rendered).copied();
+        // A method an impl of a SERVED package provides is slotted by no lane:
+        // it is reached only through its impl rule, by dispatch. One arriving
+        // here was lowered as a direct reference, which nothing can link.
+        if slot.is_none()
+            && let DeclRef::External(row) = func
+            && row.impl_block(self.db).is_some()
+        {
+            panic!(
+                "internal compiler error: `{}` is provided by an impl of a package served from \
+                 its interface, so no lane slots it; it must be reached through its impl rule, \
+                 never referenced directly",
+                baml_compiler2_mir::function_link_name(self.db, func)
+            );
+        }
         if slot.is_some() {
-            self.references.record(&rendered);
+            // The incremental edge grain is the item's last-segment name —
+            // rendered here only for the record.
+            self.references
+                .record(&baml_compiler2_mir::function_link_name(self.db, func));
         }
         slot
     }
 
     /// [`Self::try_function_global_index`], panicking with `what` when the
-    /// item does not resolve.
-    fn function_global_index(
-        &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
-        what: &str,
-    ) -> usize {
-        self.try_function_global_index(item)
-            .unwrap_or_else(|| panic!("{what}: {item}"))
+    /// callable does not resolve.
+    fn function_global_index(&mut self, func: FunctionRef<'ctx>, what: &str) -> usize {
+        self.try_function_global_index(func).unwrap_or_else(|| {
+            panic!(
+                "{what}: {}",
+                baml_compiler2_mir::function_link_name(self.db, func)
+            )
+        })
     }
 
     /// Push a function reference as a value: a pooled, interned
@@ -2079,11 +1962,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// reproducing the exact serial candidate set and pool layout.
     fn emit_pooled_function_value(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
+        func: FunctionRef<'ctx>,
         type_args: &[baml_type::RealizedTy],
     ) {
-        let name_str = item.to_string();
-        let global_idx = self.function_global_index(item, "undefined function");
+        let name_str = baml_compiler2_mir::function_link_name(self.db, func);
+        let global_idx = self.function_global_index(func, "undefined function");
         let gidx = GlobalIndex::from_raw(global_idx);
         // The pooled object carries runtime heads; anchor once and compare in
         // that space so an existing instantiation is actually recognized.
@@ -2163,7 +2046,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const("<omitted>".to_string()));
             }
-            Constant::Function(item_ref) => {
+            Constant::Function(func) => {
                 // A plain function reference as a VALUE. Pooled exactly like
                 // `Constant::GenericFunction`, with EMPTY type args: every
                 // function-pointer value on the heap is a wrapper object
@@ -2172,44 +2055,47 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // invariant `value_concrete_ty` / `callable_signature` rely
                 // on. Interning keeps `greet === greet` pointer-stable, as a
                 // direct `LoadGlobal` of the function object did before.
-                self.emit_pooled_function_value(item_ref, &[]);
+                self.emit_pooled_function_value(*func, &[]);
             }
-            Constant::GlobalItem(item_ref) => {
-                // A non-function global item (a client, a top-level `let`,
-                // ...): read the value `$init` stored in its slot, unwrapped.
-                let name_str = item_ref.to_string();
+            Constant::GlobalItem(binding) => {
+                // A top-level `let` (a client, ...): read the value `$init`
+                // stored in its slot, unwrapped.
+                let name_str = baml_compiler2_mir::definition_link_name(
+                    self.db,
+                    baml_compiler2_hir::contributions::Definition::Let(*binding),
+                );
                 let global_idx = *self
-                    .globals
-                    .get(&name_str)
+                    .slots
+                    .lets
+                    .get(binding)
                     .unwrap_or_else(|| panic!("undefined global item: {name_str}"));
                 self.references.record(&name_str);
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
-            Constant::GenericFunction { item, type_args } => {
+            Constant::GenericFunction { func, type_args } => {
                 // `foo<int>` as a value: the same pooled wrapper, carrying its
                 // concrete type arguments so calling it seeds `frame.type_args`.
-                self.emit_pooled_function_value(item, type_args);
+                self.emit_pooled_function_value(*func, type_args);
             }
             Constant::EnumVariant { enum_ref, variant } => {
-                let enum_name_str = enum_ref.to_string();
-                // Gracefully handle undefined enum references (e.g. cross-package
-                // references that aren't registered in this compilation context).
-                // Emit a Null constant so tests don't panic; runtime will fail
-                // if the code path is actually executed.
-                let enum_obj_idx = self.enum_object_indices.get(&enum_name_str).copied();
-                if enum_obj_idx.is_some() {
-                    self.references.record(&enum_name_str);
-                }
-                let Some(enum_obj_idx) = enum_obj_idx else {
-                    let idx = self.add_constant(ConstValue::Null);
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(
-                        inst,
-                        OperandMeta::Const(format!("undefined_enum::{enum_name_str}.{variant}")),
-                    );
-                    return;
-                };
+                let enum_name_str = baml_compiler2_mir::enum_link_name(self.db, *enum_ref);
+                // TIR admitted the enum and MIR resolved it to a declaration
+                // (`enum_ref_of`), so this compilation registered an object
+                // for it: a source enum — a mounted package's link stub
+                // included, the mount boundary having refused any enum it
+                // can name but cannot stub — in Pass 4, or a seeded pool
+                // object of the precompiled stdlib. A miss is an internal
+                // error, never a `Null` where a variant belongs.
+                let enum_obj_idx = *self.enum_object_indices.get(&enum_name_str).unwrap_or_else(
+                    || {
+                        panic!(
+                            "internal error: no enum object for `{enum_name_str}` (referenced as \
+                             `{enum_name_str}.{variant}`)"
+                        )
+                    },
+                );
+                self.references.record(&enum_name_str);
 
                 let variant_str = variant.to_string();
                 let variant_idx = *self
@@ -2248,15 +2134,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let classification = self.analysis.classifications[local];
                 match pull_semantics::local_store_behavior(classification) {
                     LocalStoreBehavior::StoreSlot => {
-                        let slot = self.local_slots[local];
-                        if self.captured_locals.contains(local) {
-                            // Captured local: store through the cell.
-                            self.emit(Instruction::StoreDeref(slot));
-                        } else {
-                            // Normal local: direct slot store (folds a preceding
-                            // StoreVar into StoreVar2).
-                            self.emit_store_var(slot);
-                        }
+                        debug_assert!(
+                            !self.captured_locals.contains(local),
+                            "bare store to captured {local}"
+                        );
+                        // Direct slot store (folds a preceding StoreVar into StoreVar2).
+                        self.emit_store_var(self.local_slots[local]);
                     }
                     LocalStoreBehavior::KeepOnStack => {
                         // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
@@ -2268,10 +2151,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     }
                 }
             }
-            Place::Capture(idx) => {
-                // StoreCapture for lambda body capture stores.
+            Place::Deref(CellId::Local(local)) => {
+                debug_assert!(
+                    self.captured_locals.contains(local),
+                    "deref of uncaptured {local}"
+                );
+                self.emit(Instruction::StoreDeref(self.local_slots[local]));
+            }
+            Place::Deref(CellId::Capture(idx)) => {
                 self.emit(Instruction::StoreCapture(*idx));
             }
+            Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
             Place::Field { .. } | Place::Index { .. } => {
                 unreachable!(
                     "Field/Index stores are handled in emit_statement, not emit_store_place"
@@ -2409,8 +2299,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     &self.analysis.def_use,
                 );
                 let global_callee = callee_item
-                    .as_ref()
-                    .and_then(|item| self.try_function_global_index(item))
+                    .and_then(|func| self.try_function_global_index(func))
                     .map(GlobalIndex::from_raw);
 
                 if let Some(global_callee) = global_callee {
@@ -2427,8 +2316,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
                     self.record_call_layout(inst, argument_layout.as_ref());
-                    if let Some(item) = &callee_item {
-                        self.set_operand(inst, OperandMeta::Callable(item.to_string()));
+                    if let Some(func) = callee_item {
+                        self.set_operand(
+                            inst,
+                            OperandMeta::Callable(baml_compiler2_mir::function_link_name(
+                                self.db, func,
+                            )),
+                        );
                     }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
@@ -2499,7 +2393,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::SysOp {
                 callee,
                 args,
-
                 destination,
                 target,
                 unwind: _,
@@ -2510,8 +2403,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     &self.analysis.def_use,
                 );
                 let global_callee = callee_item
-                    .as_ref()
-                    .and_then(|item| self.try_function_global_index(item))
+                    .and_then(|func| self.try_function_global_index(func))
                     .map(GlobalIndex::from_raw)
                     .unwrap_or_else(|| {
                         panic!(
@@ -2522,8 +2414,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
                 let inst = self.emit(Instruction::SysOp(global_callee));
-                if let Some(item) = &callee_item {
-                    self.set_operand(inst, OperandMeta::Callable(item.to_string()));
+                if let Some(func) = callee_item {
+                    self.set_operand(
+                        inst,
+                        OperandMeta::Callable(baml_compiler2_mir::function_link_name(
+                            self.db, func,
+                        )),
+                    );
                 }
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -3342,13 +3239,9 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                     .as_ref()
                     .map(|def| def.rvalue.clone())
                     .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                // MakeClosure must be handled specially: its captures need to load
-                // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
-                // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
-                // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod / MakeVirtualBoundMethod / VirtualFieldAccess must
-                // also be handled specially: none is handled by `walk_rvalue_pull`
-                // (which panics on them), so route through `emit_rvalue_pull`.
+                // MakeClosure, MakeBoundMethod, MakeVirtualBoundMethod, and
+                // VirtualFieldAccess are materialized only by `emit_rvalue_pull`
+                // (`walk_rvalue_pull` panics on them), so route through it.
                 // BinaryOp must be routed through `emit_rvalue_pull` so that the
                 // type-aware specialization in `try_specialize_binary_op` can fire
                 // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
@@ -3379,25 +3272,19 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             LocalClassification::CopyOf => {
                 // Copy propagation: load from source slot directly.
                 let source = self.analysis.resolve_copy_source(local);
-                let slot = self.local_slots[&source];
-                if self.captured_locals.contains(&source) && !self.loading_for_closure_capture {
-                    self.emit(Instruction::LoadDeref(slot));
-                } else {
-                    self.emit_load_var(slot);
-                }
+                debug_assert!(
+                    !self.captured_locals.contains(&source),
+                    "copy of captured {source}"
+                );
+                self.emit_load_var(self.local_slots[&source]);
                 LocalPullAction::Done
             }
             LocalClassification::Parameter
             | LocalClassification::Real
             | LocalClassification::Dead => {
-                let slot = self.local_slots[&local];
-                if self.captured_locals.contains(&local) && !self.loading_for_closure_capture {
-                    // Captured local: load the value through the cell.
-                    self.emit(Instruction::LoadDeref(slot));
-                } else {
-                    // Normal local or loading cell pointer for MakeClosure.
-                    self.emit_load_var(slot);
-                }
+                // The slot's value; for a captured local that is its cell
+                // pointer, which only a closure capture operand reads bare.
+                self.emit_load_var(self.local_slots[&local]);
                 LocalPullAction::Done
             }
         };
@@ -3455,16 +3342,24 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
         let inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(inst, OperandMeta::Const(display));
-        let deep_copy_idx = self
-            .globals
-            .get("baml.deep_copy")
-            .copied()
-            .unwrap_or_else(|| panic!("undefined function: baml.deep_copy"));
+        let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
+            self.db,
+            baml_base::LangPackage::Baml,
+            &[],
+            "deep_copy",
+        )
+        .unwrap_or_else(|| {
+            panic!("internal compiler error: the stdlib exports no `baml.deep_copy`")
+        });
+        let deep_copy_idx = self.function_global_index(deep_copy, "undefined function");
         let inst = self.emit(Instruction::Call {
             callee: GlobalIndex::from_raw(deep_copy_idx),
             ntypeargs: 0,
         });
-        self.set_operand(inst, OperandMeta::Callable("baml.deep_copy".to_string()));
+        self.set_operand(
+            inst,
+            OperandMeta::Callable(baml_compiler2_mir::function_link_name(self.db, deep_copy)),
+        );
         Ok(())
     }
 
@@ -3499,6 +3394,14 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // anonymous or misidentified object literal (e.g., `null { }` from
             // an ambiguous if-condition). Emit a null constant as a fallback so
             // compilation doesn't panic; the runtime behavior is best-effort.
+            // BUG: a CHECKED program reaches this arm too, and then constructs
+            // a silent `null`: a runtime-mounted class the link stub skipped
+            // (its own name or a field name is not a BAML identifier) that a
+            // consumer can still name — through a spellable export alias, or
+            // by omitting the unspellable field when it is optional. The enum
+            // twin (`Constant::EnumVariant`) is refused at the mount instead;
+            // this one dies with stub generation, once class objects are
+            // reached by identity.
             let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
             let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
             self.set_operand(
@@ -3600,7 +3503,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
-            TyTemplate::Class(tn, type_args_templates, _) => {
+            TyTemplate::Class(tn, type_args_templates) => {
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
                     emit_false(self);
@@ -3671,7 +3574,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // to constant-FALSE — silently misrouting every value, not just the
             // valueless ones. (Only refutable positions reach here at all: an
             // exhaustive final `let v: unknown` arm has its test elided.)
-            TyTemplate::Unknown { .. } => emit_true(self),
+            TyTemplate::Unknown => emit_true(self),
 
             // ── Singleton (literal) ──────────────────────────────────────────
             // A literal type is a set of one, so membership is decided against
@@ -3681,7 +3584,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // `type One = 1`). `ConstValue::Literal` is the exact test — the
             // specialization of the `ConstValue::Type(Literal)` structural form
             // the algebra would otherwise decide, minus the reconstruction.
-            TyTemplate::Literal(literal, _, _) => {
+            TyTemplate::Literal(literal, _) => {
                 let c = self.add_constant(ConstValue::Literal(literal.clone()));
                 let inst = self.emit(Instruction::IsType(c));
                 self.set_operand(inst, OperandMeta::Const(literal.to_string()));
@@ -3691,22 +3594,22 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
             // then use structural matching when no exact fast path exists.
             // This list is exhaustive on purpose: a new template variant must
             // choose its type-test strategy here.
-            other @ (TyTemplate::Int { .. }
-            | TyTemplate::Bigint { .. }
-            | TyTemplate::Float { .. }
-            | TyTemplate::String { .. }
-            | TyTemplate::Bool { .. }
-            | TyTemplate::Null { .. }
-            | TyTemplate::Uint8Array { .. }
+            other @ (TyTemplate::Int
+            | TyTemplate::Bigint
+            | TyTemplate::Float
+            | TyTemplate::String
+            | TyTemplate::Bool
+            | TyTemplate::Null
+            | TyTemplate::Uint8Array
             | TyTemplate::Enum(..)
             | TyTemplate::EnumVariant(..)
-            | TyTemplate::RustType { .. }
-            | TyTemplate::Type { .. }
-            | TyTemplate::Resource { .. }
-            | TyTemplate::PromptAst { .. }
-            | TyTemplate::Void { .. }
+            | TyTemplate::RustType
+            | TyTemplate::Type
+            | TyTemplate::Resource
+            | TyTemplate::PromptAst
+            | TyTemplate::Void
             | TyTemplate::TypeAlias(..)
-            | TyTemplate::Never { .. }) => {
+            | TyTemplate::Never) => {
                 // A fully-realized leaf (primitive, enum, alias, literal, ...):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
                 // tag when one exactly represents the test. Tagless leaves use
@@ -3714,7 +3617,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                 // compiling to false.
                 let realized = <&RealizedTy>::try_from(other)
                     .expect("exhaustive realized-leaf template classification");
-                if let RealizedTy::TypeAlias(tn, _) = realized {
+                if let RealizedTy::TypeAlias(tn) = realized {
                     if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                         let c = self
                             .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
@@ -3723,7 +3626,7 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
                     } else {
                         emit_false(self);
                     }
-                } else if let RealizedTy::Enum(tn, _) = realized {
+                } else if let RealizedTy::Enum(tn) = realized {
                     // Enum-pointer identity: `is Color` tests the value's enum
                     // object, so it discriminates `Color` from `Status` - the
                     // shared `ENUM` type tag cannot. Falls back to constant-false
@@ -3798,11 +3701,11 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
 
     fn make_generic_function(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef<'ctx>,
+        func: FunctionRef<'ctx>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
-        let func_name = item.to_string();
-        let global_idx = self.function_global_index(item, "MakeGenericFunction: global not found");
+        let func_name = baml_compiler2_mir::function_link_name(self.db, func);
+        let global_idx = self.function_global_index(func, "MakeGenericFunction: global not found");
         let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
         let inst = self.emit(Instruction::MakeGenericFunction {
             function: GlobalIndex::from_raw(global_idx),
@@ -3820,21 +3723,28 @@ impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
         Ok(())
     }
 
-    fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error> {
-        if self.loading_for_closure_capture {
-            // When building a MakeClosure capture list, we want to forward the
-            // raw cell pointer from this closure's capture slot to the inner
-            // closure — not read through the cell to get the inner value.
-            self.emit(Instruction::CaptureRef(idx));
-        } else {
-            self.emit(Instruction::LoadCapture(idx));
-        }
+    fn load_deref_local(&mut self, local: Local) -> Result<(), Self::Error> {
+        debug_assert!(
+            self.captured_locals.contains(&local),
+            "deref of uncaptured {local}"
+        );
+        self.emit(Instruction::LoadDeref(self.local_slots[&local]));
+        Ok(())
+    }
+
+    fn load_capture_value(&mut self, idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::LoadCapture(idx));
+        Ok(())
+    }
+
+    fn load_capture_ref(&mut self, idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::CaptureRef(idx));
         Ok(())
     }
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class = match self.resolve_place_type(base) {
-            Some(bex_vm_types::RuntimeTy::Class(head, _, _)) => head.tag(),
+            Some(bex_vm_types::RuntimeTy::Class(head, _)) => head.tag(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(class, field_idx)
@@ -3869,29 +3779,24 @@ impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
         self.emit(Instruction::Pop(n));
         Ok(())
     }
-
-    fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::StoreCapture(idx));
-        Ok(())
-    }
 }
 
 /// The coarse `IsType` type tag for a realized leaf type, or `None` for a type
 /// with no representable tag (classes take the pointer-identity path instead).
 fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
     match ty {
-        RealizedTy::Int { .. } => Some(baml_type::typetag::INT),
-        RealizedTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-        RealizedTy::String { .. } => Some(baml_type::typetag::STRING),
-        RealizedTy::Bool { .. } => Some(baml_type::typetag::BOOL),
-        RealizedTy::Null { .. } => Some(baml_type::typetag::NULL),
-        RealizedTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+        RealizedTy::Int => Some(baml_type::typetag::INT),
+        RealizedTy::Bigint => Some(baml_type::typetag::BIGINT),
+        RealizedTy::String => Some(baml_type::typetag::STRING),
+        RealizedTy::Bool => Some(baml_type::typetag::BOOL),
+        RealizedTy::Null => Some(baml_type::typetag::NULL),
+        RealizedTy::Float => Some(baml_type::typetag::FLOAT),
         RealizedTy::Enum(..) => Some(baml_type::typetag::ENUM),
         RealizedTy::List(..) => Some(baml_type::typetag::LIST),
         RealizedTy::Map { .. } => Some(baml_type::typetag::MAP),
         RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
-        RealizedTy::Type { .. } => Some(baml_type::typetag::TYPE),
-        RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+        RealizedTy::Type => Some(baml_type::typetag::TYPE),
+        RealizedTy::Uint8Array => Some(baml_type::typetag::UINT8ARRAY),
         // A literal type has no type tag. Tags name base types, and a literal
         // is a strict subset of its base, so its base's tag over-accepts every
         // other inhabitant — `1` would admit any int. Literal membership is
@@ -3904,13 +3809,13 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::Interface(..)
         | RealizedTy::Union(..)
         | RealizedTy::Future(..)
-        | RealizedTy::RustType { .. }
-        | RealizedTy::Resource { .. }
-        | RealizedTy::PromptAst { .. }
-        | RealizedTy::Void { .. }
+        | RealizedTy::RustType
+        | RealizedTy::Resource
+        | RealizedTy::PromptAst
+        | RealizedTy::Void
         | RealizedTy::TypeAlias(..)
-        | RealizedTy::Unknown { .. }
-        | RealizedTy::Never { .. }
+        | RealizedTy::Unknown
+        | RealizedTy::Never
         | RealizedTy::EnumVariant(..) => None,
     }
 }
@@ -4002,8 +3907,7 @@ mod tests {
             catch_regions: Vec::new(),
         };
 
-        let globals = HashMap::new();
-        let interface_body_slots = HashMap::new();
+        let slots = crate::GlobalSlots::default();
         let classes = HashMap::new();
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
@@ -4017,14 +3921,15 @@ mod tests {
         let line_starts = [0];
         let mut references = crate::UnitReferences::default();
 
+        let db = crate::tests::TestDb::default();
         let function = compile_mir_function(
             &body,
             1,
             None,
             &line_starts,
             MirCodegenContext {
-                globals: &globals,
-                interface_body_slots: &interface_body_slots,
+                db: &db,
+                slots: &slots,
                 classes: &classes,
                 class_object_indices: &class_object_indices,
                 enum_object_indices: &enum_object_indices,

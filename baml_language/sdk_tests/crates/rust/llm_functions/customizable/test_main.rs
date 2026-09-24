@@ -6,11 +6,9 @@
 //!
 //! Scope (subset of 09a-codegen-example-scenario.md):
 //! - user.lorem.Resume + ExtractResume (direct/spec/stream projections)
-//! - user.lorem.StreamingDoc + StreamingExtract (pins the always-different
-//!   `$stream` partial-model branch; folded in from the former
-//!   `python_llm_functions` crate)
+//! - user.lorem.StreamingDoc + StreamingExtract (class-typed streaming
+//!   bindings; folded in from the former `python_llm_functions` crate)
 //! - user.ipsum.Sentiment (enum) + ClassifySentiment
-//! - stream_types/lorem leaf presence
 
 #[test]
 fn test_main_root_imports_cleanly() {
@@ -48,7 +46,7 @@ fn test_main_lorem_streaming_doc_class_shape() {
     let _ = StreamingDoc {
         title: "t".to_string(),
         body: None,
-        word_count: 0,
+        word_count: None,
     };
 }
 
@@ -111,23 +109,6 @@ fn test_main_streaming_extract_spec_and_stream_bindings() {
     let _ = lorem::StreamingExtract_spec_async;
     let _ = lorem::StreamingExtract_stream;
     let _ = lorem::StreamingExtract_stream_async;
-}
-
-#[test]
-fn test_main_stream_types_lorem_leaf_present() {
-    // PPIR synthesizes Class$stream partial models for any class referenced
-    // by an LLM function's return type. Both Resume and StreamingDoc
-    // are LLM return types, so `stream_types.lorem` must exist with at
-    // least one of them. StreamingDoc's conditional-emit outcome is
-    // pinned to "emitted" (its `body string?` proxies a
-    // stream-state-altering field); Resume's is left to the
-    // conditional-emit rule.
-    // ADAPTATION(rust): python probes `hasattr` for "at least one of" the
-    // two companions; an any-of probe is inexpressible at compile time, so
-    // this references the leaf module plus the one companion whose emission
-    // is pinned (StreamingDoc) and leaves Resume's to the conditional-emit
-    // rule.
-    let _ = std::mem::size_of::<baml_sdk::stream_types::lorem::StreamingDoc>();
 }
 
 #[test]

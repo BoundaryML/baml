@@ -23,6 +23,7 @@ no-self-update = [  ]
 
 [dependencies]
 anyhow = { workspace = true }
+dirs = { workspace = true }
 flate2 = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 serde = { workspace = true, features = [ "derive" ] }

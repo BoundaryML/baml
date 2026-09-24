@@ -13,5 +13,10 @@ export default defineConfig({
   test: {
     env: { BAML_TEST_RUNTIME: "workers" },
     include: ["workers/**/*.test.ts"],
+    // Every pool worker is a full `workerd` runtime holding its own copy of
+    // the wasm bridge — around half a gigabyte each. An uncapped pool takes
+    // one per test file (17 were live at once here, 8 GB) and can exhaust
+    // the machine alongside the other suites.
+    maxWorkers: 4,
   },
 });

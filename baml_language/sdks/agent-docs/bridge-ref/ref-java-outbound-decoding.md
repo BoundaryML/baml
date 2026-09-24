@@ -681,10 +681,10 @@ Pinned by `WireCodecTest.decode_media_handle_constructs_image`,
 handle-type tag to select the runtime-owned `BamlStream` wrapper, but it does
 not erase the nominal receiver identity. It retains `handle.ty.class_ty.name`
 and derives method calls as `<carried-FQN>.next` and `<carried-FQN>.final`.
-`TPartial`/`TFinal` generic arguments remain host-erased, as in Python. A tagged
+The `T` generic argument remains host-erased, as in Python. A tagged
 stream handle without a class FQN is rejected rather than falling back to a
-hardcoded namespace. Stream *partials* (`next()` results) still decode as
-ordinary registered `$stream` companion classes on the wire-driven path.
+hardcoded namespace. Stream *partials* (`next()` results) decode as ordinary
+registered classes on the wire-driven path.
 
 > ⚠ **Deviation from Python — `HANDLE_UNSPECIFIED`:** Python raises `BamlError`
 > for a `HANDLE_UNSPECIFIED` handle; Java degrades it to a bare `BamlHandle`

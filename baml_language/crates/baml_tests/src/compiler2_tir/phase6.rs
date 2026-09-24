@@ -1,76 +1,169 @@
-//! Phase 6 tests: Generic type variable binding and builtin method resolution.
+//! Phase 6 tests: generic type-variable binding and builtin member resolution.
 //!
-//! Verifies that `Ty::List`, `Ty::Map`, and `Ty::String` correctly
-//! resolve methods to the builtin `.baml` stub declarations with type variable
-//! substitution applied.
+//! The four leading matrices consolidate builtin/media return types and
+//! receiver-specific missing-member diagnostics. The remaining tests retain
+//! their focused optional-call, container-establishment, and inference cases.
 
 use super::support::{expr_type_in_function, make_db, render_tir};
 use crate::engine::TestDbExt;
 
-// ── Array method resolution ───────────────────────────────────────────────────
-
 #[test]
-fn array_length_returns_int() {
+fn builtin_container_string_method_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        "function f(arr: int[]) -> int { return arr.length(); }",
+        r#"
+// array_length_returns_int
+function array_length_returns_int(arr: int[]) -> int { arr.length() }
+
+// array_at_returns_element_type_int
+function array_at_returns_element_type_int(arr: int[]) -> int? { arr.at(0) }
+
+// array_at_returns_element_type_string
+function array_at_returns_element_type_string(arr: string[]) -> string? { arr.at(0) }
+
+// array_join_returns_string
+function array_join_returns_string(arr: string[]) -> string { arr.join(",") }
+
+// map_keys_returns_key_type_array
+function map_keys_returns_key_type_array(m: map<string, int>) -> string[] { m.keys() }
+
+// map_values_returns_value_type_array
+function map_values_returns_value_type_array(m: map<string, int>) -> int[] { m.values() }
+
+// map_has_returns_bool
+function map_has_returns_bool(m: map<string, int>) -> bool { m.has("x") }
+
+// map_length_returns_int
+function map_length_returns_int(m: map<string, int>) -> int { m.length() }
+
+// string_length_returns_int
+function string_length_returns_int(s: string) -> int { s.length() }
+
+// string_split_returns_string_array
+function string_split_returns_string_array(s: string) -> string[] { s.split(",") }
+
+// string_includes_returns_bool
+function string_includes_returns_bool(s: string) -> bool { s.includes("ell") }
+
+// string_to_lower_case_returns_string
+function string_to_lower_case_returns_string(s: string) -> string { s.to_lower_case() }
+
+// let_inferred_from_array_length
+function let_inferred_from_array_length(arr: int[]) -> int {
+    let len = arr.length()
+    len
+}
+
+// let_inferred_from_array_at
+function let_inferred_from_array_at(arr: int[]) -> int? {
+    let x = arr.at(0)
+    x
+}
+
+// let_inferred_from_map_keys
+function let_inferred_from_map_keys(m: map<string, int>) -> string[] {
+    let keys = m.keys()
+    keys
+}
+
+// snapshot_builtin_method_calls: retain the multi-call/unused-result context.
+function snapshot_builtin_method_calls(
+    arr: string[],
+    m: map<string, int>,
+    s: string,
+) -> int {
+    let len = arr.length()
+    let keys = m.keys()
+    let parts = s.split(",")
+    len
+}
+"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: int[]) -> int throws never {
-      { : never
-        return arr.length() : int
-      }
-    }
-    ");
+    insta::assert_snapshot!(render_tir(&db, file));
 }
 
 #[test]
-fn array_at_returns_element_type_int() {
+fn media_instance_method_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        "function f(arr: int[]) -> int? { return arr.at(0); }",
+        r#"
+// image_url_returns_optional_string
+function image_url_returns_optional_string(img: image) -> string? { img.url() }
+
+// image_base64_returns_string
+function image_base64_returns_string(img: image) -> string { img.base64() }
+
+// image_mime_type_returns_optional_string
+function image_mime_type_returns_optional_string(img: image) -> string? { img.mime_type() }
+
+// pdf_url_returns_optional_string
+function pdf_url_returns_optional_string(doc: pdf) -> string? { doc.url() }
+
+// audio_base64_returns_string
+function audio_base64_returns_string(a: audio) -> string { a.base64() }
+
+// video_file_returns_optional_string
+function video_file_returns_optional_string(v: video) -> string? { v.file() }
+"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: int[]) -> int | null throws never {
-      { : never
-        return arr.at(0) : int | null
-      }
-    }
-    ");
+    insta::assert_snapshot!(render_tir(&db, file));
 }
 
 #[test]
-fn array_at_returns_element_type_string() {
+fn media_static_constructor_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        "function f(arr: string[]) -> string? { return arr.at(0); }",
+        r#"
+// image_static_from_url
+function image_static_from_url() -> image { image.from_url("example.com/img.png", null) }
+
+// pdf_static_from_base64
+function pdf_static_from_base64() -> pdf { pdf.from_base64("base64data", null) }
+
+// audio_static_from_file
+function audio_static_from_file() -> audio { audio.from_file("song.mp3", null) }
+
+// video_static_from_url
+function video_static_from_url() -> video { video.from_url("example.com/v.mp4", null) }
+"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: string[]) -> string | null throws never {
-      { : never
-        return arr.at(0) : string | null
-      }
-    }
-    ");
+    insta::assert_snapshot!(render_tir(&db, file));
 }
 
 #[test]
-fn array_join_returns_string() {
+fn builtin_missing_method_matrix() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
-        r#"function f(arr: string[]) -> string { return arr.join(","); }"#,
+        r#"
+// image_missing_method_produces_unresolved_member
+function image_missing_method(img: image) -> int { img.nonexistent() }
+
+// array_missing_method_produces_unresolved_member
+function array_missing_method(arr: int[]) -> int { arr.nonexistent() }
+
+// map_missing_method_produces_unresolved_member
+function map_missing_method(m: map<string, int>) -> int { m.bogus() }
+
+// string_missing_method_produces_unresolved_member
+function string_missing_method(s: string) -> int { s.doesNotExist() }
+"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(arr: string[]) -> string throws never {
-      { : never
-        return arr.join(",") : string
-      }
+    let output = render_tir(&db, file);
+    for expected in [
+        "type `image` has no member `nonexistent`",
+        "type `int[]` has no member `nonexistent`",
+        "type `map<string, int>` has no member `bogus`",
+        "type `string` has no member `doesNotExist`",
+    ] {
+        assert!(
+            output.contains(expected),
+            "missing receiver/member-specific diagnostic `{expected}`:\n{output}"
+        );
     }
-    "#);
 }
 
 #[test]
@@ -96,431 +189,6 @@ function f(xs: int[]) -> int {
         tir.contains("type mismatch: expected Array<int>, got int[]"),
         "expected nominal user.Array<T> to stay distinct from builtin int[], got:\n{tir}"
     );
-}
-
-// ── Map method resolution ─────────────────────────────────────────────────────
-
-#[test]
-fn map_keys_returns_key_type_array() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(m: map<string, int>) -> string[] { return m.keys(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(m: map<string, int>) -> string[] throws never {
-      { : never
-        return m.keys() : string[]
-      }
-    }
-    ");
-}
-
-#[test]
-fn map_values_returns_value_type_array() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(m: map<string, int>) -> int[] { return m.values(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(m: map<string, int>) -> int[] throws never {
-      { : never
-        return m.values() : int[]
-      }
-    }
-    ");
-}
-
-#[test]
-fn map_has_returns_bool() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(m: map<string, int>) -> bool { return m.has("x"); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(m: map<string, int>) -> bool throws never {
-      { : never
-        return m.has("x") : bool
-      }
-    }
-    "#);
-}
-
-#[test]
-fn map_length_returns_int() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(m: map<string, int>) -> int { return m.length(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(m: map<string, int>) -> int throws never {
-      { : never
-        return m.length() : int
-      }
-    }
-    ");
-}
-
-// ── String method resolution ──────────────────────────────────────────────────
-
-#[test]
-fn string_length_returns_int() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(s: string) -> int { return s.length(); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(s: string) -> int throws never {
-      { : never
-        return s.length() : int
-      }
-    }
-    ");
-}
-
-#[test]
-fn string_split_returns_string_array() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(s: string) -> string[] { return s.split(","); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string) -> string[] throws never {
-      { : never
-        return s.split(",") : string[]
-      }
-    }
-    "#);
-}
-
-#[test]
-fn string_includes_returns_bool() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(s: string) -> bool { return s.includes("ell"); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string) -> bool throws never {
-      { : never
-        return s.includes("ell") : bool
-      }
-    }
-    "#);
-}
-
-#[test]
-fn string_to_lower_case_returns_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(s: string) -> string { return s.to_lower_case(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(s: string) -> string throws never {
-      { : never
-        return s.to_lower_case() : string
-      }
-    }
-    ");
-}
-
-// ── Let binding with inferred type from builtin methods ───────────────────────
-
-#[test]
-fn let_inferred_from_array_length() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(arr: int[]) -> int { let len = arr.length(); return len; }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: int[]) -> int throws never {
-      { : never
-        let len = arr.length() : int
-        return len : int
-      }
-    }
-    ");
-}
-
-#[test]
-fn let_inferred_from_array_at() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(arr: int[]) -> int? { let x = arr.at(0); return x; }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(arr: int[]) -> int | null throws never {
-      { : never
-        let x = arr.at(0) : int | null
-        return x : int | null
-      }
-    }
-    ");
-}
-
-#[test]
-fn let_inferred_from_map_keys() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(m: map<string, int>) -> string[] { let k = m.keys(); return k; }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(m: map<string, int>) -> string[] throws never {
-      { : never
-        let k = m.keys() : string[]
-        return k : string[]
-      }
-    }
-    ");
-}
-
-// ── Media type method resolution ──────────────────────────────────────────────
-
-#[test]
-fn image_url_returns_optional_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(img: image) -> string? { return img.url(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(img: image) -> string | null throws never {
-      { : never
-        return img.url() : string | null
-      }
-    }
-    ");
-}
-
-#[test]
-fn image_base64_returns_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(img: image) -> string { return img.base64(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(img: image) -> string throws never {
-      { : never
-        return img.base64() : string
-      }
-    }
-    ");
-}
-
-#[test]
-fn image_mime_type_returns_optional_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(img: image) -> string? { return img.mime_type(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(img: image) -> string | null throws never {
-      { : never
-        return img.mime_type() : string | null
-      }
-    }
-    ");
-}
-
-#[test]
-fn pdf_url_returns_optional_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(doc: pdf) -> string? { return doc.url(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(doc: pdf) -> string | null throws never {
-      { : never
-        return doc.url() : string | null
-      }
-    }
-    ");
-}
-
-#[test]
-fn audio_base64_returns_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(a: audio) -> string { return a.base64(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(a: audio) -> string throws never {
-      { : never
-        return a.base64() : string
-      }
-    }
-    ");
-}
-
-#[test]
-fn video_file_returns_optional_string() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(v: video) -> string? { return v.file(); }",
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(v: video) -> string | null throws never {
-      { : never
-        return v.file() : string | null
-      }
-    }
-    ");
-}
-
-#[test]
-fn image_missing_method_produces_unresolved_member() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(img: image) -> int { return img.nonexistent(); }",
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("has no member"),
-        "Expected 'has no member' in output, got:\n{output}"
-    );
-}
-
-// ── Static constructors via primitive type name ──────────────────────────────
-
-#[test]
-fn image_static_from_url() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> image { return image.from_url("example.com/img.png", null); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> image throws never {
-      { : never
-        return image.from_url("example.com/img.png", null) : image
-      }
-    }
-    "#);
-}
-
-#[test]
-fn pdf_static_from_base64() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> pdf { return pdf.from_base64("base64data", null); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> pdf throws never {
-      { : never
-        return pdf.from_base64("base64data", null) : pdf
-      }
-    }
-    "#);
-}
-
-#[test]
-fn audio_static_from_file() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> audio { return audio.from_file("song.mp3", null); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> audio throws never {
-      { : never
-        return audio.from_file("song.mp3", null) : audio
-      }
-    }
-    "#);
-}
-
-#[test]
-fn video_static_from_url() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f() -> video { return video.from_url("example.com/v.mp4", null); }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> video throws never {
-      { : never
-        return video.from_url("example.com/v.mp4", null) : video
-      }
-    }
-    "#);
-}
-
-// ── Error: non-existent method on builtin type ─────────────────────────────────
-
-#[test]
-fn array_missing_method_produces_unresolved_member() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(arr: int[]) -> int { return arr.nonexistent(); }",
-    );
-    let output = render_tir(&db, file);
-    // Should produce an UnresolvedMember diagnostic
-    assert!(
-        output.contains("has no member"),
-        "Expected 'has no member' in output, got:\n{output}"
-    );
-}
-
-#[test]
-fn map_missing_method_produces_unresolved_member() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(m: map<string, int>) -> int { return m.bogus(); }",
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("has no member"),
-        "Expected 'has no member' in output, got:\n{output}"
-    );
-}
-
-#[test]
-fn string_missing_method_produces_unresolved_member() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        "function f(s: string) -> int { return s.doesNotExist(); }",
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("has no member"),
-        "Expected 'has no member' in output, got:\n{output}"
-    );
-}
-
-// ── Snapshot: full rendering of a function using builtin methods ──────────────
-
-#[test]
-fn snapshot_builtin_method_calls() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"function f(arr: string[], m: map<string, int>, s: string) -> int {
-  let len = arr.length();
-  let keys = m.keys();
-  let parts = s.split(",");
-  return len;
-}"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
 }
 
 // ── Optional call (?.()) type inference ──────────────────────────────────────
@@ -662,7 +330,6 @@ function f(callback: MaybeFn) -> int? {
       }
       !! 99..113: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
     }
-    type user.MaybeFn$stream = unknown | null
     ");
 }
 
@@ -690,10 +357,6 @@ function f(u: MaybeUser) -> string? {
       }
       !! 100..107: did you mean `u.name`? `u?.name` is unnecessary, because `u` cannot be null
     }
-    class user.User$stream {
-      name: string | null
-    }
-    type user.MaybeUser$stream = user.User$stream | null
     ");
 }
 
@@ -716,7 +379,6 @@ function f(xs: MaybeInts) -> int? {
         return xs?.[0] : int | null
       }
     }
-    type user.MaybeInts$stream = int[] | null
     ");
 }
 

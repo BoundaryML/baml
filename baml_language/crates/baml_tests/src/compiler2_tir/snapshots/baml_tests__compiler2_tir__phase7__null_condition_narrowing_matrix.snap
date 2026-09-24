@@ -1,0 +1,73 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase7.rs
+expression: "render_labeled_cases(&[(\"narrow_ne_null_then_branch_is_non_nullable\",\nr#\"function f(x: int?) -> int {\n  if (x != null) {\n    return x;\n  }\n  return 0;\n}\"#,),\n(\"narrow_ne_null_rhs_form\",\nr#\"function f(x: int?) -> int {\n  if (null != x) {\n    return x;\n  }\n  return 0;\n}\"#,),\n(\"narrow_eq_null_else_branch_is_non_nullable\",\nr#\"function f(x: int?) -> int {\n  if (x == null) {\n    return 0;\n  } else {\n    return x;\n  }\n}\"#,),\n(\"narrow_truthiness_then_branch_non_null\",\nr#\"function f(x: int?) -> int {\n  if (x) {\n    return x;\n  }\n  return 0;\n}\"#,),\n(\"narrow_negated_eq_null_then_branch_non_null\",\nr#\"function f(x: int?) -> int {\n  if (!(x == null)) {\n    return x;\n  }\n  return 0;\n}\"#,),])"
+---
+=== narrow_ne_null_then_branch_is_non_nullable ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x != null : bool) : void
+      { : never
+        return x : int
+      }
+    return 0 : 0
+  }
+}
+block user.f {
+}
+
+=== narrow_ne_null_rhs_form ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (null != x : bool) : void
+      { : never
+        return x : int
+      }
+    return 0 : 0
+  }
+}
+block user.f {
+}
+
+=== narrow_eq_null_else_branch_is_non_nullable ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x == null : bool) : never
+      { : never
+        return 0 : 0
+      }
+    else
+      { : never
+        return x : int
+      }
+  }
+}
+block user.f {
+}
+block user.f {
+}
+
+=== narrow_truthiness_then_branch_non_null ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (x : int | null) : void
+      { : never
+        return x : int
+      }
+    return 0 : 0
+  }
+}
+block user.f {
+}
+
+=== narrow_negated_eq_null_then_branch_non_null ===
+function user.f(x: int | null) -> int throws never {
+  { : never
+    if (Not x == null : bool) : void
+      { : never
+        return x : int
+      }
+    return 0 : 0
+  }
+}
+block user.f {
+}

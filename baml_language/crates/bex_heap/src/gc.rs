@@ -1827,7 +1827,6 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            ty_attr: baml_type::TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         }))];
         let debug = HeapDebuggerConfig {
@@ -1862,25 +1861,23 @@ mod tests {
             )),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
-                field_type: baml_type::RuntimeTy::Int {
-                    attr: baml_type::TyAttr::default(),
-                },
-                field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                    attr: baml_type::TyAttr::default(),
-                }),
+                field_type: baml_type::RuntimeTy::Int,
+                field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                 description: None,
                 alias: None,
                 docstring: None,
                 other: Default::default(),
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: None,
             }],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
+            stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -2484,7 +2481,7 @@ mod tests {
 
     #[test]
     fn test_gc_traces_instance_class_and_fields() {
-        use baml_type::{Name, TyAttr, TypeName};
+        use baml_type::{Name, TypeName};
         use bex_vm_types::Class;
 
         let heap = BexHeap::new(vec![]);
@@ -2498,8 +2495,8 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
+            stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -2531,7 +2528,7 @@ mod tests {
 
     #[test]
     fn test_gc_traces_variant_enum() {
-        use baml_type::{Name, TyAttr, TypeName};
+        use baml_type::{Name, TypeName};
         use bex_vm_types::Enum;
 
         let heap = BexHeap::new(vec![]);
@@ -2545,7 +2542,6 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            ty_attr: TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
@@ -2761,7 +2757,7 @@ mod tests {
 
     #[test]
     fn test_gc_leaf_class_preserved() {
-        use baml_type::{Name, TyAttr, TypeName};
+        use baml_type::{Name, TypeName};
         use bex_vm_types::Class;
 
         let heap = BexHeap::new(vec![]);
@@ -2773,8 +2769,8 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
+            stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -2790,7 +2786,7 @@ mod tests {
 
     #[test]
     fn test_gc_leaf_enum_preserved() {
-        use baml_type::{Name, TyAttr, TypeName};
+        use baml_type::{Name, TypeName};
         use bex_vm_types::Enum;
 
         let heap = BexHeap::new(vec![]);
@@ -2803,7 +2799,6 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            ty_attr: TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
 
@@ -2833,7 +2828,7 @@ mod tests {
     /// the head is repointed as both objects move.
     #[test]
     fn test_gc_traces_runtime_enum_definition_reached_through_a_head() {
-        use baml_type::{Name, TyAttr};
+        use baml_type::Name;
         use bex_vm_types::{Enum, EnumVariant, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
@@ -2855,13 +2850,11 @@ mod tests {
             docstring: None,
             other: Default::default(),
             type_tag,
-            ty_attr: TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(
-            TypeHead::new(enum_ptr, type_tag),
-            TyAttr::default(),
-        )));
+        let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(TypeHead::new(
+            enum_ptr, type_tag,
+        ))));
 
         // Root only the type. Its head is the sole edge keeping the enum alive,
         // and must be traced and repointed as both objects move Gen0 → Gen1 →
@@ -2877,7 +2870,7 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        let RealizedTy::Enum(head, _) = &type_value.ty else {
+        let RealizedTy::Enum(head) = &type_value.ty else {
             panic!("the type value no longer wraps an enum type")
         };
         assert_eq!(head.tag(), type_tag, "a move must not change identity");
@@ -2892,7 +2885,7 @@ mod tests {
     /// The same for a class, whose fields carry heads of their own.
     #[test]
     fn test_gc_traces_runtime_class_definition_reached_through_a_head() {
-        use baml_type::{Name, TyAttr};
+        use baml_type::Name;
         use bex_vm_types::{Class, ClassField, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
@@ -2903,23 +2896,23 @@ mod tests {
             name: type_name.clone(),
             fields: vec![ClassField {
                 name: "height_cm".to_string(),
-                field_type: bex_vm_types::RuntimeTy::Int {
-                    attr: TyAttr::default(),
-                },
+                field_type: bex_vm_types::RuntimeTy::Int,
                 field_template: bex_vm_types::TyTemplate::from(RealizedTy::int()),
                 description: Some("height in centimeters".to_string()),
                 alias: None,
                 docstring: None,
                 other: Default::default(),
                 skip: false,
+                stream_done: false,
+                must_exist: false,
                 runtime_type: None,
             }],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
+            stream_done: false,
             type_tag,
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -2927,7 +2920,6 @@ mod tests {
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
             TypeHead::new(class_ptr, type_tag),
             Box::new([]),
-            TyAttr::default(),
         )));
 
         // No instance and no independently-rooted class exists: the sole edge
@@ -2946,7 +2938,7 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        let RealizedTy::Class(head, _, _) = &type_value.ty else {
+        let RealizedTy::Class(head, _) = &type_value.ty else {
             panic!("the type value no longer wraps a class type")
         };
         assert_eq!(head.tag(), type_tag, "a move must not change identity");
@@ -3294,7 +3286,7 @@ mod tests {
 
     #[test]
     fn test_tracing_and_fixup_consistency_all_variants() {
-        use baml_type::{Name, TyAttr, TypeName};
+        use baml_type::{Name, TypeName};
         use bex_vm_types::{
             Class, Enum, UnscheduledFuture,
             types::{Cell, Closure, Instance, Variant},
@@ -3359,8 +3351,8 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
+            stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
-            ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
             owner: bex_vm_types::HeapPtr::null(),
@@ -3380,7 +3372,6 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            ty_attr: TyAttr::default(),
             owner: bex_vm_types::HeapPtr::null(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {

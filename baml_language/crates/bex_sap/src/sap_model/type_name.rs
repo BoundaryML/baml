@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt};
 use crate::sap_model::{
     ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy,
     FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy,
-    StringLiteralTy, StringTy, Ty, TyResolved, TyResolvedRef, TyWithMeta, TypeIdent, UnionTy,
+    StringLiteralTy, StringTy, Ty, TyResolved, TyResolvedRef, TypeIdent, UnionTy,
 };
 
 /// A trait that provides a type name for a given type.
@@ -16,11 +16,6 @@ pub trait TypeName {
 impl<T: TypeName> TypeName for &'_ T {
     fn type_name(&self) -> Cow<'static, str> {
         T::type_name(self)
-    }
-}
-impl<T: TypeName, M> TypeName for TyWithMeta<T, M> {
-    fn type_name(&self) -> Cow<'static, str> {
-        self.ty.type_name()
     }
 }
 
@@ -146,7 +141,7 @@ impl<N: TypeIdent> TypeName for EnumVariantTy<'_, N> {
 
 impl<N: TypeIdent> TypeName for UnionTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
-        let variants: Vec<_> = self.variants.iter().map(TyWithMeta::type_name).collect();
+        let variants: Vec<_> = self.variants.iter().map(Ty::type_name).collect();
         Cow::Owned(variants.join(" | "))
     }
 }
@@ -207,14 +202,12 @@ impl<N: TypeIdent> TypeName for TyResolvedRef<'_, N> {
     }
 }
 
-// Display delegates to TypeName for any T: TypeName wrapper.
-impl<T: TypeName, M> fmt::Display for TyWithMeta<T, M> {
+// Manual Display and Debug for TyResolvedRef since N: TypeIdent doesn't require Debug.
+impl<N: TypeIdent> fmt::Display for TyResolvedRef<'_, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.ty.type_name())
+        write!(f, "{}", self.type_name())
     }
 }
-
-// Manual Debug for TyResolvedRef since N: TypeIdent doesn't require Debug.
 impl<N: TypeIdent> fmt::Debug for TyResolvedRef<'_, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.type_name())

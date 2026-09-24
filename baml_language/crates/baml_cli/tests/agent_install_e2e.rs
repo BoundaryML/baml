@@ -37,12 +37,6 @@ fn init_warns_then_embedded_install_silences_authoring_commands() {
         "{stderr}"
     );
 
-    let mut baml_toml = fs::read_to_string(project.join("baml.toml")).unwrap();
-    baml_toml.push_str(
-        "\n[generator.py]\noutput_type = \"python/pydantic\"\noutput_dir = \"generated\"\nnaming_convention = \"preserve-case\"\n",
-    );
-    fs::write(project.join("baml.toml"), baml_toml).unwrap();
-
     let output = run_from(&project, &["agent", "install"]);
     assert!(
         output.status.success(),
@@ -57,10 +51,13 @@ fn init_warns_then_embedded_install_silences_authoring_commands() {
         );
     }
 
-    let output = run_from(&project, &["generate"]);
+    // `fmt --dry-run` is an authoring command gated by the same skill check,
+    // without paying for compilation and SDK generation just to prove the
+    // freshly installed skill is accepted.
+    let output = run_from(&project, &["fmt", "--dry-run"]);
     assert!(
         output.status.success(),
-        "generate failed: {}",
+        "fmt --dry-run failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(

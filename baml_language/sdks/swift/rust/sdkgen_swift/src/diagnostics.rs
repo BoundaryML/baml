@@ -69,7 +69,7 @@ pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> S
         }
     }
     match &function.return_type {
-        Ty::Void { .. } | Ty::Never { .. } => {}
+        Ty::Void | Ty::Never => {}
         ret if translate_ty(ret, ctx).is_none() => {
             return format!("return type `{ret}` is not representable in Swift");
         }

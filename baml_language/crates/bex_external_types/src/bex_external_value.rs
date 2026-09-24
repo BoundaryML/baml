@@ -23,7 +23,7 @@
 //! ```
 
 // Re-export RuntimeTy and TypeName from baml_type for convenience
-pub use baml_type::{RuntimeTy, TyAttr, TypeName};
+pub use baml_type::{RuntimeTy, TypeName};
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -60,7 +60,7 @@ impl UnionMetadata {
     /// Create metadata for a union type.
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
-            RuntimeTy::Union(members, _) => {
+            RuntimeTy::Union(members) => {
                 let is_optional = members.iter().any(RuntimeTy::is_null);
                 let non_null_count = members.iter().filter(|member| !member.is_null()).count();
                 (is_optional, non_null_count == 1)
@@ -477,10 +477,8 @@ impl BexExternalValue {
     /// existing type-directed VM materialization can honor `value_type`, while
     /// explicitly distinguishing it from an actual declared union.
     pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
-        let mut metadata = UnionMetadata::new(
-            RuntimeTy::Union(Box::new([value_type.clone()]), TyAttr::default()),
-            value_type,
-        );
+        let mut metadata =
+            UnionMetadata::new(RuntimeTy::Union(Box::new([value_type.clone()])), value_type);
         metadata.is_inbound_type_annotation = true;
         BexExternalValue::Union {
             value: Box::new(value),
@@ -498,7 +496,7 @@ impl BexExternalValue {
         members: impl IntoIterator<Item = RuntimeTy>,
         selected: RuntimeTy,
     ) -> Self {
-        let union_type = RuntimeTy::Union(members.into_iter().collect(), TyAttr::default());
+        let union_type = RuntimeTy::Union(members.into_iter().collect());
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(union_type, selected),
@@ -598,7 +596,7 @@ impl BexExternalValue {
     /// `baml.errors.Io { message: "boom" }` rather than
     /// `Instance { class_name: "baml.errors.Io", type_args: [], fields: {..} }`,
     /// and a generic instance's `type_args` are omitted entirely instead of
-    /// dumping `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`.
+    /// dumping `Class(QualifiedTypeName { .. }, [])`.
     ///
     /// It is a pure structural pretty-printer, not the VM's `baml.ToString`
     /// dispatch: it runs without a live VM (e.g. after the VM has unwound on an
@@ -902,7 +900,7 @@ mod render_readable_tests {
     }
 
     /// A generic error instance carrying a `Class(..)` in its `type_args` — the
-    /// shape that used to dump `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`
+    /// shape that used to dump `Class(QualifiedTypeName { .. }, [])`
     /// under `Debug` — renders readably with the `type_args` omitted and no Rust
     /// internals leaked.
     #[test]
@@ -933,7 +931,7 @@ mod render_readable_tests {
             "unexpected render: {rendered}"
         );
         // The bug: `Debug` leaks Rust-internal shapes. The readable form must not.
-        for leak in ["Instance {", "QualifiedTypeName", "TyAttr", "Class("] {
+        for leak in ["Instance {", "QualifiedTypeName", "Class("] {
             assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
         }
     }

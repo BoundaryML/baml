@@ -24,7 +24,7 @@
 
 #[cfg(test)]
 use baml_type::Name;
-use baml_type::{FunctionParamTy, Head, HeadDisplay, ParamTy, Ty, TyAttr, normalize::TypeContext};
+use baml_type::{FunctionParamTy, Head, HeadDisplay, ParamTy, Ty, normalize::TypeContext};
 use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ fn meet_all<N: Head + HeadDisplay>(
         });
     }
     if let Some(m) = &acc
-        && matches!(m, Ty::Never { .. })
+        && matches!(m, Ty::Never)
     {
         return Err(InferError {
             var: param.clone(),
@@ -335,9 +335,7 @@ fn meet_ty<N: Head>(a: &Ty<N>, b: &Ty<N>, ctx: &impl TypeContext<N>) -> Ty<N> {
     } else if ctx.is_subtype(b, a) {
         b.clone()
     } else {
-        Ty::Never {
-            attr: TyAttr::default(),
-        }
+        Ty::Never
     }
 }
 
@@ -346,7 +344,7 @@ fn meet_ty<N: Head>(a: &Ty<N>, b: &Ty<N>, ctx: &impl TypeContext<N>) -> Ty<N> {
 /// Walk formal and actual types in parallel, recording each `TypeVar`
 /// occurrence with the [`Variance`] of the position it was reached through.
 ///
-/// When `formal` is `Ty::TypeVar("T", _)` and `actual` is `Ty::Int { .. }`,
+/// When `formal` is `Ty::TypeVar("T", _)` and `actual` is `Ty::Int`,
 /// records `(variance, int)` for `T`. For structural types, recurses into
 /// matching structures, composing the current variance with the position's own
 /// variance (function parameters flip, container arguments go invariant). The
@@ -360,14 +358,14 @@ fn collect<N: Head>(
     ctx: &impl TypeContext<N>,
 ) {
     match (formal, actual) {
-        (Ty::TypeVar(name, _), actual_ty) => {
+        (Ty::TypeVar(name), actual_ty) => {
             if opts.rigid == Some(name) {
                 return;
             }
             // Skip TypeVar-to-TypeVar bindings by default — they usually provide
             // no information for ordinary call inference. Some higher-order
             // callable-summary paths opt into preserving them explicitly.
-            if !opts.allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
+            if !opts.allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_)) {
                 return;
             }
             vars.entry(name.clone())
@@ -377,7 +375,7 @@ fn collect<N: Head>(
         // Containers are invariant: descend with `Invariant` so two conflicting
         // occurrences of the same var under a container reject rather than join
         // (`02e`: `pair<T>(a: T[], b: T[])` over `int[]`/`string[]`).
-        (Ty::List(f, _), Ty::List(a, _)) => {
+        (Ty::List(f), Ty::List(a)) => {
             collect(f, a, variance.compose(Variance::Invariant), vars, opts, ctx);
         }
         (
@@ -392,7 +390,7 @@ fn collect<N: Head>(
             collect(fk, ak, inv, vars, opts, ctx);
             collect(fv, av, inv, vars, opts, ctx);
         }
-        (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
+        (Ty::Union(_), _) if nullable_non_null_part(formal).is_some() => {
             let formal_inner = nullable_non_null_part(formal).expect("checked above");
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
             collect(&formal_inner, &actual_inner, variance, vars, opts, ctx);
@@ -411,9 +409,9 @@ fn collect<N: Head>(
         // pairing — either way it binds nothing, leaving its vars to other
         // arguments or the caller's unresolved-type-arg error rather than
         // guessing by member order.
-        (Ty::Union(f_members, _), Ty::Union(a_members, _))
+        (Ty::Union(f_members), Ty::Union(a_members))
             if f_members.len() == a_members.len()
-                && !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_, _))) =>
+                && !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_))) =>
         {
             for formal_member in f_members {
                 let mut correspondents = a_members
@@ -435,19 +433,17 @@ fn collect<N: Head>(
         // matched constituents, assign the remainder to the free type variable"
         // algorithm — restricted to a *single* `TypeVar` member, since `>1`
         // (e.g. `T | U | string`) has no principled split and is left unbound.
-        (Ty::Union(f_members, _), _)
-            if f_members.iter().any(|m| matches!(m, Ty::TypeVar(_, _))) =>
-        {
+        (Ty::Union(f_members), _) if f_members.iter().any(|m| matches!(m, Ty::TypeVar(_))) => {
             let tv_members: Vec<&Ty<N>> = f_members
                 .iter()
-                .filter(|m| matches!(m, Ty::TypeVar(_, _)))
+                .filter(|m| matches!(m, Ty::TypeVar(_)))
                 .collect();
             // Only an unambiguous single `TypeVar` member has a reasonable
             // candidate. More than one ⇒ ambiguous ⇒ bind nothing.
             if let [tv] = tv_members.as_slice() {
                 let concrete: Vec<&Ty<N>> = f_members
                     .iter()
-                    .filter(|m| !matches!(m, Ty::TypeVar(_, _)))
+                    .filter(|m| !matches!(m, Ty::TypeVar(_)))
                     .collect();
                 // The residual is every actual atom NOT already explained by a
                 // concrete sibling (coercion-free subtype — `int` is NOT
@@ -462,7 +458,7 @@ fn collect<N: Head>(
                 // single `TypeVar` to the (union-merged) residual via the leaf
                 // arm, which honors `rigid`/`allow_typevar_actuals`.
                 if !residual.is_empty() {
-                    let residual_ty = normalize_union_members(residual, TyAttr::default());
+                    let residual_ty = normalize_union_members(residual);
                     collect(tv, &residual_ty, variance, vars, opts, ctx);
                 }
             }
@@ -489,7 +485,7 @@ fn collect<N: Head>(
             collect(fr, ar, variance, vars, opts, ctx);
             collect(fth, ath, variance, vars, opts, ctx);
         }
-        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
+        (Ty::Class(fn_name, f_args), Ty::Class(an_name, a_args)) if fn_name == an_name => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 collect(ft, at, inv, vars, opts, ctx);
@@ -497,7 +493,7 @@ fn collect<N: Head>(
         }
         // `Future<T, E>` is its own variant — descend into both params so the
         // future combinators can infer `<T, E>` from a `Future<T, E>[]` arg.
-        (Ty::Future(f_value, f_error, _), Ty::Future(a_value, a_error, _)) => {
+        (Ty::Future(f_value, f_error), Ty::Future(a_value, a_error)) => {
             let inv = variance.compose(Variance::Invariant);
             collect(f_value, a_value, inv, vars, opts, ctx);
             collect(f_error, a_error, inv, vars, opts, ctx);
@@ -509,15 +505,14 @@ fn collect<N: Head>(
         // the *deliberate* distribution arm (`02e` E6): kept as a confined
         // combinator special case, so it joins (covariant) rather than going
         // through the invariant equality path.
-        (Ty::Future(_, _, _), Ty::Union(members, _)) => {
+        (Ty::Future(_, _), Ty::Union(members)) => {
             for member in members {
                 collect(formal, member, variance, vars, opts, ctx);
             }
         }
-        (
-            Ty::Interface(fn_name, f_args, f_assoc, _),
-            Ty::Interface(an_name, a_args, a_assoc, _),
-        ) if fn_name == an_name => {
+        (Ty::Interface(fn_name, f_args, f_assoc), Ty::Interface(an_name, a_args, a_assoc))
+            if fn_name == an_name =>
+        {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 collect(ft, at, inv, vars, opts, ctx);
@@ -536,7 +531,7 @@ fn collect<N: Head>(
 }
 
 fn nullable_non_null_part<N: Head>(ty: &Ty<N>) -> Option<Ty<N>> {
-    let Ty::Union(members, attr) = ty else {
+    let Ty::Union(members) = ty else {
         return None;
     };
     if !members.iter().any(Ty::is_null) {
@@ -550,7 +545,7 @@ fn nullable_non_null_part<N: Head>(ty: &Ty<N>) -> Option<Ty<N>> {
     match non_null.as_slice() {
         [] => None,
         [single] => Some(single.clone()),
-        _ => Some(Ty::Union(non_null.into(), attr.clone())),
+        _ => Some(Ty::Union(non_null.into())),
     }
 }
 
@@ -580,7 +575,7 @@ fn heads_correspond<N: Head>(formal: &Ty<N>, actual: &Ty<N>) -> bool {
 /// by atom.
 fn union_atoms<N: Head>(actual: &Ty<N>) -> Box<[Ty<N>]> {
     match actual {
-        Ty::Union(members, _) => members.clone(),
+        Ty::Union(members) => members.clone(),
         other => Box::new([other.clone()]),
     }
 }
@@ -693,7 +688,7 @@ pub fn infer_value_bindings<N: Head>(
 /// Used when the same type variable is inferred from multiple arguments
 /// (e.g., `pair<T>(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty<N: Head>(a: &Ty<N>, b: &Ty<N>) -> Ty<N> {
-    normalize_union_members([a.clone(), b.clone()], TyAttr::default())
+    normalize_union_members([a.clone(), b.clone()])
 }
 
 // ── Pure `Ty<N>` walks (substitution, typevar queries, erasure) ──────────────────
@@ -707,7 +702,7 @@ pub use baml_type::{
 
 /// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
 pub fn contains_typevar<N: Head>(ty: &Ty<N>) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_)))
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns
@@ -716,7 +711,7 @@ pub fn contains_typevar<N: Head>(ty: &Ty<N>) -> bool {
 /// params) — which must be checked — from genuinely-uninferred ones (callee
 /// generics, free inference/effect vars) — which are deferred.
 pub fn contains_typevar_where<N: Head>(ty: &Ty<N>, pred: &dyn Fn(&ParamTy) -> bool) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(param, _) if pred(param)))
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(param) if pred(param)))
 }
 
 /// Replace selected type variables with `unknown` for runtime-facing metadata.
@@ -733,15 +728,14 @@ pub fn erase_typevars_matching<N: Head>(
     }
 
     match ty {
-        Ty::TypeVar(name, attr) if should_erase(name) => Ty::Unknown { attr: attr.clone() },
-        Ty::Class(qtn, args, attr) => Ty::Class(
+        Ty::TypeVar(name) if should_erase(name) => Ty::Unknown,
+        Ty::Class(qtn, args) => Ty::Class(
             qtn.clone(),
             args.iter()
                 .map(|arg| erase_typevars_matching(arg, should_erase))
                 .collect(),
-            attr.clone(),
         ),
-        Ty::Interface(qtn, args, associated_bindings, attr) => Ty::Interface(
+        Ty::Interface(qtn, args, associated_bindings) => Ty::Interface(
             qtn.clone(),
             args.iter()
                 .map(|arg| erase_typevars_matching(arg, should_erase))
@@ -750,45 +744,35 @@ pub fn erase_typevars_matching<N: Head>(
                 .iter()
                 .map(|(name, ty)| (name.clone(), erase_typevars_matching(ty, should_erase)))
                 .collect(),
-            attr.clone(),
         ),
-        Ty::List(inner, attr) => Ty::List(
-            Box::new(erase_typevars_matching(inner, should_erase)),
-            attr.clone(),
-        ),
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(inner) => Ty::List(Box::new(erase_typevars_matching(inner, should_erase))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(erase_typevars_matching(key, should_erase)),
             value: Box::new(erase_typevars_matching(value, should_erase)),
-            attr: attr.clone(),
         },
-        Ty::Union(members, attr) => Ty::Union(
+        Ty::Union(members) => Ty::Union(
             members
                 .iter()
                 .map(|member| erase_typevars_matching(member, should_erase))
                 .collect(),
-            attr.clone(),
         ),
-        Ty::Future(value, error, attr) => Ty::Future(
+        Ty::Future(value, error) => Ty::Future(
             Box::new(erase_typevars_matching(value, should_erase)),
             Box::new(erase_typevars_matching(error, should_erase)),
-            attr.clone(),
         ),
         Ty::AssociatedTypeProjection {
             base,
             interface,
             member,
-            attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_typevars_matching(base, should_erase)),
             interface: Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase))),
             member: member.clone(),
-            attr: attr.clone(),
         },
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .iter()
@@ -800,7 +784,6 @@ pub fn erase_typevars_matching<N: Head>(
                 .collect(),
             ret: Box::new(erase_typevars_matching(ret, should_erase)),
             throws: Box::new(erase_typevars_matching(throws, should_erase)),
-            attr: attr.clone(),
         },
         _ => ty.clone(),
     }
@@ -816,10 +799,6 @@ mod tests {
 
     use super::*;
 
-    fn a() -> TyAttr {
-        TyAttr::default()
-    }
-
     fn param(name: &str) -> ParamTy {
         let index = match name {
             "T" => 0,
@@ -831,19 +810,19 @@ mod tests {
     }
 
     fn tv(name: &str) -> Ty<TypeName> {
-        Ty::TypeVar(param(name), a())
+        Ty::TypeVar(param(name))
     }
 
     fn int() -> Ty<TypeName> {
-        Ty::Int { attr: a() }
+        Ty::Int
     }
 
     fn string() -> Ty<TypeName> {
-        Ty::String { attr: a() }
+        Ty::String
     }
 
     fn null() -> Ty<TypeName> {
-        Ty::Null { attr: a() }
+        Ty::Null
     }
 
     #[test]
@@ -856,7 +835,7 @@ mod tests {
     #[test]
     fn union_with_concrete_sibling_routes_actual_to_typevar() {
         // `T | string | null` vs `int` ⇒ T = int (G5 reversal).
-        let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), string(), null()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
@@ -865,7 +844,7 @@ mod tests {
     #[test]
     fn union_concrete_sibling_absorbs_actual_leaves_typevar_unbound() {
         // `T | string | null` vs `string` ⇒ the string sibling absorbs it; T unbound.
-        let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), string(), null()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &string(), &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
@@ -874,7 +853,7 @@ mod tests {
     #[test]
     fn union_null_actual_binds_typevar_to_null() {
         // `T | string | null` vs `null` ⇒ T = null (null not absorbed by string sibling).
-        let formal = Ty::Union(Box::new([tv("T"), string(), null()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), string(), null()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &null(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&null()));
@@ -883,7 +862,7 @@ mod tests {
     #[test]
     fn multi_typevar_union_is_ambiguous_binds_nothing() {
         // `T | U | string` vs `int` ⇒ no principled split ⇒ both unbound.
-        let formal = Ty::Union(Box::new([tv("T"), tv("U"), string()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), tv("U"), string()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
@@ -891,7 +870,7 @@ mod tests {
     }
 
     fn boolt() -> Ty<TypeName> {
-        Ty::Bool { attr: a() }
+        Ty::Bool
     }
 
     #[test]
@@ -899,8 +878,8 @@ mod tests {
         // Regression: `T | int` vs `int | string` (both len 2). The equal-length
         // positional-zip arm must NOT fire (it would bind T = int by member
         // ordering). The residual arm routes the unmatched `string` to T.
-        let formal = Ty::Union(Box::new([tv("T"), int()]), a());
-        let actual = Ty::Union(Box::new([int(), string()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), int()]));
+        let actual = Ty::Union(Box::new([int(), string()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&string()));
@@ -911,8 +890,8 @@ mod tests {
         // Regression: `T | int | null` vs `int | string`. After the nullable arm
         // peels `null`, the recursion lands on `T | int` vs `int | string` and
         // must route `string` to T, not positionally bind T = int.
-        let formal = Ty::Union(Box::new([tv("T"), int(), null()]), a());
-        let actual = Ty::Union(Box::new([int(), string()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), int(), null()]));
+        let actual = Ty::Union(Box::new([int(), string()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&string()));
@@ -923,8 +902,8 @@ mod tests {
         // Regression: `T | U | int` vs `int | string | bool` (both len 3). The
         // equal-length zip must not pre-empt the multi-TypeVar ambiguity guard;
         // >1 TypeVar member has no principled split ⇒ both stay unbound.
-        let formal = Ty::Union(Box::new([tv("T"), tv("U"), int()]), a());
-        let actual = Ty::Union(Box::new([int(), string(), boolt()]), a());
+        let formal = Ty::Union(Box::new([tv("T"), tv("U"), int()]));
+        let actual = Ty::Union(Box::new([int(), string(), boolt()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
@@ -937,10 +916,10 @@ mod tests {
         // inside a member: `List<T> | int` vs `List<int> | int` binds T = int
         // (the residual arm only sees direct TypeVar members, so without this
         // arm T would stay unbound).
-        let list_tv = Ty::List(Box::new(tv("T")), a());
-        let list_int = Ty::List(Box::new(int()), a());
-        let formal = Ty::Union(Box::new([list_tv, int()]), a());
-        let actual = Ty::Union(Box::new([list_int, int()]), a());
+        let list_tv = Ty::List(Box::new(tv("T")));
+        let list_int = Ty::List(Box::new(int()));
+        let formal = Ty::Union(Box::new([list_tv, int()]));
+        let actual = Ty::Union(Box::new([list_int, int()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
@@ -950,16 +929,11 @@ mod tests {
         Ty::Class(
             baml_type::TypeName::local(Name::new("Opt")),
             Box::new([arg]),
-            a(),
         )
     }
 
     fn non() -> Ty<TypeName> {
-        Ty::Class(
-            baml_type::TypeName::local(Name::new("Non")),
-            Box::new([]),
-            a(),
-        )
+        Ty::Class(baml_type::TypeName::local(Name::new("Non")), Box::new([]))
     }
 
     #[test]
@@ -968,13 +942,13 @@ mod tests {
         // reordered actual spelling exactly as from the declaration-ordered
         // one. Positional zip paired `Opt<T>` with `Non` and bound nothing —
         // the R15 order-sensitivity a canonically sorted binding type exposed.
-        let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]), a());
-        let reordered = Ty::Union(Box::new([non(), opt_of(int())]), a());
+        let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]));
+        let reordered = Ty::Union(Box::new([non(), opt_of(int())]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &reordered, &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
 
-        let declared = Ty::Union(Box::new([opt_of(int()), non()]), a());
+        let declared = Ty::Union(Box::new([opt_of(int()), non()]));
         let mut b2 = FxHashMap::default();
         infer_bindings(&formal, &declared, &mut b2, &NoFacts);
         assert_eq!(b2.get(&param("T")), Some(&int()));
@@ -984,8 +958,8 @@ mod tests {
     fn union_member_with_ambiguous_head_correspondent_binds_nothing() {
         // Two same-head actual members have no principled pairing for one
         // formal member — bind nothing rather than guess by order.
-        let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]), a());
-        let actual = Ty::Union(Box::new([opt_of(int()), opt_of(string())]), a());
+        let formal = Ty::Union(Box::new([opt_of(tv("T")), non()]));
+        let actual = Ty::Union(Box::new([opt_of(int()), opt_of(string())]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &actual, &mut b, &NoFacts);
         assert!(!b.contains_key(&param("T")));
@@ -994,8 +968,8 @@ mod tests {
     #[test]
     fn float_sibling_does_not_absorb_int_actual() {
         // Coercion-free: `int` is NOT covered by a `float` sibling, so T = int.
-        let float = Ty::Float { attr: a() };
-        let formal = Ty::Union(Box::new([tv("T"), float]), a());
+        let float = Ty::Float;
+        let formal = Ty::Union(Box::new([tv("T"), float]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &int(), &mut b, &NoFacts);
         assert_eq!(b.get(&param("T")), Some(&int()));
@@ -1011,31 +985,29 @@ mod tests {
     use baml_type::{FunctionParamTy, TypeName};
 
     fn list(t: Ty<TypeName>) -> Ty<TypeName> {
-        Ty::List(Box::new(t), a())
+        Ty::List(Box::new(t))
     }
 
     fn map_str(value: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Map {
             key: Box::new(string()),
             value: Box::new(value),
-            attr: a(),
         }
     }
 
     fn boxed(t: Ty<TypeName>) -> Ty<TypeName> {
-        Ty::Class(TypeName::local(Name::new("GenericBox")), Box::new([t]), a())
+        Ty::Class(TypeName::local(Name::new("GenericBox")), Box::new([t]))
     }
 
     fn pair_cls(first: Ty<TypeName>, second: Ty<TypeName>) -> Ty<TypeName> {
         Ty::Class(
             TypeName::local(Name::new("GenericPair")),
             Box::new([first, second]),
-            a(),
         )
     }
 
     fn float() -> Ty<TypeName> {
-        Ty::Float { attr: a() }
+        Ty::Float
     }
 
     fn func0(ret: Ty<TypeName>) -> Ty<TypeName> {
@@ -1043,7 +1015,6 @@ mod tests {
             params: Box::new([]),
             ret: Box::new(ret),
             throws: Box::new(null()),
-            attr: a(),
         }
     }
 
@@ -1052,7 +1023,6 @@ mod tests {
             params: Box::new([FunctionParamTy::required(None, param)]),
             ret: Box::new(ret),
             throws: Box::new(null()),
-            attr: a(),
         }
     }
 
@@ -1073,7 +1043,7 @@ mod tests {
 
     /// Assert a binding is a union whose members are exactly `expected` (any order).
     fn assert_union_members(ty: &Ty<TypeName>, expected: &[Ty<TypeName>]) {
-        let Ty::Union(members, _) = ty else {
+        let Ty::Union(members) = ty else {
             panic!("expected a union, got {ty}");
         };
         assert_eq!(members.len(), expected.len(), "union {ty} arity");
