@@ -928,21 +928,21 @@ function vertex_stream_time_to_first_token_timeout_ms() -> string {
     root.llm_mock.mock_sse_serve(
         [root.llm_mock.sse_data(`{"candidates":[{"content":{"parts":[{"text":"pong"}]},"finishReason":"STOP"}]}`)],
         (mock: root.llm_mock.MockSseServer) -> {
-            // The corpus runs every leaf concurrently, so leave transport
-            // headroom while keeping the delayed first event past the TTFT limit.
+            // The mock holds the first event for 10s, so only the 20ms TTFT can
+            // end this call, however slow the machine is.
             let cl = google.VertexClient.new(
                 model = "gemini-2.5-flash",
                 api_key = "express-key",
                 base_url = mock.base_url(),
                 request_timeout_ms = 15000,
-                time_to_first_token_timeout_ms = 5000,
+                time_to_first_token_timeout_ms = 20,
             );
             let stream = ai.stream.from_spec<string>(
                 GoogleEcho@spec("Say pong."),
                 client = cl,
             );
             let outcome = stream.final() catch_all (e) {
-                let timeout: baml.errors.Timeout => "Timeout",
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
                 _ => `other:${e.to_string()}`,
             };
             `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
@@ -952,7 +952,7 @@ function vertex_stream_time_to_first_token_timeout_ms() -> string {
 }
 
 test "vertex_stream_time_to_first_token_timeout_ms" {
-    assert.equal(vertex_stream_time_to_first_token_timeout_ms(), "5000|Timeout")
+    assert.equal(vertex_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
 }
 
 // ─── error taxonomy ──────────────────────────────────────────────────────────
