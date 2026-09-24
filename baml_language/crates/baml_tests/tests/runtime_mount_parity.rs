@@ -194,9 +194,9 @@ fn assert_bytes_identical(label: &str, left: &[u8], right: &[u8]) {
 }
 
 /// The wire contract a consumer unit writes: what it imports, by kind and
-/// symbol; what it exports; every name it recorded resolving; and whether
-/// it baked a type layout. Rendered one fact per line, sorted where the
-/// source order carries no meaning, so the golden reads as a table.
+/// symbol; what it exports; its impl rules. Rendered one fact per line,
+/// sorted where the source order carries no meaning, so the golden reads as
+/// a table.
 fn wire_contract(unit: &CompilationUnit) -> String {
     let mut lines = Vec::new();
     lines.push(format!(
@@ -224,10 +224,6 @@ fn wire_contract(unit: &CompilationUnit) -> String {
     for (interface, rules) in &unit.package_fragment.impl_rules {
         lines.push(format!("impl rules for {interface}: {}", rules.len()));
     }
-    for name in &unit.referenced_names {
-        lines.push(format!("references {name}"));
-    }
-    lines.push(format!("bakes type layout: {}", unit.bakes_type_layout));
     lines.join("\n") + "\n"
 }
 

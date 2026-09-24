@@ -1,6 +1,6 @@
 //! The per-package emitter: one package's sources compiled into its
-//! [`CompilationUnit`], [`PackageRecord`], and [`InitTail`], against nothing
-//! but the interfaces of the packages it reaches.
+//! [`EmittedPackage`] (unit, record, and tail), against nothing but the
+//! interfaces of the packages it reaches.
 //!
 //! A package's emit reads its own declarations and, for every package in its
 //! dependency closure, the declaration facts `hir_ty` answers by identity —
@@ -22,7 +22,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{Name, SourceFile, SourceRoot};
+use baml_base::{SourceFile, SourceRoot};
 use baml_compiler2_hir::{
     contributions::Definition,
     item_data::{
@@ -34,7 +34,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_hir_ty::{layout, lower::qualify_def};
 use baml_compiler2_mir::RuntimeLowering;
-use baml_linker_types::{CompilationUnit, ExportTable, InitTail, LocalRef, PackageRecord};
+use baml_linker_types::{EmittedPackage, ExportTable, LocalRef};
 use baml_type::typetag::TypeTag;
 use bex_vm_types::{DeclPath, Object};
 
@@ -52,20 +52,8 @@ use crate::{
 mod bodies;
 mod finish;
 
-/// One package's compiled output: what a driver hands the linker, beside the
-/// package's identity and the edges its dependency table is bound through.
-pub struct EmittedPackage {
-    pub root: SourceRoot,
-    /// The package's edge table
-    /// ([`edge_table`](baml_compiler2_hir::package::edge_table)): every
-    /// package it reaches, by the name it reaches it under.
-    pub edges: Vec<(Name, SourceRoot)>,
-    pub unit: CompilationUnit,
-    pub record: PackageRecord,
-    pub tail: Option<InitTail>,
-}
-
-/// Compile one package.
+/// Compile one package: its sources against the interfaces of the packages
+/// it reaches, into the [`EmittedPackage`] a linker binds.
 ///
 /// # Errors
 ///

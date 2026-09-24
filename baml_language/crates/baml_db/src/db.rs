@@ -1129,7 +1129,7 @@ impl ProjectDatabase {
     pub fn get_bytecode(
         &self,
         root: SourceRoot,
-    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+    ) -> Result<bex_vm_types::Program, crate::program::CompileProgramError> {
         // Bytecode generation lowers types through the runtime-conversion
         // boundary (`ResolvedAliases::convert`), which deliberately panics on
         // inference-only `Unknown`/`Error` types. Those are legitimate
@@ -1137,7 +1137,7 @@ impl ProjectDatabase {
         // attempt codegen on an error-bearing project: surface the failure as a
         // recoverable `LoweringError`. The diagnostics themselves are reported
         // through the normal check path. (CLI commands gate before calling
-        // `generate_project_bytecode` directly; this protects the in-process /
+        // `compile_program` directly; this protects the in-process /
         // runtime-eval callers that go through `get_bytecode`.) The filter is
         // the emitted WORLD's files, not the root's own: emit lowers the root
         // plus its dependency closure, and an error left in a dependency
@@ -1157,7 +1157,9 @@ impl ProjectDatabase {
             })
             .count();
         if error_count > 0 {
-            return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
+            return Err(crate::program::CompileProgramError::Emit(
+                baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count },
+            ));
         }
         self.get_bytecode_unchecked(root)
     }
@@ -1173,8 +1175,8 @@ impl ProjectDatabase {
     pub fn get_bytecode_unchecked(
         &self,
         root: SourceRoot,
-    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
-        baml_compiler2_emit::generate_project_bytecode(self, root)
+    ) -> Result<bex_vm_types::Program, crate::program::CompileProgramError> {
+        crate::program::compile_program(self, root, baml_compiler2_emit::OptLevel::Two)
     }
 }
 

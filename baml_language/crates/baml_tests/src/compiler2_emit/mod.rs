@@ -4,8 +4,7 @@
 //! compiler2 pipeline through the build-time, byte-identical stdlib prefix,
 //! and verifies the resulting `Program` has the expected structure.
 
-use baml_compiler2_emit::generate_project_bytecode_with_stdlib;
-use baml_db::ProjectDatabase;
+use baml_db::{ProjectDatabase, compile_program_with};
 
 use crate::{
     engine::TestDbExt,
@@ -34,13 +33,8 @@ fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
     let package = db
         .workspace_root()
         .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
-    generate_project_bytecode_with_stdlib(
-        db,
-        package,
-        OptLevel::Two,
-        &prefix(OptLevel::Two).program,
-    )
-    .expect("compilation should succeed")
+    compile_program_with(db, package, OptLevel::Two, prefix(OptLevel::Two))
+        .expect("compilation should succeed")
 }
 
 #[test]

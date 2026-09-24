@@ -47,7 +47,7 @@ use bex_vm_types::{
         Symbol, SymbolKind,
     },
 };
-pub use package::{EmittedPackage, emit_package};
+pub use package::emit_package;
 
 /// The source-less package surface captured before MIR/codegen starts.
 ///
@@ -492,46 +492,6 @@ fn emitted_function_origin(
 pub(crate) type ClassFieldSnapshot =
     HashMap<baml_type::typetag::TypeTag, Vec<(String, bex_vm_types::RuntimeTy)>>;
 
-/// Statically-resolved references recorded during codegen — the emit-time
-/// source of the incremental reverse-dependency edges
-/// ([`CompilationUnit::referenced_names`] / `bakes_type_layout`).
-///
-/// Codegen calls [`Self::record`] at every site that resolves an item to a
-/// baked operand (function and `let` global slots — including
-/// interface-machinery bodies, which have no runtime name — and class/enum
-/// object indices), so the edge set is produced by the resolutions
-/// themselves. Deriving it from the finished bytecode instead (reversing
-/// operands through the runtime name maps) is forbidden: the maps cover only
-/// named items, so a name class leaving them severs every edge into it
-/// silently — exactly what happened when interface bodies became anonymous.
-#[derive(Debug, Default)]
-pub(crate) struct UnitReferences {
-    /// Last-segment names of the resolved items — the dirty partition's
-    /// grain, matching the CLI's `defined_names` (the last dotted segment of
-    /// the item's `definition_link_name` rendering).
-    pub(crate) names: std::collections::BTreeSet<String>,
-    /// OR of [`bex_vm_types::relink::visit_index_operands_ref`]'s
-    /// layout-baking bit over every function compiled into this record.
-    pub(crate) bakes_type_layout: bool,
-}
-
-impl UnitReferences {
-    /// Record one resolved item reference by its rendered spelling; only the
-    /// last dotted segment is kept.
-    pub(crate) fn record(&mut self, name: &str) {
-        let last = name.rsplit('.').next().unwrap_or(name);
-        if !self.names.contains(last) {
-            self.names.insert(last.to_string());
-        }
-    }
-
-    /// Fold another record into this one (per-function → per-file).
-    pub(crate) fn merge(&mut self, other: UnitReferences) {
-        self.names.extend(other.names);
-        self.bakes_type_layout |= other.bakes_type_layout;
-    }
-}
-
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'db, 'ctx, 'obj> {
     /// The database link names are rendered through at the codegen boundary.
@@ -554,11 +514,6 @@ pub(crate) struct MirCodegenContext<'db, 'ctx, 'obj> {
     pub capture_types: &'ctx [RuntimeTy],
     /// Capture slots whose cells may be touched by spawned code.
     pub spawn_capture_indices: &'ctx HashSet<usize>,
-    /// Reference record the compiled function's resolutions accumulate into
-    /// (see [`UnitReferences`]). Callers pick the accumulation target: a
-    /// per-function record on the parallel path (merged per-file at the
-    /// serial stage), the per-file record directly on the serial paths.
-    pub references: &'obj mut UnitReferences,
 }
 
 /// Database trait for compiler2 emit queries.
@@ -717,6 +672,9 @@ impl EmitWorld {
 }
 
 /// Generate bytecode for `root`'s program (default: `OptLevel::Two`).
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_project_bytecode(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -725,6 +683,9 @@ pub fn generate_project_bytecode(
 }
 
 /// Generate bytecode for `root`'s program with a specific optimization level.
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_project_bytecode_with_opt(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -779,6 +740,9 @@ pub fn project_source_content_hash(db: &dyn crate::Db, root: baml_base::SourceRo
 /// of what user code the `db` holds. It is the cacheable artifact (keyed by
 /// compiler build + opt level) that `generate_project_bytecode_with_stdlib`
 /// splices into project compiles.
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
@@ -794,6 +758,9 @@ pub fn generate_stdlib_program(
 /// emitting only the user file group on top. The result is byte-identical to
 /// a full [`generate_project_bytecode_with_opt`] run (asserted by the
 /// `emit_determinism` integration tests).
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_project_bytecode_with_stdlib(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -806,7 +773,10 @@ pub fn generate_project_bytecode_with_stdlib(
 /// [`generate_project_bytecode_with_stdlib`] plus the decomposed symbolic
 /// units, assembled in the same frame so the emit's declaration-keyed
 /// `FunctionCoordinates` (internal) flow straight into decomposition
-/// (mirrors [`generate_project_bytecode_with_reuse_artifacts`]).
+/// (the runtime compiler's lane).
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_project_bytecode_with_stdlib_artifacts(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -835,6 +805,9 @@ fn generate_with_stdlib_coords<'db>(
 /// Compile and link a source consumer against independently emitted mounted
 /// dependency units. The database's package-interface blobs provide semantic
 /// resolution; `dependency_units` provide the matching runtime symbols.
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_project_bytecode_with_mounted_units(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -853,6 +826,9 @@ pub fn generate_project_bytecode_with_mounted_units(
 /// declaration-keyed `FunctionCoordinates` (internal) flow straight into
 /// decomposition. The dependency prefix is not decomposed — every reference
 /// into it becomes a symbolic import, exactly as on the stdlib-prefix path.
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn generate_project_bytecode_with_mounted_units_artifacts(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -868,200 +844,6 @@ pub fn generate_project_bytecode_with_mounted_units_artifacts(
         decompose_units_after_prefix(db, &world.files, &program, &coords, base.objects.len())
             .map_err(MountedPackageLinkError::Consumer)?;
     Ok((program, units))
-}
-
-/// Incremental compile that lowers function bodies only for dirty files, reuses
-/// clean files' symbolic units from the cached image, and links.
-///
-/// Declaration/layout passes still walk the project because dirty bytecode must
-/// use the same whole-program indices as a full compile. Pass 4 skips every clean
-/// file (`take_lowered_files` reports only dirty paths); decomposition's temporary
-/// clean units are discarded in favor of `prev_units`. Whole-program products are
-/// recomputed (package fragments freshly decomposed; the `$init`/`$init_test` tail
-/// **freshly synthesized** from every file's `let`s / `test` blocks — design §9
-/// R2 — whose symbolic imports the linker re-resolves against the shifted
-/// layout).
-///
-/// `clean_files` is the caller's optimistic clean set; a file is only truly
-/// reused when its inferred transitive `throws` still match the previous compile
-/// (design §4 — the throws gate). `prev_units` must come from the same compiler
-/// build and stdlib base.
-///
-/// # Errors
-///
-/// Returns [`LoweringError::Internal`] if `prev_units` fail to link (a corrupt /
-/// incompatible previous units) and propagates any [`LoweringError`] from the
-/// dirty-file emit.
-pub fn generate_project_bytecode_with_reuse_units(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-    opt: OptLevel,
-    base: &Program,
-    prev_units: &[CompilationUnit],
-    clean_files: &HashSet<String>,
-) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_reuse_artifacts(db, root, opt, base, prev_units, clean_files)
-        .map(|(program, _)| program)
-}
-
-/// Reuse compile variant that also returns the already-assembled symbolic
-/// units. Cache-aware callers can persist these directly instead of decomposing
-/// the linked program a second time.
-pub fn generate_project_bytecode_with_reuse_artifacts(
-    db: &dyn crate::Db,
-    root: baml_base::SourceRoot,
-    opt: OptLevel,
-    base: &Program,
-    prev_units: &[CompilationUnit],
-    clean_files: &HashSet<String>,
-) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
-    let world = EmitWorld::of_root(db, root);
-    let mismatches = reuse_throws_mismatches(db, root, prev_units, clean_files);
-    let effective_clean;
-    let clean_files = if mismatches.is_empty() {
-        clean_files
-    } else {
-        effective_clean = clean_files
-            .iter()
-            .filter(|path| !mismatches.contains_key(path.as_str()))
-            .cloned()
-            .collect();
-        &effective_clean
-    };
-
-    // Direct per-file emit: lower ONLY the dirty files (clean files are skipped in
-    // Pass 4), producing a partial program whose dirty content decomposes into
-    // fresh units. The partial DOES synthesize the whole-project `$init`/
-    // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
-    // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
-    // so a dirty tail-producing file no longer aborts reuse.
-    let (partial, coords) = generate_impl(db, &world, opt, Some(base), Some(clean_files))?;
-
-    let mut fresh_units = decompose_units(db, &world.files, &partial, &coords)?;
-
-    // The freshly-synthesized (symbolic) tail: whichever fresh unit the
-    // decomposition placed it on. It reflects the *current* project's lets/tests
-    // (clean + dirty), not the previous compile's, so a changed dirty tail is
-    // captured. Its object/global imports are names, so the linker re-resolves
-    // them against this compile's shifted layout.
-    let fresh_tail = fresh_units.iter_mut().find_map(|u| u.init_tail.take());
-
-    // R1 tail edge (design §9): a dirty top-level `let` initializer can intern a
-    // generic-function VALUE into the freshly-synthesized tail. The linker dedups
-    // generic values across `code` buckets, but a tail-local copy that duplicates
-    // a *clean* file's code-owned copy is not covered — it would place both and
-    // break byte-identity. This is rare (a generic value as a top-level `let`);
-    // detect it precisely and fall back to a full compile for that case only.
-    if !clean_files.is_empty()
-        && let Some(tail) = &fresh_tail
-        && tail_generic_dupes_clean(tail, prev_units, clean_files)
-    {
-        return Err(LoweringError::ReuseUnsupported(
-            "a dirty top-level `let` initializer interns a generic-function value \
-             already owned by a clean file (design §9 R1 tail edge)"
-                .to_string(),
-        ));
-    }
-
-    // Assemble: clean files verbatim from `prev_units`, dirty files fresh. A
-    // clean unit's PACKAGE-LEVEL fragment (declaration maps, interface blob —
-    // whole-package products on the carrier) is recomputed so a clean carrier
-    // never goes stale, but its IMPL RULES stay the cached unit's own: a
-    // rule's method table is provided-only, and its body offsets index the
-    // cached unit's `code` bucket, which a fresh dirty-only emit cannot see.
-    //
-    // A rule is NOT a pure function of its declaring file, though: its
-    // `interface_assoc` completion and its positional `field_links` are
-    // derived from the INTERFACE's declaration, which may live in another
-    // file. Keeping the cached rule is sound only because the CLI's dirty
-    // partition dirties every file that spells the interface's name
-    // (`syntactic_type_names`) whenever the interface's signature moves, so
-    // a clean unit here has, by construction, an interface that did not
-    // change shape. (A mounted dependency's interface changing shape is the
-    // open half — it rides the dependency fingerprint, not this partition.)
-    // The tail is placed once, below.
-    let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
-        .iter()
-        .map(|u| (u.source_file.as_str(), u))
-        .collect();
-    let mut assembled: Vec<CompilationUnit> = Vec::with_capacity(fresh_units.len());
-    for fresh in &mut fresh_units {
-        let mut unit = if clean_files.contains(&fresh.source_file) {
-            let prev = prev_by_source
-                .get(fresh.source_file.as_str())
-                .ok_or_else(|| {
-                    LoweringError::ReuseUnsupported(format!(
-                        "clean file `{}` missing from previous units",
-                        fresh.source_file
-                    ))
-                })?;
-            let mut unit = (*prev).clone();
-            let cached_rules = std::mem::take(&mut unit.package_fragment.impl_rules);
-            unit.package_fragment = std::mem::take(&mut fresh.package_fragment);
-            unit.package_fragment.impl_rules = cached_rules;
-            unit
-        } else {
-            std::mem::take(fresh)
-        };
-        // The tail is a single whole-group product placed on one carrier below;
-        // clear any per-unit copy first (a clean carrier would otherwise carry a
-        // stale tail).
-        unit.init_tail = None;
-        assembled.push(unit);
-    }
-
-    // Place the freshly-synthesized tail on the last user unit (the linker only
-    // requires it to be on *some* unit of the user group).
-    if let Some(tail) = fresh_tail
-        && let Some(carrier) = assembled
-            .iter_mut()
-            .rev()
-            .find(|u| !u.source_file.starts_with("<builtin>/"))
-    {
-        carrier.init_tail = Some(tail);
-    }
-
-    let program = bex_vm_types::legacy_link::link(&assembled)
-        .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
-    let mut program = program;
-    program.source_content_hash = Some(project_source_content_hash(db, root));
-    Ok((program, assembled))
-}
-
-/// Find clean files whose inferred-throws invariant no longer matches the
-/// previous units. Callers demote these files before serving diagnostics or
-/// splicing units. Previous metadata is read directly from the units, avoiding
-/// a full link solely for this comparison.
-pub fn reuse_throws_mismatches(
-    db: &dyn baml_compiler2_mir::Db,
-    root: baml_base::SourceRoot,
-    prev_units: &[CompilationUnit],
-    clean_files: &HashSet<String>,
-) -> HashMap<String, String> {
-    let previous: HashMap<&str, &bex_vm_types::TyTemplate> = prev_units
-        .iter()
-        .flat_map(|unit| &unit.code)
-        .filter_map(|object| match object {
-            Object::Function(function) => Some((function.name.as_str(), &function.throws_type)),
-            _ => None,
-        })
-        .collect();
-    let all_files = world_files(db, root);
-    let mut mismatches = HashMap::new();
-
-    for &file in all_files {
-        let rel = relative_source_path(db, file);
-        if !clean_files.contains(&rel) {
-            continue;
-        }
-        let pkg = file_package(db, file);
-        if let Err(detail) =
-            spliced_throws_match(db, file, &previous, &RuntimeLowering::of(db, pkg.root))
-        {
-            mismatches.insert(rel, detail);
-        }
-    }
-    mismatches
 }
 
 /// B-693 Stage 2: emit every source file as a relocatable [`CompilationUnit`].
@@ -1085,6 +867,9 @@ pub fn reuse_throws_mismatches(
 /// returns [`LoweringError::Internal`] if the flat program contains a construct
 /// the Stage 2 decomposition does not yet handle (a `$init`/generic-function
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn emit_units(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -1101,6 +886,9 @@ pub fn emit_units(
 /// unit to the prefix becomes a normal symbolic import. Linking that unit into
 /// the host image therefore resolves stdlib symbols to the host's immutable
 /// objects and impl rules instead of copying them into a runtime package.
+#[deprecated(
+    note = "the flat whole-program emitter: dies when the runtime lane loads per-package units"
+)]
 pub fn emit_units_with_stdlib(
     db: &dyn crate::Db,
     root: baml_base::SourceRoot,
@@ -1485,20 +1273,10 @@ fn decompose_units_after_prefix<'db>(
 
     // ---- Bucket objects into units + record local layout --------------------
     let mut units: Vec<CompilationUnit> = (0..n_files)
-        .map(|fi| {
-            // Stamp the emit-recorded reference edges onto the unit they
-            // describe. A file the emit never lowered (a clean file's
-            // placeholder unit, discarded at assembly) has no record.
-            let refs = coords.file_references.get(&unit_source[fi]);
-            CompilationUnit {
-                source_file: unit_source[fi].clone(),
-                package: unit_package[fi].clone(),
-                referenced_names: refs
-                    .map(|r| r.names.iter().cloned().collect())
-                    .unwrap_or_default(),
-                bakes_type_layout: refs.is_some_and(|r| r.bakes_type_layout),
-                ..CompilationUnit::default()
-            }
+        .map(|fi| CompilationUnit {
+            source_file: unit_source[fi].clone(),
+            package: unit_package[fi].clone(),
+            ..CompilationUnit::default()
         })
         .collect();
     // Per pool object: its LocalRef within its owning unit (bucket + offset).
@@ -2056,72 +1834,6 @@ fn obj_variant_name(obj: &Object) -> &'static str {
     }
 }
 
-/// Resolve the fully-qualified base-function name of a generic-function value in
-/// a [`CompilationUnit`]'s per-unit encoding (§2a): a local-global base resolves
-/// through the unit's export table, an imported base through its global imports.
-fn unit_generic_base_name(unit: &CompilationUnit, base_raw: usize) -> Option<String> {
-    let n_local_globals = unit.exports.globals.len();
-    if base_raw < n_local_globals {
-        unit.exports
-            .globals
-            .iter()
-            .find(|(_, flat)| *flat as usize == base_raw)
-            .map(|(name, _)| name.clone())
-    } else {
-        unit.global_imports
-            .get(base_raw - n_local_globals)
-            .map(|sym| sym.fq_name.clone())
-    }
-}
-
-/// Does the freshly-synthesized `$init`/`$init_test` tail intern a
-/// generic-function value that a *clean* file already owns in its `code` bucket
-/// (design §9 R1 tail edge)? Such a duplicate cannot be deduped by the linker's
-/// code-bucket interning, so the reuse path must fall back for it.
-fn tail_generic_dupes_clean(
-    tail: &bex_vm_types::legacy_unit::InitTail,
-    prev_units: &[CompilationUnit],
-    effective_clean: &HashSet<String>,
-) -> bool {
-    // (base fn fq name, type args) of every generic value clean files own.
-    // `GenericFunction::type_args` is `RealizedTy` (runtime narrowing, #3998).
-    let mut clean_keys: Vec<(String, Vec<bex_vm_types::RealizedTy>)> = Vec::new();
-    for unit in prev_units {
-        if !effective_clean.contains(&unit.source_file) {
-            continue;
-        }
-        for obj in &unit.code {
-            if let Object::GenericFunction(gf) = obj
-                && let Some(base) = unit_generic_base_name(unit, gf.function.raw())
-            {
-                clean_keys.push((base, gf.type_args.to_vec()));
-            }
-        }
-    }
-    if clean_keys.is_empty() {
-        return false;
-    }
-    // A tail generic's base is always a function, so it is a tail global import.
-    let n_tail_slots = tail.slot_objects.len();
-    for obj in &tail.objects {
-        if let Object::GenericFunction(gf) = obj {
-            let base_raw = gf.function.raw();
-            if base_raw < n_tail_slots {
-                continue; // a helper slot is never a generic base
-            }
-            let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
-                continue;
-            };
-            if clean_keys.iter().any(|(name, args)| {
-                name == &sym.fq_name && args.as_slice() == gf.type_args.as_ref()
-            }) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 /// Build the import [`Symbol`] for a cross-unit object reference by inspecting
 /// the target pool object.
 fn object_symbol(
@@ -2361,26 +2073,6 @@ fn build_init_tail(
         named,
         package_init_order: program.package_init_order.clone(),
     })
-}
-
-thread_local! {
-    /// Project-relative paths whose bodies were MIR/bytecode-lowered in Pass 4
-    /// since the last drain. B-693 Stage 6 evidence surface: after an incremental
-    /// compile only the *dirty* files appear here — clean files are never lowered.
-    static LOWERED_FILES: std::cell::RefCell<Vec<String>> =
-        const { std::cell::RefCell::new(Vec::new()) };
-}
-
-/// Record that `rel_path`'s function bodies are being lowered in Pass 4.
-fn record_lowered_file(rel_path: &str) {
-    LOWERED_FILES.with(|f| f.borrow_mut().push(rel_path.to_string()));
-}
-
-/// Drain and return the source paths whose bodies were lowered since the last
-/// call, on the current thread (B-693 Stage 6). A full compile returns every
-/// file; an incremental reuse compile returns only the dirty files.
-pub fn take_lowered_files() -> Vec<String> {
-    LOWERED_FILES.with(|f| std::mem::take(&mut *f.borrow_mut()))
 }
 
 /// Stage 6 (`SkipClean`) phase 1: register clean (skipped) files' function/let
@@ -2725,15 +2417,6 @@ struct FunctionCoordinates<'db> {
     /// these files' entries from its positional owner vectors — their objects
     /// are below the prefix and never walked.
     spliced_files: usize,
-    /// Per-file reference records accumulated by this emit's codegen (see
-    /// [`UnitReferences`]), keyed by project-relative source path. Covers
-    /// every function the emit lowered — bodies, lambdas, and `let`
-    /// initializer helpers (attributed to the `let`'s file) — for user files
-    /// only. Decomposition stamps each unit's `referenced_names` /
-    /// `bakes_type_layout` from here; a clean file skipped by an incremental
-    /// emit has no entry, and its discarded placeholder unit's empty stamp
-    /// never survives assembly (the cached unit's own record does).
-    file_references: HashMap<String, UnitReferences>,
 }
 
 /// Emit the whole project (B-693 Stage 6 core).
@@ -2877,7 +2560,6 @@ fn generate_impl<'db>(
         }
         None => (Program::new(), EmitTables::default()),
     };
-    let mut file_references: HashMap<String, UnitReferences> = HashMap::new();
     if base.is_none() {
         emit_file_group(
             db,
@@ -2886,7 +2568,6 @@ fn generate_impl<'db>(
             &mut program,
             &mut placements,
             &mut slots,
-            &mut file_references,
             opt,
             None,
         )?;
@@ -2898,7 +2579,6 @@ fn generate_impl<'db>(
         &mut program,
         &mut placements,
         &mut slots,
-        &mut file_references,
         opt,
         skip_clean,
     )?;
@@ -2974,7 +2654,6 @@ fn generate_impl<'db>(
             placements,
             slots,
             spliced_files: if base.is_some() { builtin_count } else { 0 },
-            file_references,
         },
     ))
 }
@@ -3185,51 +2864,6 @@ impl EmitTables {
     }
 }
 
-/// Dirty-set throws gate (design §4): a caller-clean file may only be reused if
-/// every one of its functions' inferred transitive `throws` still matches the
-/// previous compile.
-///
-/// `throws` is inferred from bodies, so it is interface that the
-/// body-blanked signature hash cannot see: a body edit elsewhere in the
-/// package can change a clean file's *transitive* throws — its stored
-/// `throws_type` metadata and, through catch lowering, potentially its
-/// bytecode. The package-wide throw graph is already solved on this path,
-/// so the comparison costs only map lookups; any mismatch demotes the file
-/// to a normal recompile. No fixpoint is needed: the graph is solved
-/// globally, so every affected file's own transitive set differs and each
-/// demotes independently.
-fn spliced_throws_match(
-    db: &dyn baml_compiler2_mir::Db,
-    file: baml_base::SourceFile,
-    previous: &HashMap<&str, &bex_vm_types::TyTemplate>,
-    cache: &RuntimeLowering<'_>,
-) -> Result<(), String> {
-    for &func_loc in file_functions(db, file) {
-        // Mirror Pass 4's skip set: these never become callable objects.
-        if items::owns_no_slot(db, func_loc) {
-            continue;
-        }
-        let fq = definition_link_name(db, Definition::Function(func_loc));
-        let Some(previous_throws) = previous.get(fq.as_str()) else {
-            return Err(format!("previous units have no function `{fq}`"));
-        };
-        let current_throws = compute_throws_type(
-            db,
-            file,
-            &function_data(db, func_loc).name,
-            cache,
-            &baml_compiler2_hir_ty::lower::function_generic_frame(db, func_loc),
-        );
-        if **previous_throws != bex_vm_types::anchor_template(&current_throws) {
-            return Err(format!(
-                "function `{fq}` changed from {:?} to {current_throws:?}",
-                **previous_throws
-            ));
-        }
-    }
-    Ok(())
-}
-
 /// Run emit passes 1–4.6 over one file group.
 ///
 /// `generate_project_bytecode_with_opt` calls this twice — builtin stubs
@@ -3245,7 +2879,6 @@ fn emit_file_group<'db>(
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
     slots: &mut GlobalSlots<'db>,
-    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(), LoweringError> {
@@ -3556,7 +3189,6 @@ fn emit_file_group<'db>(
             &class_fields,
             program,
             placements,
-            file_references,
             opt,
         )?;
     } else {
@@ -3570,7 +3202,6 @@ fn emit_file_group<'db>(
             &class_fields,
             program,
             placements,
-            file_references,
             opt,
         )?;
     }
@@ -3581,9 +3212,8 @@ fn emit_file_group<'db>(
     // fresh from the entire project's `let`s / `test` blocks. Register clean
     // files' function/let *slots* first so the tail passes see the whole project;
     // clean function *object* placeholders are injected after the tail (below).
-    // Clean `let` initializers are re-lowered here (their MIR is salsa-cached);
-    // this does not count as a lowered *file* (`record_lowered_file` is Pass-4
-    // only) and is byte-identical to a full compile's tail.
+    // Clean `let` initializers are re-lowered here (their MIR is salsa-cached),
+    // byte-identical to a full compile's tail.
     if let Some(clean) = skip_clean {
         inject_clean_slots(db, files, clean, slots, program);
     }
@@ -3643,7 +3273,6 @@ fn emit_file_group<'db>(
                 enum_object_indices,
                 &class_fields,
                 &mut *program,
-                file_references,
                 opt,
             )?;
 
@@ -4578,7 +4207,6 @@ fn emit_functions_serial<'db>(
     class_fields: &ClassFieldSnapshot,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
-    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) -> Result<(), LoweringError> {
     for file in files {
@@ -4591,9 +4219,6 @@ fn emit_functions_serial<'db>(
                 continue;
             }
         }
-        // This file's bodies are about to be MIR/bytecode-lowered — record it for
-        // the Stage 6 "only dirty files are lowered" evidence counter.
-        record_lowered_file(&rel_path);
         let line_starts = build_line_starts(file.text(db));
         let pkg_info_pass4 = file_package(db, *file);
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
@@ -4611,7 +4236,6 @@ fn emit_functions_serial<'db>(
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
                     let source_file = relative_source_path(db, *file);
-                    let mut references = UnitReferences::default();
                     let empty_capture_types = Vec::new();
                     let empty_spawn_capture_indices = HashSet::new();
                     let mut refs = FlatRefs {
@@ -4632,7 +4256,6 @@ fn emit_functions_serial<'db>(
                         class_fields,
                         &mut program.objects,
                         0,
-                        &mut references,
                         opt,
                     );
                     let lambda_obj_indices: Vec<usize> =
@@ -4649,18 +4272,11 @@ fn emit_functions_serial<'db>(
                         lambda_names: &lambda_names_vec,
                         capture_types: &empty_capture_types,
                         spawn_capture_indices: &empty_spawn_capture_indices,
-                        references: &mut references,
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
                     f.name.clone_from(&fq_name);
                     f.source_file.clone_from(&source_file);
-                    if !is_builtin_file {
-                        file_references
-                            .entry(source_file.clone())
-                            .or_default()
-                            .merge(references);
-                    }
                     f
                 }
                 MirFunctionKind::Builtin(kind) => {
@@ -4885,7 +4501,6 @@ fn emit_functions_parallel<'db>(
     class_fields: &ClassFieldSnapshot,
     program: &mut Program,
     placements: &mut FunctionPlacements<'db>,
-    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) -> Result<(), LoweringError> {
     use rayon::prelude::*;
@@ -4905,7 +4520,6 @@ fn emit_functions_parallel<'db>(
                 continue;
             }
         }
-        record_lowered_file(&rel_path);
         let line_starts: std::sync::Arc<[u32]> = build_line_starts(file.text(db)).into();
         let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
         for &func_loc in file_functions(db, *file) {
@@ -4943,7 +4557,7 @@ fn emit_functions_parallel<'db>(
     let handle_seed = std::sync::Mutex::new(db.parallel_db_handle().unwrap_or_else(|| {
         unreachable!("parallel emit runs only where the database hands out handles")
     }));
-    let compiled: Vec<Option<(Function, ObjectPool, UnitReferences)>> = work
+    let compiled: Vec<Option<(Function, ObjectPool)>> = work
         .par_iter()
         // Each worker renders link names through its own database handle
         // (the seed-lowering discipline: handles share one memo table). A
@@ -4964,7 +4578,6 @@ fn emit_functions_parallel<'db>(
                     return None;
                 };
                 let mut fragment = ObjectPool::default();
-                let mut references = UnitReferences::default();
                 let empty_capture_types = Vec::new();
                 let empty_spawn_capture_indices = HashSet::new();
                 let mut refs = FlatRefs {
@@ -4985,7 +4598,6 @@ fn emit_functions_parallel<'db>(
                     class_fields,
                     &mut fragment,
                     watermark,
-                    &mut references,
                     opt,
                 );
                 let lambda_obj_indices: Vec<usize> =
@@ -5002,7 +4614,6 @@ fn emit_functions_parallel<'db>(
                     lambda_names: &lambda_names_vec,
                     capture_types: &empty_capture_types,
                     spawn_capture_indices: &empty_spawn_capture_indices,
-                    references: &mut references,
                 };
                 let mut f = compile_mir_function(
                     body,
@@ -5014,7 +4625,7 @@ fn emit_functions_parallel<'db>(
                 );
                 f.name.clone_from(&item.fq_name);
                 f.source_file.clone_from(&item.source_file);
-                Some((f, fragment, references))
+                Some((f, fragment))
             },
         )
         .collect();
@@ -5033,13 +4644,7 @@ fn emit_functions_parallel<'db>(
     for (item, slot) in work.into_iter().zip(compiled) {
         let func_loc = FunctionLoc::new(db, item.file, item.local_id);
         let mut compiled_fn = match slot {
-            Some((function, fragment, references)) => {
-                if !item.is_builtin_file {
-                    file_references
-                        .entry(item.source_file.clone())
-                        .or_default()
-                        .merge(references);
-                }
+            Some((function, fragment)) => {
                 merge_function_fragment(program, watermark, fragment, function, &mut intern)
             }
             None => {
@@ -5343,7 +4948,6 @@ fn compile_lambdas<'db>(
     class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
     objects_base: usize,
-    references: &mut UnitReferences,
     opt: OptLevel,
 ) -> Vec<(usize, String)> {
     let capture_infos = parent_body.map_or_else(
@@ -5376,7 +4980,6 @@ fn compile_lambdas<'db>(
                     class_fields,
                     objects,
                     objects_base,
-                    references,
                     opt,
                 );
                 let nested_obj_indices: Vec<usize> =
@@ -5393,7 +4996,6 @@ fn compile_lambdas<'db>(
                     lambda_names: &nested_names,
                     capture_types: &capture_info.capture_types,
                     spawn_capture_indices: &capture_info.spawn_capture_indices,
-                    references: &mut *references,
                 };
                 let mut f =
                     compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
@@ -5437,21 +5039,15 @@ fn compile_init_function<'db>(
     enum_object_indices: &HashMap<String, usize>,
     class_fields: &ClassFieldSnapshot,
     program: &mut Program,
-    file_references: &mut HashMap<String, UnitReferences>,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     let mut steps = Vec::with_capacity(sorted_bindings.len());
-    for (ordinal, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
+    for (ordinal, (fq_name, let_loc, _)) in sorted_bindings.iter().enumerate() {
         let Some(&let_slot) = slots.lets.get(let_loc) else {
             return Err(LoweringError::Internal(format!(
                 "no global slot for let binding: {fq_name}"
             )));
         };
-        // The helper's references are the `let`'s own dependencies:
-        // attribute them to the file that declares the `let`, not to the
-        // synthesized `$init` tail (which is rebuilt every compile and
-        // belongs to no file).
-        let mut references = UnitReferences::default();
         let mut refs = FlatRefs {
             db,
             slots,
@@ -5466,16 +5062,8 @@ fn compile_init_function<'db>(
             class_fields,
             &mut program.objects,
             0,
-            &mut references,
             opt,
         )?;
-        let source_file = relative_source_path(db, *file);
-        if !source_file.starts_with("<builtin>/") {
-            file_references
-                .entry(source_file)
-                .or_default()
-                .merge(references);
-        }
         // Register the helper as an object and a global slot, so `$init` can
         // `Call` it.
         let helper_obj_idx = program.add_object(Object::Function(Box::new(helper)));

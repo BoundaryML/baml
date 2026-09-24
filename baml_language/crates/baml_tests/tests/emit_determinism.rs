@@ -10,10 +10,10 @@
 use std::path::{Path, PathBuf};
 
 use baml_compiler2_emit::{
-    OptLevel, emit_units, generate_project_bytecode, generate_project_bytecode_with_stdlib,
-    generate_stdlib_program,
+    OptLevel, emit_units, generate_project_bytecode_with_opt,
+    generate_project_bytecode_with_stdlib, generate_stdlib_program,
 };
-use baml_db::{ProjectDatabase, discover_baml_files};
+use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{RuntimeCompileRequest, legacy_unit::CompilationUnit};
 
@@ -37,7 +37,7 @@ fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)]) -> Vec<u8> {
     for (path, content) in sources {
         db.file(path, content);
     }
-    let program = generate_project_bytecode(&db, package)
+    let program = compile_program(&db, package, OptLevel::Two)
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
     borsh::to_vec(&program).expect("borsh serialization failed")
 }
@@ -89,10 +89,10 @@ fn baml_src_project_emit_is_deterministic() {
 }
 
 /// The default (parallel) emit must produce byte-identical output to the
-/// serial reference pass: parallel emit compiles each function into a
-/// watermark-based fragment pool and the serial merge replays the exact
-/// serial pool layout (including cross-function `GenericFunction` interning,
-/// which the `ns_instantiation_expr` fixtures in this corpus exercise).
+/// serial reference pass: parallel emit compiles each body into a fragment
+/// pool with item-local import tables and the merge replays the exact serial
+/// layout (including cross-function `GenericFunction` interning, which the
+/// `ns_instantiation_expr` fixtures in this corpus exercise).
 /// The serial path is selected the same way a user would get it — a
 /// single-threaded rayon pool (`RAYON_NUM_THREADS=1`).
 #[test]
@@ -149,8 +149,9 @@ fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
     db
 }
 
-/// The precompiled-stdlib splice oracle: compiling on top of a stdlib
-/// `Program` slice must be byte-identical to a full compile.
+/// The precompiled-stdlib splice oracle of the flat emitter (the runtime
+/// compiler's lane until it loads per-package outputs): compiling on top of a
+/// stdlib `Program` slice must be byte-identical to a full compile.
 ///
 /// The base is built from the *empty* project's database and spliced into the
 /// *full baml_src* compile — proving the stdlib slice is genuinely
@@ -169,7 +170,13 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"),
     ] {
         let sources = read_project(&root);
-        let full = compile_to_bytes(&root, &sources);
+        // The flat emitter's own full compile: the splice reproduces THAT
+        // image (the per-package lane fills the identity tables the flat
+        // emitter never does, so it is not the comparand here).
+        let flat_db = build_db(&root, &sources);
+        let full = generate_project_bytecode_with_opt(&flat_db, package(&flat_db), OptLevel::Two)
+            .unwrap_or_else(|e| panic!("flat compile of {} failed: {e:?}", root.display()));
+        let full = borsh::to_vec(&full).expect("serialize flat program");
 
         let db = build_db(&root, &sources);
         let spliced =

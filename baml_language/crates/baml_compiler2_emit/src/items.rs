@@ -39,7 +39,7 @@ use bex_vm_types::{
 };
 
 use crate::{
-    ClassFieldSnapshot, LoweringError, MirCodegenContext, OptLevel, UnitReferences,
+    ClassFieldSnapshot, LoweringError, MirCodegenContext, OptLevel,
     emit::{CodegenRefs, compile_mir_function},
 };
 
@@ -991,7 +991,6 @@ pub(crate) fn compile_let_helper<'db>(
     class_fields: &ClassFieldSnapshot,
     objects: &mut ObjectPool,
     objects_base: usize,
-    references: &mut UnitReferences,
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     let file = binding.file(db);
@@ -1027,7 +1026,6 @@ pub(crate) fn compile_let_helper<'db>(
         class_fields,
         objects,
         objects_base,
-        references,
         opt,
     );
     let lambda_object_indices: Vec<usize> = lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -1042,7 +1040,6 @@ pub(crate) fn compile_let_helper<'db>(
         lambda_names: &lambda_names,
         capture_types: &empty_capture_types,
         spawn_capture_indices: &empty_spawn_capture_indices,
-        references,
     };
     let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
     helper.name = name;

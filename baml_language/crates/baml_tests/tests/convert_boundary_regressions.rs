@@ -22,20 +22,23 @@ fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
 
 /// Lower the project to bytecode and return the `Program` for inspection.
 fn compile_program(db: &ProjectDatabase) -> bex_vm_types::Program {
-    baml_compiler2_emit::generate_project_bytecode(db, package(db))
+    baml_db::compile_program(db, package(db), baml_compiler2_emit::OptLevel::Two)
         .expect("should compile to bytecode")
 }
 
 /// An error-bearing program (here, an unresolved parameter type) produces
 /// inference-only `Unknown` types. The in-process / runtime-eval entry point
 /// (`ProjectDatabase::get_bytecode`) must gate on a clean diagnostic pass and
-/// return a recoverable `LoweringError`, not panic at the convert boundary.
+/// return a recoverable `CompileProgramError`, not panic at the convert
+/// boundary.
 #[test]
 fn error_bearing_program_returns_recoverable_error() {
     let db = db_with("function f(a: NonexistentType) -> int { 0 }");
     match db.get_bytecode(package(&db)) {
-        Ok(_) => panic!("expected a LoweringError for an error-bearing program"),
-        Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count }) => {
+        Ok(_) => panic!("expected a CompileProgramError for an error-bearing program"),
+        Err(baml_db::CompileProgramError::Emit(
+            baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count },
+        )) => {
             assert!(error_count > 0, "expected a positive error count");
         }
         Err(other) => panic!("expected ProjectHasErrors, got: {other}"),

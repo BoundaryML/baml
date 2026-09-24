@@ -13,11 +13,3 @@ export object user.level_name = Code(2)
 export object user.summary = Code(12)
 export global user.level_name = 0
 export global user.summary = 1
-references Level
-references Widget
-references bump
-references from
-references level_name
-references make
-references of
-bakes type layout: true

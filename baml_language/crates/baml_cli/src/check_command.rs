@@ -47,13 +47,13 @@ impl CheckArgs {
         }
         let file_count = session.file_count();
 
-        // The manifest can only advance alongside emitted Program/unit entries,
-        // so a clean check *seeds* the cache below by running the same
-        // emit-and-store path as run/test (gated to checks that actually have
-        // something to advance). That turns a check-only workflow warm instead
-        // of leaving it on the full-compile path forever.
+        // The manifest can only advance alongside a stored program, so a clean
+        // check *seeds* the cache below by running the same compile-and-store
+        // path as run/test (gated to checks that actually have something to
+        // advance). That turns a check-only workflow warm instead of leaving
+        // it on the full-compile path forever.
         let warmth = session.warm_prep();
-        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        let (served, stdlib_interface_hit) = (warmth.served, warmth.stdlib_interface_hit);
         let (db, package, cache) = (&session.db, session.package, &session.cache);
 
         reporter.spin("Checking", format!("{file_count} file(s)"));
@@ -62,8 +62,7 @@ impl CheckArgs {
         // identical to the read-only collector's.
         let (diagnostics, fresh_diagnostics) = match cache {
             Some(ctx) => {
-                let incremental =
-                    ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
+                let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             }
             None => (baml_db::collect_diagnostics(db), None),
@@ -72,11 +71,11 @@ impl CheckArgs {
             cache.verify_diagnostics(db, package)?;
             cache.verify_stdlib_diagnostics(db)?;
             // Sampled field verification (rustc-style 1-in-32): `baml check`
-            // serves clean files' cached diagnostics and seeds their throws, so
-            // it is a warm serving path like run/test. After the served result
-            // exists, ~1 run in 32 re-derives one served clean file on a fresh,
-            // un-seeded database and hard-errors on any drift.
-            cache.maybe_sampled_verify(reuse_plan.as_ref(), || session.honest_db())?;
+            // serves the check rows and seeds their throws, so it is a warm
+            // serving path like run/test. After the served result exists, ~1
+            // run in 32 re-derives one served file on a fresh, un-seeded
+            // database and hard-errors on any drift.
+            cache.maybe_sampled_verify(served.as_ref(), || session.honest_db())?;
             // Materialize the per-toolchain builtin-diagnostics blob on a miss.
             // Unlike the manifest, this blob is a build constant (keyed only by
             // the compiler fingerprint), so a read-only `check` may safely write
@@ -85,9 +84,9 @@ impl CheckArgs {
             // re-derivation is Salsa-memoized against the check just performed.
             cache.store_stdlib_diagnostics(db);
         }
-        // Warm-incremental evidence (mirrors run/test): with the diagnostics
-        // cache serving clean user files and the stdlib blob serving builtins,
-        // this counts only the dirty files' scopes; a cold check walks every one.
+        // Warm evidence (mirrors run/test): with the check rows served and the
+        // stdlib blob serving builtins, this is 0; a cold check walks every
+        // scope.
         crate::bytecode_cache::cache_debug(format_args!(
             "body inferences: {} this process",
             baml_db::baml_compiler2_hir_ty::infer::body_inferences()
@@ -112,32 +111,24 @@ impl CheckArgs {
         }
 
         // Seed the bytecode cache from this clean check — the same
-        // emit-and-store path run/test use — but only when it advances the
-        // manifest: no reuse plan (missing/stale manifest) or a plan with
-        // dirty files. A fully-current manifest (zero dirty files) has
-        // nothing to store, and skipping keeps the no-op check emit-free.
-        // Seeding is an optimization: a failed emit on a diagnostics-clean
-        // project is logged, never surfaced as a check failure.
+        // compile-and-store path run/test use — but only when it advances the
+        // manifest: a project whose rows were served is the one the manifest
+        // already describes, so there is nothing to store, and skipping keeps
+        // the no-op check emit-free. Seeding is an optimization: a failed
+        // emit on a diagnostics-clean project is logged, never surfaced as a
+        // check failure.
         if let Some(ctx) = cache {
-            let should_seed = reuse_plan
-                .as_ref()
-                .is_none_or(|plan| !plan.dirty_files.is_empty());
-            if should_seed {
-                match crate::bytecode_cache::compile_program_artifacts(
-                    db,
-                    package,
-                    cache.as_ref(),
-                    reuse_plan.as_ref(),
-                ) {
-                    Ok(compiled) => {
+            if served.is_none() {
+                match crate::bytecode_cache::compile_program(db, package, cache.as_ref()) {
+                    Ok(program) => {
                         let fresh = fresh_diagnostics
                             .as_ref()
                             .expect("a cache is present, so fresh diagnostics were computed");
                         ctx.verify_and_store(
                             &session,
-                            &compiled,
+                            &program,
                             fresh,
-                            reuse_plan.as_ref(),
+                            served.as_ref(),
                             stdlib_interface_hit,
                         )?;
                     }

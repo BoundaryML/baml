@@ -5,15 +5,14 @@
 //! place instead of drifting between per-file copies.
 
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use baml_db::{ProjectDatabase, SourceFile};
+use baml_db::ProjectDatabase;
 
 use crate::{
-    bytecode_cache::{CacheContext, compile_program_artifacts},
+    bytecode_cache::{CacheContext, compile_program},
     project_load::{self, ResolvedProject},
 };
 
@@ -32,13 +31,13 @@ pub(crate) fn cache_disabled() -> bool {
 /// verbatim prefix). `ProjectDatabase` canonicalizes both the workspace root and
 /// every source path, but only when they exist on disk: db1 is built before the
 /// cache dir exists (root canonicalize is a no-op fallback), then
-/// `store_artifacts_with_manifest` materializes the root, so db2's `add_source_root`
+/// `store_program_and_manifest` materializes the root, so db2's `add_source_root`
 /// *does* canonicalize it — while the in-memory `.baml` files never exist to
 /// canonicalize. If the base held an unresolved symlink, the root would then
 /// gain a resolved prefix the file paths lack, `strip_prefix` would fail, every
-/// rel_path would come out absolute, the reuse plan would collapse to `None`,
-/// and `plan.dirty_files` would be empty (macOS/Windows only; `/tmp` on Linux
-/// has no symlink so it was silently fine). Canonicalizing the base up front
+/// rel_path would come out absolute and no served row would match its file
+/// (macOS/Windows only; `/tmp` on Linux has no symlink so it was silently
+/// fine). Canonicalizing the base up front
 /// keeps the root idempotent under `canonicalize`, so db1 and db2 agree on every
 /// platform.
 pub(crate) fn unique_root(prefix: &str) -> PathBuf {
@@ -60,9 +59,10 @@ pub(crate) fn resolved(root: &Path, files: &[(&str, &str)]) -> ResolvedProject {
     }
 }
 
-/// Compile `files` at `root` and persist the v1 manifest + per-file units — the
-/// setup every reuse-plan scenario runs before editing. Returns the v1 database
-/// and cache context for the callers that assert against them.
+/// Compile `files` at `root` and persist the v1 program, package entries, and
+/// manifest — the setup every warm-path scenario runs before reopening.
+/// Returns the v1 database and cache context for the callers that assert
+/// against them.
 pub(crate) fn compile_and_store_v1(
     root: &Path,
     files: &[(&str, &str)],
@@ -71,24 +71,11 @@ pub(crate) fn compile_and_store_v1(
     let r1 = resolved(root, files);
     let (db1, pkg1) = project_load::build_db_from_sources(&r1, |_| {});
     let ctx1 = CacheContext::open(&r1).expect("cache opens");
-    let compiled =
-        compile_program_artifacts(&db1, pkg1, Some(&ctx1), None).expect("v1 compile succeeds");
+    let program = compile_program(&db1, pkg1, Some(&ctx1)).expect("v1 compile succeeds");
     let fresh1 = ctx1
         .collect_diagnostics_incremental(&db1, pkg1, None)
         .fresh_by_file;
-    ctx1.store_artifacts_with_manifest(&db1, pkg1, &compiled, &fresh1, None)
+    ctx1.store_program_and_manifest(&db1, pkg1, &program, &fresh1, None)
         .expect("v1 manifest stored");
     (db1, ctx1)
-}
-
-/// The basenames of a reuse plan's dirty files.
-pub(crate) fn dirty_basenames(dirty_files: &[SourceFile], db: &ProjectDatabase) -> HashSet<String> {
-    dirty_files
-        .iter()
-        .filter_map(|sf| {
-            sf.path(db)
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-        })
-        .collect()
 }

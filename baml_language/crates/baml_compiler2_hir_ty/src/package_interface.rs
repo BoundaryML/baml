@@ -1028,6 +1028,18 @@ pub fn export_interface(
         .unwrap_or_else(|never| match never {})
 }
 
+/// The digest of `root`'s exported interface: sha256 over the serialized
+/// [`PackageInterface`] a dependent compiles against, spelled as
+/// [`export_interface`] spells it. What a compiled output's dependency on
+/// `root` is a function of — a change to `root` that leaves this digest
+/// alone cannot change what its dependents compile to.
+pub fn interface_digest(db: &dyn baml_compiler2_hir::Db, root: baml_base::SourceRoot) -> [u8; 32] {
+    use sha2::Digest as _;
+    let bytes = borsh::to_vec(&export_interface(db, root))
+        .unwrap_or_else(|_| unreachable!("a PackageInterface serializes"));
+    sha2::Sha256::digest(&bytes).into()
+}
+
 /// A file's callable-throws fragment spelled for the wire, as the
 /// incremental cache persists it (see [`export_interface`]).
 pub fn export_callable_throws_fragment(

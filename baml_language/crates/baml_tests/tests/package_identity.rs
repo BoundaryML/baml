@@ -11,9 +11,12 @@
 
 use baml_base::{Dependency, Name, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, Severity};
-use baml_compiler2_emit::{LoweringError, generate_project_bytecode};
+use baml_compiler2_emit::{LoweringError, OptLevel};
 use baml_compiler2_hir::package::{SpellingCollision, spelling, spelling_within};
-use baml_db::{ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics};
+use baml_db::{
+    CompileProgramError, ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics,
+    compile_program,
+};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::Object;
 
@@ -149,7 +152,8 @@ fn emit_keeps_same_named_declarations_apart() {
     db.file("main.baml", "class Point { y string }\n");
     assert_clean(&db);
 
-    let program = generate_project_bytecode(&db, workspace).expect("two same-named classes emit");
+    let program =
+        compile_program(&db, workspace, OptLevel::Two).expect("two same-named classes emit");
     let tags: Vec<_> = program
         .objects
         .iter()
@@ -203,7 +207,7 @@ fn unnamed_packages_collide_only_within_one_program() {
     assert_eq!(name.as_str(), "user");
     assert_eq!(roots.len(), 3);
     assert!(spelling_within(&db, workspace).collisions().is_empty());
-    generate_project_bytecode(&db, workspace).expect("the workspace's world holds no clash");
+    compile_program(&db, workspace, OptLevel::Two).expect("the workspace's world holds no clash");
 }
 
 #[test]
@@ -263,8 +267,8 @@ fn a_shared_spelling_within_one_program_is_refused() {
     assert_eq!(name.as_str(), "lib");
     assert_eq!(roots.len(), 2);
 
-    match generate_project_bytecode(&db, workspace) {
-        Err(LoweringError::Internal(message)) => assert!(
+    match compile_program(&db, workspace, OptLevel::Two) {
+        Err(CompileProgramError::Emit(LoweringError::Internal(message))) => assert!(
             message.contains("spelled `lib`"),
             "the refusal names the shared spelling: {message}"
         ),
@@ -323,8 +327,8 @@ fn an_unnamed_package_reached_under_two_names_is_a_collision() {
     assert_eq!(names, ["first", "second"]);
     assert!(
         matches!(
-            generate_project_bytecode(&db, workspace),
-            Err(LoweringError::Internal(_))
+            compile_program(&db, workspace, OptLevel::Two),
+            Err(CompileProgramError::Emit(LoweringError::Internal(_)))
         ),
         "one root cannot be spelled two ways in one program"
     );

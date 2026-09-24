@@ -17,8 +17,9 @@
 //! 2. [`ProjectSession::try_cached_program`] — the whole-program hit for
 //!    executing commands (`run`/`test`/`pack`); called *before* warm prep so
 //!    a hit skips it entirely.
-//! 3. [`ProjectSession::warm_prep`] — stdlib-interface seed + per-file reuse
-//!    plan (throw facts, callable-throws fragments, diagnostics blobs).
+//! 3. [`ProjectSession::warm_prep`] — stdlib-interface seed + the served
+//!    check rows (throw facts, callable-throws fragments, diagnostics blobs)
+//!    of an unchanged project.
 //! 4. [`ProjectSession::prime`] — parallel per-file semantic-index prime for
 //!    commands that query whole-package aggregates without running the check
 //!    collectors (which prime internally): `generate`.
@@ -29,7 +30,7 @@ use anyhow::Result;
 use baml_db::{ProjectDatabase, SourceRoot};
 
 use crate::{
-    bytecode_cache::{CacheContext, ReusePlan},
+    bytecode_cache::{CacheContext, ServedChecks},
     project_load::{ResolvedProject, build_db_from_sources, resolve_project_sources, workspace_db},
 };
 
@@ -47,7 +48,9 @@ pub(crate) enum CacheUse {
 
 /// The state of the warm-database preamble after [`ProjectSession::warm_prep`].
 pub(crate) struct SessionWarmth {
-    pub(crate) reuse_plan: Option<ReusePlan>,
+    /// The served check rows (`None` when the project changed since the last
+    /// compile, so every file is checked honestly).
+    pub(crate) served: Option<ServedChecks>,
     /// Whether the stdlib typed interface was served from the cache —
     /// storing commands skip re-writing it in that case.
     pub(crate) stdlib_interface_hit: bool,
@@ -134,51 +137,20 @@ impl ProjectSession {
         Some(program)
     }
 
-    /// Seed the stdlib typed interface and prepare the per-file reuse plan —
+    /// Seed the stdlib typed interface and install the served check rows —
     /// the identical warm-database setup for every cache-participating
     /// command. A no-op (all-`None`) session without a cache.
     pub(crate) fn warm_prep(&mut self) -> SessionWarmth {
         let Some(ctx) = &self.cache else {
             return SessionWarmth {
-                reuse_plan: None,
+                served: None,
                 stdlib_interface_hit: false,
             };
         };
         let prep = ctx.prepare_warm_db(&mut self.db, self.package);
         SessionWarmth {
-            reuse_plan: prep.reuse_plan,
+            served: prep.served,
             stdlib_interface_hit: prep.stdlib_interface_hit,
-        }
-    }
-
-    /// Variant of [`Self::warm_prep`] for read-only introspection
-    /// (`generate`): installs the stdlib-interface seed always, and
-    /// the per-file throws seeds only on a **no-delta** plan — where they are
-    /// byte-for-byte the stored values and the serve-time gate is a proven
-    /// tautology. On a project with edits, introspection simply derives
-    /// honestly (no seeds, no gate, no staleness surface); the parallel
-    /// index prime keeps that fast.
-    pub(crate) fn warm_prep_seeds_only(&mut self) -> SessionWarmth {
-        let Some(ctx) = &self.cache else {
-            return SessionWarmth {
-                reuse_plan: None,
-                stdlib_interface_hit: false,
-            };
-        };
-        let stdlib_interface_hit = ctx.seed_stdlib_interface(&mut self.db);
-        let reuse_plan = ctx.plan_reuse(&self.db, self.package).and_then(|mut plan| {
-            if !plan.no_delta {
-                return None;
-            }
-            self.db
-                .set_seeded_throw_facts(std::mem::take(&mut plan.seeded_throw_facts));
-            self.db
-                .set_seeded_callable_throws(std::mem::take(&mut plan.seeded_callable_throws));
-            Some(plan)
-        });
-        SessionWarmth {
-            reuse_plan,
-            stdlib_interface_hit,
         }
     }
 

@@ -7,9 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    ProjectDatabase, SourceRoot, baml_compiler_diagnostics::Severity, baml_compiler2_emit,
-};
+use baml_db::{ProjectDatabase, SourceRoot, baml_compiler_diagnostics::Severity};
 use bex_engine::{
     BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
     logger::TraceLogger,
@@ -355,7 +353,7 @@ impl RunArgs {
         package: SourceRoot,
         argv: Vec<String>,
     ) -> Result<BexEngine> {
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(db, package)
+        let bytecode = crate::bytecode_cache::compile_program(db, package, None)
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         BexEngine::new_with_runtime_compiler(
             bytecode,
@@ -867,16 +865,15 @@ impl RunArgs {
         }
 
         // Seed the stdlib typed interface before the first typecheck query (a
-        // build constant, so it applies to every compile independent of the reuse
-        // plan and is gated off under verify) and prepare the per-file reuse plan
-        // — the same warm-database setup `check` and `test` run.
+        // build constant, so it applies to every compile and is gated off under
+        // verify) and install the served check rows — the same warm-database
+        // setup `check` and `test` run.
         let warmth = session.warm_prep();
-        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
-        if let Some(plan) = &reuse_plan {
+        let (served, stdlib_interface_hit) = (warmth.served, warmth.stdlib_interface_hit);
+        if let Some(served) = &served {
             self.vlog(format_args!(
-                "Per-file reuse: {} clean, {} dirty",
-                plan.clean_files.len(),
-                plan.dirty_files.len()
+                "Check rows served for {} file(s)",
+                served.diagnostics.len()
             ));
         }
         let db = &session.db;
@@ -887,11 +884,11 @@ impl RunArgs {
         // the point. Compile/count progress belongs to `check` and `generate`.
         //
         // With a cache, gate diagnostics through the incremental collector: it
-        // checks only the reuse plan's dirty files and serves clean files from
-        // their cached blobs, returning the fresh per-file blobs to persist.
-        // Without a cache, run the honest full check (no blobs to store).
+        // serves the check rows of an unchanged project and checks every file
+        // otherwise, returning the fresh per-file blobs to persist. Without a
+        // cache, run the honest full check (no blobs to store).
         let fresh_diagnostics = if let Some(ctx) = cache {
-            let incremental = ctx.collect_diagnostics_incremental(db, package, reuse_plan.as_ref());
+            let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
             self.render_and_bail_on_errors(
                 &incremental.merged,
                 db,
@@ -904,28 +901,22 @@ impl RunArgs {
             None
         };
         self.vlog(format_args!("Compiling..."));
-        let compiled = crate::bytecode_cache::compile_program_artifacts(
-            db,
-            package,
-            cache.as_ref(),
-            reuse_plan.as_ref(),
-        )
-        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
                 &session,
-                &compiled,
+                &program,
                 fresh,
-                reuse_plan.as_ref(),
+                served.as_ref(),
                 stdlib_interface_hit,
             )?;
         }
-        // Warm-incremental evidence: with the diagnostics cache serving clean
-        // files, this counts only the dirty files' scopes; a cold compile walks
-        // every scope.
+        // Warm evidence: with the check rows served this is 0; a cold compile
+        // walks every scope.
         crate::bytecode_cache::cache_debug(format_args!(
             "body inferences: {} this process",
             baml_db::baml_compiler2_hir_ty::infer::body_inferences()
@@ -936,7 +927,6 @@ impl RunArgs {
             "stdlib interface: {} honest derivation(s) this process",
             baml_db::baml_compiler2_hir_ty::package_interface::stdlib_honest_derivations()
         ));
-        let program = compiled.program;
         let engine = BexEngine::new_with_runtime_compiler(
             program,
             Arc::new(sys_native::SysOps::native()),

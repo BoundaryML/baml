@@ -332,3 +332,16 @@ pub struct InitTail {
     /// Where the test part of [`Self::slot_objects`] begins.
     pub test_slots_start: u32,
 }
+
+/// One package's compiled output for one link: what the emitter produces for
+/// a package and the linker consumes for it. Carries no package identity —
+/// the driver that emits or loads it knows which package it is for — and
+/// every reference into another package is by dependency slot and
+/// declaration path, so it is a pure function of the package's sources and
+/// its dependencies' interfaces.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct EmittedPackage {
+    pub unit: CompilationUnit,
+    pub record: PackageRecord,
+    pub tail: Option<InitTail>,
+}

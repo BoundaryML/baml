@@ -8,6 +8,3 @@ export object user.level_name = Code(2)
 export object user.render = Code(7)
 export global user.level_name = 0
 export global user.render = 1
-references Minted
-references level_name
-bakes type layout: true

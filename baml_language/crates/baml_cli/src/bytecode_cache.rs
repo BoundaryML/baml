@@ -1,5 +1,24 @@
 //! CLI wiring for the content-addressed bytecode cache (`bex_cache`).
 //!
+//! Three tiers, each keyed by every input its value is a function of (the Go
+//! model: no invalidation logic, only keys):
+//!
+//! - The whole-program `Program` blob, keyed by every compile input
+//!   ([`compute_key`]) — the warm hit for `run`/`test`/`pack`, which skips
+//!   the database entirely.
+//! - One output per PACKAGE ([`EmittedPackage`]: unit, record, tail), keyed
+//!   by the package's own sources and its dependencies' interface digests
+//!   ([`package_key`]). A compile emits only the packages the cache does not
+//!   hold and links the rest: the stdlib's packages are served on every
+//!   compile after the first on a toolchain, whatever project is being built,
+//!   and the user package whenever its sources are unchanged.
+//! - The check layer's per-file rows (diagnostics blobs, throw facts,
+//!   `callable_throws` fragments) in the project manifest, served only when
+//!   the project is byte-identical to the compile that wrote them — a file's
+//!   diagnostics depend on every declaration it resolves, not on its own
+//!   bytes alone, so nothing short of an identical program proves a row
+//!   current.
+//!
 //! Knobs:
 //! - `BAML_NO_BYTECODE_CACHE=1` — disable lookups and writes entirely.
 //! - `BAML_CACHE_DIR=<path>` — cache location override (default:
@@ -12,99 +31,61 @@
 //!   diagnostics oracles. Too expensive to leave always-on.
 //! - `BAML_CACHE_SAMPLED_VERIFY` — sampled field verification, the always-on
 //!   complement to full verify (rustc's "1-in-N compiles verifies one
-//!   artifact" hardening). On a warm incremental compile that *serves* cached
-//!   artifacts, ~1 run in 32 picks one served clean file and checks its served
-//!   diagnostics blob and `callable_throws` fragment against an honest,
-//!   un-seeded re-derivation — after the compile result is already produced, so
-//!   the added latency is one file's honest work. A mismatch is a hard error
+//!   artifact" hardening). On a warm compile that *serves* the check rows,
+//!   ~1 run in 32 picks one served file and checks its served diagnostics
+//!   blob and `callable_throws` fragment against an honest, un-seeded
+//!   re-derivation — after the compile result is already produced, so the
+//!   added latency is one file's honest work. A mismatch is a hard error
 //!   (silent staleness must be LOUD). `=0` disables; `=1` forces every warm
 //!   compile (tests); default is 1/32. See [`sampled_pick_from_key`] for the
 //!   key-derived, RNG-free sampling decision.
-//! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving clean
-//!   files from the per-file diagnostics cache (reuse / throws-seed unaffected),
-//!   to isolate that feature's win. Also forces the builtin (stdlib) files to be
-//!   checked honestly instead of served from the per-toolchain
-//!   stdlib-diagnostics blob — one knob governs all diagnostics serving.
+//! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving the
+//!   check rows, to isolate that feature's win. Also forces the builtin
+//!   (stdlib) files to be checked honestly instead of served from the
+//!   per-toolchain stdlib-diagnostics blob — one knob governs all
+//!   diagnostics serving.
 //! - `BAML_NO_CALLABLE_THROWS_CACHE=1` — empty the per-function `callable_throws`
-//!   seed so every function infers its throws honestly (reuse / diagnostics
-//!   serving unaffected), to isolate the Phase 2 fragment seed's win.
+//!   seed so every function infers its throws honestly (diagnostics serving
+//!   unaffected), to isolate the fragment seed's win.
 //! - `BAML_NO_DISCOVERY_CACHE=1` — never serve `baml test --list` from the
 //!   cached discovery output (the flattened test list), forcing the honest
 //!   engine-boot + in-VM discovery every time, to A/B the discovery cache's win.
-//!   The rest of the cache (bytecode reuse, diagnostics, throws) is unaffected.
+//!   The rest of the cache is unaffected.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use baml_db::{
-    ProjectDatabase, SourceFile, SourceRoot,
-    baml_compiler2_emit::{
-        LoweringError, OptLevel, generate_project_bytecode,
-        generate_project_bytecode_with_reuse_artifacts,
-        generate_project_bytecode_with_stdlib_artifacts, generate_stdlib_program,
-        reuse_throws_mismatches,
-    },
-    baml_compiler2_hir,
+    CompileProgramError, PackageCache, ProjectDatabase, SourceFile, SourceRoot,
+    baml_compiler2_emit::OptLevel, baml_compiler2_hir::package::edge_table,
+    baml_compiler2_hir_ty::package_interface::interface_digest,
 };
+use baml_linker_types::EmittedPackage;
 use bex_cache::{
-    BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, content_hash, env_flag, manifest_key, rel_path, stdlib_diagnostics_key,
-    stdlib_interface_key, test_discovery_key,
+    BytecodeCache, CacheKey, KeyInputs, ManifestFile, PackageKeyInputs, ProjectManifest,
+    compiler_fingerprint, compute_key, env_flag, manifest_key, package_key, rel_path,
+    stdlib_diagnostics_key, stdlib_interface_key, test_discovery_key,
 };
-use bex_vm_types::{Program, legacy_unit::CompilationUnit};
+use bex_vm_types::Program;
 
-use crate::{
-    file_signature::{file_layout_hash, file_signature_hash},
-    project_load::ResolvedProject,
-    project_session::ProjectSession,
-};
+use crate::{project_load::ResolvedProject, project_session::ProjectSession};
 
 /// The optimization level every CLI compile uses (the emit default).
 const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
-
-/// Sentinel entry injected into a file's `referenced_names` when its compiled
-/// bytecode bakes in a type's *layout* through an operand that carries no
-/// recoverable type reference — a positional field offset (`LoadField`), an
-/// enum discriminant (`Discriminant`/`JumpTable`), a type-tag/union dispatch,
-/// or a virtual-dispatch slot (`VirtualCall`). Paired with a matching sentinel
-/// added to `changed_names` whenever any *type* signature changes, it forces
-/// such a file to be re-lowered on any type-layout change. This is the
-/// conservative fallback for layout dependencies whose receiver type isn't
-/// recoverable without full type inference (e.g. `let p = mk(); p.x`, where
-/// `p`'s class is inferred and named nowhere in the file). The bit itself is
-/// recorded at emit and carried on the file's unit
-/// ([`CompilationUnit::bakes_type_layout`]).
-///
-/// The value is deliberately not a valid identifier (it holds `\0`, `:`, `-`),
-/// so it can never collide with a real last-segment item name, with a
-/// `syntactic_type_names` token, or with anything `defined_names` produces.
-const LAYOUT_SENTINEL: &str = "\u{0}::any-type-layout::";
-
-/// Sentinel entry injected into a file's `referenced_names` when the file
-/// participates in interface-coherence checking (it declares an `impl`, an
-/// out-of-body `implements … for …`, or a class `implements` block). Paired
-/// with a matching sentinel added to `changed_names` whenever any dirty, added,
-/// or removed file carries such a construct, it re-checks every
-/// coherence-participating file together whenever the package's impl set moves.
-///
-/// This closes the `OverlappingImplements` (E0132) hole: a conflicting `impl`
-/// added in one file surfaces its other half in a *different* file whose name
-/// set never changed, so the name-based dirty propagation alone would leave that
-/// half stale. Coherence-free projects never store the sentinel and pay nothing.
-/// Same non-identifier shape as [`LAYOUT_SENTINEL`], so it can never collide.
-const IMPL_SENTINEL: &str = "\u{0}::any-impl-coherence::";
 
 /// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {
     cache: BytecodeCache,
     /// Whole-project Program, keyed by sources + options + compiler build.
     key: CacheKey,
-    /// Precompiled stdlib slice, keyed by compiler build + opt level only.
-    stdlib_key: CacheKey,
     /// Cached stdlib typed-interface blob (B-694), keyed by compiler build +
-    /// opt level only — like `stdlib_key`, the stdlib is a build constant.
+    /// opt level only — the stdlib is a build constant.
     stdlib_interface_key: CacheKey,
     /// Cached stdlib **builtin diagnostics** blob, keyed by compiler build + opt
     /// level only — the builtin diagnostic set is a build constant (empty for a
@@ -117,6 +98,16 @@ pub(crate) struct CacheContext {
     /// list), derived from `key` — a warm `--list` serves it and skips engine
     /// boot + in-VM discovery entirely.
     test_discovery_key: CacheKey,
+    /// Identity of the compiler build: one half of every package key.
+    fingerprint: [u8; 32],
+    /// Interface digests of the packages this context's package keys depend
+    /// on, memoized per context — a digest serializes the whole interface.
+    digests: Mutex<HashMap<SourceRoot, [u8; 32]>>,
+    /// How many packages this context served from the cache, and how many it
+    /// saw emitted fresh — the warm-path evidence the debug channel prints
+    /// and the tests assert.
+    packages_served: AtomicUsize,
+    packages_emitted: AtomicUsize,
 }
 
 impl CacheContext {
@@ -152,7 +143,6 @@ impl CacheContext {
         Some(CacheContext {
             cache: BytecodeCache::open(dir).with_remote_from_env(),
             key,
-            stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
             stdlib_interface_key: stdlib_interface_key(&fingerprint, CLI_OPT_LEVEL as u8),
             stdlib_diagnostics_key: stdlib_diagnostics_key(&fingerprint, CLI_OPT_LEVEL as u8),
             manifest_key: manifest_key(
@@ -162,6 +152,10 @@ impl CacheContext {
                 resolved.manifest.as_deref(),
             ),
             test_discovery_key: test_discovery_key(key.as_bytes()),
+            fingerprint,
+            digests: Mutex::new(HashMap::new()),
+            packages_served: AtomicUsize::new(0),
+            packages_emitted: AtomicUsize::new(0),
         })
     }
 
@@ -237,28 +231,26 @@ impl CacheContext {
 
     /// Isolation toggle for measuring the stdlib-interface cache's win:
     /// `BAML_NO_STDLIB_INTERFACE_CACHE=1` disables *only* the interface seed
-    /// (leaving the bytecode slice / per-file reuse intact) so a with/without
+    /// (leaving the package and check-row tiers intact) so a with/without
     /// timing comparison isolates B-694. `BAML_NO_BYTECODE_CACHE` already
     /// disables the whole cache, so this is the finer-grained knob.
     fn stdlib_interface_cache_disabled() -> bool {
         env_flag("BAML_NO_STDLIB_INTERFACE_CACHE")
     }
 
-    /// Isolation toggle for measuring the per-file diagnostics cache's win:
-    /// `BAML_NO_DIAGNOSTICS_CACHE=1` drops the serve plan so every file is
-    /// re-checked (reuse / throws-seed still active), leaving `plan_reuse`
-    /// otherwise intact. `BAML_NO_BYTECODE_CACHE` already disables the whole
-    /// cache, so this is the finer-grained knob.
+    /// Isolation toggle for measuring the check-row cache's win:
+    /// `BAML_NO_DIAGNOSTICS_CACHE=1` drops the served rows so every file is
+    /// re-checked. `BAML_NO_BYTECODE_CACHE` already disables the whole cache,
+    /// so this is the finer-grained knob.
     fn diagnostics_cache_disabled() -> bool {
         env_flag("BAML_NO_DIAGNOSTICS_CACHE")
     }
 
     /// Isolation toggle for measuring the `callable_throws` seed's win:
-    /// `BAML_NO_CALLABLE_THROWS_CACHE=1` empties `plan.seeded_callable_throws`
-    /// so every function infers its throws honestly (the last cold
-    /// `infer_scope_types` pull a dirty file forces on its clean callees),
-    /// leaving reuse / diagnostics serving intact. `BAML_NO_BYTECODE_CACHE`
-    /// already disables the whole cache, so this is the finer-grained knob.
+    /// `BAML_NO_CALLABLE_THROWS_CACHE=1` empties the seed so every function
+    /// infers its throws honestly, leaving diagnostics serving intact.
+    /// `BAML_NO_BYTECODE_CACHE` already disables the whole cache, so this is
+    /// the finer-grained knob.
     fn callable_throws_cache_disabled() -> bool {
         env_flag("BAML_NO_CALLABLE_THROWS_CACHE")
     }
@@ -267,9 +259,7 @@ impl CacheContext {
     /// `load_raw` + borsh-decode into `package-name -> borsh(PackageInterface)`.
     /// `None` on a miss, a decode failure, or when the interface cache is
     /// disabled — every case falls through to honest stdlib derivation.
-    pub(crate) fn load_stdlib_interface(
-        &self,
-    ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
+    pub(crate) fn load_stdlib_interface(&self) -> Option<BTreeMap<String, Vec<u8>>> {
         if Self::stdlib_interface_cache_disabled() {
             return None;
         }
@@ -284,7 +274,7 @@ impl CacheContext {
         if Self::stdlib_interface_cache_disabled() {
             return;
         }
-        let blob = extract_stdlib_interface(db);
+        let blob = baml_db::stdlib_prefix::stdlib_interfaces(db);
         self.store_encoded(&self.stdlib_interface_key, &blob, "stdlib interface");
     }
 
@@ -302,7 +292,7 @@ impl CacheContext {
         let Some(cached) = self.load_raw_stdlib_interface_for_verify() else {
             return Ok(());
         };
-        let derived = extract_stdlib_interface(db);
+        let derived = baml_db::stdlib_prefix::stdlib_interfaces(db);
         for (name, derived_bytes) in &derived {
             if let Some(cached_bytes) = cached.get(name) {
                 if cached_bytes != derived_bytes {
@@ -322,9 +312,7 @@ impl CacheContext {
     /// Read the cached interface blob for the verify oracle, bypassing the
     /// `BAML_NO_STDLIB_INTERFACE_CACHE` disable (verify must still compare
     /// against whatever is on disk).
-    fn load_raw_stdlib_interface_for_verify(
-        &self,
-    ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
+    fn load_raw_stdlib_interface_for_verify(&self) -> Option<BTreeMap<String, Vec<u8>>> {
         self.load_decoded(&self.stdlib_interface_key, "stdlib interface")
     }
 
@@ -434,9 +422,8 @@ impl CacheContext {
     /// Isolation / A-B toggle for the `--list` discovery cache:
     /// `BAML_NO_DISCOVERY_CACHE=1` disables *only* serving/writing the flattened
     /// test list, so `--list` always boots the engine and discovers honestly,
-    /// leaving bytecode reuse / diagnostics / throws seeding intact.
-    /// `BAML_NO_BYTECODE_CACHE` already disables the whole cache, so this is the
-    /// finer-grained knob.
+    /// leaving the other tiers intact. `BAML_NO_BYTECODE_CACHE` already
+    /// disables the whole cache, so this is the finer-grained knob.
     fn discovery_cache_disabled() -> bool {
         env_flag("BAML_NO_DISCOVERY_CACHE")
     }
@@ -503,255 +490,186 @@ impl CacheContext {
     }
 }
 
-/// Derive and borsh-serialize each stdlib package's `PackageInterface` from a
-/// compiled database, keyed by package name. On a warm database the query
-/// returns the seed verbatim, so re-serializing reproduces the same bytes
-/// (idempotent); on a cold database it materializes the interface once.
-fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
-    use baml_db::baml_compiler2_hir_ty::package_interface::export_interface;
-    let mut out = std::collections::BTreeMap::new();
-    for root in db.source_roots() {
-        if root.kind(db) != baml_db::SourceRootKind::Stdlib {
-            continue;
-        }
-        let name = root
-            .self_name(db)
-            .unwrap_or_else(|| unreachable!("stdlib roots are named"));
-        let iface = export_interface(db, root);
-        match borsh::to_vec(&iface) {
-            Ok(bytes) => {
-                out.insert(name.to_string(), bytes);
-            }
-            Err(e) => cache_debug(format_args!("stdlib interface serialize `{name}`: {e}")),
-        }
+// ── The per-package tier ─────────────────────────────────────────────────────
+
+impl CacheContext {
+    /// The key of `root`'s output at `opt`: its own sources by package-relative
+    /// path, and the interface digest of every package it reaches by the edge
+    /// name it reaches it under (see [`package_key`]).
+    pub(crate) fn package_key(
+        &self,
+        db: &dyn baml_db::baml_compiler2_hir::Db,
+        root: SourceRoot,
+        opt: OptLevel,
+    ) -> CacheKey {
+        let root_path = root.path(db);
+        let files: Vec<(String, &str)> = root
+            .files(db)
+            .iter()
+            .map(|file| (rel_path(root_path, &file.path(db)), file.text(db).as_str()))
+            .collect();
+        let dependencies: Vec<(String, [u8; 32])> = edge_table(db, root)
+            .into_iter()
+            .map(|(edge, dependency)| (edge.to_string(), self.interface_digest(db, dependency)))
+            .collect();
+        package_key(&PackageKeyInputs {
+            compiler_fingerprint: self.fingerprint,
+            opt_level: opt as u8,
+            files: &files,
+            dependencies: &dependencies,
+        })
     }
-    out
+
+    fn interface_digest(
+        &self,
+        db: &dyn baml_db::baml_compiler2_hir::Db,
+        root: SourceRoot,
+    ) -> [u8; 32] {
+        let mut digests = self
+            .digests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *digests
+            .entry(root)
+            .or_insert_with(|| interface_digest(db, root))
+    }
+
+    /// How many packages this context served from the cache so far.
+    pub(crate) fn packages_served(&self) -> usize {
+        self.packages_served.load(Ordering::Relaxed)
+    }
+
+    /// How many packages this context saw emitted fresh so far.
+    pub(crate) fn packages_emitted(&self) -> usize {
+        self.packages_emitted.load(Ordering::Relaxed)
+    }
 }
 
-/// Compile the project, reusing (or materializing) the precompiled stdlib
-/// slice when a cache is available.
+/// A package's output is served by its key and offered back under it. Under
+/// `BAML_CACHE_VERIFY` nothing is served — the tripwire exercises the full
+/// compile path — but everything emitted is still stored.
+impl PackageCache for CacheContext {
+    fn load(
+        &self,
+        db: &dyn baml_db::baml_compiler2_hir::Db,
+        root: SourceRoot,
+        opt: OptLevel,
+    ) -> Option<EmittedPackage> {
+        if Self::verify_enabled() {
+            return None;
+        }
+        let emitted = self
+            .cache
+            .load_package_shared(&self.package_key(db, root, opt))?;
+        self.packages_served.fetch_add(1, Ordering::Relaxed);
+        cache_debug(format_args!("package served: {}", root.path(db).display()));
+        Some(emitted)
+    }
+
+    fn store(
+        &self,
+        db: &dyn baml_db::baml_compiler2_hir::Db,
+        root: SourceRoot,
+        opt: OptLevel,
+        emitted: &EmittedPackage,
+    ) {
+        self.packages_emitted.fetch_add(1, Ordering::Relaxed);
+        let key = self.package_key(db, root, opt);
+        if let Err(e) = self.cache.store_package_shared(&key, emitted) {
+            cache_debug(format_args!(
+                "package store failed for {}: {e}",
+                root.path(db).display()
+            ));
+        }
+    }
+}
+
+/// Compile the project: every package of its program served from the cache
+/// when the cache holds its current output, emitted fresh otherwise, and the
+/// outputs linked.
 ///
-/// The stdlib slice depends only on the compiler build + opt level — the Go
-/// model: compiled once per toolchain, ever, then spliced into every compile.
-/// Splice output is byte-identical to a full compile (enforced by the
-/// `emit_determinism` suite), so callers and the project-blob cache see no
-/// difference beyond speed. Any stdlib-entry problem falls back to compiling
-/// it fresh; a failed write just means rebuilding it next run.
+/// Served outputs are the cache's own contract (their keys cover every input
+/// they depend on), but a corrupt or forged entry that does not bind must
+/// never fail the user: a link error with a cache falls back to the fully
+/// honest compile, which reproduces a real error or the byte-identical
+/// program.
 pub(crate) fn compile_program(
     db: &ProjectDatabase,
     package: SourceRoot,
     cache: Option<&CacheContext>,
-    plan: Option<&ReusePlan>,
-) -> Result<Program, LoweringError> {
-    compile_program_artifacts(db, package, cache, plan).map(|artifacts| artifacts.program)
-}
-
-pub(crate) struct CompiledArtifacts {
-    pub(crate) program: Program,
-    pub(crate) units: CompiledUnits,
-}
-
-/// How a compile's symbolic units came to be — the store path persists fresh
-/// units for every file but may keep a reuse plan's unit-key POINTERS for
-/// clean files when the units were carried through a successful reuse.
-pub(crate) enum CompiledUnits {
-    /// Cache-less compile: units were never assembled (nothing stores them).
-    None,
-    /// Fresh full/splice compile: freshly decomposed alongside the program.
-    Fresh(Vec<CompilationUnit>),
-    /// Successful reuse compile: clean units carried from the plan.
-    Reused(Vec<CompilationUnit>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct CacheStoreStats {
-    pub(crate) unit_entries_written: usize,
-    pub(crate) manifest_entries_written: usize,
-}
-
-pub(crate) fn compile_program_artifacts(
-    db: &ProjectDatabase,
-    package: SourceRoot,
-    cache: Option<&CacheContext>,
-    plan: Option<&ReusePlan>,
-) -> Result<CompiledArtifacts, LoweringError> {
+) -> Result<Program, CompileProgramError> {
     let Some(ctx) = cache else {
-        return generate_project_bytecode(db, package).map(|program| CompiledArtifacts {
-            program,
-            units: CompiledUnits::None,
-        });
+        return baml_db::compile_program(db, package, CLI_OPT_LEVEL);
     };
-    let base = match ctx.cache.load_shared(&ctx.stdlib_key) {
-        Some(base) => base,
-        None => {
-            let base = generate_stdlib_program(db, CLI_OPT_LEVEL)?;
-            let _ = ctx.cache.store_shared(&ctx.stdlib_key, &base);
-            base
+    match baml_db::compile_program_with(db, package, CLI_OPT_LEVEL, ctx) {
+        Ok(program) => {
+            cache_debug(format_args!(
+                "packages: {} served, {} emitted",
+                ctx.packages_served(),
+                ctx.packages_emitted()
+            ));
+            Ok(program)
         }
-    };
-    if let Some(plan) = plan {
-        match generate_project_bytecode_with_reuse_artifacts(
-            db,
-            package,
-            CLI_OPT_LEVEL,
-            &base,
-            &plan.prev_units,
-            &plan.clean_files,
-        ) {
-            Ok((program, units)) => {
-                return Ok(CompiledArtifacts {
-                    program,
-                    units: CompiledUnits::Reused(units),
-                });
-            }
-            // A real compile error must surface — it is not a reuse problem.
-            Err(err @ LoweringError::ProjectHasErrors { .. }) => return Err(err),
-            // A corrupt/incompatible previous unit or an unrelocatable
-            // construct: fall back to the full (stdlib-spliced) compile, which
-            // is byte-identical. Never an error the user should see.
-            Err(other) => {
-                cache_debug(format_args!("units relink fell back: {other}"));
-            }
+        Err(CompileProgramError::Link(error)) => {
+            cache_debug(format_args!(
+                "served packages failed to link; recompiling honestly: {error}"
+            ));
+            baml_db::compile_program(db, package, CLI_OPT_LEVEL)
         }
+        Err(error) => Err(error),
     }
-    generate_project_bytecode_with_stdlib_artifacts(db, package, CLI_OPT_LEVEL, &base).map(
-        |(program, units)| CompiledArtifacts {
-            program,
-            units: CompiledUnits::Fresh(units),
-        },
-    )
 }
 
-/// The per-file reuse decision for one compile: which files' compiled
-/// bytecode can be spliced from the previous program, and which must be
-/// re-typechecked and re-lowered.
-pub(crate) struct ReusePlan {
-    /// Root-relative paths eligible for bytecode splice.
-    pub(crate) clean_files: HashSet<String>,
-    /// Files that must be re-typechecked (everything not clean). This is
-    /// also the diagnostics-gate set: a clean file references nothing whose
-    /// signature changed, so its diagnostics are identical to the previous
-    /// (error-free, or it wouldn't have been cached) compile.
-    pub(crate) dirty_files: Vec<SourceFile>,
-    /// The previous compile's symbolic units (B-693 Stage 3): clean files' units
-    /// are reused verbatim, the rest re-emitted, then linked.
-    pub(crate) prev_units: Vec<CompilationUnit>,
-    /// Content-addressed unit keys for the clean files in `prev_units`. The
-    /// store path copies these pointers into the next manifest without
-    /// serializing or probing unchanged units again.
-    pub(crate) unit_keys: HashMap<String, [u8; 32]>,
-    /// Per-file throw facts (full path → facts), to be seeded into the database
-    /// before compiling. Clean files' facts come from the manifest (their bodies
-    /// are never re-walked); dirty/added files' facts are the ones the dirty-set
-    /// pass already walked, folded in so the downstream demand hits the seed
-    /// instead of re-walking those bodies a second time.
-    pub(crate) seeded_throw_facts: std::collections::BTreeMap<
-        String,
-        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
-    >,
-    /// Per-function `callable_throws` seeds projected from the clean files'
-    /// cached interface fragments (Phase 2), keyed by full source path then by
-    /// item-tree `LocalItemId::as_u32`. Injected before the first typecheck so a
-    /// clean function's throws are served without inferring its (or any
-    /// transitively-clean callee's) body. Empty under
-    /// `BAML_NO_CALLABLE_THROWS_CACHE=1`.
-    pub(crate) seeded_callable_throws: std::collections::BTreeMap<
-        String,
-        std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
-    >,
-    /// Clean files' opaque diagnostics blobs carried from the previous manifest,
-    /// by rel_path. Rehydrated to serve those files' diagnostics without
-    /// re-checking, and copied verbatim into the next manifest.
-    pub(crate) clean_diagnostics: std::collections::BTreeMap<String, Vec<u8>>,
-    /// Clean files' `CallableThrowsFragment` blobs carried verbatim from the
-    /// previous manifest, by rel_path. The source of the `callable_throws`
-    /// seeds (so seeding needs no unit payloads) and of the next manifest's
-    /// fragment carry.
-    pub(crate) clean_fragments: std::collections::BTreeMap<String, Vec<u8>>,
-    /// True when the dirty partition found nothing changed: no dirty or added
-    /// files, and every manifest entry still present on disk. On this path the
-    /// serve-time throws gate is provably a tautology (the seeds being checked
-    /// are byte-for-byte the values the manifest was stored with, units are
-    /// content-addressed and written before the manifest, and the solve is a
-    /// deterministic pure function), so it is skipped — and unit payloads are
-    /// not loaded at all (nothing will be re-emitted or relinked from them).
-    pub(crate) no_delta: bool,
+// ── The check layer ──────────────────────────────────────────────────────────
+
+/// The previous compile's check rows, servable because the project is
+/// byte-identical to the compile that wrote them: every user file's
+/// diagnostics blob and `callable_throws` fragment, and the seeds the
+/// database installs before the first typecheck query.
+pub(crate) struct ServedChecks {
+    /// Every user file's cached diagnostics blob, by rel path. Rehydrated to
+    /// serve the file without re-checking, and copied verbatim into the next
+    /// manifest.
+    pub(crate) diagnostics: BTreeMap<String, Vec<u8>>,
+    /// Every user file's `CallableThrowsFragment` blob, by rel path — the
+    /// source of the `callable_throws` seeds, and what the sampled verify
+    /// compares against an honest derivation.
+    pub(crate) fragments: BTreeMap<String, Vec<u8>>,
+    /// Per-file throw facts (full path → facts), installed by
+    /// [`Self::install_seeds`].
+    throw_facts:
+        BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>>,
+    /// Per-function `callable_throws` seeds projected from `fragments`, keyed
+    /// by full source path then by item-tree `LocalItemId::as_u32`. Empty
+    /// under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
+    callable_throws: BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>>,
+}
+
+impl ServedChecks {
+    /// Install the type-inference seeds so no served file re-walks its bodies
+    /// to answer what it throws. The seeds are byte-for-byte the values the
+    /// manifest was stored with, and the solve that consumes them is a
+    /// deterministic pure function of the (identical) sources, so a served
+    /// value is exactly the honest one.
+    fn install_seeds(&mut self, db: &mut ProjectDatabase) {
+        db.set_seeded_throw_facts(std::mem::take(&mut self.throw_facts));
+        db.set_seeded_callable_throws(std::mem::take(&mut self.callable_throws));
+    }
 }
 
 /// The result of the warm-database preamble ([`CacheContext::prepare_warm_db`]).
 pub(crate) struct WarmPrep {
-    /// The prepared per-file reuse plan (`None` when nothing can be reused).
-    pub(crate) reuse_plan: Option<ReusePlan>,
+    /// The served check rows (`None` when the project changed since the last
+    /// compile, so every file is checked honestly).
+    pub(crate) served: Option<ServedChecks>,
     /// Whether the stdlib interface seed was served — run/test skip re-writing
     /// it in that case; `check` ignores this.
     pub(crate) stdlib_interface_hit: bool,
 }
 
-/// Install a reuse plan's type-inference seeds, then enforce its throws
-/// invariant before callers may serve cached diagnostics. Files that fail the
-/// invariant are demoted to dirty; the remaining clean units can still be
-/// reused. Any mismatch clears inference seeds so the diagnostic pass derives
-/// them honestly.
-pub(crate) fn prepare_reuse_plan(
-    db: &mut ProjectDatabase,
-    package: SourceRoot,
-    plan: Option<ReusePlan>,
-) -> Option<ReusePlan> {
-    let mut plan = plan?;
-    db.set_seeded_throw_facts(std::mem::take(&mut plan.seeded_throw_facts));
-    let callable_seeds = std::mem::take(&mut plan.seeded_callable_throws);
-    // No delta ⇒ the gate is a tautology: the seeds just installed are
-    // byte-for-byte the values the manifest was stored with (the store path
-    // persists `file_throw_facts` verbatim and units are content-addressed,
-    // written before the manifest that points at them), and the solve +
-    // runtime conversion the gate would re-run are deterministic pure
-    // functions of those inputs. Comparing a value against itself cannot
-    // demote anything, so skip the compare — it was the dominant cost of a
-    // warm no-op invocation (it derives `package_items`, i.e. re-parses the
-    // project). Any real edit, added or removed file takes the gate below.
-    if plan.no_delta {
-        db.set_seeded_callable_throws(callable_seeds);
-        return Some(plan);
-    }
-    // The gate's runtime-type conversion derives the package alias tables,
-    // which fold every file's semantic index. Prime the per-file indexes
-    // across workers first so that derivation is a cheap fold instead of a
-    // serial parse of the whole project under one salsa memo claim.
-    baml_db::prime_file_indexes_parallel(db);
-    let mismatches = reuse_throws_mismatches(db, package, &plan.prev_units, &plan.clean_files);
-    if mismatches.is_empty() {
-        db.set_seeded_callable_throws(callable_seeds);
-        return Some(plan);
-    }
-
-    // A throws mismatch is a fail-safe path. Keep unaffected bytecode units,
-    // but make every inference query honest for this invocation.
-    db.set_seeded_throw_facts(std::collections::BTreeMap::new());
-    db.set_seeded_callable_throws(std::collections::BTreeMap::new());
-    let root = package.path(db);
-    for (rel, detail) in mismatches {
-        cache_debug(format_args!("reuse demoted `{rel}`: {detail}"));
-        if !plan.clean_files.remove(&rel) {
-            continue;
-        }
-        plan.unit_keys.remove(&rel);
-        plan.clean_diagnostics.remove(&rel);
-        let full = root.join(&rel);
-        if let Some(file) = db.get_file(&full)
-            && !plan.dirty_files.contains(&file)
-        {
-            plan.dirty_files.push(file);
-        }
-    }
-    if plan.clean_files.is_empty() {
-        return None;
-    }
-    Some(plan)
-}
-
 /// Cache diagnostics to stderr, gated on `BAML_CACHE_DEBUG=1`. For support
-/// and perf triage: shows plan sizes, fallback reasons, and store failures
-/// without affecting normal output.
+/// and perf triage: shows what was served, fallback reasons, and store
+/// failures without affecting normal output.
 #[allow(clippy::print_stderr)] // opt-in debug channel (BAML_CACHE_DEBUG=1)
 pub(crate) fn cache_debug(args: std::fmt::Arguments<'_>) {
     if env_flag("BAML_CACHE_DEBUG") {
@@ -759,254 +677,9 @@ pub(crate) fn cache_debug(args: std::fmt::Arguments<'_>) {
     }
 }
 
-/// Last path segment of a dotted fq name (`user.ns.foo` → `foo`).
-fn last_segment(name: &str) -> &str {
-    name.rsplit('.').next().unwrap_or(name)
-}
-
-/// Last-segment names of every item `file` defines, from the HIR item tree.
-fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
-    use baml_compiler2_hir::{
-        contributions::Definition,
-        item_data::{
-            file_classes, file_enums, file_functions, file_interfaces, file_lets, file_type_aliases,
-        },
-    };
-    use baml_db::baml_compiler2_mir::definition_link_name;
-
-    let mut names: Vec<String> = Vec::new();
-    let push = |def, names: &mut Vec<String>| {
-        names.push(last_segment(&definition_link_name(db, def)).to_string());
-    };
-    for &loc in file_functions(db, file) {
-        push(Definition::Function(loc), &mut names);
-    }
-    for &loc in file_lets(db, file) {
-        push(Definition::Let(loc), &mut names);
-    }
-    for &loc in file_classes(db, file) {
-        push(Definition::Class(loc), &mut names);
-    }
-    for &loc in file_enums(db, file) {
-        push(Definition::Enum(loc), &mut names);
-    }
-    for &loc in file_interfaces(db, file) {
-        push(Definition::Interface(loc), &mut names);
-    }
-    // Type aliases are erased into their consumers (a non-recursive alias is
-    // expanded inline at every use), so an alias whose RHS changes must reach
-    // the change-propagation set by *name*: a consumer that named the alias
-    // would otherwise splice the stale expansion. `definition_link_name` handles
-    // `TypeAlias` like any other named item.
-    for &loc in file_type_aliases(db, file) {
-        push(Definition::TypeAlias(loc), &mut names);
-    }
-    names.sort_unstable();
-    names.dedup();
-    names
-}
-
-/// Add every named type in a single type annotation to `out`, keyed by the
-/// name's last path segment (matching `defined_names`/`changed_names`).
-///
-/// The HIR stores annotations as `baml_compiler2_ast::TypeExpr`, whose crate is
-/// not a direct dependency of `baml_cli`, so the enum can't be matched
-/// structurally here. Names are recovered from the annotation's canonical
-/// `Display` instead — see `syntactic_type_names` for why this over-approximate
-/// tokenization is sound.
-fn add_type_display<T: std::fmt::Display>(te: &T, out: &mut HashSet<String>) {
-    for token in te
-        .to_string()
-        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-    {
-        if token.is_empty()
-            || token.starts_with(|c: char| c.is_ascii_digit())
-            || is_builtin_type_word(token)
-        {
-            continue;
-        }
-        out.insert(token.to_string());
-    }
-}
-
-/// Primitive / structural keywords that `TypeExpr`'s `Display` emits (`int`,
-/// `map`, `throws`, …). None can name a user type, so dropping them just trims
-/// noise; keeping any would be harmless, since a token only ever *adds* a file
-/// to the dirty set (over-dirtying costs reuse, never correctness).
-fn is_builtin_type_word(word: &str) -> bool {
-    matches!(
-        word,
-        "int"
-            | "bigint"
-            | "float"
-            | "string"
-            | "bool"
-            | "null"
-            | "never"
-            | "void"
-            | "uint8array"
-            | "unknown"
-            | "type"
-            | "error"
-            | "map"
-            | "throws"
-    )
-}
-
-/// Last-segment type names *syntactically named* in `file`'s signatures and
-/// type-level annotations: function/method params, returns, `throws`, and
-/// generic bounds; class & interface field types; `implements`/`requires`/`for`
-/// targets; associated-type bounds/defaults; and — crucially — type-alias
-/// right-hand sides.
-///
-/// This complements the unit's emit-recorded reference edges
-/// ([`CompilationUnit::referenced_names`]), which only capture items codegen
-/// resolved to a baked operand (a callee's slot, a constructed class's object
-/// index). A file that touches a type purely through its *layout* —
-/// positional field access (`p.x` → `LoadField`), an enum variant match
-/// (`Discriminant`/`JumpTable`), a virtual call, or an inline-expanded type
-/// alias — resolves no such operand, so those references never enter the
-/// recorded set. Extracting the names written in the file's type annotations
-/// recovers every dependency that appears in a signature (the common case,
-/// and every empirically-reproduced miss: `diff(p: Point)`, `pay(m: Money)`).
-///
-/// Extraction is a deliberate over-approximation: tokenizing each annotation's
-/// `Display` also yields primitive keywords, generic-parameter names, and
-/// dotted-path prefixes. All are harmless — a spurious name only ever adds a
-/// file to the dirty set, never removes one — while every real type name is
-/// always present as an identifier run. The floor this guarantees: any file
-/// naming a changed type in a signature is dirtied.
-/// The firewall-`TypeRef` twin of [`add_type_display`]: render one type
-/// reference from an item's `type_refs` arena and tokenize its name into `out`.
-fn add_type_ref_display(
-    store: &baml_compiler2_hir::type_ref::TypeRefStore,
-    id: baml_compiler2_hir::type_ref::TypeRefId,
-    out: &mut HashSet<String>,
-) {
-    add_type_display(&store.display(id), out);
-}
-
-fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<String> {
-    use baml_compiler2_hir::item_data::{
-        ImplSubjectData, class_data, file_classes, file_functions, file_impls, file_interfaces,
-        file_type_aliases, function_data, impl_block_data, interface_data, type_alias_data,
-    };
-    let mut names: HashSet<String> = HashSet::new();
-
-    for &loc in file_functions(db, file) {
-        let func = function_data(db, loc);
-        for id in func.params.iter().filter_map(|p| p.type_ref) {
-            add_type_ref_display(&func.type_refs, id, &mut names);
-        }
-        if let Some(id) = func.return_type {
-            add_type_ref_display(&func.type_refs, id, &mut names);
-        }
-        if let Some(id) = func.throws {
-            add_type_ref_display(&func.type_refs, id, &mut names);
-        }
-        for id in func.generic_params.iter().flat_map(|p| &p.bounds) {
-            add_type_ref_display(&func.type_refs, *id, &mut names);
-        }
-    }
-    for &loc in file_classes(db, file) {
-        let class = class_data(db, loc);
-        for id in class.fields.iter().map(|f| f.type_ref) {
-            add_type_ref_display(&class.type_refs, id, &mut names);
-        }
-        for id in class.generic_params.iter().flat_map(|p| &p.bounds) {
-            add_type_ref_display(&class.type_refs, *id, &mut names);
-        }
-        for block in &class.implements {
-            add_type_ref_display(&class.type_refs, block.target, &mut names);
-        }
-    }
-    for &loc in file_interfaces(db, file) {
-        let iface = interface_data(db, loc);
-        for id in iface.fields.iter().map(|f| f.type_ref) {
-            add_type_ref_display(&iface.type_refs, id, &mut names);
-        }
-        for id in &iface.requires {
-            add_type_ref_display(&iface.type_refs, *id, &mut names);
-        }
-        for id in iface.generic_params.iter().flat_map(|p| &p.bounds) {
-            add_type_ref_display(&iface.type_refs, *id, &mut names);
-        }
-        for method in &iface.required_methods {
-            for id in method.params.iter().filter_map(|p| p.type_ref) {
-                add_type_ref_display(&iface.type_refs, id, &mut names);
-            }
-            if let Some(id) = method.return_type {
-                add_type_ref_display(&iface.type_refs, id, &mut names);
-            }
-            if let Some(id) = method.throws {
-                add_type_ref_display(&iface.type_refs, id, &mut names);
-            }
-            for id in method.generic_params.iter().flat_map(|p| &p.bounds) {
-                add_type_ref_display(&iface.type_refs, *id, &mut names);
-            }
-        }
-        for assoc in &iface.associated_types {
-            if let Some(id) = assoc.bound {
-                add_type_ref_display(&iface.type_refs, id, &mut names);
-            }
-            if let Some(id) = assoc.default {
-                add_type_ref_display(&iface.type_refs, id, &mut names);
-            }
-        }
-    }
-    for &loc in file_type_aliases(db, file) {
-        let alias = type_alias_data(db, loc);
-        if let Some(id) = alias.value {
-            add_type_ref_display(&alias.type_refs, id, &mut names);
-        }
-    }
-    for &loc in file_impls(db, file) {
-        let block = impl_block_data(db, loc);
-        add_type_ref_display(&block.type_refs, block.interface_target, &mut names);
-        // Out-of-body (`Free`) impls carry an explicit for-target; an in-class
-        // impl's for-target is the class itself (no header type to display).
-        // `names` is a set, so the interface_target added above is not
-        // double-counted for free impls.
-        if let ImplSubjectData::Free { for_target, .. } = &block.subject {
-            add_type_ref_display(&block.type_refs, *for_target, &mut names);
-        }
-    }
-    names
-}
-
-/// Whether `file` declares any type whose *layout* another file's bytecode may
-/// bake in: a class (field order), an enum (discriminants), an interface
-/// (dispatch), or a type alias (inline expansion). Used for the added-file case
-/// of the `LAYOUT_SENTINEL`, where there is no prior `layout_hash` to diff
-/// against; a *modified* file instead compares its [`file_layout_hash`] so a
-/// function-only edit in a type-defining file no longer trips the sentinel.
-fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
-    use baml_compiler2_hir::item_data::{
-        file_classes, file_enums, file_interfaces, file_type_aliases,
-    };
-    !file_classes(db, file).is_empty()
-        || !file_enums(db, file).is_empty()
-        || !file_interfaces(db, file).is_empty()
-        || !file_type_aliases(db, file).is_empty()
-}
-
-/// Whether `file` declares any interface-`impl` construct — an `impl` block, an
-/// out-of-body `implements … for …`, or a class `implements` block. Gates the
-/// `IMPL_SENTINEL`: only a change to such a file can move the package's impl set
-/// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
-fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
-    use baml_compiler2_hir::item_data::{class_data, file_classes, file_impls};
-    // `file_impls` holds both in-class and out-of-body impl blocks; a class
-    // `implements` block is a distinct construct, so it needs its own check.
-    !file_impls(db, file).is_empty()
-        || file_classes(db, file)
-            .iter()
-            .any(|&loc| !class_data(db, loc).implements.is_empty())
-}
-
 /// Root-relative display path for a user `SourceFile`, or `None` for a stdlib
 /// (`<builtin>/`) file.
-fn user_rel_path(db: &ProjectDatabase, root: &std::path::Path, sf: SourceFile) -> Option<String> {
+fn user_rel_path(db: &ProjectDatabase, root: &Path, sf: SourceFile) -> Option<String> {
     let path = sf.path(db);
     if path.to_string_lossy().starts_with("<builtin>/") {
         return None;
@@ -1028,310 +701,21 @@ fn user_files_with_rel_paths(
         .collect()
 }
 
-/// The clean/dirty partition of the current user files against a previous
-/// manifest. Shared by [`CacheContext::plan_reuse`] (to build the reuse plan)
-/// and [`CacheContext::verify_callable_throws_fragments`] (to check exactly the files
-/// that would have been seeded).
-struct DirtyPartition {
-    /// Root-relative paths eligible for reuse (clean).
-    clean_files: HashSet<String>,
-    /// Current `SourceFile`s that must be re-derived (dirty).
-    dirty_files: Vec<SourceFile>,
-    /// Freshly-walked throw facts for the dirty/added files, keyed by absolute
-    /// path. Seeded so the downstream `file_throw_facts` demand hits the seed
-    /// instead of re-walking each body a second time (the partition already
-    /// walked them, and the facts are content-derived so the value is honest).
-    fresh_throw_facts: std::collections::BTreeMap<
-        String,
-        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
-    >,
-    /// Every current user file with its rel path — the single walk this pass
-    /// makes over the source set, handed back so [`CacheContext::plan_reuse`]
-    /// need not list them again on the warm hot path.
-    current: Vec<(SourceFile, String)>,
-}
-
-fn throw_fn_names(
-    facts: &[baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>],
-) -> impl Iterator<Item = String> + '_ {
-    facts
-        .iter()
-        .map(|fact| last_segment(fact.key.as_str()).to_string())
-}
-
-/// Partition the current user files into clean (reusable) and dirty against a
-/// previous manifest.
-///
-/// Dirty = content-changed ∪ added ∪ (files whose referenced names intersect the
-/// signature/layout/impl change set, one hop) ∪ (files reachable from a
-/// throws-changed function through the transitive throws-taint closure).
-///
-/// The throws-taint closure covers throws changes that flow transitively.
-/// `callable_throws` is transitive over the call graph, so a throws change can
-/// flow through a *content-clean intermediary* — whose own `file_throw_facts`
-/// are byte-identical, only its solved transitive throws grew — to a caller a
-/// one-hop pass would never reach. The closure seeds a worklist with the
-/// last-segment names of every function whose facts changed (or was
-/// added/removed), then walks reverse call edges — over-approximated by
-/// `referenced_names` — marking each referencing file dirty and re-tainting its
-/// own functions, stopping at closed-`throws` contracts (whose `callable_throws`
-/// is the declared set, independent of callees). It over-dirties only, so a
-/// seeded function's body and transitive throw contributors are always stable —
-/// the invariant the `callable_throws` seed rests on.
-fn compute_dirty_partition(
-    db: &ProjectDatabase,
-    package: SourceRoot,
-    manifest: &ProjectManifest,
-) -> DirtyPartition {
-    let prev_files: HashMap<&str, &ManifestFile> = manifest
-        .files
-        .iter()
-        .map(|f| (f.rel_path.as_str(), f))
-        .collect();
-
-    let current = user_files_with_rel_paths(db, package);
-    let current_rels: HashSet<&str> = current.iter().map(|(_, rel)| rel.as_str()).collect();
-
-    // Δ: names whose *signature/layout/impl* meaning may have changed (one-hop).
-    let mut changed_names: HashSet<String> = HashSet::new();
-    // Files needing recompilation for their own sake.
-    let mut dirty: HashSet<String> = HashSet::new();
-    // A type's layout (field offset, enum discriminant, type tag, vtable slot)
-    // moved somewhere, so every file that bakes any layout must re-lower. Raised
-    // by a modified file whose `layout_hash` changed, or any added/removed
-    // type-defining file — never by a plain function-signature edit.
-    let mut layout_changed = false;
-    let mut impl_set_changed = false;
-    // Root-cause function names whose `callable_throws` may have changed — the
-    // seed of the transitive throws-taint closure. Last-segment form, matched
-    // against `referenced_names` (the reverse-call-edge over-approximation).
-    let mut throws_taint: HashSet<String> = HashSet::new();
-    // Freshly-extracted throw facts for the dirty/added files this pass already
-    // walked. Seeded (beside the clean files' manifest facts) so the downstream
-    // `file_throw_facts` demand hits the seed instead of re-walking each body —
-    // the facts are content-derived, so this fresh value is exactly the honest
-    // one the recompute would produce. Keyed by absolute path, like the seed.
-    let mut fresh_throw_facts: std::collections::BTreeMap<
-        String,
-        Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
-    > = std::collections::BTreeMap::new();
-
-    for (sf, rel) in &current {
-        match prev_files.get(rel.as_str()) {
-            None => {
-                // Added file: recompiles, and its names may shadow existing
-                // references anywhere.
-                dirty.insert(rel.clone());
-                changed_names.extend(defined_names(db, *sf));
-                // A newly-introduced type conservatively counts as a layout
-                // change: the file is new, so there is no prior `layout_hash` to
-                // diff against.
-                if file_defines_type(db, *sf) {
-                    layout_changed = true;
-                }
-                if file_has_impl_construct(db, *sf) {
-                    impl_set_changed = true;
-                }
-                // An added function may shadow an existing callee, so callers'
-                // transitive throws can move — seed the taint closure.
-                let fresh =
-                    baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(db, *sf);
-                throws_taint.extend(throw_fn_names(&fresh));
-                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh);
-            }
-            Some(entry) => {
-                if entry.content_hash == content_hash(sf.text(db)) {
-                    continue;
-                }
-                dirty.insert(rel.clone());
-                // Throws taint: a body-only edit that grows this file's inferred
-                // throws leaves its `signature_hash` unchanged, so no signature
-                // sentinel catches it. When the fresh facts differ from the
-                // stored ones, seed the taint closure with both the fresh and
-                // the stored function names — a rename/removal shifts which
-                // callers resolve where.
-                let fresh =
-                    baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(db, *sf);
-                if fresh != entry.throw_facts {
-                    throws_taint.extend(throw_fn_names(&fresh));
-                    throws_taint.extend(throw_fn_names(&entry.throw_facts));
-                }
-                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh);
-                if file_has_impl_construct(db, *sf)
-                    || entry
-                        .referenced_names
-                        .iter()
-                        .any(|name| name == IMPL_SENTINEL)
-                {
-                    impl_set_changed = true;
-                }
-                if entry.signature_hash != file_signature_hash(db, *sf) {
-                    changed_names.extend(entry.defined_names.iter().cloned());
-                    changed_names.extend(defined_names(db, *sf));
-                }
-                // Fire the layout sentinel only when this file's *layout*
-                // surface actually moved — a field/variant/alias reorder, a new
-                // generic parameter — not merely because a type-defining file's
-                // signature changed. A function-only signature edit in a
-                // class-defining file leaves `layout_hash` fixed, so it no longer
-                // drags every layout-baking file into the dirty set.
-                if entry.layout_hash != file_layout_hash(db, *sf) {
-                    layout_changed = true;
-                }
-            }
-        }
-    }
-    for (rel, entry) in &prev_files {
-        if !current_rels.contains(rel) {
-            // Removed file: its names vanish from resolution. A removal can
-            // erase a type another file inferred-baked, so it conservatively
-            // counts as a layout change (there is no current `layout_hash` to
-            // diff, and removals are rare on the hot edit path).
-            changed_names.extend(entry.defined_names.iter().cloned());
-            layout_changed = true;
-            if entry.referenced_names.iter().any(|n| n == IMPL_SENTINEL) {
-                impl_set_changed = true;
-            }
-            // A removed function's callers now resolve elsewhere or error — a
-            // throws change; seed the taint closure with its function names.
-            throws_taint.extend(throw_fn_names(&entry.throw_facts));
-        }
-    }
-    if layout_changed {
-        changed_names.insert(LAYOUT_SENTINEL.to_string());
-    }
-    if impl_set_changed {
-        changed_names.insert(IMPL_SENTINEL.to_string());
-    }
-
-    // Signature-meaning cascade + one-hop propagation, run jointly to a
-    // fixpoint. A file whose *full* `referenced_names` intersect the change set
-    // is dirty — a layout or name dependency surfaces one hop away. A file whose
-    // *signature* surface names a changed type has, in addition, its own resolved
-    // signature meaning changed, so its defined names join the change set
-    // (cascading to its callers) and its functions seed the throws closure —
-    // `callable_throws` can move when a signature type is re-targeted.
-    //
-    // A purely body-level reference to a changed name is dirtied but does NOT
-    // cascade: a body reference can only move the file's *throws* (the transitive
-    // closure below covers that), never its signature, so growing the change set
-    // from it would needlessly dirty the whole call graph. This is what closes
-    // the alias-re-target hole — a caller that names neither the re-targeted alias
-    // nor the changed type, only a content-unchanged callee whose signature now
-    // resolves differently — while a body-only caller stops the cascade.
-    let mut cascaded: HashSet<String> = HashSet::new();
-    loop {
-        let mut grew = false;
-        for (_, rel) in &current {
-            let Some(entry) = prev_files.get(rel.as_str()) else {
-                continue; // added file: already dirty, its names already in Δ
-            };
-            let sig_hit = entry
-                .sig_referenced_names
-                .iter()
-                .any(|name| changed_names.contains(name));
-            if sig_hit
-                || entry
-                    .referenced_names
-                    .iter()
-                    .any(|name| changed_names.contains(name))
-            {
-                dirty.insert(rel.clone());
-            }
-            if sig_hit && cascaded.insert(rel.clone()) {
-                for name in &entry.defined_names {
-                    if changed_names.insert(name.clone()) {
-                        grew = true;
-                    }
-                }
-                throws_taint.extend(throw_fn_names(&entry.throw_facts));
-            }
-        }
-        if !grew {
-            break;
-        }
-    }
-
-    // Transitive throws-taint closure, firewall-pruned. Reverse index: a
-    // last-segment name -> the current files whose stored bytecode references it.
-    let mut referencers: HashMap<&str, Vec<&str>> = HashMap::new();
-    for (rel, entry) in &prev_files {
-        if !current_rels.contains(rel) {
-            continue;
-        }
-        for name in &entry.referenced_names {
-            referencers.entry(name.as_str()).or_default().push(rel);
-        }
-    }
-    let mut worklist: Vec<String> = throws_taint.iter().cloned().collect();
-    // Re-taint each newly-reached file's functions exactly once.
-    let mut retainted: HashSet<String> = HashSet::new();
-    while let Some(name) = worklist.pop() {
-        let Some(rels) = referencers.get(name.as_str()) else {
-            continue;
-        };
-        for &rel in rels {
-            // A file referencing a tainted name is dirty (its open functions'
-            // throws may have moved); mark it and re-taint its own non-firewall
-            // functions so the change propagates transitively.
-            dirty.insert(rel.to_string());
-            if !retainted.insert(rel.to_string()) {
-                continue;
-            }
-            let Some(entry) = prev_files.get(rel) else {
-                continue;
-            };
-            for ff in &entry.throw_facts {
-                // Closed `throws` contract: `callable_throws` is the declared
-                // set, independent of callees, so the taint stops here.
-                if ff.has_declared_contract {
-                    continue;
-                }
-                let n = last_segment(ff.key.as_str()).to_string();
-                if throws_taint.insert(n.clone()) {
-                    worklist.push(n);
-                }
-            }
-        }
-    }
-
-    let clean_files: HashSet<String> = current
-        .iter()
-        .filter(|(_, rel)| !dirty.contains(rel))
-        .map(|(_, rel)| rel.clone())
-        .collect();
-    let dirty_files: Vec<SourceFile> = current
-        .iter()
-        .filter(|(_, rel)| dirty.contains(rel))
-        .map(|(sf, _)| *sf)
-        .collect();
-
-    DirtyPartition {
-        clean_files,
-        dirty_files,
-        fresh_throw_facts,
-        current,
-    }
-}
-
-/// Project each clean file's cached interface fragment into a per-function
-/// `callable_throws` seed map, keyed by full source path then by item-tree
-/// `LocalItemId::as_u32` (the fragment's key form). A unit whose fragment is
-/// empty or fails to decode is skipped — its functions then infer honestly
-/// (degrade, never miscompile). Empty under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
+/// Project each served file's fragment into a per-function `callable_throws`
+/// seed map, keyed by full source path then by item-tree `LocalItemId::as_u32`
+/// (the fragment's key form). A fragment that is empty or fails to decode is
+/// skipped — its functions then infer honestly (degrade, never miscompile).
+/// Empty under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
 fn project_callable_throws_seeds(
-    clean_fragments: &std::collections::BTreeMap<String, Vec<u8>>,
+    fragments: &BTreeMap<String, Vec<u8>>,
     root: &Path,
-) -> std::collections::BTreeMap<
-    String,
-    std::collections::BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>,
-> {
+) -> BTreeMap<String, BTreeMap<u32, baml_type::Ty<baml_type::TypeName>>> {
     if CacheContext::callable_throws_cache_disabled() {
-        return std::collections::BTreeMap::new();
+        return BTreeMap::new();
     }
     use baml_db::baml_compiler2_hir_ty::package_interface::CallableThrowsFragment;
-    let mut by_path = std::collections::BTreeMap::new();
-    for (rel, fragment_bytes) in clean_fragments {
+    let mut by_path = BTreeMap::new();
+    for (rel, fragment_bytes) in fragments {
         if fragment_bytes.is_empty() {
             continue;
         }
@@ -1355,341 +739,120 @@ fn project_callable_throws_seeds(
 }
 
 impl CacheContext {
-    /// Decide which files can reuse their previously compiled bytecode.
+    /// The previous compile's check rows, if the project is byte-identical to
+    /// the compile that wrote them.
     ///
-    /// `None` means no reuse is possible (first compile, compiler changed,
-    /// previous units trimmed, or everything is dirty) — callers take the
-    /// stdlib-splice path and gate diagnostics on all files.
-    ///
-    /// The clean/dirty partition (with the throws-taint closure) is computed by
-    /// [`compute_dirty_partition`]; this method loads each candidate clean
-    /// file's content-addressed unit, degrades individual misses to dirty, then
-    /// attaches the reuse seeds and clean-file diagnostics for what remains.
-    pub(crate) fn plan_reuse(
+    /// The manifest records the program key of that compile, and this
+    /// context's key folds in every compile input (compiler build, options,
+    /// `baml.toml`, every file's path and content), so equal keys prove every
+    /// row current — the only condition under which a per-file row can be
+    /// served soundly, since a file's diagnostics and throws depend on every
+    /// declaration it resolves. `None` on a first compile, a changed
+    /// project, a missing or undecodable manifest, or under
+    /// `BAML_CACHE_VERIFY` (the oracle exercises the honest path).
+    pub(crate) fn served_checks(
         &self,
         db: &ProjectDatabase,
         package: SourceRoot,
-    ) -> Option<ReusePlan> {
-        // The verify tripwire must exercise the full compile path — a
-        // relink-produced blob verified against a relink compile would only
-        // prove relink self-consistency (the test suite's oracles cover
-        // relink == full; verify covers key completeness in the field).
+    ) -> Option<ServedChecks> {
         if Self::verify_enabled() {
             return None;
         }
-        let Some(manifest_bytes) = self.cache.load_raw(&self.manifest_key) else {
-            cache_debug(format_args!("no manifest — full compile"));
-            return None;
-        };
-        let Ok(manifest) = borsh::from_slice::<ProjectManifest>(&manifest_bytes) else {
-            cache_debug(format_args!("manifest undecodable — full compile"));
-            return None;
-        };
-        let partition = compute_dirty_partition(db, package, &manifest);
-        if partition.clean_files.is_empty() {
-            cache_debug(format_args!("all files dirty — full compile"));
+        let manifest: ProjectManifest = self.load_decoded(&self.manifest_key, "manifest")?;
+        if manifest.program_key != *self.key.as_bytes() {
+            cache_debug(format_args!(
+                "project changed since the last compile — every file is checked honestly"
+            ));
             return None;
         }
-        let DirtyPartition {
-            mut clean_files,
-            mut dirty_files,
-            fresh_throw_facts,
-            current,
-        } = partition;
-
-        // No dirty or added files, and no manifest entry missing from disk
-        // (a removed file's entry would be neither clean nor current, so the
-        // counts diverge): nothing will be re-emitted or relinked, so unit
-        // payloads are not needed at all — the seeds and diagnostics blobs
-        // are manifest-resident. This skips both the unit read/hash pass and
-        // (in `prepare_reuse_plan`) the serve-time throws gate.
-        let no_delta = dirty_files.is_empty() && clean_files.len() == manifest.files.len();
-
-        // Reuse the single file walk `compute_dirty_partition` already made rather
-        // than re-listing the source set on the warm hot path.
-        let current_files: HashMap<String, SourceFile> =
-            current.into_iter().map(|(file, rel)| (rel, file)).collect();
-        let mut prev_units = Vec::with_capacity(clean_files.len());
-        let mut unit_keys = HashMap::with_capacity(clean_files.len());
-        if no_delta {
-            for entry in &manifest.files {
-                unit_keys.insert(entry.rel_path.clone(), entry.unit_key);
-            }
-        } else {
-            // Load clean units across worker threads (read + digest + borsh
-            // decode per unit, sizable at large projects). `par_iter`'s
-            // indexed collect preserves manifest order exactly, so
-            // `prev_units` is byte-for-byte the sequence the serial loop
-            // produced — emit determinism is unaffected.
-            use rayon::prelude::*;
-            let clean_entries: Vec<_> = manifest
-                .files
-                .iter()
-                .filter(|entry| clean_files.contains(&entry.rel_path))
-                .collect();
-            let loaded: Vec<(&str, [u8; 32], Option<CompilationUnit>)> = clean_entries
-                .par_iter()
-                .map(|entry| {
-                    let key = CacheKey::from_bytes(entry.unit_key);
-                    let unit = self.cache.load_unit_shared(&key).filter(|unit| {
-                        unit.source_file == entry.rel_path
-                            && !std::path::Path::new(&unit.source_file).is_absolute()
-                    });
-                    (entry.rel_path.as_str(), entry.unit_key, unit)
-                })
-                .collect();
-            let mut degraded = Vec::new();
-            for (rel, entry_key, unit) in loaded {
-                match unit {
-                    Some(unit) => {
-                        unit_keys.insert(rel.to_string(), entry_key);
-                        prev_units.push(unit);
-                    }
-                    None => degraded.push(rel.to_string()),
-                }
-            }
-            for rel in degraded {
-                cache_debug(format_args!(
-                    "unit `{rel}` missing or invalid — degraded to dirty"
-                ));
-                clean_files.remove(&rel);
-                unit_keys.remove(&rel);
-                if let Some(file) = current_files.get(&rel)
-                    && !dirty_files.contains(file)
-                {
-                    dirty_files.push(*file);
-                }
-            }
-            if clean_files.is_empty() {
-                cache_debug(format_args!("all reusable units missing — full compile"));
-                return None;
-            }
+        let root = package.path(db);
+        let mut diagnostics = BTreeMap::new();
+        let mut fragments = BTreeMap::new();
+        let mut throw_facts = BTreeMap::new();
+        for entry in manifest.files {
+            let full = root.join(&entry.rel_path).display().to_string();
+            throw_facts.insert(full, entry.throw_facts);
+            fragments.insert(entry.rel_path.clone(), entry.callable_throws_fragment);
+            diagnostics.insert(entry.rel_path, entry.diagnostics);
         }
         cache_debug(format_args!(
-            "reuse plan: {} clean, {} dirty{}",
-            clean_files.len(),
-            dirty_files.len(),
-            if no_delta { " (no delta)" } else { "" }
+            "check rows served for {} file(s)",
+            diagnostics.len()
         ));
-
-        // Seed throw facts for every file. Clean files' facts come from the
-        // manifest (their content is unchanged, and nothing they reference
-        // changed signature). Dirty/added files' facts are the ones the partition
-        // already walked (`fresh_throw_facts`) — folding them in lets the
-        // downstream `file_throw_facts` demand hit the seed rather than re-walking
-        // each body a second time (the seed-after-query invalidation the taint
-        // closure would otherwise cause). Every value is the honest one.
-        let root = package.path(db);
-        let mut seeded_throw_facts: std::collections::BTreeMap<
-            String,
-            Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
-        > = manifest
-            .files
-            .iter()
-            .filter(|entry| clean_files.contains(&entry.rel_path))
-            .map(|entry| {
-                let full = root.join(&entry.rel_path).display().to_string();
-                (full, entry.throw_facts.clone())
-            })
-            .collect();
-        seeded_throw_facts.extend(fresh_throw_facts);
-
-        // Carry clean files' interface-fragment blobs verbatim (rel-path-keyed):
-        // the `callable_throws` seeds project from these, and the store path
-        // copies them into the next manifest unchanged. Manifest-resident so
-        // seeding never has to read unit payloads.
-        let clean_fragments: std::collections::BTreeMap<String, Vec<u8>> = manifest
-            .files
-            .iter()
-            .filter(|entry| clean_files.contains(&entry.rel_path))
-            .map(|entry| {
-                (
-                    entry.rel_path.clone(),
-                    entry.callable_throws_fragment.clone(),
-                )
-            })
-            .collect();
-
-        // Project clean files' cached interface fragments into a per-function
-        // `callable_throws` seed (Phase 2): a clean function's throws — and hence
-        // any dirty caller's throws-dependent inference over it — are served
-        // without walking its body. The throws-taint closure guarantees a seeded
-        // function's transitive throw contributors are all unchanged.
-        let seeded_callable_throws = project_callable_throws_seeds(&clean_fragments, root);
-
-        // Carry clean files' cached diagnostics blobs verbatim (already
-        // rel-path-keyed): the gate rehydrates them to serve those files without
-        // re-checking, and they are copied into the next manifest unchanged.
-        let clean_diagnostics = manifest
-            .files
-            .iter()
-            .filter(|entry| clean_files.contains(&entry.rel_path))
-            .map(|entry| (entry.rel_path.clone(), entry.diagnostics.clone()))
-            .collect();
-
-        Some(ReusePlan {
-            clean_files,
-            dirty_files,
-            prev_units,
-            unit_keys,
-            seeded_throw_facts,
-            seeded_callable_throws,
-            clean_diagnostics,
-            clean_fragments,
-            no_delta,
+        let callable_throws = project_callable_throws_seeds(&fragments, root);
+        Some(ServedChecks {
+            diagnostics,
+            fragments,
+            throw_facts,
+            callable_throws,
         })
+    }
+
+    /// Seed the immutable stdlib typed interface (gated off under verify so the
+    /// oracle exercises the honest path) and install the served check rows'
+    /// seeds — the identical warm-database setup `run`, `test`, `check`, and
+    /// the introspection commands each run before their first query.
+    pub(crate) fn prepare_warm_db(
+        &self,
+        db: &mut ProjectDatabase,
+        package: SourceRoot,
+    ) -> WarmPrep {
+        let stdlib_interface_hit = self.seed_stdlib_interface(db);
+        let served = self.served_checks(db, package).map(|mut served| {
+            served.install_seeds(db);
+            served
+        });
+        WarmPrep {
+            served,
+            stdlib_interface_hit,
+        }
     }
 
     /// Write the Program blob plus the manifest describing it. Called after
     /// every successful compile; best-effort like all cache writes.
     ///
     /// `fresh_by_file` holds the diagnostics blob for every file the gate freshly
-    /// checked (dirty or degraded), by rel_path. Per file the manifest takes its
-    /// fresh blob if present, else the plan's carried clean blob, else an empty
-    /// blob — so a re-checked file always overwrites a stale/poison carry.
-    ///
-    /// `compiled` must carry assembled units: every cached compile assembles
-    /// them alongside the program, so a store without them is a programmer
-    /// error, reported the way every store failure is (the compile itself
-    /// succeeded; release builds degrade to an uncached run).
-    pub(crate) fn store_artifacts_with_manifest(
+    /// checked, by rel_path. Per file the manifest takes its fresh blob if
+    /// present, else the served blob, else an empty blob — so a re-checked file
+    /// always overwrites a stale/poison carry.
+    pub(crate) fn store_program_and_manifest(
         &self,
         db: &ProjectDatabase,
         package: SourceRoot,
-        compiled: &CompiledArtifacts,
-        fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
-        plan: Option<&ReusePlan>,
-    ) -> std::io::Result<CacheStoreStats> {
-        let (units, reused_units): (&[CompilationUnit], bool) = match &compiled.units {
-            CompiledUnits::Fresh(units) => (units, false),
-            CompiledUnits::Reused(units) => (units, true),
-            CompiledUnits::None => {
-                debug_assert!(false, "cached compile stored without assembled units");
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "compile produced no assembled units",
-                ));
-            }
+        program: &Program,
+        fresh_by_file: &BTreeMap<String, Vec<u8>>,
+        served: Option<&ServedChecks>,
+    ) -> std::io::Result<()> {
+        use baml_db::baml_compiler2_hir_ty::{
+            package_interface::export_callable_throws_fragment,
+            throw_facts::export_file_throw_facts,
         };
-        self.store(&compiled.program)?;
 
-        let mut units_by_source = HashMap::with_capacity(units.len());
-        for unit in units {
-            if units_by_source
-                .insert(unit.source_file.as_str(), unit)
-                .is_some()
-            {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("duplicate compilation unit for `{}`", unit.source_file),
-                ));
-            }
-        }
+        self.store(program)?;
 
-        let user_files = user_files_with_rel_paths(db, package);
-        // Only a successful reuse compile returns assembled `units`. A full
-        // fallback must persist freshly decomposed units for every file rather
-        // than carrying pointers from the abandoned reuse plan.
-        let pointer_plan = if reused_units { plan } else { None };
-        let mut unit_keys = HashMap::with_capacity(user_files.len());
-        let mut unit_entries_written = 0usize;
-        for (_, rel) in &user_files {
-            if let Some(key) = pointer_plan
-                .filter(|plan| plan.clean_files.contains(rel))
-                .and_then(|plan| plan.unit_keys.get(rel))
-            {
-                unit_keys.insert(rel.clone(), *key);
-                continue;
-            }
-            let Some(unit) = units_by_source.get(rel.as_str()) else {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("compiled output has no unit for `{rel}`"),
-                ));
-            };
-            if std::path::Path::new(&unit.source_file).is_absolute() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("unit source path is not root-relative: `{rel}`"),
-                ));
-            }
-            let (key, wrote) = self.cache.store_unit_shared(unit)?;
-            unit_entries_written += usize::from(wrote);
-            unit_keys.insert(rel.clone(), *key.as_bytes());
-        }
-        cache_debug(format_args!(
-            "unit store: wrote {unit_entries_written}, reused {}",
-            user_files.len().saturating_sub(unit_entries_written)
-        ));
-
-        let mut files: Vec<ManifestFile> = Vec::with_capacity(user_files.len());
-        for (sf, rel) in user_files {
-            // The file's assembled unit carries its emit-recorded reference
-            // edges (`CompilationUnit::referenced_names` / `bakes_type_layout`)
-            // — recorded by codegen at its resolution sites, so direct calls
-            // to interface-machinery bodies (which have no runtime name) are
-            // edges too. A clean file's unit arrives verbatim from the
-            // previous compile, its recorded edges with it; the edges are a
-            // pure function of the (content-identical) source, so the carry
-            // is exact. The units were assembled for every current file, so a
-            // missing one is corrupt state, never a benign gap.
-            let Some(unit) = units_by_source.get(rel.as_str()) else {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("compiled output has no unit for `{rel}`"),
-                ));
-            };
-            // Union the unit-recorded references (desugared calls, constructed
-            // classes, plus the layout sentinel) with the types named in this
-            // file's source-level annotations, so layout/alias dependencies
-            // invisible to the bytecode are tracked too.
-            let mut set: HashSet<String> = unit.referenced_names.iter().cloned().collect();
-            // Field offsets / discriminants / vtable slots bake a type's
-            // layout but name no `Object`; tag the file so any type-layout
-            // change re-lowers it.
-            if unit.bakes_type_layout {
-                set.insert(LAYOUT_SENTINEL.to_string());
-            }
-            // The signature-surface names, kept both as their own manifest
-            // field (the cascade's meaning-propagation input) and folded into
-            // the full referenced set (the one-hop layout/name dependency).
-            let sig_names = syntactic_type_names(db, sf);
-            let mut sig_referenced_names: Vec<String> = sig_names.iter().cloned().collect();
-            sig_referenced_names.sort_unstable();
-            set.extend(sig_names);
-            // Tag coherence-participating files so any package-wide impl-set
-            // change re-checks every one of them together (IMPL_SENTINEL).
-            if file_has_impl_construct(db, sf) {
-                set.insert(IMPL_SENTINEL.to_string());
-            }
-            let mut referenced_names: Vec<String> = set.into_iter().collect();
-            referenced_names.sort_unstable();
+        let mut files: Vec<ManifestFile> = Vec::new();
+        for (sf, rel) in user_files_with_rel_paths(db, package) {
+            // The fragment holds no absolute paths; on the just-compiled
+            // database every function's throws are memoized, so exporting it
+            // pulls no fresh inference.
+            let callable_throws_fragment = borsh::to_vec(&export_callable_throws_fragment(db, sf))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             files.push(ManifestFile {
-                content_hash: content_hash(sf.text(db)),
-                signature_hash: file_signature_hash(db, sf),
-                layout_hash: file_layout_hash(db, sf),
-                defined_names: defined_names(db, sf),
-                referenced_names,
-                sig_referenced_names,
-                // Free: seeded files return their seeds verbatim, dirty
-                // files were extracted (and memoized) during the compile.
-                // Spelled for the wire: every head by its root's spelling in
-                // this database, which is what the manifest compares.
-                throw_facts: baml_db::baml_compiler2_hir_ty::throw_facts::export_file_throw_facts(
-                    db, sf,
-                ),
-                // Fresh blob if the gate re-checked this file, else the
-                // carried clean blob, else empty. A re-checked file always
-                // wins so a stale/poison carry can't persist.
+                // Free: seeded files return their seeds verbatim, freshly
+                // checked files were extracted (and memoized) during the
+                // compile. Spelled for the wire: every head by its root's
+                // spelling in this database, which is what the next compile
+                // seeds.
+                throw_facts: export_file_throw_facts(db, sf),
+                // Fresh blob if the gate re-checked this file, else the served
+                // blob, else empty. A re-checked file always wins so a
+                // stale/poison carry can't persist.
                 diagnostics: fresh_by_file
                     .get(&rel)
                     .cloned()
-                    .or_else(|| plan.and_then(|p| p.clean_diagnostics.get(&rel).cloned()))
+                    .or_else(|| served.and_then(|served| served.diagnostics.get(&rel).cloned()))
                     .unwrap_or_else(crate::diagnostics_cache::empty_blob),
-                // Verbatim copy of the unit's fragment bytes — byte-identical
-                // to the plan's carried manifest copy by construction.
-                callable_throws_fragment: unit.callable_throws_fragment.clone(),
-                unit_key: unit_keys[&rel],
+                callable_throws_fragment,
                 rel_path: rel,
             });
         }
@@ -1701,53 +864,32 @@ impl CacheContext {
         };
         let payload = borsh::to_vec(&manifest)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        self.cache.store_raw(&self.manifest_key, &payload)?;
-        Ok(CacheStoreStats {
-            unit_entries_written,
-            manifest_entries_written: 1,
-        })
+        self.cache.store_raw(&self.manifest_key, &payload)
     }
 
-    /// Seed the immutable stdlib typed interface (gated off under verify so the
-    /// oracle exercises the honest path) and prepare the per-file reuse plan —
-    /// the identical warm-database setup `run`, `test`, and `check` each run
-    /// before the diagnostics gate. `check` discards `stdlib_interface_hit`.
-    pub(crate) fn prepare_warm_db(
-        &self,
-        db: &mut ProjectDatabase,
-        package: SourceRoot,
-    ) -> WarmPrep {
-        let stdlib_interface_hit = self.seed_stdlib_interface(db);
-        let reuse_plan = prepare_reuse_plan(db, package, self.plan_reuse(db, package));
-        WarmPrep {
-            reuse_plan,
-            stdlib_interface_hit,
-        }
-    }
-
-    /// The warm-path verify-and-store sequence shared by `run` and `test` for
-    /// `session`'s compile: run every `BAML_CACHE_VERIFY` oracle, persist the
-    /// Program + per-file units and manifest, materialize the stdlib interface
-    /// (unless it was already served) and the per-toolchain
-    /// builtin-diagnostics blob, then run the sampled field-verify on a fresh
-    /// un-seeded database over the session's sources.
+    /// The warm-path verify-and-store sequence shared by `run`, `test`,
+    /// `pack`, and a seeding `check` for `session`'s compile: run every
+    /// `BAML_CACHE_VERIFY` oracle, persist the Program and the manifest,
+    /// materialize the stdlib interface (unless it was already served) and the
+    /// per-toolchain builtin-diagnostics blob, then run the sampled
+    /// field-verify on a fresh un-seeded database over the session's sources.
     pub(crate) fn verify_and_store(
         &self,
         session: &ProjectSession,
-        compiled: &CompiledArtifacts,
-        fresh: &std::collections::BTreeMap<String, Vec<u8>>,
-        plan: Option<&ReusePlan>,
+        program: &Program,
+        fresh: &BTreeMap<String, Vec<u8>>,
+        served: Option<&ServedChecks>,
         stdlib_interface_hit: bool,
     ) -> anyhow::Result<()> {
         let (db, package) = (&session.db, session.package);
-        self.verify_against(&compiled.program)?;
+        self.verify_against(program)?;
         self.verify_stdlib_interface(db)?;
         self.verify_diagnostics(db, package)?;
         self.verify_stdlib_diagnostics(db)?;
         self.verify_callable_throws_fragments(db, package)?;
         // A store failure never fails the command (the compile succeeded), but
         // it is LOUD on the debug channel, never silent.
-        if let Err(e) = self.store_artifacts_with_manifest(db, package, compiled, fresh, plan) {
+        if let Err(e) = self.store_program_and_manifest(db, package, program, fresh, served) {
             cache_debug(format_args!("bytecode cache write failed: {e}"));
         }
         // Materialize the stdlib interface blob on a miss (idempotent on a hit,
@@ -1759,55 +901,53 @@ impl CacheContext {
         // (self-gating on blob presence, so a warm hit is a no-op write).
         self.store_stdlib_diagnostics(db);
         // Sampled field verification (rustc-style 1-in-32): now that the compile
-        // result exists, ~1 warm run in 32 re-derives one served clean file on a
-        // fresh, un-seeded database and hard-errors on any drift. Bounded latency
-        // (one file's honest work), loud on the silent-staleness bug class the
-        // full `BAML_CACHE_VERIFY` guards.
-        self.maybe_sampled_verify(plan, || session.honest_db())?;
+        // result exists, ~1 warm run in 32 re-derives one served file on a
+        // fresh, un-seeded database and hard-errors on any drift. Bounded
+        // latency (one file's honest work), loud on the silent-staleness bug
+        // class the full `BAML_CACHE_VERIFY` guards.
+        self.maybe_sampled_verify(served, || session.honest_db())?;
         Ok(())
     }
 
-    /// Read-only diagnostics collector for `baml check`. It uses the same
-    /// prepared reuse plan as run/test, but does not serialize fresh blobs: a
-    /// check-only manifest cannot advance hashes without matching new units.
+    /// Read-only diagnostics collector for `baml check`. It serves the same
+    /// rows as run/test, but does not serialize fresh blobs: a check-only
+    /// manifest cannot advance without a stored program.
     pub(crate) fn collect_diagnostics_for_check(
         &self,
         db: &ProjectDatabase,
         package: SourceRoot,
-        plan: Option<&ReusePlan>,
+        served: Option<&ServedChecks>,
     ) -> Vec<baml_db::baml_compiler_diagnostics::Diagnostic> {
-        let plan = plan
-            .filter(|_| !Self::diagnostics_cache_disabled())
-            .map(|plan| DiagnosticsServePlan {
-                clean_files: &plan.clean_files,
-                clean_diagnostics: &plan.clean_diagnostics,
-            });
-        self.collect_diagnostics_with_plan(db, package, plan, false)
+        self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), false)
             .merged
     }
 
-    /// Gate diagnostics on the warm path: run `check_file` only for the reuse
-    /// plan's dirty (plus degraded and builtin) files, serving clean files from
-    /// their cached blobs, and return the merged set plus the fresh per-file
-    /// blobs to persist. With `plan == None` (first compile / verify / all
-    /// dirty) this reduces to the honest full check, so the merged set always
-    /// equals the honest collector and the caller renders errors identically.
+    /// Gate diagnostics on the warm path: serve every user file from its
+    /// row when the rows are current, run `check_file` for the rest (and for
+    /// the builtins unless the per-toolchain blob covers them), and return the
+    /// merged set plus the fresh per-file blobs to persist. With `served ==
+    /// None` (first compile / edited project / verify) this reduces to the
+    /// honest full check, so the merged set always equals the honest
+    /// collector and the caller renders errors identically.
     pub(crate) fn collect_diagnostics_incremental(
         &self,
         db: &ProjectDatabase,
         package: SourceRoot,
-        plan: Option<&ReusePlan>,
+        served: Option<&ServedChecks>,
     ) -> IncrementalDiagnostics {
-        // Isolation toggle (mirrors `BAML_NO_STDLIB_INTERFACE_CACHE`): dropping
-        // the serve plan checks every file, so a with/without scope-inference
-        // comparison measures exactly the clean files this feature skips.
-        let plan = plan
+        self.collect_diagnostics_with_plan(db, package, self.serve_plan(served), true)
+    }
+
+    /// The rows to serve, unless serving is disabled (the isolation toggle
+    /// mirrors `BAML_NO_STDLIB_INTERFACE_CACHE`: dropping the served rows
+    /// checks every file, so a with/without comparison measures exactly the
+    /// files this tier skips).
+    fn serve_plan<'a>(&self, served: Option<&'a ServedChecks>) -> Option<DiagnosticsServePlan<'a>> {
+        served
             .filter(|_| !Self::diagnostics_cache_disabled())
-            .map(|plan| DiagnosticsServePlan {
-                clean_files: &plan.clean_files,
-                clean_diagnostics: &plan.clean_diagnostics,
-            });
-        self.collect_diagnostics_with_plan(db, package, plan, true)
+            .map(|served| DiagnosticsServePlan {
+                diagnostics: &served.diagnostics,
+            })
     }
 
     fn collect_diagnostics_with_plan(
@@ -1819,12 +959,12 @@ impl CacheContext {
     ) -> IncrementalDiagnostics {
         let root = package.path(db);
 
-        // Rehydrate clean files' cached diagnostics; a file that fails to
+        // Rehydrate the served files' diagnostics; a file that fails to
         // rehydrate degrades to a re-check (its blob is never served stale).
         let mut precomputed: Vec<baml_db::baml_compiler_diagnostics::Diagnostic> = Vec::new();
         let mut degrade: HashSet<String> = HashSet::new();
         if let Some(plan) = &plan {
-            for (rel, blob) in plan.clean_diagnostics {
+            for (rel, blob) in plan.diagnostics {
                 match crate::diagnostics_cache::rehydrate_file_blob(db, root, blob) {
                     Some(mut diags) => precomputed.append(&mut diags),
                     None => {
@@ -1837,14 +977,14 @@ impl CacheContext {
         // Serve the builtin (stdlib) diagnostics from the per-toolchain constant
         // blob when present: the builtins then drop out of `should_check` below
         // and their (usually empty) diagnostics fold into `precomputed`, exactly
-        // like a clean user file's served blob. This removes the ~1,900-scope
-        // stdlib re-inference tail from every warm dirty compile. It is
-        // independent of the per-file reuse `plan` (even a first-ever compile of
-        // a project can serve a blob written by any earlier compile on the same
-        // toolchain). A missing / corrupt blob, `BAML_NO_DIAGNOSTICS_CACHE`, and
-        // `BAML_CACHE_VERIFY` all fall through to the honest builtin check
-        // (`load_stdlib_diagnostics` gates the disable knob; verify is gated
-        // here so its oracle exercises the honest path).
+        // like a served user file's blob. This removes the ~1,900-scope stdlib
+        // re-inference tail from every warm compile. It is independent of the
+        // served rows (even a first-ever compile of a project can serve a blob
+        // written by any earlier compile on the same toolchain). A missing /
+        // corrupt blob, `BAML_NO_DIAGNOSTICS_CACHE`, and `BAML_CACHE_VERIFY` all
+        // fall through to the honest builtin check (`load_stdlib_diagnostics`
+        // gates the disable knob; verify is gated here so its oracle exercises
+        // the honest path).
         let serve_builtins = !Self::verify_enabled()
             && self
                 .load_stdlib_diagnostics()
@@ -1860,7 +1000,7 @@ impl CacheContext {
                 // otherwise checked honestly, and its blob stored afterward.
                 None => !serve_builtins,
                 Some(rel) => match &plan {
-                    Some(plan) => !plan.clean_files.contains(&rel) || degrade.contains(&rel),
+                    Some(plan) => !plan.diagnostics.contains_key(&rel) || degrade.contains(&rel),
                     None => true,
                 },
             }
@@ -1872,11 +1012,12 @@ impl CacheContext {
         let mut fresh_by_file = if persist_fresh {
             crate::diagnostics_cache::fresh_blobs_by_file(db, root, &narrowed.fresh)
         } else {
-            std::collections::BTreeMap::new()
+            BTreeMap::new()
         };
         // Ensure every re-checked user file has an entry (empty if it produced
-        // no diagnostics) so `store_artifacts_with_manifest` overwrites a stale/poison
-        // carry for a degraded-but-now-clean file rather than re-carrying it.
+        // no diagnostics) so `store_program_and_manifest` overwrites a
+        // stale/poison carry for a degraded-but-now-clean file rather than
+        // re-carrying it.
         if persist_fresh {
             for (sf, rel) in user_files_with_rel_paths(db, package) {
                 if should_check(sf) {
@@ -1894,13 +1035,11 @@ impl CacheContext {
     }
 
     /// Localized diagnostics verify oracle (analog of `verify_stdlib_interface`):
-    /// under `BAML_CACHE_VERIFY` the reuse plan is disabled, so the compile runs
-    /// the honest full check; this compares every file the reuse plan would have
-    /// served from cache (the dirty-partition clean set — not merely the
-    /// content-unchanged files) against a fresh `check_file`. A mismatch means the
-    /// cached diagnostics are a stale substitute that would change what a warm
-    /// incremental run reports — a hard error, and a tighter signal than the
-    /// whole-`Program` byte-compare.
+    /// under `BAML_CACHE_VERIFY` no row is served, so the compile runs the
+    /// honest full check; this compares every row a warm run would have served
+    /// against a fresh `check_file`. A mismatch means the cached diagnostics are
+    /// a stale substitute that would change what a warm run reports — a hard
+    /// error, and a tighter signal than the whole-`Program` byte-compare.
     pub(crate) fn verify_diagnostics(
         &self,
         db: &ProjectDatabase,
@@ -1920,22 +1059,11 @@ impl CacheContext {
         db: &ProjectDatabase,
         package: SourceRoot,
     ) -> anyhow::Result<()> {
-        let Some(manifest) = self.load_prev_manifest_for_verify() else {
+        let Some(manifest) = self.servable_manifest_for_verify() else {
             return Ok(());
         };
         let root = package.path(db);
-        // Exactly the files a served warm compile would serve from cache — the
-        // throws-taint-closure / signature-cascade clean set, not merely the
-        // content-unchanged files. A content-unchanged file dirtied by a changed
-        // referenced name (or a sentinel, or the cascade) is re-checked, never
-        // served stale, so comparing its stored blob against a fresh check would
-        // bail spuriously on ordinary cross-file edits. Mirrors the sibling
-        // fragment oracle's gating.
-        let clean_files = compute_dirty_partition(db, package, &manifest).clean_files;
         for entry in &manifest.files {
-            if !clean_files.contains(&entry.rel_path) {
-                continue; // dirty — always re-checked, never served from cache
-            }
             let full = root.join(&entry.rel_path);
             let Some(sf) = db.get_file(&full) else {
                 continue; // file removed — never served
@@ -1962,41 +1090,22 @@ impl CacheContext {
         Ok(())
     }
 
-    /// Load the previous manifest for the verify oracle, bypassing the
-    /// `plan_reuse` verify short-circuit (verify must still compare against
-    /// whatever manifest is on disk).
-    fn load_prev_manifest_for_verify(&self) -> Option<ProjectManifest> {
-        self.load_decoded(&self.manifest_key, "manifest")
+    /// The manifest whose rows a warm run of this project would serve — the
+    /// one written for this compile's program key — for the verify oracles,
+    /// bypassing the `served_checks` verify short-circuit (verify must still
+    /// compare against whatever is on disk). `None` when no row would be
+    /// served, so there is nothing to compare.
+    fn servable_manifest_for_verify(&self) -> Option<ProjectManifest> {
+        let manifest: ProjectManifest = self.load_decoded(&self.manifest_key, "manifest")?;
+        (manifest.program_key == *self.key.as_bytes()).then_some(manifest)
     }
 
-    /// Load the previous compile's symbolic units for the verify oracle,
-    /// bypassing the `plan_reuse` verify short-circuit.
-    fn load_prev_units_for_verify(&self, manifest: &ProjectManifest) -> Vec<CompilationUnit> {
-        manifest
-            .files
-            .iter()
-            .filter_map(|entry| {
-                let unit = self
-                    .cache
-                    .load_unit_shared(&CacheKey::from_bytes(entry.unit_key))?;
-                (unit.source_file == entry.rel_path).then_some(unit)
-            })
-            .collect()
-    }
-
-    /// Localized interface-fragment / `callable_throws`-seed verify oracle
-    /// (analog of `verify_stdlib_interface` / `verify_diagnostics`): under
-    /// `BAML_CACHE_VERIFY` the reuse plan is disabled, so `db` derives every
-    /// fragment honestly (no seed served). This compares each *taint-clean*
-    /// file's stored fragment against that honest re-derivation.
-    ///
-    /// The clean set is the exact throws-taint-closure partition a served warm
-    /// compile would seed — not merely the content-unchanged files — so the
-    /// oracle checks precisely what would have been seeded. A clean file whose
-    /// stored fragment differs from honest means the closure failed to dirty a
-    /// file whose `callable_throws` actually moved, so the seed would have been
-    /// stale. Whole-fragment equality checks the exact seed-faithfulness
-    /// invariant, not a heuristic.
+    /// Localized `callable_throws`-seed verify oracle (analog of
+    /// `verify_stdlib_interface` / `verify_diagnostics`): under
+    /// `BAML_CACHE_VERIFY` no row is served, so `db` derives every fragment
+    /// honestly. This compares each fragment a warm run would have seeded from
+    /// against that honest re-derivation; whole-fragment equality checks the
+    /// exact seed-faithfulness invariant, not a heuristic.
     pub(crate) fn verify_callable_throws_fragments(
         &self,
         db: &ProjectDatabase,
@@ -2016,18 +1125,12 @@ impl CacheContext {
         db: &ProjectDatabase,
         package: SourceRoot,
     ) -> anyhow::Result<()> {
-        let Some(manifest) = self.load_prev_manifest_for_verify() else {
+        let Some(manifest) = self.servable_manifest_for_verify() else {
             return Ok(());
         };
         let root = package.path(db);
-        // Exactly the files a served warm compile would have seeded. The
-        // served artifact is the manifest-resident fragment blob (seeds
-        // project from the manifest, not from unit payloads), so that copy is
-        // what the oracle must compare.
-        let clean_files = compute_dirty_partition(db, package, &manifest).clean_files;
-
         for entry in &manifest.files {
-            if !clean_files.contains(&entry.rel_path) || entry.callable_throws_fragment.is_empty() {
+            if entry.callable_throws_fragment.is_empty() {
                 continue;
             }
             let full = root.join(&entry.rel_path);
@@ -2047,10 +1150,8 @@ impl CacheContext {
             if honest_bytes != entry.callable_throws_fragment {
                 anyhow::bail!(
                     "BAML_CACHE_VERIFY: cached interface fragment for `{}` differs from a fresh \
-                     derivation ({} cached vs {} fresh bytes). A clean file's stored fragment is \
-                     a stale substitute — the throws-taint closure failed to dirty a file whose \
-                     `callable_throws` changed, so the seeded value would be \
-                     wrong. Please report this.",
+                     derivation ({} cached vs {} fresh bytes). A served file's stored fragment is \
+                     a stale substitute — the seeded value would be wrong. Please report this.",
                     entry.rel_path,
                     entry.callable_throws_fragment.len(),
                     honest_bytes.len(),
@@ -2071,47 +1172,50 @@ impl CacheContext {
         }
     }
 
-    /// Pick the one served clean file this compile should sample-verify, keyed
-    /// off the program cache key (see [`sampled_pick_from_key`]). `None` when
+    /// Pick the one served file this compile should sample-verify, keyed off
+    /// the program cache key (see [`sampled_pick_from_key`]). `None` when
     /// verify mode is active (it already does the full compare), this compile
-    /// isn't sampled, or the plan serves no clean file.
-    fn sampled_verify_pick(&self, plan: &ReusePlan) -> Option<String> {
+    /// isn't sampled, or nothing is served.
+    fn sampled_verify_pick(&self, served: &ServedChecks) -> Option<String> {
         if Self::verify_enabled() {
             return None;
         }
-        let mut clean: Vec<&str> = plan.clean_files.iter().map(String::as_str).collect();
-        clean.sort_unstable();
-        sampled_pick_from_key(self.key.as_bytes(), &clean, Self::sampled_verify_force())
-            .map(str::to_string)
+        let served_files: Vec<&str> = served.diagnostics.keys().map(String::as_str).collect();
+        sampled_pick_from_key(
+            self.key.as_bytes(),
+            &served_files,
+            Self::sampled_verify_force(),
+        )
+        .map(str::to_string)
     }
 
     /// Sampled field verification driver (the always-on tripwire). If this warm
     /// compile is sampled, build an honest database — deferred to `FnOnce` so an
-    /// unsampled compile pays nothing — and verify one served clean file's
-    /// artifacts against it. Meant to be called *after* the compile result is
-    /// produced, so user-visible latency grows by at most one file's honest work.
+    /// unsampled compile pays nothing — and verify one served file's artifacts
+    /// against it. Meant to be called *after* the compile result is produced,
+    /// so user-visible latency grows by at most one file's honest work.
     ///
     /// `build_honest_db` MUST produce a FRESH database from the same sources
-    /// with NO per-file reuse seeds installed (throw facts, `callable_throws`,
-    /// diagnostics). The compile database is seeded with exactly those, so
-    /// re-deriving on it would compare a served seed against itself and prove
-    /// nothing — the honest oracle only has teeth on a database that derives the
-    /// user artifacts itself, exactly as full verify gets by short-circuiting
-    /// `plan_reuse`. (The stdlib build-constant *is* seeded below, for speed;
-    /// that is orthogonal to user-file staleness — see the seeding comment.)
+    /// with NO seeds installed (throw facts, `callable_throws`, diagnostics).
+    /// The compile database is seeded with exactly those, so re-deriving on it
+    /// would compare a served seed against itself and prove nothing — the
+    /// honest oracle only has teeth on a database that derives the user
+    /// artifacts itself, exactly as full verify gets by serving nothing. (The
+    /// stdlib build-constant *is* seeded below, for speed; that is orthogonal to
+    /// user-file staleness — see the seeding comment.)
     pub(crate) fn maybe_sampled_verify(
         &self,
-        plan: Option<&ReusePlan>,
+        served: Option<&ServedChecks>,
         build_honest_db: impl FnOnce() -> (ProjectDatabase, SourceRoot),
     ) -> anyhow::Result<()> {
-        let Some(plan) = plan else {
+        let Some(served) = served else {
             // Cold compile or a whole-image cache hit: nothing was served
-            // artifact-by-artifact, so there is nothing to sample. (A pure hit
-            // serves the program blob; sampling it would require a full honest
+            // row by row, so there is nothing to sample. (A pure hit serves
+            // the program blob; sampling it would require a full honest
             // compile — unacceptable — so hits stay unsampled by design.)
             return Ok(());
         };
-        let Some(rel) = self.sampled_verify_pick(plan) else {
+        let Some(rel) = self.sampled_verify_pick(served) else {
             return Ok(());
         };
         cache_debug(format_args!("sampled field verify: checking `{rel}`"));
@@ -2129,21 +1233,21 @@ impl CacheContext {
         if let Some(blob) = self.load_stdlib_interface() {
             honest_db.set_seeded_stdlib_interface(blob);
         }
-        self.verify_sampled_artifact(&honest_db, honest_package, plan, &rel)
+        self.verify_sampled_artifact(&honest_db, honest_package, served, &rel)
     }
 
-    /// Compare one served clean file's diagnostics blob and `callable_throws`
+    /// Compare one served file's diagnostics blob and `callable_throws`
     /// fragment against an honest re-derivation on `honest_db` (which must be
     /// un-seeded — see [`Self::maybe_sampled_verify`]). A mismatch is a hard
-    /// error: the incremental cache served a stale artifact, so the user's warm
-    /// build silently diverged from an honest compile. The message points at
+    /// error: the cache served a stale artifact, so the user's warm build
+    /// silently diverged from an honest compile. The message points at
     /// `BAML_CACHE_VERIFY=1` (the full byte-compare) and names the file and
     /// artifact kind, mirroring rustc's ICE-on-fingerprint-mismatch.
     pub(crate) fn verify_sampled_artifact(
         &self,
         honest_db: &ProjectDatabase,
         honest_package: SourceRoot,
-        plan: &ReusePlan,
+        served: &ServedChecks,
         rel: &str,
     ) -> anyhow::Result<()> {
         let root = honest_package.path(honest_db);
@@ -2155,29 +1259,27 @@ impl CacheContext {
         // (1) Served diagnostics blob vs a fresh per-file check. A blob that
         // fails to rehydrate would have degraded to a re-check (never served
         // stale), so it is not a mismatch — skip it, as the full oracle does.
-        if let Some(blob) = plan.clean_diagnostics.get(rel)
-            && let Some(served) =
+        if let Some(blob) = served.diagnostics.get(rel)
+            && let Some(served_diagnostics) =
                 crate::diagnostics_cache::rehydrate_file_blob(honest_db, root, blob)
         {
             let fresh = honest_db.check_file(sf);
-            if !diagnostic_sets_equal(&served, &fresh) {
+            if !diagnostic_sets_equal(&served_diagnostics, &fresh) {
                 anyhow::bail!(
-                    "BAML_CACHE_SAMPLED_VERIFY: the incremental cache served STALE diagnostics \
-                     for `{rel}` ({} served vs {} from an honest check). This is a \
-                     cache-soundness bug — a warm build would report different errors than a \
-                     clean one. Re-run with BAML_CACHE_VERIFY=1 for the full compare and please \
-                     report this (file `{rel}`, artifact: diagnostics).",
-                    served.len(),
+                    "BAML_CACHE_SAMPLED_VERIFY: the cache served STALE diagnostics for `{rel}` \
+                     ({} served vs {} from an honest check). This is a cache-soundness bug — a \
+                     warm build would report different errors than a clean one. Re-run with \
+                     BAML_CACHE_VERIFY=1 for the full compare and please report this (file \
+                     `{rel}`, artifact: diagnostics).",
+                    served_diagnostics.len(),
                     fresh.len(),
                 );
             }
         }
 
-        // (2) Served `callable_throws` fragment vs an honest derivation. The
-        // served copy is the manifest-resident blob (what the seeds project
-        // from); an empty fragment seeds nothing, so there is no served
-        // artifact to check.
-        if let Some(fragment) = plan.clean_fragments.get(rel)
+        // (2) Served `callable_throws` fragment vs an honest derivation. An
+        // empty fragment seeds nothing, so there is no served artifact to check.
+        if let Some(fragment) = served.fragments.get(rel)
             && !fragment.is_empty()
         {
             let honest =
@@ -2187,11 +1289,11 @@ impl CacheContext {
             let honest_bytes = borsh::to_vec(&honest)?;
             if honest_bytes != *fragment {
                 anyhow::bail!(
-                    "BAML_CACHE_SAMPLED_VERIFY: the incremental cache served a STALE \
-                     callable-throws seed for `{rel}` ({} served vs {} honest bytes). This is a \
-                     cache-soundness bug — a warm build would infer different throws than a clean \
-                     one. Re-run with BAML_CACHE_VERIFY=1 for the full compare and please report \
-                     this (file `{rel}`, artifact: callable-throws fragment).",
+                    "BAML_CACHE_SAMPLED_VERIFY: the cache served a STALE callable-throws seed for \
+                     `{rel}` ({} served vs {} honest bytes). This is a cache-soundness bug — a \
+                     warm build would infer different throws than a clean one. Re-run with \
+                     BAML_CACHE_VERIFY=1 for the full compare and please report this (file \
+                     `{rel}`, artifact: callable-throws fragment).",
                     fragment.len(),
                     honest_bytes.len(),
                 );
@@ -2226,57 +1328,33 @@ impl CacheContext {
 
     #[cfg(test)]
     fn set_manifest_diagnostics_for_test(&self, rel_path: &str, diagnostics: Vec<u8>) {
-        let bytes = self
-            .cache
-            .load_raw(&self.manifest_key)
-            .expect("manifest present");
-        let mut manifest: ProjectManifest = borsh::from_slice(&bytes).expect("manifest decodes");
-        manifest
-            .files
-            .iter_mut()
-            .find(|file| file.rel_path == rel_path)
-            .expect("manifest file present")
-            .diagnostics = diagnostics;
-        let payload = borsh::to_vec(&manifest).expect("manifest serializes");
-        self.cache
-            .store_raw(&self.manifest_key, &payload)
-            .expect("manifest re-stored");
+        self.edit_manifest_row_for_test(rel_path, |row| row.diagnostics = diagnostics);
     }
 
-    /// Test hook: point one manifest entry at a newly content-addressed unit
-    /// carrying a poisoned interface fragment. Used by the fragment verify
-    /// oracle's negative test.
+    /// Test hook: overwrite one file's stored `callable_throws` fragment with
+    /// a poisoned one. Used by the fragment verify oracle's negative test.
     #[cfg(test)]
     pub(crate) fn poison_callable_throws_fragment_for_test(
         &self,
         rel_path: &str,
         fragment: Vec<u8>,
     ) {
-        let manifest_bytes = self
+        self.edit_manifest_row_for_test(rel_path, |row| row.callable_throws_fragment = fragment);
+    }
+
+    #[cfg(test)]
+    fn edit_manifest_row_for_test(&self, rel_path: &str, edit: impl FnOnce(&mut ManifestFile)) {
+        let bytes = self
             .cache
             .load_raw(&self.manifest_key)
             .expect("manifest present");
-        let mut manifest: ProjectManifest =
-            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
-        let entry = manifest
+        let mut manifest: ProjectManifest = borsh::from_slice(&bytes).expect("manifest decodes");
+        let row = manifest
             .files
             .iter_mut()
-            .find(|entry| entry.rel_path == rel_path)
+            .find(|file| file.rel_path == rel_path)
             .expect("manifest file present");
-        let mut unit = self
-            .cache
-            .load_unit_shared(&CacheKey::from_bytes(entry.unit_key))
-            .expect("unit present");
-        unit.callable_throws_fragment = fragment.clone();
-        let (key, _) = self
-            .cache
-            .store_unit_shared(&unit)
-            .expect("poisoned unit stored");
-        entry.unit_key = *key.as_bytes();
-        // The manifest carries its own verbatim fragment copy (the one seeds
-        // project from) — poison it too so the drift is observable on the
-        // served artifact, matching what a real store-path bug would produce.
-        entry.callable_throws_fragment = fragment;
+        edit(row);
         let payload = borsh::to_vec(&manifest).expect("manifest serializes");
         self.cache
             .store_raw(&self.manifest_key, &payload)
@@ -2286,15 +1364,15 @@ impl CacheContext {
 
 #[derive(Clone, Copy)]
 struct DiagnosticsServePlan<'a> {
-    clean_files: &'a HashSet<String>,
-    clean_diagnostics: &'a std::collections::BTreeMap<String, Vec<u8>>,
+    /// The served files' cached diagnostics blobs, by rel path.
+    diagnostics: &'a BTreeMap<String, Vec<u8>>,
 }
 
 /// The merged (gate/render) diagnostics plus the per-file blobs to persist,
 /// produced by [`CacheContext::collect_diagnostics_incremental`].
 pub(crate) struct IncrementalDiagnostics {
     pub(crate) merged: Vec<baml_db::baml_compiler_diagnostics::Diagnostic>,
-    pub(crate) fresh_by_file: std::collections::BTreeMap<String, Vec<u8>>,
+    pub(crate) fresh_by_file: BTreeMap<String, Vec<u8>>,
 }
 
 /// Order-independent equality of two diagnostic sets — the verify oracle
@@ -2324,7 +1402,7 @@ fn diagnostic_sets_equal(
 
 /// The RNG-free sampled-verify decision, derived entirely from the program
 /// cache key (`compute_key`'s sha256 over every compile input). Returns the
-/// chosen clean file — `None` when this compile is not sampled or nothing is
+/// chosen served file — `None` when this compile is not sampled or nothing is
 /// served.
 ///
 /// No clock and no `rand`: the key already varies with the sources, so
@@ -2337,49 +1415,37 @@ fn diagnostic_sets_equal(
 ///   compiles pay the check. `force = Some(true/false)` overrides the gate for
 ///   the `BAML_CACHE_SAMPLED_VERIFY=1/0` knobs.
 /// - Which file: bytes 1..5 of the key (independent of the gate byte) index the
-///   **sorted** clean set, so the pick is stable regardless of set iteration
+///   **sorted** served set, so the pick is stable regardless of set iteration
 ///   order.
 fn sampled_pick_from_key<'a>(
     key: &[u8; 32],
-    clean_sorted: &[&'a str],
+    served_sorted: &[&'a str],
     force: Option<bool>,
 ) -> Option<&'a str> {
     let sample = match force {
         Some(forced) => forced,
         None => key[0] & 31 == 0,
     };
-    if !sample || clean_sorted.is_empty() {
+    if !sample || served_sorted.is_empty() {
         return None;
     }
-    let idx = u32::from_le_bytes([key[1], key[2], key[3], key[4]]) as usize % clean_sorted.len();
-    Some(clean_sorted[idx])
+    let idx = u32::from_le_bytes([key[1], key[2], key[3], key[4]]) as usize % served_sorted.len();
+    Some(served_sorted[idx])
 }
 
 #[cfg(test)]
 mod tests {
-    //! Soundness of the dirty-set computation and the Phase 2 seeding path.
-    //! Covers, in layers:
-    //!   - the layout dependencies the bytecode-operand set alone misses (field
-    //!     reorder, enum variant reorder, type-alias change, inferred-receiver
-    //!     field access) — a `plan_reuse` test caches a compile, edits one type,
-    //!     and asserts the affected consumer is dirtied while an unrelated file
-    //!     stays clean;
-    //!   - the transitive throws-taint closure and the signature-meaning cascade
-    //!     (direct / clean-intermediary / firewall / body-only-reference cases),
-    //!     asserted on the dirty/clean/seeded partition and on served==honest
-    //!     diagnostics and byte-identity;
-    //!   - the stdlib typed-interface cache and per-file throws seeds;
-    //!   - the fragment and diagnostics `BAML_CACHE_VERIFY` oracles (a faithful
-    //!     cache passes, a poisoned one bails).
+    //! Soundness of the three tiers: a warm compile serves every package and
+    //! reproduces an honest compile byte for byte; an edit re-emits only the
+    //! user package; the check rows are served only for an identical project;
+    //! the stdlib typed-interface and builtin-diagnostics blobs; the fragment
+    //! and diagnostics `BAML_CACHE_VERIFY` oracles (a faithful cache passes, a
+    //! poisoned one bails); the discovery cache; sampled verification.
 
     use std::path::{Path, PathBuf};
 
-    use bex_vm_types::Object;
-
     use super::*;
-    use crate::cache_test_support::{
-        cache_disabled, compile_and_store_v1, dirty_basenames, resolved, unique_root,
-    };
+    use crate::cache_test_support::{cache_disabled, compile_and_store_v1, resolved, unique_root};
 
     /// A unique on-disk root for a `bytecode_cache` disk-round-trip test.
     fn bc_root() -> PathBuf {
@@ -2402,980 +1468,210 @@ mod tests {
             .expect("source file present")
     }
 
-    /// Compile+cache `initial`, then plan a reuse against `edited`; return the
-    /// set of dirty file names (`None` when caching is disabled by env). A strict
-    /// subset of [`plan_after_edit`]'s partition.
-    fn dirty_after_edit(
-        initial: &[(&str, &str)],
-        edited: &[(&str, &str)],
-    ) -> Option<HashSet<String>> {
-        plan_after_edit(initial, edited).map(|plan| plan.dirty)
+    /// The number of packages a compile of `package` links: every root of its
+    /// world with files.
+    fn linked_package_count(db: &ProjectDatabase, package: SourceRoot) -> usize {
+        baml_db::baml_compiler2_hir::package::world_roots(db, package)
+            .iter()
+            .filter(|root| !root.files(db).is_empty())
+            .count()
     }
 
-    /// The reuse plan's file partition after an edit, by basename: which files
-    /// are dirty, which stay clean, and which carry a `callable_throws` seed
-    /// (Phase 2). Used by the seeding-specific scenarios below.
-    #[derive(Debug)]
-    struct PlanSummary {
-        dirty: HashSet<String>,
-        clean: HashSet<String>,
-        seeded: HashSet<String>,
+    fn program_bytes(program: &Program) -> Vec<u8> {
+        borsh::to_vec(program).expect("serialize program")
     }
 
-    fn basename(s: &str) -> String {
-        Path::new(s)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| s.to_string())
+    /// An honest compile of `resolved`'s sources on a fresh database with no
+    /// cache: the oracle every cached compile must reproduce byte for byte.
+    fn honest_bytes(resolved: &ResolvedProject) -> Vec<u8> {
+        let (db, package) = crate::project_load::build_db_from_sources(resolved, |_| {});
+        program_bytes(&baml_db::compile_program(&db, package, CLI_OPT_LEVEL).expect("honest"))
     }
 
-    /// Compile through the CLI path, returning the program AND its assembled
-    /// units — the incremental-vs-scratch oracle needs both halves.
-    fn compile_artifacts_for_test(
-        db: &ProjectDatabase,
-        package: SourceRoot,
-        ctx: &CacheContext,
-        plan: Option<&ReusePlan>,
-    ) -> (Program, Vec<CompilationUnit>) {
-        let artifacts =
-            compile_program_artifacts(db, package, Some(ctx), plan).expect("compile succeeds");
-        let (CompiledUnits::Fresh(units) | CompiledUnits::Reused(units)) = artifacts.units else {
-            panic!("a cached compile always assembles units");
-        };
-        (artifacts.program, units)
-    }
+    const A_V1: &str = "function a() -> int {\n  1\n}\n";
+    const A_V2: &str = "function a() -> int {\n  10 + 1\n}\n";
+    const B: &str = "function b() -> int {\n  2\n}\n";
 
-    /// The units half of the incremental-vs-scratch oracle: every unit the
-    /// warm (reuse) compile assembled must byte-equal the scratch compile's
-    /// freshly decomposed one. A divergence means the reuse path preserved
-    /// something a scratch compile derives differently — stale bytecode, a
-    /// stale `callable_throws` fragment, or stale recorded reference edges —
-    /// exactly the silent-staleness class the dirty partition must prevent.
-    /// Runs inside every relink scenario helper, so each scenario in the
-    /// matrix sweeps it automatically.
-    fn assert_units_match_scratch(warm: &[CompilationUnit], scratch: &[CompilationUnit]) {
-        let by_file = |units: &[CompilationUnit]| -> std::collections::BTreeMap<String, Vec<u8>> {
-            units
-                .iter()
-                .map(|u| {
-                    (
-                        u.source_file.clone(),
-                        borsh::to_vec(u).expect("unit serializes"),
-                    )
-                })
-                .collect()
-        };
-        let warm = by_file(warm);
-        let scratch = by_file(scratch);
-        assert_eq!(
-            warm.keys().collect::<Vec<_>>(),
-            scratch.keys().collect::<Vec<_>>(),
-            "warm and scratch compiles must produce units for the same files"
-        );
-        for (file, warm_bytes) in &warm {
-            assert!(
-                warm_bytes == &scratch[file],
-                "unit for `{file}` diverges between the warm incremental compile and \
-                 a scratch compile of the same sources — the reuse plan served stale \
-                 state for it"
-            );
-        }
-    }
+    // ── The per-package tier ─────────────────────────────────────────────
 
-    /// Compile+cache `initial`, then plan a reuse against `edited` and summarize
-    /// the partition (dirty / clean / seeded) by basename. `None` when caching is
-    /// disabled. Every scenario keeps at
-    /// least one unrelated clean file so a reuse plan is always produced.
-    fn plan_after_edit(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<PlanSummary> {
+    #[test]
+    fn warm_compile_serves_every_package_byte_identically() {
         if cache_disabled() {
-            return None;
+            return;
         }
         let root = bc_root();
-        let _ = compile_and_store_v1(&root, initial);
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let _ = compile_and_store_v1(&root, &files);
 
-        let r2 = resolved(&root, edited);
+        let r2 = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-        let plan = ctx2.plan_reuse(&db2, pkg2).expect("reuse plan available");
-
-        let dirty = dirty_basenames(&plan.dirty_files, &db2);
-        let clean: HashSet<String> = plan.clean_files.iter().map(|r| basename(r)).collect();
-        let seeded: HashSet<String> = plan
-            .seeded_callable_throws
-            .keys()
-            .map(|p| basename(p))
-            .collect();
-        let _ = std::fs::remove_dir_all(&root);
-        Some(PlanSummary {
-            dirty,
-            clean,
-            seeded,
-        })
-    }
-
-    /// Like [`plan_after_edit`], but also runs the full incremental flow the CLI
-    /// runs — seed the plan's throw facts + `callable_throws`, relink through the
-    /// reuse units — and compares the relinked `Program` byte-for-byte against an
-    /// honest full compile of the same edited sources. Returns the plan summary
-    /// plus whether relink and full are byte-identical. `None` when caching is
-    /// disabled.
-    fn plan_and_relink_after_edit(
-        initial: &[(&str, &str)],
-        edited: &[(&str, &str)],
-    ) -> Option<(PlanSummary, bool)> {
-        if cache_disabled() {
-            return None;
-        }
-        let root = bc_root();
-        let _ = compile_and_store_v1(&root, initial);
-
-        // v2 served path: plan reuse, seed exactly as the CLI does, relink.
-        let r2 = resolved(&root, edited);
-        let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-        let pending_plan = ctx2.plan_reuse(&db2, pkg2);
-        let seeded = pending_plan
-            .as_ref()
-            .into_iter()
-            .flat_map(|plan| plan.seeded_callable_throws.keys())
-            .map(|path| basename(path))
-            .collect();
-        let plan = prepare_reuse_plan(&mut db2, pkg2, pending_plan).expect("reuse plan available");
-        let (relinked, relinked_units) = compile_artifacts_for_test(&db2, pkg2, &ctx2, Some(&plan));
-
-        // v2 honest path: an independent fresh database, no reuse plan — the
-        // stdlib-spliced full compile the relink must reproduce byte-for-byte.
-        let (db_full, pkg_full) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let (full, full_units) = compile_artifacts_for_test(&db_full, pkg_full, &ctx2, None);
-        assert_units_match_scratch(&relinked_units, &full_units);
-        let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
-            == borsh::to_vec(&full).expect("ser full");
-
-        let summary = PlanSummary {
-            dirty: dirty_basenames(&plan.dirty_files, &db2),
-            clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
-            seeded,
-        };
-        let _ = std::fs::remove_dir_all(&root);
-        Some((summary, byte_identical))
-    }
-
-    /// Like [`plan_and_relink_after_edit`], but additionally asserts diagnostics
-    /// parity: the warm *served* diagnostics (reuse plan honored — clean files
-    /// served from cache, dirty files re-checked) must equal an independent fresh
-    /// database's full check. Returns the plan summary, whether served == honest,
-    /// and whether relink == full.
-    fn plan_diags_and_relink_after_edit(
-        initial: &[(&str, &str)],
-        edited: &[(&str, &str)],
-    ) -> Option<(PlanSummary, bool, Option<bool>)> {
-        if cache_disabled() {
-            return None;
-        }
-        let root = bc_root();
-        let _ = compile_and_store_v1(&root, initial);
-
-        let result = plan_diags_and_relink_from_stored(&root, edited);
-        let _ = std::fs::remove_dir_all(&root);
-        Some(result)
-    }
-
-    /// Compare one edit against an already-stored baseline. Keeping this
-    /// separate lets matrix tests reuse the expensive v1 compile while each
-    /// edited case still gets independent served and honest databases.
-    fn plan_diags_and_relink_from_stored(
-        root: &Path,
-        edited: &[(&str, &str)],
-    ) -> (PlanSummary, bool, Option<bool>) {
-        let r2 = resolved(root, edited);
-        let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-        let pending_plan = ctx2.plan_reuse(&db2, pkg2);
-        let seeded = pending_plan
-            .as_ref()
-            .into_iter()
-            .flat_map(|plan| plan.seeded_callable_throws.keys())
-            .map(|path| basename(path))
-            .collect();
-        let plan = prepare_reuse_plan(&mut db2, pkg2, pending_plan).expect("reuse plan available");
-
-        // Warm served diagnostics (plan honored) vs an honest full check in an
-        // independent database with no seeds.
-        let served = ctx2
-            .collect_diagnostics_incremental(&db2, pkg2, Some(&plan))
-            .merged;
-        let (db_honest, pkg_honest) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
-        let diags_match = diagnostic_sets_equal(&served, &honest);
-
-        // Relink parity is only a question for a program that still COMPILES.
-        // Lowering runs on a checked program by contract (see the emit-side
-        // note on `lower_to_runtime`), so an edited program that still has
-        // errors has no artifact to compare — asking for one lowers an
-        // inconsistent TIR and trips an invariant somewhere in MIR. `None`
-        // says the comparison did not apply, never that it passed.
-        let edited_has_errors = honest
-            .iter()
-            .any(|d| d.severity == baml_db::baml_compiler_diagnostics::Severity::Error);
-        let byte_identical = (!edited_has_errors).then(|| {
-            let (relinked, relinked_units) =
-                compile_artifacts_for_test(&db2, pkg2, &ctx2, Some(&plan));
-            let (full, full_units) =
-                compile_artifacts_for_test(&db_honest, pkg_honest, &ctx2, None);
-            assert_units_match_scratch(&relinked_units, &full_units);
-            borsh::to_vec(&relinked).expect("ser relink") == borsh::to_vec(&full).expect("ser full")
-        });
-
-        let summary = PlanSummary {
-            dirty: dirty_basenames(&plan.dirty_files, &db2),
-            clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
-            seeded,
-        };
-        (summary, diags_match, byte_identical)
-    }
-
-    fn assert_mixed_file_edit(
-        root: &Path,
-        label: &str,
-        mixed_v2: &str,
-        baker: &str,
-        unrelated: &str,
-        expect_baker_dirty: bool,
-    ) {
-        let edited = [
-            ("mixed.baml", mixed_v2),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let (plan, diagnostics_match, byte_identical) =
-            plan_diags_and_relink_from_stored(root, &edited);
-
-        assert!(
-            plan.dirty.contains("mixed.baml"),
-            "{label}: the edited file must be dirty; {plan:?}"
-        );
+        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
         assert_eq!(
-            plan.dirty.contains("baker.baml"),
-            expect_baker_dirty,
-            "{label}: layout-sentinel decision was wrong; {plan:?}"
+            ctx2.packages_served(),
+            linked_package_count(&db2, pkg2),
+            "an unchanged project serves every package from the cache"
         );
-        assert!(
-            plan.clean.contains("z.baml"),
-            "{label}: the unrelated file must remain clean; {plan:?}"
-        );
-        assert!(
-            diagnostics_match,
-            "{label}: served diagnostics must match an independent fresh database"
-        );
+        assert_eq!(ctx2.packages_emitted(), 0, "nothing is emitted fresh");
         assert_eq!(
-            byte_identical,
-            Some(true),
-            "{label}: relink must be byte-identical to a full compile"
-        );
-    }
-
-    // ── Layout-scoped sentinel (mixed class+function files) ──────────────────
-
-    /// Exercise both sides of the mixed-file layout sentinel in one labeled
-    /// oracle. In each case diagnostics and bytecode are compared with a
-    /// distinct, unseeded database; only the served side receives the reuse
-    /// plan.
-    #[test]
-    fn mixed_file_edits_preserve_minimal_reuse_and_honest_outputs() {
-        if cache_disabled() {
-            return;
-        }
-        let mixed_v1 = "class Widget {\n  w int\n  h int\n}\n\
-                        function helper(a: int) -> int {\n  a\n}\n";
-        let function_edit = "class Widget {\n  w int\n  h int\n}\n\
-                        function helper(a: int, b: int) -> int {\n  a + b\n}\n";
-        let field_reorder = "class Widget {\n  h int\n  w int\n}\n\
-                            function helper(a: int) -> int {\n  a\n}\n";
-        let baker = "class Other {\n  a int\n  b int\n}\n\
-                     function reado(o: Other) -> int {\n  o.a\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let root = bc_root();
-        let initial = [
-            ("mixed.baml", mixed_v1),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let _ = compile_and_store_v1(&root, &initial);
-
-        // A function-only signature edit leaves the sentinel unraised; a field
-        // reorder fires it and dirties the layout-baking file.
-        assert_mixed_file_edit(
-            &root,
-            "function signature edit",
-            function_edit,
-            baker,
-            unrelated,
-            false,
-        );
-        assert_mixed_file_edit(
-            &root,
-            "field reorder",
-            field_reorder,
-            baker,
-            unrelated,
-            true,
+            program_bytes(&program),
+            honest_bytes(&r2),
+            "a compile linked from served packages is byte-identical to an honest compile"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// Editing a class's generic-parameter list is a layout change — it must
-    /// fire the sentinel (the generic-param count feeds the class object),
-    /// dirtying layout-baking files, byte-identity preserved.
     #[test]
-    fn plan_reuse_mixed_file_type_param_edit_fires_sentinel() {
-        let mixed_v1 = "class Box<T> {\n  value T\n}\n\
-                        function helper(a: int) -> int {\n  a\n}\n";
-        let mixed_v2 = "class Box<T, U> {\n  value T\n}\n\
-                        function helper(a: int) -> int {\n  a\n}\n";
-        let baker = "class Other {\n  a int\n  b int\n}\n\
-                     function reado(o: Other) -> int {\n  o.a\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("mixed.baml", mixed_v1),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("mixed.baml", mixed_v2),
-            ("baker.baml", baker),
-            ("z.baml", unrelated),
-        ];
-        let Some((p, byte_identical)) = plan_and_relink_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("mixed.baml"),
-            "the edited file must be dirty; {p:?}"
-        );
-        assert!(
-            p.dirty.contains("baker.baml"),
-            "a generic-parameter change must fire the layout sentinel; dirty = {:?}",
-            p.dirty
-        );
-        assert!(
-            byte_identical,
-            "relink must be byte-identical to a full compile"
-        );
-    }
-
-    // ── FINDING 1: field reorder (receiver named in the signature) ───────────
-
-    #[test]
-    fn plan_reuse_dirties_field_reader_on_field_reorder() {
-        let initial = [
-            ("a.baml", "class Point {\n  x int\n  y int\n}\n"),
-            (
-                "b.baml",
-                "function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
-            ),
-            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
-        ];
-        let edited = [
-            ("a.baml", "class Point {\n  y int\n  x int\n}\n"),
-            (
-                "b.baml",
-                "function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
-            ),
-            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
-        ];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            dirty.contains("b.baml"),
-            "field reader must be dirtied when Point's fields reorder; dirty = {dirty:?}"
-        );
-        assert!(
-            !dirty.contains("c.baml"),
-            "a file referencing no changed type must stay clean; dirty = {dirty:?}"
-        );
-    }
-
-    // ── FINDING 1 (deep): inferred receiver, caught only by the sentinel ─────
-
-    #[test]
-    fn plan_reuse_dirties_inferred_receiver_field_access_via_layout_sentinel() {
-        // `use_it` names no type: `p`'s class is inferred from `mk()`'s return,
-        // so only the layout sentinel (its `LoadField` bakes Point's offsets)
-        // can catch a reorder. `mk` lives in its own file, so reordering Point
-        // does not change `mk`'s file signature — ruling out a name-based hit.
-        let point_v1 = "class Point {\n  x int\n  y int\n}\n";
-        let point_v2 = "class Point {\n  y int\n  x int\n}\n";
-        let mk = "function mk() -> Point {\n  Point { x: 1, y: 2 }\n}\n";
-        let use_it = "function use_it() -> int {\n  let p = mk();\n  p.x\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("a.baml", point_v1),
-            ("d.baml", mk),
-            ("b.baml", use_it),
-            ("c.baml", unrelated),
-        ];
-        let edited = [
-            ("a.baml", point_v2),
-            ("d.baml", mk),
-            ("b.baml", use_it),
-            ("c.baml", unrelated),
-        ];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            dirty.contains("b.baml"),
-            "inferred-receiver field reader must be dirtied via the layout sentinel; \
-             dirty = {dirty:?}"
-        );
-        assert!(
-            !dirty.contains("c.baml"),
-            "unrelated file must stay clean; dirty = {dirty:?}"
-        );
-    }
-
-    // ── FINDING 1 (enum analog): variant reorder ─────────────────────────────
-
-    #[test]
-    fn plan_reuse_dirties_enum_consumer_on_variant_reorder() {
-        let initial = [
-            ("a.baml", "enum Color {\n  Red\n  Green\n}\n"),
-            ("b.baml", "function pick(c: Color) -> Color {\n  c\n}\n"),
-            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
-        ];
-        let edited = [
-            ("a.baml", "enum Color {\n  Green\n  Red\n}\n"),
-            ("b.baml", "function pick(c: Color) -> Color {\n  c\n}\n"),
-            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
-        ];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            dirty.contains("b.baml"),
-            "enum consumer must be dirtied when Color's variants reorder; dirty = {dirty:?}"
-        );
-        assert!(
-            !dirty.contains("c.baml"),
-            "unrelated file must stay clean; dirty = {dirty:?}"
-        );
-    }
-
-    // ── FINDING 2: type-alias change ─────────────────────────────────────────
-
-    #[test]
-    fn plan_reuse_dirties_type_alias_consumer_on_alias_change() {
-        // `pay` forwards a `Money` value (no field access → no layout sentinel),
-        // so only tracking the *alias name* `Money` — via `defined_names` and
-        // `syntactic_type_names` — can dirty it when the RHS changes.
-        let a_v1 = "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Dollars\n";
-        let a_v2 = "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Euros\n";
-        let pay = "function pay(m: Money) -> Money {\n  m\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [("a.baml", a_v1), ("b.baml", pay), ("c.baml", unrelated)];
-        let edited = [("a.baml", a_v2), ("b.baml", pay), ("c.baml", unrelated)];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            dirty.contains("b.baml"),
-            "type-alias consumer must be dirtied when the alias RHS changes; dirty = {dirty:?}"
-        );
-    }
-
-    // ── Risk 1: inferred-throws change dirties the caller ────────────────────
-
-    #[test]
-    fn plan_reuse_dirties_caller_on_callee_inferred_throws_change() {
-        // A body-only edit to `risky` grows its inferred throws (none -> MyErr)
-        // without touching its signature, so its `signature_hash` is unchanged
-        // and the name-based dirty set alone would leave the caller clean. Only
-        // the throws-change propagation (Risk 1) dirties `caller`, whose
-        // throws-contract / catch diagnostics depend on `risky`'s throws.
-        let err = "class MyErr {\n  msg string\n}\n";
-        let risky_v1 = "function risky(x: int) -> int {\n  x\n}\n";
-        let risky_v2 = "function risky(x: int) -> int {\n  throw MyErr { msg: \"boom\" }\n}\n";
-        let caller = "function caller(x: int) -> int {\n  risky(x)\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("err.baml", err),
-            ("risky.baml", risky_v1),
-            ("caller.baml", caller),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("err.baml", err),
-            ("risky.baml", risky_v2),
-            ("caller.baml", caller),
-            ("z.baml", unrelated),
-        ];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            dirty.contains("caller.baml"),
-            "caller must be dirtied when the callee's inferred throws grow; dirty = {dirty:?}"
-        );
-        assert!(
-            !dirty.contains("z.baml"),
-            "an unrelated file must stay clean; dirty = {dirty:?}"
-        );
-    }
-
-    // ── Phase 2d: seeding-specific scenarios ─────────────────────────────────
-
-    #[test]
-    fn plan_reuse_dirties_transitive_caller_through_clean_intermediary() {
-        // A -> B -> C. Only C's body is edited (its inferred throws grow from
-        // none to MyErr). B and A are byte-identical, so B is a *clean
-        // intermediary*: its own `file_throw_facts` are unchanged, yet its solved
-        // transitive throws grew and A's throws grew through it. The one-hop
-        // propagation reaches only B (which references C by name); ONLY the
-        // transitive throws-taint closure reaches A. This is the sharp §5b case
-        // — A must be dirtied so its `callable_throws` seed is never served stale.
-        let err = "class MyErr {\n  msg string\n}\n";
-        let c_v1 = "function c() -> int {\n  1\n}\n";
-        let c_v2 = "function c() -> int {\n  throw MyErr { msg: \"boom\" }\n}\n";
-        let b = "function b() -> int {\n  c()\n}\n";
-        let a = "function a() -> int {\n  b()\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("err.baml", err),
-            ("c.baml", c_v1),
-            ("b.baml", b),
-            ("a.baml", a),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("err.baml", err),
-            ("c.baml", c_v2),
-            ("b.baml", b),
-            ("a.baml", a),
-            ("z.baml", unrelated),
-        ];
-        let Some(p) = plan_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("c.baml"),
-            "the edited callee must be dirty; {p:?}"
-        );
-        assert!(
-            p.dirty.contains("b.baml"),
-            "the clean intermediary (direct caller of C) must be dirty; {p:?}"
-        );
-        assert!(
-            p.dirty.contains("a.baml"),
-            "the TRANSITIVE caller through the clean intermediary must be dirty — \
-             only the taint closure reaches it; dirty = {:?}",
-            p.dirty
-        );
-        assert!(
-            !p.seeded.contains("a.baml"),
-            "a transitively-tainted caller must NOT be seeded; seeded = {:?}",
-            p.seeded
-        );
-        assert!(
-            p.clean.contains("z.baml") && p.seeded.contains("z.baml"),
-            "an unrelated file stays clean and seeded; {p:?}"
-        );
-    }
-
-    #[test]
-    fn plan_reuse_firewall_stops_taint_at_closed_throws_contract() {
-        // A -> B -> C, but B declares a *closed* `throws` contract. C's inferred
-        // throws change ({MyErr} -> {OtherErr}), so B is (over-)dirtied for
-        // referencing C — but B's `callable_throws` is its declared set,
-        // independent of C, so the taint STOPS at B: A's throws are unchanged, so
-        // A stays clean and its seed remains valid.
-        let err = "class MyErr {\n  msg string\n}\nclass OtherErr {\n  msg string\n}\n";
-        let c_v1 = "function c() -> int {\n  throw MyErr { msg: \"x\" }\n}\n";
-        let c_v2 = "function c() -> int {\n  throw OtherErr { msg: \"y\" }\n}\n";
-        let b = "function b() -> int throws MyErr {\n  c()\n}\n";
-        let a = "function a() -> int {\n  b()\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("err.baml", err),
-            ("c.baml", c_v1),
-            ("b.baml", b),
-            ("a.baml", a),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("err.baml", err),
-            ("c.baml", c_v2),
-            ("b.baml", b),
-            ("a.baml", a),
-            ("z.baml", unrelated),
-        ];
-        let Some(p) = plan_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("c.baml"),
-            "the edited callee must be dirty; {p:?}"
-        );
-        assert!(
-            p.clean.contains("a.baml"),
-            "the closed-`throws` firewall must keep A clean; dirty = {:?}",
-            p.dirty
-        );
-        assert!(
-            p.seeded.contains("a.baml"),
-            "A must be seeded — its throws are unchanged behind the firewall; \
-             seeded = {:?}",
-            p.seeded
-        );
-    }
-
-    #[test]
-    fn plan_reuse_body_edit_not_touching_throws_keeps_callers_seeded() {
-        // A -> B -> C. B's body is rewritten (a no-op `let`), so B is
-        // content-dirty and re-emitted, but its inferred throws are unchanged, so
-        // the taint closure never fires: A stays clean and its `callable_throws`
-        // seed is served, as does the untouched callee C.
-        let c = "function c() -> int {\n  1\n}\n";
-        let b_v1 = "function b() -> int {\n  c()\n}\n";
-        let b_v2 = "function b() -> int {\n  let r = c()\n  r\n}\n";
-        let a = "function a() -> int {\n  b()\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("c.baml", c),
-            ("b.baml", b_v1),
-            ("a.baml", a),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("c.baml", c),
-            ("b.baml", b_v2),
-            ("a.baml", a),
-            ("z.baml", unrelated),
-        ];
-        let Some(p) = plan_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("b.baml"),
-            "the body-edited file must be dirty; {p:?}"
-        );
-        assert!(
-            p.clean.contains("a.baml") && p.seeded.contains("a.baml"),
-            "a caller whose callee's throws are unchanged stays clean and seeded; {p:?}"
-        );
-        assert!(
-            p.clean.contains("c.baml") && p.seeded.contains("c.baml"),
-            "the untouched callee stays clean and seeded; {p:?}"
-        );
-    }
-
-    // ── Emit-recorded edges to interface-machinery bodies ────────────────────
-
-    /// The `default.<method>()` bypass compiles to a direct `Call` of the
-    /// interface's default-body slot — a slot that owns NO runtime name, so
-    /// the old bytecode-operand reversal produced no edge for it; the
-    /// emit-recorded `speak` edge on the impl file's unit is what connects
-    /// the two now. In this scenario the interface's `throws` declaration
-    /// widens (interface methods must declare `throws`, so the change is
-    /// signature-level) and the impl's `throws never` delegation to
-    /// `default.speak()` becomes an uncovered-throw error: the impl file
-    /// must be dirtied and re-checked, and the warm units/diagnostics must
-    /// match a scratch compile. (An impl file also always *spells* its
-    /// interface's name, so the syntactic edge over-covers this particular
-    /// shape; the recorded edge is the one that exists by construction rather
-    /// than by spelling — the truly spelling-free severed lane is pinned by
-    /// `plan_reuse_function_value_reference_edit_dirties_holder` below.)
-    #[test]
-    fn plan_reuse_default_body_throws_widening_dirties_bypass_caller() {
-        let iface_v1 = "class BoomErr {\n}\n\
-                        interface Speaker {\n  \
-                        function speak(self) -> string throws never {\n    \"quiet\"\n  }\n}\n";
-        // The default method's contract widens and its body now throws.
-        let iface_v2 = "class BoomErr {\n}\n\
-                        interface Speaker {\n  \
-                        function speak(self) -> string throws BoomErr {\n    \
-                        throw BoomErr {}\n  }\n}\n";
-        let impl_file = "class Wrap {\n  implements Speaker {\n    \
-                         function speak(self) -> string throws never {\n      \
-                         \"wrapped \" + default.speak()\n    }\n  }\n}\n\
-                         function make_wrap() -> Wrap {\n  Wrap {}\n}\n";
-        let caller = "function use_it() -> string throws never {\n  \
-                      let w = make_wrap()\n  w.speak()\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("iface.baml", iface_v1),
-            ("impl.baml", impl_file),
-            ("caller.baml", caller),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("iface.baml", iface_v2),
-            ("impl.baml", impl_file),
-            ("caller.baml", caller),
-            ("z.baml", unrelated),
-        ];
-        let Some((p, diags_match, byte_identical)) =
-            plan_diags_and_relink_after_edit(&initial, &edited)
-        else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("impl.baml"),
-            "the impl file direct-calls the edited default body via \
-             `default.speak()` and must be re-checked (its `throws never` \
-             delegation is now an uncovered throw); {p:?}"
-        );
-        assert!(
-            p.clean.contains("z.baml"),
-            "an unrelated file stays clean; {p:?}"
-        );
-        assert!(
-            diags_match,
-            "warm served diagnostics must equal the honest full check — the \
-             impl's uncovered-throw error must not be hidden by a stale clean \
-             blob; {p:?}"
-        );
-        assert!(
-            byte_identical.is_none_or(|same| same),
-            "when the edited program still compiles, relink must equal the full compile; {p:?}"
-        );
-    }
-
-    /// A function referenced as a VALUE (`let f = other_fn`) reaches its
-    /// callee through a pooled `GenericFunction` wrapper — no `Call` operand
-    /// names it, and the old operand reversal skipped `Function`-kind pool
-    /// objects entirely, so an arity change to the target left the holder
-    /// clean with stale no-error diagnostics. The emit-recorded edge (made at
-    /// the wrapper's slot resolution) dirties the holder.
-    #[test]
-    fn plan_reuse_function_value_reference_edit_dirties_holder() {
-        let def_v1 = "function other_fn() -> int {\n  7\n}\n";
-        let def_v2 = "function other_fn(x: int) -> int {\n  x\n}\n";
-        let holder = "function use_val() -> int {\n  let f = other_fn\n  f()\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("def.baml", def_v1),
-            ("holder.baml", holder),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("def.baml", def_v2),
-            ("holder.baml", holder),
-            ("z.baml", unrelated),
-        ];
-        let Some((p, diags_match, byte_identical)) =
-            plan_diags_and_relink_after_edit(&initial, &edited)
-        else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("holder.baml"),
-            "the value-reference edge must dirty the holder when the target's \
-             signature changes (its `f()` call is now an arity error); {p:?}"
-        );
-        assert!(
-            diags_match,
-            "the holder's arity error must not be hidden by a stale clean blob; {p:?}"
-        );
-        assert!(
-            byte_identical.is_none_or(|same| same),
-            "when the edited program still compiles, relink must equal the full compile; {p:?}"
-        );
-    }
-
-    #[test]
-    fn plan_reuse_signature_edit_invalidates_caller_seed() {
-        // A change to C's *signature* (a new param) dirties its direct caller B
-        // (which names C), so B's seed is invalidated — riding the same name
-        // propagation the throws closure extends, but proving a signature edit is
-        // also caught for the `callable_throws` seed.
-        let c_v1 = "function c() -> int {\n  1\n}\n";
-        let c_v2 = "function c(x: int) -> int {\n  x\n}\n";
-        let b_v1 = "function b() -> int {\n  c()\n}\n";
-        let b_v2 = "function b() -> int {\n  c(1)\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [("c.baml", c_v1), ("b.baml", b_v1), ("z.baml", unrelated)];
-        let edited = [("c.baml", c_v2), ("b.baml", b_v2), ("z.baml", unrelated)];
-        let Some(p) = plan_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("c.baml") && p.dirty.contains("b.baml"),
-            "a signature edit dirties the callee and its caller; {p:?}"
-        );
-        assert!(
-            !p.seeded.contains("b.baml"),
-            "a dirtied caller must not be seeded; seeded = {:?}",
-            p.seeded
-        );
-        assert!(
-            p.clean.contains("z.baml") && p.seeded.contains("z.baml"),
-            "an unrelated file stays clean and seeded; {p:?}"
-        );
-    }
-
-    // ── Transitive signature-meaning cascade (alias re-target) ───────────────
-
-    #[test]
-    fn plan_reuse_cascades_signature_meaning_through_clean_callee() {
-        // The soundness repro. `alias.baml` re-targets `type AppErr` from `Boom`
-        // to `Kaboom`. `sink` is content-unchanged but names `AppErr` in its
-        // signature, so its resolved parameter type moves — the signature-meaning
-        // cascade dirties it AND joins its name to the change set. `boundary` is
-        // content-unchanged and names neither `AppErr` nor `Kaboom`; it only calls
-        // `sink` in its body, so the one-hop propagation reaches it only *after*
-        // the cascade adds `sink` to the change set. Without the cascade, boundary
-        // stays clean and its cached no-error diagnostics are served, hiding the
-        // arg-type mismatch (Boom passed where sink now expects Kaboom) — a
-        // program the honest compiler rejects. With it, served == honest and the
-        // relink is byte-identical to a full compile.
-        let alias_v1 = "type AppErr = Boom\n";
-        let alias_v2 = "type AppErr = Kaboom\n";
-        let errs = "class Boom {\n  b int\n}\nclass Kaboom {\n  k int\n}\n";
-        let sink = "function sink(e: AppErr) -> int throws AppErr {\n  throw e\n}\n";
-        let boundary = "function boundary(e: Boom) -> int {\n  sink(e)\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("alias.baml", alias_v1),
-            ("errs.baml", errs),
-            ("sink.baml", sink),
-            ("boundary.baml", boundary),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("alias.baml", alias_v2),
-            ("errs.baml", errs),
-            ("sink.baml", sink),
-            ("boundary.baml", boundary),
-            ("z.baml", unrelated),
-        ];
-        let Some((p, diags_match, byte_identical)) =
-            plan_diags_and_relink_after_edit(&initial, &edited)
-        else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("alias.baml"),
-            "the re-targeted alias file must be dirty; {p:?}"
-        );
-        assert!(
-            p.dirty.contains("sink.baml"),
-            "the content-unchanged callee whose signature names the alias must be \
-             dirtied by the cascade; {p:?}"
-        );
-        assert!(
-            p.dirty.contains("boundary.baml"),
-            "the transitive caller — naming neither the alias nor the changed type, \
-             only the clean callee `sink` in its body — must be dirtied so its stale \
-             no-error diagnostics are never served; dirty = {:?}",
-            p.dirty
-        );
-        assert!(
-            diags_match,
-            "warm served diagnostics must equal the honest full check — the arg-type \
-             mismatch at boundary's call site must not be hidden; {p:?}"
-        );
-        assert!(
-            byte_identical.is_none_or(|same| same),
-            "when the edited program still compiles, the relink must reproduce a full \
-             compile byte-for-byte; {p:?}"
-        );
-    }
-
-    #[test]
-    fn plan_reuse_signature_cascade_stops_at_body_only_reference() {
-        // The cascade must NOT over-fire: a file that references a changed name
-        // only in its *body* is dirtied but does not propagate its own defined
-        // names further. `types.baml` re-targets `type Alias` from `A` to `B`.
-        // `mid` names `Alias` in its signature and has a closed `throws never`
-        // contract, so it cascades (its defined name joins the change set) but is a
-        // throws firewall. `bodyref` calls `mid` in its body and constructs `A`, so
-        // it is dirtied — but its signature names no changed type, so it must NOT
-        // cascade. `topcaller` calls only `bodyref` (behind the firewall), names no
-        // changed type, and must therefore stay clean and seeded: proof the cascade
-        // stopped at the body-only reference rather than dirtying the whole graph.
-        let types_v1 = "type Alias = A\nclass A {\n  a int\n}\nclass B {\n  b int\n}\n";
-        let types_v2 = "type Alias = B\nclass A {\n  a int\n}\nclass B {\n  b int\n}\n";
-        let mid = "function mid(x: Alias) -> int throws never {\n  0\n}\n";
-        let bodyref = "function bodyref() -> int throws never {\n  mid(A { a: 1 })\n}\n";
-        let topcaller = "function topcaller() -> int throws never {\n  bodyref()\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("types.baml", types_v1),
-            ("mid.baml", mid),
-            ("bodyref.baml", bodyref),
-            ("topcaller.baml", topcaller),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("types.baml", types_v2),
-            ("mid.baml", mid),
-            ("bodyref.baml", bodyref),
-            ("topcaller.baml", topcaller),
-            ("z.baml", unrelated),
-        ];
-        let Some(p) = plan_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            p.dirty.contains("mid.baml"),
-            "the callee whose signature names the alias must cascade (be dirty); {p:?}"
-        );
-        assert!(
-            p.dirty.contains("bodyref.baml"),
-            "the body-only caller of `mid` must be dirtied (re-checked); {p:?}"
-        );
-        assert!(
-            p.clean.contains("topcaller.baml") && p.seeded.contains("topcaller.baml"),
-            "the cascade must STOP at the body-only reference — a caller of the \
-             body-only referencer stays clean and seeded; dirty = {:?}",
-            p.dirty
-        );
-    }
-
-    #[test]
-    fn verify_diagnostics_passes_when_dependent_dirtied_by_cross_file_edit() {
-        // Fix for the over-strict diagnostics oracle: it must gate on the served
-        // (clean) set, not the content-unchanged set. Reusing the alias repro, the
-        // content-UNCHANGED `boundary` is dirtied by the cascade and would report a
-        // NEW error on a fresh check. Because it is dirty it is re-checked, never
-        // served, so the oracle must skip it. Gating on `content_hash` instead
-        // would compare boundary's stored (clean) blob against its fresh (erroring)
-        // check and bail spuriously on this ordinary cross-file edit.
+    fn edit_reemits_only_the_user_package() {
         if cache_disabled() {
             return;
         }
-        let errs = "class Boom {\n  b int\n}\nclass Kaboom {\n  k int\n}\n";
-        let sink = "function sink(e: AppErr) -> int throws AppErr {\n  throw e\n}\n";
-        let boundary = "function boundary(e: Boom) -> int {\n  sink(e)\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("alias.baml", "type AppErr = Boom\n"),
-            ("errs.baml", errs),
-            ("sink.baml", sink),
-            ("boundary.baml", boundary),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("alias.baml", "type AppErr = Kaboom\n"),
-            ("errs.baml", errs),
-            ("sink.baml", sink),
-            ("boundary.baml", boundary),
-            ("z.baml", unrelated),
-        ];
         let root = bc_root();
-        let _ = compile_and_store_v1(&root, &initial);
+        let _ = compile_and_store_v1(&root, &[("a.baml", A_V1), ("b.baml", B)]);
 
-        // v2 sources; the diagnostics oracle (env-independent core) must pass:
-        // boundary is dirty (skipped), the truly-clean files are unchanged.
+        let edited = [("a.baml", A_V2), ("b.baml", B)];
         let r2 = resolved(&root, &edited);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-        ctx2.check_cached_diagnostics_against_fresh(&db2, pkg2)
-            .expect(
-                "the diagnostics oracle must not bail on a content-unchanged file that \
-             the cascade dirtied (it is re-checked, never served stale)",
-            );
+        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        assert_eq!(
+            ctx2.packages_emitted(),
+            1,
+            "only the user package's sources changed, so only it is emitted"
+        );
+        assert_eq!(
+            ctx2.packages_served(),
+            linked_package_count(&db2, pkg2) - 1,
+            "every stdlib package is served"
+        );
+        assert_eq!(program_bytes(&program), honest_bytes(&r2));
+
+        // The edited package's output is now cached too: a third compile of
+        // the edited sources serves everything.
+        let (db3, pkg3) = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx3 = CacheContext::open(&r2).expect("cache reopens");
+        let again = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
+        assert_eq!(ctx3.packages_emitted(), 0);
+        assert_eq!(program_bytes(&again), program_bytes(&program));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn corrupt_package_entry_is_re_emitted_identically() {
+        if cache_disabled() {
+            return;
+        }
+        let root = bc_root();
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let (db1, ctx1) = compile_and_store_v1(&root, &files);
+        let pkg1 = db1.workspace_root().expect("workspace root");
+        // Corrupt the user package's entry in place: the header's checksum
+        // rejects it, so the package is emitted fresh.
+        let key = ctx1.package_key(&db1, pkg1, CLI_OPT_LEVEL);
+        let hex = key.hex();
+        let entry = ctx1
+            .cache
+            .dir()
+            .join("bytecode")
+            .join(&hex[..2])
+            .join(format!("{hex}.bexc"));
+        let mut bytes = std::fs::read(&entry).expect("package entry present");
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0xFF;
+        std::fs::write(&entry, &bytes).expect("rewrite package entry");
+
+        let r2 = resolved(&root, &files);
+        let (db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
+        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("warm compile");
+        assert_eq!(
+            ctx2.packages_emitted(),
+            1,
+            "the corrupt entry is re-emitted"
+        );
+        assert_eq!(ctx2.packages_served(), linked_package_count(&db2, pkg2) - 1);
+        assert_eq!(program_bytes(&program), honest_bytes(&r2));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn stdlib_package_keys_do_not_depend_on_the_project() {
+        // Two contexts for two different projects (different roots, sources,
+        // and program keys) key each stdlib package identically: a stdlib
+        // package's inputs are all build constants, so one entry per
+        // toolchain serves every project sharing a cache directory.
+        let root_a = bc_root();
+        let root_b = bc_root();
+        let ra = resolved(&root_a, &[("a.baml", A_V1)]);
+        let rb = resolved(&root_b, &[("other.baml", B), ("more.baml", A_V2)]);
+        let (Some(ctx_a), Some(ctx_b)) = (CacheContext::open(&ra), CacheContext::open(&rb)) else {
+            return;
+        };
+        assert_ne!(ctx_a.key, ctx_b.key, "the projects differ");
+        let (db_a, pkg_a) = crate::project_load::build_db_from_sources(&ra, |_| {});
+        let (db_b, pkg_b) = crate::project_load::build_db_from_sources(&rb, |_| {});
+        let stdlib_keys = |db: &ProjectDatabase, package: SourceRoot, ctx: &CacheContext| {
+            baml_db::baml_compiler2_hir::package::world_roots(db, package)
+                .iter()
+                .filter(|root| root.kind(db) == baml_db::SourceRootKind::Stdlib)
+                .map(|&root| {
+                    (
+                        root.path(db).display().to_string(),
+                        ctx.package_key(db, root, CLI_OPT_LEVEL),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        let keys_a = stdlib_keys(&db_a, pkg_a, &ctx_a);
+        let keys_b = stdlib_keys(&db_b, pkg_b, &ctx_b);
+        assert!(!keys_a.is_empty(), "the program has stdlib packages");
+        assert_eq!(keys_a, keys_b);
+        assert_ne!(
+            ctx_a.package_key(&db_a, pkg_a, CLI_OPT_LEVEL),
+            ctx_b.package_key(&db_b, pkg_b, CLI_OPT_LEVEL),
+            "the user packages differ"
+        );
+        let _ = std::fs::remove_dir_all(&root_a);
+        let _ = std::fs::remove_dir_all(&root_b);
+    }
+
+    // ── The check layer ──────────────────────────────────────────────────
+
+    #[test]
+    fn check_rows_are_served_only_for_an_identical_project() {
+        if cache_disabled() {
+            return;
+        }
+        let root = bc_root();
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let _ = compile_and_store_v1(&root, &files);
+
+        let same = resolved(&root, &files);
+        let (db_same, pkg_same) = crate::project_load::build_db_from_sources(&same, |_| {});
+        let ctx_same = CacheContext::open(&same).expect("cache reopens");
+        let served = ctx_same
+            .served_checks(&db_same, pkg_same)
+            .expect("an identical project serves its check rows");
+        assert_eq!(
+            served.diagnostics.keys().cloned().collect::<Vec<_>>(),
+            vec!["a.baml".to_string(), "b.baml".to_string()],
+            "every user file has a served row"
+        );
+        assert!(
+            served
+                .callable_throws
+                .keys()
+                .any(|path| path.ends_with("a.baml")),
+            "the callable-throws seed covers the served files"
+        );
+
+        let edited = resolved(&root, &[("a.baml", A_V2), ("b.baml", B)]);
+        let (db_edit, pkg_edit) = crate::project_load::build_db_from_sources(&edited, |_| {});
+        let ctx_edit = CacheContext::open(&edited).expect("cache reopens");
+        assert!(
+            ctx_edit.served_checks(&db_edit, pkg_edit).is_none(),
+            "an edited project serves no row — every file is checked honestly"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -3386,8 +1682,9 @@ mod tests {
         // returns it (short-circuiting honest inference), while an unseeded
         // function still infers. If either key format drifted (rel vs abs, a
         // separator change) the seed would silently never apply and this fails.
-        use baml_compiler2_hir::loc::FunctionLoc;
-        use baml_db::baml_compiler2_hir_ty::callable::callable_throws;
+        use baml_db::{
+            baml_compiler2_hir::loc::FunctionLoc, baml_compiler2_hir_ty::callable::callable_throws,
+        };
 
         let (mut db, _) = build_db(&[(
             "a.baml",
@@ -3397,7 +1694,7 @@ mod tests {
         )]);
         let file = file_named(&db, "a.baml");
         let (f_id, g_id) = {
-            use baml_compiler2_hir::item_data::{file_functions, function_data};
+            use baml_db::baml_compiler2_hir::item_data::{file_functions, function_data};
             let mut f_id = None;
             let mut g_id = None;
             for &loc in file_functions(&db, file) {
@@ -3428,12 +1725,12 @@ mod tests {
         // Seed f's key with g's throw `Ty`, keyed by (abs path, f's LocalItemId).
         let abs_path = file.path(&db).display().to_string();
         let spelling = baml_db::baml_compiler2_hir::package::spelling(&db);
-        let mut by_id = std::collections::BTreeMap::new();
+        let mut by_id = BTreeMap::new();
         by_id.insert(
             f_id.as_u32(),
             g_throws.map_heads(&mut |decl| spelling.wire(decl)),
         );
-        let mut by_path = std::collections::BTreeMap::new();
+        let mut by_path = BTreeMap::new();
         by_path.insert(abs_path, by_id);
         db.set_seeded_callable_throws(by_path);
 
@@ -3453,21 +1750,18 @@ mod tests {
 
     #[test]
     fn verify_callable_throws_fragments_bails_on_stale_fragment() {
-        // Seed-vs-honest divergence tripwire (unit level): corrupt a clean file's
-        // stored fragment and the verify core must bail, naming the file. This is
-        // the single assumption the whole scheme rests on — that a served seed
-        // equals the honest re-derivation.
+        // Seed-vs-honest divergence tripwire (unit level): corrupt a served
+        // file's stored fragment and the verify core must bail, naming the
+        // file. This is the single assumption the whole scheme rests on — that
+        // a served seed equals the honest re-derivation.
         if cache_disabled() {
             return;
         }
         let root = bc_root();
-        let files = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-        ];
+        let files = [("a.baml", A_V1), ("b.baml", B)];
         let _ = compile_and_store_v1(&root, &files);
 
-        // A faithful fragment cache passes the oracle (all files content-clean).
+        // A faithful fragment cache passes the oracle.
         let r = resolved(&root, &files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx2 = CacheContext::open(&r).expect("cache reopens");
@@ -3484,325 +1778,15 @@ mod tests {
             err.to_string().contains("a.baml"),
             "the bail must name the drifted file; got: {err}"
         );
+
+        // An edited project would serve nothing, so there is nothing to
+        // compare: the poisoned row is not a violation there.
+        let edited = resolved(&root, &[("a.baml", A_V2), ("b.baml", B)]);
+        let (db4, pkg4) = crate::project_load::build_db_from_sources(&edited, |_| {});
+        let ctx4 = CacheContext::open(&edited).expect("cache reopens");
+        ctx4.check_callable_throws_fragments_against_honest(&db4, pkg4)
+            .expect("rows that would not be served are not compared");
         let _ = std::fs::remove_dir_all(&root);
-    }
-
-    // ── Risk 2: impl edit dirties coherence peers ────────────────────────────
-
-    #[test]
-    fn plan_reuse_dirties_coherence_peer_on_impl_edit() {
-        // Editing one impl-bearing file's method body must re-check the OTHER
-        // impl-bearing file: an `OverlappingImplements` verdict spans both, and
-        // the peer names no symbol the edit changed — only `IMPL_SENTINEL`
-        // connects them. The method-body edit keeps the peer's signature intact,
-        // so no layout/name path can substitute for the sentinel.
-        let iface = "interface Speaker {\n  function speak(self) -> string\n}\n";
-        let a = "class Dog {\n  name string\n  implements Speaker {\n    \
-                 function speak(self) -> string {\n      \"woof\"\n    }\n  }\n}\n";
-        let b_v1 = "class Cat {\n  name string\n  implements Speaker {\n    \
-                    function speak(self) -> string {\n      \"meow\"\n    }\n  }\n}\n";
-        let b_v2 = "class Cat {\n  name string\n  implements Speaker {\n    \
-                    function speak(self) -> string {\n      \"MEOW\"\n    }\n  }\n}\n";
-        let unrelated = "function unrelated() -> int {\n  42\n}\n";
-        let initial = [
-            ("iface.baml", iface),
-            ("a.baml", a),
-            ("b.baml", b_v1),
-            ("z.baml", unrelated),
-        ];
-        let edited = [
-            ("iface.baml", iface),
-            ("a.baml", a),
-            ("b.baml", b_v2),
-            ("z.baml", unrelated),
-        ];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(
-            dirty.contains("b.baml"),
-            "the edited impl file must be dirty; dirty = {dirty:?}"
-        );
-        assert!(
-            dirty.contains("a.baml"),
-            "a coherence peer must be re-checked via IMPL_SENTINEL; dirty = {dirty:?}"
-        );
-        assert!(
-            !dirty.contains("z.baml"),
-            "an impl-free file must stay clean; dirty = {dirty:?}"
-        );
-    }
-
-    #[test]
-    fn plan_reuse_dirties_coherence_peer_when_impl_is_removed() {
-        let iface = "interface Speaker {\n  function speak(self) -> string\n}\n";
-        let dog = "class Dog {\n  implements Speaker {\n    \
-                   function speak(self) -> string {\n      \"woof\"\n    }\n  }\n}\n";
-        let cat_with_impl = "class Cat {\n  implements Speaker {\n    \
-                             function speak(self) -> string {\n      \"meow\"\n    }\n  }\n}\n";
-        let cat_without_impl = "class Cat {}\n";
-        let initial = [
-            ("iface.baml", iface),
-            ("dog.baml", dog),
-            ("cat.baml", cat_with_impl),
-        ];
-        let edited = [
-            ("iface.baml", iface),
-            ("dog.baml", dog),
-            ("cat.baml", cat_without_impl),
-        ];
-        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
-            return;
-        };
-        assert!(dirty.contains("cat.baml"));
-        assert!(
-            dirty.contains("dog.baml"),
-            "the previous impl sentinel must dirty remaining coherence peers: {dirty:?}"
-        );
-    }
-
-    #[test]
-    fn prepare_reuse_plan_demotes_stale_throws_before_diagnostics() {
-        if cache_disabled() {
-            return;
-        }
-        let root = bc_root();
-        let initial = [
-            ("a.baml", "function stable() -> int {\n  1\n}\n"),
-            ("b.baml", "function edited() -> int {\n  1\n}\n"),
-            ("c.baml", "function untouched() -> int {\n  3\n}\n"),
-        ];
-        let edited = [
-            ("a.baml", "function stable() -> int {\n  1\n}\n"),
-            ("b.baml", "function edited() -> int {\n  2\n}\n"),
-            ("c.baml", "function untouched() -> int {\n  3\n}\n"),
-        ];
-
-        let _ = compile_and_store_v1(&root, &initial);
-
-        let r2 = resolved(&root, &edited);
-        let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-        let mut plan = ctx2
-            .plan_reuse(&db2, pkg2)
-            .expect("partial reuse available");
-        assert!(plan.clean_files.contains("a.baml"));
-        let stable_unit = plan
-            .prev_units
-            .iter_mut()
-            .find(|unit| unit.source_file == "a.baml")
-            .expect("stable unit");
-        let stable_fn = stable_unit
-            .code
-            .iter_mut()
-            .find_map(|object| match object {
-                Object::Function(function) if function.name.ends_with("stable") => Some(function),
-                _ => None,
-            })
-            .expect("stable function");
-        stable_fn.throws_type = baml_type::TyTemplate::String;
-
-        let prepared = prepare_reuse_plan(&mut db2, pkg2, Some(plan))
-            .expect("the unaffected clean unit remains reusable");
-        assert!(!prepared.clean_files.contains("a.baml"));
-        assert!(prepared.clean_files.contains("c.baml"));
-        assert!(prepared.dirty_files.iter().any(|file| {
-            file.path(&db2)
-                .file_name()
-                .is_some_and(|name| name == "a.baml")
-        }));
-        assert!(!prepared.clean_diagnostics.contains_key("a.baml"));
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    // ── Mechanism-level assertions (independent of the on-disk cache) ─────────
-
-    #[test]
-    fn defined_names_includes_type_aliases() {
-        let (db, _) = build_db(&[("m.baml", "type Money = int\n")]);
-        let f = file_named(&db, "m.baml");
-        let names = defined_names(&db, f);
-        assert!(
-            names.iter().any(|n| n == "Money"),
-            "a type alias must contribute a defined name; got {names:?}"
-        );
-    }
-
-    #[test]
-    fn syntactic_type_names_capture_signature_and_alias_types() {
-        let (db, _) = build_db(&[(
-            "t.baml",
-            "class Point {\n  x int\n  y int\n}\n\
-             type Money = int\n\
-             function diff(p: Point) -> int {\n  p.x - p.y\n}\n\
-             function pay(m: Money) -> Money {\n  m\n}\n",
-        )]);
-        let f = file_named(&db, "t.baml");
-        let names = syntactic_type_names(&db, f);
-        for expected in ["Point", "Money"] {
-            assert!(
-                names.contains(expected),
-                "expected `{expected}` among syntactic type names {names:?}"
-            );
-        }
-        assert!(
-            !names.contains("int"),
-            "primitive keywords must be filtered out; got {names:?}"
-        );
-    }
-
-    #[test]
-    fn unit_records_carry_layout_flag_for_field_reader() {
-        let (db, package) = build_db(&[(
-            "a.baml",
-            "class Point {\n  x int\n  y int\n}\n\
-             function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
-        )]);
-        let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
-        let (_, units) =
-            baml_db::baml_compiler2_emit::generate_project_bytecode_with_stdlib_artifacts(
-                &db,
-                package,
-                CLI_OPT_LEVEL,
-                &base,
-            )
-            .expect("project compiles");
-        let a = units
-            .iter()
-            .find(|u| u.source_file == "a.baml")
-            .expect("a.baml has a unit");
-        assert!(
-            a.bakes_type_layout,
-            "a field reader's unit must record the layout-baking bit \
-             (the manifest turns it into LAYOUT_SENTINEL); names: {:?}",
-            a.referenced_names
-        );
-    }
-
-    // Per-file content-addressed unit storage.
-
-    #[test]
-    fn missing_unit_degrades_only_that_file_and_relinks_identically() {
-        if cache_disabled() {
-            return;
-        }
-        let files = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-            ("c.baml", "function c() -> int {\n  3\n}\n"),
-        ];
-        // The second compile edits c.baml: unit validation (and hence missing-
-        // unit degradation) runs only when the partition has a delta — a
-        // no-delta invocation serves entirely from the manifest and never
-        // opens unit payloads (a missing unit there surfaces later as the
-        // relink fallback to a full compile).
-        let edited = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-            ("c.baml", "function c() -> int {\n  3 + 0\n}\n"),
-        ];
-        let root = bc_root();
-        let (_db1, ctx1) = compile_and_store_v1(&root, &files);
-
-        let manifest_bytes = ctx1
-            .cache
-            .load_raw(&ctx1.manifest_key)
-            .expect("manifest present");
-        let manifest: ProjectManifest =
-            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
-        let missing_key = CacheKey::from_bytes(
-            manifest
-                .files
-                .iter()
-                .find(|entry| entry.rel_path == "b.baml")
-                .expect("b entry")
-                .unit_key,
-        );
-        let hex = missing_key.hex();
-        let missing_path = ctx1
-            .cache
-            .dir()
-            .join("bytecode")
-            .join(&hex[..2])
-            .join(format!("{hex}.bexc"));
-        std::fs::remove_file(missing_path).expect("remove b unit");
-
-        let r = resolved(&root, &edited);
-        let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx2 = CacheContext::open(&r).expect("cache reopens");
-        let pending = ctx2.plan_reuse(&db2, pkg2).expect("partial reuse survives");
-        let dirty = dirty_basenames(&pending.dirty_files, &db2);
-        assert_eq!(
-            dirty,
-            HashSet::from(["b.baml".to_string(), "c.baml".to_string()])
-        );
-        assert_eq!(pending.clean_files, HashSet::from(["a.baml".to_string()]));
-
-        let plan = prepare_reuse_plan(&mut db2, pkg2, Some(pending)).expect("reuse plan");
-        let _ = baml_db::baml_compiler2_emit::take_lowered_files();
-        let relinked =
-            compile_program(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("incremental compile");
-        let mut lowered = baml_db::baml_compiler2_emit::take_lowered_files();
-        lowered.sort();
-        assert_eq!(lowered, vec!["b.baml".to_string(), "c.baml".to_string()]);
-
-        let (honest_db, honest_pkg) = crate::project_load::build_db_from_sources(&r, |_| {});
-        let full =
-            compile_program(&honest_db, honest_pkg, Some(&ctx2), None).expect("full compile");
-        assert_eq!(
-            borsh::to_vec(&relinked).expect("serialize relink"),
-            borsh::to_vec(&full).expect("serialize full")
-        );
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn warm_body_edit_writes_one_unit_and_one_manifest() {
-        if cache_disabled() {
-            return;
-        }
-        let initial = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-            ("c.baml", "function c() -> int {\n  3\n}\n"),
-        ];
-        let edited = [
-            ("a.baml", "function a() -> int {\n  10 + 1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-            ("c.baml", "function c() -> int {\n  3\n}\n"),
-        ];
-        let root = bc_root();
-
-        let r1 = resolved(&root, &initial);
-        let (db1, pkg1) = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1).expect("cache opens");
-        let compiled1 = compile_program_artifacts(&db1, pkg1, Some(&ctx1), None).expect("compile");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, pkg1, None)
-            .fresh_by_file;
-        let cold_stats = ctx1
-            .store_artifacts_with_manifest(&db1, pkg1, &compiled1, &fresh1, None)
-            .expect("cold store");
-        assert_eq!(cold_stats.unit_entries_written, 3);
-        assert_eq!(cold_stats.manifest_entries_written, 1);
-
-        let r2 = resolved(&root, &edited);
-        let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2).expect("cache reopens");
-        let pending = ctx2.plan_reuse(&db2, pkg2);
-        let plan = prepare_reuse_plan(&mut db2, pkg2, pending).expect("reuse plan");
-        assert_eq!(plan.dirty_files.len(), 1);
-        let fresh2 = ctx2
-            .collect_diagnostics_incremental(&db2, pkg2, Some(&plan))
-            .fresh_by_file;
-        let compiled =
-            compile_program_artifacts(&db2, pkg2, Some(&ctx2), Some(&plan)).expect("compile");
-        let stats = ctx2
-            .store_artifacts_with_manifest(&db2, pkg2, &compiled, &fresh2, Some(&plan))
-            .expect("warm store");
-        assert_eq!(stats.unit_entries_written, 1);
-        assert_eq!(stats.manifest_entries_written, 1);
-        let _ = std::fs::remove_dir_all(root);
     }
 
     // B-694: stdlib typed-interface cache ("export data").
@@ -3813,10 +1797,10 @@ mod tests {
         // `PackageInterface` must serialize byte-identically from two
         // independently-built fresh databases — the soundness foundation for
         // keying the blob by compiler fingerprint alone.
-        let (db1, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
-        let (db2, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
-        let blob1 = extract_stdlib_interface(&db1);
-        let blob2 = extract_stdlib_interface(&db2);
+        let (db1, _) = build_db(&[("a.baml", A_V1)]);
+        let (db2, _) = build_db(&[("a.baml", A_V1)]);
+        let blob1 = baml_db::stdlib_prefix::stdlib_interfaces(&db1);
+        let blob2 = baml_db::stdlib_prefix::stdlib_interfaces(&db2);
         assert_eq!(
             blob1, blob2,
             "stdlib interface blobs must be byte-identical across fresh databases"
@@ -3833,12 +1817,12 @@ mod tests {
         // Deriving honestly, then seeding those exact bytes into a fresh db and
         // re-deriving, must reproduce the identical blob — the invariant the
         // `verify_stdlib_interface` oracle enforces (seeded == derived).
-        let (cold, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
-        let cold_blob = extract_stdlib_interface(&cold);
+        let (cold, _) = build_db(&[("a.baml", A_V1)]);
+        let cold_blob = baml_db::stdlib_prefix::stdlib_interfaces(&cold);
 
-        let (mut warm, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let (mut warm, _) = build_db(&[("a.baml", A_V1)]);
         warm.set_seeded_stdlib_interface(cold_blob.clone());
-        let warm_blob = extract_stdlib_interface(&warm);
+        let warm_blob = baml_db::stdlib_prefix::stdlib_interfaces(&warm);
         assert_eq!(
             cold_blob, warm_blob,
             "a seeded stdlib interface must reproduce the honest derivation exactly"
@@ -3860,7 +1844,7 @@ mod tests {
         // ignored the seed it would derive the real, non-empty one. This proves
         // the seed is consulted (derivation skipped) without relying on the
         // process-global honest-derivation counter (racy under parallel tests).
-        let (mut db, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let (mut db, _) = build_db(&[("a.baml", A_V1)]);
 
         let sentinel = PackageInterface::<baml_type::TypeName> {
             types: Default::default(),
@@ -3872,7 +1856,7 @@ mod tests {
             namespaces: Default::default(),
             impls: Default::default(),
         };
-        let mut seed = std::collections::BTreeMap::new();
+        let mut seed = BTreeMap::new();
         seed.insert(
             "log".to_string(),
             borsh::to_vec(&sentinel).expect("serialize sentinel"),
@@ -3920,7 +1904,7 @@ mod tests {
         }
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
-        let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let r = resolved(&root, &[("a.baml", A_V1)]);
         let ctx = CacheContext::open(&r).expect("cache opens");
 
         assert!(
@@ -3949,7 +1933,7 @@ mod tests {
         }
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
-        let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let r = resolved(&root, &[("a.baml", A_V1)]);
         let ctx = CacheContext::open(&r).expect("cache opens");
 
         ctx.cache
@@ -3990,7 +1974,7 @@ mod tests {
 
     #[test]
     fn sampled_pick_from_key_is_deterministic_gated_and_forceable() {
-        let clean = ["a.baml", "b.baml", "c.baml", "d.baml"];
+        let served = ["a.baml", "b.baml", "c.baml", "d.baml"];
         // byte0 low 5 bits == 0 → sampled at the default gate; bytes 1..5 == 2
         // (little-endian) → index 2 of the 4-file sorted set.
         let mut sampled_key = [0u8; 32];
@@ -4000,29 +1984,29 @@ mod tests {
         unsampled_key[0] = 1;
 
         assert_eq!(
-            sampled_pick_from_key(&sampled_key, &clean, None),
+            sampled_pick_from_key(&sampled_key, &served, None),
             Some("c.baml"),
             "a gated key samples; bytes 1..5 select the sorted index"
         );
         assert_eq!(
-            sampled_pick_from_key(&unsampled_key, &clean, None),
+            sampled_pick_from_key(&unsampled_key, &served, None),
             None,
             "a non-gated key must NOT sample at the default 1/32 gate"
         );
         // Pure function of the key: identical inputs → identical pick.
         assert_eq!(
-            sampled_pick_from_key(&sampled_key, &clean, None),
-            sampled_pick_from_key(&sampled_key, &clean, None),
+            sampled_pick_from_key(&sampled_key, &served, None),
+            sampled_pick_from_key(&sampled_key, &served, None),
             "the sampling decision must be deterministic for a given key"
         );
         // Force overrides the gate both ways (the =1 / =0 knobs).
         assert_eq!(
-            sampled_pick_from_key(&unsampled_key, &clean, Some(true)),
+            sampled_pick_from_key(&unsampled_key, &served, Some(true)),
             Some("a.baml"),
             "force=Some(true) samples even a non-gated key"
         );
         assert_eq!(
-            sampled_pick_from_key(&sampled_key, &clean, Some(false)),
+            sampled_pick_from_key(&sampled_key, &served, Some(false)),
             None,
             "force=Some(false) disables even a gated key"
         );
@@ -4030,8 +2014,8 @@ mod tests {
         let mut other = sampled_key;
         other[1] = 3;
         assert_ne!(
-            sampled_pick_from_key(&sampled_key, &clean, Some(true)),
-            sampled_pick_from_key(&other, &clean, Some(true)),
+            sampled_pick_from_key(&sampled_key, &served, Some(true)),
+            sampled_pick_from_key(&other, &served, Some(true)),
             "a different key must be able to select a different file"
         );
         // Nothing served → nothing to sample.
@@ -4039,7 +2023,7 @@ mod tests {
     }
 
     /// Compile+store a project, reopen it byte-identically, and return the
-    /// reopened context, its all-clean reuse plan, and a FRESH un-seeded honest
+    /// reopened context, its served check rows, and a FRESH un-seeded honest
     /// database — the three inputs `verify_sampled_artifact` compares. `None`
     /// when the on-disk cache is disabled by env.
     fn sampled_setup(
@@ -4047,7 +2031,7 @@ mod tests {
     ) -> Option<(
         PathBuf,
         CacheContext,
-        ReusePlan,
+        ServedChecks,
         ProjectDatabase,
         SourceRoot,
     )> {
@@ -4060,26 +2044,25 @@ mod tests {
         let r = resolved(&root, files);
         let (db2, pkg2) = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx2 = CacheContext::open(&r).expect("cache reopens");
-        let plan = ctx2.plan_reuse(&db2, pkg2).expect("all-clean reuse plan");
-        // The oracle DB must be fresh and un-seeded (no `prepare_reuse_plan`),
-        // else the honest re-derivation would return the served seed verbatim.
+        let served = ctx2
+            .served_checks(&db2, pkg2)
+            .expect("an identical project serves its rows");
+        // The oracle DB must be fresh and un-seeded (no `install_seeds`), else
+        // the honest re-derivation would return the served seed verbatim.
         let (honest, honest_pkg) = crate::project_load::build_db_from_sources(&r, |_| {});
-        Some((root, ctx2, plan, honest, honest_pkg))
+        Some((root, ctx2, served, honest, honest_pkg))
     }
 
     #[test]
     fn verify_sampled_artifact_passes_on_faithful_cache() {
-        let files = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-        ];
-        let Some((root, ctx, plan, honest, honest_pkg)) = sampled_setup(&files) else {
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let Some((root, ctx, served, honest, honest_pkg)) = sampled_setup(&files) else {
             return;
         };
         // A byte-identical reopen serves every file faithfully — both the
         // diagnostics blob and the throws fragment must verify clean.
         for rel in ["a.baml", "b.baml"] {
-            ctx.verify_sampled_artifact(&honest, honest_pkg, &plan, rel)
+            ctx.verify_sampled_artifact(&honest, honest_pkg, &served, rel)
                 .unwrap_or_else(|e| panic!("faithful cache must pass for {rel}: {e}"));
         }
         let _ = std::fs::remove_dir_all(root);
@@ -4087,21 +2070,18 @@ mod tests {
 
     #[test]
     fn verify_sampled_artifact_bails_on_stale_diagnostics() {
-        let files = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-        ];
-        let Some((root, ctx, mut plan, honest, honest_pkg)) = sampled_setup(&files) else {
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let Some((root, ctx, mut served, honest, honest_pkg)) = sampled_setup(&files) else {
             return;
         };
         // Replace a.baml's served (empty) diagnostics blob with one fabricating
         // an error the honest check never produces: served != honest → bail.
-        plan.clean_diagnostics.insert(
+        served.diagnostics.insert(
             "a.baml".to_string(),
             crate::diagnostics_cache::one_fake_diagnostic_blob("a.baml"),
         );
         let err = ctx
-            .verify_sampled_artifact(&honest, honest_pkg, &plan, "a.baml")
+            .verify_sampled_artifact(&honest, honest_pkg, &served, "a.baml")
             .expect_err("a stale served diagnostics blob must hard-error");
         let msg = err.to_string();
         assert!(msg.contains("a.baml"), "must name the file; got: {msg}");
@@ -4114,26 +2094,23 @@ mod tests {
 
     #[test]
     fn verify_sampled_artifact_bails_on_stale_fragment() {
-        let files = [
-            ("a.baml", "function a() -> int {\n  1\n}\n"),
-            ("b.baml", "function b() -> int {\n  2\n}\n"),
-        ];
-        let Some((root, ctx, mut plan, honest, honest_pkg)) = sampled_setup(&files) else {
+        let files = [("a.baml", A_V1), ("b.baml", B)];
+        let Some((root, ctx, mut served, honest, honest_pkg)) = sampled_setup(&files) else {
             return;
         };
         // Corrupt a.baml's served callable-throws fragment (the manifest-
         // resident copy the seeds project from); honest bytes differ.
-        let fragment = plan
-            .clean_fragments
+        let fragment = served
+            .fragments
             .get_mut("a.baml")
-            .expect("a.baml fragment present in the reuse plan");
+            .expect("a.baml fragment present in the served rows");
         assert!(
             !fragment.is_empty(),
             "a plain function must carry a non-empty fragment for this test to bite"
         );
         *fragment = vec![0xde, 0xad, 0xbe, 0xef];
         let err = ctx
-            .verify_sampled_artifact(&honest, honest_pkg, &plan, "a.baml")
+            .verify_sampled_artifact(&honest, honest_pkg, &served, "a.baml")
             .expect_err("a stale served fragment must hard-error");
         let msg = err.to_string();
         assert!(
@@ -4145,11 +2122,11 @@ mod tests {
 
     #[test]
     fn maybe_sampled_verify_skips_the_hit_path_without_building_a_db() {
-        // A whole-image cache hit passes `plan = None`: nothing is served
-        // artifact-by-artifact, so the honest DB must never be built (sampling a
-        // hit would need a full honest compile — the design forbids it).
+        // A whole-image cache hit passes `served = None`: nothing was served
+        // row by row, so the honest DB must never be built (sampling a hit
+        // would need a full honest compile — the design forbids it).
         let root = bc_root();
-        let project = resolved(&root, &[("a.baml", "function a() -> int {\n  1\n}\n")]);
+        let project = resolved(&root, &[("a.baml", A_V1)]);
         let Some(ctx) = CacheContext::open(&project) else {
             return;
         };
@@ -4166,7 +2143,7 @@ mod tests {
         db: &ProjectDatabase,
     ) -> baml_db::baml_compiler_diagnostics::Diagnostic {
         use baml_db::baml_compiler_diagnostics::{Diagnostic, DiagnosticId};
-        let builtin = baml_compiler2_hir::compiler2_all_files(db)
+        let builtin = baml_db::baml_compiler2_hir::compiler2_all_files(db)
             .into_iter()
             .find(|sf| sf.path(db).to_string_lossy().starts_with("<builtin>/"))
             .expect("a builtin file exists");
@@ -4193,7 +2170,7 @@ mod tests {
         }
         let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
-        let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let r = resolved(&root, &[("a.baml", A_V1)]);
         let (db, ws) = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx = CacheContext::open(&r).expect("cache opens");
 
@@ -4229,7 +2206,7 @@ mod tests {
     fn compare_stdlib_diagnostics_passes_on_faithful_blob() {
         // The verify oracle's env-independent core: a blob that equals a fresh
         // builtin check is a pass.
-        let (db, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let (db, _) = build_db(&[("a.baml", A_V1)]);
         let blob = crate::diagnostics_cache::serialize_builtin_diagnostics(&db);
         let honest = crate::diagnostics_cache::collect_builtin_diagnostics(&db);
         assert!(
@@ -4242,7 +2219,7 @@ mod tests {
     fn compare_stdlib_diagnostics_bails_on_dropped_diagnostic() {
         // A cache that dropped a builtin diagnostic the honest check produces:
         // the soundness direction — serving would hide a real diagnostic — bails.
-        let (db, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let (db, _) = build_db(&[("a.baml", A_V1)]);
         let cached = crate::diagnostics_cache::serialize_builtin_diagnostics(&db);
         let mut honest = crate::diagnostics_cache::collect_builtin_diagnostics(&db);
         honest.push(fabricate_builtin_diag(&db));
@@ -4259,7 +2236,7 @@ mod tests {
     fn compare_stdlib_diagnostics_bails_on_stale_extra() {
         // A cache carrying a stale diagnostic the honest check no longer produces
         // also bails (a non-empty cached blob vs the honest set).
-        let (db, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let (db, _) = build_db(&[("a.baml", A_V1)]);
         let fabricated = fabricate_builtin_diag(&db);
         let stale = crate::diagnostics_cache::serialize_builtin_blob(&db, &[&fabricated]);
         assert_eq!(
@@ -4283,7 +2260,7 @@ mod tests {
     fn compare_stdlib_diagnostics_passes_on_undecodable_blob() {
         // Degradation: an undecodable blob is NOT a verify violation (the warm
         // path falls back to the honest builtin check), so the core passes.
-        let (db, _) = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let (db, _) = build_db(&[("a.baml", A_V1)]);
         let honest = vec![fabricate_builtin_diag(&db)];
         assert!(
             CacheContext::compare_stdlib_diagnostics(&db, b"not-a-valid-blob", &honest).is_ok(),

@@ -21,8 +21,7 @@ use bex_vm_types::{
 use super::TypePass;
 use crate::{
     ClassFieldSnapshot, FnSeed, GenericFunctionInterner, LoweringError, MirCodegenContext,
-    OptLevel, UnitReferences, attach_function_metadata, build_line_starts, builtin_emit_function,
-    compile_lambdas,
+    OptLevel, attach_function_metadata, build_line_starts, builtin_emit_function, compile_lambdas,
     emit::{CodegenRefs, compile_mir_function},
     lower_seed_mirs, lowered,
     refs::{ImportTables, LocalTables, Own, PackageRefs},
@@ -83,9 +82,6 @@ fn compile_body<'db>(
     source_file: &str,
     opt: OptLevel,
 ) -> Function {
-    // The dirty partition's reference records die with the flat emitter;
-    // a unit's references are its import table.
-    let mut references = UnitReferences::default();
     let empty_capture_types = Vec::new();
     let empty_spawn_capture_indices = HashSet::new();
     let lambda_info = compile_lambdas(
@@ -100,7 +96,6 @@ fn compile_body<'db>(
         class_fields,
         objects,
         objects_base,
-        &mut references,
         opt,
     );
     let lambda_object_indices: Vec<usize> = lambda_info.iter().map(|(idx, _)| *idx).collect();
@@ -115,7 +110,6 @@ fn compile_body<'db>(
         lambda_names: &lambda_names,
         capture_types: &empty_capture_types,
         spawn_capture_indices: &empty_spawn_capture_indices,
-        references: &mut references,
     };
     let mut function = compile_mir_function(body, mir.arity, mir.span, line_starts, ctx, opt);
     function.name = mir.identity.link_name(db);

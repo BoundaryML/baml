@@ -12,7 +12,6 @@ use baml_compiler2_hir::{
         interface_data,
     },
     loc::{DeclRef, FunctionLoc, LetLoc},
-    package::edge_table,
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
@@ -20,8 +19,8 @@ use baml_compiler2_hir_ty::{
 };
 use baml_compiler2_mir::{RuntimeLowering, definition_link_name};
 use baml_linker_types::{
-    CompilationUnit, ExportTable, InitTail, LocalRef, PackageRecord, ProgramImplRuleFrag,
-    ProgramMethodImplFrag,
+    CompilationUnit, EmittedPackage, ExportTable, InitTail, LocalRef, PackageRecord,
+    ProgramImplRuleFrag, ProgramMethodImplFrag,
 };
 use bex_vm_types::{
     ClassMethodDef, DeclPath, FnPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
@@ -29,11 +28,11 @@ use bex_vm_types::{
 };
 
 use super::{
-    EmittedPackage, HeadIndex, TypePass,
+    HeadIndex, TypePass,
     bodies::{BodyPass, RefTables},
 };
 use crate::{
-    ClassFieldSnapshot, LoweringError, OptLevel, UnitReferences,
+    ClassFieldSnapshot, LoweringError, OptLevel,
     emit::CodegenRefs,
     items::{
         InitStep, bake_impl_rule, build_init_function, build_init_test_chainer, compile_let_helper,
@@ -103,8 +102,6 @@ pub(super) fn finish<'db>(
         .transpose()?;
 
     Ok(EmittedPackage {
-        root,
-        edges: edge_table(db, root),
         unit: CompilationUnit {
             dependencies: refs.deps.into_entries(),
             classes,
@@ -434,7 +431,6 @@ fn emit_tail<'db>(
     if !sorted.is_empty() {
         let mut steps = Vec::with_capacity(sorted.len());
         for (ordinal, (fq_name, binding, _)) in sorted.iter().enumerate() {
-            let mut references = UnitReferences::default();
             let helper = compile_let_helper(
                 db,
                 *binding,
@@ -443,7 +439,6 @@ fn emit_tail<'db>(
                 class_fields,
                 &mut objects,
                 0,
-                &mut references,
                 opt,
             )?;
             let (_, helper_slot) = pool(&mut objects, &mut slot_objects, helper);
