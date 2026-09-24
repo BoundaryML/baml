@@ -12759,6 +12759,43 @@ function Demo() -> string {
     }
 
     #[test]
+    fn backtick_segments_trim_layout_around_interpolations() {
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo(name: string) -> string {
+    let s = `
+
+        ${role(\"system\")}
+        Hello, ${name}.
+
+    `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|node| node.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segments = lit.segments();
+        let text_parts: Vec<&str> = segments
+            .iter()
+            .filter_map(|segment| match segment {
+                BacktickSegment::Text(text) => Some(text.as_str()),
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(text_parts, vec!["\nHello, ", "."]);
+    }
+
+    #[test]
     fn backtick_lone_dollar_is_literal_text() {
         // `$` not immediately followed by `{` is content, not interpolation.
         let source = "
