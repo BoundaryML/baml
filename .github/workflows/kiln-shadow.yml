@@ -84,6 +84,14 @@ jobs:
         run: cargo nextest run --profile ci --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
+      # Release leg: structured-log value copying carries `debug_assert`-adjacent
+      # logic whose behavior must not change when debug assertions are
+      # compiled out (PR #4548 review A.1). Narrow on purpose — this module,
+      # not the workspace.
+      - name: "Run structured-log value-copy tests in release mode"
+        run: cargo test --release -p bex_engine --lib trace_heap
+        working-directory: baml_language
+
       - name: "Upload test results on failure"
         if: failure()
         uses: actions/upload-artifact@v7
