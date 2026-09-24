@@ -292,6 +292,21 @@ fn reserve_package_slots(
 /// checker accepts, and the VM then fails to find the rule. Indexing every
 /// package's rules once, at load, makes that whole failure class
 /// unrepresentable: resolution asks one question of one complete table.
+///
+/// # Compile-time pointers only, immutable after load
+///
+/// Every pointer here is into the static image: the load pass writes package
+/// and impl-rule slots it reserved in the compile-time pool, and nothing
+/// writes afterwards — the engine shares the index as a plain `Arc`, with no
+/// interior mutability. The static region is never moved and never
+/// collected, so the index is neither a root nor traced and cannot dangle.
+/// That is also why a runtime package NEVER enters it: a moving pointer here
+/// would need rooting (pinning the package forever) or tracing (a fourth
+/// forwarding site). Runtime packages are reached through the edges that
+/// own them — an artifact's pins, a package's `dependency_names`, a value's
+/// owner — and their impl rules through their own `Package::impl_rules` and
+/// the swept dynamic dispatch table, which the resolver chains with this
+/// index. The prelude is the one thing a runtime loader binds by name here.
 #[derive(Default)]
 pub struct PackageIndex {
     /// Package name → its `Object::Package` pointer.
@@ -340,6 +355,12 @@ impl PackageIndex {
     pub fn global_by_name(&self, name: &str) -> Option<GlobalIndex> {
         self.globals_by_name.get(name).copied()
     }
+    /// The `Object::Package` pointer of the package at `ordinal` in the
+    /// executable — the position `LoadCurrentPackage` carries.
+    pub fn package_at(&self, ordinal: usize) -> Option<HeapPtr> {
+        self.by_name.get_index(ordinal).map(|(_, ptr)| *ptr)
+    }
+
     /// The `Object::Package` pointer for `name`, if the package is loaded.
     pub fn package_ptr(&self, name: &Name) -> Option<HeapPtr> {
         self.by_name.get(name).copied()
@@ -460,6 +481,11 @@ fn fill_package_slots(
             impl_rules,
             functions: resolve_members(heap, &pkg.functions),
             type_aliases: resolve_members(heap, &pkg.type_aliases),
+            globals: pkg
+                .globals
+                .iter()
+                .map(|(path, slot)| (path.clone(), slot.raw()))
+                .collect(),
             interface_blob: pkg.interface_blob.clone(),
             test_init: pkg
                 .test_init

@@ -35,11 +35,11 @@ pub use indexable::{
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
-    ArtifactKind, RuntimeCompileArtifact, RuntimeCompileArtifactSlot, RuntimeCompileDiagnostic,
-    RuntimeCompileMode, RuntimeCompileRequest, RuntimeDiagnosticAnnotation,
-    RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind,
-    RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity,
-    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs,
+    ArtifactKind, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
+    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
+    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
+    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimeMountedClass,
+    RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs,
     RuntimePackageIdentity, RuntimePackageMount, RuntimeSessionCompileArtifact,
     RuntimeSessionCompileRequest, RuntimeSessionInitializer, RuntimeSessionStep,
     RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount, SessionContract, SessionEvalLease,

@@ -98,6 +98,8 @@ impl Resolved {
 /// How a pooled object's operands map into the image.
 pub(super) trait OperandSpace {
     fn name(&self) -> &Name;
+    /// The package's position in the executable.
+    fn ordinal(&self) -> usize;
     fn object(&self, raw: usize) -> Result<usize, LinkError>;
     fn global(&self, raw: usize) -> Result<usize, LinkError>;
 
@@ -111,6 +113,7 @@ pub(super) trait OperandSpace {
 
 pub(super) struct UnitSpace<'l> {
     pub(super) name: &'l Name,
+    pub(super) ordinal: usize,
     pub(super) unit: &'l CompilationUnit,
     pub(super) objects: &'l UnitObjects,
     pub(super) slots: &'l SlotLayout,
@@ -120,6 +123,10 @@ pub(super) struct UnitSpace<'l> {
 impl OperandSpace for UnitSpace<'_> {
     fn name(&self) -> &Name {
         self.name
+    }
+
+    fn ordinal(&self) -> usize {
+        self.ordinal
     }
 
     fn object(&self, raw: usize) -> Result<usize, LinkError> {
@@ -137,6 +144,7 @@ impl OperandSpace for UnitSpace<'_> {
 
 pub(super) struct TailSpace<'l> {
     pub(super) name: &'l Name,
+    pub(super) ordinal: usize,
     pub(super) tail: &'l InitTail,
     pub(super) objects: &'l [Placed],
     pub(super) slots: &'l TailSlots,
@@ -146,6 +154,10 @@ pub(super) struct TailSpace<'l> {
 impl OperandSpace for TailSpace<'_> {
     fn name(&self) -> &Name {
         self.name
+    }
+
+    fn ordinal(&self) -> usize {
+        self.ordinal
     }
 
     fn object(&self, raw: usize) -> Result<usize, LinkError> {
@@ -193,6 +205,11 @@ pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result
         return Err(error);
     }
     if let Object::Function(function) = object {
+        for instruction in &mut function.bytecode.instructions {
+            if let bex_vm_types::bytecode::Instruction::LoadCurrentPackage(ordinal) = instruction {
+                *ordinal = space.ordinal();
+            }
+        }
         for table in &mut function.bytecode.match_hash_tables {
             // The keys are image indices now; the tag of each is its index.
             table

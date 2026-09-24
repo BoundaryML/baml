@@ -9415,13 +9415,9 @@ impl BexVm {
                 }
                 // ── Package.current() ───────────────────────────────────────
                 OpCode::LoadCurrentPackage => {
-                    let idx = read_u32_unchecked(code, pc) as usize;
-                    let package_name = {
-                        let value = function.bytecode.resolved_constants[idx];
-                        self.as_string(&value)?.to_string()
-                    };
+                    let ordinal = read_u32_unchecked(code, pc) as usize;
                     let value =
-                        crate::package_reflect::reflect::current_package_value(self, &package_name);
+                        crate::package_reflect::reflect::current_package_value(self, ordinal);
                     self.stack.push(value);
                 }
 

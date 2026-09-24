@@ -21,8 +21,7 @@ use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
-    RuntimeCompileArtifactSlot, RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
-    SessionEvalLease, Ty, TyTemplate,
+    RuntimeSessionCompileArtifact, RuntimeSessionStepKind, SessionEvalLease, Ty, TyTemplate,
     legacy_link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
@@ -38,6 +37,7 @@ use super::{
 };
 use crate::{
     BexVm,
+    compile_artifact::{PinnedArtifact, RuntimeCompileArtifactSlot},
     errors::{VmBamlError, VmRustFnError},
     vm::CallableSignature,
 };
@@ -56,13 +56,13 @@ const ARG_FQN: &str = "reflect.Arg";
 
 /// Materialize the public wrapper for the package selected by the lexical
 /// `Package.current()` instruction. Dynamic code uses its owning package;
-/// static code uses the package name baked at the call site.
-pub(crate) fn current_package_value(vm: &mut BexVm, static_package: &str) -> Value {
+/// static code uses the package ordinal the linker wrote at the call site.
+pub(crate) fn current_package_value(vm: &mut BexVm, ordinal: usize) -> Value {
     let runtime = vm.current_runtime_package();
     let package = if runtime.is_null() {
         vm.packages
-            .package_ptr(&baml_type::Name::new(static_package))
-            .expect("Package.current call site names a loaded package")
+            .package_at(ordinal)
+            .expect("Package.current call site carries a linked package ordinal")
     } else {
         runtime
     };
@@ -123,7 +123,7 @@ fn take_compile_artifact(
     value: Value,
     invalid_message: &str,
     consumed_message: &str,
-) -> Result<RuntimeCompileArtifact, VmRustFnError> {
+) -> Result<PinnedArtifact, VmRustFnError> {
     let Some(inner) = value
         .as_object_ptr()
         .and_then(|pointer| match vm.get_object(pointer) {
@@ -894,7 +894,7 @@ impl BamlClassPackage for PackageReflectImpl {
         artifact: &Value,
         packages: &IndexMap<bex_str::BexStr, Value>,
     ) -> NativeCallResult {
-        let artifact = match take_compile_artifact(
+        let PinnedArtifact { artifact, pins } = match take_compile_artifact(
             vm,
             *artifact,
             "reflect.Package._finish received an invalid artifact",
@@ -918,27 +918,10 @@ impl BamlClassPackage for PackageReflectImpl {
                 .into();
             }
         };
-        let mut dependencies = IndexMap::<String, HeapPtr>::new();
-        for (alias, value) in packages {
-            // Keep runtime rejection single-sourced with compiler mount filtering.
-            if baml_builtins2::reserved_edge_names().contains(&alias.as_str()) {
-                let diagnostic = super::type_kinds::compiler_diagnostic(
-                    DiagnosticId::InvalidSyntax,
-                    format!("package alias `{alias}` is reserved"),
-                );
-                return VmRustFnError::thrown_fresh(super::type_kinds::alloc_compilation_error(
-                    vm,
-                    &[diagnostic],
-                ))
-                .into();
-            }
-            match package_ptr(vm, *value) {
-                Ok(ptr) => {
-                    dependencies.insert(alias.to_string(), ptr);
-                }
-                Err(error) => return error.into(),
-            }
-        }
+        let dependencies = match pinned_dependencies(vm, &pins, packages) {
+            Ok(dependencies) => dependencies,
+            Err(error) => return error.into(),
+        };
 
         let program_package = plan
             .program
@@ -955,6 +938,7 @@ impl BamlClassPackage for PackageReflectImpl {
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
             type_aliases: IndexMap::new(),
+            globals: IndexMap::new(),
             interface_blob: artifact.interface_blob,
             test_init: None,
             mounted_types: IndexMap::new(),
@@ -1646,6 +1630,51 @@ impl BamlClassPackage for PackageReflectImpl {
 ///
 /// Returns the `old content tag → reminted head` rows the head bind uses to
 /// bridge the plan's internal references onto the new identities.
+/// The dependencies a `Package._finish` binds: the packages the artifact was
+/// compiled against, by the alias the compile spelled each under. The
+/// caller's `packages` must be exactly that map — same aliases, same package
+/// objects — or the artifact's references would bind to declarations the
+/// compiler never read.
+fn pinned_dependencies(
+    vm: &BexVm,
+    pins: &IndexMap<String, bex_heap::Handle>,
+    packages: &IndexMap<bex_str::BexStr, Value>,
+) -> Result<IndexMap<String, HeapPtr>, VmRustFnError> {
+    use bex_heap::WeakHeapRef as _;
+    let mismatch = |message: String| {
+        VmRustFnError::from(VmBamlError::InvalidArgument {
+            message: format!("reflect.Package._finish: {message}"),
+        })
+    };
+    let mut dependencies = IndexMap::with_capacity(pins.len());
+    for (alias, handle) in pins {
+        let pinned = vm
+            .heap
+            .resolve_handle_ptr(handle.slab_key())
+            .ok_or_else(|| mismatch(format!("the pin of package `{alias}` no longer resolves")))?;
+        let Some(given) = packages.get(alias.as_str()) else {
+            return Err(mismatch(format!(
+                "the artifact was compiled against package `{alias}`, which `packages` omits"
+            )));
+        };
+        if package_ptr(vm, *given)? != pinned {
+            return Err(mismatch(format!(
+                "package `{alias}` is not the one the artifact was compiled against"
+            )));
+        }
+        dependencies.insert(alias.clone(), pinned);
+    }
+    if let Some(extra) = packages
+        .keys()
+        .find(|alias| !pins.contains_key(alias.as_str()))
+    {
+        return Err(mismatch(format!(
+            "the artifact was not compiled against package `{extra}`"
+        )));
+    }
+    Ok(dependencies)
+}
+
 fn remint_grafted_declarations(
     vm: &mut BexVm,
     owned: &[HeapPtr],
@@ -2481,6 +2510,7 @@ impl BamlClassSession for PackageReflectImpl {
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
             type_aliases: IndexMap::new(),
+            globals: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),
@@ -2518,7 +2548,7 @@ impl BamlClassSession for PackageReflectImpl {
             Ok(package) => package,
             Err(error) => return error.into(),
         };
-        let mut artifact = match take_compile_artifact(
+        let PinnedArtifact { mut artifact, pins } = match take_compile_artifact(
             vm,
             *artifact,
             "Session._finish received an invalid artifact",
@@ -2527,6 +2557,10 @@ impl BamlClassSession for PackageReflectImpl {
             Ok(artifact) => artifact,
             Err(error) => return error.into(),
         };
+        debug_assert!(
+            pins.is_empty(),
+            "a session artifact binds its dependencies through the session package, not pins"
+        );
         let kind = std::mem::replace(&mut artifact.kind, ArtifactKind::Package);
         let (metadata, lease) = match kind {
             ArtifactKind::Session { meta, lease } => (meta, lease),

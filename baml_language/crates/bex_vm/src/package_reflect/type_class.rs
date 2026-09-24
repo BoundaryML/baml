@@ -1439,6 +1439,7 @@ mod renderability_tests {
             impl_rules: indexmap::IndexMap::new(),
             functions: indexmap::IndexMap::new(),
             type_aliases: indexmap::IndexMap::new(),
+            globals: indexmap::IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: indexmap::IndexMap::new(),

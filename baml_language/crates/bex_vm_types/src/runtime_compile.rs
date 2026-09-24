@@ -5,7 +5,7 @@
 //! compiler implementation is assembled in `bex_project`.
 
 use std::sync::{
-    Arc, Mutex, Weak,
+    Arc, Weak,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -373,6 +373,3 @@ pub enum ArtifactKind {
         lease: SessionEvalLease,
     },
 }
-
-/// One-shot storage used by the BAML `CompileArtifact` wrapper.
-pub type RuntimeCompileArtifactSlot = Mutex<Option<RuntimeCompileArtifact>>;

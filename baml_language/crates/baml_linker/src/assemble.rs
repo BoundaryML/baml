@@ -122,6 +122,7 @@ impl Assembler<'_, '_> {
         let package = self.set.package(id);
         UnitSpace {
             name: &package.name,
+            ordinal: id.0 as usize,
             unit: package.unit,
             objects: &self.objects.units[id],
             slots: &self.slots.units[id],
@@ -132,6 +133,7 @@ impl Assembler<'_, '_> {
     fn tail_space(&self, id: LinkPackageId) -> TailSpace<'_> {
         TailSpace {
             name: self.set.name(id),
+            ordinal: id.0 as usize,
             tail: tail_of(self.set, id),
             objects: &self.objects.tails[id],
             slots: &self.slots.tails[id],

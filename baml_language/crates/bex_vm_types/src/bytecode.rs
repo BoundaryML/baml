@@ -1059,9 +1059,10 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
-    /// Reify the package selected lexically by the compiler. The operand is a
-    /// constant-pool string naming the static package; a dynamic function's
-    /// runtime owner takes precedence.
+    /// Reify the package lexically enclosing the call site. In a unit the
+    /// operand is a placeholder — the package is the unit's own; the linker
+    /// writes the package's ordinal in the executable, which the static VM
+    /// reads. A dynamic function's runtime owner takes precedence.
     LoadCurrentPackage(usize),
 
     /// Pop the condition on both edges and branch when true.

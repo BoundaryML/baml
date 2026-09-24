@@ -9111,11 +9111,7 @@ impl<'db> LoweringContext<'db> {
         // `Package.current()` is lexical, like `reflect.Type.of`: bake the enclosing
         // package identity at this call site instead of emitting a callable
         // reference to the compiler-owned declaration.
-        if matches!(
-            &callee_operand,
-            Operand::Constant(Constant::Function(func))
-                if self.is_lang_method(*func, baml_base::LangPackage::Reflect, "Package", "current")
-        ) {
+        if self.is_current_package_intrinsic(callee, &callee_operand) {
             let package = self
                 .spelling
                 .of(file_package(self.db, self.file).root)
@@ -9722,6 +9718,37 @@ impl<'db> LoweringContext<'db> {
     /// case is deferred to template lowering, which produces
     /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
     /// `LoadType` instruction.
+    /// Whether a call's callee is `reflect.Package.current`, whichever lane
+    /// serves the stdlib: a source declaration reaches here as the callee
+    /// operand's function, a precompiled row through the callee expression's
+    /// external resolution (as `reflect.Type.of` is recognized).
+    fn is_current_package_intrinsic(&self, callee: AstExprId, callee_operand: &Operand) -> bool {
+        use baml_compiler2_ast::BuiltinKind;
+
+        if self
+            .trusted_external_callee(callee)
+            .is_some_and(|(external, row)| {
+                row.builtin_kind == Some(BuiltinKind::Intrinsic)
+                    && matches!(
+                        external.slot(self.db),
+                        baml_compiler2_hir_ty::callable::ExternalCallTarget::Method { class, name }
+                            if class.is_lang_root_type(
+                                baml_compiler2_hir::package::lang_roots(self.db),
+                                baml_base::LangPackage::Reflect,
+                                "Package",
+                            ) && name.as_str() == "current"
+                    )
+            })
+        {
+            return true;
+        }
+        matches!(
+            callee_operand,
+            Operand::Constant(Constant::Function(func))
+                if self.is_lang_method(*func, baml_base::LangPackage::Reflect, "Package", "current")
+        )
+    }
+
     fn check_type_of_intrinsic(
         &mut self,
         callee: AstExprId,

@@ -3649,9 +3649,9 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_> {
     }
 
     fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
-        let object = self.mint_object(Object::String(package.into()));
-        let constant = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(object)));
-        let inst = self.emit(Instruction::LoadCurrentPackage(constant));
+        // The package is this unit's own; whoever lays the unit into an
+        // executable writes its ordinal here. The spelling is display only.
+        let inst = self.emit(Instruction::LoadCurrentPackage(0));
         self.set_operand(inst, OperandMeta::Const(package.to_string()));
         Ok(())
     }

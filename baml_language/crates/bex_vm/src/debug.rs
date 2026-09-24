@@ -125,7 +125,11 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::LoadConst(index) | Instruction::LoadCurrentPackage(index) => {
+        Instruction::LoadCurrentPackage(ordinal) => operand_meta.map_or_else(
+            || format!("(package {ordinal})"),
+            |meta| format!("({})", meta.as_str()),
+        ),
+        Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
                 format!("({})", display_value(*value))

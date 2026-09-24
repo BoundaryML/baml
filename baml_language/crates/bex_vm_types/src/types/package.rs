@@ -57,6 +57,12 @@ pub struct Package {
     /// `Object::TypeAlias`. Non-recursive aliases are expanded at lowering and
     /// never reach here.
     pub type_aliases: IndexMap<LocalName, HeapPtr>,
+    /// The package's own global slots by declaration path: every named
+    /// function (free or method) and every `let`, never an interface body. A
+    /// static package's slots index the program's global pool; a runtime
+    /// package's index its own slot table. This is how a consumer binds a
+    /// function value or a `let` cell without a rendered spelling.
+    pub globals: IndexMap<DeclPath, usize>,
     /// Versioned artifact containing the enriched, source-less compiler
     /// interface for mounting this package under an alias in a later
     /// `Package.compile` call.

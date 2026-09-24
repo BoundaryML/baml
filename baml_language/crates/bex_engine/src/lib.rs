@@ -133,6 +133,14 @@ pub use tokio_util::sync::CancellationToken;
 /// Compiler implementation injected by an assembly crate above the runtime.
 /// Every call receives only owned data and returns an owned, compiler-neutral
 /// artifact, so no compiler database can leak into the engine or heap.
+/// A runtime compile request beside the dependency packages it pins (see
+/// [`bex_vm::PinnedArtifact`]): minted under the heap permit, carried across
+/// the compile task, and stored with the artifact.
+struct PendingRuntimeCompile {
+    request: bex_vm_types::RuntimeCompileRequest,
+    pins: IndexMap<String, bex_external_types::Handle>,
+}
+
 pub trait RuntimeCompiler: Send + Sync + 'static {
     fn compile(
         &self,
@@ -6310,8 +6318,9 @@ impl BexEngine {
                         }
                         _ => None,
                     };
-                    if let Some(Ok(request)) = runtime_compile_request.as_ref()
-                        && let bex_vm_types::RuntimeCompileMode::Session(session) = &request.mode
+                    if let Some(Ok(pending)) = runtime_compile_request.as_ref()
+                        && let bex_vm_types::RuntimeCompileMode::Session(session) =
+                            &pending.request.mode
                         && let Some(future_id) = thread.vm_thread_settles_future()
                     {
                         let mut guard = self.futures.acquire(thread.proof()).await;
@@ -7325,7 +7334,7 @@ impl BexEngine {
     fn runtime_compile_request(
         vm: &BexVm,
         args: &[Value],
-    ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
+    ) -> Result<PendingRuntimeCompile, EngineError> {
         fn map_entries(
             vm: &BexVm,
             value: Value,
@@ -7371,6 +7380,7 @@ impl BexEngine {
         }
 
         let mut packages = IndexMap::new();
+        let mut pins = IndexMap::new();
         for (alias, value) in map_entries(vm, packages_value)? {
             let Some(wrapper_ptr) = value.as_object_ptr() else {
                 return Err(EngineError::TypeMismatch {
@@ -7412,18 +7422,25 @@ impl BexEngine {
                     types,
                 },
             );
+            // Pinned while this thread holds the permit: the compile task runs
+            // across the sys-op await, and `_finish` binds against exactly
+            // this object.
+            pins.insert(alias.to_string(), vm.heap.create_handle(package_ptr));
         }
-        Ok(bex_vm_types::RuntimeCompileRequest {
-            files,
-            packages,
-            mode: bex_vm_types::RuntimeCompileMode::Package,
+        Ok(PendingRuntimeCompile {
+            request: bex_vm_types::RuntimeCompileRequest {
+                files,
+                packages,
+                mode: bex_vm_types::RuntimeCompileMode::Package,
+            },
+            pins,
         })
     }
 
     fn runtime_session_compile_request(
         vm: &mut BexVm,
         args: &[Value],
-    ) -> Result<bex_vm_types::RuntimeCompileRequest, OpError> {
+    ) -> Result<PendingRuntimeCompile, OpError> {
         let operation = SysOp::ReflectSessionCompile;
         let invalid = |message: String| {
             OpError::new(
@@ -7547,16 +7564,21 @@ impl BexEngine {
             expected,
             lease,
         };
-        Ok(bex_vm_types::RuntimeCompileRequest {
-            files: IndexMap::new(),
-            packages,
-            mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
+        // A session's dependencies are pinned by the session package itself
+        // (`dependency_names`), which `_finish` binds against.
+        Ok(PendingRuntimeCompile {
+            request: bex_vm_types::RuntimeCompileRequest {
+                files: IndexMap::new(),
+                packages,
+                mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
+            },
+            pins: IndexMap::new(),
         })
     }
 
     fn execute_runtime_compile(
         &self,
-        request: bex_vm_types::RuntimeCompileRequest,
+        pending: PendingRuntimeCompile,
         operation: SysOp,
     ) -> SysOpResult {
         fn string(value: impl Into<String>) -> BexExternalValue {
@@ -7711,6 +7733,7 @@ impl BexEngine {
             }
         }
 
+        let PendingRuntimeCompile { request, pins } = pending;
         let compiler = self.runtime_compiler.clone();
         SysOpResult::Async(Box::pin(async move {
             let Some(compiler) = compiler else {
@@ -7725,12 +7748,32 @@ impl BexEngine {
                     },
                 ));
             };
-            match compiler.compile(request) {
+            // A compiler panic is an internal compiler error, reported as a
+            // failed compile. Letting it unwind through this future would
+            // drop the sys-op's result and leave the caller waiting forever.
+            let compiled = catch_unwind(AssertUnwindSafe(|| compiler.compile(request)))
+                .unwrap_or_else(|panic| {
+                    let message = panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|text| (*text).to_string()))
+                        .unwrap_or_else(|| "unknown panic".to_string());
+                    Err(vec![bex_vm_types::RuntimeCompileDiagnostic {
+                        code: "E_RUNTIME_INTERNAL".to_string(),
+                        message: format!("internal compiler error: {message}"),
+                        severity: bex_vm_types::RuntimeDiagnosticSeverity::Error,
+                        span: None,
+                        details: None,
+                    }])
+                });
+            match compiled {
                 Ok(artifact) => Ok(BexExternalValue::Instance {
                     class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(artifact)))),
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(
+                            bex_vm::PinnedArtifact { artifact, pins },
+                        )))),
                     },
                 }),
                 Err(diagnostics) => {

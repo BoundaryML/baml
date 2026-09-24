@@ -11,6 +11,7 @@
 //! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
 pub(crate) mod array_index;
+pub mod compile_artifact;
 pub mod debug;
 pub mod errors;
 pub mod indexable;
@@ -26,6 +27,7 @@ mod type_match;
 pub mod types;
 pub mod vm;
 
+pub use compile_artifact::{PinnedArtifact, RuntimeCompileArtifactSlot};
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;

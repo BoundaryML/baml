@@ -71,7 +71,7 @@ mod tlab;
 
 // Re-export types from bex_external_types for convenience
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
-pub use bex_external_types::{BexExternalValue, Handle};
+pub use bex_external_types::{BexExternalValue, Handle, WeakHeapRef};
 pub use bex_vm_types::PermitProof;
 pub use gc::{CollectionLevel, GcStats};
 #[cfg(feature = "gc_profiling")]
