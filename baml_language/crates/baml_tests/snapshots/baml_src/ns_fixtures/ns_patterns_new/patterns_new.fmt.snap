@@ -84,6 +84,46 @@ function fn_return_widens(cb: (int) -> int throws never) -> int {
     }
 }
 
+// A function pattern greedily owns both unions. The parenthesized return and
+// throws spellings below are an equivalent control for the if-let regression.
+function greedy_if_let_function_unions(cb: ((int) -> int throws never)?) -> int {
+    if let f: (int) -> int | string throws AppError | string = cb {
+        1
+    } else {
+        0
+    }
+}
+
+function parenthesized_if_let_function_unions(cb: ((int) -> int throws never)?) -> int {
+    if let f: (int) -> (int | string) throws (AppError | string) = cb {
+        1
+    } else {
+        0
+    }
+}
+
+function greedy_match_function_unions(cb: (int) -> int throws never) -> int {
+    match (cb) {
+        (int) -> int | string throws AppError | string => 1,
+    }
+}
+
+// Parentheses keep the pipe between these two throwing functions outside
+// both function types. Their return and throws unions remain inside each one.
+type ThrowingFunctionUnion = ((int) -> int | string throws AppError | string)
+    | ((string) -> string | int throws AppError | string);
+
+function match_throwing_function_union(cb: ThrowingFunctionUnion) -> int {
+    if (
+        cb is ((int) -> int | string throws AppError | string)
+            | ((string) -> string | int throws AppError | string)
+    ) {
+        1
+    } else {
+        0
+    }
+}
+
 type Number = int | float;
 
 function int_widens_to_alias(v: Number) -> int {
