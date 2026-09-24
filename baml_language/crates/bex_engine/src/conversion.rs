@@ -933,7 +933,7 @@ impl BexEngine {
             // bridge's historical `int` inference. Contextual coercion can
             // still select `float`; a non-integral number is float-only.
             BexExternalValue::JsNumber(value) => {
-                SynthTy::Known(if js_number_to_i64(*value).is_some() {
+                SynthTy::Known(if js_number_to_vm_int(*value).is_some() {
                     RuntimeTy::int()
                 } else {
                     RuntimeTy::float()
@@ -4919,13 +4919,19 @@ fn coerce_numeric_to_declared_type(
         // No numeric context selected a representation (for example an
         // `unknown` slot). Keep Node's historical value-shaped default so a
         // JavaScript integer infers/materializes as `int`, otherwise `float`.
-        (BexExternalValue::JsNumber(value), _) => Ok(match js_number_to_i64(value) {
+        (BexExternalValue::JsNumber(value), _) => Ok(match js_number_to_vm_int(value) {
             Some(integer) => BexExternalValue::Int(integer),
             None => BexExternalValue::Float(value),
         }),
 
         (v, _) => Ok(v),
     }
+}
+
+/// Convert an integral JavaScript number only when the VM can represent it as
+/// an immediate integer. Larger integral doubles must remain floats.
+fn js_number_to_vm_int(value: f64) -> Option<i64> {
+    js_number_to_i64(value).filter(|integer| Value::try_int(*integer).is_some())
 }
 
 /// Resolve a JavaScript number against the explicit numeric arms of a union.
@@ -4940,8 +4946,7 @@ fn resolve_js_number_for_union(
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
 ) -> (BexExternalValue, Option<RuntimeTy>) {
-    if let Some(integer) = js_number_to_i64(value).filter(|value| Value::try_int(*value).is_some())
-    {
+    if let Some(integer) = js_number_to_vm_int(value) {
         let integer_value = BexExternalValue::Int(integer);
         let matching_literal = members.iter().find(|member| {
             union_member_resolves_to_int_literal(member, aliases)
@@ -5125,6 +5130,17 @@ mod union_container_selection_tests {
         };
         assert_eq!(metadata.selected_option, RuntimeTy::float());
         assert_eq!(*value, BexExternalValue::Float(number));
+    }
+
+    #[test]
+    fn js_number_without_numeric_context_uses_float_beyond_vm_int_range() {
+        let number = 2_f64.powi(62);
+
+        let coerced =
+            coerce_arg_to_declared_type(BexExternalValue::JsNumber(number), &RuntimeTy::unknown())
+                .unwrap();
+
+        assert_eq!(coerced, BexExternalValue::Float(number));
     }
 
     #[test]
