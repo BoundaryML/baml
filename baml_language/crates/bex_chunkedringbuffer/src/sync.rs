@@ -26,5 +26,4 @@ pub(crate) fn spin() {
     thread::yield_now();
 }
 
-#[repr(align(128))]
-pub(crate) struct Padded<T>(pub(crate) T);
+pub(crate) use btel_settings::layout::Padded;

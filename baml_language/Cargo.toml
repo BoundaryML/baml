@@ -118,10 +118,12 @@ baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
+btel_settings = { path = "crates/btel_settings" }
 btel_types = { path = "crates/btel_types" }
 btel_clock = { path = "crates/btel_clock" }
 btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
+btel_publisher = { path = "crates/btel_publisher" }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }

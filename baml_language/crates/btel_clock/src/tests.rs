@@ -220,6 +220,6 @@ fn actual_backend_preserves_raw_and_reference_duration_agreement() {
     let reference = end.reference.0 - start.reference.0;
     assert!(
         elapsed.as_nanos().abs_diff(u128::from(reference))
-            < u128::from(ACCURACY_TARGET + start.uncertainty + end.uncertainty)
+            < u128::from(ACCURACY_TARGET_NS + start.uncertainty + end.uncertainty)
     );
 }

@@ -20,16 +20,13 @@ use quanta::{CalibrationMetadata, CalibrationQuality, CalibrationStatus, Clock, 
 use web_time::{SystemTime, UNIX_EPOCH};
 
 mod calibration;
+pub use btel_settings::clock::ClockMode;
+use btel_settings::clock::{
+    ACCURACY_TARGET_NS, DISCONTINUITY_MARGIN_NS, MAX_SAMPLE_UNCERTAINTY_NS,
+    VALIDATION_INTERVAL_DURATION,
+};
 use calibration::{Calibrated, Probe, probe};
-pub use quanta::ClockSource as Source;
-
-// Budget: up to 100 ppm accepted scale uncertainty contributes 10 us between
-// 100 ms checks. A 250 us residual margin leaves headroom within the 1 ms target.
-// These are engineering tolerances, not statistical confidence guarantees.
-const CHECK_INTERVAL: Duration = Duration::from_millis(100);
-const ACCURACY_TARGET: u64 = 1_000_000;
-const DISCONTINUITY_MARGIN: u64 = 250_000;
-const MAX_SAMPLE_UNCERTAINTY: u64 = 50_000;
+pub use quanta::{CalibrationStatus as CalibrationOutcome, ClockSource as Source};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 fn next_id() -> NonZeroU64 {
@@ -49,6 +46,17 @@ pub struct ClockDomainId(NonZeroU64);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClockEpochId(NonZeroU64);
+
+impl ClockDomainId {
+    pub const fn get(self) -> u64 {
+        self.0.get()
+    }
+}
+impl ClockEpochId {
+    pub const fn get(self) -> u64 {
+        self.0.get()
+    }
+}
 
 /// OS monotonic nanoseconds, never UTC or raw counter ticks.
 #[repr(transparent)]
@@ -99,12 +107,6 @@ impl ClockThreshold {
     pub fn reached(self, elapsed: ClockDuration, domain: ClockDomainId) -> bool {
         self.domain == domain && elapsed >= self.ticks
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ClockMode {
-    Auto,
-    Monotonic,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -213,7 +215,7 @@ impl ClockEpoch {
                     ),
                 },
             },
-            status: AtomicU8::new(if origin.uncertainty > MAX_SAMPLE_UNCERTAINTY {
+            status: AtomicU8::new(if origin.uncertainty > MAX_SAMPLE_UNCERTAINTY_NS {
                 TimingStatus::Uncertain as u8
             } else {
                 TimingStatus::Valid as u8
@@ -221,7 +223,12 @@ impl ClockEpoch {
             active_threads: AtomicUsize::new(0),
             has_finished: AtomicBool::new(false),
             last_checked_tick: AtomicU64::new(origin.ticks.get()),
-            interval_ticks: to_ticks(CHECK_INTERVAL, conversion.multiplier, conversion.shift).get(),
+            interval_ticks: to_ticks(
+                VALIDATION_INTERVAL_DURATION,
+                conversion.multiplier,
+                conversion.shift,
+            )
+            .get(),
             validation: Mutex::new(()),
         })
     }
@@ -324,7 +331,7 @@ impl ClockEpoch {
     }
 
     fn assess(&self, sample: Probe, previous: ClockInstant) -> TimingStatus {
-        if sample.uncertainty > MAX_SAMPLE_UNCERTAINTY {
+        if sample.uncertainty > MAX_SAMPLE_UNCERTAINTY_NS {
             return TimingStatus::Uncertain;
         }
         if sample.reference < self.metadata.reference_time {
@@ -338,7 +345,7 @@ impl ClockEpoch {
                 sample.ticks.elapsed_until(previous),
                 self.metadata.multiplier,
                 self.metadata.shift,
-            ) > DISCONTINUITY_MARGIN.saturating_add(sample.uncertainty)
+            ) > DISCONTINUITY_MARGIN_NS.saturating_add(sample.uncertainty)
         {
             return TimingStatus::Discontinuity;
         }
@@ -354,12 +361,12 @@ impl ClockEpoch {
         );
         let scale_error =
             narrow(u128::from(elapsed) * u128::from(self.metadata.rate_error.0) / 1_000_000_000);
-        let tolerance = DISCONTINUITY_MARGIN
+        let tolerance = DISCONTINUITY_MARGIN_NS
             .saturating_add(sampling)
             .saturating_add(scale_error);
         // A growing scale-error allowance must not silently accept a known
         // >1 ms origin error. Both tests subtract the measurement uncertainty.
-        if discrepancy > tolerance || discrepancy > ACCURACY_TARGET.saturating_add(sampling) {
+        if discrepancy > tolerance || discrepancy > ACCURACY_TARGET_NS.saturating_add(sampling) {
             TimingStatus::Discontinuity
         } else {
             TimingStatus::Valid

@@ -289,7 +289,7 @@ impl Calibration {
                 let mwe = variance.mean_with_error();
                 let samples = variance.samples();
 
-                if samples > MINIMUM_CAL_ROUNDS
+                if samples > options.minimum_samples
                     && mwe < options.maximum_error.as_nanos() as f64
                     && reference.now().saturating_sub(started)
                         >= options

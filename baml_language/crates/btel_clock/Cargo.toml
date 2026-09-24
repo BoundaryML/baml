@@ -18,6 +18,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+btel_settings = { workspace = true }
 btel_types = { workspace = true }
 quanta = { workspace = true }
 web-time = { workspace = true }

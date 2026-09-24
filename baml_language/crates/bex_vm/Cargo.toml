@@ -27,6 +27,7 @@ bex_vm_types = { workspace = true }
 btel_clock = { workspace = true }
 btel_processor = { workspace = true }
 btel_records = { workspace = true }
+btel_settings = { workspace = true }
 btel_types = { workspace = true }
 aes-gcm-siv = { workspace = true }
 base64 = { workspace = true }

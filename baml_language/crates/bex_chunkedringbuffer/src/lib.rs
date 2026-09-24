@@ -19,23 +19,11 @@ mod sync;
 
 use std::{collections::VecDeque, marker::PhantomData, mem::size_of, num::NonZeroUsize, rc::Rc};
 
+pub use btel_settings::transport::ChunkConfig as Config;
 use sync::{
     Arc, AtomicBool, AtomicUsize, Condvar, Mutex, MutexGuard, Ordering, Padded, TryLockError,
     thread,
 };
-
-#[derive(Clone, Copy, Debug)]
-pub struct Config {
-    pub chunk_capacity: NonZeroUsize,
-    pub timing_chunks: NonZeroUsize,
-    pub span_chunks: NonZeroUsize,
-    /// Maximum registered OS workers; their predetermined slots survive polls.
-    /// Each lane needs at least this many chunks, otherwise writers can exhaust
-    /// it with PRIVATE partial chunks that the consumer cannot reclaim.
-    pub max_producers: NonZeroUsize,
-    pub preallocate: bool,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SetupError {
     InvalidCapacity,
@@ -673,7 +661,7 @@ impl<T, S> Consumer<T, S> {
         mut timing: impl FnMut(ProducerId, std::vec::Drain<'_, T>),
         mut span: impl FnMut(ProducerId, SpanChunk<T, S>),
     ) -> DrainStatus {
-        const BATCH: usize = 8;
+        use btel_settings::transport::DRAIN_BATCH_CHUNKS as BATCH;
         self.shared.check();
         let mut guard = FailureGuard {
             shared: &self.shared,
@@ -771,7 +759,11 @@ impl<T, S> Consumer<T, S> {
     /// Consumer-only deadline for periodic processing when no input arrives.
     /// The same locked predicate protects timed and untimed waits from lost wakes.
     pub fn wait_until(&mut self, deadline: Option<std::time::Instant>) {
-        for _ in 0..if cfg!(baml_loom) { 1 } else { 64 } {
+        for _ in 0..if cfg!(baml_loom) {
+            btel_settings::transport::MODEL_IDLE_PROBES
+        } else {
+            btel_settings::transport::IDLE_PROBES
+        } {
             self.shared.check();
             // Avoid competing with publishers for the mutex during empty polls.
             // A stale hint only changes how soon we reach the locked recheck;
@@ -810,6 +802,15 @@ impl<T, S> Consumer<T, S> {
         }
         drop(s);
         self.shared.check();
+    }
+
+    /// Readiness hint only. A producer may publish immediately after this read.
+    pub fn has_ready_chunks(&self) -> bool {
+        self.shared.ready_hint.0.load(Ordering::Acquire)
+    }
+
+    pub fn chunk_capacity(&self) -> usize {
+        self.shared.config.chunk_capacity.get()
     }
 
     /// Fixed decoder capacity; every chunk carries an index below this bound.

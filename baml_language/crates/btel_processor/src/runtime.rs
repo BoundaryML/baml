@@ -2,11 +2,10 @@ use std::{
     cell::RefCell,
     future::{Future, poll_fn},
     marker::PhantomData,
-    num::NonZeroUsize,
     pin::pin,
     rc::Rc,
     sync::{
-        Arc, Weak,
+        Arc, Mutex, OnceLock, Weak,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -17,11 +16,20 @@ use bex_chunkedringbuffer::{
 use btel_records::{CaptureDeferred, SpanRecord, TimingRecord};
 use btel_types::TelemetryId;
 
-use crate::Processor;
+use crate::{NoSinkPublisher, Processor, Publisher};
 
 type Span = SpanRecord<CaptureDeferred, CaptureDeferred>;
 type Pool = ChunkPool<TimingRecord, Span>;
-type BoundProcessor = Processor<CaptureDeferred, CaptureDeferred>;
+/// Terminal worker failure. Delivery callbacks run on the processor thread;
+/// their panics are reported here as well as making the transport terminal.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeError(pub String);
+impl std::fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for RuntimeError {}
 
 static NEXT_RUNTIME: AtomicU64 = AtomicU64::new(0);
 
@@ -59,7 +67,8 @@ thread_local! {
 pub struct TelemetryRuntime {
     id: u64,
     pool: Pool,
-    worker: Option<std::thread::JoinHandle<()>>,
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
+    result: Arc<OnceLock<Result<(), RuntimeError>>>,
 }
 
 impl TelemetryRuntime {
@@ -80,24 +89,39 @@ impl TelemetryRuntime {
     /// Lazy chunks, bounded to two chunks per lane per admitted OS thread.
     /// The floor accommodates host thread pools larger than available CPUs.
     pub fn new() -> std::io::Result<Arc<Self>> {
-        let producers = std::thread::available_parallelism().map_or(64, |n| n.get().max(64));
-        Self::with_config(Config {
-            chunk_capacity: NonZeroUsize::new(256).unwrap(),
-            timing_chunks: NonZeroUsize::new(producers * 2).unwrap(),
-            span_chunks: NonZeroUsize::new(producers * 2).unwrap(),
-            max_producers: NonZeroUsize::new(producers).unwrap(),
-            preallocate: false,
-        })
+        Self::with_publisher(NoSinkPublisher::default())
+    }
+
+    /// Select the worker's publisher once, without adding dispatch to VM writes
+    /// or record processing. The worker owns the publisher and delivery callback.
+    pub fn with_publisher<P>(publisher: P) -> std::io::Result<Arc<Self>>
+    where
+        P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
+    {
+        Self::with_config_and_publisher(Config::default(), publisher)
     }
 
     pub fn with_config(config: Config) -> std::io::Result<Arc<Self>> {
+        Self::with_config_and_publisher(config, NoSinkPublisher::default())
+    }
+
+    pub fn with_config_and_publisher<P>(config: Config, publisher: P) -> std::io::Result<Arc<Self>>
+    where
+        P: Publisher<CaptureDeferred, CaptureDeferred> + Send + 'static,
+    {
+        const {
+            assert!(btel_settings::processor::THREADS_PER_RUNTIME == 1);
+        }
+        let result = Arc::new(OnceLock::new());
+        let completion = Arc::clone(&result);
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let worker = {
             let copy = pool.clone();
-            let (ready, bound) = std::sync::mpsc::sync_channel(1);
+            let (ready, bound) =
+                std::sync::mpsc::sync_channel(btel_settings::processor::STARTUP_CHANNEL_CAPACITY);
             let worker = std::thread::Builder::new()
                 .name("btel-processor".into())
                 .spawn(move || {
@@ -111,8 +135,28 @@ impl TelemetryRuntime {
                     if ready.send(Ok(())).is_err() {
                         return;
                     }
-                    // The consumer's guard marks failure before a panic escapes.
-                    let _ = BoundProcessor::new(consumer, NonZeroUsize::new(8).unwrap()).run();
+                    // Catch outside Processor: its guard first marks the pool
+                    // terminal, releasing spinning producers on callback failure.
+                    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        Processor::with_publisher(
+                            consumer,
+                            btel_settings::processor::REQUESTED_BATCH_CHUNKS,
+                            publisher,
+                        )
+                        .run()
+                    }));
+                    let result = match outcome {
+                        Ok(result) => result.map_err(|error| RuntimeError(error.to_string())),
+                        Err(payload) => {
+                            let message = payload
+                                .downcast_ref::<String>()
+                                .map(String::as_str)
+                                .or_else(|| payload.downcast_ref::<&str>().copied())
+                                .unwrap_or("telemetry processor or publisher panicked");
+                            Err(RuntimeError(message.to_owned()))
+                        }
+                    };
+                    let _ = completion.set(result);
                 })?;
             match bound.recv() {
                 Ok(Ok(())) => worker,
@@ -128,7 +172,8 @@ impl TelemetryRuntime {
         Ok(Arc::new(Self {
             id,
             pool,
-            worker: Some(worker),
+            worker: Mutex::new(Some(worker)),
+            result,
         }))
     }
 
@@ -224,6 +269,35 @@ impl TelemetryRuntime {
         });
     }
 
+    /// Stop admission, drain published chunks, seal the publisher, and join.
+    /// Call only after execution is quiescent, with no active producer/heap
+    /// permit on this thread. Blocking; async hosts should use `spawn_blocking`.
+    /// Repeated/concurrent calls return the same terminal result.
+    pub fn finish(&self) -> Result<(), RuntimeError> {
+        self.pool.close_admission();
+        let mut worker = self
+            .worker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(handle) = worker.take() {
+            if handle.join().is_err() {
+                let _ = self
+                    .result
+                    .set(Err(RuntimeError("telemetry worker panicked".into())));
+            }
+        }
+        self.result.get().cloned().unwrap_or_else(|| {
+            Err(RuntimeError(
+                "telemetry worker stopped without a result".into(),
+            ))
+        })
+    }
+
+    /// None while running; failure is observable without waiting for shutdown.
+    pub fn result(&self) -> Option<Result<(), RuntimeError>> {
+        self.result.get().cloned()
+    }
+
     pub fn stats(&self) -> Stats {
         self.pool.stats()
     }
@@ -258,16 +332,14 @@ impl Drop for ExecutionScope {
 
 impl Drop for TelemetryRuntime {
     fn drop(&mut self) {
-        self.pool.close_admission();
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        let _ = self.finish();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
+        num::NonZeroUsize,
         panic::{AssertUnwindSafe, catch_unwind},
         task::{Context, Poll, Waker},
     };
@@ -292,7 +364,8 @@ mod tests {
         let runtime = Arc::new(TelemetryRuntime {
             id: NEXT_RUNTIME.fetch_add(1, Ordering::Relaxed),
             pool: pool.clone(),
-            worker: None,
+            worker: Mutex::new(None),
+            result: Arc::new(OnceLock::new()),
         });
         (runtime, pool)
     }

@@ -38,8 +38,8 @@ fn assert_completed(engine: &BexEngine, expected: &[(u64, InvocationOutcome)]) {
         "each logical thread must finish exactly once"
     );
     #[cfg(not(target_arch = "wasm32"))]
-    {
-        let stats = engine.telemetry_runtime.stats();
+    if let Some(telemetry) = &engine.telemetry {
+        let stats = telemetry.runtime.stats();
         assert_eq!(
             stats.active_producers, 0,
             "no producer may survive a VM handoff"
@@ -456,9 +456,9 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     );
     let cancel = CancellationToken::new();
     let thread = entry(&engine, &cancel, &[]).await;
-    let old = Arc::clone(thread.vm.telemetry_clock());
+    let old = Arc::clone(thread.vm.telemetry_clock().unwrap());
     let id = thread.vm.thread_id;
-    let replacement = engine.reset_telemetry_clock_after_restore();
+    let replacement = engine.reset_telemetry_clock_after_restore().unwrap();
     assert_eq!(old.status(), TimingStatus::Restored);
     assert_ne!(replacement.metadata().epoch, old.metadata().epoch);
     let result = engine
@@ -478,7 +478,10 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     ));
     assert_completed(&engine, &[(id, InvocationOutcome::Ok)]);
     let mut next = entry(&engine, &cancel, &[]).await;
-    assert_eq!(next.vm.telemetry_clock().status(), TimingStatus::Valid);
-    assert_ne!(next.vm.telemetry_clock().domain(), old.domain());
+    assert_eq!(
+        next.vm.telemetry_clock().unwrap().status(),
+        TimingStatus::Valid
+    );
+    assert_ne!(next.vm.telemetry_clock().unwrap().domain(), old.domain());
     engine.finish_thread_telemetry(&mut next, InvocationOutcome::Cancelled);
 }

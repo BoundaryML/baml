@@ -5,55 +5,31 @@ use btel_clock::{ClockDomainId, ClockThreshold};
 use btel_types::{ClockDuration, InvocationOutcome, TelemetryPolicyId};
 use rustc_hash::FxHashMap;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "resolved policy flags are independent and intentionally direct"
-)]
-pub struct TelemetryPolicy {
-    pub span_from_entry: bool,
-    /// Resolve again after a clock-domain change; stale tick thresholds never
-    /// compare against a different scale. Other capture/error rules still apply.
-    pub promote_after: Option<ClockThreshold>,
-    pub promote_errors: bool,
-    pub capture_inputs: bool,
-    pub capture_output: bool,
-    pub capture_error: bool,
+pub type TelemetryPolicy = btel_settings::policy::TelemetryPolicy<ClockThreshold>;
+use btel_settings::policy::{PAGE_COUNT, PAGE_SIZE};
+
+#[inline(always)]
+pub(super) fn promotes(
+    policy: TelemetryPolicy,
+    elapsed: ClockDuration,
+    outcome: InvocationOutcome,
+    domain: ClockDomainId,
+) -> bool {
+    policy.span_from_entry
+        || policy.promote_errors && outcome == InvocationOutcome::Errored
+        || policy
+            .promotion_duration_threshold
+            .is_some_and(|threshold| threshold.reached(elapsed, domain))
 }
 
-impl TelemetryPolicy {
-    pub const NONE: Self = Self {
-        span_from_entry: false,
-        promote_after: None,
-        promote_errors: false,
-        capture_inputs: false,
-        capture_output: false,
-        capture_error: false,
-    };
-
-    #[inline(always)]
-    pub(super) fn promotes(
-        self,
-        elapsed: ClockDuration,
-        outcome: InvocationOutcome,
-        domain: ClockDomainId,
-    ) -> bool {
-        self.span_from_entry
-            || self.promote_errors && outcome == InvocationOutcome::Errored
-            || self
-                .promote_after
-                .is_some_and(|threshold| threshold.reached(elapsed, domain))
-    }
-}
-
-const PAGE_SIZE: usize = 256;
 type Page = [OnceLock<TelemetryPolicy>; PAGE_SIZE];
 
 /// Shared by every VM over the same engine's function objects. IDs are scoped
 /// to this table. Published slots never move, change, or get reused, so readers
 /// can safely finish using an old ID while a function's policy is updated.
 pub struct TelemetryPolicies {
-    pages: [OnceLock<Box<Page>>; PAGE_SIZE],
+    mode: btel_settings::mode::TelemetryMode,
+    pages: [OnceLock<Box<Page>>; PAGE_COUNT],
     interned: Mutex<FxHashMap<TelemetryPolicy, u16>>,
 }
 
@@ -65,10 +41,19 @@ impl Default for TelemetryPolicies {
 
 impl TelemetryPolicies {
     pub fn new() -> Self {
+        Self::with_mode(btel_settings::mode::DEFAULT_MODE)
+    }
+
+    pub fn with_mode(mode: btel_settings::mode::TelemetryMode) -> Self {
         Self {
-            pages: [const { OnceLock::new() }; PAGE_SIZE],
+            mode,
+            pages: [const { OnceLock::new() }; PAGE_COUNT],
             interned: Mutex::new(FxHashMap::default()),
         }
+    }
+
+    pub fn mode(&self) -> btel_settings::mode::TelemetryMode {
+        self.mode
     }
 
     #[inline(always)]
@@ -127,7 +112,9 @@ mod tests {
         let target = TelemetryPolicyId::none();
         let clock = btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
         let policy = |ticks| TelemetryPolicy {
-            promote_after: Some(clock.threshold(std::time::Duration::from_secs(ticks))),
+            promotion_duration_threshold: Some(
+                clock.threshold(std::time::Duration::from_secs(ticks)),
+            ),
             ..TelemetryPolicy::NONE
         };
         policies.publish(&target, policy(1)).unwrap();

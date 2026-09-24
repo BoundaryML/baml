@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 bex_chunkedringbuffer = { workspace = true }
 btel_records = { workspace = true }
+btel_settings = { workspace = true }
 btel_types = { workspace = true }
 rustc-hash = { workspace = true }
 

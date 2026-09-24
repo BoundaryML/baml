@@ -1,0 +1,290 @@
+// Btel recording v1. Rust types are generated into OUT_DIR by btel_publisher.
+// RecordingPublisher seals this format; destination delivery is separate.
+syntax = "proto3";
+package baml.btel.recording.v1;
+
+// One complete protobuf message per immutable local file or S3 object.
+// All sections may coexist. References may resolve in earlier OR later files.
+// Publisher does not order, deduplicate, or join spans, announcements or definitions.
+// Post-processing joins identities, reconciles repeated definitions/clock observations,
+// and reports unresolved references; missing references do not block file creation.
+// A live query can expose available data without claiming full structural resolution.
+// Readers apply each file once; RecordingEnd is not required to query a prefix.
+message RecordingFile {
+  RecordingHeader header = 1;
+  uint64 sequence = 2;        // Contiguous from 1 within a recording; never reused.
+  Definitions definitions = 3;
+  AggregateBatch aggregates = 4;
+  SpanBatch spans = 5;
+  ClockStateBatch clock_states = 6;
+  RecordingEnd end = 7;       // If present, this sequence is the final sequence.
+}
+
+message RecordingHeader {
+  uint32 format_major = 1;       // Exactly 1.
+  uint32 format_minor = 2;       // Initially 0; additive optional fields only.
+  bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
+  optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
+}
+
+message Definitions {
+  repeated FunctionDefinition functions = 1;
+  repeated CallPathDefinition call_paths = 2;
+  repeated ThreadDefinition threads = 3;
+  repeated ClockEpochDefinition clock_epochs = 4;
+}
+
+message FunctionDefinition {
+  uint64 function_id = 1;       // Nonzero, engine-scoped runtime definition ID.
+  oneof resolution {
+    FunctionMetadata metadata = 2;
+    MetadataUnavailable unavailable = 3;
+  }
+}
+
+// Lookup did not return metadata. This is an observation, not immutable metadata.
+// A later successful definition supersedes it; it never erases known metadata.
+message MetadataUnavailable {}
+
+message FunctionMetadata {
+  string fqn = 1;
+  string display_name = 2;
+  optional string source_file = 3;
+  SourceSpan source_span = 4;   // Absent if unavailable.
+  FunctionKind kind = 5;
+  optional string sys_op_name = 6; // Present iff kind == FUNCTION_KIND_SYS_OP.
+  FunctionOrigin origin = 7;
+  optional string owner_type_key = 8;
+  optional string parent_function_key = 9;
+  optional string lambda_path = 10;
+  optional string definition_key = 11;
+  optional string package_name = 12;
+  repeated string namespace = 13;
+}
+
+message SourceSpan {
+  uint32 file_id = 1;           // Compiler-local reference; not globally unique.
+  uint32 start = 2;             // Preserve compiler offsets, half-open range.
+  uint32 end = 3;
+}
+
+enum FunctionKind {
+  FUNCTION_KIND_UNSPECIFIED = 0;
+  FUNCTION_KIND_BYTECODE = 1;
+  FUNCTION_KIND_SYS_OP = 2;
+  FUNCTION_KIND_NATIVE = 3;
+  FUNCTION_KIND_NATIVE_UNRESOLVED = 4;
+}
+
+enum FunctionOrigin {
+  FUNCTION_ORIGIN_UNSPECIFIED = 0;
+  FUNCTION_ORIGIN_USER_DEFINED = 1;
+  FUNCTION_ORIGIN_COMPANION = 2;
+  FUNCTION_ORIGIN_INTERNAL = 3;
+  FUNCTION_ORIGIN_BUILTIN = 4;
+  FUNCTION_ORIGIN_AUTO_DERIVE = 5;
+}
+
+message CallPathDefinition {
+  uint32 call_path_id = 1;      // Nonzero.
+  uint64 thread_id = 2;        // From selector context when path was defined.
+  uint32 parent_call_path_id = 3; // Zero is the root sentinel.
+  optional uint64 visible_caller_function_id = 4; // Nonzero when present.
+  uint32 caller_pc = 5;        // Existing bytecode instruction coordinate.
+  uint64 callee_function_id = 6; // Nonzero.
+  CallPathEdge edge = 7;
+}
+
+enum CallPathEdge {
+  CALL_PATH_EDGE_UNSPECIFIED = 0;
+  CALL_PATH_EDGE_SYNCHRONOUS = 1;
+  CALL_PATH_EDGE_SPAWN = 2;
+}
+
+// Extracted from a thread announcement OR completion; either carries all fields.
+message ThreadDefinition {
+  uint64 thread_id = 1;        // Nonzero TelemetryId, not an OS thread ID.
+  optional uint64 parent_id = 2; // Absent for roots; otherwise nonzero node ID.
+  uint32 spawn_call_path_id = 3; // Zero allowed.
+  fixed64 started_at_ticks = 4;
+  uint64 clock_epoch_id = 5;   // Nonzero.
+}
+
+message ClockEpochDefinition {
+  uint64 epoch_id = 1;         // Nonzero.
+  uint64 domain_id = 2;        // Nonzero; immutable scale identity.
+  ClockSource source = 3;
+  fixed64 reference_tick = 4;
+  fixed64 reference_monotonic_ns = 5;
+  fixed64 multiplier = 6;      // Nonzero.
+  uint32 shift = 7;            // 0..127; delta conversion uses a u128 product.
+  uint64 origin_uncertainty_ns = 8;
+  uint64 rate_error_ppb = 9;
+  CalibrationQuality calibration = 10;
+  FallbackReason fallback = 11; // NONE is meaningful.
+  UtcAnchor utc = 12;
+}
+
+enum ClockSource {
+  CLOCK_SOURCE_UNSPECIFIED = 0;
+  CLOCK_SOURCE_OS_MONOTONIC = 1;
+  CLOCK_SOURCE_WINDOWS_QPC = 2;
+  CLOCK_SOURCE_X86_TSC = 3;
+  CLOCK_SOURCE_ARM_SYSTEM_COUNTER = 4;
+  CLOCK_SOURCE_MOCK = 5;       // Test recordings only.
+}
+
+message CalibrationQuality {
+  CalibrationStatus status = 1;
+  uint64 samples = 2;
+  uint64 elapsed_ns = 3;
+  double mean_residual_ns = 4;
+  double mean_error_ns = 5;
+}
+
+enum CalibrationStatus {
+  CALIBRATION_STATUS_UNSPECIFIED = 0;
+  CALIBRATION_STATUS_NOT_REQUIRED = 1;
+  CALIBRATION_STATUS_CONVERGED = 2;
+  CALIBRATION_STATUS_DEADLINE_REACHED = 3;
+}
+
+enum FallbackReason {
+  FALLBACK_REASON_NONE = 0;
+  FALLBACK_REASON_REQUESTED = 1;
+  FALLBACK_REASON_UNSUPPORTED = 2;
+  FALLBACK_REASON_CALIBRATION = 3;
+  FALLBACK_REASON_SCALE_VALIDATION = 4;
+  FALLBACK_REASON_DISCONTINUITY = 5;
+}
+
+message UtcAnchor {
+  fixed64 ticks = 1;
+  UnixNanos unix_nanos = 2;
+  uint64 uncertainty_ns = 3;
+}
+
+// Lossless representation of the runtime's i128, not a new timestamp scale.
+// signed value = signed(high) * 2^64 + unsigned(low).
+message UnixNanos {
+  fixed64 low = 1;
+  sfixed64 high = 2;
+}
+
+message ClockStateBatch {
+  repeated ClockEpochState states = 1;
+}
+
+message ClockEpochState {
+  uint64 epoch_id = 1;
+  TimingStatus status = 2;
+  bool final = 3;             // Epoch lifecycle settled; status cannot change.
+}
+
+enum TimingStatus {
+  TIMING_STATUS_UNSPECIFIED = 0;
+  TIMING_STATUS_VALID = 1;
+  TIMING_STATUS_RESTORED = 2;
+  TIMING_STATUS_DISCONTINUITY = 3;
+  TIMING_STATUS_UNCERTAIN = 4;
+  TIMING_STATUS_MODE_CHANGED = 5;
+}
+
+message AggregateBatch {
+  repeated AggregateDelta entries = 1;
+}
+
+message AggregateDelta {
+  uint64 node = 1;             // (uint64(call_path_id) << 1) | reentry; 33 bits.
+  uint64 count = 2;            // Positive; includes recursive invocations.
+  fixed64 total_duration_ticks = 3;
+  fixed64 total_self_await_ticks = 4;
+}
+
+message SpanBatch {
+  repeated ThreadSection sections = 1; // Consecutive runs, not global regrouping.
+}
+
+message ThreadSection {
+  uint64 thread_id = 1;        // Nonzero; context applies only within this section.
+  repeated SpanEvent events = 2;
+}
+
+message SpanEvent {
+  oneof event {
+    ThreadAnnouncement thread_announcement = 1;
+    ThreadCompletion thread_completion = 2;
+    FunctionAnnouncement function_announcement = 3;
+    FunctionCompletion function_completion = 4;
+    FunctionCompletion late_function_completion = 5;
+  }
+}
+
+// Explicit occurrence; immutable start fields live in ThreadDefinition.
+message ThreadAnnouncement {}
+
+message ThreadCompletion {
+  fixed64 completed_at_ticks = 1;
+  InvocationOutcome outcome = 2;
+}
+
+message FunctionAnnouncement {
+  uint64 id = 1;               // Nonzero TelemetryId.
+  uint64 parent_id = 2;        // Nonzero thread/function node ID.
+  uint32 call_path_id = 3;     // Nonzero; producer announcement has no reentry bit.
+  fixed64 entered_at_ticks = 4;
+  CaptureState inputs = 5;
+}
+
+message FunctionCompletion {
+  uint64 id = 1;
+  uint64 parent_id = 2;
+  uint64 node = 3;             // Path + reentry, no second path/reentry field.
+  fixed64 entered_at_ticks = 4;
+  fixed64 exited_at_ticks = 5;
+  fixed64 self_await_ticks = 6;
+  // Bits 0..1: InvocationOutcome (1=OK, 2=ERRORED, 3=CANCELLED; 0 invalid).
+  // Bit 2: value capture deferred. Bit 3: requires entry input announcement.
+  // All other bits must be zero in v1. Reentry is already encoded in node.
+  // Late completions must not set bit 3. This is an explicit wire mapping,
+  // unrelated to the Rust enum's discriminants or memory layout.
+  uint32 completion_flags = 7;
+}
+
+enum InvocationOutcome {
+  INVOCATION_OUTCOME_UNSPECIFIED = 0;
+  INVOCATION_OUTCOME_OK = 1;
+  INVOCATION_OUTCOME_ERRORED = 2;
+  INVOCATION_OUTCOME_CANCELLED = 3;
+}
+
+// No owned snapshot format in this phase. NOT_RECORDED does not prove policy off.
+enum CaptureState {
+  CAPTURE_STATE_NOT_RECORDED = 0;
+  CAPTURE_STATE_DEFERRED = 1;
+}
+
+// Present only in the last file; its containing sequence declares the file count.
+// Emitted only after input, metadata attempts and final epoch states settle.
+message RecordingEnd {}
+
+// BCS control plane only. Telemetry bytes go directly to S3 using the returned PUT URL.
+// HTTP routing/authentication and response representation are outside this schema.
+message PresignRecordingFileRequest {
+  bytes recording_id = 1;     // Exactly 16 bytes.
+  uint64 sequence = 2;        // Matches RecordingFile.sequence.
+  uint64 byte_length = 3;     // Length of the finalized protobuf file.
+  optional bytes sha256 = 4;  // Integrity only: 32 bytes when supplied; not object identity.
+}
+
+message PresignRecordingFileResponse {
+  string put_url = 1;
+  string object_key = 2;      // Server-controlled authorized recording prefix/name.
+  repeated UploadHeader required_headers = 3;
+  uint64 expires_at_unix_seconds = 4; // Planning hint; a rejected URL may need renewal.
+}
+
+message UploadHeader {
+  string name = 1;
+  string value = 2;
+}

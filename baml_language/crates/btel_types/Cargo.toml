@@ -15,6 +15,7 @@ description = "Core types for BAML telemetry producers"
 doctest = false
 
 [dependencies]
+btel_settings = { workspace = true }
 rustc-hash = { workspace = true }
 
 [lints]

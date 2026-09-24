@@ -13,7 +13,7 @@ use std::{
     fmt,
     num::NonZeroUsize,
     panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 pub use bex_chunkedringbuffer::DrainStatus as Progress;
@@ -25,9 +25,8 @@ mod aggregate;
 mod publisher;
 pub use aggregate::AggregateDelta;
 use aggregate::CombiningCache;
-pub use publisher::{NoSinkPublisher, ProcessedSpanBatch, Publisher, PublisherStats};
-
-const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+use btel_settings::processor::CACHE_FLUSH_INTERVAL_DURATION;
+pub use publisher::{NoSinkPublisher, Publisher, PublisherStats};
 
 #[derive(Clone, Copy, Default)]
 struct DecoderContext {
@@ -35,7 +34,8 @@ struct DecoderContext {
     span: Option<TelemetryId>,
 }
 
-const _: () = assert!(std::mem::size_of::<DecoderContext>() == 16);
+const _: () =
+    assert!(std::mem::size_of::<DecoderContext>() == btel_settings::layout::DECODER_CONTEXT_BYTES);
 
 struct Processing<P> {
     publisher: P,
@@ -102,38 +102,154 @@ impl<P> Processing<P> {
     ) where
         P: Publisher<I, V>,
     {
+        self.publisher.before_span_chunk(records.as_slice().len());
         let initial_thread = self.contexts[producer.index()].span;
         let mut thread = initial_thread;
         for record in records.as_slice() {
             match record {
-                SpanRecord::ThreadSelected { thread_id } => thread = Some(*thread_id),
-                SpanRecord::FunctionSpanCompletion {
+                SpanRecord::ThreadSelected { thread_id } => {
+                    thread = Some(*thread_id);
+                    continue;
+                }
+                SpanRecord::FunctionSpanCompletionOk {
                     call_path,
                     entered_at,
                     exited_at,
                     await_time,
-                    reentry,
                     ..
                 }
-                | SpanRecord::LateFunctionSpanCompletion {
+                | SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
                     call_path,
                     entered_at,
                     exited_at,
                     await_time,
-                    reentry,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErrored {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelled {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionOk {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionErrored {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionCancelled {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
                     ..
                 } => {
                     assert!(thread.is_some(), "span completion without thread selector");
-                    self.sample::<I, V>(*call_path, *entered_at, *exited_at, *await_time, *reentry);
+                    self.sample::<I, V>(*call_path, *entered_at, *exited_at, *await_time, false);
                 }
-                _ => assert!(thread.is_some(), "span record without thread selector"),
+                SpanRecord::FunctionSpanCompletionOkReentry {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErroredReentry {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelledReentry {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionOkReentry {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionErroredReentry {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                }
+                | SpanRecord::LateFunctionSpanCompletionCancelledReentry {
+                    call_path,
+                    entered_at,
+                    exited_at,
+                    await_time,
+                    ..
+                } => {
+                    assert!(thread.is_some(), "span completion without thread selector");
+                    self.sample::<I, V>(*call_path, *entered_at, *exited_at, *await_time, true);
+                }
+                _ => {}
             }
+            self.publisher
+                .span(thread.expect("span record without thread selector"), record);
         }
         self.contexts[producer.index()].span = thread;
-        self.publisher.spans(ProcessedSpanBatch {
-            initial_thread,
-            records,
-        });
+        drop(records);
     }
 
     fn flush<I: ?Sized, V>(&mut self)
@@ -148,7 +264,7 @@ impl<P> Processing<P> {
 #[cfg(not(target_arch = "wasm32"))]
 mod runtime;
 #[cfg(not(target_arch = "wasm32"))]
-pub use runtime::{ExecutionScope, TelemetryRuntime};
+pub use runtime::{ExecutionScope, RuntimeError, TelemetryRuntime};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ProcessorError {
@@ -193,6 +309,8 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
     ) -> Self {
         let contexts =
             vec![DecoderContext::default(); consumer.producer_capacity()].into_boxed_slice();
+        let max_chunks = NonZeroUsize::new(max_chunks.get().min(publisher.max_chunks_per_batch()))
+            .expect("publisher batch limit must be nonzero");
         Self {
             consumer,
             max_chunks,
@@ -201,7 +319,7 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
                 cache: CombiningCache::default(),
                 contexts,
             },
-            next_flush: Instant::now() + FLUSH_INTERVAL,
+            next_flush: Instant::now() + CACHE_FLUSH_INTERVAL_DURATION,
             finished: false,
         }
     }
@@ -216,13 +334,22 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
     pub fn flush(&mut self) {
         self.consumer
             .guard_processing(|| self.processing.flush::<I, V>());
-        self.next_flush = Instant::now() + FLUSH_INTERVAL;
+        self.next_flush = Instant::now() + CACHE_FLUSH_INTERVAL_DURATION;
     }
 
     /// Consume at most the configured chunk budget without waiting. A callback
     /// panic fails the transport and prevents producers from silently proceeding.
     /// No partially accepted batch is retried after failure.
     pub fn process_available(&mut self) -> Progress {
+        self.consumer.guard_processing(|| {
+            if self.consumer.has_ready_chunks() {
+                self.processing.publisher.before_batch(
+                    self.max_chunks
+                        .get()
+                        .saturating_mul(self.consumer.chunk_capacity()),
+                );
+            }
+        });
         // Both callbacks share worker-local state. Borrow once per chunk, not
         // once per record, and never across a callback or user suspension.
         let processing = RefCell::new(&mut self.processing);
@@ -231,15 +358,38 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
             |id, records| processing.borrow_mut().timing::<I, V>(id, records),
             |id, records| processing.borrow_mut().spans(id, records),
         );
-        if progress.complete {
-            if !self.finished {
-                self.flush();
-                self.processing.contexts.fill(DecoderContext::default());
-                self.finished = true;
+        self.consumer.guard_processing(|| {
+            if progress.complete {
+                if !self.finished {
+                    self.processing
+                        .cache
+                        .flush(|delta| self.processing.publisher.aggregate(delta));
+                    self.processing.publisher.finish();
+                    self.processing.contexts.fill(DecoderContext::default());
+                    self.finished = true;
+                }
+            } else {
+                let now = Instant::now();
+                if now >= self.next_flush
+                    || self
+                        .processing
+                        .publisher
+                        .deadline()
+                        .is_some_and(|d| now >= d)
+                {
+                    self.processing
+                        .cache
+                        .flush(|delta| self.processing.publisher.aggregate(delta));
+                    self.next_flush = now + CACHE_FLUSH_INTERVAL_DURATION;
+                    // Publishers without their own deadline retain the original
+                    // periodic flush behavior (including zero-sink windows).
+                    if !self.processing.publisher.manages_flush_deadline() {
+                        self.processing.publisher.flush();
+                    }
+                }
+                self.processing.publisher.after_batch(progress.records);
             }
-        } else if Instant::now() >= self.next_flush {
-            self.flush();
-        }
+        });
         progress
     }
 
@@ -259,7 +409,12 @@ impl<I: ?Sized, V, P: Publisher<I, V>> Processor<I, V, P> {
                 return;
             }
             if progress.chunks == 0 {
-                self.consumer.wait_until(Some(self.next_flush));
+                let wake = self
+                    .processing
+                    .publisher
+                    .deadline()
+                    .map_or(self.next_flush, |d| d.min(self.next_flush));
+                self.consumer.wait_until(Some(wake));
             }
         }
     }

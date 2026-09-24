@@ -1,52 +1,44 @@
 //! Synchronous processor/publisher boundary. No sink I/O or outgoing queue yet.
-use std::{num::NonZeroUsize, vec::Drain};
+use std::num::NonZeroUsize;
 
-use bex_chunkedringbuffer::SpanChunk;
-use btel_records::{SpanRecord, TimingRecord};
+use btel_records::SpanRecord;
 use btel_types::{CallPathNodeId, TelemetryId};
 use rustc_hash::FxHashMap;
 
 use crate::AggregateDelta;
 
-/// Only the processor constructs this, after every completion was aggregated.
-/// Owns the original allocation, counted against the bounded input pool until
-/// this batch drops. Retaining or transferring it does not copy any records.
-/// `initial_thread` applies before the first selector in `records`.
-/// Each batch carries that context independently, including after producer
-/// retirement. A publisher need not maintain a second per-producer selector map.
-pub struct ProcessedSpanBatch<I: ?Sized, V> {
-    pub(crate) initial_thread: Option<TelemetryId>,
-    pub(crate) records: SpanChunk<TimingRecord, SpanRecord<I, V>>,
-}
-
-impl<I: ?Sized, V> ProcessedSpanBatch<I, V> {
-    pub fn initial_thread(&self) -> Option<TelemetryId> {
-        self.initial_thread
-    }
-    pub fn records(&self) -> &[SpanRecord<I, V>] {
-        self.records.as_slice()
-    }
-    /// Move individual records if needed, keeping the allocation with this batch.
-    pub fn drain(&mut self) -> Drain<'_, SpanRecord<I, V>> {
-        self.records.drain()
-    }
-}
-
-/// Statically dispatched, worker-local receiver. Callbacks must accept ownership
-/// synchronously (including accepting an owned batch for later use) or panic
-/// terminally; a partial batch is never replayed. They must
-/// not wait on VM/heap permits (producers may be spinning for these allocations).
+/// Statically dispatched, worker-local receiver. The processor owns the chunk
+/// throughout each callback and recycles it immediately afterward. A publisher
+/// must finish reading a record synchronously; only independently owned output
+/// may survive the callback. Selectors are consumed by the processor, so `thread`
+/// is explicit on every callback and survives chunk boundaries and slot reuse.
 ///
-/// Aggregate deltas may precede definitions. A sink must associate each path with
-/// the defining thread and retained clock epoch before interpreting raw tick sums.
-/// Call-path IDs must not be interned across epochs without changing that key.
-/// Span batches retain their original order and selector context. Retained
-/// batches consume the pool's quota and must eventually be released so producers
-/// can progress. Input completion/flush is not an asynchronous delivery barrier.
+/// Callbacks must not wait on VM/heap permits: producers can be spinning for the
+/// input allocation. A panic fails the transport; partially accepted input is
+/// never replayed. Aggregate deltas may precede supporting definitions. Flush
+/// covers consumed input only, not private chunks or asynchronous delivery.
 pub trait Publisher<I: ?Sized, V> {
     fn aggregate(&mut self, delta: AggregateDelta);
-    fn spans(&mut self, batch: ProcessedSpanBatch<I, V>);
+    fn span(&mut self, thread: TelemetryId, record: &SpanRecord<I, V>);
     fn flush(&mut self);
+    /// Admission and delivery hooks run with no input chunk held.
+    fn before_batch(&mut self, _max_records: usize) {}
+    /// Actual span chunk length, including selectors, before visiting its records.
+    /// Runs with the input chunk held; must not deliver files or block.
+    fn before_span_chunk(&mut self, _records: usize) {}
+    fn after_batch(&mut self, _records: usize) {}
+    fn manages_flush_deadline(&self) -> bool {
+        false
+    }
+    fn deadline(&self) -> Option<std::time::Instant> {
+        None
+    }
+    fn max_chunks_per_batch(&self) -> usize {
+        btel_settings::processor::UNLIMITED_PUBLISHER_BATCH
+    }
+    fn finish(&mut self) {
+        self.flush();
+    }
 }
 
 /// Diagnostics across windows; temporal totals deliberately stay scoped to paths.
@@ -54,13 +46,14 @@ pub trait Publisher<I: ?Sized, V> {
 pub struct PublisherStats {
     pub aggregate_updates: u64,
     pub function_completions: u64,
+    /// Non-selector records passed through the borrowed callback.
     pub span_records: u64,
     pub flushed_nodes: u64,
 }
 
 /// Real bounded downstream merging with zero configured sinks. Full windows are
-/// discarded here; this is not exported telemetry or durable capture. Spans are
-/// accepted as their original batch and owned captures are dropped exactly once.
+/// discarded here; this is not exported telemetry or durable capture. Span records are
+/// borrowed; the processor drops owned captures exactly once when recycling.
 /// Ordinary and reentry nodes retain separate, unmodified measurements. An
 /// inclusive rollup uses `AggregateDelta::inclusive_duration`; it does not erase
 /// the reentry node. No metadata is retained because no sink interprets raw times.
@@ -72,7 +65,7 @@ pub struct NoSinkPublisher {
 
 impl Default for NoSinkPublisher {
     fn default() -> Self {
-        Self::new(NonZeroUsize::new(4096).unwrap())
+        Self::new(btel_settings::processor::NO_SINK_MAX_NODES)
     }
 }
 
@@ -121,12 +114,8 @@ impl<I: ?Sized, V> Publisher<I, V> for NoSinkPublisher {
     fn aggregate(&mut self, delta: AggregateDelta) {
         self.accept(delta);
     }
-    fn spans(&mut self, batch: ProcessedSpanBatch<I, V>) {
-        self.stats.span_records = self
-            .stats
-            .span_records
-            .saturating_add(batch.records().len() as u64);
-        drop(batch);
+    fn span(&mut self, _: TelemetryId, _: &SpanRecord<I, V>) {
+        self.stats.span_records = self.stats.span_records.saturating_add(1);
     }
     fn flush(&mut self) {
         self.flush_window();
