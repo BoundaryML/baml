@@ -199,3 +199,25 @@ async fn spawned_closure_can_add_captured_bigint_field() {
         Ok(BexExternalValue::Bigint(BigInt::from(11)))
     );
 }
+
+#[tokio::test]
+async fn spawn_shared_bigint_subtraction_uses_generic_binop() {
+    let output = baml_test!(
+        r#"
+        function spawn_bigint_sub() -> bigint {
+            let x = 10n;
+            let f = spawn { x = 5n; 0n };
+            let y = x - 1n;
+            let _ = await f;
+            y
+        }
+
+        function main() -> bigint {
+            spawn_bigint_sub()
+        }
+        "#
+    );
+
+    assert!(output.bytecode.contains("bin_op -"));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(9))));
+}
