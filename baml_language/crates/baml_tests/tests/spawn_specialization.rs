@@ -207,8 +207,8 @@ async fn spawn_shared_bigint_subtraction_uses_generic_binop() {
         function spawn_bigint_sub() -> bigint {
             let x = 10n;
             let f = spawn { x = 5n; 0n };
-            let y = x - 1n;
             let _ = await f;
+            let y = x - 1n;
             y
         }
 
@@ -219,5 +219,5 @@ async fn spawn_shared_bigint_subtraction_uses_generic_binop() {
     );
 
     assert!(output.bytecode.contains("bin_op -"));
-    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(9))));
+    assert_eq!(output.result, Ok(BexExternalValue::Bigint(BigInt::from(4))));
 }
