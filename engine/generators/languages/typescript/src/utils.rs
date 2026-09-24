@@ -28,10 +28,7 @@ mod tests {
 
     #[test]
     fn test_prefix_lines_multiline() {
-        assert_eq!(
-            prefix_lines("line1\nline2", " * "),
-            " * line1\n * line2"
-        );
+        assert_eq!(prefix_lines("line1\nline2", " * "), " * line1\n * line2");
     }
 
     #[test]
